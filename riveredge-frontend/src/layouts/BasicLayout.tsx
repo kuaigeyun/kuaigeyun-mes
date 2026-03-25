@@ -136,6 +136,7 @@ const MENU_BADGE_PATH_KEY: Record<string, string> = {
   '/apps/kuaizhizao/quality-management/finished-goods-inspection': 'quality_inspection',
   '/apps/kuaizhizao/quality-management/inspection-plans': 'quality_inspection',
   '/apps/kuaizhizao/plan-management/production-plans': 'production_plan',
+  '/apps/kuaizhizao/plan-management/demand-computation': 'demand_computation',
   '/apps/kuaizhizao/equipment-management/equipment': 'equipment',
   '/apps/kuaizhizao/equipment-management/molds': 'mold',
 };

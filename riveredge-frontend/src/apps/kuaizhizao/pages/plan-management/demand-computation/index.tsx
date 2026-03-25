@@ -34,7 +34,6 @@ import {
   Select,
   Tabs,
   Radio,
-  Dropdown,
 } from 'antd'
 import {
   PlayCircleOutlined,
@@ -42,7 +41,6 @@ import {
   ReloadOutlined,
   ArrowDownOutlined,
   DeleteOutlined,
-  MoreOutlined,
   SettingOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
@@ -933,29 +931,35 @@ const DemandComputationPage: React.FC = () => {
     {
       title: '操作',
       valueType: 'option',
-      width: 200,
+      width: 320,
       fixed: 'right',
       render: (_, record) => {
-        const moreItems = [
-          ...(record.computation_status === '进行中'
-            ? [{ key: 'execute', label: '执行计算', icon: <PlayCircleOutlined />, onClick: () => handleExecute(record) }]
-            : []),
-          ...(record.computation_status === '完成' || record.computation_status === '失败'
-            ? [{ key: 'recompute', label: '重新计算', icon: <ReloadOutlined />, onClick: () => handleRecompute(record) }]
-            : []),
-        ]
+        const canExecute = record.computation_status === '进行中'
+        const canRecompute =
+          record.computation_status === '完成' || record.computation_status === '失败'
         return (
-          <Space>
-            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail([record.id!])}>详情</Button>
+          <Space size={4} wrap>
+            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail([record.id!])}>
+              详情
+            </Button>
+            {canExecute && (
+              <Button type="link" size="small" icon={<PlayCircleOutlined />} onClick={() => handleExecute(record)}>
+                执行计算
+              </Button>
+            )}
+            {canRecompute && (
+              <Button type="link" size="small" icon={<ReloadOutlined />} onClick={() => handleRecompute(record)}>
+                重新计算
+              </Button>
+            )}
             {record.computation_status === '完成' && (
-              <Button type="link" size="small" icon={<ArrowDownOutlined />} onClick={() => handleOpenPushPanel(record)}>下推</Button>
+              <Button type="link" size="small" icon={<ArrowDownOutlined />} onClick={() => handleOpenPushPanel(record)}>
+                下推
+              </Button>
             )}
-            <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>删除</Button>
-            {moreItems.length > 0 && (
-              <Dropdown menu={{ items: moreItems }} trigger={['click']}>
-                <Button type="link" size="small" icon={<MoreOutlined />}>更多</Button>
-              </Dropdown>
-            )}
+            <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
+              删除
+            </Button>
           </Space>
         )
       },

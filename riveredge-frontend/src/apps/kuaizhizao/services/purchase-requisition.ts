@@ -98,8 +98,24 @@ export async function fixPurchaseRequisitionStatus(id: number): Promise<Purchase
 
 export async function convertToPurchaseOrder(
   requisitionId: number,
-  data: { item_ids: number[]; supplier_id: number; supplier_name: string; item_quantities?: Record<number, number> }
-): Promise<{ success: boolean; message: string; purchase_order_id: number; purchase_order_code: string }> {
+  data: {
+    item_ids: number[];
+    supplier_id?: number;
+    supplier_name?: string;
+    item_quantities?: Record<number, number>;
+    /** 申请行 id -> 供应商 id，优先于行上 supplier_id */
+    item_suppliers?: Record<number, number>;
+    /** 转单成功后写回采购件物料默认供应商 */
+    persist_default_supplier_to_material?: boolean;
+  }
+): Promise<{
+  success: boolean;
+  message: string;
+  purchase_order_id: number;
+  purchase_order_code: string;
+  purchase_orders?: Array<{ purchase_order_id: number; purchase_order_code: string; supplier_id: number }>;
+  persisted_material_ids?: number[];
+}> {
   return apiRequest(`/apps/kuaizhizao/purchase-requisitions/${requisitionId}/convert-to-purchase-order`, {
     method: 'POST',
     data,

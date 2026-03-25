@@ -5,7 +5,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Card, Table, Form as AntForm, Input, InputNumber, Select, Dropdown, Row, Col } from 'antd';
+import { App, Button, Tag, Space, Card, Table, Form as AntForm, Input, InputNumber, Select, Dropdown, Row, Col, Checkbox } from 'antd';
 import { EyeOutlined, SendOutlined, SwapOutlined, ThunderboltOutlined, MoreOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerActions, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
@@ -100,7 +100,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
     {
       title: '操作',
       valueType: 'option',
-      width: 280,
+      width: 320,
       fixed: 'right',
       render: (_, record) => {
         const s = (record.status ?? '').toString().trim();
@@ -108,9 +108,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
         const isPending = ['待审核', 'pending_review', 'PENDING_REVIEW'].includes(s);
         const isApprovedOrPartial = ['已通过', '部分转单', 'audited', 'approved', 'AUDITED', 'PARTIAL_CONVERTED'].includes(s);
         const moreItems = [
-          ...(isApprovedOrPartial
-            ? [{ key: 'convert', label: '下推采购单', icon: <SwapOutlined />, onClick: () => handleConvert(record) }]
-            : []),
           ...(isDraft || isPending
             ? [{ key: 'urgent', label: '紧急采购', icon: <ThunderboltOutlined />, onClick: () => handleUrgent(record) }]
             : []),
@@ -143,6 +140,11 @@ const PurchaseRequisitionsPage: React.FC = () => {
               }}
               onSuccess={() => actionRef.current?.reload()}
             />
+            {isApprovedOrPartial && (
+              <Button type="link" size="small" icon={<SwapOutlined />} onClick={() => handleConvert(record)}>
+                下推采购单
+              </Button>
+            )}
             {moreItems.length > 0 && (
               <Dropdown menu={{ items: moreItems }} trigger={['click']} placement="bottomRight">
                 <Button type="link" size="small" icon={<MoreOutlined />}>
@@ -289,11 +291,15 @@ const PurchaseRequisitionsPage: React.FC = () => {
     supplierId: number;
     supplierName: string;
     itemQuantities: Record<number, number>;
+    itemSuppliers: Record<number, number>;
+    persistDefaultSupplier: boolean;
   }>({
     selectedIds: [],
     supplierId: 0,
     supplierName: '',
     itemQuantities: {},
+    itemSuppliers: {},
+    persistDefaultSupplier: false,
   });
 
   const handleConvert = async (record: PurchaseRequisition) => {
@@ -319,12 +325,14 @@ const PurchaseRequisitionsPage: React.FC = () => {
         supplierId: defaultSupplierId || 0,
         supplierName: supplierList.find((s) => s.id === defaultSupplierId)?.name || supplierList[0]?.name || '',
         itemQuantities: quantities,
+        itemSuppliers: {},
+        persistDefaultSupplier: false,
       };
 
       modalApi.confirm({
         title: '下推采购单',
         icon: null,
-        width: MODAL_CONFIG.STANDARD_WIDTH,
+        width: MODAL_CONFIG.LARGE_WIDTH,
         content: (
           <ConvertForm
             items={allItems}
@@ -334,35 +342,53 @@ const PurchaseRequisitionsPage: React.FC = () => {
           />
         ),
         onOk: async () => {
-          const { selectedIds, supplierId, supplierName, itemQuantities } = convertFormRef.current;
-          if (selectedIds.length === 0 || !supplierId) {
-            messageApi.error('请选择要下推的明细和供应商');
+          const {
+            selectedIds,
+            supplierId,
+            supplierName,
+            itemQuantities,
+            itemSuppliers,
+            persistDefaultSupplier,
+          } = convertFormRef.current;
+          if (selectedIds.length === 0) {
+            messageApi.error('请选择要下推的明细');
+            return Promise.reject();
+          }
+          const missing = selectedIds.some((id) => !itemSuppliers[id]);
+          if (missing) {
+            messageApi.error('请为每条选中明细选择供应商');
             return Promise.reject();
           }
           try {
             const res = await convertToPurchaseOrder(record.id!, {
               item_ids: selectedIds,
-              supplier_id: supplierId,
-              supplier_name: supplierName,
+              supplier_id: supplierId || undefined,
+              supplier_name: supplierName || undefined,
               item_quantities: itemQuantities,
+              item_suppliers: Object.fromEntries(selectedIds.map((id) => [id, itemSuppliers[id]])),
+              persist_default_supplier_to_material: persistDefaultSupplier,
             });
+            const pos = res.purchase_orders?.length
+              ? res.purchase_orders
+              : [{ purchase_order_id: res.purchase_order_id, purchase_order_code: res.purchase_order_code, supplier_id: supplierId }];
             messageApi.success({
               content: (
                 <span>
                   {res.message || '下推成功'}
-                  {res.purchase_order_code && (
+                  {pos.map((p) => (
                     <Button
+                      key={p.purchase_order_id}
                       type="link"
                       size="small"
                       style={{ paddingLeft: 8 }}
                       onClick={() => navigate(ROUTES.PURCHASE_ORDERS)}
                     >
-                      查看采购单 {res.purchase_order_code}
+                      查看 {p.purchase_order_code}
                     </Button>
-                  )}
+                  ))}
                 </span>
               ),
-              duration: 5,
+              duration: 6,
             });
             actionRef.current?.reload();
           } catch (e: any) {
@@ -810,10 +836,24 @@ const ConvertForm: React.FC<{
     supplierId: number;
     supplierName: string;
     itemQuantities: Record<number, number>;
+    itemSuppliers: Record<number, number>;
+    persistDefaultSupplier: boolean;
   }>;
 }> = ({ items, unconvertedIds, suppliers, formRef }) => {
+  const fallbackSupplierId = suppliers[0]?.id || 0;
   const [selected, setSelected] = useState<number[]>(unconvertedIds);
-  const [supplierId, setSupplierId] = useState<number>(items[0]?.supplier_id || suppliers[0]?.id || 0);
+  const [batchSupplierId, setBatchSupplierId] = useState<number>(() => {
+    const first = items.find((i) => i.id != null && unconvertedIds.includes(i.id) && !i.purchase_order_id);
+    return first?.supplier_id || fallbackSupplierId;
+  });
+  const [rowSuppliers, setRowSuppliers] = useState<Record<number, number>>(() => {
+    const m: Record<number, number> = {};
+    items.forEach((i) => {
+      if (i.id == null || i.purchase_order_id || !unconvertedIds.includes(i.id)) return;
+      m[i.id] = i.supplier_id || fallbackSupplierId;
+    });
+    return m;
+  });
   const [quantities, setQuantities] = useState<Record<number, number>>(() => {
     const q: Record<number, number> = {};
     items.filter((i) => !i.purchase_order_id).forEach((i) => {
@@ -821,31 +861,66 @@ const ConvertForm: React.FC<{
     });
     return q;
   });
+  const [persistDefault, setPersistDefault] = useState(false);
   const hasSuppliers = suppliers && suppliers.length > 0;
+
+  const applyBatchToSelected = () => {
+    const selectedSet = new Set(selected);
+    setRowSuppliers((prev) => {
+      const next = { ...prev };
+      items.forEach((i) => {
+        if (i.id == null || !selectedSet.has(i.id) || i.purchase_order_id || !unconvertedIds.includes(i.id)) return;
+        next[i.id] = batchSupplierId;
+      });
+      return next;
+    });
+  };
+
+  const hasBatchTargetRows = selected.some((id) => {
+    const i = items.find((x) => x.id === id);
+    return i != null && !i.purchase_order_id && unconvertedIds.includes(i.id);
+  });
 
   useEffect(() => {
     formRef.current.selectedIds = selected;
-    formRef.current.supplierId = supplierId;
-    formRef.current.supplierName = suppliers.find((x) => x.id === supplierId)?.name || '';
     formRef.current.itemQuantities = quantities;
-  }, [selected, supplierId, quantities, suppliers, formRef]);
+    formRef.current.itemSuppliers = rowSuppliers;
+    formRef.current.persistDefaultSupplier = persistDefault;
+    const head = selected.length ? rowSuppliers[selected[0]] : batchSupplierId;
+    formRef.current.supplierId = head || batchSupplierId || 0;
+    formRef.current.supplierName = suppliers.find((x) => x.id === (head || batchSupplierId))?.name || '';
+  }, [selected, quantities, rowSuppliers, persistDefault, batchSupplierId, suppliers, formRef]);
+
+  const supplierOptions = suppliers.map((s) => ({
+    label: `${s.code ? `${s.code} - ` : ''}${s.name}`.trim(),
+    value: s.id,
+  }));
 
   return (
     <div style={{ margin: 0 }}>
       {hasSuppliers && (
-        <div style={{ marginBottom: 12 }}>
+        <div style={{ marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{ color: '#666', whiteSpace: 'nowrap' }}>批量默认供应商</span>
           <Select
-            style={{ width: '100%' }}
-            placeholder="请选择供应商"
-            value={supplierId || undefined}
-            onChange={(v: number) => setSupplierId(v)}
-            options={suppliers.map((s) => ({ label: `${s.code || ''} - ${s.name}`.trim(), value: s.id }))}
+            style={{ minWidth: 220, flex: 1 }}
+            placeholder="选择供应商后应用到勾选行"
+            value={batchSupplierId || undefined}
+            onChange={(v: number) => setBatchSupplierId(v)}
+            options={supplierOptions}
           />
+          <Button type="default" onClick={applyBatchToSelected} disabled={!hasBatchTargetRows}>
+            应用到选中的行
+          </Button>
         </div>
       )}
       {!hasSuppliers && (
         <p style={{ color: 'var(--ant-color-warning)', margin: '0 0 12px 0' }}>暂无供应商，请先在主数据中维护供应商档案</p>
       )}
+      <div style={{ marginBottom: 12 }}>
+        <Checkbox checked={persistDefault} onChange={(e) => setPersistDefault(e.target.checked)}>
+          将各行所选供应商写回物料主数据中的默认供应商（仅「采购件」生效，便于下次自动带出）
+        </Checkbox>
+      </div>
       <Table
         size="small"
         rowSelection={{
@@ -856,14 +931,30 @@ const ConvertForm: React.FC<{
           }),
         }}
         columns={[
-          { title: '物料编码', dataIndex: 'material_code', width: 120 },
-          { title: '物料名称', dataIndex: 'material_name', width: 140 },
-          { title: '需求数量', dataIndex: 'quantity', width: 100, align: 'right', render: (v: any) => Number(v ?? 0) },
+          { title: '物料编码', dataIndex: 'material_code', width: 110 },
+          { title: '物料名称', dataIndex: 'material_name', width: 160 },
+          {
+            title: '供应商',
+            width: 240,
+            render: (_: unknown, record: PurchaseRequisitionItem) =>
+              record.id != null && !record.purchase_order_id ? (
+                <Select
+                  style={{ width: '100%' }}
+                  placeholder="选择供应商"
+                  value={rowSuppliers[record.id] || undefined}
+                  onChange={(v: number) => setRowSuppliers((prev) => ({ ...prev, [record.id!]: v }))}
+                  options={supplierOptions}
+                />
+              ) : record.purchase_order_id ? (
+                '-'
+              ) : null,
+          },
+          { title: '需求数量', dataIndex: 'quantity', width: 88, align: 'right', render: (v: any) => Number(v ?? 0) },
           {
             title: '已下推数量',
-            width: 140,
+            width: 120,
             align: 'right',
-            render: (_: any, record: PurchaseRequisitionItem) => {
+            render: (_: unknown, record: PurchaseRequisitionItem) => {
               const draft = Number(record.converted_quantity_draft ?? 0);
               const confirmed = Number(record.converted_quantity_confirmed ?? 0);
               if (draft === 0 && confirmed === 0) return 0;
@@ -873,18 +964,18 @@ const ConvertForm: React.FC<{
               return parts.join(' / ');
             },
           },
-          { title: '最小起订量', width: 100, align: 'right', render: () => '-' },
+          { title: '最小起订量', width: 88, align: 'right', render: () => '-' },
           {
             title: '本次下推数量',
-            width: 130,
+            width: 120,
             align: 'right',
-            render: (_: any, record: PurchaseRequisitionItem) =>
+            render: (_: unknown, record: PurchaseRequisitionItem) =>
               record.id != null && !record.purchase_order_id ? (
                 <InputNumber
                   min={0.01}
                   value={quantities[record.id] ?? Number(record.quantity ?? 0)}
                   onChange={(v) => setQuantities((prev) => ({ ...prev, [record.id!]: Number(v) || 0 }))}
-                  style={{ width: 110 }}
+                  style={{ width: 100 }}
                 />
               ) : record.purchase_order_id ? (
                 '-'
@@ -894,7 +985,7 @@ const ConvertForm: React.FC<{
         dataSource={items}
         pagination={false}
         rowKey="id"
-        scroll={{ x: 800 }}
+        scroll={{ x: 1100 }}
       />
     </div>
   );

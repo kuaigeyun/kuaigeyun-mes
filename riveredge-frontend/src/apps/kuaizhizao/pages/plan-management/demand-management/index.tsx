@@ -40,6 +40,7 @@ import {
   DemandRecalcHistoryItem,
   DemandSnapshotItem,
 } from '../../../services/demand';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { createDemandComputation } from '../../../services/demand-computation';
 import { getDemandChangeImpact, type ChangeImpactResponse } from '../../../services/document-relation';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
@@ -210,7 +211,7 @@ const DemandManagementPage: React.FC = () => {
       invalidateStatistics();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.response?.data?.detail || error?.message || '创建失败');
+      messageApi.error(getApiErrorMessage(error, '创建失败'));
     } finally {
       setCreatePlanLoading(false);
     }

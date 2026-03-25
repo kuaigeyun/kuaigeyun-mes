@@ -965,6 +965,35 @@ async def get_menu_badge_counts(
     except Exception as e:
         logger.warning(f"menu-badge-counts mold: {e}")
         counts["mold"] = 0
+    try:
+        # 需求计算：已审核通过且尚未下推到需求计算的需求数（与新建计算可选需求条件一致）
+        from apps.kuaizhizao.models.demand import Demand
+        from apps.kuaizhizao.constants import DemandStatus, ReviewStatus
+
+        _audited_status = [
+            DemandStatus.AUDITED.value,
+            "AUDITED",
+            "已审核",
+            "CONFIRMED",
+            "已确认",
+        ]
+        _approved_review = [
+            ReviewStatus.APPROVED.value,
+            "APPROVED",
+            "审核通过",
+            "通过",
+            "已通过",
+        ]
+        counts["demand_computation"] = await Demand.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            pushed_to_computation=False,
+            status__in=_audited_status,
+            review_status__in=_approved_review,
+        ).count()
+    except Exception as e:
+        logger.warning(f"menu-badge-counts demand_computation: {e}")
+        counts["demand_computation"] = 0
     return counts
 
 

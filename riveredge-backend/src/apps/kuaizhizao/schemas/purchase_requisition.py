@@ -9,7 +9,7 @@ from datetime import date, datetime
 from typing import Dict, List, Optional
 from decimal import Decimal
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 
 class PurchaseRequisitionItemBase(BaseModel):
@@ -121,9 +121,26 @@ class PurchaseRequisitionListResponse(PurchaseRequisitionResponse):
 class ConvertToPurchaseOrderRequest(BaseModel):
     """转采购单请求"""
     item_ids: List[int] = Field(..., description="要转单的采购申请行ID列表")
-    supplier_id: int = Field(..., description="供应商ID")
-    supplier_name: str = Field(..., description="供应商名称")
+    supplier_id: Optional[int] = Field(None, description="统一供应商ID（行未指定且无 item_suppliers 映射时使用）")
+    supplier_name: Optional[str] = Field(None, description="统一供应商名称（可选，缺省由服务端按 supplier_id 解析）")
     item_quantities: Optional[Dict[int, float]] = Field(None, description="按 item_id 覆盖数量，不传则用申请行原数量")
+    item_suppliers: Optional[Dict[int, int]] = Field(
+        None,
+        description="申请行ID -> 供应商ID；优先于申请行上的 supplier_id 与顶层的 supplier_id，支持多供应商拆单",
+    )
+    persist_default_supplier_to_material: bool = Field(
+        False,
+        description="转单成功后，将本次下推使用的供应商写回采购件物料来源配置中的默认供应商",
+    )
+
+    @field_validator("item_suppliers", mode="before")
+    @classmethod
+    def _coerce_item_supplier_keys(cls, v):
+        if v is None:
+            return v
+        if not isinstance(v, dict):
+            return v
+        return {int(k): int(val) for k, val in v.items()}
 
 
 class ApproveRequisitionRequest(BaseModel):

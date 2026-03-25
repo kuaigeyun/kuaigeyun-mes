@@ -110,6 +110,12 @@ class DemandBase(BaseSchema):
 
 class DemandCreate(DemandBase):
     """统一需求创建schema"""
+    # 覆盖基类：创建时由服务端生成编码，请求体无需传 demand_code
+    demand_code: Optional[str] = Field(
+        None,
+        max_length=50,
+        description="需求编码（省略时由服务端按类型自动生成）",
+    )
     items: Optional[List["DemandItemCreate"]] = Field(None, description="需求明细列表")
     
     @model_validator(mode='after')

@@ -2039,7 +2039,11 @@ class DemandComputationService:
             results["outsource_work_orders"] = r.get("outsource_work_orders", [])
 
         if purchase == "requisition":
+            exclusions = await self._get_already_pushed_exclusions(tenant_id, computation_id)
             if not exclusions["has_purchase_requisition"]:
+                from apps.kuaizhizao.services.document_push_pull_service import DocumentPushPullService
+
+                push_service = DocumentPushPullService()
                 try:
                     r = await push_service.push_document(
                         tenant_id=tenant_id,

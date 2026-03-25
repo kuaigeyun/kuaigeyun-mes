@@ -20,6 +20,47 @@ const getMessage = () => {
 };
 
 /**
+ * 将 FastAPI / Pydantic 的 detail（字符串、校验项数组或单对象）转为可展示文案，避免传入 message.error 导致 React 崩溃。
+ */
+export function formatFastApiDetail(detail: unknown): string {
+  if (detail == null || detail === '') return '';
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    const parts = detail
+      .map((e: any) => {
+        if (e == null) return '';
+        if (typeof e === 'string') return e;
+        if (typeof e === 'object') {
+          const m = e.msg ?? e.message;
+          if (m != null && String(m).trim()) return String(m);
+        }
+        return '';
+      })
+      .filter((s) => s && String(s).trim());
+    return parts.length ? parts.join('；') : '';
+  }
+  if (typeof detail === 'object' && detail !== null) {
+    const m = (detail as any).msg ?? (detail as any).message;
+    if (m != null) return String(m);
+  }
+  try {
+    return JSON.stringify(detail);
+  } catch {
+    return String(detail);
+  }
+}
+
+/**
+ * 优先使用 apiRequest 抛出的 Error.message；否则从 response.data.detail 解析。
+ */
+export function getApiErrorMessage(error: any, fallback = '操作失败'): string {
+  const m = error?.message;
+  if (typeof m === 'string' && m.trim()) return m;
+  const fromDetail = formatFastApiDetail(error?.response?.data?.detail);
+  return fromDetail || fallback;
+}
+
+/**
  * 错误响应接口
  */
 export interface ErrorResponse {
@@ -55,9 +96,7 @@ export function handleError(error: any, defaultMessage: string = '操作失败')
     
     // FastAPI 错误格式 { detail: ... }
     if (errorData.detail) {
-      const errorMessage = Array.isArray(errorData.detail)
-        ? errorData.detail.map((e: any) => e.msg || e.message).join(', ')
-        : errorData.detail;
+      const errorMessage = formatFastApiDetail(errorData.detail) || defaultMessage;
       message.error(errorMessage);
       return errorMessage;
     }

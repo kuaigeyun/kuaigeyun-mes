@@ -126,8 +126,15 @@ class DemandService(AppBaseService[Demand]):
                 
                 # 重新加载需求以获取最新数据
                 demand = await Demand.get(tenant_id=tenant_id, id=demand.id)
-            
-            return DemandResponse.model_validate(demand)
+
+        # 手工「需求计划」：蓝图 nodes.demand 无需审核时，创建后直接提交并自动通过（与销售订单自动审核一致）
+        if demand_data.demand_type == "demand_plan":
+            from infra.services.business_config_service import BusinessConfigService
+
+            if not await BusinessConfigService().check_audit_required(tenant_id, "demand"):
+                return await self.submit_demand(tenant_id, demand.id, created_by)
+
+        return DemandResponse.model_validate(demand)
 
     async def get_demand_by_id(
         self, 
@@ -349,7 +356,9 @@ class DemandService(AppBaseService[Demand]):
         submitted_by: int
     ) -> DemandResponse:
         """
-        提交需求（提交审核）
+        提交需求（提交审核）。
+
+        蓝图 nodes.demand.auditRequired=false 时，与销售订单一致：提交后立即自动审核通过，不创建审批流实例。
         
         Args:
             tenant_id: 租户ID
@@ -363,6 +372,7 @@ class DemandService(AppBaseService[Demand]):
             NotFoundError: 需求不存在
             BusinessLogicError: 需求状态不允许提交
         """
+        audit_required = True
         async with in_transaction():
             demand = await Demand.get_or_none(tenant_id=tenant_id, id=demand_id, deleted_at__isnull=True)
             if not demand:
@@ -398,28 +408,42 @@ class DemandService(AppBaseService[Demand]):
                 submit_time=datetime.now(),
                 updated_by=submitted_by
             )
-            
-            # 启动审核流程（统一使用 ApprovalInstanceService）
-            try:
-                from core.services.approval.approval_instance_service import ApprovalInstanceService
-                instance = await ApprovalInstanceService.start_approval(
-                    tenant_id=tenant_id,
-                    user_id=submitted_by,
-                    process_code="demand_approval",
-                    entity_type="demand",
-                    entity_id=demand_id,
-                    entity_uuid=str(demand.uuid),
-                    title=f"需求审批: {demand.demand_code}",
-                    content=f"需求类型: {demand.demand_type or '-'}, 业务模式: {demand.business_mode or '-'}",
+
+            # 蓝图 nodes.demand.auditRequired=False 时表示自动审核，优先于审批流（与销售订单 submit 逻辑一致）
+            from infra.services.business_config_service import BusinessConfigService
+
+            audit_required = await BusinessConfigService().check_audit_required(tenant_id, "demand")
+
+            if audit_required:
+                # 启动审核流程（统一使用 ApprovalInstanceService）
+                try:
+                    from core.services.approval.approval_instance_service import ApprovalInstanceService
+                    instance = await ApprovalInstanceService.start_approval(
+                        tenant_id=tenant_id,
+                        user_id=submitted_by,
+                        process_code="demand_approval",
+                        entity_type="demand",
+                        entity_id=demand_id,
+                        entity_uuid=str(demand.uuid),
+                        title=f"需求审批: {demand.demand_code}",
+                        content=f"需求类型: {demand.demand_type or '-'}, 业务模式: {demand.business_mode or '-'}",
+                    )
+                    if instance:
+                        logger.info(f"需求 {demand.demand_code} 已启动审核流程")
+                    else:
+                        logger.info(f"需求 {demand.demand_code} 未配置审核流程，使用简单审核模式")
+                except Exception as e:
+                    logger.warning(f"启动审核流程失败: {e}，继续使用简单审核模式")
+            else:
+                logger.info(
+                    "需求 %s 蓝图配置为无需审核（nodes.demand.auditRequired=false），跳过审批实例，提交后将自动通过",
+                    demand.demand_code,
                 )
-                if instance:
-                    logger.info(f"需求 {demand.demand_code} 已启动审核流程")
-                else:
-                    logger.info(f"需求 {demand.demand_code} 未配置审核流程，使用简单审核模式")
-            except Exception as e:
-                logger.warning(f"启动审核流程失败: {e}，继续使用简单审核模式")
-            
-            return await self.get_demand_by_id(tenant_id, demand_id)
+
+        if not audit_required:
+            return await self.approve_demand(tenant_id, demand_id, submitted_by)
+
+        return await self.get_demand_by_id(tenant_id, demand_id)
 
     async def approve_demand(
         self, 
