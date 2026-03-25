@@ -197,6 +197,11 @@ const WorkOrdersPage: React.FC = () => {
     enabled: !hasPageMetricConfig,
     staleTime: 30_000, // 30 秒内不重复请求统计接口
   })
+  const { data: executionConfig } = useQuery({
+    queryKey: ['workOrderExecutionConfig'],
+    queryFn: () => workOrderApi.getExecutionConfig(),
+    staleTime: 60_000,
+  })
 
   // 产品列表状态
   const [productList, setProductList] = useState<any[]>([])
@@ -1110,6 +1115,13 @@ const WorkOrdersPage: React.FC = () => {
                 operation.status === 'pending'
                   ? async () => {
                       try {
+                        if (executionConfig?.require_confirmed_picking_before_operation_start) {
+                          const pickingStatus = await workOrderApi.getPickingConfirmationStatus(workOrder.id!.toString())
+                          if (!pickingStatus?.has_confirmed_picking) {
+                            messageApi.warning('当前配置要求先确认领料，未确认时不可开工')
+                            return
+                          }
+                        }
                         await workOrderApi.startOperation(workOrder.id!.toString(), operation.id)
                         messageApi.success('工序已开始')
                         const operations = await workOrderApi.getOperations(workOrder.id!.toString())

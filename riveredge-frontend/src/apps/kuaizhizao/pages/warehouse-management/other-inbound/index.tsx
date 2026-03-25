@@ -495,7 +495,7 @@ const OtherInboundPage: React.FC = () => {
           </Col>
           <Col span={12}>
             <ProFormItem name="reason_desc" label="原因说明">
-              <Input.TextArea rows={2} placeholder="可选" />
+              <Input placeholder="可选" />
             </ProFormItem>
           </Col>
         </Row>

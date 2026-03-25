@@ -420,6 +420,11 @@ const ReportingPage: React.FC = () => {
   const [reportOperations, setReportOperations] = useState<any[]>([]);
   const [reportWorkOrderId, setReportWorkOrderId] = useState<number | null>(null);
   const [reportOperationId, setReportOperationId] = useState<number | null>(null);
+  const { data: executionConfig } = useQuery({
+    queryKey: ['workOrderExecutionConfig'],
+    queryFn: () => workOrderApi.getExecutionConfig(),
+    staleTime: 60_000,
+  });
 
   /** 获取报工员工信息：优先使用工序派工的 assigned_worker，否则使用当前登录用户 */
   const getWorkerInfo = (operation?: any) => {
@@ -983,8 +988,20 @@ const ReportingPage: React.FC = () => {
    */
   const handleReportingSubmit = async (values: any) => {
     try {
+      const ensurePickingGate = async (workOrderId: number) => {
+        if (!executionConfig?.require_confirmed_picking_before_reporting) return true;
+        const status = await workOrderApi.getPickingConfirmationStatus(workOrderId.toString());
+        if (!status?.has_confirmed_picking) {
+          messageApi.warning('当前配置要求先确认领料，未确认时不可报工');
+          return false;
+        }
+        return true;
+      };
+
       // 如果是扫码报工模式
       if (scanModalVisible && currentWorkOrder && currentOperation) {
+        const canContinue = await ensurePickingGate(currentWorkOrder.id);
+        if (!canContinue) return;
         const { worker_id, worker_name } = getWorkerInfo(currentOperation);
         const reportingData = {
           work_order_id: currentWorkOrder.id,
@@ -1022,6 +1039,8 @@ const ReportingPage: React.FC = () => {
         messageApi.error('工单或工序信息不存在');
         throw new Error('工单或工序未选择');
       }
+      const canContinue = await ensurePickingGate(workOrder.id);
+      if (!canContinue) return;
       const { worker_id, worker_name } = getWorkerInfo(operation);
       const reportingData: any = {
         work_order_id: workOrder.id,

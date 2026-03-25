@@ -68,6 +68,7 @@ from apps.kuaizhizao.schemas.warehouse import (
     SalesReturnCreate,
     SalesReturnResponse,
     PurchaseReceiptCreate,
+    PurchaseReceiptUpdate,
     PurchaseReceiptResponse,
     PurchaseReceiptWithItemsResponse,
     PurchaseReturnCreate,
@@ -2283,6 +2284,24 @@ async def get_purchase_receipt(
     return await PurchaseReceiptService().get_purchase_receipt_by_id(
         tenant_id=tenant_id,
         receipt_id=receipt_id
+    )
+
+
+@router.put("/purchase-receipts/{receipt_id}", response_model=PurchaseReceiptResponse, summary="更新采购入库单")
+async def update_purchase_receipt(
+    receipt_id: int,
+    receipt: PurchaseReceiptUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PurchaseReceiptResponse:
+    """
+    更新采购入库单（草稿/待入库阶段可调整实际入库数量等明细）。
+    """
+    return await PurchaseReceiptService().update_purchase_receipt(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id,
+        receipt_data=receipt,
+        updated_by=current_user.id,
     )
 
 

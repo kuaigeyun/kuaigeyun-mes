@@ -63,6 +63,7 @@ from apps.kuaizhizao.utils.material_source_helper import (
     SOURCE_TYPE_CONFIGURE,
 )
 from loguru import logger
+from infra.services.business_config_service import BusinessConfigService
 
 
 def _max_reportable_quantity_for_op(work_order: WorkOrder, op: WorkOrderOperation) -> Decimal:
@@ -82,6 +83,16 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
     def __init__(self):
         super().__init__(WorkOrder)
+
+    @staticmethod
+    async def has_confirmed_picking_for_work_order(tenant_id: int, work_order_id: int) -> bool:
+        confirmed_statuses = ["已领料", "已确认", "confirmed", "picked"]
+        return await ProductionPicking.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            status__in=confirmed_statuses,
+            deleted_at__isnull=True,
+        ).exists()
 
     async def _match_process_route_for_material(
         self,
@@ -2328,6 +2339,12 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         async with in_transaction():
             # 获取工单
             work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
+
+            policy = await BusinessConfigService().get_work_order_picking_policy(tenant_id)
+            if policy.get("require_confirmed_picking_before_operation_start", False):
+                has_confirmed = await self.has_confirmed_picking_for_work_order(tenant_id, work_order_id)
+                if not has_confirmed:
+                    raise BusinessLogicError("未确认领料，禁止开工：请先确认该工单的领料单")
 
             # 检查工单状态
             if work_order.status not in ['released', 'in_progress']:

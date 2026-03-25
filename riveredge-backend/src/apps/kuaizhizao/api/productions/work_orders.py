@@ -498,6 +498,40 @@ async def start_work_order_operation(
     )
 
 
+@router.get("/work-orders/execution-config", summary="获取工单执行配置（领料确认策略）")
+async def get_work_order_execution_config(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    from infra.services.business_config_service import BusinessConfigService
+    from apps.kuaizhizao.services.warehouse_service import ProductionPickingService
+
+    policy = await BusinessConfigService().get_work_order_picking_policy(tenant_id)
+    can_confirm_picking, role_codes = await ProductionPickingService().can_user_confirm_picking(
+        tenant_id=tenant_id,
+        user_id=current_user.id,
+    )
+    return {
+        **policy,
+        "current_user_role_codes": sorted(role_codes),
+        "current_user_can_confirm_picking": can_confirm_picking,
+    }
+
+
+@router.get("/work-orders/{work_order_id}/picking-confirmation-status", summary="检查工单领料确认状态")
+async def get_work_order_picking_confirmation_status(
+    work_order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    service = WorkOrderService()
+    has_confirmed = await service.has_confirmed_picking_for_work_order(tenant_id, work_order_id)
+    return {
+        "work_order_id": work_order_id,
+        "has_confirmed_picking": has_confirmed,
+    }
+
+
 @router.put("/work-orders/{work_order_id}", response_model=WorkOrderResponse, summary="更新工单")
 async def update_work_order(
     work_order_id: int,

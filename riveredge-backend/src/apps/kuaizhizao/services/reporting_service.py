@@ -41,6 +41,7 @@ from apps.kuaizhizao.schemas.defect_record import (
 
 from apps.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+from infra.services.business_config_service import BusinessConfigService
 
 
 class ReportingService(AppBaseService[ReportingRecord]):
@@ -83,6 +84,16 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
             if not work_order:
                 raise NotFoundError(f"工单不存在: {reporting_data.work_order_id}")
+
+            policy = await BusinessConfigService().get_work_order_picking_policy(tenant_id)
+            if policy.get("require_confirmed_picking_before_reporting", False):
+                from apps.kuaizhizao.services.work_order_service import WorkOrderService
+                has_confirmed = await WorkOrderService.has_confirmed_picking_for_work_order(
+                    tenant_id=tenant_id,
+                    work_order_id=reporting_data.work_order_id,
+                )
+                if not has_confirmed:
+                    raise BusinessLogicError("未确认领料，禁止报工：请先确认该工单的领料单")
 
             # 检查工单是否冻结
             if work_order.is_frozen:
@@ -188,7 +199,6 @@ class ReportingService(AppBaseService[ReportingRecord]):
                     raise ValidationError("合格数量 + 不合格数量必须等于报工数量")
 
             # 检查是否开启自动审核
-            from infra.services.business_config_service import BusinessConfigService
             biz_config_svc = BusinessConfigService()
             biz_config = await biz_config_svc.get_business_config(tenant_id)
             auto_approve = biz_config.get("parameters", {}).get("reporting", {}).get("auto_approve", False)

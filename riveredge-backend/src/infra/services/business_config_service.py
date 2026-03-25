@@ -44,6 +44,11 @@ PROCESS_KEYS = {
     "parameters.procurement.require_purchase_requisition",
     "parameters.purchase.auto_approval",
     "parameters.reporting.auto_approve",
+    "parameters.work_order.picking_issue_strategy",
+    "parameters.work_order.picking_confirm_warehouse_only",
+    "parameters.work_order.picking_confirm_allowed_role_codes",
+    "parameters.work_order.require_confirmed_picking_before_operation_start",
+    "parameters.work_order.require_confirmed_picking_before_reporting",
 }
 
 # 参数设置：具体业务值（数值、阈值、功能开关）
@@ -70,6 +75,23 @@ PARAMETER_KEYS = {
     "parameters.quality.finished_inspection",
     "parameters.quality.defect_handling",
     "parameters.bom.bom_multi_version_allowed",
+}
+
+DEFAULT_WAREHOUSE_ROLE_CODES = {
+    "WAREHOUSE",
+    "WAREHOUSE_MANAGER",
+    "WAREHOUSE_ADMIN",
+    "INVENTORY",
+    "INVENTORY_MANAGER",
+}
+
+DEFAULT_PRODUCTION_PICKING_CONFIRM_ROLE_CODES = {
+    "PRODUCTION",
+    "PRODUCTION_MANAGER",
+    "PRODUCTION_WORKER",
+    "WORKSHOP",
+    "WORKSHOP_MANAGER",
+    "DEPT_MANAGER",
 }
 
 # 全部 45 业务节点（与菜单结构对齐：设备运营/模具运营/工装运营 细粒度）
@@ -182,6 +204,11 @@ class BusinessConfigService:
                 "split": False,          # 关闭拆单
                 "merge": False,          # 关闭合单
                 "allow_production_without_material": False,  # 允许不带料生产（只管制造过程，不检查缺料）
+                "picking_issue_strategy": "after_release",
+                "picking_confirm_warehouse_only": True,
+                "picking_confirm_allowed_role_codes": [],
+                "require_confirmed_picking_before_operation_start": False,
+                "require_confirmed_picking_before_reporting": False,
             },
             "reporting": {
                 "quick_reporting": True,     # 开启快捷报工
@@ -310,6 +337,43 @@ class BusinessConfigService:
             "planning_mode": "direct" if not plan_enabled or can_direct_wo else "via_plan",
         }
 
+    async def get_work_order_picking_policy(self, tenant_id: int) -> Dict[str, Any]:
+        """
+        获取工单领料策略（角色 + 开工/报工门禁）
+        """
+        config = await self.get_business_config(tenant_id)
+        wo_params = config.get("parameters", {}).get("work_order", {})
+
+        issue_strategy = str(wo_params.get("picking_issue_strategy", "after_release") or "after_release")
+        warehouse_only = bool(wo_params.get("picking_confirm_warehouse_only", True))
+        require_before_start = bool(wo_params.get("require_confirmed_picking_before_operation_start", False))
+        require_before_reporting = bool(wo_params.get("require_confirmed_picking_before_reporting", False))
+
+        configured_codes = wo_params.get("picking_confirm_allowed_role_codes", [])
+        if not isinstance(configured_codes, list):
+            configured_codes = []
+        normalized_extra_codes = sorted({
+            str(code).strip().upper()
+            for code in configured_codes
+            if str(code).strip()
+        })
+
+        allowed_codes = set(DEFAULT_WAREHOUSE_ROLE_CODES)
+        if warehouse_only:
+            allowed_codes = set(DEFAULT_WAREHOUSE_ROLE_CODES)
+        else:
+            allowed_codes.update(normalized_extra_codes or DEFAULT_PRODUCTION_PICKING_CONFIRM_ROLE_CODES)
+
+        return {
+            "picking_issue_strategy": issue_strategy,
+            "picking_confirm_warehouse_only": warehouse_only,
+            "picking_confirm_allowed_role_codes": normalized_extra_codes,
+            "require_confirmed_picking_before_operation_start": require_before_start,
+            "require_confirmed_picking_before_reporting": require_before_reporting,
+            "default_warehouse_role_codes": sorted(DEFAULT_WAREHOUSE_ROLE_CODES),
+            "effective_allowed_role_codes": sorted(allowed_codes),
+        }
+
     
     # 全流程模式默认配置
     FULL_MODE_CONFIG = {
@@ -379,6 +443,11 @@ class BusinessConfigService:
                 "split": True,
                 "merge": True,
                 "allow_production_without_material": False,  # 允许不带料生产（只管制造过程，不检查缺料）
+                "picking_issue_strategy": "after_release",
+                "picking_confirm_warehouse_only": True,
+                "picking_confirm_allowed_role_codes": [],
+                "require_confirmed_picking_before_operation_start": False,
+                "require_confirmed_picking_before_reporting": False,
             },
             "reporting": {
                 "quick_reporting": True,

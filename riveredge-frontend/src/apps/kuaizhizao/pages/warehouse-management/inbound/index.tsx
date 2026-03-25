@@ -19,7 +19,8 @@ import { warehouseApi, workOrderApi } from '../../../services/production';
 import { getInboundLifecycle } from '../../../utils/inboundLifecycle';
 import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
-import { listPurchaseOrders, pushPurchaseOrderToReceipt } from '../../../services/purchase';
+import { getPurchaseOrder, listPurchaseOrders, pushPurchaseOrderToReceipt } from '../../../services/purchase';
+import { receiptNoticeApi } from '../../../services/receipt-notice';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 
 // 统一的入库单接口（结合采购入库、成品入库、生产退料）
@@ -45,6 +46,7 @@ interface InboundOrder {
   total_quantity?: number;
   total_items?: number;
   notes?: string;
+  review_status?: string;
   created_at?: string;
   updated_at?: string;
   items?: InboundOrderItem[];
@@ -57,6 +59,16 @@ interface InboundOrderItem {
   material_id?: number;
   material_code?: string;
   material_name?: string;
+  material_spec?: string;
+  material_unit?: string;
+  purchase_order_item_id?: number;
+  receipt_quantity?: number;
+  unit_price?: number;
+  total_amount?: number;
+  qualified_quantity?: number;
+  unqualified_quantity?: number;
+  batch_number?: string;
+  status?: string;
   quantity?: number;
   unit?: string;
   notes?: string;
@@ -73,6 +85,8 @@ const InboundPage: React.FC = () => {
   // Drawer 相关状态（详情查看）
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<InboundOrder | null>(null);
+  const [editableReceiptQuantities, setEditableReceiptQuantities] = useState<Record<number, number>>({});
+  const [savingPurchaseReceipt, setSavingPurchaseReceipt] = useState(false);
 
   // 批量入库 Modal
   const [batchModalVisible, setBatchModalVisible] = useState(false);
@@ -86,6 +100,9 @@ const InboundPage: React.FC = () => {
   // 新建入库单：仓库、供应商选项
   const [createWarehouseOptions, setCreateWarehouseOptions] = useState<{ label: string; value: number; name: string }[]>([]);
   const [supplierOptions, setSupplierOptions] = useState<{ label: string; value: number; name: string }[]>([]);
+  const [purchaseSourceType, setPurchaseSourceType] = useState<'purchase_order' | 'receipt_notice'>('purchase_order');
+  const [purchaseSourceOptions, setPurchaseSourceOptions] = useState<{ label: string; value: number }[]>([]);
+  const [sourceLoading, setSourceLoading] = useState(false);
 
   const defaultPurchaseItem = {
     purchase_order_item_id: 0,
@@ -138,6 +155,116 @@ const InboundPage: React.FC = () => {
     };
     load();
   }, [createModalVisible]);
+
+  useEffect(() => {
+    if (!createModalVisible || inboundType !== 'purchase') return;
+    const loadSources = async () => {
+      try {
+        setSourceLoading(true);
+        if (purchaseSourceType === 'purchase_order') {
+          const poRes = await listPurchaseOrders({ skip: 0, limit: 500 });
+          const poData = (poRes as any)?.data ?? (poRes as any)?.items ?? poRes ?? [];
+          const poList = Array.isArray(poData) ? poData : [];
+          const eligible = poList.filter((po: any) => ['已审核', '已确认', 'AUDITED', 'CONFIRMED'].includes(po.status));
+          setPurchaseSourceOptions(
+            eligible.map((po: any) => ({
+              value: Number(po.id),
+              label: `${po.order_code || po.code || po.id} - ${po.supplier_name || '-'}`,
+            }))
+          );
+        } else {
+          const rnRes = await receiptNoticeApi.list({ skip: 0, limit: 500 });
+          const rnData = (rnRes as any)?.data ?? (rnRes as any)?.items ?? rnRes ?? [];
+          const rnList = Array.isArray(rnData) ? rnData : [];
+          const eligible = rnList.filter((n: any) => ['待收货', '已通知'].includes(n.status));
+          setPurchaseSourceOptions(
+            eligible.map((n: any) => ({
+              value: Number(n.id),
+              label: `${n.notice_code || n.id} - ${n.supplier_name || '-'}`,
+            }))
+          );
+        }
+      } catch {
+        setPurchaseSourceOptions([]);
+      } finally {
+        setSourceLoading(false);
+      }
+    };
+    loadSources();
+  }, [createModalVisible, inboundType, purchaseSourceType]);
+
+  const loadPurchaseBySource = async () => {
+    if (inboundType !== 'purchase') return;
+    const sourceId = formRef.current?.getFieldValue?.('source_id');
+    if (!sourceId) {
+      messageApi.warning('请先选择源单据');
+      return;
+    }
+    try {
+      setSourceLoading(true);
+      if (purchaseSourceType === 'purchase_order') {
+        const detail: any = await getPurchaseOrder(Number(sourceId));
+        const mappedItems = (detail.items || [])
+          .filter((it: any) => Number(it.outstanding_quantity ?? it.ordered_quantity ?? 0) > 0)
+          .map((it: any) => ({
+            purchase_order_item_id: Number(it.id || 0),
+            material_id: Number(it.material_id),
+            material_code: it.material_code || '',
+            material_name: it.material_name || '',
+            material_spec: it.material_spec || '',
+            material_unit: it.unit || '个',
+            receipt_quantity: Number(it.outstanding_quantity ?? it.ordered_quantity ?? 0),
+            unit_price: Number(it.unit_price ?? 0),
+            qualified_quantity: Number(it.outstanding_quantity ?? it.ordered_quantity ?? 0),
+            unqualified_quantity: 0,
+          }));
+        if (!mappedItems.length) {
+          messageApi.warning('该采购单暂无可入库明细');
+          return;
+        }
+        formRef.current?.setFieldsValue?.({
+          purchase_order_id: Number(detail.id || 0),
+          purchase_order_code: detail.order_code || '',
+          supplier_id: detail.supplier_id,
+          items: mappedItems,
+          notes: detail.notes || undefined,
+        });
+      } else {
+        const detail: any = await receiptNoticeApi.get(String(sourceId));
+        const mappedItems = (detail.items || [])
+          .filter((it: any) => Number(it.notice_quantity ?? 0) > 0)
+          .map((it: any) => ({
+            purchase_order_item_id: Number(it.purchase_order_item_id || 0),
+            material_id: Number(it.material_id),
+            material_code: it.material_code || '',
+            material_name: it.material_name || '',
+            material_spec: it.material_spec || '',
+            material_unit: it.material_unit || '个',
+            receipt_quantity: Number(it.notice_quantity ?? 0),
+            unit_price: Number(it.unit_price ?? 0),
+            qualified_quantity: Number(it.notice_quantity ?? 0),
+            unqualified_quantity: 0,
+          }));
+        if (!mappedItems.length) {
+          messageApi.warning('该收货通知单暂无可入库明细');
+          return;
+        }
+        formRef.current?.setFieldsValue?.({
+          purchase_order_id: Number(detail.purchase_order_id || 0),
+          purchase_order_code: detail.purchase_order_code || '',
+          warehouse_id: detail.warehouse_id || undefined,
+          supplier_id: detail.supplier_id,
+          items: mappedItems,
+          notes: detail.notes || undefined,
+        });
+      }
+      messageApi.success('已按源单据载入入库明细');
+    } catch (e: any) {
+      messageApi.error(e?.message || e?.response?.data?.detail || '载入源单据失败');
+    } finally {
+      setSourceLoading(false);
+    }
+  };
 
   /** 批量入库：加载工单、采购订单、仓库 */
   useEffect(() => {
@@ -254,11 +381,89 @@ const InboundPage: React.FC = () => {
         detailData = await warehouseApi.productionReturn.get(record.id!.toString());
       }
       if (detailData) {
+        if (record.receipt_type === 'purchase') {
+          const quantities: Record<number, number> = {};
+          (detailData.items || []).forEach((it: any) => {
+            if (it?.id != null) quantities[it.id] = Number(it.receipt_quantity ?? 0);
+          });
+          setEditableReceiptQuantities(quantities);
+        } else {
+          setEditableReceiptQuantities({});
+        }
         setCurrentOrder({ ...detailData, receipt_type: record.receipt_type });
         setDetailDrawerVisible(true);
       }
     } catch (error) {
       messageApi.error('获取入库单详情失败');
+    }
+  };
+
+  const isEditablePurchaseReceipt = (order?: InboundOrder | null) =>
+    order?.receipt_type === 'purchase' && ['草稿', 'draft', 'DRAFT', '待入库'].includes(String(order?.status || ''));
+
+  const handleSavePurchaseReceiptQuantities = async () => {
+    if (!currentOrder?.id || currentOrder.receipt_type !== 'purchase') return;
+    const items = (currentOrder.items || []) as InboundOrderItem[];
+    if (!items.length) {
+      messageApi.warning('暂无可编辑明细');
+      return;
+    }
+    const mappedItems = items
+      .filter((it) => it.material_id != null)
+      .map((it) => {
+        const rowId = Number(it.id);
+        const qty = Number(editableReceiptQuantities[rowId] ?? it.receipt_quantity ?? 0);
+        if (!(qty > 0)) {
+          throw new Error(`物料 ${it.material_code || it.material_name || '-'} 的实际数量必须大于 0`);
+        }
+        const unitPrice = Number(it.unit_price ?? 0);
+        const qualified = Number(it.qualified_quantity ?? it.receipt_quantity ?? qty);
+        const unqualified = Number(it.unqualified_quantity ?? 0);
+        return {
+          purchase_order_item_id: Number(it.purchase_order_item_id ?? 0),
+          material_id: Number(it.material_id),
+          material_code: it.material_code || '',
+          material_name: it.material_name || '',
+          material_spec: it.material_spec || undefined,
+          material_unit: it.material_unit || it.unit || '个',
+          receipt_quantity: qty,
+          unit_price: unitPrice,
+          total_amount: Number((qty * unitPrice).toFixed(2)),
+          qualified_quantity: Number((qualified + unqualified > qty ? qty : qualified).toFixed(2)),
+          unqualified_quantity: Number((qualified + unqualified > qty ? 0 : unqualified).toFixed(2)),
+          batch_number: it.batch_number || undefined,
+          status: it.status || currentOrder.status || '草稿',
+          notes: it.notes || undefined,
+        };
+      });
+
+    setSavingPurchaseReceipt(true);
+    try {
+      await warehouseApi.purchaseReceipt.update(String(currentOrder.id), {
+        purchase_order_id: Number(currentOrder.purchase_order_id || 0),
+        purchase_order_code: currentOrder.purchase_order_code || '',
+        supplier_id: Number(currentOrder.supplier_id || 0),
+        supplier_name: currentOrder.supplier_name || '',
+        warehouse_id: Number(currentOrder.warehouse_id || 0),
+        warehouse_name: currentOrder.warehouse_name || '',
+        status: currentOrder.status || '草稿',
+        review_status: currentOrder.review_status || '待审核',
+        notes: currentOrder.notes || undefined,
+        items: mappedItems,
+      });
+      const detail = await warehouseApi.purchaseReceipt.get(String(currentOrder.id));
+      setCurrentOrder({ ...detail, receipt_type: 'purchase' });
+      const quantities: Record<number, number> = {};
+      ((detail as any).items || []).forEach((it: any) => {
+        if (it?.id != null) quantities[it.id] = Number(it.receipt_quantity ?? 0);
+      });
+      setEditableReceiptQuantities(quantities);
+      messageApi.success('实际数量已保存');
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || error?.response?.data?.detail || '保存失败');
+    } finally {
+      setSavingPurchaseReceipt(false);
     }
   };
 
@@ -675,6 +880,45 @@ const InboundPage: React.FC = () => {
         {inboundType === 'purchase' && (
           <>
             <Row gutter={16}>
+              <Col span={8}>
+                <ProFormSelect
+                  name="source_type"
+                  label="源单据类型"
+                  initialValue="purchase_order"
+                  options={[
+                    { label: '采购单', value: 'purchase_order' },
+                    { label: '收货通知单', value: 'receipt_notice' },
+                  ]}
+                  fieldProps={{
+                    onChange: (v: 'purchase_order' | 'receipt_notice') => {
+                      setPurchaseSourceType(v);
+                      formRef.current?.setFieldsValue?.({ source_id: undefined });
+                    },
+                  }}
+                />
+              </Col>
+              <Col span={10}>
+                <ProFormSelect
+                  name="source_id"
+                  label="选择源单据"
+                  placeholder={purchaseSourceType === 'purchase_order' ? '请选择采购单' : '请选择收货通知单'}
+                  options={purchaseSourceOptions}
+                  fieldProps={{
+                    loading: sourceLoading,
+                    showSearch: true,
+                    filterOption: (i: any, o: any) => (o?.label ?? '').toString().toLowerCase().includes((i ?? '').toLowerCase()),
+                  }}
+                />
+              </Col>
+              <Col span={6}>
+                <ProFormItem label=" " style={{ marginBottom: 0 }}>
+                  <Button onClick={loadPurchaseBySource} loading={sourceLoading} style={{ width: '100%' }}>
+                    载入源单据
+                  </Button>
+                </ProFormItem>
+              </Col>
+            </Row>
+            <Row gutter={16}>
               <Col span={12}>
                 <ProFormSelect
                   name="warehouse_id"
@@ -919,18 +1163,28 @@ const InboundPage: React.FC = () => {
       <DetailDrawerTemplate
         title={`${currentOrder?.receipt_type === 'production_return' ? '生产退料单' : '入库单'}详情 - ${currentOrder?.receipt_code || currentOrder?.return_code || ''}`}
         open={detailDrawerVisible}
-        onClose={() => setDetailDrawerVisible(false)}
+        onClose={() => {
+          setDetailDrawerVisible(false);
+          setEditableReceiptQuantities({});
+        }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
         extra={
           currentOrder && (currentOrder.status === 'draft' || currentOrder.status === '待退料' || currentOrder.status === '草稿' || currentOrder.status === '待入库') && (
-            <Button
-              type="primary"
-              icon={<CheckCircleOutlined />}
-              onClick={() => handleConfirm(currentOrder)}
-            >
-              {currentOrder.receipt_type === 'production_return' ? '确认退料' : '确认入库'}
-            </Button>
+            <Space>
+              {isEditablePurchaseReceipt(currentOrder) && (
+                <Button onClick={handleSavePurchaseReceiptQuantities} loading={savingPurchaseReceipt}>
+                  保存实际数量
+                </Button>
+              )}
+              <Button
+                type="primary"
+                icon={<CheckCircleOutlined />}
+                onClick={() => handleConfirm(currentOrder)}
+              >
+                {currentOrder.receipt_type === 'production_return' ? '确认退料' : '确认入库'}
+              </Button>
+            </Space>
           )
         }
         customContent={
@@ -1015,7 +1269,27 @@ const InboundPage: React.FC = () => {
                           ? [
                               { title: '物料编码', dataIndex: 'material_code', width: 120 },
                               { title: '物料名称', dataIndex: 'material_name', width: 150 },
-                              { title: '数量', dataIndex: 'receipt_quantity', width: 100, align: 'right' as const },
+                              {
+                                title: '实际数量',
+                                dataIndex: 'receipt_quantity',
+                                width: 140,
+                                align: 'right' as const,
+                                render: (_: any, row: InboundOrderItem) => {
+                                  const editable = isEditablePurchaseReceipt(currentOrder) && row.id != null;
+                                  if (!editable) return Number(row.receipt_quantity ?? 0);
+                                  const rid = Number(row.id);
+                                  return (
+                                    <InputNumber
+                                      min={0.01}
+                                      precision={2}
+                                      value={editableReceiptQuantities[rid] ?? Number(row.receipt_quantity ?? 0)}
+                                      onChange={(v) => setEditableReceiptQuantities((prev) => ({ ...prev, [rid]: Number(v) || 0 }))}
+                                      style={{ width: 110 }}
+                                      size="small"
+                                    />
+                                  );
+                                },
+                              },
                               { title: '单位', dataIndex: 'material_unit', width: 60 },
                               { title: '单价', dataIndex: 'unit_price', width: 90, align: 'right' as const },
                               { title: '金额', dataIndex: 'total_amount', width: 100, align: 'right' as const },

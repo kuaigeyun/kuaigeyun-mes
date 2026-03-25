@@ -64,6 +64,14 @@ export async function getWorkOrderStatistics(): Promise<WorkOrderStatistics> {
   return apiRequest<WorkOrderStatistics>('/apps/kuaizhizao/work-orders/statistics', { method: 'GET' });
 }
 
+export interface WorkOrderExecutionConfig {
+  picking_issue_strategy: string;
+  picking_confirm_warehouse_only: boolean;
+  require_confirmed_picking_before_operation_start: boolean;
+  require_confirmed_picking_before_reporting: boolean;
+  current_user_can_confirm_picking: boolean;
+}
+
 export const workOrderApi = {
   list: async (params?: any) => apiRequest('/apps/kuaizhizao/work-orders', { method: 'GET', params }),
   create: async (data: any) => apiRequest('/apps/kuaizhizao/work-orders', { method: 'POST', data }),
@@ -80,6 +88,13 @@ export const workOrderApi = {
     apiRequest(`/apps/kuaizhizao/work-orders/${workOrderId}/operations/${operationId}/start`, { method: 'POST' }),
   dispatchOperation: async (workOrderId: string, operationId: number, data: any) =>
     apiRequest(`/apps/kuaizhizao/work-orders/${workOrderId}/operations/${operationId}/dispatch`, { method: 'POST', data }),
+  getExecutionConfig: async () =>
+    apiRequest<WorkOrderExecutionConfig>('/apps/kuaizhizao/work-orders/execution-config', { method: 'GET' }),
+  getPickingConfirmationStatus: async (workOrderId: string) =>
+    apiRequest<{ work_order_id: number; has_confirmed_picking: boolean }>(
+      `/apps/kuaizhizao/work-orders/${workOrderId}/picking-confirmation-status`,
+      { method: 'GET' }
+    ),
   checkShortage: async (workOrderId: string, warehouseId?: number) => {
     const res = await apiRequest<{
       has_shortage: boolean;

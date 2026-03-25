@@ -83,12 +83,39 @@ from apps.kuaizhizao.schemas.warehouse import (
 from apps.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
+from infra.models.user import User
 
 class ProductionPickingService(AppBaseService[ProductionPicking]):
     """生产领料单服务"""
 
     def __init__(self):
         super().__init__(ProductionPicking)
+
+    async def _get_user_role_codes(self, user_id: int) -> set[str]:
+        user = await User.get_or_none(id=user_id, deleted_at__isnull=True).prefetch_related("roles")
+        if not user:
+            return set()
+        role_codes = set()
+        for role in getattr(user, "roles", []) or []:
+            code = getattr(role, "code", None)
+            if code:
+                role_codes.add(str(code).strip().upper())
+        return role_codes
+
+    async def _assert_can_confirm_picking(self, tenant_id: int, user_id: int) -> None:
+        policy = await BusinessConfigService().get_work_order_picking_policy(tenant_id)
+        allowed_role_codes = set(policy.get("effective_allowed_role_codes", []))
+        user_role_codes = await self._get_user_role_codes(user_id)
+
+        if not user_role_codes & allowed_role_codes:
+            mode_text = "仅仓库角色可确认" if policy.get("picking_confirm_warehouse_only", True) else "角色未在允许名单"
+            raise BusinessLogicError(f"无权限确认领料：{mode_text}")
+
+    async def can_user_confirm_picking(self, tenant_id: int, user_id: int) -> tuple[bool, set[str]]:
+        policy = await BusinessConfigService().get_work_order_picking_policy(tenant_id)
+        allowed_role_codes = set(policy.get("effective_allowed_role_codes", []))
+        user_role_codes = await self._get_user_role_codes(user_id)
+        return bool(user_role_codes & allowed_role_codes), user_role_codes
 
     async def create_production_picking(self, tenant_id: int, picking_data: ProductionPickingCreate, created_by: int) -> ProductionPickingResponse:
         """创建生产领料单"""
@@ -190,6 +217,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
     async def confirm_picking(self, tenant_id: int, picking_id: int, confirmed_by: int) -> ProductionPickingResponse:
         """确认领料"""
         async with in_transaction():
+            await self._assert_can_confirm_picking(tenant_id=tenant_id, user_id=confirmed_by)
             picking = await self.get_production_picking_by_id(tenant_id, picking_id)
 
             if picking.status != '待领料':
@@ -1768,6 +1796,65 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         resp.lifecycle = get_purchase_receipt_lifecycle(receipt)
         resp.items = [PurchaseReceiptItemResponse.model_validate(i) for i in items]
         return resp
+
+    async def update_purchase_receipt(
+        self,
+        tenant_id: int,
+        receipt_id: int,
+        receipt_data: PurchaseReceiptUpdate,
+        updated_by: int,
+    ) -> PurchaseReceiptResponse:
+        """更新采购入库单（草稿/待入库可编辑明细数量）。"""
+        async with in_transaction():
+            receipt = await PurchaseReceipt.get_or_none(tenant_id=tenant_id, id=receipt_id, deleted_at__isnull=True)
+            if not receipt:
+                raise NotFoundError(f"采购入库单不存在: {receipt_id}")
+            if receipt.status not in ("草稿", "draft", "DRAFT", "待入库"):
+                raise BusinessLogicError("只有草稿或待入库状态的采购入库单可修改")
+
+            # 更新入库单头
+            receipt_dict = receipt_data.model_dump(exclude_unset=True, exclude={"items", "receipt_code"})
+            receipt_dict["updated_by"] = updated_by
+            await PurchaseReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(**receipt_dict)
+
+            # 全量替换明细（前端会传完整明细）
+            if receipt_data.items is not None:
+                await PurchaseReceiptItem.filter(tenant_id=tenant_id, receipt_id=receipt_id).delete()
+                total_quantity = Decimal(0)
+                total_amount = Decimal(0)
+                for item_data in receipt_data.items:
+                    qty = Decimal(str(item_data.receipt_quantity or 0))
+                    if qty <= 0:
+                        raise ValidationError(f"物料 {item_data.material_code} 的实际数量必须大于 0")
+                    unit_price = Decimal(str(item_data.unit_price or 0))
+                    line_amount = qty * unit_price
+
+                    item_dict = item_data.model_dump(exclude_unset=True)
+                    item_dict.update({
+                        "tenant_id": tenant_id,
+                        "receipt_id": receipt_id,
+                        "receipt_quantity": qty,
+                        "unit_price": unit_price,
+                        "total_amount": line_amount,
+                        "qualified_quantity": Decimal(str(item_data.qualified_quantity))
+                        if item_data.qualified_quantity is not None
+                        else qty,
+                        "unqualified_quantity": Decimal(str(item_data.unqualified_quantity))
+                        if item_data.unqualified_quantity is not None
+                        else Decimal(0),
+                    })
+                    await PurchaseReceiptItem.create(**item_dict)
+                    total_quantity += qty
+                    total_amount += line_amount
+
+                await PurchaseReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(
+                    total_quantity=total_quantity,
+                    total_amount=total_amount,
+                )
+
+            return PurchaseReceiptResponse.model_validate(
+                await PurchaseReceipt.get(tenant_id=tenant_id, id=receipt_id)
+            )
 
     async def list_purchase_receipts(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[PurchaseReceiptResponse]:
         """获取采购入库单列表"""

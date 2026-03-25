@@ -6,7 +6,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, message, Card, Table, Row, Col, Form } from 'antd';
+import { App, Button, Tag, Space, Modal, message, Card, Table, Row, Col, Form, Tooltip } from 'antd';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined, InboxOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -77,6 +77,19 @@ const OutboundPage: React.FC = () => {
   const [salesOrderOptions, setSalesOrderOptions] = useState<{ label: string; value: number }[]>([]);
   const [warehouseOptions, setWarehouseOptions] = useState<{ label: string; value: number; name: string }[]>([]);
   const [batchSubmitting, setBatchSubmitting] = useState(false);
+  const [executionConfig, setExecutionConfig] = useState<any>(null);
+
+  useEffect(() => {
+    const loadExecutionConfig = async () => {
+      try {
+        const cfg = await workOrderApi.getExecutionConfig();
+        setExecutionConfig(cfg);
+      } catch {
+        setExecutionConfig(null);
+      }
+    };
+    loadExecutionConfig();
+  }, []);
 
   /** 批量出库：加载工单、销售订单、仓库 */
   useEffect(() => {
@@ -218,6 +231,14 @@ const OutboundPage: React.FC = () => {
    * 处理确认出库
    */
   const handleConfirm = async (record: OutboundOrder) => {
+    if (
+      record.outbound_type === 'production_picking' &&
+      executionConfig &&
+      executionConfig.current_user_can_confirm_picking === false
+    ) {
+      messageApi.warning('当前业务配置下，您无权限确认生产领料');
+      return;
+    }
     Modal.confirm({
       title: '确认出库',
       content: `确定要确认出库单 "${record.delivery_code || record.picking_code}" 吗？确认后将更新库存。`,
@@ -360,15 +381,30 @@ const OutboundPage: React.FC = () => {
             详情
           </Button>
           {(record.status === 'draft' || record.status === '草稿' || record.status === '待领料' || record.status === '待出库') && (
-            <Button
-              type="link"
-              size="small"
-              icon={<CheckCircleOutlined />}
-              onClick={() => handleConfirm(record)}
-              style={{ color: '#52c41a' }}
+            <Tooltip
+              title={
+                record.outbound_type === 'production_picking' &&
+                executionConfig &&
+                executionConfig.current_user_can_confirm_picking === false
+                  ? '当前业务配置下，您无权限确认生产领料'
+                  : undefined
+              }
             >
-              确认出库
-            </Button>
+              <Button
+                type="link"
+                size="small"
+                icon={<CheckCircleOutlined />}
+                onClick={() => handleConfirm(record)}
+                style={{ color: '#52c41a' }}
+                disabled={
+                  record.outbound_type === 'production_picking' &&
+                  executionConfig &&
+                  executionConfig.current_user_can_confirm_picking === false
+                }
+              >
+                确认出库
+              </Button>
+            </Tooltip>
           )}
         </Space>
       ),
@@ -686,6 +722,11 @@ const OutboundPage: React.FC = () => {
               type="primary"
               icon={<CheckCircleOutlined />}
               onClick={() => handleConfirm(currentOrder)}
+              disabled={
+                currentOrder.outbound_type === 'production_picking' &&
+                executionConfig &&
+                executionConfig.current_user_can_confirm_picking === false
+              }
             >
               确认出库
             </Button>
