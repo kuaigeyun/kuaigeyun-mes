@@ -40,9 +40,15 @@ from apps.kuaizhizao.schemas.work_order import (
     WorkOrderMergeResponse,
     WorkOrderOperationDispatch,
     DefectTypeMinimal,
+    WorkOrderKittingAnalysisResponse,
+    MaterialKittingItem,
+    MaterialLocationInfo,
 )
 from apps.kuaizhizao.utils.bom_helper import calculate_material_requirements_from_bom
-from apps.kuaizhizao.utils.inventory_helper import get_material_available_quantity
+from apps.kuaizhizao.utils.inventory_helper import (
+    get_material_available_quantity,
+    get_material_detailed_locations,
+)
 from apps.kuaizhizao.models.reporting_record import ReportingRecord
 from apps.kuaizhizao.models.production_picking import ProductionPicking
 from apps.kuaizhizao.models.production_picking_item import ProductionPickingItem
@@ -1078,10 +1084,9 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 logger.exception(e)
                 continue
 
-        # 批量更新 created_by_name 为空的工单
+        # 批量更新 created_by_name 为空的工单（性能优化：使用 bulk_update 减少数据库往返）
         if work_orders_to_update:
-            for wo in work_orders_to_update:
-                await wo.save(update_fields=["created_by_name"])
+            await WorkOrder.bulk_update(work_orders_to_update, fields=["created_by_name"])
 
         return result, total
 
@@ -2598,6 +2603,130 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             logger.info(f"批量设置 {len(updated_work_orders)} 个工单的优先级为 {batch_data.priority}")
 
             return updated_work_orders
+
+    async def get_work_order_kitting_analysis(
+        self,
+        tenant_id: int,
+        work_order_id: int
+    ) -> WorkOrderKittingAnalysisResponse:
+        """
+        获取工单齐套性分析
+
+        逻辑：
+        1. 展开 BOM 需求
+        2. 统计已领料数量
+        3. 获取实时库位库存（主仓 + 线边仓）
+        4. 计算齐套状态
+        """
+        from tortoise.functions import Sum
+
+        # 1. 获取工单
+        wo = await WorkOrder.get_or_none(tenant_id=tenant_id, id=work_order_id)
+        if not wo:
+            raise NotFoundError(f"工单不存在: {work_order_id}")
+
+        # 2. 从 BOM 计算物料需求
+        try:
+            requirements = await calculate_material_requirements_from_bom(
+                tenant_id=tenant_id,
+                material_id=wo.product_id,
+                required_quantity=float(wo.quantity),
+                only_approved=True,
+                variant_attributes=wo.variant_attributes,
+                configurable_selections=wo.configurable_selections
+            )
+        except Exception as e:
+            logger.warning(f"BOM 展开失败: {e}")
+            requirements = []
+
+        if not requirements:
+            return WorkOrderKittingAnalysisResponse(
+                work_order_id=work_order_id,
+                work_order_code=wo.code,
+                kitting_rate=Decimal("0"),
+                status="no_bom",
+                items=[]
+            )
+
+        # 3. 聚合分析
+        analysis_items = []
+        total_items = len(requirements)
+        fully_kitted_count = 0
+
+        for req in requirements:
+            # 3.1 获取已领料数量 (从 ProductionPickingItem 汇总)
+            # 状态为“已领料”或“已确认”的视为已下线到车间/线边
+            agg_picked = await ProductionPickingItem.filter(
+                tenant_id=tenant_id,
+                picking__work_order_id=work_order_id,
+                material_id=req.component_id,
+                status__in=["已领料", "已确认", "picked", "confirmed"],
+                deleted_at__isnull=True
+            ).aggregate(total=Sum("picked_quantity"))
+            picked_qty = Decimal(str(agg_picked.get("total") or 0))
+
+            # 3.2 获取实时库位分布
+            locations_data = await get_material_detailed_locations(tenant_id, req.component_id)
+            locations = [MaterialLocationInfo(**loc) for loc in locations_data]
+
+            # 3.3 计算按仓库类型的汇总库存
+            main_warehouse_qty = Decimal("0")
+            line_side_qty = Decimal("0")
+            
+            # 这里简单通过名称或 warehouse_id 判断（生产实务中通常 warehouse_id 段位不同或有辅助字段）
+            # 我们在 inventory_helper 里标记了 wh_id=0 为主仓，>0 且匹配类型为线边仓
+            for loc in locations_data:
+                q = Decimal(str(loc["quantity"]))
+                if loc["storage_location_code"] == "线边位":
+                    line_side_qty += q
+                else:
+                    main_warehouse_qty += q
+
+            required_qty = Decimal(str(req.gross_requirement))
+            shortage_qty = required_qty - picked_qty
+            if shortage_qty < 0:
+                shortage_qty = Decimal("0")
+
+            # 3.4 判定状态
+            # 可用总量 = 已领 + 线边 + 主仓
+            total_available = picked_qty + line_side_qty + main_warehouse_qty
+            
+            if total_available >= required_qty:
+                item_status = "fully_kitted"
+                fully_kitted_count += 1
+            elif total_available > picked_qty:
+                item_status = "partial"
+            else:
+                item_status = "shortage"
+
+            analysis_items.append(MaterialKittingItem(
+                material_id=req.component_id,
+                material_code=req.component_code,
+                material_name=req.component_name,
+                material_unit=req.unit,
+                required_quantity=required_qty,
+                picked_quantity=picked_qty,
+                shortage_quantity=shortage_qty,
+                main_warehouse_available=main_warehouse_qty,
+                line_side_available=line_side_qty,
+                status=item_status,
+                locations=locations
+            ))
+
+        # 4. 汇总
+        kitting_rate = Decimal(str(round(fully_kitted_count / total_items * 100, 2))) if total_items > 0 else Decimal("100")
+        
+        overall_status = "fully_kitted"
+        if kitting_rate < 100:
+            overall_status = "partial" if kitting_rate > 0 else "shortage"
+
+        return WorkOrderKittingAnalysisResponse(
+            work_order_id=work_order_id,
+            work_order_code=wo.code,
+            kitting_rate=kitting_rate,
+            status=overall_status,
+            items=analysis_items
+        )
 
     async def merge_work_orders(
         self,

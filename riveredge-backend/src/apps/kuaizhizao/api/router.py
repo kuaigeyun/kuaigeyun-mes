@@ -13,6 +13,7 @@ from fastapi import APIRouter
 from .productions.productions import router as production_router
 from .purchases.purchases import router as purchase_router
 from .purchase_requisitions.purchase_requisitions import router as purchase_requisition_router
+from .material_calls.material_calls import router as material_call_router
 
 from .demands.demands import router as demand_router
 from .demand_computations.demand_computations import router as demand_computation_router
@@ -66,6 +67,7 @@ router.include_router(sample_trial_router)  # 样品试用单管理
 router.include_router(production_router)
 router.include_router(purchase_router)
 router.include_router(purchase_requisition_router)
+router.include_router(material_call_router)
 
 router.include_router(demand_router)  # 统一需求管理（新设计）
 router.include_router(demand_computation_router)  # 统一需求计算（新设计）

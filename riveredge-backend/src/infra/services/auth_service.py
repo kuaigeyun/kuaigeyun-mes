@@ -37,27 +37,7 @@ from core.services.authorization.user_permission_service import UserPermissionSe
 from core.services.authorization.permission_version_service import PermissionVersionService
 
 
-async def _ensure_db_connection():
-    """
-    确保数据库连接已初始化
 
-    由于跳过 register_tortoise，我们需要在需要时手动初始化
-    """
-    try:
-        # 检查是否已初始化
-        Tortoise.get_connection("default")
-    except Exception as e:
-        # 未初始化，尝试初始化
-        try:
-            # 确保配置中的 routers 字段存在且是列表
-            config = TORTOISE_ORM.copy()
-            if "routers" not in config or config["routers"] is None:
-                config["routers"] = []
-            await Tortoise.init(config=config)
-            logger.debug("Tortoise ORM 手动初始化成功")
-        except Exception as init_error:
-            logger.error(f"Tortoise ORM 初始化失败: {init_error}")
-            raise
 
 
 class AuthService:
@@ -286,8 +266,6 @@ class AuthService:
         Raises:
             HTTPException: 当组织不存在、用户名已存在或邀请码无效时抛出
         """
-        # 确保数据库连接已初始化
-        await _ensure_db_connection()
         
         from infra.services.user_service import UserService
         from infra.services.tenant_service import TenantService
@@ -520,8 +498,6 @@ class AuthService:
             >>> "access_token" in result
             True
         """
-        # 确保数据库连接已初始化
-        await _ensure_db_connection()
 
         logger.info(f"开始登录: username_or_phone={data.username}, tenant_id={getattr(data, 'tenant_id', None)}")
         # 查找用户（支持用户名或手机号登录，符合中国用户使用习惯）
@@ -944,8 +920,6 @@ class AuthService:
         Raises:
             HTTPException: 当创建体验账户失败时抛出
         """
-        # 确保数据库连接已初始化
-        await _ensure_db_connection()
 
         from infra.schemas.tenant import TenantCreate
         from infra.schemas.user import UserCreate

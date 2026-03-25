@@ -242,6 +242,45 @@ class MaterialShortageResponse(BaseModel):
     work_order_name: str = Field(..., description="工单名称")
 
 
+class MaterialLocationInfo(BaseModel):
+    """库位详细信息"""
+    warehouse_id: int
+    warehouse_name: str
+    batch_no: Optional[str] = None
+    quantity: Decimal
+    storage_location_code: Optional[str] = None
+
+
+class MaterialKittingItem(BaseModel):
+    """齐套性分析明细项"""
+    material_id: int = Field(..., description="物料ID")
+    material_code: str = Field(..., description="物料编码")
+    material_name: str = Field(..., description="物料名称")
+    material_unit: Optional[str] = Field(None, description="单位")
+    required_quantity: Decimal = Field(..., description="总需求数量")
+    picked_quantity: Decimal = Field(..., description="已领料数量")
+    shortage_quantity: Decimal = Field(..., description="缺料数量（相对于总需求）")
+    
+    # 库存分布
+    main_warehouse_available: Decimal = Field(..., description="主仓可用库存")
+    line_side_available: Decimal = Field(..., description="线边仓可用库存")
+    
+    # 状态：fully_kitted(全齐), partial(部分满足), shortage(短缺)
+    status: str = Field(..., description="齐套状态")
+    
+    # 具体库位分布
+    locations: List[MaterialLocationInfo] = Field(default_factory=list, description="库存位置分布详情")
+
+
+class WorkOrderKittingAnalysisResponse(BaseModel):
+    """工单齐套性分析响应"""
+    work_order_id: int
+    work_order_code: str
+    kitting_rate: Decimal = Field(..., description="齐套率（0-100）")
+    status: str = Field(..., description="整体齐套状态")
+    items: List[MaterialKittingItem] = Field(..., description="物料齐套明细")
+
+
 class WorkOrderSplitRequest(BaseModel):
     """工单拆分请求Schema"""
     split_type: str = Field(..., description="拆分类型：quantity（按数量拆分）或operation（按工序拆分）")

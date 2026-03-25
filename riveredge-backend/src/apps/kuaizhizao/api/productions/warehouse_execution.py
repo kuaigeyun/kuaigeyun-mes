@@ -93,6 +93,7 @@ from apps.kuaizhizao.schemas.warehouse import (
     MaterialReturnResponse,
     MaterialReturnListResponse,
     MaterialReturnWithItemsResponse,
+    MaterialPrepReminderResponse,
 )
 from apps.kuaizhizao.schemas.replenishment_suggestion import (
     ReplenishmentSuggestionResponse,
@@ -280,6 +281,19 @@ async def confirm_production_picking(
         picking_id=picking_id,
         confirmed_by=current_user.id
     )
+
+
+@router.get("/production-pickings/material-prep-reminders", response_model=MaterialPrepReminderResponse, summary="获取仓库主动备料提醒列表")
+async def get_material_prep_reminders(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> MaterialPrepReminderResponse:
+    """
+    获取推荐备料的工单列表（齐套且未领料）。
+    """
+    return await ProductionPickingService().get_material_prep_reminders(tenant_id, skip, limit)
 
 
 # ============ 生产退料管理 API ============

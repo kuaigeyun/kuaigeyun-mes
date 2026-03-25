@@ -55,13 +55,15 @@ async def get_dynamic_tortoise_config() -> dict:
                     "database": settings.DB_NAME,
                     # 连接池配置（解决连接中断问题）
                     "min_size": 5,  # 最小连接池大小
-                    "max_size": 20,  # 最大连接池大小（增加以支持并发请求）
+                    "max_size": 25,  # 最大连接池大小（增加以支持并发请求）
                     "max_queries": 50000,  # 每个连接最大查询次数
-                    "max_inactive_connection_lifetime": 300.0,  # 非活跃连接最大生存时间（秒）
-                    "command_timeout": 60,  # 命令超时（秒）
+                    "max_inactive_connection_lifetime": 60.0,  # 非活跃连接最大生存时间（秒，防止空闲连接由于远程防火墙断开而失效）
+                    "command_timeout": 300,  # 命令超时（秒），增加以处理可能的慢查询
                     "server_settings": {
                         "application_name": "riveredge_asyncpg",
-                        "timezone": dynamic_config.get("timezone", "UTC")
+                        "timezone": dynamic_config.get("timezone", "UTC"),
+                        # ⚠️ 关键修复：增加更多 server_settings 以保持连接稳定性
+                        "tcp_user_timeout": "30000",  # TCP用户超时（毫秒）
                     }
                 }
             },
@@ -93,10 +95,11 @@ TORTOISE_ORM = {
                 "min_size": _pool_min,  # aerich 迁移时仅 1 个连接，避免 too many clients
                 "max_size": _pool_max,
                 "max_queries": 50000,  # 每个连接最大查询次数
-                "max_inactive_connection_lifetime": 300.0,  # 非活跃连接最大生存时间（秒，必须是浮点数）
+                "max_inactive_connection_lifetime": 60.0,  # 非活跃连接最大生存时间（秒，必须是浮点数）
                 "command_timeout": 300,  # 命令超时（秒），aerich 迁移需更长时间
                 "server_settings": {
                     "application_name": "riveredge_asyncpg",
+                    "tcp_user_timeout": "30000",  # TCP用户超时（毫秒）
                     "timezone": settings.TIMEZONE  # 使用与Tortoise ORM相同的时区
                 }
             }

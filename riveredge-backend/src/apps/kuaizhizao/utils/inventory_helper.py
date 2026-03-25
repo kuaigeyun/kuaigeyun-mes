@@ -127,3 +127,79 @@ async def get_material_inventory_info(
         "total_quantity": float(on_hand),
     }
 
+
+async def get_material_detailed_locations(
+    tenant_id: int,
+    material_id: int
+) -> list[Dict[str, Any]]:
+    """
+    获取物料的详细库位分布
+
+    Returns:
+        List[Dict], 包含库位、仓库、批次及可用数量
+    """
+    locations = []
+    
+    # 1. 主仓 MaterialBatch
+    try:
+        from apps.master_data.models.material_batch import MaterialBatch
+        from apps.master_data.models.warehouse import Warehouse
+
+        batches = await MaterialBatch.filter(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            deleted_at__isnull=True,
+            status="in_stock",
+            quantity__gt=0
+        ).all()
+        
+        # 暂时没有在 MaterialBatch 里直接存 warehouse_id，
+        # 如果有仓库字段则关联；如果没有则标记为“默认主仓”
+        # 补充：通常在业务实务中，MaterialBatch 会归属于某个 Warehouse
+        for b in batches:
+            wh_name = "主仓"
+            wh_id = 0
+            # 尝试通过仓库字段获取（取决于具体模型定义，此处兼容性处理）
+            if hasattr(b, "warehouse_id") and b.warehouse_id:
+                wh = await Warehouse.get_or_none(id=b.warehouse_id)
+                if wh:
+                    wh_name = wh.name
+                    wh_id = wh.id
+            
+            locations.append({
+                "warehouse_id": wh_id,
+                "warehouse_name": wh_name,
+                "batch_no": b.batch_no,
+                "quantity": b.quantity,
+                "storage_location_code": getattr(b, "storage_location_code", None)
+            })
+    except Exception as e:
+        logger.warning(f"获取主仓明细失败: {e}")
+
+    # 2. 线边仓 LineSideInventory
+    try:
+        from apps.kuaizhizao.models.line_side_inventory import LineSideInventory
+        from apps.master_data.models.warehouse import Warehouse
+
+        line_items = await LineSideInventory.filter(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            deleted_at__isnull=True,
+            status="available",
+            quantity__gt=0
+        ).all()
+        
+        for item in line_items:
+            wh = await Warehouse.get_or_none(id=item.warehouse_id)
+            locations.append({
+                "warehouse_id": item.warehouse_id,
+                "warehouse_name": wh.name if wh else f"线边仓({item.warehouse_id})",
+                "batch_no": item.batch_no,
+                "quantity": (item.quantity or Decimal("0")) - (item.reserved_quantity or Decimal("0")),
+                "storage_location_code": "线边位"
+            })
+    except Exception as e:
+        logger.warning(f"获取线边仓明细失败: {e}")
+
+    return locations
+

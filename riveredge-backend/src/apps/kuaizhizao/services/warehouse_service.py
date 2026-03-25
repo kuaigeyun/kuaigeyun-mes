@@ -37,6 +37,8 @@ from apps.kuaizhizao.models.material_borrow import MaterialBorrow
 from apps.kuaizhizao.models.material_borrow_item import MaterialBorrowItem
 from apps.kuaizhizao.models.material_return import MaterialReturn
 from apps.kuaizhizao.models.material_return_item import MaterialReturnItem
+from apps.kuaizhizao.models.work_order import WorkOrder
+from apps.kuaizhizao.models.line_side_inventory import LineSideInventory
 
 from apps.kuaizhizao.schemas.warehouse import (
     # 生产领料单
@@ -78,6 +80,7 @@ from apps.kuaizhizao.schemas.warehouse import (
     MaterialReturnCreate, MaterialReturnUpdate, MaterialReturnResponse, MaterialReturnListResponse,
     MaterialReturnWithItemsResponse, MaterialReturnItemCreate, MaterialReturnItemUpdate,
     MaterialReturnItemResponse,
+    MaterialPrepReminderResponse, MaterialPrepReminderItem,
 )
 
 from apps.base_service import AppBaseService
@@ -198,6 +201,64 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             await ProductionPicking.filter(tenant_id=tenant_id, id=picking_id).update(**update_data)
             updated_picking = await self.get_production_picking_by_id(tenant_id, picking_id)
             return updated_picking
+
+    async def get_material_prep_reminders(
+        self,
+        tenant_id: int,
+        skip: int = 0,
+        limit: int = 50
+    ) -> MaterialPrepReminderResponse:
+        """
+        获取物料备料提醒列表
+
+        逻辑：
+        1. 筛选状态为“已下达”或“已发布”，且实际未开始（actual_start_date 为空）的工单
+        2. 排除已完全领料的工单
+        3. 对每个工单执行齐套性分析
+        4. 返回分析结果中物料相对充裕且需要备料的项
+        """
+        from apps.kuaizhizao.services.work_order_service import WorkOrderService
+        wo_svc = WorkOrderService()
+
+        # 1. 基础工单筛选
+        # 假设状态包括：released, dispatched, confirmed 等（取决于具体业务定义）
+        released_statuses = ["released", "dispatched", "confirmed", "已下达", "已确认"]
+        
+        query = WorkOrder.filter(
+            tenant_id=tenant_id,
+            status__in=released_statuses,
+            actual_start_date__isnull=True,
+            deleted_at__isnull=True
+        ).order_by("priority", "planned_start_date")
+
+        total_count = await query.count()
+        # 为保证性能，暂不进行深层 BOM 计算的分页筛选，先分页获取工单再分析
+        # 实际生产中建议在 WorkOrder 上增加 kitting_status 缓存字段进行高效查询
+        work_orders = await query.offset(skip).limit(limit).all()
+
+        reminders = []
+        for wo in work_orders:
+            # 检查是否已有领料（如果是部分领料且可继续齐套，仍可提醒）
+            # 如果已经全领了，就不提醒备料了
+            kitting = await wo_svc.get_work_order_kitting_analysis(tenant_id, wo.id)
+            
+            # 如果齐套率达到 100% 且工单还没开始，或者大部分已齐，则推荐备料
+            if kitting.kitting_rate > 0 and kitting.status != "fully_picked":
+                reminders.append(MaterialPrepReminderItem(
+                    work_order_id=wo.id,
+                    work_order_code=wo.code,
+                    product_name=wo.product_name,
+                    quantity=float(wo.quantity),
+                    planned_start_date=wo.planned_start_date,
+                    priority=wo.priority or "normal",
+                    kitting_rate=float(kitting.kitting_rate),
+                    kitting_status=kitting.status
+                ))
+
+        return MaterialPrepReminderResponse(
+            items=reminders,
+            total_count=total_count
+        )
 
     async def delete_production_picking(self, tenant_id: int, picking_id: int) -> bool:
         """删除生产领料单"""
