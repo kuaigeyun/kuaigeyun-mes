@@ -22,7 +22,8 @@ export interface DemandComputation {
   demand_code?: string;
   demand_type?: 'sales_forecast' | 'sales_order';
   business_mode?: 'MTS' | 'MTO';
-  computation_type?: 'MRP' | 'LRP';
+  /** 恒为 MRP；业务模式见 business_mode */
+  computation_type?: 'MRP';
   computation_params?: Record<string, any>;
   computation_status?: string;
   computation_start_time?: string;
@@ -83,6 +84,7 @@ export interface DemandComputationListParams {
   demand_id?: number;
   demand_code?: string;
   computation_code?: string;
+  /** 兼容后端筛选：MRP≈MTS、LRP≈MTO（列表请优先用 business_mode） */
   computation_type?: 'MRP' | 'LRP';
   computation_status?: string;
   business_mode?: 'MTS' | 'MTO';
@@ -102,7 +104,11 @@ export interface DemandComputationListResponse {
 /** 需求计算统计（用于指标卡片） */
 export interface DemandComputationStatistics {
   total_count: number;
+  mts_count: number;
+  mto_count: number;
+  /** @deprecated 等同于 mts_count */
   mrp_count: number;
+  /** @deprecated 等同于 mto_count */
   lrp_count: number;
   pending_count: number;
   completed_count: number;
@@ -356,6 +362,7 @@ export interface ComputationHistoryParams {
   skip?: number;
   limit?: number;
   demand_id?: number;
+  /** 兼容后端筛选：MRP≈MTS、LRP≈MTO */
   computation_type?: 'MRP' | 'LRP';
   start_date?: string;
   end_date?: string;
@@ -389,6 +396,11 @@ export interface ComputationCompareResult {
   };
   basic_diff: {
     computation_type: {
+      value1: string;
+      value2: string;
+      same: boolean;
+    };
+    business_mode?: {
       value1: string;
       value2: string;
       same: boolean;

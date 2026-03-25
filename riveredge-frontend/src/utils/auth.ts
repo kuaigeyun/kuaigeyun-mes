@@ -186,8 +186,12 @@ export function isTokenExpired(token?: string | null): boolean {
   }
   
   const payload = decodeJWT(tokenToCheck);
-  if (!payload || !payload.exp) {
-    return true; // 无法解析或没有过期时间，视为过期
+  if (!payload) {
+    return true; // 无法解析，视为无效
+  }
+  // 无 exp 的非标准 JWT：不凭前端臆断过期，交由接口 401 处理，避免误踢出
+  if (payload.exp == null) {
+    return false;
   }
   
   // exp 是 Unix 时间戳（秒），需要转换为毫秒

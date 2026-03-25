@@ -367,6 +367,7 @@ export async function exportReport(reportType: string, params: ReportParams = {}
   } catch (error) {
     throw new Error('导出失败：' + (error as Error).message);
   } finally {
+    updateLastActivity(true);
     decrementPendingRequests();
   }
 }

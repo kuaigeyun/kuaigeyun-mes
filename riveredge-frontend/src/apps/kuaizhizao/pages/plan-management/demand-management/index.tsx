@@ -12,14 +12,13 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
-import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormList, ProFormDigit, ProDescriptions } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Drawer, Table, Input, Select, Tabs, Alert, Row, Col, Spin } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions, ProFormInstance } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Drawer, Table, Input, InputNumber, Select, Tabs, Alert, Row, Col, Spin, Form as AntForm, DatePicker, Typography } from 'antd';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
-import { EyeOutlined, EditOutlined, CheckCircleOutlined, CloseCircleOutlined, SendOutlined, ArrowDownOutlined, MergeCellsOutlined, DeleteOutlined, ApartmentOutlined } from '@ant-design/icons';
+import { EyeOutlined, EditOutlined, CheckCircleOutlined, CloseCircleOutlined, SendOutlined, ArrowDownOutlined, MergeCellsOutlined, DeleteOutlined, ApartmentOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
-import { ListPageTemplate, MODAL_CONFIG, type StatCard } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG, type StatCard } from '../../../../../components/layout-templates';
 import {
   listDemands,
   getDemand,
@@ -120,7 +119,8 @@ const DemandManagementPage: React.FC = () => {
   // Modal 相关状态（新建/编辑）
   const [modalVisible, setModalVisible] = useState(false);
   const [createPlanModalVisible, setCreatePlanModalVisible] = useState(false);
-  const createPlanFormRef = useRef<any>(null);
+  const [createPlanLoading, setCreatePlanLoading] = useState(false);
+  const createPlanFormRef = useRef<ProFormInstance>(null);
   const [isEdit, setIsEdit] = useState(false);
   const [currentId, setCurrentId] = useState<number | null>(null);
   const [isEditingDraft, setIsEditingDraft] = useState(false); // 当前编辑的需求是否为草稿（草稿可改更多字段）
@@ -176,6 +176,7 @@ const DemandManagementPage: React.FC = () => {
 
   /** 新建计划（需求计划）提交 */
   const handleCreatePlanSubmit = async (values: any) => {
+    setCreatePlanLoading(true);
     try {
       const items = (values.items || []).map((it: any) => ({
         material_id: it.material_id,
@@ -192,7 +193,7 @@ const DemandManagementPage: React.FC = () => {
       await createDemand({
         demand_type: 'demand_plan',
         demand_name: values.demand_name,
-        business_mode: values.business_mode || 'MTO',
+        business_mode: values.business_mode || 'MTS',
         start_date: values.start_date ? dayjs(values.start_date).format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD'),
         end_date: values.end_date ? dayjs(values.end_date).format('YYYY-MM-DD') : undefined,
         total_quantity: 0,
@@ -210,7 +211,8 @@ const DemandManagementPage: React.FC = () => {
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error?.response?.data?.detail || error?.message || '创建失败');
-      throw error;
+    } finally {
+      setCreatePlanLoading(false);
     }
   };
 
@@ -726,78 +728,258 @@ const DemandManagementPage: React.FC = () => {
         />
       </ListPageTemplate>
 
-      {/* 新建计划 Modal */}
-      <Modal
-        open={createPlanModalVisible}
-        onCancel={() => { setCreatePlanModalVisible(false); createPlanFormRef.current?.resetFields(); }}
+      {/* 新建计划：FormModalTemplate + 两栏表头 + 销售订单式明细 Table */}
+      <FormModalTemplate
         title="新建计划"
-        width={640}
-        footer={null}
-        destroyOnClose
+        open={createPlanModalVisible}
+        onClose={() => {
+          setCreatePlanModalVisible(false);
+          createPlanFormRef.current?.resetFields();
+        }}
+        onFinish={handleCreatePlanSubmit}
+        isEdit={false}
+        formRef={createPlanFormRef as React.RefObject<ProFormInstance>}
+        width={1200}
+        loading={createPlanLoading}
+        grid={false}
+        initialValues={{ business_mode: 'MTS', priority: 5, items: [{ delivery_date: dayjs() }] }}
       >
-        <ProForm
-          formRef={createPlanFormRef}
-          onFinish={handleCreatePlanSubmit}
-          layout="vertical"
-          initialValues={{ business_mode: 'MTO', priority: 5, items: [{}] }}
-          submitter={{
-            render: (_, dom) => (
-              <div style={{ textAlign: 'right', marginTop: 16 }}>
-                <Space>
-                  <Button onClick={() => { setCreatePlanModalVisible(false); createPlanFormRef.current?.resetFields(); }}>取消</Button>
-                  {dom}
-                </Space>
-              </div>
-            ),
-          }}
-        >
-          <ProFormText name="demand_name" label="计划名称" placeholder="请输入计划名称" rules={[{ required: true, message: '请输入计划名称' }]} />
-          <Row gutter={16}>
-            <Col span={12}>
-              <ProFormDatePicker name="start_date" label="开始日期" rules={[{ required: true, message: '请选择开始日期' }]} />
-            </Col>
-            <Col span={12}>
-              <ProFormDatePicker name="end_date" label="结束日期（选填）" />
-            </Col>
-          </Row>
-          <Row gutter={16}>
-            <Col span={12}>
-              <ProFormSelect name="business_mode" label="业务模式" options={[{ label: '按库存生产 (MTS)', value: 'MTS' }, { label: '按订单生产 (MTO)', value: 'MTO' }]} />
-            </Col>
-            <Col span={12}>
-              <ProFormSelect name="priority" label="优先级" options={[{ label: '高 (1)', value: 1 }, { label: '中 (5)', value: 5 }, { label: '低 (10)', value: 10 }]} />
-            </Col>
-          </Row>
-          <ProFormTextArea name="notes" label="备注" fieldProps={{ rows: 2 }} />
-          <ProFormList name="items" label="计划明细" creatorButtonProps={{ creatorButtonText: '添加一行' }} min={1}>
-            {(listDom, listField) => (
-              <Row key={listField.key} gutter={8} style={{ marginBottom: 8, alignItems: 'center' }}>
-                <Col span={12}>
-                  <UniMaterialSelect
-                    name={[listField.name, 'material_id']}
-                    label="物料"
-                    placeholder="请选择物料"
-                    required
-                    listFieldKey={listField.key}
-                    listFieldName="items"
-                    fillMapping={{ material_code: 'mainCode', material_name: 'name', material_unit: 'baseUnit' }}
-                  />
-                  <ProFormText name={[listField.name, 'material_code']} hidden />
-                  <ProFormText name={[listField.name, 'material_name']} hidden />
-                  <ProFormText name={[listField.name, 'material_unit']} hidden />
-                </Col>
-                <Col span={6}>
-                  <ProFormDigit name={[listField.name, 'required_quantity']} label="数量" min={0.0001} placeholder="数量" fieldProps={{ style: { width: '100%' } }} rules={[{ required: true, message: '必填' }]} />
-                </Col>
-                <Col span={5}>
-                  <ProFormDatePicker name={[listField.name, 'delivery_date']} label="需求日期" fieldProps={{ style: { width: '100%' } }} rules={[{ required: true, message: '必填' }]} />
-                </Col>
-                <Col span={1}>{listField.action}</Col>
-              </Row>
-            )}
-          </ProFormList>
-        </ProForm>
-      </Modal>
+        <Row gutter={16}>
+          <Col span={24}>
+            <ProFormText
+              name="demand_name"
+              label="计划名称"
+              placeholder="请输入计划名称"
+              rules={[{ required: true, message: '请输入计划名称' }]}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormDatePicker
+              name="start_date"
+              label="开始日期"
+              rules={[{ required: true, message: '请选择开始日期' }]}
+              fieldProps={{ style: { width: '100%' } }}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormDatePicker
+              name="end_date"
+              label="结束日期（选填）"
+              fieldProps={{ style: { width: '100%' } }}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormSelect
+              name="business_mode"
+              label="业务模式"
+              options={[
+                { label: '按库存生产 (MTS)', value: 'MTS' },
+                { label: '按订单生产 (MTO)', value: 'MTO' },
+              ]}
+              fieldProps={{ style: { width: '100%' } }}
+              extra={
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  下推「需求计算」时计算类型统一为 MRP；MTS/MTO 由需求上的业务模式决定，并写入计算头供下推工单等使用。
+                </Typography.Text>
+              }
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormSelect
+              name="priority"
+              label="优先级"
+              options={[
+                { label: '高 (1)', value: 1 },
+                { label: '中 (5)', value: 5 },
+                { label: '低 (10)', value: 10 },
+              ]}
+              fieldProps={{ style: { width: '100%' } }}
+            />
+          </Col>
+        </Row>
+
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ marginBottom: 8 }}>
+            <span style={{ fontWeight: 600, color: 'rgba(0, 0, 0, 0.88)' }}>
+              <span style={{ color: '#ff4d4f', marginRight: 4, fontFamily: 'SimSun, sans-serif' }}>*</span>
+              计划明细
+            </span>
+          </div>
+          <ProForm.Item
+            name="items"
+            noStyle
+            rules={[{ type: 'array', min: 1, message: '请至少添加一行明细' }]}
+          >
+            <AntForm.List name="items">
+              {(fields, { add, remove }) => {
+                const planDetailColumns = [
+                  {
+                    title: '物料',
+                    dataIndex: 'material_id',
+                    width: 280,
+                    render: (_: unknown, __: unknown, index: number) => (
+                      <>
+                        <div
+                          className="sales-order-material-cell"
+                          style={{ display: 'flex', alignItems: 'center', width: '100%', gap: 8 }}
+                        >
+                          <div style={{ flex: 1, minWidth: 200 }}>
+                            <UniMaterialSelect
+                              name={[index, 'material_id']}
+                              label=""
+                              placeholder="请选择物料"
+                              required
+                              size="small"
+                              listFieldKey={index}
+                              listFieldName="items"
+                              fillMapping={{
+                                material_code: 'mainCode',
+                                material_name: 'name',
+                                material_unit: 'baseUnit',
+                              }}
+                              formItemProps={{ style: { margin: 0 } }}
+                            />
+                          </div>
+                        </div>
+                        <AntForm.Item name={[index, 'material_code']} hidden>
+                          <Input />
+                        </AntForm.Item>
+                        <AntForm.Item name={[index, 'material_name']} hidden>
+                          <Input />
+                        </AntForm.Item>
+                        <AntForm.Item name={[index, 'material_unit']} hidden>
+                          <Input />
+                        </AntForm.Item>
+                      </>
+                    ),
+                  },
+                  {
+                    title: '数量',
+                    dataIndex: 'required_quantity',
+                    width: 110,
+                    align: 'right' as const,
+                    render: (_: unknown, __: unknown, index: number) => (
+                      <AntForm.Item
+                        name={[index, 'required_quantity']}
+                        rules={[
+                          { required: true, message: '必填' },
+                          { type: 'number', min: 0.0001, message: '>0' },
+                        ]}
+                        style={{ margin: 0 }}
+                      >
+                        <InputNumber placeholder="数量" min={0} precision={4} style={{ width: '100%' }} size="small" />
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: '需求日期',
+                    dataIndex: 'delivery_date',
+                    width: 130,
+                    render: (_: unknown, __: unknown, index: number) => (
+                      <AntForm.Item
+                        name={[index, 'delivery_date']}
+                        rules={[{ required: true, message: '必填' }]}
+                        style={{ margin: 0 }}
+                      >
+                        <DatePicker size="small" style={{ width: '100%' }} format="YYYY-MM-DD" />
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: '操作',
+                    width: 72,
+                    fixed: 'right' as const,
+                    onHeaderCell: () => ({ className: 'sales-order-fixed-op-header' }),
+                    render: (_: unknown, __: unknown, index: number) => (
+                      <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)}>
+                        删除
+                      </Button>
+                    ),
+                  },
+                ];
+                const totalWidth = planDetailColumns.reduce((s, c) => s + (typeof c.width === 'number' ? c.width : 0), 0);
+                return (
+                  <div style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
+                    <style>{`
+                      .sales-order-detail-table .ant-table-thead > tr > th {
+                        background-color: var(--ant-color-fill-alter) !important;
+                        font-weight: 600;
+                      }
+                      .sales-order-detail-table .ant-table-thead > tr > th.sales-order-fixed-op-header {
+                        background: var(--ant-color-fill-alter) !important;
+                      }
+                      .sales-order-detail-table .ant-table-cell-fix-right {
+                        background: var(--ant-color-bg-container) !important;
+                      }
+                      .sales-order-detail-table .ant-table {
+                        border-top: 1px solid var(--ant-color-border);
+                      }
+                      .sales-order-detail-table .ant-table-tbody > tr > td {
+                        border-bottom: 1px solid var(--ant-color-border);
+                        overflow: visible !important;
+                      }
+                      .sales-order-detail-table .sales-order-material-cell .ant-form-item,
+                      .sales-order-detail-table .sales-order-material-cell .ant-form-item-control,
+                      .sales-order-detail-table .sales-order-material-cell .ant-form-item-control-input,
+                      .sales-order-detail-table .sales-order-material-cell .ant-select {
+                        width: 100% !important;
+                        min-width: 0;
+                      }
+                      .sales-order-detail-table .ant-form-item-explain,
+                      .sales-order-detail-table .ant-form-item-explain-error {
+                        display: none !important;
+                      }
+                      .sales-order-detail-table .ant-input-number-input::selection,
+                      .sales-order-detail-table .ant-input::selection {
+                        background-color: var(--ant-color-primary);
+                        color: #fff;
+                        border-radius: 0;
+                      }
+                    `}</style>
+                    <div style={{ width: '100%', overflowX: 'auto' }}>
+                      <Table
+                        className="sales-order-detail-table"
+                        size="small"
+                        dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
+                        rowKey="key"
+                        pagination={false}
+                        columns={planDetailColumns}
+                        scroll={fields.length > 0 ? { x: totalWidth } : undefined}
+                        style={{ width: '100%', margin: 0 }}
+                        footer={() => (
+                          <Button
+                            type="dashed"
+                            icon={<PlusOutlined />}
+                            onClick={() =>
+                              add({
+                                material_id: undefined,
+                                material_code: '',
+                                material_name: '',
+                                material_unit: '',
+                                required_quantity: 0,
+                                delivery_date: dayjs(),
+                              })
+                            }
+                            block
+                          >
+                            添加明细
+                          </Button>
+                        )}
+                      />
+                    </div>
+                  </div>
+                );
+              }}
+            </AntForm.List>
+          </ProForm.Item>
+        </div>
+
+        <Row gutter={16}>
+          <Col span={24}>
+            <ProFormTextArea name="notes" label="备注" fieldProps={{ rows: 2 }} />
+          </Col>
+        </Row>
+      </FormModalTemplate>
 
       {/* 编辑需求 Modal：非草稿仅可改优先级和备注；草稿可改更多字段 */}
       <Modal

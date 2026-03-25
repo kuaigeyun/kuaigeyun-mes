@@ -39,7 +39,7 @@ async def create_computation(
     """
     创建需求计算
     
-    支持创建MRP或LRP类型的需求计算。
+    创建统一需求计算（类型恒为 MRP；MTS/MTO 由关联需求的 business_mode 决定）。
     """
     try:
         return await computation_service.create_computation(
@@ -71,15 +71,15 @@ async def get_demand_computation_statistics(
         logger.warning(f"demand-computation-statistics total_count: {e}")
         total_count = 0
     try:
-        mrp_count = await base.filter(computation_type="MRP").count()
+        mts_count = await base.filter(business_mode="MTS").count()
     except Exception as e:
-        logger.warning(f"demand-computation-statistics mrp_count: {e}")
-        mrp_count = 0
+        logger.warning(f"demand-computation-statistics mts_count: {e}")
+        mts_count = 0
     try:
-        lrp_count = await base.filter(computation_type="LRP").count()
+        mto_count = await base.filter(business_mode="MTO").count()
     except Exception as e:
-        logger.warning(f"demand-computation-statistics lrp_count: {e}")
-        lrp_count = 0
+        logger.warning(f"demand-computation-statistics mto_count: {e}")
+        mto_count = 0
     try:
         pending_count = await base.filter(computation_status__in=["进行中", "pending", "running"]).count()
     except Exception as e:
@@ -93,8 +93,10 @@ async def get_demand_computation_statistics(
 
     return {
         "total_count": total_count,
-        "mrp_count": mrp_count,
-        "lrp_count": lrp_count,
+        "mts_count": mts_count,
+        "mto_count": mto_count,
+        "mrp_count": mts_count,
+        "lrp_count": mto_count,
         "pending_count": pending_count,
         "completed_count": completed_count,
     }
@@ -105,7 +107,10 @@ async def list_computations(
     demand_id: Optional[int] = Query(None, description="需求ID"),
     demand_code: Optional[str] = Query(None, description="需求编码"),
     computation_code: Optional[str] = Query(None, description="计算编码"),
-    computation_type: Optional[str] = Query(None, description="计算类型（MRP/LRP）"),
+    computation_type: Optional[str] = Query(
+        None,
+        description="兼容筛选：MRP≈MTS、LRP≈MTO（新数据 computation_type 均为 MRP）",
+    ),
     computation_status: Optional[str] = Query(None, description="计算状态"),
     business_mode: Optional[str] = Query(None, description="业务模式（MTS/MTO）"),
     start_date: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
@@ -546,7 +551,10 @@ async def push_to_production_plan(
 @router.get("/history", summary="查询需求计算历史记录")
 async def list_computation_history(
     demand_id: Optional[int] = Query(None, description="需求ID"),
-    computation_type: Optional[str] = Query(None, description="计算类型（MRP/LRP）"),
+    computation_type: Optional[str] = Query(
+        None,
+        description="兼容筛选：MRP≈MTS、LRP≈MTO（新数据 computation_type 均为 MRP）",
+    ),
     start_date: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
     end_date: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
     skip: int = Query(0, ge=0, description="跳过数量"),
@@ -568,7 +576,12 @@ async def list_computation_history(
         if demand_id:
             query = query.filter(demand_id=demand_id)
         if computation_type:
-            query = query.filter(computation_type=computation_type)
+            if computation_type == "LRP":
+                query = query.filter(business_mode="MTO")
+            elif computation_type == "MRP":
+                query = query.filter(business_mode="MTS")
+            else:
+                query = query.filter(computation_type=computation_type)
         if start_date:
             start_dt = datetime.strptime(start_date, "%Y-%m-%d")
             query = query.filter(computation_start_time__gte=start_dt)

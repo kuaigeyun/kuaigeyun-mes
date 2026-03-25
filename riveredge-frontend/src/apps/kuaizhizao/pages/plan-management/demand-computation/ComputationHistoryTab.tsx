@@ -77,13 +77,13 @@ const ComputationHistoryTab: React.FC = () => {
     { title: '计算编码', dataIndex: 'computation_code', width: 150, fixed: 'left' },
     { title: '需求编码', dataIndex: 'demand_code', width: 150 },
     {
-      title: '计算类型',
-      dataIndex: 'computation_type',
-      width: 100,
-      valueEnum: { MRP: { text: '按预测', status: 'Processing' }, LRP: { text: '按订单', status: 'Success' } },
+      title: '业务模式',
+      dataIndex: 'business_mode',
+      width: 110,
+      valueEnum: { MTS: { text: 'MTS' }, MTO: { text: 'MTO' } },
       render: (_, record) => (
-        <Tag color={record.computation_type === 'MRP' ? 'processing' : 'success'}>
-          {record.computation_type === 'MRP' ? '按预测' : '按订单'}
+        <Tag color={record.business_mode === 'MTS' ? 'cyan' : 'purple'}>
+          {record.business_mode === 'MTS' ? '按库存(MTS)' : '按订单(MTO)'}
         </Tag>
       ),
     },
@@ -268,9 +268,15 @@ const ComputationHistoryTab: React.FC = () => {
                 <Col span={12}>
                   <Card size="small" title={`计算1: ${compareResult.computation1.computation_code}`}>
                     <Statistic
-                      title="计算类型"
-                      value={compareResult.basic_diff.computation_type.value1}
-                      valueStyle={{ color: compareResult.basic_diff.computation_type.same ? '#3f8600' : '#cf1322' }}
+                      title="业务模式"
+                      value={compareResult.basic_diff.business_mode?.value1 ?? compareResult.basic_diff.computation_type.value1}
+                      valueStyle={{
+                        color:
+                          (compareResult.basic_diff.business_mode?.same ??
+                            compareResult.basic_diff.computation_type.same)
+                            ? '#3f8600'
+                            : '#cf1322',
+                      }}
                     />
                     <Divider />
                     <div><strong>计算开始时间:</strong> {compareResult.computation1.computation_start_time || '-'}</div>
@@ -280,9 +286,15 @@ const ComputationHistoryTab: React.FC = () => {
                 <Col span={12}>
                   <Card size="small" title={`计算2: ${compareResult.computation2.computation_code}`}>
                     <Statistic
-                      title="计算类型"
-                      value={compareResult.basic_diff.computation_type.value2}
-                      valueStyle={{ color: compareResult.basic_diff.computation_type.same ? '#3f8600' : '#cf1322' }}
+                      title="业务模式"
+                      value={compareResult.basic_diff.business_mode?.value2 ?? compareResult.basic_diff.computation_type.value2}
+                      valueStyle={{
+                        color:
+                          (compareResult.basic_diff.business_mode?.same ??
+                            compareResult.basic_diff.computation_type.same)
+                            ? '#3f8600'
+                            : '#cf1322',
+                      }}
                     />
                     <Divider />
                     <div><strong>计算开始时间:</strong> {compareResult.computation2.computation_start_time || '-'}</div>

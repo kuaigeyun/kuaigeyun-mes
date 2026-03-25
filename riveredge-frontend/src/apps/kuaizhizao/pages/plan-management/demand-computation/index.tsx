@@ -1,7 +1,7 @@
 /**
  * 统一需求计算页面
  *
- * 提供统一的需求计算功能，支持MRP和LRP两种计算类型。
+ * 提供统一的需求计算功能（计算类型恒为 MRP；MTS/MTO 由业务模式区分）。
  *
  * 根据《☆ 用户使用全场景推演.md》的设计理念，将MRP和LRP合并为统一的需求计算。
  *
@@ -858,20 +858,20 @@ const DemandComputationPage: React.FC = () => {
       hideInSearch: false,
     },
     {
-      title: '计算模式',
-      dataIndex: 'computation_type',
-      width: 100,
+      title: '需求类型',
+      dataIndex: 'demand_type',
+      width: 110,
       valueType: 'select',
       valueEnum: {
-        MRP: { text: '按预测' },
-        LRP: { text: '按订单' },
+        sales_forecast: { text: '销售预测' },
+        sales_order: { text: '销售订单' },
       },
-      hideInSearch: true, // 隐藏 MRP/LRP 术语，按需求来源自动推断
-      render: (_, record) => (
-        <Tag color={record.computation_type === 'MRP' ? 'blue' : 'green'}>
-          {record.computation_type === 'MRP' ? '按预测' : '按订单'}
-        </Tag>
-      ),
+      hideInSearch: true,
+      render: (_, record) => {
+        const t = record.demand_type
+        const label = t === 'sales_order' ? '销售订单' : t === 'sales_forecast' ? '销售预测' : t || '-'
+        return <Tag color={t === 'sales_order' ? 'green' : 'blue'}>{label}</Tag>
+      },
     },
     {
       title: '生命周期',
@@ -967,8 +967,8 @@ const DemandComputationPage: React.FC = () => {
     : statistics
     ? [
         { title: '总计算数', value: statistics.total_count },
-        { title: '按预测计划', value: statistics.mrp_count },
-        { title: '按订单计划', value: statistics.lrp_count },
+        { title: '按库存(MTS)', value: statistics.mts_count ?? statistics.mrp_count },
+        { title: '按订单(MTO)', value: statistics.mto_count ?? statistics.lrp_count },
         { title: '进行中', value: statistics.pending_count, valueStyle: statistics.pending_count > 0 ? { color: '#faad14' } : undefined },
         { title: '已完成', value: statistics.completed_count },
       ]
@@ -1091,11 +1091,6 @@ const DemandComputationPage: React.FC = () => {
               return
             }
 
-            // 根据需求类型确定计算类型（多需求时：有订单则 LRP，全预测则 MRP）
-            const selectedDemands = demandList.filter(d => selectedDemandIds.includes(d.id!))
-            const hasMTO = selectedDemands.some(d => d.business_mode === 'MTO')
-            const computationType = hasMTO ? 'LRP' : 'MRP'
-
             // 过滤 material_bom_versions 中的空值
             const params = values.computation_params || {}
             const materialBomVersions = params.material_bom_versions || {}
@@ -1115,7 +1110,7 @@ const DemandComputationPage: React.FC = () => {
 
             // 多需求时使用 demand_ids，单需求时使用 demand_id（向后兼容）
             const createData: any = {
-              computation_type: computationType,
+              computation_type: 'MRP',
               computation_params: computationParams,
               notes: values.notes,
             }
@@ -1150,7 +1145,7 @@ const DemandComputationPage: React.FC = () => {
               placeholder: '支持多选需求合并计算',
             }}
             rules={[{ required: true, message: '请至少选择一个需求' }]}
-            tooltip="多需求合并时，相同物料的需求数量会自动汇总；有订单需求时自动选择「按订单计算」模式"
+            tooltip="多需求合并时，相同物料的需求数量会自动汇总；任一为按订单(MTO)时，计算头业务模式为 MTO"
           />
           <ProForm.Item
             name="computation_params"
@@ -1279,9 +1274,9 @@ const DemandComputationPage: React.FC = () => {
                   { title: '计算编码', dataIndex: 'computation_code' },
                   { title: '需求编码', dataIndex: 'demand_code' },
                   {
-                    title: '计算模式',
+                    title: '计算类型',
                     dataIndex: 'computation_type',
-                    render: (t: string) => (t === 'MRP' ? '按预测' : '按订单'),
+                    render: () => '物料需求计划 (MRP)',
                   },
                   {
                     title: '业务模式',
@@ -1439,9 +1434,14 @@ const DemandComputationPage: React.FC = () => {
                         { title: '计算编码', dataIndex: 'computation_code' },
                         { title: '需求编码', dataIndex: 'demand_code' },
                         {
-                          title: '计算模式',
+                          title: '计算类型',
                           dataIndex: 'computation_type',
-                          render: (t: any) => (t === 'MRP' ? '按预测' : '按订单'),
+                          render: () => '物料需求计划 (MRP)',
+                        },
+                        {
+                          title: '业务模式',
+                          dataIndex: 'business_mode',
+                          render: (t: any) => (t === 'MTS' ? '按库存生产' : '按订单生产'),
                         },
                         { title: '计算状态', dataIndex: 'computation_status' },
                         { title: '开始时间', dataIndex: 'computation_start_time', valueType: 'dateTime' },

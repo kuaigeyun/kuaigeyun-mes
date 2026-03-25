@@ -3817,9 +3817,9 @@ const WorkOrdersPage: React.FC = () => {
           label="工单默认超报"
           colProps={{ span: 12 }}
           options={[
-            { label: '不允许超报', value: 'none' },
-            { label: '固定多报数量', value: 'fixed' },
-            { label: '按计划比例(%)', value: 'percent' },
+            { label: t('field.operation.overReportModeNone'), value: 'none' },
+            { label: t('field.operation.overReportModeFixed'), value: 'fixed' },
+            { label: t('field.operation.overReportModePercent'), value: 'percent' },
           ]}
           initialValue="none"
         />

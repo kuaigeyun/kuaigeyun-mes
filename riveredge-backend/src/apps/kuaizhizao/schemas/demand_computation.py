@@ -65,15 +65,20 @@ class DemandComputationBase(BaseModel):
     """需求计算基础Schema"""
     demand_id: Optional[int] = Field(None, description="需求ID（单需求时使用）")
     demand_ids: Optional[List[int]] = Field(None, description="需求ID列表（多需求合并时使用，与 demand_id 二选一）")
-    computation_type: str = Field(..., max_length=20, description="计算类型（MRP/LRP）")
+    computation_type: str = Field("MRP", max_length=20, description="计算类型（仅 MRP；传入 LRP 时归一为 MRP）")
     computation_params: Dict[str, Any] = Field(..., description="计算参数（JSON格式）")
     notes: Optional[str] = Field(None, description="备注")
     
     @field_validator("computation_type")
+    @classmethod
     def validate_computation_type(cls, v):
-        """验证计算类型"""
-        if v not in ["MRP", "LRP"]:
-            raise ValueError("计算类型必须是MRP或LRP")
+        """仅允许 MRP；旧客户端传 LRP 时归一为 MRP"""
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return "MRP"
+        if v == "LRP":
+            return "MRP"
+        if v != "MRP":
+            raise ValueError("计算类型必须为 MRP")
         return v
 
     @field_validator("demand_ids")

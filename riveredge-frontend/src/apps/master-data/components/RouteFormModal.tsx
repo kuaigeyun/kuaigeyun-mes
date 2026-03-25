@@ -4,7 +4,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ProFormInstance, ProForm } from '@ant-design/pro-components';
+import { ProFormInstance, ProForm, ProFormDependency } from '@ant-design/pro-components';
 import { App, Tag, Typography } from 'antd';
 import { FormModalTemplate } from '../../../components/layout-templates';
 import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
@@ -314,6 +314,7 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
         return;
       }
 
+      const allowJump = !!values.allowOperationJump;
       const operationSequenceData = {
         sequence: operationSequence.map((op) => op.uuid),
         operations: operationSequence.map((op) => {
@@ -322,7 +323,7 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
             code: op.code,
             name: op.name,
             reportingType: op.reportingType ?? 'quantity',
-            isNodeOperation: op.isNodeOperation ?? false,
+            isNodeOperation: allowJump ? (op.isNodeOperation ?? false) : false,
           };
           const om = op.overReportMode ?? 'none';
           const ov = Number(op.overReportValue) || 0;
@@ -441,12 +442,26 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
               {t('field.route.operationSequenceHint')}
             </Typography.Text>
           </div>
-          <OperationSequenceEditor value={operationSequence} onChange={setOperationSequence} />
+          <ProFormDependency name={['allowOperationJump']}>
+            {({ allowOperationJump }) => (
+              <OperationSequenceEditor
+                value={operationSequence}
+                onChange={setOperationSequence}
+                showNodeOperationColumn={!!allowOperationJump}
+              />
+            )}
+          </ProFormDependency>
         </div>
       </ProForm.Item>
       <SchemaFormRenderer
         schema={routeFormSchema.filter((f) =>
-          ['description', 'isActive', 'allowOperationJump', 'overReportMode', 'overReportValue'].includes(f.name)
+          [
+            'allowOperationJump',
+            'overReportMode',
+            'overReportValue',
+            'description',
+            'isActive',
+          ].includes(f.name)
         )}
         isEdit={isEdit}
       />

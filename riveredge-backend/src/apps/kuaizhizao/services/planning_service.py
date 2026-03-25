@@ -184,18 +184,40 @@ class ProductionPlanningService(BaseService):
         return await query.count()
 
     async def get_production_plan_statistics(self, tenant_id: int) -> Dict[str, Any]:
-        """获取生产计划统计信息"""
+        """获取生产计划统计信息（按来源区分 MTS/MTO 语义，不再按 plan_type=LRP）"""
+        from apps.kuaizhizao.models.demand_computation import DemandComputation
+
         base_query = ProductionPlan.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         total_plans = await base_query.count()
-        mrp_plans = await base_query.filter(plan_type='MRP').count()
-        lrp_plans = await base_query.filter(plan_type='LRP').count()
         executed_plans = await base_query.filter(execution_status='已执行').count()
         pending_execution_plans = await base_query.filter(execution_status='未执行').count()
 
+        sales_order_plans = await base_query.filter(source_type='SalesOrder').count()
+        comp_ids = await base_query.filter(source_type='DemandComputation').values_list('source_id', flat=True)
+        id_list = list({i for i in comp_ids if i})
+        mto_from_comp = 0
+        mts_from_comp = 0
+        if id_list:
+            mto_from_comp = await DemandComputation.filter(
+                tenant_id=tenant_id, id__in=id_list, business_mode='MTO'
+            ).count()
+            mts_from_comp = await DemandComputation.filter(
+                tenant_id=tenant_id, id__in=id_list, business_mode='MTS'
+            ).count()
+
+        # 仍为 LRP 类型、且非需求计算下推的计划（历史数据），按 MTO 口径计入
+        orphan_lrp_plans = await base_query.filter(plan_type='LRP').exclude(
+            source_type='DemandComputation'
+        ).count()
+        mto_total = sales_order_plans + mto_from_comp + orphan_lrp_plans
+        mts_total = mts_from_comp
+
         return {
             "total_count": total_plans,
-            "mrp_count": mrp_plans,
-            "lrp_count": lrp_plans,
+            "mts_count": mts_total,
+            "mto_count": mto_total,
+            "mrp_count": mts_total,
+            "lrp_count": mto_total,
             "executed_count": executed_plans,
             "pending_execution_count": pending_execution_plans,
         }

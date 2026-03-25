@@ -1180,16 +1180,16 @@ class SalesOrderService:
             plan_code = await CodeGenerationService.generate_code(
                 tenant_id=tenant_id,
                 rule_code="PRODUCTION_PLAN_CODE",
-                context={"prefix": "LRP-"},
+                context={"prefix": "MRP-"},
             )
         except Exception:
-            plan_code = f"LRP-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            plan_code = f"MRP-{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
         plan = await ProductionPlan.create(
             tenant_id=tenant_id,
             plan_code=plan_code,
             plan_name=f"生产计划-{order.order_code}（直推）",
-            plan_type="LRP",
+            plan_type="MRP",
             source_type="SalesOrder",
             source_id=sales_order_id,
             source_code=order.order_code,

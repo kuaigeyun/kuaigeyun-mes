@@ -36,7 +36,22 @@ class DocumentPushPullService:
         self.computation_service = DemandComputationService()
         self.work_order_service = WorkOrderService()
         self.purchase_service = PurchaseService()
-    
+
+    async def _resolve_plan_production_mode(self, tenant_id: int, plan) -> str:
+        """由生产计划解析工单 production_mode（MTS/MTO），不依赖 plan_type=LRP。"""
+        st = (getattr(plan, "source_type", None) or "").strip()
+        if st == "DemandComputation":
+            sid = getattr(plan, "source_id", None)
+            if sid:
+                comp = await DemandComputation.get_or_none(tenant_id=tenant_id, id=sid)
+                if comp and getattr(comp, "business_mode", None) in ("MTS", "MTO"):
+                    return comp.business_mode
+        if st == "SalesOrder":
+            return "MTO"
+        if getattr(plan, "plan_type", None) == "LRP":
+            return "MTO"
+        return "MTS"
+
     async def push_document(
         self,
         tenant_id: int,
@@ -204,9 +219,8 @@ class DocumentPushPullService:
         if demand.pushed_to_computation:
             raise BusinessLogicError("需求已经下推到需求计算，不能重复下推")
         
-        # 确定计算类型（根据业务模式）
-        computation_type = "MRP" if demand.business_mode == "MTS" else "LRP"
-        
+        computation_type = "MRP"
+
         # 构建计算参数
         computation_params = push_params.get("computation_params", {}) if push_params else {}
         computation_params.setdefault("planning_horizon", 3)
@@ -457,8 +471,8 @@ class DocumentPushPullService:
         plan_start = min(dates) if dates else date.today()
         plan_end = max(dates) if dates else date.today()
         
-        # 生成计划编码
-        plan_type = computation.computation_type
+        # 生产计划类型与需求计算统一为 MRP（MTS/MTO 见 DemandComputation.business_mode）
+        plan_type = "MRP"
         try:
             plan_code = await CodeGenerationService.generate_code(
                 tenant_id=tenant_id,
@@ -718,7 +732,7 @@ class DocumentPushPullService:
         work_orders = []
         relations = []
 
-        production_mode = "MTO" if getattr(plan, "plan_type", "") == "LRP" else "MTS"
+        production_mode = await self._resolve_plan_production_mode(tenant_id, plan)
 
         for item in prod_items:
             qty = float(item.work_order_quantity or 0)
@@ -769,7 +783,7 @@ class DocumentPushPullService:
                 relation_type="source",
                 relation_mode="push",
                 relation_desc="从生产计划转工单",
-                business_mode=getattr(plan, "plan_type", None),
+                business_mode=production_mode,
                 demand_id=getattr(plan, "source_id", None) if plan.source_type == "Demand" else None,
             )
             rel = await self.relation_service.create_relation(

@@ -252,16 +252,15 @@ class DemandComputationService:
             if len(demands) > 3:
                 demand_codes += f"等{len(demands)}个"
 
-            # 推断计算类型（多需求时：有订单则 LRP，全预测则 MRP）
-            computation_type = computation_data.computation_type
-            if len(demands) > 1:
-                has_mto = any(getattr(d, "business_mode", None) == "MTO" for d in demands)
-                computation_type = "LRP" if has_mto else "MRP"
+            # 业务模式：多需求时任一为 MTO 则整体为 MTO（与下推工单语义一致）
+            merged_business_mode = (
+                "MTO" if any(getattr(d, "business_mode", None) == "MTO" for d in demands) else "MTS"
+            )
+            # 对外统一为 MRP；MTS/MTO 由 business_mode 表达
+            persist_computation_type = "MRP"
 
-            # 生成计算编码
-            computation_code = await self._generate_computation_code(tenant_id, computation_type)
+            computation_code = await self._generate_computation_code(tenant_id, persist_computation_type)
 
-            # 创建需求计算
             computation = await DemandComputation.create(
                 tenant_id=tenant_id,
                 computation_code=computation_code,
@@ -269,8 +268,8 @@ class DemandComputationService:
                 demand_ids=demand_id_list,
                 demand_code=demand_codes,
                 demand_type=demand.demand_type,
-                business_mode=demand.business_mode,
-                computation_type=computation_data.computation_type,
+                business_mode=merged_business_mode,
+                computation_type=persist_computation_type,
                 computation_params=computation_data.computation_params,
                 computation_status="进行中",
                 computation_start_time=datetime.now(),
@@ -300,7 +299,7 @@ class DemandComputationService:
         
         Args:
             tenant_id: 租户ID
-            computation_type: 计算类型（MRP/LRP）
+            computation_type: 计算类型（恒为 MRP）
             
         Returns:
             str: 计算编码
@@ -315,10 +314,8 @@ class DemandComputationService:
             return code
         except Exception as e:
             logger.warning(f"使用编码规则生成失败: {e}，使用简单编码")
-            # 回退到简单编码格式
             now = datetime.now()
-            prefix = "MRP" if computation_type == "MRP" else "LRP"
-            return f"{prefix}-{now.strftime('%Y%m%d')}-NEW"
+            return f"MRP-{now.strftime('%Y%m%d')}-NEW"
     
     async def _build_computation_response(
         self,
@@ -433,7 +430,13 @@ class DemandComputationService:
         if computation_code:
             query = query.filter(computation_code__icontains=computation_code)
         if computation_type:
-            query = query.filter(computation_type=computation_type)
+            # 兼容旧客户端：LRP → 按 MTO 筛选；MRP → 按 MTS 筛选
+            if computation_type == "LRP":
+                query = query.filter(business_mode="MTO")
+            elif computation_type == "MRP":
+                query = query.filter(business_mode="MTS")
+            else:
+                query = query.filter(computation_type=computation_type)
         if computation_status:
             query = query.filter(computation_status=computation_status)
         if business_mode:
@@ -518,13 +521,8 @@ class DemandComputationService:
                     computation_start_time=datetime.now()
                 )
 
-                # 根据计算类型执行不同的计算逻辑
-                if computation.computation_type == "MRP":
-                    await self._execute_mrp_computation(tenant_id, computation)
-                elif computation.computation_type == "LRP":
-                    await self._execute_lrp_computation(tenant_id, computation)
-                else:
-                    raise ValidationError(f"不支持的计算类型: {computation.computation_type}")
+                # 统一需求计算（原 MRP/LRP 合并为单一实现，类型字段恒为 MRP）
+                await self._execute_mrp_computation(tenant_id, computation)
 
                 # 更新计算状态为完成，清除失败时的错误信息
                 await DemandComputation.filter(tenant_id=tenant_id, id=computation_id).update(
@@ -592,12 +590,7 @@ class DemandComputationService:
                     computation_start_time=datetime.now()
                 )
 
-                if computation.computation_type == "MRP":
-                    await self._execute_mrp_computation(tenant_id, computation)
-                elif computation.computation_type == "LRP":
-                    await self._execute_lrp_computation(tenant_id, computation)
-                else:
-                    raise ValidationError(f"不支持的计算类型: {computation.computation_type}")
+                await self._execute_mrp_computation(tenant_id, computation)
 
                 items = await DemandComputationItem.filter(
                     tenant_id=tenant_id,
@@ -783,6 +776,11 @@ class DemandComputationService:
                 "value2": computation2.computation_type,
                 "same": computation1.computation_type == computation2.computation_type
             },
+            "business_mode": {
+                "value1": computation1.business_mode,
+                "value2": computation2.business_mode,
+                "same": computation1.business_mode == computation2.business_mode
+            },
             "computation_params": {
                 "value1": computation1.computation_params,
                 "value2": computation2.computation_params,
@@ -877,23 +875,15 @@ class DemandComputationService:
         computation: DemandComputation
     ) -> None:
         """
-        执行MRP计算（物料需求计划）
-        
-        应用物料来源控制逻辑：
-        - 自制件：生成生产工单需求
-        - 采购件：生成采购订单需求
-        - 虚拟件：自动跳过，直接展开下层物料
-        - 委外件：生成委外工单需求
-        - 配置件：按属性展开BOM
-        
-        Args:
-            tenant_id: 租户ID
-            computation: 计算对象
+        执行统一需求计算（原 MRP/LRP 合并为单一路径）。
+
+        BOM 与净需求逻辑不变；有需求行交期时写入排程字段；汇总保留 demand_item_ids 追溯。
         """
         from apps.kuaizhizao.models.demand_item import DemandItem
         from apps.master_data.models.material import Material
-        
-        logger.info(f"执行MRP计算: {computation.computation_code}")
+        from apps.kuaizhizao.utils.bom_helper import get_bom_items_by_material_id
+
+        logger.info(f"执行需求计算: {computation.computation_code}")
         # 1. 获取需求明细（支持多需求合并）
         demand_id_list = computation.demand_ids if computation.demand_ids else [computation.demand_id]
         demand_items = []
@@ -908,9 +898,17 @@ class DemandComputationService:
             logger.warning(f"需求明细为空，计算ID: {computation.id}")
             return
         
-        # 2. 计算参数（库存相关开关、BOM版本）
+        # 2. 计算参数（库存相关开关、BOM版本、4M 开关供后续排产扩展）
         computation_params = computation.computation_params or {}
         include_safety_stock = computation_params.get("include_safety_stock", True)
+        consider_capacity = computation_params.get("consider_capacity", True)
+        consider_material_readiness = computation_params.get("consider_material_readiness", True)
+        consider_equipment_availability = computation_params.get("consider_equipment_availability", False)
+        consider_mold_tool_availability = computation_params.get("consider_mold_tool_availability", False)
+        logger.debug(
+            f"需求计算 4M 约束(供后续排产扩展): capacity={consider_capacity}, material={consider_material_readiness}, "
+            f"equipment={consider_equipment_availability}, mold_tool={consider_mold_tool_availability}"
+        )
         # BOM 版本：根据 bom_multi_version_allowed 决定使用指定版本或默认版本
         biz_config = BusinessConfigService()
         bom_multi_allowed = await biz_config.get_bom_multi_version_allowed(tenant_id)
@@ -925,12 +923,21 @@ class DemandComputationService:
 
         # 3. 存储所有物料需求（用于汇总）
         all_material_requirements = {}  # material_id -> requirement info
-        
+
+        def _append_demand_item_id(bucket: dict, did: Any) -> None:
+            if did is None:
+                return
+            if "demand_item_ids" not in bucket:
+                bucket["demand_item_ids"] = []
+            if did not in bucket["demand_item_ids"]:
+                bucket["demand_item_ids"].append(did)
+
         # 4. 处理每个需求明细
         for demand_item in demand_items:
             material_id = demand_item.material_id
             required_quantity = float(demand_item.required_quantity or 0)
-            
+            delivery_date = getattr(demand_item, "delivery_date", None)
+
             if required_quantity <= 0:
                 continue
             
@@ -984,9 +991,11 @@ class DemandComputationService:
                             "source_type": req.get("source_type"),
                             "required_quantity": 0.0,
                             "unit": req.get("unit"),
+                            "delivery_date": delivery_date,
                         }
                     all_material_requirements[req_material_id]["required_quantity"] += req["required_quantity"]
-                    
+                    _append_demand_item_id(all_material_requirements[req_material_id], demand_item.id)
+
             elif source_type == SOURCE_TYPE_CONFIGURE:
                 # 配置件：按属性展开BOM（从需求明细获取 variant_attributes）
                 logger.debug(f"处理配置件，物料ID: {material_id}, 物料编码: {material.main_code}")
@@ -1015,9 +1024,11 @@ class DemandComputationService:
                             "source_type": req.get("source_type"),
                             "required_quantity": 0.0,
                             "unit": req.get("unit"),
+                            "delivery_date": delivery_date,
                         }
                     all_material_requirements[req_material_id]["required_quantity"] += req["required_quantity"]
-                
+                    _append_demand_item_id(all_material_requirements[req_material_id], demand_item.id)
+
             else:
                 # 其他类型（自制件、采购件、委外件）：正常处理
                 if material_id not in all_material_requirements:
@@ -1028,11 +1039,12 @@ class DemandComputationService:
                         "source_type": source_type,
                         "required_quantity": 0.0,
                         "unit": material.base_unit,
+                        "delivery_date": delivery_date,
                     }
                 all_material_requirements[material_id]["required_quantity"] += required_quantity
-                
+                _append_demand_item_id(all_material_requirements[material_id], demand_item.id)
+
                 # 如果有BOM，展开BOM（顶层物料优先从 material_bom_versions 取版本）
-                from apps.kuaizhizao.utils.bom_helper import get_bom_items_by_material_id
                 top_version = bom_version
                 top_use_default = use_default_bom
                 if material_bom_versions:
@@ -1077,13 +1089,10 @@ class DemandComputationService:
                                 "source_type": req.get("source_type"),
                                 "required_quantity": 0.0,
                                 "unit": req.get("unit"),
+                                "delivery_date": delivery_date,
                             }
                         all_material_requirements[req_material_id]["required_quantity"] += req["required_quantity"]
-                        # 记录需求明细ID用于追溯
-                        if "demand_item_ids" not in all_material_requirements[req_material_id]:
-                            all_material_requirements[req_material_id]["demand_item_ids"] = []
-                        if demand_item.id not in all_material_requirements[req_material_id]["demand_item_ids"]:
-                            all_material_requirements[req_material_id]["demand_item_ids"].append(demand_item.id)
+                        _append_demand_item_id(all_material_requirements[req_material_id], demand_item.id)
         
         # 5. 生成计算结果明细
         for material_id, req_info in all_material_requirements.items():
@@ -1116,7 +1125,7 @@ class DemandComputationService:
                 material_id=material_id,
                 computation_params=computation_params,
             )
-            supply_qty, net_requirement = _compute_supply_and_net(
+            _, net_requirement = _compute_supply_and_net(
                 inventory_info=inventory_info,
                 safety_stock=safety_stock,
                 reorder_point=reorder_point,
@@ -1128,25 +1137,42 @@ class DemandComputationService:
             reserved_qty = float(inventory_info.get("reserved_quantity", 0))
             gross_requirement = req_info["required_quantity"]
 
-            # 根据物料来源类型确定建议行动
+            delivery_date = req_info.get("delivery_date")
+            production_start_date = None
+            production_completion_date = None
+            procurement_start_date = None
+            procurement_completion_date = None
+
             suggested_work_order_quantity = Decimal(0)
             suggested_purchase_order_quantity = Decimal(0)
-            
+            planned_production = Decimal(0)
+            planned_procurement = Decimal(0)
+
             if source_type == SOURCE_TYPE_MAKE:
-                # 自制件：建议生成生产工单
                 if net_requirement > 0 and validation_passed:
                     suggested_work_order_quantity = Decimal(str(net_requirement))
+                    planned_production = Decimal(str(net_requirement))
+                    production_lead_time = source_config.get("source_config", {}).get("production_lead_time", 3)
+                    if delivery_date:
+                        production_completion_date = delivery_date
+                        production_start_date = delivery_date - timedelta(days=production_lead_time)
             elif source_type == SOURCE_TYPE_BUY:
-                # 采购件：建议生成采购订单
                 if net_requirement > 0:
                     suggested_purchase_order_quantity = Decimal(str(net_requirement))
+                    planned_procurement = Decimal(str(net_requirement))
+                    purchase_lead_time = source_config.get("source_config", {}).get("purchase_lead_time", 7)
+                    if delivery_date:
+                        procurement_completion_date = delivery_date
+                        procurement_start_date = delivery_date - timedelta(days=purchase_lead_time)
             elif source_type == SOURCE_TYPE_OUTSOURCE:
-                # 委外件：建议生成委外工单（有净需求即显示建议数量，与采购件一致；验证失败时生成工单会拦截）
                 if net_requirement > 0:
                     suggested_work_order_quantity = Decimal(str(net_requirement))
-            # Phantom和Configure已经在BOM展开时处理，不需要单独生成工单或采购单
-            
-            # 创建计算结果明细（包含需求明细追溯）
+                    planned_production = Decimal(str(net_requirement))
+                    outsource_lead_time = source_config.get("source_config", {}).get("outsource_lead_time", 5)
+                    if delivery_date:
+                        production_completion_date = delivery_date
+                        production_start_date = delivery_date - timedelta(days=outsource_lead_time)
+
             await DemandComputationItem.create(
                 tenant_id=tenant_id,
                 computation_id=computation.id,
@@ -1161,330 +1187,6 @@ class DemandComputationService:
                 gross_requirement=Decimal(str(gross_requirement)),
                 safety_stock=Decimal(str(safety_stock)) if include_safety_stock else None,
                 reorder_point=Decimal(str(reorder_point)) if computation_params.get("include_reorder_point", False) else None,
-                suggested_work_order_quantity=suggested_work_order_quantity if suggested_work_order_quantity > 0 else None,
-                suggested_purchase_order_quantity=suggested_purchase_order_quantity if suggested_purchase_order_quantity > 0 else None,
-                material_source_type=source_type,
-                material_source_config=source_config,
-                source_validation_passed=validation_passed,
-                source_validation_errors=validation_errors if not validation_passed else None,
-                demand_item_ids=req_info.get("demand_item_ids"),  # 多需求追溯
-                detail_results={"in_transit_quantity": in_transit_qty, "reserved_quantity": reserved_qty},  # 库存追溯
-            )
-    
-    async def _execute_lrp_computation(
-        self,
-        tenant_id: int,
-        computation: DemandComputation
-    ) -> None:
-        """
-        执行LRP计算（物流需求计划）
-        
-        应用物料来源控制逻辑：
-        - 自制件：生成生产计划（需要BOM和工艺路线）
-        - 采购件：生成采购计划（自动填充默认供应商）
-        - 虚拟件：自动跳过，直接展开下层物料
-        - 委外件：生成委外计划
-        - 配置件：按属性展开BOM
-        
-        Args:
-            tenant_id: 租户ID
-            computation: 计算对象
-        """
-        from apps.kuaizhizao.models.demand_item import DemandItem
-        from apps.master_data.models.material import Material
-        
-        logger.info(f"执行LRP计算: {computation.computation_code}")
-        
-        # 1. 获取需求明细（支持多需求合并）
-        demand_id_list = computation.demand_ids if computation.demand_ids else [computation.demand_id]
-        demand_items = []
-        for demand_id in demand_id_list:
-            items = await DemandItem.filter(
-                tenant_id=tenant_id,
-                demand_id=demand_id
-            ).all()
-            demand_items.extend(items)
-        
-        if not demand_items:
-            logger.warning(f"需求明细为空，计算ID: {computation.id}")
-            return
-        
-        # 2. 计算参数（含 BOM 版本、4M 人机料法开关）
-        computation_params = computation.computation_params or {}
-        consider_capacity = computation_params.get("consider_capacity", True)
-        consider_material_readiness = computation_params.get("consider_material_readiness", True)
-        consider_equipment_availability = computation_params.get("consider_equipment_availability", False)
-        consider_mold_tool_availability = computation_params.get("consider_mold_tool_availability", False)
-        logger.debug(
-            f"LRP 4M 约束: capacity={consider_capacity}, material={consider_material_readiness}, "
-            f"equipment={consider_equipment_availability}, mold_tool={consider_mold_tool_availability}"
-        )
-        biz_config = BusinessConfigService()
-        bom_multi_allowed = await biz_config.get_bom_multi_version_allowed(tenant_id)
-        if bom_multi_allowed:
-            bom_version = computation_params.get("bom_version")
-            material_bom_versions = computation_params.get("material_bom_versions")
-            use_default_bom = False
-        else:
-            bom_version = None
-            material_bom_versions = None
-            use_default_bom = True
-
-        # 3. 存储所有物料需求（用于汇总）
-        all_material_requirements = {}  # material_id -> requirement info
-        
-        # 4. 处理每个需求明细
-        for demand_item in demand_items:
-            material_id = demand_item.material_id
-            required_quantity = float(demand_item.required_quantity or 0)
-            delivery_date = getattr(demand_item, 'delivery_date', None)  # 销售订单的交货日期
-            
-            if required_quantity <= 0:
-                continue
-            
-            # 获取物料信息
-            material = await Material.get_or_none(tenant_id=tenant_id, id=material_id)
-            if not material:
-                logger.warning(f"物料不存在，物料ID: {material_id}")
-                continue
-            
-            # 获取物料来源类型
-            source_type = await get_material_source_type(tenant_id, material_id)
-            
-            # 验证物料来源配置
-            validation_passed, validation_errors = await validate_material_source_config(
-                tenant_id=tenant_id,
-                material_id=material_id,
-                source_type=source_type or "Make"
-            )
-            
-            # 获取物料来源配置
-            source_config = await get_material_source_config(tenant_id, material_id) or {}
-            
-            # 处理不同来源类型的物料（类似MRP逻辑）
-            if source_type == SOURCE_TYPE_PHANTOM:
-                # 虚拟件：自动跳过，直接展开下层物料
-                variant_attrs = getattr(demand_item, "variant_attributes", None)
-                cfg_selections = _safe_configurable_selections(getattr(demand_item, "configurable_selections", None))
-                expanded_requirements = await expand_bom_with_source_control(
-                    tenant_id=tenant_id,
-                    material_id=material_id,
-                    required_quantity=required_quantity,
-                    only_approved=True,
-                    bom_version=bom_version,
-                    use_default_bom=use_default_bom,
-                    material_bom_versions=material_bom_versions,
-                    variant_attributes=variant_attrs,
-                    configurable_selections=cfg_selections,
-                )
-                
-                for req in expanded_requirements:
-                    req_material_id = req["material_id"]
-                    if req_material_id not in all_material_requirements:
-                        all_material_requirements[req_material_id] = {
-                            "material_id": req_material_id,
-                            "material_code": req["material_code"],
-                            "material_name": req["material_name"],
-                            "source_type": req.get("source_type"),
-                            "required_quantity": 0.0,
-                            "unit": req.get("unit"),
-                            "delivery_date": delivery_date,
-                        }
-                    all_material_requirements[req_material_id]["required_quantity"] += req["required_quantity"]
-                    
-            elif source_type == SOURCE_TYPE_CONFIGURE:
-                # 配置件：按属性展开BOM（从需求明细获取 variant_attributes）
-                variant_attrs = getattr(demand_item, "variant_attributes", None)
-                cfg_selections = _safe_configurable_selections(getattr(demand_item, "configurable_selections", None))
-                expanded_requirements = await expand_bom_with_source_control(
-                    tenant_id=tenant_id,
-                    material_id=material_id,
-                    required_quantity=required_quantity,
-                    only_approved=True,
-                    bom_version=bom_version,
-                    use_default_bom=use_default_bom,
-                    material_bom_versions=material_bom_versions,
-                    variant_attributes=variant_attrs,
-                    configurable_selections=cfg_selections,
-                )
-                
-                for req in expanded_requirements:
-                    req_material_id = req["material_id"]
-                    if req_material_id not in all_material_requirements:
-                        all_material_requirements[req_material_id] = {
-                            "material_id": req_material_id,
-                            "material_code": req["material_code"],
-                            "material_name": req["material_name"],
-                            "source_type": req.get("source_type"),
-                            "required_quantity": 0.0,
-                            "unit": req.get("unit"),
-                            "delivery_date": delivery_date,
-                        }
-                    all_material_requirements[req_material_id]["required_quantity"] += req["required_quantity"]
-            else:
-                # 其他类型（自制件、采购件、委外件）：正常处理
-                if material_id not in all_material_requirements:
-                    all_material_requirements[material_id] = {
-                        "material_id": material_id,
-                        "material_code": material.main_code or material.code,
-                        "material_name": material.name,
-                        "source_type": source_type,
-                        "required_quantity": 0.0,
-                        "unit": material.base_unit,
-                        "delivery_date": delivery_date,
-                    }
-                all_material_requirements[material_id]["required_quantity"] += required_quantity
-                
-                # 如果有BOM，展开BOM（顶层物料优先从 material_bom_versions 取版本）
-                from apps.kuaizhizao.utils.bom_helper import get_bom_items_by_material_id
-                top_version = bom_version
-                top_use_default = use_default_bom
-                if material_bom_versions:
-                    v = material_bom_versions.get(material_id) or material_bom_versions.get(str(material_id))
-                    if v:
-                        top_version = v
-                        top_use_default = False
-                    elif not bom_version:
-                        top_use_default = True
-                bom_items = await get_bom_items_by_material_id(
-                    tenant_id=tenant_id,
-                    material_id=material_id,
-                    only_approved=True,
-                    version=top_version,
-                    use_default=top_use_default,
-                )
-
-                if bom_items:
-                    variant_attrs = getattr(demand_item, "variant_attributes", None)
-                    cfg_selections = _safe_configurable_selections(getattr(demand_item, "configurable_selections", None))
-                    expanded_requirements = await expand_bom_with_source_control(
-                        tenant_id=tenant_id,
-                        material_id=material_id,
-                        required_quantity=required_quantity,
-                        only_approved=True,
-                        bom_version=bom_version,
-                        use_default_bom=use_default_bom,
-                        material_bom_versions=material_bom_versions,
-                        variant_attributes=variant_attrs,
-                        configurable_selections=cfg_selections,
-                    )
-
-                    for req in expanded_requirements:
-                        req_material_id = req["material_id"]
-                        if req_material_id not in all_material_requirements:
-                            all_material_requirements[req_material_id] = {
-                                "material_id": req_material_id,
-                                "material_code": req["material_code"],
-                                "material_name": req["material_name"],
-                                "source_type": req.get("source_type"),
-                                "required_quantity": 0.0,
-                                "unit": req.get("unit"),
-                                "delivery_date": delivery_date,
-                            }
-                        all_material_requirements[req_material_id]["required_quantity"] += req["required_quantity"]
-        
-        # 5. 生成计算结果明细（包含时间安排）
-        for material_id, req_info in all_material_requirements.items():
-            material = await Material.get_or_none(tenant_id=tenant_id, id=material_id)
-            if not material:
-                continue
-            
-            source_type = req_info.get("source_type") or material.source_type
-            
-            # 验证物料来源配置
-            validation_passed, validation_errors = await validate_material_source_config(
-                tenant_id=tenant_id,
-                material_id=material_id,
-                source_type=source_type or "Make"
-            )
-            
-            # 获取物料来源配置
-            source_config = await get_material_source_config(tenant_id, material_id) or {}
-            
-            # 获取库存信息与安全库存/再订货点，计算净需求
-            computation_params = computation.computation_params or {}
-            inventory_info = await get_material_inventory_info(
-                tenant_id=tenant_id,
-                material_id=material_id,
-                warehouse_id=None,
-            )
-            safety_stock, reorder_point = await _get_material_safety_reorder(
-                tenant_id=tenant_id,
-                material=material,
-                material_id=material_id,
-                computation_params=computation_params,
-            )
-            _, net_requirement = _compute_supply_and_net(
-                inventory_info=inventory_info,
-                safety_stock=safety_stock,
-                reorder_point=reorder_point,
-                gross_requirement=req_info["required_quantity"],
-                computation_params=computation_params,
-            )
-            available_inventory = float(inventory_info.get("available_quantity", 0))
-            in_transit_qty = float(inventory_info.get("in_transit_quantity", 0))
-            reserved_qty = float(inventory_info.get("reserved_quantity", 0))
-            gross_requirement = req_info["required_quantity"]
-
-            # 计算时间安排
-            delivery_date = req_info.get("delivery_date")
-            production_start_date = None
-            production_completion_date = None
-            procurement_start_date = None
-            procurement_completion_date = None
-            
-            # 根据物料来源类型确定建议行动和时间
-            suggested_work_order_quantity = Decimal(0)
-            suggested_purchase_order_quantity = Decimal(0)
-            planned_production = Decimal(0)
-            planned_procurement = Decimal(0)
-            
-            if source_type == SOURCE_TYPE_MAKE:
-                # 自制件：生成生产计划
-                if net_requirement > 0 and validation_passed:
-                    suggested_work_order_quantity = Decimal(str(net_requirement))
-                    planned_production = Decimal(str(net_requirement))
-                    
-                    # 计算生产时间（TODO: 从工艺路线获取提前期）
-                    production_lead_time = source_config.get("source_config", {}).get("production_lead_time", 3)
-                    if delivery_date:
-                        production_completion_date = delivery_date
-                        production_start_date = delivery_date - timedelta(days=production_lead_time)
-            elif source_type == SOURCE_TYPE_BUY:
-                # 采购件：生成采购计划
-                if net_requirement > 0:
-                    suggested_purchase_order_quantity = Decimal(str(net_requirement))
-                    planned_procurement = Decimal(str(net_requirement))
-                    
-                    # 计算采购时间（TODO: 从物料主数据获取提前期）
-                    purchase_lead_time = source_config.get("source_config", {}).get("purchase_lead_time", 7)
-                    if delivery_date:
-                        procurement_completion_date = delivery_date
-                        procurement_start_date = delivery_date - timedelta(days=purchase_lead_time)
-            elif source_type == SOURCE_TYPE_OUTSOURCE:
-                # 委外件：生成委外计划（有净需求即显示建议数量；验证失败时生成工单会拦截）
-                if net_requirement > 0:
-                    suggested_work_order_quantity = Decimal(str(net_requirement))
-                    planned_production = Decimal(str(net_requirement))
-                    
-                    # 计算委外时间
-                    outsource_lead_time = source_config.get("source_config", {}).get("outsource_lead_time", 5)
-                    if delivery_date:
-                        production_completion_date = delivery_date
-                        production_start_date = delivery_date - timedelta(days=outsource_lead_time)
-            
-            # 创建计算结果明细
-            await DemandComputationItem.create(
-                tenant_id=tenant_id,
-                computation_id=computation.id,
-                material_id=material_id,
-                material_code=req_info["material_code"],
-                material_name=req_info["material_name"],
-                material_spec=material.specification,
-                material_unit=req_info["unit"],
-                required_quantity=Decimal(str(gross_requirement)),
-                available_inventory=Decimal(str(available_inventory)),
-                net_requirement=Decimal(str(net_requirement)),
                 delivery_date=delivery_date,
                 planned_production=planned_production if planned_production > 0 else None,
                 planned_procurement=planned_procurement if planned_procurement > 0 else None,
@@ -1498,8 +1200,8 @@ class DemandComputationService:
                 material_source_config=source_config,
                 source_validation_passed=validation_passed,
                 source_validation_errors=validation_errors if not validation_passed else None,
-                demand_item_ids=req_info.get("demand_item_ids"),  # 多需求追溯
-                detail_results={"in_transit_quantity": in_transit_qty, "reserved_quantity": reserved_qty},  # 库存追溯
+                demand_item_ids=req_info.get("demand_item_ids"),
+                detail_results={"in_transit_quantity": in_transit_qty, "reserved_quantity": reserved_qty},
             )
     
     async def update_computation(
@@ -2656,7 +2358,7 @@ class DemandComputationService:
                 delivery_date=delivery_date,
                 order_type="标准采购",
                 status="草稿",
-                source_type=computation.computation_type,
+                source_type="demand_computation",
                 source_id=computation.id,
                 notes=f"从需求计算 {computation.computation_code} 自动生成",
             )
@@ -2679,7 +2381,7 @@ class DemandComputationService:
                 total_price=Decimal(str(total_price)),
                 required_date=delivery_date,
                 inspection_required=True,
-                source_type=computation.computation_type,
+                source_type="demand_computation",
                 source_id=computation.id,
             )
             
@@ -2775,7 +2477,7 @@ class DemandComputationService:
                 delivery_date=delivery_date,
                 order_type="标准采购",
                 status="草稿",
-                source_type=computation.computation_type,
+                source_type="demand_computation",
                 source_id=computation.id,
                 notes=f"从需求计算 {computation.computation_code} 自动生成（按供应商分组）",
                 created_by=created_by,
@@ -2811,7 +2513,7 @@ class DemandComputationService:
                     total_price=total_price,
                     required_date=delivery_date,
                     inspection_required=True,
-                    source_type=computation.computation_type,
+                    source_type="demand_computation",
                     source_id=computation.id,
                     created_by=created_by,
                     updated_by=created_by

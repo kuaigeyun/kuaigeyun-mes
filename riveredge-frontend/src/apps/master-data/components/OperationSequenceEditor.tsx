@@ -31,9 +31,15 @@ export interface OperationItem {
 export interface OperationSequenceEditorProps {
   value?: OperationItem[];
   onChange?: (operations: OperationItem[]) => void;
+  /** 为 true 时显示「节点工序」列（与路线「允许工序跳转」联动） */
+  showNodeOperationColumn?: boolean;
 }
 
-export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = ({ value = [], onChange }) => {
+export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = ({
+  value = [],
+  onChange,
+  showNodeOperationColumn = false,
+}) => {
   const { t } = useTranslation();
   const [operations, setOperations] = useState<OperationItem[]>(value);
   const [allOperations, setAllOperations] = useState<Operation[]>([]);
@@ -194,6 +200,9 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
     return allOperations.filter((op) => op.uuid === excludeUuid || !operations.some((a) => a.uuid === op.uuid));
   };
 
+  const tableColSpan = showNodeOperationColumn ? 5 : 4;
+  const actionTdIndex = showNodeOperationColumn ? 4 : 3;
+
   const columns = [
     {
       title: t('app.master-data.operationSequence.index'),
@@ -230,27 +239,40 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
         </Tag>
       ),
     },
+    ...(showNodeOperationColumn
+      ? [
+          {
+            title: t('app.master-data.operationSequence.nodeOperation'),
+            key: 'isNodeOperation',
+            width: 88,
+            render: (_: any, record: OperationItem) => (
+              <Switch
+                size="small"
+                checked={!!record.isNodeOperation}
+                onChange={(c) => toggleNodeOperation(record.uuid, c)}
+              />
+            ),
+          },
+        ]
+      : []),
     {
-      title: t('app.master-data.operationSequence.nodeOperation'),
-      key: 'isNodeOperation',
-      width: 100,
+      title: t('app.master-data.operationSequence.overReportAction'),
+      key: 'action',
+      width: 320,
       render: (_: any, record: OperationItem) => (
-        <Switch
-          size="small"
-          checked={!!record.isNodeOperation}
-          onChange={(c) => toggleNodeOperation(record.uuid, c)}
-        />
-      ),
-    },
-    {
-      title: t('app.master-data.operationSequence.overReport'),
-      key: 'overReport',
-      width: 150,
-      render: (_: any, record: OperationItem) => (
-        <Space direction="vertical" size={2} onClick={(e) => e.stopPropagation()}>
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'nowrap',
+            alignItems: 'center',
+            gap: 8,
+            whiteSpace: 'nowrap',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
           <Select
             size="small"
-            style={{ width: 108 }}
+            style={{ width: 100, flexShrink: 0 }}
             value={record.overReportMode ?? 'none'}
             options={[
               { label: t('field.operation.overReportModeNone'), value: 'none' },
@@ -262,22 +284,17 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
           <InputNumber
             size="small"
             min={0}
-            style={{ width: 108 }}
+            style={{ width: 88, flexShrink: 0 }}
             value={record.overReportValue ?? 0}
             onChange={(v) => patchOverReport(record.uuid, { overReportValue: v ?? 0 })}
           />
-        </Space>
-      ),
-    },
-    {
-      title: t('app.master-data.operationSequence.action'),
-      key: 'action',
-      width: 150,
-      render: (_: any, record: OperationItem) => (
-        <Space onClick={(e) => e.stopPropagation()}>
-          <Button type="link" size="small" onClick={(e) => { e.stopPropagation(); handleOpenReplaceModal(record.uuid); }}>{t('app.master-data.operationSequence.replace')}</Button>
-          <Button type="link" danger size="small" onClick={(e) => { e.stopPropagation(); handleDeleteOperation(record.uuid); }}>{t('app.master-data.operationSequence.delete')}</Button>
-        </Space>
+          <Button type="link" size="small" style={{ padding: '0 4px', flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); handleOpenReplaceModal(record.uuid); }}>
+            {t('app.master-data.operationSequence.replace')}
+          </Button>
+          <Button type="link" danger size="small" style={{ padding: '0 4px', flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); handleDeleteOperation(record.uuid); }}>
+            {t('app.master-data.operationSequence.delete')}
+          </Button>
+        </div>
       ),
     },
   ];
@@ -321,7 +338,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
               }),
             });
           }
-          if (idx >= 4 && React.isValidElement(child)) {
+          if (idx === actionTdIndex && React.isValidElement(child)) {
             return React.cloneElement(child, { onClick: (e: React.MouseEvent) => e.stopPropagation() });
           }
           return child;
@@ -370,7 +387,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
                               <React.Fragment key={op.uuid}>
                                 {isInsertBefore && (
                                   <tr>
-                                    <td colSpan={7} style={{ padding: 0, height: 0, lineHeight: 0 }}>
+                                    <td colSpan={tableColSpan} style={{ padding: 0, height: 0, lineHeight: 0 }}>
                                       <div style={{ height: 2, backgroundColor: '#1890ff', margin: 0, boxShadow: '0 0 4px rgba(24, 144, 255, 0.5)' }} />
                                     </td>
                                   </tr>
@@ -397,25 +414,28 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
                                       {op.reportingType === 'quantity' ? t('app.master-data.operationSequence.reportingByQuantity') : op.reportingType === 'status' ? t('app.master-data.operationSequence.reportingByStatus') : '-'}
                                     </Tag>
                                   </td>
+                                  {showNodeOperationColumn && (
+                                    <td onClick={(e) => e.stopPropagation()}>
+                                      <Switch
+                                        size="small"
+                                        checked={!!op.isNodeOperation}
+                                        onChange={(c) => toggleNodeOperation(op.uuid, c)}
+                                      />
+                                    </td>
+                                  )}
                                   <td onClick={(e) => e.stopPropagation()}>
-                                    <Switch
-                                      size="small"
-                                      checked={!!op.allowJump}
-                                      onChange={(c) => toggleAllowJump(op.uuid, c)}
-                                    />
-                                  </td>
-                                  <td onClick={(e) => e.stopPropagation()}>
-                                    <Switch
-                                      size="small"
-                                      checked={!!op.isNodeOperation}
-                                      onChange={(c) => toggleNodeOperation(op.uuid, c)}
-                                    />
-                                  </td>
-                                  <td onClick={(e) => e.stopPropagation()}>
-                                    <Space direction="vertical" size={2}>
+                                    <div
+                                      style={{
+                                        display: 'flex',
+                                        flexWrap: 'nowrap',
+                                        alignItems: 'center',
+                                        gap: 8,
+                                        whiteSpace: 'nowrap',
+                                      }}
+                                    >
                                       <Select
                                         size="small"
-                                        style={{ width: 108 }}
+                                        style={{ width: 100, flexShrink: 0 }}
                                         value={op.overReportMode ?? 'none'}
                                         options={[
                                           { label: t('field.operation.overReportModeNone'), value: 'none' },
@@ -427,22 +447,22 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
                                       <InputNumber
                                         size="small"
                                         min={0}
-                                        style={{ width: 108 }}
+                                        style={{ width: 88, flexShrink: 0 }}
                                         value={op.overReportValue ?? 0}
                                         onChange={(v) => patchOverReport(op.uuid, { overReportValue: v ?? 0 })}
                                       />
-                                    </Space>
-                                  </td>
-                                  <td onClick={(e) => e.stopPropagation()}>
-                                    <Space>
-                                      <Button type="link" size="small" onClick={(e) => { e.stopPropagation(); handleOpenReplaceModal(op.uuid); }}>{t('app.master-data.operationSequence.replace')}</Button>
-                                      <Button type="link" danger size="small" onClick={(e) => { e.stopPropagation(); handleDeleteOperation(op.uuid); }}>{t('app.master-data.operationSequence.delete')}</Button>
-                                    </Space>
+                                      <Button type="link" size="small" style={{ padding: '0 4px', flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); handleOpenReplaceModal(op.uuid); }}>
+                                        {t('app.master-data.operationSequence.replace')}
+                                      </Button>
+                                      <Button type="link" danger size="small" style={{ padding: '0 4px', flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); handleDeleteOperation(op.uuid); }}>
+                                        {t('app.master-data.operationSequence.delete')}
+                                      </Button>
+                                    </div>
                                   </td>
                                 </DraggableRow>
                                 {isInsertAfter && (
                                   <tr>
-                                    <td colSpan={7} style={{ padding: 0, height: 0, lineHeight: 0 }}>
+                                    <td colSpan={tableColSpan} style={{ padding: 0, height: 0, lineHeight: 0 }}>
                                       <div style={{ height: 2, backgroundColor: '#1890ff', margin: 0, boxShadow: '0 0 4px rgba(24, 144, 255, 0.5)' }} />
                                     </td>
                                   </tr>
@@ -456,7 +476,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
                   },
                 }}
                 style={{ width: '100%' }}
-                scroll={{ x: 900 }}
+                scroll={{ x: showNodeOperationColumn ? 820 : 732 }}
                 locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.master-data.operationSequence.noData')} /> }}
               />
             </div>

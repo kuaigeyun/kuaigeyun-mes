@@ -33,7 +33,7 @@ interface ProductionPlan {
   tenant_id?: number;
   plan_code?: string;
   plan_name?: string;
-  plan_type?: string; // MRP/LRP
+  plan_type?: string; // 统一为 MRP；MTS/MTO 见来源需求计算或销售订单
   status?: string;
   execution_status?: string;
   plan_start_date?: string;
@@ -78,7 +78,7 @@ const { useToken } = theme;
 
 const PLAN_TYPE_FALLBACK = [
   { label: 'MRP计划', value: 'MRP' },
-  { label: 'LRP计划', value: 'LRP' },
+  { label: '历史LRP类型', value: 'LRP' },
   { label: '手动计划', value: 'MANUAL' },
 ];
 
@@ -135,7 +135,7 @@ const ProductionPlansPage: React.FC = () => {
       render: (type) => {
         const typeMap = {
           'MRP': { text: '按预测计划', color: 'processing' },
-          'LRP': { text: '按订单计划', color: 'success' },
+          'LRP': { text: '历史按订单计划', color: 'success' },
         };
         const config = typeMap[type as keyof typeof typeMap] || { text: type, color: 'default' };
         return <Tag color={config.color}>{config.text}</Tag>;
@@ -500,14 +500,14 @@ const ProductionPlansPage: React.FC = () => {
           valueStyle: { color: '#1890ff' },
         },
         {
-          title: '按预测计划',
-          value: statistics?.mrp_count || 0,
+          title: '按库存(MTS)',
+          value: (statistics?.mts_count ?? statistics?.mrp_count) || 0,
           suffix: '个',
           valueStyle: { color: '#52c41a' },
         },
         {
-          title: '按订单计划',
-          value: statistics?.lrp_count || 0,
+          title: '按订单(MTO)',
+          value: (statistics?.mto_count ?? statistics?.lrp_count) || 0,
           suffix: '个',
           valueStyle: { color: '#722ed1' },
         },

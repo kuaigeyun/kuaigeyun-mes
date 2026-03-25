@@ -62,6 +62,7 @@ import TechStackModal from '../components/tech-stack-modal';
 import { MobileQRCode } from '../components/mobile-preview';
 import ThemeEditor from '../components/theme-editor';
 import IterationFloatButton from '../components/iteration-float-button';
+import { RouteTransition } from '../components/route-transition';
 import { getCurrentUser } from '../services/auth';
 import { getCurrentInfraSuperAdmin } from '../services/infraAdmin';
 import { getToken, clearAuth, getUserInfo, getTenantId } from '../utils/auth';
@@ -4426,7 +4427,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }}
       >
         {isMobileOrTablet ? (
-          <>{children}</>
+          <RouteTransition>{children}</RouteTransition>
         ) : (
         <UniTabs
           menuConfig={filteredMenuData}

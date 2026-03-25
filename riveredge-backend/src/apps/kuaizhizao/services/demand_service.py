@@ -1621,12 +1621,9 @@ class DemandService(AppBaseService[Demand]):
                 else:
                     logger.warning(f"需求 {demand.demand_code} 标记为已下推但未找到计算记录，允许重新下推")
             
-            # 确定计算类型：MTO/销售订单 -> LRP (按单), MTS/销售预测 -> MRP (批产)
-            if demand.business_mode == "MTO" or demand.demand_type == "sales_order":
-                computation_type = "LRP"
-            else:
-                computation_type = "MRP"
-                
+            # 统一需求计算类型恒为 MRP；按单/按预测由需求的 business_mode 写入计算头
+            computation_type = "MRP"
+
             # 设置默认计算参数（含 4M 人机料法开关）
             default_params = {
                 "include_safety_stock": True,

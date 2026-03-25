@@ -84,8 +84,6 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
     formRef.current?.setFieldsValue({
       isActive: true,
       reportingType: 'quantity',
-      allowJump: false,
-      isNodeOperation: false,
       overReportMode: 'none',
       overReportValue: 0,
       inspectionMode: 'simple',
@@ -98,8 +96,6 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
       const initValues = {
         isActive: true,
         reportingType: 'quantity',
-        allowJump: false,
-        isNodeOperation: false,
         overReportMode: 'none',
         overReportValue: 0,
       };
@@ -153,8 +149,6 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
           name: detail.name,
           description: detail.description,
           reportingType: detail.reportingType || 'quantity',
-          allowJump: detail.allowJump ?? false,
-          isNodeOperation: detail.isNodeOperation ?? (detail as any).is_node_operation ?? false,
           overReportMode: detail.overReportMode ?? (detail as any).over_report_mode ?? 'none',
           overReportValue: Number(detail.overReportValue ?? (detail as any).over_report_value ?? 0) || 0,
           isActive: detail.isActive ?? true,
@@ -189,6 +183,8 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
           defectTypeUuids,
           defaultOperatorUuids,
           ...inspectionPayload,
+          allowJump: false,
+          isNodeOperation: false,
         };
         await operationApi.update(editUuid, updatePayload);
         messageApi.success(t('common.updateSuccess'));
@@ -227,6 +223,8 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
           defectTypeUuids,
           defaultOperatorUuids,
           ...inspectionPayload,
+          allowJump: false,
+          isNodeOperation: false,
         };
         const created = await operationApi.create(createPayload);
         messageApi.success(t('common.createSuccess'));
@@ -270,7 +268,7 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
       loading={formLoading}
       width={MODAL_CONFIG.STANDARD_WIDTH}
       formRef={formRef as React.RefObject<ProFormInstance>}
-      initialValues={{ isActive: true, reportingType: 'quantity', allowJump: false, isNodeOperation: false, inspectionMode: 'simple' }}
+      initialValues={{ isActive: true, reportingType: 'quantity', inspectionMode: 'simple' }}
       layout="vertical"
       grid
     >

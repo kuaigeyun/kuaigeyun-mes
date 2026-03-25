@@ -145,6 +145,7 @@ export async function downloadBackup(uuid: string): Promise<Blob> {
     }
     return res.blob();
   } finally {
+    updateLastActivity(true);
     decrementPendingRequests();
   }
 }

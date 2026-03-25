@@ -297,7 +297,11 @@ export async function apiRequest<T = any>(
     response = result.res;
     data = result.data;
   } catch (fetchError: any) {
-    if (!isPublicEndpoint) decrementPendingRequests();
+    if (!isPublicEndpoint) {
+      // 请求已结束（失败）：仍视为一次交互，避免长耗时/失败后仅沿用「发起时刻」被判无操作
+      updateLastActivity(true);
+      decrementPendingRequests();
+    }
     handleNetworkError(fetchError?.originalError || fetchError);
     const err = new Error(fetchError?.message || '网络连接失败') as any;
     err.originalError = fetchError;
@@ -457,11 +461,6 @@ export async function apiRequest<T = any>(
       throw error;
     }
 
-    // 非公开接口的成功响应计入用户活动（API 请求表示用户正在使用系统）
-    if (!isPublicEndpoint && response.ok) {
-      updateLastActivity(true);
-    }
-
     // 检查后端响应格式
     if (data && typeof data === 'object') {
       const responseObj = data as any;
@@ -506,6 +505,8 @@ export async function apiRequest<T = any>(
     throw wrappedError;
   } finally {
     if (!isPublicEndpoint) {
+      // 任意完成态（成功、HTTP 错误、业务抛错）均刷新活动时间，与 pending 归零同步，消除「长请求刚结束即判 idle」的窗口
+      updateLastActivity(true);
       decrementPendingRequests();
     }
   }

@@ -16,6 +16,7 @@ import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { getSavedTabs, setSavedTabs, getSavedActiveKey, setSavedActiveKey } from '../../stores/tabsStorage';
 import { getUserInfo, getTenantId } from '../../utils/auth';
+import { RouteTransition } from '../route-transition';
 
 /**
  * 标签项接口
@@ -841,7 +842,11 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
 
   // 如果没有标签，直接渲染子组件
   if (tabs.length === 0) {
-    return <>{children}</>;
+    return (
+      <RouteTransition>
+        {children}
+      </RouteTransition>
+    );
   }
 
   return (
@@ -1663,12 +1668,12 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         </div>
         <div
           className={`uni-tabs-content${isDashboardOrAnalysisPage ? ' uni-tabs-content-dashboard' : ''}`}
-          key={`content-${activeKey}-${refreshKey}`}
+          key={`content-refresh-${refreshKey}`}
         >
           {isHMIPage ? (
             <div className="uni-tabs-content-hmi-container">
               <div className="uni-tabs-content-hmi-inner">
-                {children}
+                <RouteTransition>{children}</RouteTransition>
               </div>
             </div>
           ) : (
@@ -1683,7 +1688,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
               flexDirection: 'column',
             }}>
               <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-                {children}
+                <RouteTransition>{children}</RouteTransition>
               </div>
             </div>
           )}

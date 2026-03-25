@@ -219,6 +219,9 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
   // 引入 useConfigStore
   const fetchConfigs = useConfigStore((s) => s.fetchConfigs);
   const getConfig = useConfigStore((s) => s.getConfig);
+  /** 拆出具体项作依赖，避免 fetchConfigs 更新后定时器仍闭包旧阈值 */
+  const tokenCheckIntervalSec = useConfigStore((s) => s.configs['security.token_check_interval']);
+  const inactivityTimeoutSec = useConfigStore((s) => s.configs['security.inactivity_timeout']);
   const tenantId = getTenantId();
 
   // 初始化系统配置（用户登录后拉取；租户切换时重新拉取，确保新租户显示平台级 LOGO/站点名）
@@ -228,7 +231,7 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     }
   }, [currentUser, tenantId, isPublicPath, fetchConfigs]);
 
-  // 监听用户活动（仅用户操作时更新，API 请求由 api.ts 在成功响应时更新）
+  // 监听用户活动；API 请求由 api.ts 在请求结束（含失败）时强制刷新活动时间
   useEffect(() => {
     if (isPublicPath) return;
 
@@ -236,19 +239,26 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     updateLastActivity(true);
 
     const onActivity = () => updateLastActivity();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') updateLastActivity(true);
+    };
 
     window.addEventListener('mousemove', onActivity);
     window.addEventListener('keydown', onActivity);
     window.addEventListener('click', onActivity);
-    window.addEventListener('scroll', onActivity);
+    window.addEventListener('scroll', onActivity, { passive: true });
+    window.addEventListener('wheel', onActivity, { passive: true });
     window.addEventListener('touchstart', onActivity);
+    document.addEventListener('visibilitychange', onVisible);
 
     return () => {
       window.removeEventListener('mousemove', onActivity);
       window.removeEventListener('keydown', onActivity);
       window.removeEventListener('click', onActivity);
       window.removeEventListener('scroll', onActivity);
+      window.removeEventListener('wheel', onActivity);
       window.removeEventListener('touchstart', onActivity);
+      document.removeEventListener('visibilitychange', onVisible);
     };
   }, [isPublicPath]);
 
@@ -264,9 +274,24 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
       return;
     }
 
-    // 获取配置参数（默认值作为后备）
-    const checkInterval = getConfig('security.token_check_interval', 60) * 1000;
-    const inactivityTimeout = getConfig('security.inactivity_timeout', 1800) * 1000; // 默认30分钟
+    const parseCheckIntervalMs = (raw: unknown): number => {
+      const n = Number(raw);
+      const sec = !Number.isFinite(n) ? 60 : Math.max(5, Math.min(3600, n));
+      return sec * 1000;
+    };
+    const parseInactivityMs = (raw: unknown): number => {
+      const n = Number(raw);
+      if (raw === 0 || n === 0) return 0;
+      if (!Number.isFinite(n) || n < 0) return 1800 * 1000;
+      return n * 1000;
+    };
+
+    const checkInterval = parseCheckIntervalMs(
+      tokenCheckIntervalSec !== undefined ? tokenCheckIntervalSec : getConfig('security.token_check_interval', 60),
+    );
+    const inactivityTimeout = parseInactivityMs(
+      inactivityTimeoutSec !== undefined ? inactivityTimeoutSec : getConfig('security.inactivity_timeout', 1800),
+    );
 
     // 定时器 ref 需在 handleLogout 之前声明，避免 handleLogout 被首次检查调用时访问未初始化变量
     const checkTimerRef = { current: null as NodeJS.Timeout | null };
@@ -342,7 +367,15 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
         clearInterval(checkTimerRef.current);
       }
     };
-  }, [isPublicPath, location.pathname, setCurrentUser, getConfig, t]);
+  }, [
+    isPublicPath,
+    location.pathname,
+    setCurrentUser,
+    getConfig,
+    t,
+    tokenCheckIntervalSec,
+    inactivityTimeoutSec,
+  ]);
 
   // 检查是否有 token（这是判断是否登录的唯一标准）
   const token = getToken();

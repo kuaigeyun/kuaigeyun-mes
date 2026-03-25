@@ -582,7 +582,7 @@ const ComputationParamsForm: React.FC<{ value?: Record<string, any>; onChange?: 
         </Row>
       </Panel>
 
-      <Panel header="4M 人机料法（LRP 计算约束）" key="4m">
+      <Panel header="4M 人机料法（需求计算约束）" key="4m">
         <div style={{ color: '#8c8c8c', fontSize: 12, marginBottom: 12 }}>
           勾选表示需求计算时考虑该约束，取消勾选则忽略（适合中小企业按实情选择）
         </div>

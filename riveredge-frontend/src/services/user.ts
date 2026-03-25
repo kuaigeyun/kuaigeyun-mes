@@ -251,6 +251,8 @@ export async function exportUsers(params?: UserListParams): Promise<Blob> {
 
     return response.blob();
   } finally {
+    // 与 apiRequest 一致：结束时刻刷新活动，避免长导出结束后立刻被判无操作
+    updateLastActivity(true);
     decrementPendingRequests();
   }
 }
