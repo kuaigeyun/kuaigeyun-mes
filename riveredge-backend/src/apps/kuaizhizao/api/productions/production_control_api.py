@@ -8,7 +8,7 @@ from core.dependencies.auth import get_current_user
 from apps.kuaizhizao.services.production_control_service import ProductionControlService
 from apps.kuaizhizao.schemas.production_control import (
     MaterialReadinessItem, ResourceLoadItem, DeliveryRiskItem, ControlTowerSummary,
-    BulkReleaseRequest
+    BulkReleaseRequest, UrgentOrderSimulationRequest, SimulationResult
 )
 from apps.kuaizhizao.models.work_order import WorkOrder
 
@@ -74,3 +74,12 @@ async def bulk_release_kitted_orders(
 ):
     """批量下达齐套工单"""
     return await service.release_kitted_work_orders(current_user.tenant_id, req.work_order_ids)
+
+
+@router.post("/simulate-impact", response_model=SimulationResult)
+async def simulate_urgent_order_impact(
+    req: UrgentOrderSimulationRequest,
+    current_user=Depends(get_current_user)
+):
+    """紧急订单插单影响模拟"""
+    return await service.simulate_urgent_order_impact(current_user.tenant_id, req.dict())

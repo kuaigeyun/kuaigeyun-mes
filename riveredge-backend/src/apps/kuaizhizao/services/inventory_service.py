@@ -17,6 +17,7 @@ Date: 2026-02-28
 from decimal import Decimal
 from typing import Optional, Dict, Any
 from loguru import logger
+from tortoise.transactions import atomic
 
 from apps.kuaizhizao.utils.inventory_helper import get_material_inventory_info
 
@@ -30,6 +31,7 @@ class InventoryService:
     """
 
     @staticmethod
+    @atomic()
     async def increase_stock(
         tenant_id: int,
         material_id: int,
@@ -70,12 +72,12 @@ class InventoryService:
                 from apps.master_data.models.material_batch import MaterialBatch
 
                 batch_no = batch_no or "DEFAULT"
-                batch = await MaterialBatch.get_or_none(
+                batch = await MaterialBatch.filter(
                     tenant_id=tenant_id,
                     material_id=material_id,
                     batch_no=batch_no,
                     deleted_at__isnull=True,
-                )
+                ).select_for_update().first()
                 if batch:
                     batch.quantity = (batch.quantity or Decimal(0)) + quantity
                     await batch.save()
@@ -104,7 +106,7 @@ class InventoryService:
                 )
                 if batch_no:
                     inv_filter["batch_no"] = batch_no
-                inv = await LineSideInventory.get_or_none(**inv_filter)
+                inv = await LineSideInventory.filter(**inv_filter).select_for_update().first()
                 if inv:
                     inv.quantity = (inv.quantity or Decimal(0)) + quantity
                     await inv.save()
@@ -136,6 +138,7 @@ class InventoryService:
             raise
 
     @staticmethod
+    @atomic()
     async def decrease_stock(
         tenant_id: int,
         material_id: int,
@@ -145,12 +148,14 @@ class InventoryService:
         source_type: Optional[str] = None,
         source_doc_id: Optional[int] = None,
         source_doc_code: Optional[str] = None,
+        enforce_fifo: bool = False,
     ) -> bool:
         """
         扣减库存
 
         Args:
             同 increase_stock
+            enforce_fifo: 是否强校验先进先出（拦截）
 
         Returns:
             是否成功
@@ -168,18 +173,37 @@ class InventoryService:
                 from apps.master_data.models.material_batch import MaterialBatch
 
                 if batch_no:
-                    batch = await MaterialBatch.get_or_none(
+                    batch = await MaterialBatch.filter(
                         tenant_id=tenant_id,
                         material_id=material_id,
                         batch_no=batch_no,
                         deleted_at__isnull=True,
                         status="in_stock",
-                    )
+                    ).select_for_update().first()
                     if not batch or (batch.quantity or 0) < quantity:
                         raise ValueError(
                             f"库存不足: material={material_id} batch={batch_no} "
                             f"need={quantity} have={batch.quantity if batch else 0}"
                         )
+                        
+                    # 阶段2：强制先进先出 (FIFO Strict Enforcement) 拦截网
+                    if enforce_fifo:
+                        # 检查是否有更早产生的（id 更小），且有库存的批次
+                        older_batch = await MaterialBatch.filter(
+                            tenant_id=tenant_id,
+                            material_id=material_id,
+                            deleted_at__isnull=True,
+                            status="in_stock",
+                            quantity__gt=0,
+                            id__lt=batch.id
+                        ).order_by("id").first()
+                        if older_batch:
+                            from infra.exceptions.exceptions import BusinessLogicError
+                            raise BusinessLogicError(
+                                f"【防呆拦截】当前物料不符合先入先出！"
+                                f"系统内仍存在早期旧批次 (批号:{older_batch.batch_no}) 未用完！"
+                                f"请优先领用早期批次以防产品滞留过期。"
+                            )
                     batch.quantity = (batch.quantity or Decimal(0)) - quantity
                     if batch.quantity <= 0:
                         batch.status = "out_stock"
@@ -194,6 +218,7 @@ class InventoryService:
                             status="in_stock",
                             quantity__gt=0,
                         )
+                        .select_for_update()
                         .order_by("id")
                         .all()
                     )
@@ -229,7 +254,7 @@ class InventoryService:
                 )
                 if batch_no:
                     inv_filter["batch_no"] = batch_no
-                inv = await LineSideInventory.get_or_none(**inv_filter)
+                inv = await LineSideInventory.filter(**inv_filter).select_for_update().first()
                 if not inv:
                     raise ValueError(
                         f"线边仓无库存: warehouse={warehouse_id} material={material_id}"
@@ -274,6 +299,7 @@ class InventoryService:
         return Decimal(str(info["available_quantity"]))
 
     @staticmethod
+    @atomic()
     async def adjust_inventory(
         tenant_id: int,
         material_id: int,
@@ -305,12 +331,12 @@ class InventoryService:
                 from apps.master_data.models.material_batch import MaterialBatch
 
                 batch_no = batch_no or "DEFAULT"
-                batch = await MaterialBatch.get_or_none(
+                batch = await MaterialBatch.filter(
                     tenant_id=tenant_id,
                     material_id=material_id,
                     batch_no=batch_no,
                     deleted_at__isnull=True,
-                )
+                ).select_for_update().first()
                 if batch:
                     batch.quantity = quantity
                     batch.status = "in_stock" if quantity > 0 else "out_stock"
@@ -330,12 +356,12 @@ class InventoryService:
             else:
                 from apps.kuaizhizao.models.line_side_inventory import LineSideInventory
 
-                inv = await LineSideInventory.get_or_none(
+                inv = await LineSideInventory.filter(
                     tenant_id=tenant_id,
                     warehouse_id=warehouse_id,
                     material_id=material_id,
                     deleted_at__isnull=True,
-                )
+                ).select_for_update().first()
                 if inv:
                     inv.quantity = quantity
                     await inv.save()

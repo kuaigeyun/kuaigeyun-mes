@@ -9,13 +9,12 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ActionType, ProColumns, ModalForm, ProFormText, ProFormSelect, ProFormDateRangePicker, ProFormList, ProFormGroup, ProFormDigit, ProFormDatePicker, ProFormItem } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ModalForm, ProFormText, ProFormDateRangePicker, ProFormList, ProFormGroup, ProFormDigit, ProFormDatePicker, ProFormItem } from '@ant-design/pro-components';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { App, Button, Tag, Space, Modal, Card, Row, Col, Table, theme } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, PlayCircleOutlined, BarChartOutlined, LoadingOutlined } from '@ant-design/icons';
+import { EyeOutlined, EditOutlined, DeleteOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerActions, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { planningApi } from '../../../services/production';
 import { getProductionPlanLifecycle } from '../../../utils/productionPlanLifecycle';
@@ -23,9 +22,10 @@ import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { apiRequest } from '../../../../../services/api';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
-import { useRequest } from 'ahooks';
-import { batchImport } from '../../../../../utils/batchOperations';
 import { materialApi } from '../../../../master-data/services/material';
+import ProductionControlTower from './ProductionControlTower';
+import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
+import { batchImport } from '../../../../../utils/batchOperations';
 
 // 生产计划接口定义
 interface ProductionPlan {
@@ -260,26 +260,6 @@ const ProductionPlansPage: React.FC = () => {
     },
   ];
 
-  // 获取计划配置（是否需审核后执行）
-  const { data: planningConfig } = useRequest(() => planningApi.productionPlan.getPlanningConfig());
-
-  // 获取统计数据
-  const { data: statistics, loading: statsLoading, refresh: refreshStats } = useRequest(async () => {
-    return planningApi.productionPlan.list({ skip: 0, limit: 1 }).then(res => {
-        // Since we don't have a specialized stats endpoint that returns everything, 
-        // we'll at least fetch the total from the list call for now, 
-        // Or better, I just added /production-plans/statistics to the backend.
-        // Let's assume I can use it if I update the planningApi.
-        return planningApi.productionPlan.getStatistics().catch(() => ({
-            total_count: res.total,
-            mrp_count: 0,
-            lrp_count: 0,
-            executed_count: 0,
-            pending_execution_count: 0,
-        }));
-    });
-  });
-
   // 处理详情查看
   const handleDetail = async (record: ProductionPlan) => {
     try {
@@ -302,7 +282,6 @@ const ProductionPlansPage: React.FC = () => {
           await planningApi.productionPlan.execute(record.id!.toString());
           messageApi.success('生产计划执行成功，已生成工单');
           actionRef.current?.reload();
-          refreshStats();
         } catch (error: any) {
           messageApi.error(error?.response?.data?.detail || '生产计划执行失败');
         }
@@ -311,7 +290,7 @@ const ProductionPlansPage: React.FC = () => {
   };
 
   // 处理编辑
-  const handleEdit = (record: ProductionPlan) => {
+  const handleEdit = (_record: ProductionPlan) => {
     messageApi.info('编辑功能正在对接明细调整界面...');
   };
 
@@ -326,7 +305,6 @@ const ProductionPlansPage: React.FC = () => {
           await planningApi.productionPlan.delete(record.id!.toString());
           messageApi.success('删除成功');
           actionRef.current?.reload();
-          refreshStats();
         } catch (error: any) {
           messageApi.error(error?.response?.data?.detail || '删除失败');
         }
@@ -348,35 +326,11 @@ const ProductionPlansPage: React.FC = () => {
           messageApi.success(`已删除 ${keys.length} 条生产计划`);
           setSelectedRowKeys([]);
           actionRef.current?.reload();
-          refreshStats();
         } catch (error: any) {
           messageApi.error(error?.response?.data?.detail || '批量删除失败');
         }
       },
     });
-  };
-
-  const handleSyncConfirm = async (rows: Record<string, any>[]) => {
-    try {
-      let successCount = 0;
-      for (const row of rows) {
-        const payload = {
-          plan_code: row.plan_code || row.planCode,
-          plan_name: row.plan_name || row.planName,
-          plan_type: row.plan_type || row.planType || 'MRP',
-          plan_start_date: row.plan_start_date || row.planStartDate,
-          plan_end_date: row.plan_end_date || row.planEndDate,
-          items: Array.isArray(row.items) ? row.items : [],
-        };
-        await planningApi.productionPlan.create(payload);
-        successCount += 1;
-      }
-      messageApi.success(`已同步 ${successCount} 条生产计划`);
-      actionRef.current?.reload();
-      refreshStats();
-    } catch (error: any) {
-      messageApi.error(error?.message || '同步失败');
-    }
   };
 
   const handleListImport = async (data: any[][]) => {
@@ -483,7 +437,6 @@ const ProductionPlansPage: React.FC = () => {
     if (result.successCount > 0) {
       messageApi.success(`成功导入 ${result.successCount} 条生产计划`);
       actionRef.current?.reload();
-      refreshStats();
     }
     if (result.failureCount > 0) {
       messageApi.warning(`部分失败 ${result.failureCount} 条`);
@@ -492,39 +445,11 @@ const ProductionPlansPage: React.FC = () => {
 
   return (
     <ListPageTemplate
-      statCards={[
-        {
-          title: '总计划数',
-          value: statistics?.total_count || 0,
-          prefix: statsLoading ? <LoadingOutlined /> : <BarChartOutlined />,
-          valueStyle: { color: '#1890ff' },
-        },
-        {
-          title: '按库存(MTS)',
-          value: (statistics?.mts_count ?? statistics?.mrp_count) || 0,
-          suffix: '个',
-          valueStyle: { color: '#52c41a' },
-        },
-        {
-          title: '按订单(MTO)',
-          value: (statistics?.mto_count ?? statistics?.lrp_count) || 0,
-          suffix: '个',
-          valueStyle: { color: '#722ed1' },
-        },
-        {
-          title: '待执行',
-          value: statistics?.pending_execution_count ?? 0,
-          suffix: '个',
-          valueStyle: (statistics?.pending_execution_count ?? 0) > 0 ? { color: '#faad14' } : undefined,
-        },
-        {
-          title: '已执行计划',
-          value: statistics?.executed_count || 0,
-          suffix: '个',
-          valueStyle: { color: '#52c41a' },
-        },
-      ]}
+      statCards={[]}
     >
+      <div style={{ marginBottom: 16 }}>
+        <ProductionControlTower />
+      </div>
       <UniTable
           headerTitle="生产计划管理"
           actionRef={actionRef}
@@ -804,9 +729,6 @@ const ProductionPlansPage: React.FC = () => {
                               </a>
                             );
                           }
-                          if (record.suggested_action === '采购' && record.purchase_order_id) {
-                             return <span>采购单#{record.purchase_order_id}</span>;
-                          }
                           return '-';
                         }
                       },
@@ -825,59 +747,37 @@ const ProductionPlansPage: React.FC = () => {
                   <DocumentTrackingPanel documentType="production_plan" documentId={currentPlan.id} />
                 </DetailDrawerSection>
               )}
-
-              {/* 5. 其他功能：智能排程可视化 */}
-              <Card 
-                title={<Space><BarChartOutlined /> 智能排程建议与资源负荷</Space>} 
-                style={{ marginBottom: 16 }} 
-                size="small" 
-                headStyle={{ background: '#fafafa', borderBottom: `1px solid ${token.colorBorder}` }}
-              >
-                <div style={{ padding: '8px 4px' }}>
-                   <Row gutter={12}>
-                      {[0, 1, 2, 3].map((off) => {
-                        const dateStr = `02-${14 + off}`; 
-                        const load = off === 0 ? 95 : (off === 1 ? 40 : 20);
-                        return (
-                          <Col span={6} key={off}>
-                            <div style={{ background: '#fff', border: `1px solid ${token.colorBorder}`, padding: '10px', borderRadius: 6 }}>
-                               <div style={{ fontSize: 12, color: '#8c8c8c' }}>{dateStr} 负荷预期</div>
-                               <div style={{ margin: '4px 0', fontSize: 18, fontWeight: 'bold', color: load > 80 ? '#cf1322' : '#000' }}>
-                                 {load}%
-                               </div>
-                               <div style={{ height: 6, background: '#f5f5f5', borderRadius: 3, overflow: 'hidden' }}>
-                                  <div style={{ 
-                                    height: '100%', 
-                                    width: `${load}%`, 
-                                    background: load > 80 ? 'linear-gradient(90deg, #ff4d4f, #cf1322)' : '#52c41a',
-                                    transition: 'width 0.3s'
-                                  }} />
-                               </div>
-                            </div>
-                          </Col>
-                        );
-                      })}
-                   </Row>
-                   <div style={{ marginTop: 12, padding: '10px 12px', background: '#fffbe6', border: '1px solid #ffe58f', borderRadius: 4, display: 'flex', alignItems: 'flex-start' }}>
-                      <PlayCircleOutlined style={{ color: '#faad14', marginRight: 8, marginTop: 3 }} />
-                      <div style={{ fontSize: 13, lineHeight: '20px' }}>
-                        <div style={{ fontWeight: 'bold', color: '#856404' }}>排程专家建议：</div>
-                        检测到今日（02-14）车间负荷即将触顶，算法驱动的排程引擎已将部分低优先级工单标记为红色。
-                        建议在执行该计划前，将红色背景的明细项手动顺延至 **02-16** 以平衡车间负载。
-                      </div>
-                   </div>
-                </div>
-              </Card>
             </div>
           ) : null
         }
       />
-
+      
       <SyncFromDatasetModal
+        title="从数据集中心同步生产计划"
         open={syncModalVisible}
         onClose={() => setSyncModalVisible(false)}
-        onConfirm={handleSyncConfirm}
-        title="从数据集同步生产计划"
+        onConfirm={async (rows) => {
+          try {
+            let successCount = 0;
+            for (const row of rows) {
+              const payload = {
+                plan_code: row.plan_code || row.planCode,
+                plan_name: row.plan_name || row.planName,
+                plan_type: row.plan_type || row.planType || 'MRP',
+                plan_start_date: row.plan_start_date || row.planStartDate,
+                plan_end_date: row.plan_end_date || row.planEndDate,
+                items: Array.isArray(row.items) ? row.items : [],
+              };
+              await planningApi.productionPlan.create(payload);
+              successCount += 1;
+            }
+            messageApi.success(`已同步 ${successCount} 条生产计划`);
+            setSyncModalVisible(false);
+            actionRef.current?.reload();
+          } catch (error: any) {
+            messageApi.error(error?.message || '同步失败');
+          }
+        }}
       />
     </ListPageTemplate>
   );

@@ -3,7 +3,7 @@
 """
 
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 from decimal import Decimal
 
@@ -54,3 +54,36 @@ class ControlTowerSummary(BaseModel):
 class BulkReleaseRequest(BaseModel):
     """批量下达请求"""
     work_order_ids: List[int]
+
+
+class UrgentOrderSimulationRequest(BaseModel):
+    """紧急工单插单影响模拟请求"""
+    product_id: int
+    quantity: float
+    planned_start_date: datetime
+    planned_end_date: datetime
+    priority: str = "urgent"
+    workshop_id: Optional[int] = None
+    work_center_id: Optional[int] = None
+
+
+class ImpactedOrderItem(BaseModel):
+    """受影响的现有工单"""
+    work_order_id: int
+    work_order_code: str
+    product_name: str
+    original_planned_start: datetime
+    original_planned_end: datetime
+    impact_type: str = Field(..., description="影响类型：material_conflict(切料/抢料), resource_delay(资源排队延期)")
+    delay_days: int = 0
+    shortage_items: List[str] = []
+
+
+class SimulationResult(BaseModel):
+    """模拟结果"""
+    can_fulfill_material: bool = Field(..., description="物料是否可满足")
+    readiness_rate: float
+    shortage_items: List[Dict[str, Any]] = []
+    impacted_orders: List[ImpactedOrderItem] = []
+    resource_load_change: List[Dict[str, Any]] = []
+    recommendation: str

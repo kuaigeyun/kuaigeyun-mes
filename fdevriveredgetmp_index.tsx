@@ -10,8 +10,6 @@
  */
 
 import React, { useRef, useState, useEffect, useMemo, lazy, Suspense } from 'react'
-import { DatePicker } from 'antd'
-const { RangePicker } = DatePicker
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import {
@@ -22,7 +20,6 @@ import {
   ProFormText,
   ProFormSelect,
   ProFormDatePicker,
-  ProFormDateRangePicker,
   ProFormDigit,
   ProFormTextArea,
   ProFormRadio,
@@ -122,7 +119,6 @@ import { listDemands, getDemand } from '../../../services/demand'
 import { operationApi, processRouteApi } from '../../../../master-data/services/process'
 import { workshopApi } from '../../../../master-data/services/factory'
 import { supplierApi } from '../../../../master-data/services/supply-chain'
-import { warehouseApi } from '../../../services/warehouse-execution'
 import { materialApi } from '../../../../master-data/services/material'
 import { useNavigate, useLocation } from 'react-router-dom'
 import dayjs from 'dayjs'
@@ -243,13 +239,6 @@ const WorkOrdersPage: React.FC = () => {
   const [productSourceModalType, setProductSourceModalType] = useState<
     'sales_order' | 'sales_forecast' | 'demand' | null
   >(null)
-  
-  // 紧急插单模拟状态
-  const [urgentSimulationVisible, setUrgentSimulationVisible] = useState(false);
-  const [simulationLoading, setSimulationLoading] = useState(false);
-  const [simulationResult, setSimulationResult] = useState<any>(null);
-  const [simulationParams, setSimulationParams] = useState<any>(null);
-
   const [productSourceDocList, setProductSourceDocList] = useState<any[]>([])
   const [productSourceDocLoading, setProductSourceDocLoading] = useState(false)
   // 加载产品来源文档列表（销售订单/销售预测/需求）- 直接拉平为明细行
@@ -262,7 +251,7 @@ const WorkOrdersPage: React.FC = () => {
       setProductSourceDocLoading(true)
       try {
         if (productSourceModalType === 'sales_order') {
-          const res: any = await listSalesOrders({ limit: 50 })
+          const res = await listSalesOrders({ limit: 50 })
           const orders = Array.isArray(res) ? res : (res?.data ?? [])
           const ordersWithItems = await Promise.all(
             orders.map((o: any) => getSalesOrder(o.id, true))
@@ -281,11 +270,11 @@ const WorkOrdersPage: React.FC = () => {
           })
           setProductSourceDocList(flat)
         } else if (productSourceModalType === 'sales_forecast') {
-          const res: any = await listSalesForecasts({ limit: 50 })
+          const res = await listSalesForecasts({ limit: 50 })
           const forecasts = res?.data ?? []
           const flat: any[] = []
           for (const f of forecasts) {
-            const items = (await getSalesForecastItems(f.id as number)) ?? []
+            const items = (await getSalesForecastItems(f.id)) ?? []
             items.forEach((it: any, idx: number) => {
               flat.push({
                 ...it,
@@ -505,7 +494,6 @@ const WorkOrdersPage: React.FC = () => {
   // 合并工单相关状态
   const [mergeModalVisible, setMergeModalVisible] = useState(false)
   const mergeFormRef = useRef<any>(null)
-  const [mergeLoading, setMergeLoading] = useState(false)
 
   // 拆分工单相关状态
   const [splitModalVisible, setSplitModalVisible] = useState(false)
@@ -530,16 +518,6 @@ const WorkOrdersPage: React.FC = () => {
   const [printModalVisible, setPrintModalVisible] = useState(false)
   const [syncModalVisible, setSyncModalVisible] = useState(false)
   const [currentWorkOrderForPrint, setCurrentWorkOrderForPrint] = useState<any>(null)
-
-  const selectedRows = useMemo(() => {
-    return selectedRowKeys.map(key => {
-      // Try to find in current list via actionRef or other state if possible, 
-      // but for simple consistency we can just use the key-based approach in the components that need it
-      // or define it here if we have a way to access the full data.
-      // Since ProTable actionRef.current?.asRow?.(key) is ideal but might not be available yet:
-      return (actionRef.current as any)?.asRow?.(key);
-    }).filter(Boolean);
-  }, [selectedRowKeys, actionRef.current]);
 
   /** 解析工艺路线的 operation_sequence，兼容多种格式（与工艺路线编辑页保存格式对接） */
   const parseOperationSequence = (
@@ -1739,6 +1717,8 @@ const WorkOrdersPage: React.FC = () => {
     {
       title: '优先级',
       dataIndex: 'priority',
+      width: 100,
+      sorter: true,
       render: (_, record) => {
         const priorityMap: Record<string, { text: string; color: string }> = {
           low: { text: '低', color: 'default' },
@@ -1964,24 +1944,6 @@ const WorkOrdersPage: React.FC = () => {
         }
       },
     });
-  };
-
-  /** 紧急插单模拟 (Phase 4) */
-  const handleUrgentOrderSimulation = async (values: any) => {
-    setSimulationLoading(true);
-    setSimulationParams(values);
-    try {
-      const res = await productionControlApi.simulateImpact({
-        ...values,
-        planned_start_date: values.planned_range[0].format('YYYY-MM-DD HH:mm:ss'),
-        planned_end_date: values.planned_range[1].format('YYYY-MM-DD HH:mm:ss'),
-      });
-      setSimulationResult(res);
-    } catch (error: any) {
-      messageApi.error(error.message || '模拟分析失败');
-    } finally {
-      setSimulationLoading(false);
-    }
   };
 
   /**
@@ -3490,15 +3452,6 @@ const WorkOrdersPage: React.FC = () => {
           }}
           toolBarRender={() => [
             <Button
-              key="urgent-simulate"
-              icon={<PlusOutlined />}
-              danger
-              type="primary"
-              onClick={() => setUrgentSimulationVisible(true)}
-            >
-              紧急插单模拟
-            </Button>,
-            <Button
               key="batch-qrcode"
               icon={<QrcodeOutlined />}
               disabled={selectedRowKeys.length === 0}
@@ -3579,7 +3532,6 @@ const WorkOrdersPage: React.FC = () => {
       {/* 创建/编辑工单 Modal */}
       <SmartSuggestionFloatPanel
         visible={modalVisible && !!selectedMaterialSourceInfo}
-        suggestion={null}
         messages={
           selectedMaterialSourceInfo
             ? (() => {
@@ -5009,7 +4961,7 @@ const WorkOrdersPage: React.FC = () => {
                         <div style={{ color: '#faad14', fontWeight: 'bold' }}>警告：</div>
                         <ul style={{ margin: '4px 0', paddingLeft: 20 }}>
                           {result.warnings.map((warning: string, i: number) => (
-            <li key={i} style={{ color: '#faad14' }}>
+                            <li key={i} style={{ color: '#faad14' }}>
                               {warning}
                             </li>
                           ))}
@@ -5053,42 +5005,6 @@ const WorkOrdersPage: React.FC = () => {
           />
         </div>
       </Modal>
-
-      {/* 合并工单Modal */}
-      <FormModalTemplate
-        title="合并工单"
-        open={mergeModalVisible}
-        onClose={() => {
-          setMergeModalVisible(false)
-          mergeFormRef.current?.resetFields()
-        }}
-        onFinish={handleSubmitMerge}
-        formRef={mergeFormRef}
-        loading={mergeLoading}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
-      >
-        <div style={{ marginBottom: 16 }}>
-          已选择 <strong>{selectedRowKeys.length}</strong> 个工单进行合并。
-          <br />
-          主工单将作为合并后的工单，其他工单将被取消。
-        </div>
-        <ProFormSelect
-          name="main_work_order_id"
-          label="选择主工单"
-          placeholder="请选择一个工单作为主工单"
-          rules={[{ required: true, message: '请选择主工单' }]}
-          options={selectedRows.map((row: any) => ({
-            label: `${row.code} - ${row.product_name}`,
-            value: row.id,
-          }))}
-        />
-        <ProFormTextArea
-          name="remarks"
-          label="合并备注"
-          placeholder="请输入合并备注（可选）"
-          fieldProps={{ rows: 3 }}
-        />
-      </FormModalTemplate>
 
       {/* 批量设置优先级Modal */}
       <Modal
@@ -5203,151 +5119,57 @@ const WorkOrdersPage: React.FC = () => {
         />
       </FormModalTemplate>
 
-      {/* 紧急插单模拟 Modal (Phase 4) */}
-      <Modal
-        title="紧急插单影响模拟"
-        open={urgentSimulationVisible}
-        onCancel={() => {
-          setUrgentSimulationVisible(false);
-          setSimulationResult(null);
+      {/* 合并工单Modal */}
+      <FormModalTemplate
+        title="合并工单"
+        open={mergeModalVisible}
+        onClose={() => {
+          setMergeModalVisible(false)
+          mergeFormRef.current?.resetFields()
         }}
-        width={1000}
-        footer={null}
-        destroyOnClose
+        onFinish={handleSubmitMerge}
+        isEdit={false}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        formRef={mergeFormRef}
       >
-        <Row gutter={24}>
-          <Col span={10}>
-            <Card title="插单基本信息" size="small">
-              <ProForm
-                onFinish={handleUrgentOrderSimulation}
-                submitter={{
-                  searchConfig: { submitText: '开始模拟分析' },
-                  render: (_, dom) => <div style={{ marginTop: 16 }}>{dom}</div>,
-                }}
-              >
-                <ProFormSelect
-                  name="product_id"
-                  label="选择产品"
-                  required
-                  request={async () => {
-                    const res: any = await materialApi.list({ limit: 100 } as any);
-                    const dataList = Array.isArray(res) ? res : res?.data || [];
-                    return dataList.map((item: any) => ({
-                      label: `[${item.code}] ${item.name}`,
-                      value: item.id,
-                    }));
-                  }}
-                />
-                <ProFormDigit name="quantity" label="计划数量" initialValue={1} min={1} required />
-                <ProFormDateRangePicker
-                  name="planned_range"
-                  label="计划起止日期"
-                  required
-                  fieldProps={{ showTime: true, style: { width: '100%' } }}
-                />
-                <ProFormSelect
-                  name="priority"
-                  label="优先级"
-                  initialValue="urgent"
-                  options={[
-                    { label: '紧急', value: 'urgent' },
-                    { label: '特急', value: 'critical' },
-                  ]}
-                />
-              </ProForm>
-            </Card>
-          </Col>
-          <Col span={14}>
-            <Card title="模拟分析结果" size="small" loading={simulationLoading}>
-              {!simulationResult ? (
-                <Empty description="请在左侧填写信息并点击“开始模拟分析”" />
-              ) : (
-                <Space direction="vertical" style={{ width: '100%' }}>
-                  <div style={{ backgroundColor: '#f5f5f5', padding: 12, borderRadius: 4 }}>
-                    <Typography.Title level={5}>建议：{simulationResult.recommendation}</Typography.Title>
-                    <Space size="large">
-                      <span>齐套率: <Typography.Text strong style={{ color: simulationResult.readiness_rate === 100 ? '#52c41a' : '#faad14' }}>{simulationResult.readiness_rate}%</Typography.Text></span>
-                      <span>涉及产能: <Typography.Text strong>{simulationResult.resource_load_change?.length || 0} 个站点</Typography.Text></span>
-                    </Space>
-                  </div>
+        <div style={{ marginBottom: 16 }}>
+          <div>
+            已选择 <strong>{selectedRowKeys.length}</strong> 个工单进行合并
+          </div>
+          <div style={{ marginTop: 8, color: '#666', fontSize: '12px' }}>
+            注意：只能合并相同产品、相同状态（草稿或已下达）且未报工的工单
+          </div>
+        </div>
+        <ProFormTextArea
+          name="remarks"
+          label="合并备注"
+          placeholder="请输入合并备注（可选）"
+          fieldProps={{
+            rows: 3,
+          }}
+        />
+      </FormModalTemplate>
 
-                  {simulationResult.shortage_items?.length > 0 && (
-                    <div style={{ marginTop: 12 }}>
-                      <Typography.Text type="danger" strong>缺料明细：</Typography.Text>
-                      <Table
-                        size="small"
-                        dataSource={simulationResult.shortage_items}
-                        pagination={false}
-                        columns={[
-                          { title: '物料', dataIndex: 'material_name' },
-                          { title: '短缺量', dataIndex: 'shortage_quantity' },
-                        ]}
-                      />
-                    </div>
-                  )}
-
-                  {simulationResult.impacted_orders?.length > 0 && (
-                    <div style={{ marginTop: 12 }}>
-                      <Typography.Text type="warning" strong>受影响的现有工单：</Typography.Text>
-                      <Table
-                        size="small"
-                        dataSource={simulationResult.impacted_orders}
-                        pagination={false}
-                        columns={[
-                          { title: '工单', dataIndex: 'work_order_code' },
-                          { title: '冲突类型', dataIndex: 'impact_type', render: (t) => t === 'material_conflict' ? '物料抢占' : '资源排队' },
-                          { title: '可能延期', dataIndex: 'delay_days', render: (d) => d > 0 ? `${d}天` : '未知' },
-                        ]}
-                      />
-                    </div>
-                  )}
-
-                  <div style={{ marginTop: 24, textAlign: 'right' }}>
-                    <Button onClick={() => setUrgentSimulationVisible(false)}>取消</Button>
-                    <Button 
-                      type="primary" 
-                      danger 
-                      style={{ marginLeft: 8 }}
-                      onClick={() => {
-                        setUrgentSimulationVisible(false);
-                        // 预填逻辑：关闭模拟框，打开创建框
-                        handleCreate();
-                        
-                        // 将模拟参数同步到创建工单表单中
-                        setTimeout(() => {
-                          if (formRef.current && simulationParams) {
-                            formRef.current.setFieldsValue({
-                              product_id: simulationParams.product_id,
-                              quantity: simulationParams.quantity,
-                              priority: simulationParams.priority,
-                              planned_start_date: simulationParams.planned_range[0],
-                              planned_end_date: simulationParams.planned_range[1],
-                            });
-                          }
-                          messageApi.success('模拟数据已预填至创建表单');
-                        }, 200);
-                        messageApi.success('模拟结果与申请参数已载入工单表单，请进一步完善信息');
-                      }}
-                    >
-                      确认并转正式工单
-                    </Button>
-                  </div>
-                </Space>
-              )}
-            </Card>
-          </Col>
-        </Row>
-      </Modal>
+      {syncModalVisible && (
+        <Suspense fallback={<Spin spinning />}>
+          <SyncFromDatasetModal
+            open={syncModalVisible}
+            onClose={() => setSyncModalVisible(false)}
+            onConfirm={handleSyncConfirm}
+            title="从数据集同步工单"
+          />
+        </Suspense>
+      )}
     </>
   )
 }
 
 /**
- * 创建工单时的工序列表组件
+ * 新建工单时的工序清单（样式参考工艺路线编辑页面）
  */
 interface CreateWorkOrderOperationsListProps {
   selectedOperations: any[]
-  setSelectedOperations: React.Dispatch<React.SetStateAction<any[]>>
+  setSelectedOperations: (ops: any[]) => void
   operationList: any[]
   formRef: React.RefObject<any>
   disabled?: boolean
@@ -5358,126 +5180,417 @@ const CreateWorkOrderOperationsList: React.FC<CreateWorkOrderOperationsListProps
   setSelectedOperations,
   operationList,
   formRef,
-  disabled,
+  disabled = false,
 }) => {
+  const [addOpModalVisible, setAddOpModalVisible] = useState(false)
   const sensors = useSensors(
     useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   )
+
+  const syncToForm = (ops: any[]) => {
+    formRef.current?.setFieldsValue({ operations: ops.map((o: any) => o.operation_id) })
+  }
+
+  const patchOperation = (index: number, patch: Record<string, any>) => {
+    const next = selectedOperations.map((o, i) => (i === index ? { ...o, ...patch } : o))
+    setSelectedOperations(next)
+    syncToForm(next)
+  }
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
-    if (over && active.id !== over.id) {
-      const oldIndex = selectedOperations.findIndex(op => op.operation_id === active.id)
-      const newIndex = selectedOperations.findIndex(op => op.operation_id === over.id)
-      
-      const newOps = arrayMove(selectedOperations, oldIndex, newIndex).map((op, idx) => ({
-        ...op,
-        sequence: idx + 1,
-      }))
-      
-      setSelectedOperations(newOps)
-      // 同步到表单
-      formRef.current?.setFieldsValue({
-        operations: newOps.map((op: any) => op.operation_id)
-      })
-    }
+    if (!over || active.id === over.id) return
+    const oldIdx = selectedOperations.findIndex((_: any, i: number) => `op-${i}` === active.id)
+    const newIdx = selectedOperations.findIndex((_: any, i: number) => `op-${i}` === over.id)
+    if (oldIdx === -1 || newIdx === -1) return
+    const next = arrayMove(selectedOperations, oldIdx, newIdx).map((o: any, i: number) => ({
+      ...o,
+      sequence: i + 1,
+    }))
+    setSelectedOperations(next)
+    syncToForm(next)
   }
 
-  const handleDelete = (operationId: number) => {
-    const newOps = selectedOperations
-      .filter(op => op.operation_id !== operationId)
-      .map((op, idx) => ({
-        ...op,
-        sequence: idx + 1,
-      }))
-    setSelectedOperations(newOps)
-    formRef.current?.setFieldsValue({
-      operations: newOps.map((op: any) => op.operation_id)
-    })
+  const handleRemove = (index: number) => {
+    const next = selectedOperations
+      .filter((_: any, i: number) => i !== index)
+      .map((o: any, i: number) => ({ ...o, sequence: i + 1 }))
+    setSelectedOperations(next)
+    syncToForm(next)
   }
+
+  const handleReplace = (index: number, newOpId: number) => {
+    const op = operationList.find((o: any) => o.id === newOpId)
+    if (!op) return
+    const next = [...selectedOperations]
+    next[index] = {
+      operation_id: op.id,
+      operation_code: op.code,
+      operation_name: op.name,
+      sequence: index + 1,
+      is_node_operation: false,
+      reporting_type: op.reportingType ?? (op as any).reporting_type ?? 'quantity',
+      over_report_mode: (op as any).overReportMode ?? (op as any).over_report_mode ?? 'none',
+      over_report_value: Number((op as any).overReportValue ?? (op as any).over_report_value ?? 0) || 0,
+    }
+    setSelectedOperations(next)
+    syncToForm(next)
+  }
+
+  const addableOptions = operationList
+    .filter((o: any) => !selectedOperations.some((s: any) => s.operation_id === o.id))
+    .map((op: any) => ({ label: `${op.code} - ${op.name}`, value: op.id }))
+  const handleAddSelect = (id: number) => {
+    const op = operationList.find((o: any) => o.id === id)
+    if (!op) return
+    const next = [
+      ...selectedOperations,
+      {
+        operation_id: op.id,
+        operation_code: op.code,
+        operation_name: op.name,
+        sequence: selectedOperations.length + 1,
+        is_node_operation: false,
+        reporting_type: op.reportingType ?? (op as any).reporting_type ?? 'quantity',
+        over_report_mode: (op as any).overReportMode ?? (op as any).over_report_mode ?? 'none',
+        over_report_value: Number((op as any).overReportValue ?? (op as any).over_report_value ?? 0) || 0,
+      },
+    ]
+    setSelectedOperations(next)
+    syncToForm(next)
+  }
+
+  const getOpDetail = (opId: number) => operationList.find((o: any) => o.id === opId)
 
   if (selectedOperations.length === 0) {
     return (
-      <div style={{ padding: '24px', textAlign: 'center', color: '#999', border: '1px dashed #d9d9d9', borderRadius: 4 }}>
-        请选择工艺路线或手动添加工序
+      <div style={{ width: '100%' }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 8,
+          }}
+        >
+          <Typography.Text type="secondary" style={{ fontSize: '12px' }}>
+            支持拖拽排序，点击删除移除工序
+          </Typography.Text>
+        </div>
+        <div
+          style={{
+            width: '100%',
+            boxSizing: 'border-box',
+            padding: 24,
+            background: '#fafafa',
+            borderRadius: 4,
+            border: '1px dashed #d9d9d9',
+            textAlign: 'center',
+            color: '#999',
+          }}
+        >
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={addableOptions.length > 0 ? '暂无工序，点击下方按钮添加' : '请先选择工艺路线，将自动加载工序清单'}
+          />
+          {!disabled && addableOptions.length > 0 && (
+            <Button
+              type="primary"
+              ghost
+              icon={<PlusOutlined />}
+              onClick={() => setAddOpModalVisible(true)}
+              style={{ marginTop: 12 }}
+            >
+              新增工序
+            </Button>
+          )}
+        </div>
+        {!disabled && addableOptions.length > 0 && (
+          <Modal
+            title="选择工序"
+            open={addOpModalVisible}
+            onCancel={() => setAddOpModalVisible(false)}
+            footer={null}
+            destroyOnHidden
+          >
+            <Select
+              style={{ width: '100%' }}
+              placeholder="选择要添加的工序"
+              showSearch
+              filterOption={(i, o) => (o?.label ?? '').toLowerCase().includes(i.toLowerCase())}
+              options={addableOptions}
+              onSelect={(id: number) => {
+                handleAddSelect(id)
+                setAddOpModalVisible(false)
+              }}
+            />
+          </Modal>
+        )}
       </div>
     )
   }
 
+  const columns = [
+    { title: '序号', key: 'index', width: 100 },
+    { title: '工序代码/名称', key: 'operation' },
+    { title: '报工类型', key: 'reportingType', width: 120 },
+    { title: '节点工序', key: 'isNodeOperation', width: 90 },
+    { title: '超报', key: 'overReport', width: 160 },
+    { title: '操作', key: 'action', width: 150 },
+  ]
+
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-      <SortableContext
-        items={selectedOperations.map(op => op.operation_id)}
-        strategy={verticalListSortingStrategy}
+    <div style={{ width: '100%' }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: 8,
+        }}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {selectedOperations.map((op, idx) => (
-            <SortableCreateOperationItem 
-              key={op.operation_id} 
-              operation={op} 
-              index={idx}
-              disabled={disabled}
-              onDelete={() => handleDelete(op.operation_id)}
-            />
-          ))}
-        </div>
-      </SortableContext>
-    </DndContext>
+        <Typography.Text type="secondary" style={{ fontSize: '12px' }}>
+          支持拖拽排序，点击删除移除工序
+        </Typography.Text>
+        {!disabled && addableOptions.length > 0 && (
+          <Button type="dashed" icon={<PlusOutlined />} onClick={() => setAddOpModalVisible(true)} size="small">
+            新增工序
+          </Button>
+        )}
+      </div>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext
+          items={selectedOperations.map((_: any, i: number) => `op-${i}`)}
+          strategy={verticalListSortingStrategy}
+        >
+          <div style={{ width: '100%', overflowX: 'auto' }}>
+            <Table
+              columns={columns}
+              dataSource={selectedOperations}
+              rowKey={(_, i) => `op-${i}`}
+              pagination={false}
+              size="small"
+              style={{ width: '100%', margin: 0 }}
+              components={{
+              body: {
+                wrapper: (wrapperProps: any) => (
+                  <tbody {...wrapperProps}>
+                    {selectedOperations.map((op: any, idx: number) => (
+                      <CreateWorkOrderTableRow
+                        key={`op-${idx}`}
+                        op={op}
+                        index={idx}
+                        disabled={disabled}
+                        onRemove={() => handleRemove(idx)}
+                        onReplace={id => handleReplace(idx, id)}
+                        onPatch={patch => patchOperation(idx, patch)}
+                        operationList={operationList}
+                        getOpDetail={getOpDetail}
+                      />
+                    ))}
+                  </tbody>
+                ),
+              },
+            }}
+          />
+          </div>
+        </SortableContext>
+      </DndContext>
+      {!disabled && addableOptions.length > 0 && (
+        <Modal
+          title="选择工序"
+          open={addOpModalVisible}
+          onCancel={() => setAddOpModalVisible(false)}
+          footer={null}
+          destroyOnHidden
+        >
+          <Select
+            style={{ width: '100%' }}
+            placeholder="选择要添加的工序"
+            showSearch
+            filterOption={(i, o) => (o?.label ?? '').toLowerCase().includes(i.toLowerCase())}
+            options={addableOptions}
+            onSelect={(id: number) => {
+              handleAddSelect(id)
+              setAddOpModalVisible(false)
+            }}
+          />
+        </Modal>
+      )}
+    </div>
   )
 }
 
-/**
- * 创建工单时的可拖拽工序项
- */
-const SortableCreateOperationItem: React.FC<{ 
-  operation: any, 
-  index: number, 
-  disabled?: boolean,
-  onDelete: () => void 
-}> = ({ operation, index, disabled, onDelete }) => {
+/** 可拖拽的表格行 */
+const CreateWorkOrderTableRow: React.FC<{
+  op: any
+  index: number
+  disabled?: boolean
+  onRemove: () => void
+  onReplace: (newOpId: number) => void
+  onPatch: (patch: Record<string, any>) => void
+  operationList: any[]
+  getOpDetail: (id: number) => any
+}> = ({ op, index, disabled, onRemove, onReplace, onPatch, operationList, getOpDetail }) => {
+  const id = `op-${index}`
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: operation.operation_id,
+    id,
   })
-
-  const style = {
+  const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
-    padding: '8px 12px',
-    background: '#fff',
-    border: '1px solid #d9d9d9',
-    borderRadius: 4,
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
+    opacity: isDragging ? 0.4 : 1,
+    backgroundColor: isDragging ? '#f0f9ff' : 'transparent',
+    boxShadow: isDragging ? '0 4px 12px rgba(0,0,0,0.15)' : 'none',
   }
-
   return (
-    <div ref={setNodeRef} style={style}>
-      {!disabled && (
-        <div {...attributes} {...listeners} style={{ cursor: 'grab', display: 'flex' }}>
-          <HolderOutlined style={{ color: '#999' }} />
-        </div>
-      )}
-      <div style={{ flex: 1 }}>
+    <tr ref={setNodeRef} style={style}>
+      <td>
         <Space>
-          <span style={{ fontWeight: 'bold' }}>{index + 1}. {operation.operation_name}</span>
-          <span style={{ color: '#999', fontSize: 12 }}>({operation.operation_code})</span>
+          {!disabled && (
+            <span
+              className="drag-handle"
+              {...attributes}
+              {...listeners}
+              style={{
+                color: '#1890ff',
+                cursor: 'move',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '16px',
+                padding: '4px',
+                minWidth: '24px',
+                minHeight: '24px',
+              }}
+            >
+              <HolderOutlined style={{ fontSize: '16px' }} />
+            </span>
+          )}
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minWidth: '28px',
+              height: '28px',
+              padding: '0 8px',
+              backgroundColor: '#f0f9ff',
+              border: '1px solid #91d5ff',
+              borderRadius: '6px',
+              color: '#1890ff',
+              fontWeight: 600,
+              fontSize: '13px',
+            }}
+          >
+            {index + 1}
+          </span>
         </Space>
-      </div>
-      {!disabled && (
-        <Button 
-          type="link" 
-          size="small" 
-          danger 
-          icon={<DeleteOutlined />} 
-          onClick={onDelete}
-        />
-      )}
-    </div>
+      </td>
+      <td>
+        <div style={{ fontWeight: 500 }}>
+          {op.operation_code} - {op.operation_name}
+        </div>
+      </td>
+      <td>
+        {(() => {
+          const rt =
+            op.reporting_type ??
+            getOpDetail(op.operation_id)?.reportingType ??
+            getOpDetail(op.operation_id)?.reporting_type
+          return (
+            <Tag color={rt === 'quantity' ? 'blue' : 'green'}>
+              {rt === 'quantity' ? '按数量报工' : rt === 'status' ? '按状态报工' : '-'}
+            </Tag>
+          )
+        })()}
+      </td>
+      <td onClick={e => e.stopPropagation()}>
+        {!disabled ? (
+          <Switch
+            size="small"
+            checked={!!op.is_node_operation}
+            onChange={c => onPatch({ is_node_operation: c })}
+          />
+        ) : (
+          <Tag color={op.is_node_operation ? 'processing' : 'default'}>
+            {op.is_node_operation ? '是' : '否'}
+          </Tag>
+        )}
+      </td>
+      <td onClick={e => e.stopPropagation()}>
+        {!disabled ? (
+          <Space direction="vertical" size={4} style={{ minWidth: 140 }}>
+            <Select
+              size="small"
+              style={{ width: 130 }}
+              value={op.over_report_mode ?? 'none'}
+              options={[
+                { label: '不超报', value: 'none' },
+                { label: '固定', value: 'fixed' },
+                { label: '比例%', value: 'percent' },
+              ]}
+              onChange={v => onPatch({ over_report_mode: v })}
+            />
+            <InputNumber
+              size="small"
+              min={0}
+              style={{ width: 130 }}
+              value={op.over_report_value ?? 0}
+              onChange={v => onPatch({ over_report_value: v ?? 0 })}
+            />
+          </Space>
+        ) : (
+          <span style={{ fontSize: 12 }}>
+            {(op.over_report_mode ?? 'none') === 'none'
+              ? '—'
+              : `${op.over_report_mode} ${op.over_report_value ?? 0}`}
+          </span>
+        )}
+      </td>
+      <td onClick={e => e.stopPropagation()}>
+        <Space>
+          <Button
+            type="link"
+            size="small"
+            onClick={() => {
+              const opts = operationList.filter((o: any) => o.id !== op.operation_id)
+              if (opts.length === 0) return
+              Modal.confirm({
+                title: '替换工序',
+                content: (
+                  <Select
+                    style={{ width: '100%', marginTop: 8 }}
+                    placeholder="选择替换的工序"
+                    showSearch
+                    filterOption={(i, o) =>
+                      (o?.label ?? '').toLowerCase().includes(i.toLowerCase())
+                    }
+                    options={opts.map((opp: any) => ({
+                      label: `${opp.code} - ${opp.name}`,
+                      value: opp.id,
+                    }))}
+                    onSelect={(v: number) => {
+                      onReplace(v)
+                      Modal.destroyAll()
+                    }}
+                  />
+                ),
+                okText: '取消',
+                cancelButtonProps: { style: { display: 'none' } },
+                onOk: () => Modal.destroyAll(),
+              })
+            }}
+          >
+            替换
+          </Button>
+          <Button type="link" size="small" danger onClick={onRemove}>
+            删除
+          </Button>
+        </Space>
+      </td>
+    </tr>
   )
 }
 
@@ -5555,7 +5668,7 @@ const WorkOrderKittingPanel: React.FC<{ workOrderId?: number }> = ({ workOrderId
       key: 'side_status',
       render: (_: any, record: any) => {
         const shortage = record.required_quantity - record.picked_quantity
-        const totalAvailable = (record.warehouse_available || 0) + (record.line_side_inventory || 0)
+        const totalAvailable = record.warehouse_available + record.line_side_inventory
         const isReady = totalAvailable >= shortage
         return (
           <Space>
@@ -5607,7 +5720,7 @@ const WorkOrderKittingPanel: React.FC<{ workOrderId?: number }> = ({ workOrderId
     >
       <Table
         dataSource={kittingData.items}
-        columns={columns as any}
+        columns={columns}
         pagination={false}
         size="small"
         rowKey="material_id"
@@ -5862,6 +5975,7 @@ const SortableOperationItem: React.FC<SortableOperationItemProps> = ({
           </Space>
         )}
       </div>
+
     </div>
   )
 }

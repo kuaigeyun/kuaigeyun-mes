@@ -15,6 +15,8 @@ from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
 from apps.kuaizhizao.models.reporting_record import ReportingRecord
 from apps.master_data.models.factory import WorkCenter
+from apps.master_data.models.material import Material
+from apps.master_data.models.process import ProcessRoute, Operation
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.kuaizhizao.utils.bom_helper import calculate_material_requirements_from_bom
 from apps.kuaizhizao.utils.inventory_helper import get_material_available_quantity
@@ -253,4 +255,114 @@ class ProductionControlService:
             "success_count": success_count,
             "fail_count": fail_count,
             "messages": messages
+        }
+
+    async def simulate_urgent_order_impact(self, tenant_id: int, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        插单影响模拟核心逻辑
+        """
+        product_id = params.get("product_id")
+        quantity = params.get("quantity", 0)
+        planned_start = params.get("planned_start_date")
+        planned_end = params.get("planned_end_date")
+        
+        # 1. 模拟齐套分析 (抢占逻辑)
+        # 获取该产品BOM需求
+        requirements = await calculate_material_requirements_from_bom(
+            tenant_id=tenant_id,
+            material_id=product_id,
+            required_quantity=float(quantity)
+        )
+        
+        shortage_items = []
+        ready_count = 0
+        total_count = len(requirements)
+        
+        for req in requirements:
+            m_id = req["material_id"]
+            needed = req["total_quantity"]
+            # 获取当前实时可用库存
+            avail = await get_material_available_quantity(tenant_id, m_id)
+            
+            if avail >= needed:
+                ready_count += 1
+            else:
+                shortage_items.append({
+                    "material_id": m_id,
+                    "material_code": req["material_code"],
+                    "material_name": req["material_name"],
+                    "shortage_quantity": float(needed - avail)
+                })
+        
+        readiness_rate = (ready_count / total_count * 100) if total_count > 0 else 100.0
+        
+        # 2. 模拟受影响订单 (抢占物料导致其他订单缺料)
+        # 简单逻辑：如果当前订单扣除了 X 数量，哪些本来“齐套”或“部分齐套”的订单会因此变缺料？
+        impacted_orders = []
+        if readiness_rate > 0:
+            # 查找同样用到这些物料的待执行/进行中工单
+            used_material_ids = [r["material_id"] for r in requirements]
+            
+            # 这里简化处理：找出最近 7 天内计划开工的所有工单
+            potential_victims = await WorkOrder.filter(
+                tenant_id=tenant_id,
+                status__in=['draft', 'released', 'in_progress'],
+                deleted_at__isnull=True,
+                planned_start_date__lte=datetime.now() + timedelta(days=7)
+            ).all()
+            
+            for victim in potential_victims:
+                # 检查 victim 的 BOM 是否与新订单冲突
+                v_shortage = await self.work_order_service.check_material_shortage(victim.id)
+                # 模拟逻辑：如果新订单拿走了物料，victim 本来不缺的现在缺了，即为受影响
+                # 此处由于是模拟，我们只标识“物料冲突”类型
+                # (实际生产环境需要更精细的库存分配预演)
+                v_requirements = await calculate_material_requirements_from_bom(
+                    tenant_id=tenant_id,
+                    material_id=victim.product_id,
+                    required_quantity=float(victim.quantity)
+                )
+                
+                conflicts = [r["material_code"] for r in v_requirements if r["material_id"] in used_material_ids]
+                if conflicts:
+                    impacted_orders.append({
+                        "work_order_id": victim.id,
+                        "work_order_code": victim.code,
+                        "product_name": victim.product_name,
+                        "original_planned_start": victim.planned_start_date,
+                        "original_planned_end": victim.planned_end_date,
+                        "impact_type": "material_conflict",
+                        "shortage_items": conflicts[:3] # 仅列出前三个冲突物料
+                    })
+
+        # 3. 产能负荷变化模拟
+        # 查找产品对应的默认工艺路线
+        route = await ProcessRoute.get_or_none(material_id=product_id, is_active=True, tenant_id=tenant_id)
+        load_changes = []
+        if route:
+            # 简单假设平摊到所有工序涉及的工作中心
+            ops = await Operation.filter(route_id=route.id, is_active=True).all()
+            for op in ops:
+                load_changes.append({
+                    "work_center_name": op.name, # 简化处理，通常应关联 WorkCenter
+                    "added_hours": float((op.standard_time or 0) * quantity)
+                })
+
+        # 4. 给出建议
+        if readiness_rate == 100:
+            recommendation = "物料完全齐套，建议立即插单。"
+            if impacted_orders:
+                recommendation += f" 注意：将导致 {len(impacted_orders)} 个现有工单物料短缺。"
+        elif readiness_rate >= 80:
+            recommendation = "物料基本齐套，可考虑通过调拨或紧急采购补齐后插单。"
+        else:
+            recommendation = "严重缺料，不建议此时插单，以免造成生产停滞。"
+
+        return {
+            "can_fulfill_material": readiness_rate == 100,
+            "readiness_rate": round(readiness_rate, 2),
+            "shortage_items": shortage_items,
+            "impacted_orders": impacted_orders,
+            "resource_load_change": load_changes,
+            "recommendation": recommendation
         }

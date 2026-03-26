@@ -294,13 +294,61 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                 updated_by=confirmed_by
             )
 
-            # 更新库存（扣减）
+            # 更新库存（扣减）及其前置的【防超发拦截】闭环
             try:
                 from apps.kuaizhizao.services.inventory_service import InventoryService
+                from apps.kuaizhizao.models.production_picking import ProductionPicking
+                from apps.kuaizhizao.models.production_picking_item import ProductionPickingItem
 
                 picking_items = await ProductionPickingItem.filter(
                     tenant_id=tenant_id, picking_id=picking_id
                 ).all()
+                picking = await ProductionPicking.get(tenant_id=tenant_id, id=picking_id)
+                
+                # 防超发逻辑验证 1.1 (Core Foundation Verification)
+                if picking.work_order_id:
+                    from apps.kuaizhizao.models.work_order import WorkOrder
+                    from apps.kuaizhizao.utils.bom_helper import calculate_material_requirements_from_bom
+                    from tortoise.functions import Sum
+                    wo = await WorkOrder.get_or_none(tenant_id=tenant_id, id=picking.work_order_id)
+                    if wo:
+                        try:
+                            # 1. 拿取目标 BOM 需求上限
+                            reqs = await calculate_material_requirements_from_bom(
+                                tenant_id=tenant_id,
+                                material_id=wo.product_id,
+                                required_quantity=float(wo.quantity),
+                                only_approved=True
+                            )
+                            limit_map = {r.component_id: r.gross_requirement for r in reqs}
+                            
+                            # 2. 统计已领过多少
+                            past_items = await ProductionPickingItem.filter(
+                                tenant_id=tenant_id,
+                                picking__work_order_id=picking.work_order_id,
+                                picking__status='已领料'
+                            ).group_by("material_id").annotate(total_picked=Sum("picked_quantity")).values("material_id", "total_picked")
+                            past_map = {item["material_id"]: item["total_picked"] or 0 for item in past_items}
+                            
+                            # 3. 计算本期即将领用的
+                            current_map = {}
+                            for item in picking_items:
+                                qty = item.picked_quantity or item.required_quantity or Decimal(0)
+                                current_map[item.material_id] = current_map.get(item.material_id, 0) + float(qty)
+                                
+                            # 4. 严苛防超发出库比对
+                            for mat_id, current_qty in current_map.items():
+                                past_qty = float(past_map.get(mat_id, 0))
+                                total_attempt = past_qty + current_qty
+                                allowed = limit_map.get(mat_id)
+                                if allowed is not None:
+                                    # 允许 1% 浮点误差或容损
+                                    if total_attempt > float(allowed) * 1.01:
+                                        raise BusinessLogicError(f"防超发拦截生效：物料[ID:{mat_id}]试图总领用量({total_attempt:.2f}) 超出了当前工单配方上限额度({float(allowed):.2f})，禁止强行出库！")
+                        except BusinessLogicError:
+                            raise
+                        except Exception as calc_e:
+                            logger.warning(f"防超发校验过程发生错误，可能是缺少BOM，跳过强制拦截: {calc_e}")
                 picking = await ProductionPicking.get(tenant_id=tenant_id, id=picking_id)
                 for item in picking_items:
                     qty = item.required_quantity or item.picked_quantity or Decimal(0)
@@ -316,6 +364,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                         source_type="production_picking",
                         source_doc_id=picking_id,
                         source_doc_code=picking.picking_code,
+                        enforce_fifo=True,
                     )
             except Exception as inv_e:
                 logger.error("生产领料确认-更新库存失败: %s", inv_e)

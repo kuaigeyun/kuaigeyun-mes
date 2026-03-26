@@ -11,6 +11,31 @@ export { warehouseApi } from './warehouse-execution';
 export { qualityApi, inspectionPlanApi } from './quality-execution';
 export { planningApi } from './planning';
 
+
+// 生产控制台（控制塔）相关接口
+export const productionControlApi = {
+  // 获取控制塔汇总数据
+  getSummary: async () => {
+    return apiRequest('/apps/kuaizhizao/production-control/summary', { method: 'GET' });
+  },
+
+  // 批量下达齐套工单
+  releaseKitted: async (workOrderIds: number[]) => {
+    return apiRequest('/apps/kuaizhizao/production-control/release-kitted', {
+      method: 'POST',
+      data: { work_order_ids: workOrderIds },
+    });
+  },
+
+  // 模拟紧急工单影响
+  simulateImpact: async (data: any) => {
+    return apiRequest('/apps/kuaizhizao/production-control/simulate-impact', {
+      method: 'POST',
+      data,
+    });
+  },
+};
+
 // 委外工单相关接口
 export const outsourceWorkOrderApi = {
   // 获取委外工单列表
