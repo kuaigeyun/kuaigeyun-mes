@@ -7,11 +7,15 @@ Author: Luigi Lu
 Date: 2026-01-05
 """
 
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 from tortoise.exceptions import IntegrityError
 
 from apps.kuaizhizao.models.equipment import Equipment, EquipmentCalibration
+from apps.kuaizhizao.models.equipment_status_monitor import EquipmentStatusHistory
+from apps.kuaizhizao.models.equipment_fault import EquipmentFault, EquipmentRepair
+from apps.kuaizhizao.models.maintenance_plan import MaintenanceExecution
+from apps.kuaizhizao.models.equipment_point_inspection import EquipmentPointInspectionRecord
 from apps.kuaizhizao.schemas.equipment import EquipmentCreate, EquipmentUpdate, EquipmentCalibrationCreate
 from core.services.business.code_generation_service import CodeGenerationService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -30,22 +34,8 @@ class EquipmentService:
         data: EquipmentCreate,
         created_by: Optional[int] = None
     ) -> Equipment:
-        """
-        创建设备
-        
-        Args:
-            tenant_id: 组织ID
-            data: 设备创建数据
-            created_by: 创建人ID（可选）
-            
-        Returns:
-            Equipment: 创建的设备对象
-            
-        Raises:
-            ValidationError: 当设备编码已存在时抛出
-        """
+        """创建设备"""
         try:
-            # 如果没有提供编码，自动生成
             if not data.code:
                 try:
                     data.code = await CodeGenerationService.generate_code(
@@ -54,8 +44,6 @@ class EquipmentService:
                         context=None
                     )
                 except ValidationError:
-                    # 如果编码规则不存在，使用默认编码格式
-                    from datetime import datetime
                     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
                     data.code = f"EQ{timestamp}"
             
@@ -73,19 +61,7 @@ class EquipmentService:
         tenant_id: int,
         uuid: str
     ) -> Equipment:
-        """
-        根据UUID获取设备
-        
-        Args:
-            tenant_id: 组织ID
-            uuid: 设备UUID
-            
-        Returns:
-            Equipment: 设备对象
-            
-        Raises:
-            NotFoundError: 当设备不存在时抛出
-        """
+        """根据UUID获取设备"""
         equipment = await Equipment.filter(
             tenant_id=tenant_id,
             uuid=uuid,
@@ -102,16 +78,7 @@ class EquipmentService:
         tenant_id: int,
         code: str
     ) -> Optional[Equipment]:
-        """
-        根据编码获取设备
-        
-        Args:
-            tenant_id: 组织ID
-            code: 设备编码
-            
-        Returns:
-            Equipment: 设备对象，如果不存在返回 None
-        """
+        """根据编码获取设备"""
         return await Equipment.filter(
             tenant_id=tenant_id,
             code=code,
@@ -130,29 +97,11 @@ class EquipmentService:
         workstation_id: Optional[int] = None,
         search: Optional[str] = None
     ) -> tuple[List[Equipment], int]:
-        """
-        获取设备列表
-        
-        Args:
-            tenant_id: 组织ID
-            skip: 跳过数量
-            limit: 限制数量
-            type: 设备类型（可选）
-            category: 设备分类（可选）
-            status: 设备状态（可选）
-            is_active: 是否启用（可选）
-            workstation_id: 工位ID（可选）
-            search: 搜索关键词（可选，搜索编码、名称）
-            
-        Returns:
-            tuple[List[Equipment], int]: 设备列表和总数量
-        """
+        """获取设备列表"""
         query = Equipment.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True
         )
-        
-        # 筛选条件
         if type:
             query = query.filter(type=type)
         if category:
@@ -163,20 +112,13 @@ class EquipmentService:
             query = query.filter(is_active=is_active)
         if workstation_id:
             query = query.filter(workstation_id=workstation_id)
-        
-        # 搜索条件
         if search:
             from tortoise.expressions import Q
             query = query.filter(
                 Q(code__icontains=search) | Q(name__icontains=search)
             )
-        
-        # 获取总数量
         total = await query.count()
-        
-        # 获取列表
         equipment_list = await query.offset(skip).limit(limit).order_by("-created_at")
-        
         return equipment_list, total
     
     @staticmethod
@@ -185,37 +127,17 @@ class EquipmentService:
         uuid: str,
         data: EquipmentUpdate
     ) -> Equipment:
-        """
-        更新设备
-        
-        Args:
-            tenant_id: 组织ID
-            uuid: 设备UUID
-            data: 设备更新数据
-            
-        Returns:
-            Equipment: 更新后的设备对象
-            
-        Raises:
-            NotFoundError: 当设备不存在时抛出
-            ValidationError: 当设备编码已存在时抛出
-        """
+        """更新设备"""
         equipment = await EquipmentService.get_equipment_by_uuid(tenant_id, uuid)
-        
         update_data = data.model_dump(exclude_unset=True, exclude_none=True)
-        
-        # 如果更新了编码，检查是否重复
         if 'code' in update_data and update_data['code'] != equipment.code:
             existing = await EquipmentService.get_equipment_by_code(
                 tenant_id, update_data['code']
             )
             if existing and existing.uuid != equipment.uuid:
                 raise ValidationError(f"设备编码 {update_data['code']} 已存在")
-        
-        # 更新字段
         for key, value in update_data.items():
             setattr(equipment, key, value)
-        
         await equipment.save()
         return equipment
     
@@ -224,19 +146,8 @@ class EquipmentService:
         tenant_id: int,
         uuid: str
     ) -> None:
-        """
-        删除设备（软删除）
-        
-        Args:
-            tenant_id: 组织ID
-            uuid: 设备UUID
-            
-        Raises:
-            NotFoundError: 当设备不存在时抛出
-        """
+        """删除设备"""
         equipment = await EquipmentService.get_equipment_by_uuid(tenant_id, uuid)
-        
-        # 软删除
         equipment.deleted_at = datetime.now()
         await equipment.save()
 
@@ -262,3 +173,49 @@ class EquipmentService:
         await calib.save()
         return calib
 
+    @staticmethod
+    async def get_equipment_lifecycle_log(
+        tenant_id: int,
+        equipment_uuid: str,
+        limit: int = 50
+    ) -> List[Dict[str, Any]]:
+        """
+        获取设备全生命周期履历
+        聚合各模块记录：状态变更、故障、维修、保养、点检、校准。
+        """
+        equipment = await EquipmentService.get_equipment_by_uuid(tenant_id, equipment_uuid)
+        equipment_id = equipment.id
+        logs = []
+        
+        # 1. 状态变更记录
+        items = await EquipmentStatusHistory.filter(tenant_id=tenant_id, equipment_id=equipment_id).limit(limit).all()
+        for item in items:
+            logs.append({"type": "status_change", "time": item.status_changed_at, "title": f"状态变更: {item.from_status} -> {item.to_status}", "content": item.reason or "", "operator": item.changed_by_name})
+            
+        # 2. 故障记录
+        items = await EquipmentFault.filter(tenant_id=tenant_id, equipment_id=equipment_id).limit(limit).all()
+        for item in items:
+            logs.append({"type": "fault", "time": item.fault_date, "title": f"故障上报: {item.fault_type}", "content": item.fault_description, "operator": item.reporter_name, "status": item.status})
+            
+        # 3. 维修记录
+        items = await EquipmentRepair.filter(tenant_id=tenant_id, equipment_id=equipment_id).limit(limit).all()
+        for item in items:
+            logs.append({"type": "repair", "time": item.repair_date, "title": f"设备维修: {item.repair_type}", "content": item.repair_description, "operator": item.repairer_name, "result": item.repair_result})
+            
+        # 4. 保养记录
+        items = await MaintenanceExecution.filter(tenant_id=tenant_id, equipment_id=equipment_id).limit(limit).all()
+        for item in items:
+            logs.append({"type": "maintenance", "time": item.execution_date, "title": f"设备保养: {item.execution_no}", "content": item.execution_content, "operator": item.executor_name, "result": item.execution_result})
+            
+        # 5. 点检记录
+        items = await EquipmentPointInspectionRecord.filter(tenant_id=tenant_id, equipment_id=equipment_id).limit(limit).all()
+        for item in items:
+            logs.append({"type": "inspection", "time": item.inspection_date, "title": "日常点检", "content": f"结果: {'异常' if item.has_abnormality else '正常'} - {item.abnormality_description or ''}", "operator": item.inspector_name})
+            
+        # 6. 校准记录
+        items = await EquipmentCalibration.filter(tenant_id=tenant_id, equipment_id=equipment_id).limit(limit).all()
+        for item in items:
+            logs.append({"type": "calibration", "time": item.calibration_date, "title": "设备校准/计量", "content": f"结果: {item.result}, 证书号: {item.certificate_no or '无'}", "operator": ""})
+
+        logs.sort(key=lambda x: x["time"] if x["time"] else datetime.min, reverse=True)
+        return logs[:limit]

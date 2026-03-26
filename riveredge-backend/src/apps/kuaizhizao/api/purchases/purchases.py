@@ -20,9 +20,13 @@ from infra.exceptions.exceptions import ValidationError, NotFoundError
 from apps.kuaizhizao.schemas.purchase import (
     PurchaseOrderCreate, PurchaseOrderUpdate, PurchaseOrderResponse,
     PurchaseOrderListResponse, PurchaseOrderApprove, PurchaseOrderConfirm,
-    PurchaseOrderListParams
+    PurchaseOrderListParams, MaterialPriceHistoryResponse,
+    PurchaseTrackingResponse, SupplierPerformanceResponse,
+    ExpediteRequest, ExpediteResponse, PriceComparisonResponse,
+    LandingCostAllocationRequest, PurchaseOrderChangeResponse
 )
 from apps.kuaizhizao.services.purchase_service import PurchaseService
+from apps.kuaizhizao.services.purchase_cost_service import PurchaseCostService
 from apps.kuaizhizao.services.print_service import DocumentPrintService
 from apps.kuaizhizao.services.demand_source_chain_service import DemandSourceChainService
 from fastapi.responses import HTMLResponse
@@ -484,3 +488,75 @@ async def print_purchase_order(
     else:
         return HTMLResponse(content=result["content"], status_code=200)
 
+@router.get("/material-price-history/{material_id}", response_model=MaterialPriceHistoryResponse, summary="获取物料历史成交价")
+async def get_material_price_history(
+    material_id: int = Path(..., description="物料ID"),
+    tenant_id: int = Depends(get_current_tenant)
+):
+    """获取物料在当前租户下的历史成交价统计"""
+    return await PurchaseService().get_material_price_history(tenant_id, material_id)
+
+
+@router.get("/purchase-orders/{order_id}/tracking", response_model=PurchaseTrackingResponse, summary="获取采购订单履约追踪")
+async def get_purchase_order_tracking(
+    order_id: int = Path(..., description="采购订单ID"),
+    tenant_id: int = Depends(get_current_tenant)
+):
+    """获取采购订单从下达到入库的全链路追踪数据"""
+    return await PurchaseService().get_purchase_order_tracking(tenant_id, order_id)
+
+
+@router.get("/suppliers/{supplier_id}/performance", response_model=SupplierPerformanceResponse, summary="获取供应商表现指标")
+async def get_supplier_performance(
+    supplier_id: int = Path(..., description="供应商ID"),
+    tenant_id: int = Depends(get_current_tenant)
+):
+    """获取供应商近半年的 OTIF、合格率等表现数据"""
+    return await PurchaseService().get_supplier_performance_metrics(tenant_id, supplier_id)
+
+
+@router.post("/purchase-orders/{order_id}/expedite", response_model=ExpediteResponse, summary="一键催单")
+async def expedite_purchase_order(
+    order_id: int = Path(..., description="采购订单ID"),
+    request: ExpediteRequest = Body(None),
+    tenant_id: int = Depends(get_current_tenant)
+):
+    """记录催单日志并模拟发出催单通知"""
+    return await PurchaseService().expedite_purchase_order(tenant_id, order_id, request.remarks if request else None)
+@router.get("/price-comparison", response_model=PriceComparisonResponse, summary="多物料价格对比")
+async def get_price_comparison(
+    material_ids: str = Query(..., description="物料ID列表，逗号分隔"),
+    tenant_id: int = Depends(get_current_tenant)
+):
+    """获取物料的多供应商价格对比（比价助手）"""
+    try:
+        mids = [int(mid.strip()) for mid in material_ids.split(",") if mid.strip()]
+        return await PurchaseService().get_price_comparison(tenant_id, mids)
+    except Exception as e:
+        raise ValidationError(f"无法获取价格对比: {str(e)}")
+
+
+@router.post("/purchase-orders/{order_id}/allocate-costs", summary="分摊采购落地成本")
+async def allocate_purchase_costs(
+    order_id: int = Path(..., description="采购订单ID"),
+    request: LandingCostAllocationRequest = Body(...),
+    tenant_id: int = Depends(get_current_tenant)
+):
+    """人工输入杂费并分摊到订单明细（V2 增强：支持按金额、数量、重量、体积等维度分摊）"""
+    try:
+        fee_dicts = [{"name": item.name, "amount": item.amount} for item in request.fee_items]
+        items = await PurchaseCostService().allocate_landing_costs(
+            tenant_id, order_id, fee_dicts, request.method
+        )
+        return {"success": True, "items_count": len(items)}
+    except Exception as e:
+        raise ValidationError(f"分摊失败: {str(e)}")
+
+
+@router.get("/purchase-orders/{order_id}/changes", response_model=List[PurchaseOrderChangeResponse], summary="获取采购订单变更历史")
+async def get_purchase_order_changes(
+    order_id: int = Path(..., description="采购订单ID"),
+    tenant_id: int = Depends(get_current_tenant)
+):
+    """获取采购订单的全程变更记录（对应 PurchaseOrderChange 模型）"""
+    return await PurchaseService().get_purchase_order_changes(tenant_id, order_id)

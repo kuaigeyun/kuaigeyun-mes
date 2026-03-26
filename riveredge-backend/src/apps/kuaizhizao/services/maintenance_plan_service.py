@@ -114,7 +114,14 @@ class MaintenancePlanService:
         if not plan:
             raise NotFoundError("维护计划不存在")
         
-        return plan
+        from apps.kuaizhizao.services.document_lifecycle_service import get_maintenance_plan_lifecycle, get_document_milestones
+        from apps.kuaizhizao.schemas.maintenance_plan import MaintenancePlanResponse
+        
+        milestones = await get_document_milestones(plan.tenant_id, "maintenance_plan", plan.id)
+        
+        resp = MaintenancePlanResponse.model_validate(plan)
+        resp.lifecycle = get_maintenance_plan_lifecycle(plan, milestones=milestones)
+        return resp
     
     @staticmethod
     async def list_maintenance_plans(
@@ -139,7 +146,7 @@ class MaintenancePlanService:
             search: 搜索关键词（可选，搜索计划编号、计划名称）
             
         Returns:
-            tuple[List[MaintenancePlan], int]: 维护计划列表和总数量
+            tuple[List[MaintenancePlanResponse], int]: 维护计划列表和总数量（包含生命周期信息）
         """
         query = MaintenancePlan.filter(
             tenant_id=tenant_id,

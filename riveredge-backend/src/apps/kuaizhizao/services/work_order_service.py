@@ -900,8 +900,13 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         """
         work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
         response = WorkOrderResponse.model_validate(work_order)
-        from apps.kuaizhizao.services.document_lifecycle_service import get_work_order_lifecycle
-        response.lifecycle = get_work_order_lifecycle(work_order)
+        # 获取 UniLifecycle 里程碑历史
+        from apps.kuaizhizao.services.document_lifecycle_service import (
+            get_work_order_lifecycle,
+            get_document_milestones
+        )
+        milestones = await get_document_milestones(tenant_id, "work_order", work_order_id)
+        response.lifecycle = get_work_order_lifecycle(work_order, milestones=milestones)
         # 从产品物料获取制造模式（加工型/装配型）
         if work_order.product_id:
             product = await Material.get_or_none(

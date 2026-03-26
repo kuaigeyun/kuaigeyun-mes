@@ -29,7 +29,9 @@ from apps.kuaizhizao.schemas.sales_order import (
     SalesOrderItemUpdate,
     SalesOrderItemResponse,
     SalesOrderRemindCreate,
+    SalesOrderTrackingResponse,
 )
+from apps.kuaizhizao.schemas.quote import QuoteBreakdownResponse
 
 # 初始化服务实例
 sales_order_service = SalesOrderService()
@@ -375,6 +377,30 @@ async def get_sales_order(
     except Exception as e:
         logger.error(f"获取销售订单详情失败: {e}")
         raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取销售订单详情失败")
+
+
+@router.get("/{sales_order_id}/tracking", response_model=SalesOrderTrackingResponse, summary="获取销售订单全息追踪视图")
+async def get_sales_order_tracking(
+    sales_order_id: int = Path(..., description="销售订单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取销售订单全息追踪视图
+    
+    返回订单从接单、备料、生产到最终发货的全局进度与明细（赋能销售人员）。
+    """
+    try:
+        result = await sales_order_service.get_sales_order_tracking(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id
+        )
+        return result
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.error(f"获取销售订单追踪视图失败: {e}")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取销售订单追踪视图失败")
 
 
 @router.get("/{sales_order_id}/change-impact", response_model=ChangeImpactResponse, summary="获取销售订单变更影响")
@@ -912,3 +938,25 @@ async def bulk_delete_sales_orders(
     except Exception as e:
         logger.error(f"批量删除销售订单失败: {e}")
         raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="批量删除销售订单失败")
+
+
+@router.get("/quote-breakdown/{material_id}", response_model=QuoteBreakdownResponse, summary="获取产品核价明细 (敏捷核价)")
+async def get_quote_breakdown(
+    material_id: int = Path(..., description="产品 ID"),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    根据产品 ID 获取其 BOM 层级的预估成本及工艺费，辅助销售核价。
+    """
+    try:
+        result = await sales_order_service.get_quote_breakdown(
+            tenant_id=tenant_id,
+            material_id=material_id
+        )
+        return result
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.error(f"获取核价明细失败: {e}")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取核价明细失败")
+

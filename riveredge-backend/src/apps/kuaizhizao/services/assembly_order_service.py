@@ -101,8 +101,12 @@ class AssemblyOrderService(AppBaseService[AssemblyOrder]):
             deleted_at__isnull=True
         ).order_by('id')
 
+        from apps.kuaizhizao.services.document_lifecycle_service import get_assembly_order_lifecycle, get_document_milestones
+        milestones = await get_document_milestones(order.tenant_id, "assembly_order", order.id)
+        
         response = AssemblyOrderWithItemsResponse.model_validate(order)
         response.items = [AssemblyOrderItemResponse.model_validate(item) for item in items]
+        response.lifecycle = get_assembly_order_lifecycle(order, milestones=milestones)
         return response
 
     async def update_assembly_order(

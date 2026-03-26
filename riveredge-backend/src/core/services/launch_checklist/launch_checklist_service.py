@@ -56,6 +56,9 @@ class LaunchChecklistService:
                 "description": "检查物料主数据是否完整，包括物料编码、名称、单位等",
                 "check_method": "检查物料主数据表，确保必填字段完整",
                 "is_critical": True,
+                "action_url": "/master-data/materials",
+                "action_type": "nav",
+                "action_label": "去维护物料",
             },
             {
                 "category": "static_data",
@@ -65,6 +68,9 @@ class LaunchChecklistService:
                 "description": "检查BOM数据是否完整，包括BOM结构、用量等",
                 "check_method": "检查BOM表，确保BOM结构完整",
                 "is_critical": True,
+                "action_url": "/kuaipdm/bom",
+                "action_type": "nav",
+                "action_label": "去配置BOM",
             },
             {
                 "category": "static_data",
@@ -74,6 +80,9 @@ class LaunchChecklistService:
                 "description": "检查工艺路线数据是否完整，包括工序、设备等",
                 "check_method": "检查工艺路线表，确保工艺路线完整",
                 "is_critical": True,
+                "action_url": "/master-data/routes",
+                "action_type": "nav",
+                "action_label": "去配置工艺",
             },
         ])
         
@@ -87,6 +96,9 @@ class LaunchChecklistService:
                 "description": "检查期初库存是否已导入完成",
                 "check_method": "检查期初库存导入进度",
                 "is_critical": True,
+                "action_url": "/kuaizhizao/inventory/initial",
+                "action_type": "nav",
+                "action_label": "去导入库存",
             },
             {
                 "category": "dynamic_data",
@@ -96,6 +108,9 @@ class LaunchChecklistService:
                 "description": "检查在制品是否已导入完成",
                 "check_method": "检查在制品导入进度",
                 "is_critical": True,
+                "action_url": "/kuaizhizao/wip/initial",
+                "action_type": "nav",
+                "action_label": "去导入在制",
             },
             {
                 "category": "dynamic_data",
@@ -105,6 +120,9 @@ class LaunchChecklistService:
                 "description": "检查应收应付是否已导入完成",
                 "check_method": "检查应收应付导入进度",
                 "is_critical": True,
+                "action_url": "/kuaicaiwu/initial",
+                "action_type": "nav",
+                "action_label": "去导入账款",
             },
             {
                 "category": "dynamic_data",
@@ -114,6 +132,9 @@ class LaunchChecklistService:
                 "description": "检查动态数据补偿是否已完成",
                 "check_method": "检查动态数据补偿进度",
                 "is_critical": True,
+                "action_url": "/kuaizhizao/compensation",
+                "action_type": "nav",
+                "action_label": "去处理补偿",
             },
         ])
         
@@ -127,6 +148,9 @@ class LaunchChecklistService:
                 "description": "检查编码规则是否已配置完成",
                 "check_method": "检查编码规则配置",
                 "is_critical": False,
+                "action_url": "/system/code-rules",
+                "action_type": "nav",
+                "action_label": "去配置规则",
             },
             {
                 "category": "system_config",
@@ -136,6 +160,9 @@ class LaunchChecklistService:
                 "description": "检查用户权限是否已配置完成",
                 "check_method": "检查用户权限配置",
                 "is_critical": True,
+                "action_url": "/system/users",
+                "action_type": "nav",
+                "action_label": "分配权限",
             },
             {
                 "category": "system_config",
@@ -145,6 +172,9 @@ class LaunchChecklistService:
                 "description": "检查业务流程是否已配置完成",
                 "check_method": "检查业务流程配置",
                 "is_critical": False,
+                "action_url": "/system/workflow",
+                "action_type": "nav",
+                "action_label": "配置流程",
             },
         ])
         

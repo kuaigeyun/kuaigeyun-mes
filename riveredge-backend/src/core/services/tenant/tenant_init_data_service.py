@@ -57,6 +57,35 @@ class TenantInitDataService:
         {"key": "variant_attribute_preset", "name": "属性定义预设", "description": "颜色、规格、材质、等级、表面处理等"},
     ]
 
+    # 行业预设模板（一键建账）
+    INDUSTRY_PRESETS: Dict[str, Dict[str, Any]] = {
+        "sme_manufacturing": {
+            "name": "离散制造通用版",
+            "description": "适用于一般的五金、机械、注塑等离散制造企业。",
+            "keys": [
+                "department_preset", 
+                "position_preset", 
+                "role_preset", 
+                "warehouse_preset",
+                "operation_preset",
+                "defect_type_preset"
+            ]
+        },
+        "electronics_assembly": {
+            "name": "电子组装版",
+            "description": "适用于 PCBA、3C 类电子产品组装与测试。",
+            "keys": [
+                "department_preset", 
+                "position_preset", 
+                "role_preset", 
+                "warehouse_preset",
+                "operation_preset",
+                "defect_type_preset",
+                "variant_attribute_preset"
+            ]
+        }
+    }
+
     @classmethod
     def get_init_items_config(cls) -> Dict[str, Any]:
         """
@@ -123,6 +152,59 @@ class TenantInitDataService:
                 logger.error(f"可选初始化 {key} 失败: {e}")
                 results[key] = {"success": False, "error": str(e)}
         return results
+
+    @classmethod
+    def get_industry_presets(cls) -> List[Dict[str, Any]]:
+        """
+        获取所有支持的行业预设模板
+        
+        Returns:
+            List[Dict[str, Any]]: 行业预设列表
+        """
+        presets = []
+        for code, config in cls.INDUSTRY_PRESETS.items():
+            presets.append({
+                "code": code,
+                "name": config["name"],
+                "description": config["description"],
+                "keys": config["keys"]
+            })
+        return presets
+
+    @classmethod
+    async def run_industry_preset(
+        cls, 
+        tenant_id: int, 
+        industry_code: str, 
+        current_user_id: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """
+        根据行业代码执行一键预设初始化
+        
+        Args:
+            tenant_id: 组织ID
+            industry_code: 行业编码 (如 'sme_manufacturing')
+            current_user_id: 当前操作用户ID
+            
+        Returns:
+            Dict[str, Any]: 执行结果
+            
+        Raises:
+            ValueError: 如果 industry_code 不存在
+        """
+        if industry_code not in cls.INDUSTRY_PRESETS:
+            raise ValueError(f"不支持的行业预设代码: {industry_code}")
+            
+        preset_config = cls.INDUSTRY_PRESETS[industry_code]
+        keys_to_run = preset_config["keys"]
+        
+        logger.info(f"开始执行行业预设初始化 [{industry_code}] -> {tenant_id}, 项: {keys_to_run}")
+        
+        return await cls.run_optional(
+            tenant_id=tenant_id,
+            selected_keys=keys_to_run,
+            current_user_id=current_user_id
+        )
 
     @classmethod
     async def run_single(

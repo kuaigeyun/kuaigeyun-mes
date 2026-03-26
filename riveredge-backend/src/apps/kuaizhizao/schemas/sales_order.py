@@ -195,3 +195,47 @@ class SalesOrderRemindCreate(BaseSchema):
     recipient_user_uuid: str = Field(..., description="提醒对象（用户UUID）")
     action_type: str = Field(..., description="提醒操作：review/delivery/invoice/follow_up/other")
     remarks: Optional[str] = Field(None, max_length=500, description="备注")
+
+
+# === 销售订单追踪 (Sales Enablement 360 View) ===
+
+class TrackingWorkOrderInfo(BaseSchema):
+    """追踪视图：关联工单信息"""
+    work_order_id: int
+    work_order_code: str
+    product_name: str
+    quantity: Decimal
+    completed_quantity: Decimal
+    status: str
+
+
+class TrackingDeliveryInfo(BaseSchema):
+    """追踪视图：关联发货单信息"""
+    delivery_id: int
+    delivery_code: str
+    delivery_date: Optional[date]
+    status: str
+
+
+class TrackingMaterialShortageInfo(BaseSchema):
+    """追踪视图：物料缺口预警"""
+    material_code: str
+    material_name: str
+    required_quantity: Decimal
+    shortage_quantity: Decimal
+
+
+class SalesOrderTrackingResponse(BaseSchema):
+    """销售订单全息追踪视图响应"""
+    sales_order_id: int
+    sales_order_code: str
+    
+    # 核心进度统计 (0 - 100)
+    material_prep_progress: float = Field(0.0, description="备料进度 (100 - (缺口总额/需求总额)*100)")
+    production_progress: float = Field(0.0, description="生产进度 (关联工单完成率综合)")
+    delivery_progress: float = Field(0.0, description="发货进度 (订单明细发货率)")
+    
+    # 详情数据
+    work_orders: List[TrackingWorkOrderInfo] = Field(default_factory=list, description="关联生产工单明细")
+    deliveries: List[TrackingDeliveryInfo] = Field(default_factory=list, description="关联发货单明细")
+    material_shortages: List[TrackingMaterialShortageInfo] = Field(default_factory=list, description="物料缺货明细")

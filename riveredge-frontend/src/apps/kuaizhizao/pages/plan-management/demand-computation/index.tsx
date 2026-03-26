@@ -34,6 +34,11 @@ import {
   Select,
   Tabs,
   Radio,
+  Alert,
+  Timeline,
+  Badge,
+  Empty,
+  Typography,
 } from 'antd'
 import {
   PlayCircleOutlined,
@@ -42,6 +47,10 @@ import {
   ArrowDownOutlined,
   DeleteOutlined,
   SettingOutlined,
+  WarningOutlined,
+  SyncOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { UniTable } from '../../../../../components/uni-table'
@@ -56,13 +65,13 @@ import {
   executeDemandComputation,
   recomputeDemandComputation,
   deleteDemandComputation,
-  generateOrdersFromComputation,
   getPushOptions,
   getPushPreview,
   pushAll,
   validateMaterialSources,
   getMaterialSources,
   getDemandComputationStatistics,
+  getComputationDynamicMonitor,
   type PushOptions,
   type PushPreview,
   listComputationRecalcHistory,
@@ -287,6 +296,8 @@ const DemandComputationPage: React.FC = () => {
   const [pushRecords, setPushRecords] = useState<PushRecordItem[]>([])
   const [recalcHistoryLoading, setRecalcHistoryLoading] = useState(false)
   const [snapshotsLoading, setSnapshotsLoading] = useState(false)
+  const [dynamicMonitorData, setDynamicMonitorData] = useState<any>(null)
+  const [dynamicMonitorLoading, setDynamicMonitorLoading] = useState(false)
   const [pushRecordsLoading, setPushRecordsLoading] = useState(false)
   const [detailTabKey, setDetailTabKey] = useState<string>('detail')
 
@@ -374,7 +385,7 @@ const DemandComputationPage: React.FC = () => {
             const boms = await bomApi.getByMaterial(m.material_id, undefined, true)
             const versionMap = new Map<string, boolean>()
             for (const b of boms) {
-              if (b.version) versionMap.set(b.version, b.isDefault || versionMap.get(b.version))
+              if (b.version) versionMap.set(b.version, !!b.isDefault || !!versionMap.get(b.version))
             }
             const bomVersions: BomVersionOption[] = Array.from(versionMap.entries()).map(
               ([version, isDefault]) => ({ version, isDefault: !!isDefault })
@@ -512,7 +523,7 @@ const DemandComputationPage: React.FC = () => {
               const boms = await bomApi.getByMaterial(m.material_id, undefined, true)
               const versionMap = new Map<string, boolean>()
               for (const b of boms) {
-                if (b.version) versionMap.set(b.version, b.isDefault || versionMap.get(b.version))
+                if (b.version) versionMap.set(b.version, !!b.isDefault || !!versionMap.get(b.version))
               }
               const bomVersions: BomVersionOption[] = Array.from(versionMap.entries()).map(
                 ([version, isDefault]) => ({ version, isDefault: !!isDefault })
@@ -679,164 +690,6 @@ const DemandComputationPage: React.FC = () => {
     }
   }
 
-  /**
-   * 处理一键生成工单和采购单（物料来源控制增强）
-   * @param generateMode 生成粒度：all=全部，work_order_only=仅工单，purchase_only=仅采购
-   */
-  const handleGenerateOrders = async (
-    record: DemandComputation,
-    generateMode: 'all' | 'work_order_only' | 'purchase_only' = 'all'
-  ) => {
-    // 先验证物料来源配置
-    try {
-      const validation = await validateMaterialSources(record.id!)
-
-      if (!validation.all_passed) {
-        // 有验证失败，允许用户选择继续生成草稿单（由下游补全）
-        const errorMessages = validation.validation_results
-          .filter((r: any) => !r.validation_passed)
-          .map((r: any) => `物料 ${r.material_code} (${r.material_name}): ${r.errors.join(', ')}`)
-          .join('\n')
-
-        modalApi.confirm({
-          title: '物料来源验证失败',
-          width: 600,
-          okText: '继续生成草稿单',
-          cancelText: '取消',
-          content: (
-            <div>
-              <p>以下物料的来源配置验证失败，将生成草稿单，请下游用户补全后提交。是否继续？</p>
-              <pre
-                style={{
-                  background: '#f5f5f5',
-                  padding: '12px',
-                  borderRadius: '4px',
-                  maxHeight: '300px',
-                  overflow: 'auto',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                }}
-              >
-                {errorMessages}
-              </pre>
-              <p style={{ marginTop: '12px', color: '#ff4d4f' }}>
-                失败数量: {validation.failed_count} / {validation.total_count}
-              </p>
-            </div>
-          ),
-          onOk: async () => {
-            try {
-              const result = await generateOrdersFromComputation(record.id!, generateMode, {
-                allowDraft: true,
-              })
-              const parts = []
-              if (result.work_order_count > 0)
-                parts.push(`生产工单 ${result.work_order_count} 个（工单管理）`)
-              if ((result.outsource_work_order_count ?? 0) > 0)
-                parts.push(`委外工单 ${result.outsource_work_order_count} 个（委外管理）`)
-              if (result.purchase_order_count > 0)
-                parts.push(`采购单 ${result.purchase_order_count} 个`)
-              if (parts.length > 0) {
-                messageApi.success(`草稿单生成成功！${parts.join('，')}，请下游用户补全后提交。`)
-              } else {
-                messageApi.warning(
-                  '未生成任何工单或采购单。请检查计算结果中的建议数量是否大于0，以及物料来源类型是否正确配置。'
-                )
-              }
-              invalidateStatistics(); actionRef.current?.reload()
-            } catch (error: any) {
-              messageApi.error(error?.response?.data?.detail || '生成草稿单失败')
-            }
-          },
-        })
-        return
-      }
-
-      // 获取物料来源统计信息
-      const sources = await getMaterialSources(record.id!)
-      const sourceTypeCounts: Record<string, number> = {}
-      sources.material_sources.forEach((s: any) => {
-        const type = s.source_type || '未设置'
-        sourceTypeCounts[type] = (sourceTypeCounts[type] || 0) + 1
-      })
-
-      const sourceInfo = Object.entries(sourceTypeCounts)
-        .map(([type, count]) => {
-          const typeNames: Record<string, string> = {
-            Make: '自制件',
-            Buy: '采购件',
-            Phantom: '虚拟件',
-            Outsource: '委外件',
-            Configure: '配置件',
-            未设置: '未设置',
-          }
-          return `${typeNames[type] || type}: ${count}`
-        })
-        .join(', ')
-
-      const modeLabel =
-        generateMode === 'all'
-          ? '工单和采购单'
-          : generateMode === 'work_order_only'
-            ? '工单'
-            : '采购单'
-      modalApi.confirm({
-        title: `一键生成${modeLabel}`,
-        width: 600,
-        content: (
-          <div>
-            <p>
-              确认要从计算结果 <strong>{record.computation_code}</strong> 生成{modeLabel}吗？
-            </p>
-            <div
-              style={{
-                marginTop: '12px',
-                padding: '12px',
-                background: '#f0f5ff',
-                borderRadius: '4px',
-              }}
-            >
-              <p style={{ margin: 0, fontWeight: 'bold' }}>物料来源统计：</p>
-              <p style={{ margin: '8px 0 0 0' }}>{sourceInfo}</p>
-            </div>
-            <p style={{ marginTop: '12px', fontSize: '12px', color: '#666' }}>
-              {generateMode === 'all'
-                ? '系统将根据物料来源类型智能生成：自制件/委外件生成工单，采购件生成采购订单，虚拟件自动跳过'
-                : generateMode === 'work_order_only'
-                  ? '将仅生成自制件、委外件、配置件的工单，采购件跳过'
-                  : '将仅生成采购件的采购订单，自制件/委外件跳过'}
-            </p>
-          </div>
-        ),
-        onOk: async () => {
-          try {
-            const result = await generateOrdersFromComputation(record.id!, generateMode)
-
-            const parts = []
-            if (result.work_order_count > 0)
-              parts.push(`生产工单 ${result.work_order_count} 个（工单管理）`)
-            if ((result.outsource_work_order_count ?? 0) > 0)
-              parts.push(`委外工单 ${result.outsource_work_order_count} 个（委外管理）`)
-            if (result.purchase_order_count > 0)
-              parts.push(`采购单 ${result.purchase_order_count} 个`)
-            if (parts.length > 0) {
-              messageApi.success(`生成成功！${parts.join('，')}`)
-            } else {
-              messageApi.warning(
-                '未生成任何工单或采购单。请检查计算结果中的建议数量是否大于0，以及物料来源类型是否正确配置。'
-              )
-            }
-            invalidateStatistics(); actionRef.current?.reload()
-          } catch (error: any) {
-
-            messageApi.error(error?.response?.data?.detail || '生成工单和采购单失败')
-          }
-        },
-      })
-    } catch (error: any) {
-      messageApi.error('验证物料来源配置失败')
-    }
-  }
 
   /**
    * 表格列定义
@@ -854,6 +707,33 @@ const DemandComputationPage: React.FC = () => {
       dataIndex: 'demand_code',
       width: 150,
       hideInSearch: false,
+    },
+    {
+      title: '物料概看',
+      dataIndex: 'computation_summary',
+      width: 180,
+      hideInSearch: true,
+      render: (_, record) => {
+        const summary = record.computation_summary || {}
+        const shortage = summary.shortage_count || 0
+        const risk = summary.risk_count || 0
+        const total = summary.item_count || 0
+
+        if (total === 0 && record.computation_status !== '完成') return '-'
+        if (total === 0 && record.computation_status === '完成')
+          return <span style={{ color: '#999' }}>无物料需求</span>
+
+        return (
+          <Space size={4}>
+            {shortage > 0 ? (
+              <Tag color="error">缺料 {shortage}</Tag>
+            ) : (
+              <Tag color="success">无缺料</Tag>
+            )}
+            {risk > 0 && <Tag color="warning">风险 {risk}</Tag>}
+          </Space>
+        )
+      },
     },
     {
       title: '需求类型',
@@ -975,6 +855,13 @@ const DemandComputationPage: React.FC = () => {
         { title: '按订单(MTO)', value: statistics.mto_count ?? statistics.lrp_count },
         { title: '进行中', value: statistics.pending_count, valueStyle: statistics.pending_count > 0 ? { color: '#faad14' } : undefined },
         { title: '已完成', value: statistics.completed_count },
+        {
+          title: '物料/交期风险',
+          value: statistics.risk_count || 0,
+          valueStyle:
+            (statistics.risk_count || 0) > 0 ? { color: '#ff4d4f' } : undefined,
+          prefix: <WarningOutlined />,
+        },
       ]
     : []
 
@@ -1285,7 +1172,7 @@ const DemandComputationPage: React.FC = () => {
                   {
                     title: '业务模式',
                     dataIndex: 'business_mode',
-                    render: (t: string) => (t === 'MTS' ? '按库存生产' : '按订单生产'),
+                    render: (dom: any) => (dom === 'MTS' ? '按库存生产' : '按订单生产'),
                   },
                 ]}
               />
@@ -1353,14 +1240,14 @@ const DemandComputationPage: React.FC = () => {
                   title: '建议工单',
                   dataIndex: 'suggested_work_order_quantity',
                   width: 90,
-                  render: (v: number, r: { material_source_type?: string }) =>
+                  render: (v: number, r: any) =>
                     r.material_source_type === 'Outsource' ? '-' : (v ? Number(v).toLocaleString() : '-'),
                 },
                 {
                   title: '建议委外',
                   dataIndex: 'suggested_work_order_quantity',
                   width: 90,
-                  render: (v: number, r: { material_source_type?: string }) =>
+                  render: (v: number, r: any) =>
                     r.material_source_type === 'Outsource' ? (v ? Number(v).toLocaleString() : '-') : '-',
                 },
                 {
@@ -1424,6 +1311,13 @@ const DemandComputationPage: React.FC = () => {
                   .then((res) => setPushRecords(res.records || []))
                   .catch(() => messageApi.error('获取下推记录失败'))
                   .finally(() => setPushRecordsLoading(false))
+              }
+              if (key === 'monitor' && currentComputation.id) {
+                setDynamicMonitorLoading(true)
+                getComputationDynamicMonitor(currentComputation.id)
+                  .then(setDynamicMonitorData)
+                  .catch(() => messageApi.error('获取同步监控失败'))
+                  .finally(() => setDynamicMonitorLoading(false))
               }
             }}
             items={[
@@ -1520,66 +1414,130 @@ const DemandComputationPage: React.FC = () => {
                           dataSource={currentComputation.items}
                           rowKey="id"
                           columns={[
-                            { title: '物料编码', dataIndex: 'material_code', width: 120 },
-                            { title: '物料名称', dataIndex: 'material_name', width: 150 },
+                            { title: '物料编码', dataIndex: 'material_code', width: 120, fixed: 'left' },
+                            { title: '物料名称', dataIndex: 'material_name', width: 150, ellipsis: true },
+                            {
+                              title: '就绪状态',
+                              dataIndex: 'readiness_status',
+                              width: 100,
+                              render: (status: string, record: DemandComputationItem) => {
+                                const map: Record<string, { label: string; color: string }> = {
+                                  Ready: { label: '就绪', color: 'success' },
+                                  Partial: { label: '部分', color: 'warning' },
+                                  Shortage: { label: '缺料', color: 'error' },
+                                }
+                                const info = map[status || 'Shortage'] || { label: '未知', color: 'default' }
+                                return (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                    <Tag color={info.color} style={{ margin: 0, textAlign: 'center' }}>
+                                      {info.label}
+                                    </Tag>
+                                    {record.readiness_rate != null && record.readiness_rate < 1 && (
+                                      <div style={{ fontSize: 10, color: '#999', textAlign: 'center' }}>
+                                        {Math.round(record.readiness_rate * 100)}%
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                              },
+                            },
                             {
                               title: '物料来源',
                               dataIndex: 'material_source_type',
-                              width: 100,
+                              width: 90,
                               render: (type: string) => {
                                 const typeMap: Record<string, { label: string; color: string }> = {
-                                  Make: { label: '自制件', color: 'blue' },
-                                  Buy: { label: '采购件', color: 'green' },
-                                  Phantom: { label: '虚拟件', color: 'orange' },
-                                  Outsource: { label: '委外件', color: 'purple' },
-                                  Configure: { label: '配置件', color: 'cyan' },
+                                  Make: { label: '自制', color: 'blue' },
+                                  Buy: { label: '采购', color: 'green' },
+                                  Phantom: { label: '虚拟', color: 'orange' },
+                                  Outsource: { label: '委外', color: 'purple' },
+                                  Configure: { label: '配置', color: 'cyan' },
                                 }
                                 const info = typeMap[type] || { label: type || '未设置', color: 'default' }
                                 return <Tag color={info.color}>{info.label}</Tag>
                               },
                             },
                             {
-                              title: '验证状态',
-                              dataIndex: 'source_validation_passed',
-                              width: 100,
-                              render: (passed: boolean, record: DemandComputationItem) => {
-                                if (record.material_source_type) {
-                                  // 优先使用实时验证结果（打开详情时调用 validateMaterialSources）
-                                  const realTime = validationResults?.validation_results?.find(
-                                    (r: any) => r.material_id === record.material_id
-                                  )
-                                  const isPassed = realTime != null ? realTime.validation_passed : passed
-                                  return (
-                                    <Tag color={isPassed ? 'success' : 'error'}>
-                                      {isPassed ? '通过' : '失败'}
-                                    </Tag>
-                                  )
-                                }
-                                return <span>-</span>
+                              title: '交期要求',
+                              dataIndex: 'delivery_date',
+                              width: 160,
+                              render: (date: string, record: DemandComputationItem) => {
+                                const startDate = record.production_start_date || record.procurement_start_date
+                                const isRisk = record.is_overdue_risk
+                                return (
+                                  <div style={{ fontSize: 13 }}>
+                                    <div style={{ color: isRisk ? '#ff4d4f' : 'inherit', fontWeight: isRisk ? 'bold' : 'normal' }}>
+                                      {date || '-'}
+                                      {isRisk && <Tag color="error" style={{ marginLeft: 8, fontSize: 10 }}>交期风险</Tag>}
+                                    </div>
+                                    {startDate && (
+                                      <div style={{ fontSize: 11, color: '#999', marginTop: 2 }}>
+                                        计划开始: {startDate}
+                                      </div>
+                                    )}
+                                  </div>
+                                )
                               },
                             },
-                            { title: '需求数量', dataIndex: 'required_quantity', width: 100 },
-                            { title: '可用库存', dataIndex: 'available_inventory', width: 100 },
-                            { title: '净需求', dataIndex: 'net_requirement', width: 100 },
+                            { title: '需求数量', dataIndex: 'required_quantity', width: 90, align: 'right' },
+                            { title: '可用库存', dataIndex: 'available_inventory', width: 90, align: 'right' },
+                            { title: '净需求', dataIndex: 'net_requirement', width: 90, align: 'right', render: (v) => <span style={{ fontWeight: 'bold' }}>{v}</span> },
                             {
-                              title: '建议工单数量',
+                              title: '建议工单',
                               dataIndex: 'suggested_work_order_quantity',
-                              width: 120,
+                              width: 100,
+                              align: 'right',
                               render: (v: number, r: DemandComputationItem) =>
                                 r.material_source_type === 'Outsource' ? '-' : (v ?? '-'),
                             },
                             {
-                              title: '建议委外数量',
+                              title: '建议委外',
                               dataIndex: 'suggested_work_order_quantity',
-                              width: 120,
+                              width: 100,
+                              align: 'right',
                               render: (v: number, r: DemandComputationItem) =>
                                 r.material_source_type === 'Outsource' ? (v ?? '-') : '-',
                             },
                             {
-                              title: '建议采购数量',
+                              title: '建议采购',
                               dataIndex: 'suggested_purchase_order_quantity',
-                              width: 120,
+                              width: 100,
+                              align: 'right',
                             },
+                            {
+                              title: '溯源',
+                              dataIndex: 'id',
+                              width: 60,
+                              fixed: 'right',
+                              render: (_, record) => {
+                                const ids = record.detail_results?.demand_item_ids || []
+                                return (
+                                  <Button 
+                                    type="link" 
+                                    size="small" 
+                                    disabled={!ids.length}
+                                    onClick={() => {
+                                      modalApi.info({
+                                        title: '需求溯源',
+                                        content: (
+                                          <div>
+                                            <p>此物料需求由以下原始单据触发汇总：</p>
+                                            <ul style={{ maxHeight: 300, overflow: 'auto' }}>
+                                              {ids.map((id: number, idx: number) => (
+                                                <li key={idx}>原始需求明细 ID: {id}</li>
+                                              ))}
+                                            </ul>
+                                            <p style={{ color: '#999', fontSize: 12 }}>提示：完整溯源功能开发中，将支持点击跳转至对应订单。</p>
+                                          </div>
+                                        )
+                                      })
+                                    }}
+                                  >
+                                    溯源
+                                  </Button>
+                                )
+                              }
+                            }
                           ]}
                           pagination={false}
                           scroll={{ x: 1200 }}
@@ -1663,6 +1621,80 @@ const DemandComputationPage: React.FC = () => {
                     ]}
                     pagination={false}
                   />
+                ),
+              },
+              {
+                key: 'monitor',
+                label: (
+                  <Badge dot={dynamicMonitorData?.has_upstream_change || dynamicMonitorData?.has_downstream_risk}>
+                    协同监控
+                  </Badge>
+                ),
+                children: (
+                  <div style={{ padding: '16px 0' }}>
+                    {dynamicMonitorLoading ? (
+                      <div style={{ textAlign: 'center', padding: 40 }}>
+                        <SyncOutlined spin style={{ fontSize: 24, color: '#1890ff' }} />
+                        <div style={{ marginTop: 12, color: '#666' }}>正在分析协同状态...</div>
+                      </div>
+                    ) : dynamicMonitorData ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                        <DetailDrawerSection title="上游需求变动感应 (Upstream Change Detection)">
+                          {dynamicMonitorData.upstream_alerts.length > 0 ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                              {dynamicMonitorData.upstream_alerts.map((alert: any, i: number) => (
+                                <Alert
+                                  key={i}
+                                  message="原始需求已变更"
+                                  description={alert.message}
+                                  type="warning"
+                                  showIcon
+                                  action={
+                                    <Button size="small" type="primary" ghost onClick={() => handleRecompute(currentComputation)}>
+                                      重新计算
+                                    </Button>
+                                  }
+                                />
+                              ))}
+                            </div>
+                          ) : (
+                            <Empty description="源需求数据稳定，暂无变动" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                          )}
+                        </DetailDrawerSection>
+
+                        <DetailDrawerSection title="下游执行进度追踪 (Downstream Execution Tracking)">
+                          {dynamicMonitorData.downstream_alerts.length > 0 ? (
+                            <Timeline
+                              mode="left"
+                              items={dynamicMonitorData.downstream_alerts.map((alert: any, i: number) => ({
+                                key: i,
+                                label: alert.planned_end_date || alert.delivery_date,
+                                children: (
+                                  <div>
+                                    <div style={{ fontWeight: 'bold' }}>{alert.code} ({alert.name})</div>
+                                    <div style={{ color: '#ff4d4f', fontSize: 13 }}>{alert.message}</div>
+                                    <div style={{ fontSize: 12, color: '#999' }}>当前状态: {alert.status}</div>
+                                  </div>
+                                ),
+                                color: 'red',
+                                dot: <ClockCircleOutlined style={{ fontSize: '16px' }} />,
+                              }))}
+                            />
+                          ) : (
+                            <div style={{ textAlign: 'center', padding: '20px 0', color: '#52c41a' }}>
+                              <CheckCircleOutlined style={{ fontSize: 24, marginBottom: 8 }} />
+                              <div>所有下推单据均在计划时间内，执行正常</div>
+                            </div>
+                          )}
+                        </DetailDrawerSection>
+                        <div style={{ textAlign: 'right', color: '#ccc', fontSize: 12 }}>
+                          最近监控时间: {dayjs(dynamicMonitorData.monitor_time).format('YYYY-MM-DD HH:mm:ss')}
+                        </div>
+                      </div>
+                    ) : (
+                      <Empty description="暂无监控数据" />
+                    )}
+                  </div>
                 ),
               },
               {

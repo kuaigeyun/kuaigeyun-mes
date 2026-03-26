@@ -65,13 +65,18 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
 
     async def get_incoming_inspection_by_id(self, tenant_id: int, inspection_id: int) -> IncomingInspectionResponse:
         """根据ID获取来料检验单"""
-        from apps.kuaizhizao.services.document_lifecycle_service import get_incoming_inspection_lifecycle
+        from apps.kuaizhizao.services.document_lifecycle_service import (
+            get_incoming_inspection_lifecycle,
+            get_document_milestones
+        )
 
         inspection = await IncomingInspection.get_or_none(tenant_id=tenant_id, id=inspection_id)
         if not inspection:
             raise NotFoundError(f"来料检验单不存在: {inspection_id}")
+        
+        milestones = await get_document_milestones(tenant_id, "incoming_inspection", inspection_id)
         resp = IncomingInspectionResponse.model_validate(inspection)
-        return resp.model_copy(update={"lifecycle": get_incoming_inspection_lifecycle(inspection)})
+        return resp.model_copy(update={"lifecycle": get_incoming_inspection_lifecycle(inspection, milestones=milestones)})
 
     async def list_incoming_inspections(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> Dict[str, Any]:
         """获取来料检验单列表"""
@@ -144,7 +149,90 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             )
 
             updated_inspection = await self.get_incoming_inspection_by_id(tenant_id, inspection_id)
+            
+            # 如果合格，可以增加逻辑确保其可以正式入库（如果入库单是待入库状态）
+            if updated_inspection.quality_status == "合格" and updated_inspection.qualified_quantity > 0:
+                try:
+                    from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+                    receipt = await PurchaseReceipt.get_or_none(tenant_id=tenant_id, id=updated_inspection.purchase_receipt_id)
+                    if receipt and receipt.status == "待入库":
+                        logger.info(f"来料检验合格 -> 关联采购入库单 {receipt.receipt_code} 可执行确认")
+                except Exception as e:
+                    logger.warning(f"来料检验合格 -> 关联入库单处理失败: {e}")
+            
             return updated_inspection
+
+    async def push_to_purchase_return(self, tenant_id: int, inspection_id: int, created_by: int) -> dict:
+        """来料检验不合格 -> 一键生成采购退货单"""
+        async with in_transaction():
+            inspection = await self.get_incoming_inspection_by_id(tenant_id, inspection_id)
+            
+            if inspection.quality_status != '不合格':
+                raise BusinessLogicError("只有不合格的来料检验单才能下推采购退货单")
+            
+            if inspection.unqualified_quantity <= 0:
+                raise BusinessLogicError("不合格数量为0，无需退货")
+
+            from apps.kuaizhizao.services.warehouse_service import PurchaseReturnService
+            from apps.kuaizhizao.schemas.warehouse import PurchaseReturnCreate, PurchaseReturnItemCreate
+            
+            return_svc = PurchaseReturnService()
+            
+            # 生成采购退货单
+            return_data = PurchaseReturnCreate(
+                supplier_id=inspection.supplier_id,
+                supplier_name=inspection.supplier_name,
+                purchase_receipt_id=inspection.purchase_receipt_id,
+                purchase_receipt_code=inspection.purchase_receipt_code,
+                return_date=datetime.now().date(),
+                status="待退项",
+                notes=f"由来料检验单 {inspection.inspection_code} 不合格项自动生成"
+            )
+            
+            item_data = PurchaseReturnItemCreate(
+                material_id=inspection.material_id,
+                material_code=inspection.material_code,
+                material_name=inspection.material_name,
+                material_unit=inspection.material_unit or "个",
+                return_quantity=inspection.unqualified_quantity,
+                reason=inspection.nonconformance_reason or "质量检验不合格",
+                batch_number=getattr(inspection, "batch_number", None)
+            )
+            
+            ret_bill = await return_svc.create_purchase_return(
+                tenant_id=tenant_id,
+                return_data=return_data,
+                created_by=created_by,
+                items=[item_data]
+            )
+            
+            # 建立 质检 -> 采购退货单 的关联
+            try:
+                from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+                from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+                
+                rel_svc = DocumentRelationNewService()
+                await rel_svc.create_relation(
+                    tenant_id=tenant_id,
+                    relation_data=DocumentRelationCreate(
+                        source_type="incoming_inspection",
+                        source_id=inspection_id,
+                        source_code=inspection.inspection_code,
+                        source_name=None,
+                        target_type="purchase_return",
+                        target_id=ret_bill.id,
+                        target_code=ret_bill.return_code,
+                        target_name=None,
+                        relation_type="source",
+                        relation_mode="push",
+                        relation_desc="来料检验不合格生成采购退货单",
+                    ),
+                    created_by=created_by,
+                )
+            except Exception as rel_e:
+                logger.warning(f"建立质检->采购退货单关联失败: {rel_e}")
+
+            return {"return_id": ret_bill.id, "return_code": ret_bill.return_code}
 
     async def approve_inspection(self, tenant_id: int, inspection_id: int, approved_by: int, rejection_reason: Optional[str] = None) -> IncomingInspectionResponse:
         """审核检验单"""
@@ -505,13 +593,18 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
 
     async def get_process_inspection_by_id(self, tenant_id: int, inspection_id: int) -> ProcessInspectionResponse:
         """根据ID获取过程检验单"""
-        from apps.kuaizhizao.services.document_lifecycle_service import get_process_inspection_lifecycle
+        from apps.kuaizhizao.services.document_lifecycle_service import (
+            get_process_inspection_lifecycle,
+            get_document_milestones
+        )
 
         inspection = await ProcessInspection.get_or_none(tenant_id=tenant_id, id=inspection_id)
         if not inspection:
             raise NotFoundError(f"过程检验单不存在: {inspection_id}")
+        
+        milestones = await get_document_milestones(tenant_id, "process_inspection", inspection_id)
         resp = ProcessInspectionResponse.model_validate(inspection)
-        return resp.model_copy(update={"lifecycle": get_process_inspection_lifecycle(inspection)})
+        return resp.model_copy(update={"lifecycle": get_process_inspection_lifecycle(inspection, milestones=milestones)})
 
     async def list_process_inspections(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[ProcessInspectionListResponse]:
         """获取过程检验单列表"""
@@ -924,13 +1017,18 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
 
     async def get_finished_goods_inspection_by_id(self, tenant_id: int, inspection_id: int) -> FinishedGoodsInspectionResponse:
         """根据ID获取成品检验单"""
-        from apps.kuaizhizao.services.document_lifecycle_service import get_finished_goods_inspection_lifecycle
+        from apps.kuaizhizao.services.document_lifecycle_service import (
+            get_finished_goods_inspection_lifecycle,
+            get_document_milestones
+        )
 
         inspection = await FinishedGoodsInspection.get_or_none(tenant_id=tenant_id, id=inspection_id)
         if not inspection:
             raise NotFoundError(f"成品检验单不存在: {inspection_id}")
+        
+        milestones = await get_document_milestones(tenant_id, "finished_goods_inspection", inspection_id)
         resp = FinishedGoodsInspectionResponse.model_validate(inspection)
-        return resp.model_copy(update={"lifecycle": get_finished_goods_inspection_lifecycle(inspection)})
+        return resp.model_copy(update={"lifecycle": get_finished_goods_inspection_lifecycle(inspection, milestones=milestones)})
 
     async def list_finished_goods_inspections(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[FinishedGoodsInspectionListResponse]:
         """获取成品检验单列表"""
@@ -1028,14 +1126,113 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 updated_by=issued_by
             )
 
+            # 自动推送至成品入库（待审核/待入库状态）
+            try:
+                if inspection.qualified_quantity > 0:
+                    from apps.kuaizhizao.services.warehouse_service import FinishedGoodsReceiptService
+                    from apps.kuaizhizao.schemas.warehouse import FinishedGoodsReceiptCreate, FinishedGoodsReceiptItemCreate
+                    
+                    wh_svc = FinishedGoodsReceiptService()
+                    # 尝试从工单获取默认信息
+                    receipt_data = FinishedGoodsReceiptCreate(
+                        work_order_id=inspection.work_order_id,
+                        work_order_code=inspection.work_order_code,
+                        sales_order_id=inspection.sales_order_id,
+                        sales_order_code=inspection.sales_order_code,
+                        warehouse_id=None, # 默认由入库服务处理或前端指定
+                        receipt_time=datetime.now(),
+                        status="待入库",
+                        notes=f"由成品检验单 {inspection.inspection_code} 合格放行自动生成",
+                    )
+                    
+                    item_data = FinishedGoodsReceiptItemCreate(
+                        material_id=inspection.material_id,
+                        material_code=inspection.material_code,
+                        material_name=inspection.material_name,
+                        material_unit="个", # TODO: 从主数据获取
+                        receipt_quantity=inspection.qualified_quantity,
+                        qualified_quantity=inspection.qualified_quantity,
+                        unqualified_quantity=0,
+                        batch_number=inspection.batch_number,
+                        quality_inspection_id=inspection.id,
+                        quality_status="合格"
+                    )
+                    
+                    await wh_svc.create_finished_goods_receipt(
+                        tenant_id=tenant_id,
+                        receipt_data=receipt_data,
+                        created_by=issued_by,
+                        items=[item_data]
+                    )
+                    logger.info(f"成品检验合格 -> 自动生成成品入库单成功: {inspection.inspection_code}")
+            except Exception as e:
+                logger.warning(f"成品检验合格 -> 自动生成成品入库单失败: {e}")
+
             updated_inspection = await self.get_finished_goods_inspection_by_id(tenant_id, inspection_id)
-            
-            # 检验结果处理：合格数量允许入库，不良数量不允许入库
-            # 这里可以触发入库流程，但只允许合格数量入库
-            if qualified_quantity > 0:
-                logger.info(f"成品检验完成，合格数量{qualified_quantity}允许入库，不合格数量{unqualified_quantity}不允许入库")
-            
             return updated_inspection
+
+    async def push_to_rework(self, tenant_id: int, inspection_id: int, created_by: int) -> dict:
+        """成品检验不合格 -> 一键生成返工单"""
+        async with in_transaction():
+            inspection = await self.get_finished_goods_inspection_by_id(tenant_id, inspection_id)
+            
+            if inspection.quality_status != '不合格':
+                raise BusinessLogicError("只有不合格的成品检验单才能下推返工单")
+            
+            if inspection.unqualified_quantity <= 0:
+                raise BusinessLogicError("不合格数量为0，无需返工")
+
+            from apps.kuaizhizao.services.rework_order_service import ReworkOrderService
+            from apps.kuaizhizao.schemas.rework_order import ReworkOrderCreate
+            
+            rework_svc = ReworkOrderService()
+            
+            # 生成返工单
+            rework_data = ReworkOrderCreate(
+                original_work_order_id=inspection.work_order_id,
+                original_work_order_uuid=None, 
+                product_id=inspection.material_id,
+                product_code=inspection.material_code,
+                product_name=inspection.material_name,
+                quantity=inspection.unqualified_quantity,
+                rework_reason=inspection.nonconformance_reason or "质量检验不合格",
+                rework_type="internal",
+                remarks=f"由成品检验单 {inspection.inspection_code} 不合格项自动生成"
+            )
+            
+            rework_order = await rework_svc.create_rework_order(
+                tenant_id=tenant_id,
+                rework_order_data=rework_data,
+                created_by=created_by
+            )
+            
+            # 建立 质检 -> 返工单 的关联
+            try:
+                from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+                from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+                
+                rel_svc = DocumentRelationNewService()
+                await rel_svc.create_relation(
+                    tenant_id=tenant_id,
+                    relation_data=DocumentRelationCreate(
+                        source_type="finished_goods_inspection",
+                        source_id=inspection_id,
+                        source_code=inspection.inspection_code,
+                        source_name=None,
+                        target_type="rework_order",
+                        target_id=rework_order.id,
+                        target_code=rework_order.code,
+                        target_name=None,
+                        relation_type="source",
+                        relation_mode="push",
+                        relation_desc="成品检验不合格生成返工单",
+                    ),
+                    created_by=created_by,
+                )
+            except Exception as rel_e:
+                logger.warning(f"建立质检->返工单关联失败: {rel_e}")
+
+            return {"rework_order_id": rework_order.id, "rework_order_code": rework_order.code}
 
     async def create_inspection_from_work_order(
         self,

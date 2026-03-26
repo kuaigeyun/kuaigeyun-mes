@@ -9,6 +9,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { Card, Tabs, Progress, Statistic, Table, Tag, Space, Button, Typography, Alert, List, Divider } from 'antd';
 import { CheckCircleOutlined, ClockCircleOutlined, ExclamationCircleOutlined, FileTextOutlined, ReloadOutlined } from '@ant-design/icons';
 import { App } from 'antd';
@@ -22,6 +23,7 @@ const { Title, Paragraph, Text } = Typography;
  */
 const LaunchProgressPage: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [progressTracking, setProgressTracking] = useState<ProgressTracking | null>(null);
@@ -224,6 +226,24 @@ const LaunchProgressPage: React.FC = () => {
       dataIndex: 'check_time',
       key: 'check_time',
       render: (text: string) => text || '-',
+    },
+    {
+      title: t('common.action') || '操作',
+      key: 'action',
+      render: (_: any, record: ChecklistItem) => {
+        if (record.check_status !== 'passed' && record.action_url) {
+          return (
+            <Button 
+              type="primary" 
+              size="small" 
+              onClick={() => navigate(record.action_url!)}
+            >
+              {record.action_label || '去配置'}
+            </Button>
+          );
+        }
+        return '-';
+      },
     },
   ];
 

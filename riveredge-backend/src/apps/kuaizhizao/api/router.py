@@ -40,6 +40,8 @@ from .molds.molds import router as molds_router
 from .tools.tools import router as tools_router
 from .equipment_status.equipment_status import router as equipment_status_router
 from .maintenance_reminders.maintenance_reminders import router as maintenance_reminders_router
+from .equipment_inspections.equipment_inspections import router as equipment_inspections_router
+from .equipment_inspections.spare_parts import router as spare_parts_router
 
 # 成本核算路由已迁移至 kuaicaiwu
 
@@ -86,6 +88,8 @@ router.include_router(molds_router)
 router.include_router(tools_router)
 router.include_router(equipment_status_router)
 router.include_router(maintenance_reminders_router)
+router.include_router(equipment_inspections_router)
+router.include_router(spare_parts_router)
 
 # 注册期初数据导入路由
 router.include_router(initial_data_router)

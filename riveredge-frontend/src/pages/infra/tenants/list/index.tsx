@@ -27,7 +27,7 @@ import {
   deactivateTenant,
   deleteTenantBySuperAdmin,
 } from '../../../../services/tenant';
-import { getInitConfig, type InitItem } from '../../../../services/tenantInit';
+import { getInitConfig, getIndustryPresets, type InitItem, type IndustryPreset } from '../../../../services/tenantInit';
 // 使用 apiRequest 统一处理 HTTP 请求
 
 // @ts-ignore
@@ -70,6 +70,7 @@ const SuperAdminTenantList: React.FC = () => {
   const [packageConfigs, setPackageConfigs] = useState<Record<string, PackageConfig>>({});
   const [selectedPlan, setSelectedPlan] = useState<TenantPlan>(TenantPlan.TRIAL);
   const [initOptionalItems, setInitOptionalItems] = useState<InitItem[]>([]);
+  const [industryPresets, setIndustryPresets] = useState<IndustryPreset[]>([]);
   
   /**
    * 审核通过组织注册
@@ -676,6 +677,12 @@ const SuperAdminTenantList: React.FC = () => {
           });
         })
         .catch(() => setInitOptionalItems([]));
+        
+      getIndustryPresets()
+        .then((res) => {
+          setIndustryPresets(res || []);
+        })
+        .catch(() => setIndustryPresets([]));
     }
   }, [modalVisible, isEdit]);
 
@@ -723,6 +730,7 @@ const SuperAdminTenantList: React.FC = () => {
           plan: values.plan || TenantPlan.TRIAL,
           settings: values.settings || {},
           expires_at: values.expires_at,
+          industry_preset: values.industry_preset || null,
           init_data_options: values.init_data_options,
         };
         await apiRequest<Tenant>('/infra/tenants', {
@@ -1356,20 +1364,42 @@ const SuperAdminTenantList: React.FC = () => {
           placeholder={t('pages.infra.tenant.formExpiresAtPlaceholder')}
           colProps={{ span: 12 }}
         />
-        {!isEdit && initOptionalItems.length > 0 && (
+        {!isEdit && (
           <ProFormGroup
-            title={t('pages.infra.tenant.initDataOptions')}
+            title="数据初始化配置"
             colProps={{ span: 24 }}
-            extra={t('pages.infra.tenant.initDataOptionsExtra')}
           >
-            <ProFormCheckbox.Group
-              name="init_data_options"
-              options={initOptionalItems.map((i) => ({
-                label: `${i.name}：${i.description}`,
-                value: i.key,
-              }))}
-              colProps={{ span: 24 }}
-            />
+            {industryPresets.length > 0 && (
+              <ProFormSelect
+                name="industry_preset"
+                label="行业预设 (一键建账)"
+                placeholder="请选择行业预设模板"
+                colProps={{ span: 24 }}
+                options={[
+                  ...industryPresets.map(p => ({
+                    label: `${p.name} - ${p.description}`,
+                    value: p.code,
+                  }))
+                ]}
+                fieldProps={{
+                  allowClear: true,
+                }}
+                extra="选择行业预设后，将自动忽略下方勾选的个别模块，直接装载该行业的完整数据包。"
+              />
+            )}
+            
+            {initOptionalItems.length > 0 && (
+              <ProFormCheckbox.Group
+                name="init_data_options"
+                label={t('pages.infra.tenant.initDataOptions')}
+                options={initOptionalItems.map((i) => ({
+                  label: `${i.name}：${i.description}`,
+                  value: i.key,
+                }))}
+                colProps={{ span: 24 }}
+                extra={t('pages.infra.tenant.initDataOptionsExtra')}
+              />
+            )}
           </ProFormGroup>
         )}
     </FormModalTemplate>

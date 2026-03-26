@@ -23,6 +23,9 @@ import { MaterialBomIndicator } from '../../../components/MaterialBomIndicator';
 import { SalesOrderIndicatorsProvider } from '../../../components/SalesOrderIndicatorsProvider';
 import SalesOrderGanttChart from '../../../components/SalesOrderGanttChart';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { SalesOrderTrackingRadar } from './components/SalesOrderTrackingRadar';
+import { AgileQuotingDrawer } from './components/AgileQuotingDrawer';
+import { CalculatorOutlined } from '@ant-design/icons';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { getSalesOrderLifecycle } from '../../../utils/salesOrderLifecycle';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
@@ -197,6 +200,11 @@ const SalesOrdersPage: React.FC = () => {
   /** 发货方式字典选项（数据字典 SHIPPING_METHOD） */
   const [shippingMethodOptions, setShippingMethodOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [shippingMethodLoading, setShippingMethodLoading] = useState(false);
+
+  // 敏捷核价相关状态
+  const [quoteDrawerVisible, setQuoteDrawerVisible] = useState(false);
+  const [quoteMaterialId, setQuoteMaterialId] = useState<number | undefined>(undefined);
+  const [activeItemIndex, setActiveItemIndex] = useState<number | null>(null);
   /** 付款条件字典选项（数据字典 PAYMENT_TERMS） */
   const [paymentTermsOptions, setPaymentTermsOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [paymentTermsLoading, setPaymentTermsLoading] = useState(false);
@@ -1301,7 +1309,7 @@ const SalesOrdersPage: React.FC = () => {
     // 明细表格视图以每行订单明细为展示维度，纯查看用途，不提供操作按钮
   ];
 
-  const columns = dataViewMode === 'detail' ? detailColumns : orderColumns;
+  const columns = (dataViewMode === 'detail' ? detailColumns : orderColumns) as any[];
 
   const handleDeleteResolved = dataViewMode === 'order'
     ? async (keys: React.Key[]) => {
@@ -2216,11 +2224,36 @@ const SalesOrdersPage: React.FC = () => {
                     {
                       title: t('app.kuaizhizao.salesOrder.unitPrice'),
                       dataIndex: 'unit_price',
-                      width: 100,
+                      width: 140,
                       align: 'right' as const,
                       render: (_: any, __: any, index: number) => (
-                        <AntForm.Item name={[index, 'unit_price']} style={{ margin: 0 }}>
-                          <InputNumber placeholder={t('app.kuaizhizao.salesOrder.unitPricePlaceholder')} min={0} precision={2} prefix="¥" style={{ width: '100%' }} size="small" />
+                        <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id}>
+                          {({ getFieldValue }: any) => {
+                            const materialId = getFieldValue(['items', index, 'material_id']);
+                            return (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <AntForm.Item name={[index, 'unit_price']} style={{ margin: 0, flex: 1 }}>
+                                  <InputNumber placeholder={t('app.kuaizhizao.salesOrder.unitPricePlaceholder')} min={0} precision={2} prefix="¥" style={{ width: '100%' }} size="small" />
+                                </AntForm.Item>
+                                <Tooltip title="敏捷核价">
+                                  <Button 
+                                    size="small" 
+                                    type="text" 
+                                    icon={<CalculatorOutlined style={{ color: materialId ? '#1890ff' : '#ccc' }} />} 
+                                    onClick={() => {
+                                      if (materialId) {
+                                        setQuoteMaterialId(materialId);
+                                        setActiveItemIndex(index);
+                                        setQuoteDrawerVisible(true);
+                                      } else {
+                                        messageApi.warning('请先选择物料');
+                                      }
+                                    }}
+                                  />
+                                </Tooltip>
+                              </div>
+                            );
+                          }}
                         </AntForm.Item>
                       ),
                     },
@@ -2742,6 +2775,13 @@ const SalesOrdersPage: React.FC = () => {
               ]}
             />
 
+            {/* 360度全息跟踪视图 */}
+            {currentSalesOrder.id && (
+              <div style={{ marginTop: 24, marginBottom: 24 }}>
+                <SalesOrderTrackingRadar salesOrderId={currentSalesOrder.id} />
+              </div>
+            )}
+
             {/* 生命周期状态（与需求管理统一布局） */}
             {(() => {
               const lifecycle = getSalesOrderLifecycle(currentSalesOrder);
@@ -2842,6 +2882,23 @@ const SalesOrdersPage: React.FC = () => {
         onClose={() => setSyncModalVisible(false)}
         onConfirm={handleSyncConfirm}
         title={t('app.kuaizhizao.salesOrder.syncFromDataset')}
+      />
+
+      <AgileQuotingDrawer
+        visible={quoteDrawerVisible}
+        materialId={quoteMaterialId}
+        onClose={() => setQuoteDrawerVisible(false)}
+        onAdopt={(price) => {
+          if (activeItemIndex !== null) {
+            const items = formRef.current?.getFieldValue('items') ?? [];
+            const next = [...items];
+            if (next[activeItemIndex]) {
+              next[activeItemIndex] = { ...next[activeItemIndex], unit_price: price };
+              formRef.current?.setFieldsValue({ items: next });
+              messageApi.success('已采纳建议报价');
+            }
+          }
+        }}
       />
 
       {/* 提醒弹窗 */}

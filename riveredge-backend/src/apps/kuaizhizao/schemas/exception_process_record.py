@@ -26,6 +26,8 @@ class ExceptionProcessRecordBase(BaseModel):
     current_step: str = Field("detected", description="当前步骤")
     assigned_to: Optional[int] = Field(None, description="分配给（用户ID）")
     assigned_to_name: Optional[str] = Field(None, description="分配给（用户名）")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    lifecycle: Optional[Dict[str, Any]] = Field(None, description="通用生命周期")
     assigned_at: Optional[datetime] = Field(None, description="分配时间")
     process_config: Optional[Dict[str, Any]] = Field(None, description="流程配置（JSON格式）")
     started_at: Optional[datetime] = Field(None, description="开始时间")

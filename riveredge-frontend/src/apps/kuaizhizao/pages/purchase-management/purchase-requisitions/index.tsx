@@ -5,8 +5,8 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Card, Table, Form as AntForm, Input, InputNumber, Select, Dropdown, Row, Col, Checkbox } from 'antd';
-import { EyeOutlined, SendOutlined, SwapOutlined, ThunderboltOutlined, MoreOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, Table, Form as AntForm, Input, InputNumber, Select, Dropdown, Row, Col, Checkbox } from 'antd';
+import { EyeOutlined, SwapOutlined, ThunderboltOutlined, MoreOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerActions, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
@@ -33,6 +33,7 @@ import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
 import { ROUTES } from '../../../constants/routes';
+import { PriceHistoryInsight, SupplierPerformanceTag, MultiSupplierPriceComparison } from '../purchase-orders/ProcurementEmpowermentComponents';
 
 const PurchaseRequisitionsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -270,21 +271,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
     }
   };
 
-  const handleSubmit = async (record: PurchaseRequisition) => {
-    modalApi.confirm({
-      title: '提交采购申请',
-      content: `确定要提交采购申请 ${record.requisition_code} 吗？`,
-      onOk: async () => {
-        try {
-          await submitPurchaseRequisition(record.id!);
-          messageApi.success('提交成功');
-          actionRef.current?.reload();
-        } catch (e: any) {
-          messageApi.error(e?.response?.data?.detail || '提交失败');
-        }
-      },
-    });
-  };
+  // handleSubmit removed as it is redundant with UniWorkflowActions
 
   const convertFormRef = React.useRef<{
     selectedIds: number[];
@@ -424,15 +411,15 @@ const PurchaseRequisitionsPage: React.FC = () => {
     modalApi.confirm({
       title: '紧急采购',
       content: (
-        <Form layout="vertical">
-          <Form.Item label="紧急原因" required>
+        <AntForm layout="vertical">
+          <AntForm.Item label="紧急原因" required>
             <Input.TextArea
               rows={3}
               placeholder="请输入紧急原因（如：客户加急、设备故障补件）"
               onChange={(e) => (reason = e.target.value)}
             />
-          </Form.Item>
-        </Form>
+          </AntForm.Item>
+        </AntForm>
       ),
       onOk: async () => {
         if (!reason?.trim()) {
@@ -635,11 +622,22 @@ const PurchaseRequisitionsPage: React.FC = () => {
                   {
                     title: '建议单价',
                     dataIndex: 'suggested_unit_price',
-                    width: 100,
+                    width: 130,
                     align: 'right' as const,
                     render: (_: any, __: any, index: number) => (
-                      <AntForm.Item name={[index, 'suggested_unit_price']} style={{ margin: 0 }}>
-                        <InputNumber placeholder="0" min={0} precision={2} style={{ width: '100%' }} size="small" />
+                      <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id}>
+                        {({ getFieldValue }: any) => {
+                          const materialId = getFieldValue(['items', index, 'material_id']);
+                          const price = getFieldValue(['items', index, 'suggested_unit_price']);
+                          return (
+                            <Space size={4}>
+                              <AntForm.Item name={[index, 'suggested_unit_price']} style={{ margin: 0 }}>
+                                <InputNumber placeholder="0" min={0} precision={2} style={{ width: 80 }} size="small" />
+                              </AntForm.Item>
+                              {materialId && <PriceHistoryInsight materialId={materialId} currentPrice={price} />}
+                            </Space>
+                          );
+                        }}
                       </AntForm.Item>
                     ),
                   },
@@ -797,8 +795,19 @@ const PurchaseRequisitionsPage: React.FC = () => {
                   { title: '物料编码', dataIndex: 'material_code', width: 120 },
                   { title: '物料名称', dataIndex: 'material_name', width: 150 },
                   { title: '数量', dataIndex: 'quantity', width: 90, align: 'right' },
-                  { title: '单位', dataIndex: 'unit', width: 60 },
-                  { title: '建议单价', dataIndex: 'suggested_unit_price', width: 100, align: 'right' },
+                   { title: '单位', dataIndex: 'unit', width: 60 },
+                  { 
+                    title: '建议单价', 
+                    dataIndex: 'suggested_unit_price', 
+                    width: 130, 
+                    align: 'right',
+                    render: (v, record) => (
+                      <Space size={4}>
+                        ¥{Number(v || 0).toFixed(2)}
+                        {record.material_id && <PriceHistoryInsight materialId={record.material_id} currentPrice={v} />}
+                      </Space>
+                    )
+                  },
                   { title: '要求到货日期', dataIndex: 'required_date', width: 120 },
                   {
                     title: '已转单',
@@ -878,7 +887,7 @@ const ConvertForm: React.FC<{
 
   const hasBatchTargetRows = selected.some((id) => {
     const i = items.find((x) => x.id === id);
-    return i != null && !i.purchase_order_id && unconvertedIds.includes(i.id);
+    return i != null && i.id != null && !i.purchase_order_id && unconvertedIds.includes(i.id);
   });
 
   useEffect(() => {
@@ -886,9 +895,11 @@ const ConvertForm: React.FC<{
     formRef.current.itemQuantities = quantities;
     formRef.current.itemSuppliers = rowSuppliers;
     formRef.current.persistDefaultSupplier = persistDefault;
-    const head = selected.length ? rowSuppliers[selected[0]] : batchSupplierId;
-    formRef.current.supplierId = head || batchSupplierId || 0;
-    formRef.current.supplierName = suppliers.find((x) => x.id === (head || batchSupplierId))?.name || '';
+    const firstSelectedId = selected[0];
+    const head = firstSelectedId ? rowSuppliers[firstSelectedId] : batchSupplierId;
+    const currentSupplierId = (head || batchSupplierId || 0) as number;
+    formRef.current.supplierId = currentSupplierId;
+    formRef.current.supplierName = suppliers.find((x) => x.id === currentSupplierId)?.name || '';
   }, [selected, quantities, rowSuppliers, persistDefault, batchSupplierId, suppliers, formRef]);
 
   const supplierOptions = suppliers.map((s) => ({
@@ -935,19 +946,40 @@ const ConvertForm: React.FC<{
           { title: '物料名称', dataIndex: 'material_name', width: 160 },
           {
             title: '供应商',
-            width: 240,
+            width: 320,
             render: (_: unknown, record: PurchaseRequisitionItem) =>
               record.id != null && !record.purchase_order_id ? (
-                <Select
-                  style={{ width: '100%' }}
-                  placeholder="选择供应商"
-                  value={rowSuppliers[record.id] || undefined}
-                  onChange={(v: number) => setRowSuppliers((prev) => ({ ...prev, [record.id!]: v }))}
-                  options={supplierOptions}
-                />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <Select
+                    style={{ width: '100%' }}
+                    placeholder="选择供应商"
+                    value={rowSuppliers[record.id] || undefined}
+                    onChange={(v: number) => setRowSuppliers((prev) => ({ ...prev, [record.id!]: v }))}
+                    options={supplierOptions}
+                    showSearch
+                    optionFilterProp="label"
+                  />
+                  {rowSuppliers[record.id] && (
+                    <div style={{ transform: 'scale(0.85)', transformOrigin: 'left' }}>
+                      <SupplierPerformanceTag supplierId={rowSuppliers[record.id]} />
+                    </div>
+                  )}
+                </div>
               ) : record.purchase_order_id ? (
                 '-'
               ) : null,
+          },
+          { 
+            title: '比价助手', 
+            width: 100, 
+            align: 'center',
+            render: (_: unknown, record: PurchaseRequisitionItem) => 
+              record.id != null && record.material_id ? (
+                <MultiSupplierPriceComparison 
+                  materialId={record.material_id} 
+                  onSelectSupplier={(sid) => setRowSuppliers((prev) => ({ ...prev, [record.id!]: sid }))}
+                />
+              ) : '-'
           },
           { title: '需求数量', dataIndex: 'quantity', width: 88, align: 'right', render: (v: any) => Number(v ?? 0) },
           {

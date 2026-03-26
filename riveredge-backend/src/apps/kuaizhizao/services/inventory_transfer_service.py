@@ -141,11 +141,12 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
         ).order_by('id')
 
         # 构建响应
-        from apps.kuaizhizao.services.document_lifecycle_service import get_inventory_transfer_lifecycle
+        from apps.kuaizhizao.services.document_lifecycle_service import get_inventory_transfer_lifecycle, get_document_milestones
+        milestones = await get_document_milestones(transfer.tenant_id, "inventory_transfer", transfer.id)
 
         response = InventoryTransferWithItemsResponse.model_validate(transfer)
         response.items = [InventoryTransferItemResponse.model_validate(item) for item in items]
-        response.lifecycle = get_inventory_transfer_lifecycle(transfer)
+        response.lifecycle = get_inventory_transfer_lifecycle(transfer, milestones=milestones)
 
         return response
 

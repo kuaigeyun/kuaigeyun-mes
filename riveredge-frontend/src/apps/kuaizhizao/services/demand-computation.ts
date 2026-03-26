@@ -73,6 +73,10 @@ export interface DemandComputationItem {
   material_source_config?: Record<string, any>;
   source_validation_passed?: boolean;
   source_validation_errors?: string[];
+  // 计划员赋能增强字段
+  readiness_status?: 'Ready' | 'Partial' | 'Shortage';
+  readiness_rate?: number;
+  is_overdue_risk?: boolean;
 }
 
 /**
@@ -112,6 +116,8 @@ export interface DemandComputationStatistics {
   lrp_count: number;
   pending_count: number;
   completed_count: number;
+  /** 物料就绪或交期风险计数 */
+  risk_count?: number;
 }
 
 /** 获取需求计算统计 */
@@ -148,6 +154,39 @@ export async function getDemandComputation(id: number, includeItems: boolean = t
   return apiRequest<DemandComputation>(`/apps/kuaizhizao/demand-computations/${id}`, {
     method: 'GET',
     params: { include_items: includeItems },
+  });
+}
+
+/**
+ * 获取需求计算的动态变动监控
+ */
+export async function getComputationDynamicMonitor(id: number): Promise<{
+  computation_id: number;
+  computation_code: string;
+  has_upstream_change: boolean;
+  has_downstream_risk: boolean;
+  upstream_alerts: Array<{
+    type: string;
+    id: number;
+    code: string;
+    name: string;
+    updated_at: string;
+    message: string;
+  }>;
+  downstream_alerts: Array<{
+    type: string;
+    id: number;
+    code: string;
+    name: string;
+    planned_end_date?: string;
+    delivery_date?: string;
+    status: string;
+    message: string;
+  }>;
+  monitor_time: string;
+}> {
+  return apiRequest(`/apps/kuaizhizao/demand-computations/${id}/dynamic-monitor`, {
+    method: 'GET',
   });
 }
 

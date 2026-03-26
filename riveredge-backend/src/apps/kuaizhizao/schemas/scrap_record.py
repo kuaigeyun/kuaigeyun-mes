@@ -8,7 +8,7 @@ Date: 2025-01-04
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field, ConfigDict
 from decimal import Decimal
 
@@ -103,6 +103,7 @@ class ScrapRecordResponse(ScrapRecordBase):
     updated_by_name: Optional[str] = Field(None, description="更新人姓名")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    lifecycle: Optional[Dict[str, Any]] = Field(None, description="通用生命周期")
 
 
 class ScrapRecordListResponse(BaseModel):

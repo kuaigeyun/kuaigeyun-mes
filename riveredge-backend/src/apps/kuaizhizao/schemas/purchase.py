@@ -24,7 +24,7 @@ class PurchaseOrderBase(BaseSchema):
     """采购订单基础Schema"""
     model_config = ConfigDict(from_attributes=True)
 
-    order_code: str = Field(..., max_length=50, description="订单编码")
+    order_code: Optional[str] = Field(None, max_length=50, description="订单编码")
     supplier_id: int = Field(..., description="供应商ID")
     supplier_name: str = Field(..., max_length=200, description="供应商名称")
     supplier_contact: Optional[str] = Field(None, max_length=100, description="供应商联系人")
@@ -57,6 +57,7 @@ class PurchaseOrderUpdate(PurchaseOrderBase):
     order_code: Optional[str] = Field(None, max_length=50, description="订单编码")
     items: Optional[List["PurchaseOrderItemUpdate"]] = Field(None, description="订单明细")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
+    change_reason: Optional[str] = Field(None, description="变更原因（当已审核/确认后变更时必填）")
 
 
 class PurchaseOrderResponse(PurchaseOrderBase):
@@ -120,33 +121,130 @@ class PurchaseOrderItemResponse(PurchaseOrderItemBase):
     """采购订单明细响应Schema"""
     id: int = Field(..., description="明细ID")
     order_id: int = Field(..., description="订单ID")
-    tenant_id: int = Field(..., description="租户ID")
-    created_at: datetime = Field(..., description="创建时间")
-    updated_at: datetime = Field(..., description="更新时间")
+    # V2 落地成本增强
+    landing_cost: Decimal = Field(default=Decimal(0), description="落地成本")
+    additional_fees_details: Optional[List[dict]] = Field(None, description="费用明细")
 
 
-# === 审核相关Schema ===
-class PurchaseOrderApprove(BaseSchema):
-    """采购订单审核Schema"""
-    approved: bool = Field(..., description="是否审核通过")
-    review_remarks: Optional[str] = Field(None, description="审核备注")
+# === 扩展响应 ===
+class MaterialPriceHistory(BaseModel):
+    """物料价格历史"""
+    order_code: str
+    order_date: date
+    supplier_name: str
+    unit_price: Decimal
+    currency: str
 
 
-class PurchaseOrderConfirm(BaseSchema):
-    """采购订单确认Schema"""
-    confirm_remarks: Optional[str] = Field(None, description="确认备注")
+class MaterialPriceHistoryResponse(BaseModel):
+    """物料价格历史响应"""
+    material_id: int
+    history: List[MaterialPriceHistory]
 
 
-# === 查询相关Schema ===
-class PurchaseOrderListParams(BaseSchema):
-    """采购订单列表查询参数"""
-    skip: Optional[int] = Field(0, ge=0, description="跳过数量")
-    limit: Optional[int] = Field(20, ge=1, le=100, description="返回数量")
-    supplier_id: Optional[int] = Field(None, description="供应商ID")
-    status: Optional[str] = Field(None, description="订单状态")
-    review_status: Optional[str] = Field(None, description="审核状态")
-    order_date_from: Optional[date] = Field(None, description="订单日期从")
-    order_date_to: Optional[date] = Field(None, description="订单日期到")
-    delivery_date_from: Optional[date] = Field(None, description="到货日期从")
-    delivery_date_to: Optional[date] = Field(None, description="到货日期到")
-    keyword: Optional[str] = Field(None, description="关键词搜索")
+class PurchaseTrackingEvent(BaseModel):
+    """采购追踪事件"""
+    event_time: datetime
+    event_type: str
+    description: str
+    operator: Optional[str] = None
+
+
+class PurchaseTrackingResponse(BaseModel):
+    """采购追踪响应"""
+    order_id: int
+    order_code: str
+    status: str
+    events: List[PurchaseTrackingEvent]
+
+
+class SupplierPerformanceResponse(BaseModel):
+    """供应商绩效响应"""
+    supplier_id: int
+    supplier_name: str
+    on_time_delivery_rate: float
+    quality_pass_rate: float
+    average_lead_time_days: float
+    reliability_rating: str  # S/A/B/C
+
+
+# === V2 增强：比价与分摊 ===
+class PriceComparisonItem(BaseModel):
+    """比价条目"""
+    supplier_id: int
+    supplier_name: str
+    last_price: Decimal
+    last_order_date: Optional[date]
+    reliability_rating: str
+    delivery_lead_time: int  # Days
+
+
+class MaterialPriceComparison(BaseModel):
+    """物料比价汇总"""
+    material_id: int
+    material_name: str
+    comparison: List[PriceComparisonItem]
+
+
+class PriceComparisonResponse(BaseModel):
+    """多物料比价响应"""
+    results: List[MaterialPriceComparison]
+
+
+class LandingCostFeeItem(BaseModel):
+    name: str = Field(..., description="费用名称（如：运费、关税）")
+    amount: Decimal = Field(..., description="金额")
+
+
+class LandingCostAllocationRequest(BaseModel):
+    fee_items: List[LandingCostFeeItem] = Field(..., description="待分摊杂费列表")
+    method: str = Field("by_value", description="分摊方式：by_value, by_quantity, by_weight, by_volume")
+
+
+class PurchaseOrderChangeResponse(BaseModel):
+    id: int
+    order_id: int
+    change_type: str
+    field_name: str
+    old_value: Optional[str]
+    new_value: Optional[str]
+    reason: Optional[str]
+    operator_id: Optional[int]
+    operator_name: Optional[str]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# === 其他请求 ===
+class PurchaseOrderApprove(BaseModel):
+    approved: bool
+    review_remarks: Optional[str] = None
+
+
+class PurchaseOrderConfirm(BaseModel):
+    confirm_remarks: Optional[str] = None
+
+
+class PurchaseOrderListParams(BaseModel):
+    supplier_id: Optional[int] = None
+    status: Optional[str] = None
+    review_status: Optional[str] = None
+    order_date_from: Optional[date] = None
+    order_date_to: Optional[date] = None
+    delivery_date_from: Optional[date] = None
+    delivery_date_to: Optional[date] = None
+    keyword: Optional[str] = None
+    skip: int = 0
+    limit: int = 20
+
+
+class ExpediteRequest(BaseModel):
+    reason: str
+    expected_delivery_date: date
+
+
+class ExpediteResponse(BaseModel):
+    success: bool
+    message: str

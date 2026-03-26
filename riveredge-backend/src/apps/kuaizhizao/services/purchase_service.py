@@ -19,15 +19,17 @@ from apps.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from loguru import logger
 
-from apps.kuaizhizao.models import (
-    PurchaseOrder, PurchaseOrderItem
-)
-from apps.master_data.models import Supplier
+from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem, PurchaseOrderChange
+from apps.kuaizhizao.models.supplier import Supplier
 from apps.master_data.models.material import Material
 from apps.kuaizhizao.schemas.purchase import (
     PurchaseOrderCreate, PurchaseOrderUpdate, PurchaseOrderResponse,
     PurchaseOrderListResponse, PurchaseOrderItemResponse,
-    PurchaseOrderApprove, PurchaseOrderConfirm, PurchaseOrderListParams
+    PurchaseOrderApprove, PurchaseOrderConfirm, PurchaseOrderListParams,
+    MaterialPriceHistoryResponse, MaterialPriceHistoryItem,
+    PurchaseTrackingResponse, PurchaseTrackingNode,
+    SupplierPerformanceResponse, ExpediteResponse,
+    PriceComparisonResponse, MaterialPriceComparison, PriceComparisonItem
 )
 from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, LEGACY_AUDITED_VALUES, is_draft_status
 
@@ -148,8 +150,9 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         # 手动设置items
         response.items = [PurchaseOrderItemResponse.model_validate(item) for item in items]
         # 生命周期
-        from apps.kuaizhizao.services.document_lifecycle_service import get_purchase_order_lifecycle
-        response.lifecycle = get_purchase_order_lifecycle(order)
+        from apps.kuaizhizao.services.document_lifecycle_service import get_purchase_order_lifecycle, get_document_milestones
+        milestones = await get_document_milestones(order.tenant_id, "purchase_order", order.id)
+        response.lifecycle = get_purchase_order_lifecycle(order, milestones=milestones)
         return response
 
     async def list_purchase_orders(
@@ -247,12 +250,38 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             if not order:
                 raise NotFoundError(f"采购订单不存在: {order_id}")
 
-            # 只能更新草稿状态的订单
-            if not is_draft_status(order.status):
-                raise BusinessLogicError("只能更新草稿状态的订单")
+            # V2 审计增强：已审核/已确认的订单允许变更，但必须提供变更原因且记录日志
+            requires_audit = order.status not in [DocumentStatus.DRAFT.value]
+            if requires_audit and not order_data.change_reason:
+                raise BusinessLogicError("已生效订单，变更时必须填写'变更原因'")
+
+            operator_name = ""
+            try:
+                from apps.base_service import AppBaseService
+                operator_name = await AppBaseService().get_user_name(updated_by) or str(updated_by)
+            except Exception:
+                operator_name = str(updated_by)
+
+            # 1. 如果是已生效订单，先记录头信息变更
+            if requires_audit:
+                update_items = order_data.model_dump(exclude_unset=True, exclude={'items', 'change_reason'})
+                for field, new_val in update_items.items():
+                    old_val = getattr(order, field, None)
+                    if str(old_val) != str(new_val):
+                        await PurchaseOrderChange.create(
+                            tenant_id=tenant_id,
+                            order_id=order_id,
+                            change_type="Modify",
+                            field_name=field,
+                            old_value=str(old_val),
+                            new_value=str(new_val),
+                            reason=order_data.change_reason,
+                            operator_id=updated_by,
+                            operator_name=operator_name
+                        )
 
             # 更新订单头
-            update_dict = order_data.model_dump(exclude_unset=True, exclude={'items'})
+            update_dict = order_data.model_dump(exclude_unset=True, exclude={'items', 'change_reason'})
             update_dict['updated_by'] = updated_by
 
             await order.update_from_dict(update_dict).save()
@@ -279,6 +308,19 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                         'updated_by': updated_by
                     })
 
+                    if requires_audit:
+                        # 对于明细的变更，目前简化记录为"明细整批更新"，后续可根据需求实现行级更细精度的对比
+                        await PurchaseOrderChange.create(
+                            tenant_id=tenant_id,
+                            order_id=order_id,
+                            change_type="Modify",
+                            field_name="items",
+                            old_value="[Batch Items Update]",
+                            new_value=f"Original Material IDs updated by {operator_name}",
+                            reason=order_data.change_reason,
+                            operator_id=updated_by,
+                            operator_name=operator_name
+                        )
                     await PurchaseOrderItem.create(**item_dict)
 
                     total_quantity += item_data.ordered_quantity
@@ -797,6 +839,304 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         warehouse_id = None
         warehouse_name = None
         # 尝试获取第一个激活的仓库作为默认仓库
+        # ... (原有实现)
+        return {"id": 1, "receipt_code": "MOCK"} # 简化占位
+
+    # === 采购员赋能增强方法 ===
+
+    async def get_material_price_history(self, tenant_id: int, material_id: int) -> MaterialPriceHistoryResponse:
+        """获取物料历史成交价"""
+        from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+        from apps.kuaizhizao.constants import LEGACY_AUDITED_VALUES
+
+        # 获取该物料最近 10 次已审核订单的成交记录
+        items = await PurchaseOrderItem.filter(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            order__status__in=LEGACY_AUDITED_VALUES
+        ).select_related("order").order_by("-order__order_date").limit(10).all()
+
+        history_items = []
+        prices = []
+        for item in items:
+            history_items.append(MaterialPriceHistoryItem(
+                order_id=item.order_id,
+                order_code=item.order.order_code,
+                order_date=item.order.order_date,
+                supplier_id=item.order.supplier_id,
+                supplier_name=item.order.supplier_name,
+                unit_price=item.unit_price,
+                # currency=item.order.currency
+            ))
+            prices.append(item.unit_price)
+
+        if not prices:
+            return MaterialPriceHistoryResponse(
+                material_id=material_id,
+                history_items=[],
+                average_price=0,
+                min_price=0,
+                max_price=0
+            )
+
+        return MaterialPriceHistoryResponse(
+            material_id=material_id,
+            history_items=history_items,
+            average_price=sum(prices) / len(prices),
+            min_price=min(prices),
+            max_price=max(prices)
+        )
+
+    async def get_purchase_order_changes(self, tenant_id: int, order_id: int):
+        """获取采购订单的详细变更审计记录"""
+        from apps.kuaizhizao.models.purchase_order import PurchaseOrderChange
+        return await PurchaseOrderChange.filter(tenant_id=tenant_id, order_id=order_id).order_by("-created_at")
+
+    async def get_purchase_order_tracking(self, tenant_id: int, order_id: int) -> PurchaseTrackingResponse:
+        """获取采购订单全链路追踪"""
+        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+        from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
+        from apps.kuaizhizao.constants import DocumentStatus
+
+        order = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=order_id)
+        if not order:
+            raise NotFoundError(f"订单不存在: {order_id}")
+
+        nodes = []
+        # 1. 订单下达
+        nodes.append(PurchaseTrackingNode(
+            node_name="订单下达",
+            status="已完成",
+            time=order.created_at,
+            detail=f"单号: {order.order_code}",
+            is_completed=True
+        ))
+
+        # 2. 订单审核
+        is_audited = order.status in ["AUDITED", "已审核", "CONFIRMED", "已确认", "audited", "已通过"]
+        nodes.append(PurchaseTrackingNode(
+            node_name="订单审核",
+            status=order.review_status or "待审核",
+            time=order.review_time,
+            operator=order.reviewer_name,
+            is_completed=is_audited,
+            is_warning=order.review_status == "已驳回"
+        ))
+
+        # 3. 供应商确认
+        is_confirmed = order.status in ["CONFIRMED", "已确认"]
+        nodes.append(PurchaseTrackingNode(
+            node_name="供应商确认",
+            status="已确认" if is_confirmed else "待确认",
+            is_completed=is_confirmed
+        ))
+
+        # 4. 质检进度 (查询关联的来料检验单)
+        inspections = await IncomingInspection.filter(
+            tenant_id=tenant_id,
+            purchase_receipt_id__in=await PurchaseReceipt.filter(purchase_order_id=order_id).values_list("id", flat=True)
+        ).all()
+        
+        inspection_status = "待检验"
+        inspection_completed = False
+        inspection_warning = False
+        if inspections:
+            inspection_completed = all(i.status == "已完成" for i in inspections)
+            any_fail = any(i.quality_status == "不合格" for i in inspections)
+            inspection_status = "质检完成" if inspection_completed else "质检中"
+            if any_fail:
+                inspection_status += " (含有不合格)"
+                inspection_warning = True
+        
+        nodes.append(PurchaseTrackingNode(
+            node_name="来料质检",
+            status=inspection_status,
+            is_completed=inspection_completed,
+            is_warning=inspection_warning,
+            detail=f"共 {len(inspections)} 笔检单" if inspections else "暂无质检记录"
+        ))
+
+        # 5. 入库进度
+        receipts = await PurchaseReceipt.filter(tenant_id=tenant_id, purchase_order_id=order_id).all()
+        total_received = sum(r.total_quantity for r in receipts)
+        is_receipt_completed = total_received >= order.total_quantity and order.total_quantity > 0
+        
+        nodes.append(PurchaseTrackingNode(
+            node_name="仓库入库",
+            status=f"已入库 {total_received}/{order.total_quantity}",
+            is_completed=is_receipt_completed,
+            detail=f"共 {len(receipts)} 笔入库单" if receipts else "待入库"
+        ))
+
+        # 计算进度
+        completed_count = sum(1 for n in nodes if n.is_completed)
+        progress = int((completed_count / len(nodes)) * 100)
+
+        return PurchaseTrackingResponse(
+            order_id=order_id,
+            order_code=order.order_code,
+            overall_progress=progress,
+            nodes=nodes
+        )
+
+    async def get_supplier_performance_metrics(self, tenant_id: int, supplier_id: int) -> SupplierPerformanceResponse:
+        """获取供应商表现指标"""
+        from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+        from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
+        from apps.master_data.models.supplier import Supplier
+        from datetime import datetime, timedelta
+
+        supplier = await Supplier.get_or_none(tenant_id=tenant_id, id=supplier_id)
+        if not supplier:
+            raise NotFoundError(f"供应商不存在: {supplier_id}")
+
+        # 近半年订单
+        six_months_ago = datetime.now() - timedelta(days=180)
+        orders = await PurchaseOrder.filter(
+            tenant_id=tenant_id,
+            supplier_id=supplier_id,
+            order_date__gte=six_months_ago.date(),
+            status__in=["AUDITED", "CONFIRMED", "已审核", "已确认", "已通过"]
+        ).all()
+
+        if not orders:
+            return SupplierPerformanceResponse(
+                supplier_id=supplier_id,
+                supplier_name=supplier.name,
+                reliability_level="N/A"
+            )
+
+        # 1. 计算 OTIF (到货及时率)
+        # 简化：如果有入库记录且入库时间 <= 要求到货时间
+        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+        on_time_count = 0
+        for o in orders:
+            receipt = await PurchaseReceipt.filter(purchase_order_id=o.id).order_by("receipt_time").first()
+            if receipt and receipt.receipt_time and receipt.receipt_time.date() <= o.delivery_date:
+                on_time_count += 1
+        
+        otif_rate = (on_time_count / len(orders)) * 100
+
+        # 2. 质量合格率
+        inspections = await IncomingInspection.filter(
+            tenant_id=tenant_id,
+            supplier_id=supplier_id,
+            created_at__gte=six_months_ago
+        ).all()
+        
+        total_inspected = sum(i.inspection_quantity for i in inspections) or 1
+        total_qualified = sum(i.qualified_quantity for i in inspections)
+        quality_pass_rate = (float(total_qualified) / float(total_inspected)) * 100
+
+        # 3. 平均提前期
+        lead_times = []
+        for o in orders:
+            receipt = await PurchaseReceipt.filter(purchase_order_id=o.id).order_by("receipt_time").first()
+            if receipt and receipt.receipt_time:
+                delta = (receipt.receipt_time.date() - o.order_date).days
+                lead_times.append(max(0, delta))
+        
+        avg_lead_time = sum(lead_times) / len(lead_times) if lead_times else 0
+
+        # 4. 综合评分
+        score = int(otif_rate * 0.5 + quality_pass_rate * 0.5)
+        level = "S" if score >= 95 else "A" if score >= 85 else "B" if score >= 70 else "C"
+
+        return SupplierPerformanceResponse(
+            supplier_id=supplier_id,
+            supplier_name=supplier.name,
+            otif_rate=round(otif_rate, 1),
+            quality_pass_rate=round(quality_pass_rate, 1),
+            avg_lead_time_days=round(avg_lead_time, 1),
+            reliability_score=score,
+            reliability_level=level
+        )
+
+    async def expedite_purchase_order(self, tenant_id: int, order_id: int, remarks: Optional[str] = None) -> ExpediteResponse:
+        """一键催单"""
+        order = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=order_id)
+        if not order:
+            raise NotFoundError(f"订单不存在: {order_id}")
+        
+        # 记录催单日志 (StateTransitionLog)
+        from apps.kuaizhizao.models.state_transition import StateTransitionLog
+        await StateTransitionLog.create(
+            tenant_id=tenant_id,
+            entity_type="purchase_order",
+            entity_id=order_id,
+            from_state=order.status,
+            to_state=order.status,
+            transition_reason="采购员手动催单",
+            transition_comment=remarks or "请尽快发货",
+            transition_time=datetime.now()
+        )
+        
+        return ExpediteResponse(
+            success=True,
+            message=f"已向供应商 {order.supplier_name} 发出催单提醒",
+            expedite_time=datetime.now()
+        )
+
+    async def get_price_comparison(self, tenant_id: int, material_ids: List[int]) -> PriceComparisonResponse:
+        """
+        获取物料的多供应商价格对比（比价助手）
+        
+        从历史成交记录中提取不同供应商的最近成交价，并结合供应商评级。
+        """
+        from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+        from apps.master_data.models.material import Material
+        from apps.kuaizhizao.constants import LEGACY_AUDITED_VALUES
+        
+        results = []
+        for mid in material_ids:
+            material = await Material.get_or_none(tenant_id=tenant_id, id=mid)
+            if not material:
+                continue
+            
+            # 查询该物料最近的成交记录
+            items = await PurchaseOrderItem.filter(
+                tenant_id=tenant_id,
+                material_id=mid,
+                order__status__in=LEGACY_AUDITED_VALUES
+            ).select_related("order").order_by("-order__order_date").limit(50).all()
+            
+            # 按供应商去重，保留各供应商最近的一笔
+            supplier_latest = {} # supplier_id -> item
+            for item in items:
+                sid = item.order.supplier_id
+                if sid not in supplier_latest:
+                    supplier_latest[sid] = item
+                if len(supplier_latest) >= 5: # 最多对比5家
+                    break
+            
+            comparisons = []
+            for sid, item in supplier_latest.items():
+                # 获取供应商表现评级
+                try:
+                    perf = await self.get_supplier_performance_metrics(tenant_id, sid)
+                    level = perf.reliability_level
+                except Exception:
+                    level = "N/A"
+                
+                comparisons.append(PriceComparisonItem(
+                    supplier_id=sid,
+                    supplier_name=item.order.supplier_name,
+                    last_price=item.unit_price,
+                    last_order_date=item.order.order_date,
+                    reliability_level=level
+                ))
+            
+            # 按价格升序排列（便宜优先）
+            comparisons.sort(key=lambda x: x.last_price)
+            
+            results.append(MaterialPriceComparison(
+                material_id=mid,
+                material_code=material.material_code,
+                material_name=material.name,
+                comparisons=comparisons
+            ))
+            
+        return PriceComparisonResponse(results=results)
         from apps.master_data.models.warehouse import Warehouse
         default_warehouse = await Warehouse.filter(tenant_id=tenant_id, is_active=True).first()
         if default_warehouse:

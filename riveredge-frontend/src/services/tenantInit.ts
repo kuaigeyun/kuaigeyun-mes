@@ -22,6 +22,13 @@ export interface RunInitResponse {
   message: string;
 }
 
+export interface IndustryPreset {
+  code: string;
+  name: string;
+  description: string;
+  keys: string[];
+}
+
 /**
  * 获取初始化项配置
  */
@@ -40,3 +47,13 @@ export async function runInitItems(keys: string[]): Promise<RunInitResponse> {
     data: { keys },
   });
 }
+
+/**
+ * 获取可用行业预设模板
+ */
+export async function getIndustryPresets(): Promise<IndustryPreset[]> {
+  return apiRequest<IndustryPreset[]>('/core/tenant-init/industry-presets', {
+    method: 'GET',
+  });
+}
+

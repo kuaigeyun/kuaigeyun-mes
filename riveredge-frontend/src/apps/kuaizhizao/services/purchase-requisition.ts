@@ -131,3 +131,30 @@ export async function urgentPurchase(
     data,
   });
 }
+
+export interface PriceComparisonItem {
+  supplier_id: number;
+  supplier_name: string;
+  last_price: number;
+  last_order_date?: string;
+  reliability_level: string;
+}
+
+export interface MaterialPriceComparison {
+  material_id: number;
+  material_code: string;
+  material_name: string;
+  comparisons: PriceComparisonItem[];
+}
+
+export interface PriceComparisonResponse {
+  results: MaterialPriceComparison[];
+}
+
+/** 获取多个物料的价格对比助手数据 */
+export async function getPriceComparison(materialIds: number[]): Promise<PriceComparisonResponse> {
+  return apiRequest('/apps/kuaizhizao/price-comparison', {
+    method: 'GET',
+    params: { material_ids: materialIds.join(',') },
+  });
+}

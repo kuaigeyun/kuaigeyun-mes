@@ -195,6 +195,83 @@ export async function getSalesOrder(id: number, includeItems: boolean = false, i
   });
 }
 
+export interface QuoteItemResponse {
+  item_type: 'material' | 'labor' | 'overhead';
+  name: string;
+  code?: string;
+  quantity: number;
+  unit?: string;
+  unit_cost: number;
+  total_cost: number;
+  remark?: string;
+}
+
+export interface QuoteBreakdownResponse {
+  material_id: number;
+  material_code: string;
+  material_name: string;
+  material_spec?: string;
+  material_costs: QuoteItemResponse[];
+  manufacturing_costs: QuoteItemResponse[];
+  total_material_cost: number;
+  total_manufacturing_cost: number;
+  total_estimated_cost: number;
+  suggested_price: number;
+}
+
+/**
+ * 获取产品快速核价明细
+ */
+export async function getQuoteBreakdown(materialId: number): Promise<QuoteBreakdownResponse> {
+  return apiRequest<QuoteBreakdownResponse>(`/apps/kuaizhizao/sales-orders/quote-breakdown/${materialId}`, {
+    method: 'GET',
+  });
+}
+
+/** 销售订单全息追踪视图数据结构 */
+export interface TrackingWorkOrderInfo {
+  work_order_id: number;
+  work_order_code: string;
+  product_name: string;
+  quantity: number;
+  completed_quantity: number;
+  status: string;
+}
+
+export interface TrackingDeliveryInfo {
+  delivery_id: number;
+  delivery_code: string;
+  delivery_date: string | null;
+  status: string;
+}
+
+export interface TrackingMaterialShortageInfo {
+  material_code: string;
+  material_name: string;
+  required_quantity: number;
+  shortage_quantity: number;
+}
+
+export interface SalesOrderTrackingResponse {
+  sales_order_id: number;
+  sales_order_code: string;
+  material_prep_progress: number;
+  production_progress: number;
+  delivery_progress: number;
+  work_orders: TrackingWorkOrderInfo[];
+  deliveries: TrackingDeliveryInfo[];
+  material_shortages: TrackingMaterialShortageInfo[];
+}
+
+/**
+ * 获取销售订单全息追踪视图
+ */
+export async function getSalesOrderTracking(salesOrderId: number): Promise<SalesOrderTrackingResponse> {
+  return apiRequest<SalesOrderTrackingResponse>(`/apps/kuaizhizao/sales-orders/${salesOrderId}/tracking`, {
+    method: 'GET',
+  });
+}
+
 /**
  * 创建销售订单
  */

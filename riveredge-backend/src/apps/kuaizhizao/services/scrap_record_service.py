@@ -330,3 +330,19 @@ class ScrapRecordService(AppBaseService[ScrapRecord]):
         scrap_records = await ScrapRecord.filter(query).order_by('-created_at').offset(skip).limit(limit).all()
 
         return [ScrapRecordListResponse.model_validate(record) for record in scrap_records]
+    async def get_scrap_record(
+        self,
+        tenant_id: int,
+        scrap_id: int
+    ) -> ScrapRecordResponse:
+        """获取报废记录详情（包含生命周期）"""
+        scrap = await ScrapRecord.get_or_none(id=scrap_id, tenant_id=tenant_id, deleted_at__isnull=True)
+        if not scrap:
+            raise NotFoundError(f"报废记录不存在: {scrap_id}")
+            
+        from apps.kuaizhizao.services.document_lifecycle_service import get_scrap_record_lifecycle, get_document_milestones
+        milestones = await get_document_milestones(scrap.tenant_id, "scrap_record", scrap.id)
+        
+        resp = ScrapRecordResponse.model_validate(scrap)
+        resp.lifecycle = get_scrap_record_lifecycle(scrap, milestones=milestones)
+        return resp

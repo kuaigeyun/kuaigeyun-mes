@@ -139,11 +139,12 @@ class StocktakingService(AppBaseService[Stocktaking]):
         ).order_by('id')
 
         # 构建响应
-        from apps.kuaizhizao.services.document_lifecycle_service import get_stocktaking_lifecycle
-
+        from apps.kuaizhizao.services.document_lifecycle_service import get_stocktaking_lifecycle, get_document_milestones
+        milestones = await get_document_milestones(stocktaking.tenant_id, "stocktaking", stocktaking.id)
+        
         response = StocktakingWithItemsResponse.model_validate(stocktaking)
         response.items = [StocktakingItemResponse.model_validate(item) for item in items]
-        response.lifecycle = get_stocktaking_lifecycle(stocktaking)
+        response.lifecycle = get_stocktaking_lifecycle(stocktaking, milestones=milestones)
 
         return response
 

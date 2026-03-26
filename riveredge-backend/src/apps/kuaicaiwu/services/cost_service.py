@@ -20,6 +20,7 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError, Business
 from apps.base_service import AppBaseService
 from apps.kuaicaiwu.models.cost_rule import CostRule
 from apps.kuaicaiwu.models.cost_calculation import CostCalculation
+from apps.kuaicaiwu.models.standard_cost import StandardCost
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.reporting_record import ReportingRecord
 from apps.kuaizhizao.models.production_picking import ProductionPicking
@@ -150,6 +151,28 @@ class CostCalculationService(AppBaseService[CostCalculation]):
         super().__init__(CostCalculation)
         self.cost_rule_service = CostRuleService()
 
+    async def _get_standard_value(self, tenant_id: int, target_type: str, target_id: int, item_type: str) -> Decimal:
+        """获取标准值（单价或费率）"""
+        sc = await StandardCost.filter(
+            tenant_id=tenant_id,
+            target_type=target_type,
+            target_id=target_id,
+            cost_item_type=item_type,
+            is_active=True,
+            effective_date__lte=date.today()
+        ).order_by("-effective_date").first()
+        
+        if sc:
+            return sc.standard_value
+        
+        # 默认回退值（可根据业务需求调整）
+        defaults = {
+            "material_cost": Decimal("100.00"),
+            "labor_rate": Decimal("50.00"),
+            "overhead_rate": Decimal("10.00")
+        }
+        return defaults.get(item_type, Decimal("0.00"))
+
     async def calculate_work_order_cost(
         self,
         tenant_id: int,
@@ -277,7 +300,7 @@ class CostCalculationService(AppBaseService[CostCalculation]):
             for item in items:
                 material = await Material.get_or_none(tenant_id=tenant_id, id=item.material_id)
                 if material:
-                    unit_price = Decimal(100.00)
+                    unit_price = await self._get_standard_value(tenant_id, "material", material.id, "material_cost")
                     total_material_cost += item.picked_quantity * unit_price
         return total_material_cost
 
@@ -290,7 +313,8 @@ class CostCalculationService(AppBaseService[CostCalculation]):
         ).all()
         total_labor_cost = Decimal(0)
         for record in reporting_records:
-            hourly_rate = Decimal(50.00)
+            # 优先从工作中心获取标准工时费率
+            hourly_rate = await self._get_standard_value(tenant_id, "work_center", record.work_center_id, "labor_rate")
             total_labor_cost += record.work_hours * hourly_rate
         return total_labor_cost
 
@@ -311,7 +335,8 @@ class CostCalculationService(AppBaseService[CostCalculation]):
                     deleted_at__isnull=True
                 ).all()
                 total_hours = sum([record.work_hours for record in reporting_records])
-                rate = Decimal(10.00)
+                # 从规则参数或工作中心获取制造费用率
+                rate = await self._get_standard_value(tenant_id, "work_center", work_order.work_center_id, "overhead_rate") # Assuming work_order has work_center_id
                 total_manufacturing_cost += total_hours * rate
             elif rule.calculation_method == "按比例":
                 material_cost = await self._calculate_material_cost(tenant_id, work_order)

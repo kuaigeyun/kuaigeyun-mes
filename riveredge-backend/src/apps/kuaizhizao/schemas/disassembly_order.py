@@ -6,7 +6,7 @@ Date: 2026-02-26
 """
 
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field, ConfigDict
 from decimal import Decimal
 
@@ -54,6 +54,7 @@ class DisassemblyOrderResponse(DisassemblyOrderBase):
     updated_at: datetime = Field(..., description="更新时间")
     created_by: Optional[int] = Field(None, description="创建人ID")
     created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    lifecycle: Optional[Dict[str, Any]] = Field(None, description="通用生命周期")
 
 
 class DisassemblyOrderListResponse(BaseModel):

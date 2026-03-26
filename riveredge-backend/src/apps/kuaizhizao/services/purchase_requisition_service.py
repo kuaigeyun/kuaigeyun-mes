@@ -233,8 +233,9 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             req_dict.pop("items", None)
             resp = PurchaseRequisitionListResponse.model_construct(**req_dict)
             resp.items_count = items_count
-            from apps.kuaizhizao.services.document_lifecycle_service import get_purchase_requisition_lifecycle
-            resp.lifecycle = get_purchase_requisition_lifecycle(req)
+            from apps.kuaizhizao.services.document_lifecycle_service import get_purchase_requisition_lifecycle, get_document_milestones
+            milestones = await get_document_milestones(req.tenant_id, "purchase_requisition", req.id)
+            resp.lifecycle = get_purchase_requisition_lifecycle(req, milestones=milestones)
             result.append(resp.model_dump())
         return {"data": result, "total": total, "success": True}
 

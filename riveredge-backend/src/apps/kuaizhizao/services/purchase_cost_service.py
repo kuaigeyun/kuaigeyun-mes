@@ -26,6 +26,74 @@ class PurchaseCostService:
     处理基于物料来源类型的采购成本核算业务逻辑。
     """
 
+    async def allocate_landing_costs(
+        self,
+        tenant_id: int,
+        order_id: int,
+        fee_items: List[Dict[str, Any]],
+        method: str = "by_value"
+    ) -> List[PurchaseOrderItem]:
+        """
+        分摊落地成本（杂费）到采购订单明细
+        
+        Args:
+            tenant_id: 租户ID
+            order_id: 采购订单ID
+            fee_items: 杂费列表 [{"name": "运费", "amount": 100.0}, ...]
+            method: 分摊方式 (by_value, by_quantity, by_weight, by_volume)
+        """
+        async with in_transaction():
+            order = await PurchaseOrder.filter(tenant_id=tenant_id, id=order_id).first()
+            if not order:
+                raise NotFoundError(f"订单 {order_id} 不存在")
+            
+            items = await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order_id).all()
+            if not items:
+                return []
+            
+            total_fee = Decimal(sum(Decimal(str(f["amount"])) for f in fee_items))
+            if total_fee <= 0:
+                for item in items:
+                    item.landing_cost = Decimal(0)
+                    item.additional_fees_details = None
+                    await item.save()
+                return items
+            
+            # 1. 计算各行分摊基数
+            weights = {}
+            total_base = Decimal(0)
+            
+            for item in items:
+                base = Decimal(0)
+                if method == "by_value":
+                    base = item.total_price
+                elif method == "by_quantity":
+                    base = item.ordered_quantity
+                elif method in ["by_weight", "by_volume"]:
+                    material = await Material.filter(id=item.material_id).first()
+                    # 动态获取 Material 的 weight 或 volume 字段 (V2 新增)
+                    val = Decimal(str(getattr(material, "weight" if method == "by_weight" else "volume", 0) or 0))
+                    base = val * item.ordered_quantity
+                
+                weights[item.id] = base
+                total_base += base
+            
+            # 2. 如果基数为0（如所有权重未定义），则按行平均分摊
+            if total_base == 0:
+                total_base = Decimal(len(items))
+                for item in items:
+                    weights[item.id] = Decimal(1)
+            
+            # 3. 执行比例分摊并持久化
+            for item in items:
+                ratio = weights[item.id] / total_base
+                item_fee = (total_fee * ratio).quantize(Decimal("0.01"))
+                item.landing_cost = item_fee
+                item.additional_fees_details = fee_items
+                await item.save()
+            
+            return items
+
     async def calculate_purchase_cost(
         self,
         tenant_id: int,
@@ -495,7 +563,26 @@ class PurchaseCostService:
                     "source": "order_tax",
                 })
         
-        # TODO: 可以添加其他费用类型（运输费、保险费等）
+        # 2. 累加分摊的落地成本 (Additional Fees / Landing Cost)
+        if order_item and order_item.landing_cost > 0:
+            total_fee += order_item.landing_cost
+            fee_breakdown.append({
+                "fee_type": "分摊杂费",
+                "fee": float(order_item.landing_cost),
+                "details": order_item.additional_fees_details,
+                "source": "landing_cost_allocation",
+            })
+        elif not order_item:
+            # 汇总整单已分摊的落地成本
+            all_items = await PurchaseOrderItem.filter(order_id=order.id).all()
+            total_landing = sum(item.landing_cost for item in all_items)
+            if total_landing > 0:
+                total_fee += total_landing
+                fee_breakdown.append({
+                    "fee_type": "分摊杂费汇总",
+                    "fee": float(total_landing),
+                    "source": "landing_cost_allocation",
+                })
         # 这些费用可能存储在订单的扩展字段中
         
         return total_fee, fee_breakdown

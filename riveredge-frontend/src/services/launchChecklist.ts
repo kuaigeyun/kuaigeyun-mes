@@ -23,6 +23,9 @@ export interface ChecklistItem {
   check_status?: string;
   check_time?: string;
   check_message?: string;
+  action_url?: string;
+  action_type?: string;
+  action_label?: string;
 }
 
 /**

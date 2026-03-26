@@ -6,7 +6,7 @@
 
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProDescriptionsItemType } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -18,6 +18,7 @@ import { SupplierFormModal } from '../../../components/SupplierFormModal';
 import type { Supplier, SupplierCreate } from '../../../types/supply-chain';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { downloadFile } from '../../../../../utils';
+import { SupplierPerformanceTag } from '../../../../kuaizhizao/pages/purchase-management/purchase-orders/ProcurementEmpowermentComponents';
 
 /**
  * 供应商管理列表页面组件
@@ -439,7 +440,13 @@ const SuppliersPage: React.FC = () => {
     {
       title: t('field.supplier.name'),
       dataIndex: 'name',
-      width: 200,
+      width: 250,
+      render: (name: React.ReactNode, record: Supplier) => (
+        <Space>
+          {name}
+          {record.id && <SupplierPerformanceTag supplierId={record.id} />}
+        </Space>
+      ),
     },
     {
       title: t('field.supplier.shortName'),
@@ -534,8 +541,7 @@ const SuppliersPage: React.FC = () => {
     },
   ];
 
-  // 详情列定义
-  const detailColumns: ProDescriptionsItemType<Supplier>[] = [
+  const detailColumns: ProDescriptionsItemProps<Supplier>[] = [
     {
       title: t('field.supplier.code'),
       dataIndex: 'code',
@@ -543,6 +549,12 @@ const SuppliersPage: React.FC = () => {
     {
       title: t('field.supplier.name'),
       dataIndex: 'name',
+      render: (name: React.ReactNode, record: Supplier) => (
+        <Space>
+          {name}
+          {record.id && <SupplierPerformanceTag supplierId={record.id} />}
+        </Space>
+      ),
     },
     {
       title: t('field.supplier.shortName'),

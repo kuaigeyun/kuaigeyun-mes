@@ -26,7 +26,16 @@ import CodeField from '../../../../../components/code-field';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import dayjs from 'dayjs';
-import { listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder, approvePurchaseOrder, submitPurchaseOrder, pushPurchaseOrderToReceipt, pushPurchaseOrderToReceiptPreview, pushPurchaseOrderToReceiptNotice, pushPurchaseOrderToInvoice, getPurchaseOrderStatistics, PurchaseOrder, PurchaseOrderItem } from '../../../services/purchase';
+import {
+  listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, updatePurchaseOrder,
+  deletePurchaseOrder, approvePurchaseOrder, submitPurchaseOrder,
+  pushPurchaseOrderToReceipt, pushPurchaseOrderToReceiptPreview,
+  pushPurchaseOrderToReceiptNotice, pushPurchaseOrderToInvoice,
+  getPurchaseOrderStatistics, expeditePurchaseOrder,
+  PurchaseOrder, PurchaseOrderItem
+} from '../../../services/purchase';
+import { FulfillmentTrackingTimeline, PriceHistoryInsight, SupplierPerformanceTag, OrderChangeHistoryTable } from './ProcurementEmpowermentComponents';
+import LandingCostAllocationModal from './LandingCostAllocationModal';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
 import { getApprovalStatus, ApprovalStatusResponse } from '../../../../../services/approvalInstance';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
@@ -216,6 +225,10 @@ const PurchaseOrdersPage: React.FC = () => {
   // 下推采购发票 loading
   const [pushToInvoiceLoading, setPushToInvoiceLoading] = useState(false);
 
+  // 费用分摊 Modal
+  const [landingCostModalVisible, setLandingCostModalVisible] = useState(false);
+  const [landingCostOrder, setLandingCostOrder] = useState<PurchaseOrder | null>(null);
+
   // 表格列定义
   const columns: ProColumns<PurchaseOrder>[] = [
     {
@@ -342,6 +355,19 @@ const PurchaseOrdersPage: React.FC = () => {
                 下推 <DownOutlined />
               </Button>
             </Dropdown>
+          )}
+          {isAuditedStatus(record.status) && (
+            <Button
+              type="link"
+              size="small"
+              icon={<DollarOutlined />}
+              onClick={() => {
+                setLandingCostOrder(record);
+                setLandingCostModalVisible(true);
+              }}
+            >
+              费用分摊
+            </Button>
           )}
           {isDraftStatus(record.status) && (
             <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
@@ -1333,6 +1359,27 @@ const PurchaseOrdersPage: React.FC = () => {
           </Col>
           <Col span={12} />
         </Row>
+        
+        {/* V2 审计：非草稿订单变更需填写原因 */}
+        <AntForm.Item noStyle shouldUpdate>
+          {() => {
+            const isNotDraft = isEdit && currentOrder && !isDraftStatus(currentOrder.status);
+            if (!isNotDraft) return null;
+            return (
+              <Row gutter={16}>
+                <Col span={24}>
+                  <ProFormTextArea
+                    name="change_reason"
+                    label={<span style={{ color: '#faad14', fontWeight: 600 }}>变更原因 (审计记录必备)</span>}
+                    placeholder="请输入本次变更的具体原因，例如：供应商调价、需求量调整等..."
+                    rules={[{ required: true, message: '非草稿状态单据变更，必须填写变更原因' }]}
+                    fieldProps={{ rows: 2 }}
+                  />
+                </Col>
+              </Row>
+            );
+          }}
+        </AntForm.Item>
         <div style={{ marginBottom: 24 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 12 }}>
             <Space align="center" size={12}>
@@ -1436,8 +1483,19 @@ const PurchaseOrdersPage: React.FC = () => {
                     width: 100,
                     align: 'right' as const,
                     render: (_: any, __: any, index: number) => (
-                      <AntForm.Item name={[index, 'unit_price']} rules={[{ required: true, message: '必填' }, { type: 'number', min: 0, message: '≥0' }]} style={{ margin: 0 }}>
-                        <InputNumber placeholder={showTaxColumns ? '含税单价' : '单价'} min={0} precision={4} prefix="¥" style={{ width: '100%' }} size="small" />
+                      <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id}>
+                        {({ getFieldValue }: any) => {
+                          const items = getFieldValue('items') ?? [];
+                          const row = items[index];
+                          return (
+                            <Space size={4}>
+                              <AntForm.Item name={[index, 'unit_price']} rules={[{ required: true, message: '必填' }, { type: 'number', min: 0, message: '≥0' }]} style={{ margin: 0 }}>
+                                <InputNumber placeholder={showTaxColumns ? '含税单价' : '单价'} min={0} precision={4} prefix="¥" style={{ width: '100%' }} size="small" />
+                              </AntForm.Item>
+                              {row?.material_id && <PriceHistoryInsight materialId={row.material_id} currentPrice={Number(row.unit_price) || 0} />}
+                            </Space>
+                          );
+                        }}
                       </AntForm.Item>
                     ),
                   },
@@ -1636,6 +1694,21 @@ const PurchaseOrdersPage: React.FC = () => {
         }}
       />
 
+      <LandingCostAllocationModal
+        visible={landingCostModalVisible}
+        onCancel={() => {
+          setLandingCostModalVisible(false);
+          setLandingCostOrder(null);
+        }}
+        onSuccess={() => {
+          setLandingCostModalVisible(false);
+          setLandingCostOrder(null);
+          actionRef.current?.reload();
+        }}
+        orderId={landingCostOrder?.id || 0}
+        orderCode={landingCostOrder?.order_code || ''}
+      />
+
       {/* 采购订单详情 Drawer */}
       <DetailDrawerTemplate<PurchaseOrderDetail>
         title={`采购订单详情 - ${orderDetail?.order_code || ''}`}
@@ -1705,6 +1778,28 @@ const PurchaseOrdersPage: React.FC = () => {
                   ),
                 },
                 {
+                  key: 'expedite',
+                  visible: orderDetail.status === 'AUDITED' || orderDetail.status === 'CONFIRMED' || orderDetail.status === '已审核' || orderDetail.status === '已确认',
+                  render: () => (
+                    <Button 
+                      type="link" 
+                      size="small" 
+                      icon={<ClockCircleOutlined />} 
+                      style={{ color: '#faad14' }}
+                      onClick={async () => {
+                        try {
+                          await expeditePurchaseOrder(orderDetail.id!);
+                          messageApi.success('催单提醒已发出');
+                        } catch (err: any) {
+                          messageApi.error(err.message || '催单失败');
+                        }
+                      }}
+                    >
+                      一键催单
+                    </Button>
+                  ),
+                },
+                {
                   key: 'delete',
                   visible: isDraftStatus(orderDetail.status),
                   render: () => (
@@ -1726,7 +1821,11 @@ const PurchaseOrdersPage: React.FC = () => {
                     <strong>订单编号：</strong>{orderDetail.order_code}
                   </Col>
                   <Col span={8}>
-                    <strong>供应商：</strong>{orderDetail.supplier_name}
+                    <strong>供应商：</strong>
+                    <Space>
+                      {orderDetail.supplier_name}
+                      {orderDetail.supplier_id && <SupplierPerformanceTag supplierId={orderDetail.supplier_id} />}
+                    </Space>
                   </Col>
                   <Col span={8}>
                     <strong>订单类型：</strong>{orderDetail.order_type || '-'}
@@ -1800,6 +1899,13 @@ const PurchaseOrdersPage: React.FC = () => {
                 );
               })()}
 
+              {/* 采购赋能：全链路追踪 */}
+              {orderDetail.status !== '草稿' && (
+                <DetailDrawerSection title="履约全链路追踪">
+                  <FulfillmentTrackingTimeline orderId={orderDetail.id!} />
+                </DetailDrawerSection>
+              )}
+
               {/* 3. 单据明细 */}
               {orderDetail.items && orderDetail.items.length > 0 && (
                 <DetailDrawerSection title="订单明细">
@@ -1834,6 +1940,13 @@ const PurchaseOrdersPage: React.FC = () => {
                     documentId={orderDetail.id}
                     onDocumentClick={(type, id) => messageApi.info(`跳转到${type}#${id}`)}
                   />
+                </DetailDrawerSection>
+              )}
+
+              {/* 5. 变更记录 (V2 增强：审计必备) */}
+              {orderDetail?.id && (
+                <DetailDrawerSection title="订单变更审计历史">
+                  <OrderChangeHistoryTable orderId={orderDetail.id} />
                 </DetailDrawerSection>
               )}
 

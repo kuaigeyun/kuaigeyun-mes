@@ -43,6 +43,8 @@ export interface PurchaseOrder {
   created_at?: string;
   updated_at?: string;
   items?: PurchaseOrderItem[];
+  /** 变更原因 (V2 审计) */
+  change_reason?: string;
 }
 
 export interface PurchaseOrderItem {
@@ -59,11 +61,12 @@ export interface PurchaseOrderItem {
   outstanding_quantity?: number;
   required_date?: string;
   actual_delivery_date?: string;
-  quality_requirements?: string;
-  inspection_required?: boolean;
-  source_type?: string;
   source_id?: number;
   notes?: string;
+  /** 分摊落地成本 (V2) */
+  landing_cost?: number;
+  /** 杂费明细 (V2) */
+  additional_fees_details?: LandingCostFeeItem[];
 }
 
 export interface PurchaseOrderListParams {
@@ -249,5 +252,119 @@ export async function pushPurchaseOrderToReceiptNotice(id: number, noticeQuantit
 export async function pushPurchaseOrderToInvoice(id: number): Promise<any> {
   return apiRequest<any>(`/apps/kuaizhizao/purchase-orders/${id}/push-to-invoice`, {
     method: 'POST',
+  });
+}
+
+/** 物料价格历史响应接口 */
+export interface MaterialPriceHistoryResponse {
+  material_id: number;
+  history_items: Array<{
+    order_id: number;
+    order_code: string;
+    order_date: string;
+    supplier_id: number;
+    supplier_name: string;
+    unit_price: number;
+    currency: string;
+  }>;
+  average_price: number;
+  min_price: number;
+  max_price: number;
+}
+
+/** 采购追踪响应接口 */
+export interface PurchaseTrackingResponse {
+  order_id: number;
+  order_code: string;
+  overall_progress: number;
+  nodes: Array<{
+    node_name: string;
+    status: string;
+    time?: string;
+    operator?: string;
+    detail?: string;
+    is_completed: boolean;
+    is_warning: boolean;
+  }>;
+}
+
+/** 供应商表现评分响应接口 */
+export interface SupplierPerformanceResponse {
+  supplier_id: number;
+  supplier_name: string;
+  otif_rate: number;
+  quality_pass_rate: number;
+  avg_lead_time_days: number;
+  reliability_score: number;
+  reliability_level: string;
+}
+
+/** 获取物料历史成交价 */
+export async function getMaterialPriceHistory(materialId: number): Promise<MaterialPriceHistoryResponse> {
+  return apiRequest<MaterialPriceHistoryResponse>(`/apps/kuaizhizao/material-price-history/${materialId}`, {
+    method: 'GET',
+  });
+}
+
+/** 获取采购订单履约追踪 */
+export async function getPurchaseOrderTracking(orderId: number): Promise<PurchaseTrackingResponse> {
+  return apiRequest<PurchaseTrackingResponse>(`/apps/kuaizhizao/purchase-orders/${orderId}/tracking`, {
+    method: 'GET',
+  });
+}
+
+/** 获取供应商表现指标 */
+export async function getSupplierPerformance(supplierId: number): Promise<SupplierPerformanceResponse> {
+  return apiRequest<SupplierPerformanceResponse>(`/apps/kuaizhizao/suppliers/${supplierId}/performance`, {
+    method: 'GET',
+  });
+}
+
+/** 一键催单 */
+export async function expeditePurchaseOrder(orderId: number, remarks?: string): Promise<{ success: boolean; message: string }> {
+  return apiRequest<any>(`/apps/kuaizhizao/purchase-orders/${orderId}/expedite`, {
+    method: 'POST',
+    data: { remarks },
+  });
+}
+
+/** 杂费项 (V2) */
+export interface LandingCostFeeItem {
+  name: string;
+  amount: number;
+}
+
+/** 杂费分摊请求 (V2) */
+export interface LandingCostAllocationRequest {
+  fee_items: LandingCostFeeItem[];
+  method: 'by_value' | 'by_quantity' | 'by_weight' | 'by_volume';
+}
+
+/** 分摊落地成本 (V2) */
+export async function allocatePurchaseCosts(orderId: number, data: LandingCostAllocationRequest): Promise<any> {
+  return apiRequest<any>(`/apps/kuaizhizao/purchase-orders/${orderId}/allocate-costs`, {
+    method: 'POST',
+    data,
+  });
+}
+
+/** 变更记录接口 (V2) */
+export interface PurchaseOrderChange {
+  id: number;
+  order_id: number;
+  change_type: string;
+  field_name: string;
+  old_value?: string;
+  new_value?: string;
+  reason?: string;
+  operator_id?: number;
+  operator_name?: string;
+  created_at: string;
+}
+
+/** 获取采购订单变更历史 (V2) */
+export async function getPurchaseOrderChanges(orderId: number): Promise<PurchaseOrderChange[]> {
+  return apiRequest<PurchaseOrderChange[]>(`/apps/kuaizhizao/purchase-orders/${orderId}/changes`, {
+    method: 'GET',
   });
 }

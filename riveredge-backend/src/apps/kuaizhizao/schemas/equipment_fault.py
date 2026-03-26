@@ -8,7 +8,7 @@ Date: 2025-01-15
 """
 
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, List, Dict, Any
 from decimal import Decimal
 from uuid import UUID
 
@@ -99,6 +99,7 @@ class EquipmentFaultResponse(EquipmentFaultBase):
     equipment_name: str = Field(..., description="设备名称")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    lifecycle: Optional[Dict[str, Any]] = Field(None, description="通用生命周期")
     deleted_at: Optional[datetime] = Field(None, description="删除时间（软删除）")
 
 

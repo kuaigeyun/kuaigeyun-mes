@@ -1154,3 +1154,23 @@ class MaterialReturnItemResponse(MaterialReturnItemBase):
 class MaterialReturnWithItemsResponse(MaterialReturnResponse):
     """还料单详情响应（含明细）"""
     items: List[MaterialReturnItemResponse] = Field(default_factory=list, description="还料明细列表")
+
+
+# === 物料备料提醒 ===
+
+class MaterialPrepReminderItem(BaseSchema):
+    """物料备料提醒项"""
+    work_order_id: int = Field(..., description="工单ID")
+    work_order_code: str = Field(..., description="工单编码")
+    product_name: str = Field(..., description="产品名称")
+    quantity: float = Field(..., description="工单数量")
+    planned_start_date: Optional[datetime] = Field(None, description="计划开始时间")
+    priority: str = Field("normal", description="优先级")
+    kitting_rate: float = Field(..., description="齐套率")
+    kitting_status: str = Field(..., description="齐套状态")
+
+
+class MaterialPrepReminderResponse(BaseSchema):
+    """物料备料提醒响应"""
+    items: List[MaterialPrepReminderItem] = Field(default_factory=list, description="提醒项列表")
+    total_count: int = Field(0, description="总条数")

@@ -100,8 +100,9 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         if not forecast:
             raise NotFoundError(f"销售预测不存在: {forecast_id}")
         resp = SalesForecastResponse.model_validate(forecast)
-        from apps.kuaizhizao.services.document_lifecycle_service import get_sales_forecast_lifecycle
-        resp.lifecycle = get_sales_forecast_lifecycle(forecast)
+        from apps.kuaizhizao.services.document_lifecycle_service import get_sales_forecast_lifecycle, get_document_milestones
+        milestones = await get_document_milestones(forecast.tenant_id, "sales_forecast", forecast.id)
+        resp.lifecycle = get_sales_forecast_lifecycle(forecast, milestones=milestones)
         return resp
 
     async def list_sales_forecasts(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> Dict[str, Any]:

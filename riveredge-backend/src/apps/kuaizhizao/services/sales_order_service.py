@@ -15,6 +15,9 @@ from tortoise.transactions import in_transaction
 from loguru import logger
 
 from apps.kuaizhizao.models.sales_order import SalesOrder
+from apps.master_data.models.material import Material, BOM
+from apps.master_data.models.process import ProcessRoute
+from apps.kuaizhizao.schemas.quote import QuoteBreakdownResponse, QuoteItemResponse
 from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
 from apps.kuaizhizao.models.demand import Demand
 from apps.kuaizhizao.models.demand_item import DemandItem
@@ -81,6 +84,7 @@ class SalesOrderService:
         invoice_progress: Optional[float] = None,
         material_code_fallback: Optional[Dict[int, str]] = None,
         material_fallback: Optional[Dict[int, Dict[str, Any]]] = None,
+        milestones: Optional[List[Dict[str, Any]]] = None,
     ) -> SalesOrderResponse:
         """将 SalesOrder 转为 SalesOrderResponse"""
         from apps.kuaizhizao.services.document_lifecycle_service import get_sales_order_lifecycle
@@ -90,6 +94,7 @@ class SalesOrderService:
             delivery_progress=delivery_progress,
             invoice_progress=invoice_progress,
             pushed_to_computation=bool(demand and getattr(demand, "pushed_to_computation", False)),
+            milestones=milestones,
         )
         base = {
             "id": order.id,
@@ -379,6 +384,11 @@ class SalesOrderService:
                     }
 
         demand = await self._get_linked_demand(tenant_id, sales_order_id)
+        
+        # 获取 UniLifecycle 里程碑历史
+        from apps.kuaizhizao.services.document_lifecycle_service import get_document_milestones
+        milestones = await get_document_milestones(tenant_id, "sales_order", sales_order_id)
+        
         duration_info = None
         if include_duration and demand:
             duration_info = getattr(demand, "duration_info", None)
@@ -389,6 +399,7 @@ class SalesOrderService:
             duration_info=duration_info,
             material_code_fallback=material_code_fallback,
             material_fallback=material_fallback,
+            milestones=milestones,
         )
 
     async def list_sales_orders(
@@ -1928,3 +1939,238 @@ class SalesOrderService:
             "invoice_id": invoice.id,
             "invoice_code": invoice.invoice_code,
         }
+
+    async def get_sales_order_tracking(
+        self, tenant_id: int, sales_order_id: int
+    ):
+        """获取销售订单全息追踪视图"""
+        from apps.kuaizhizao.schemas.sales_order import (
+            SalesOrderTrackingResponse, TrackingWorkOrderInfo, TrackingDeliveryInfo, TrackingMaterialShortageInfo
+        )
+        from apps.kuaizhizao.models.work_order import WorkOrder
+        from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+        from apps.kuaizhizao.models.demand_computation_item import DemandComputationItem
+        
+        order = await SalesOrder.get_or_none(tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True)
+        if not order:
+            raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+            
+        items = await SalesOrderItem.filter(tenant_id=tenant_id, sales_order_id=sales_order_id).all()
+        
+        # 1. 备料进度 (Material Prep)
+        material_shortages = []
+        material_prep_progress = 0.0
+        demand = await self._get_linked_demand(tenant_id, sales_order_id)
+        if demand and demand.computation_id:
+            comp_items = await DemandComputationItem.filter(
+                tenant_id=tenant_id, 
+                computation_id=demand.computation_id,
+            ).exclude(material_source_type="Make").all()
+            
+            total_req = Decimal("0")
+            total_short = Decimal("0")
+            for ci in comp_items:
+                req = ci.required_quantity or Decimal("0")
+                short = ci.net_requirement or Decimal("0")
+                if req > 0:
+                    total_req += req
+                    if short > 0:
+                        total_short += short
+                        material_shortages.append(TrackingMaterialShortageInfo(
+                            material_code=ci.material_code,
+                            material_name=ci.material_name,
+                            required_quantity=req,
+                            shortage_quantity=short
+                        ))
+            if total_req > 0:
+                prep = float((total_req - total_short) / total_req * 100)
+                material_prep_progress = max(0.0, min(100.0, prep))
+            else:
+                material_prep_progress = 100.0
+        elif demand and not demand.computation_id:
+            material_prep_progress = 0.0
+        else:
+            material_prep_progress = 100.0
+            
+        # 2. 生产进度 (Production)
+        work_orders = await WorkOrder.filter(
+            tenant_id=tenant_id, 
+            sales_order_id=sales_order_id, 
+            deleted_at__isnull=True
+        ).all()
+        wo_list = []
+        total_wo_plan = Decimal("0")
+        total_wo_completed = Decimal("0")
+        for wo in work_orders:
+            w_plan = wo.quantity or Decimal("0")
+            w_comp = wo.completed_quantity or Decimal("0")
+            total_wo_plan += w_plan
+            total_wo_completed += w_comp
+            wo_list.append(TrackingWorkOrderInfo(
+                work_order_id=wo.id,
+                work_order_code=wo.code,
+                product_name=wo.product_name,
+                quantity=w_plan,
+                completed_quantity=w_comp,
+                status=wo.status
+            ))
+        production_progress = 0.0
+        if total_wo_plan > 0:
+            production_progress = float(min(100.0, (total_wo_completed / total_wo_plan) * 100))
+        elif work_orders: 
+            production_progress = 0.0
+        else:
+            production_progress = 0.0
+            if order.status in ("COMPLETED", "FINISHED"): 
+                production_progress = 100.0
+                
+        # 3. 发货进度 (Delivery)
+        deliveries = await SalesDelivery.filter(
+            tenant_id=tenant_id, 
+            sales_order_id=sales_order_id, 
+            deleted_at__isnull=True
+        ).all()
+        del_list = []
+        for de in deliveries:
+            del_list.append(TrackingDeliveryInfo(
+                delivery_id=de.id,
+                delivery_code=de.delivery_code,
+                delivery_date=de.delivery_date,
+                status=de.status
+            ))
+            
+        delivery_progress = 0.0
+        total_qty = sum((it.order_quantity or Decimal("0")) for it in items)
+        total_delivered = sum((it.delivered_quantity or Decimal("0")) for it in items)
+        if total_qty > 0:
+            delivery_progress = float(min(100.0, (total_delivered / total_qty) * 100))
+            
+        return SalesOrderTrackingResponse(
+            sales_order_id=order.id,
+            sales_order_code=order.order_code,
+            material_prep_progress=round(material_prep_progress, 1),
+            production_progress=round(production_progress, 1),
+            delivery_progress=round(delivery_progress, 1),
+            work_orders=wo_list,
+            deliveries=del_list,
+            material_shortages=material_shortages
+        )
+
+    async def get_quote_breakdown(
+        self, tenant_id: int, material_id: int
+    ) -> QuoteBreakdownResponse:
+        """
+        获取产品核价明细 (Agile Quoting Tool)
+        
+        逻辑：
+        1. 获取 Material
+        2. 获取默认 BOM (is_default=True)
+        3. 遍历 BOM 子件，获取单价（标准成本或参考采购价）
+        4. 获取关联的 ProcessRoute，提取工序并预估人工/制费
+        """
+        material = await Material.filter(tenant_id=tenant_id, id=material_id, deleted_at__isnull=True).first()
+        if not material:
+            raise NotFoundError(f"未找到物料 ID: {material_id}")
+
+        material_costs = []
+        manufacturing_costs = []
+        
+        # 1. 直接材料预估
+        # 优先查找 is_default=True 的 BOM 编码对应的项
+        default_bom = await BOM.filter(
+            tenant_id=tenant_id, 
+            material_id=material_id, 
+            is_default=True,
+            is_active=True,
+            deleted_at__isnull=True
+        ).first()
+        
+        bom_filter = {"tenant_id": tenant_id, "material_id": material_id, "is_active": True, "deleted_at__isnull": True}
+        if default_bom and default_bom.bom_code:
+            bom_filter["bom_code"] = default_bom.bom_code
+            
+        bom_items = await BOM.filter(**bom_filter).prefetch_related("component").all()
+        
+        total_material_cost = Decimal("0")
+        for bom in bom_items:
+            comp = bom.component
+            unit_cost = Decimal("0")
+            remark = "成本参考值缺失"
+            
+            # 从 defaults 获取标准成本/参考成本
+            if comp.defaults and isinstance(comp.defaults, dict):
+                # 尝试多个可能的成本字段
+                cost_val = comp.defaults.get("standard_cost") or comp.defaults.get("purchase_price") or comp.defaults.get("moving_average_cost") or 0
+                unit_cost = Decimal(str(cost_val))
+                if comp.defaults.get("standard_cost"):
+                    remark = "读取自标准成本"
+                elif comp.defaults.get("purchase_price"):
+                    remark = "读取自最近采购价"
+                elif comp.defaults.get("moving_average_cost"):
+                    remark = "读取自移动平均成本"
+            
+            qty = bom.quantity or Decimal("0")
+            waste_rate = bom.waste_rate or Decimal("0")
+            actual_qty = qty * (1 + waste_rate / 100)
+            item_total = actual_qty * unit_cost
+            total_material_cost += item_total
+            
+            material_costs.append(QuoteItemResponse(
+                item_type="material",
+                name=comp.name,
+                code=comp.main_code,
+                quantity=float(actual_qty),
+                unit=comp.base_unit,
+                unit_cost=float(unit_cost),
+                total_cost=float(item_total),
+                remark=remark
+            ))
+
+        # 2. 制造费用预估
+        # 获取物料级绑定的工艺路线
+        route = None
+        if material.process_route_id:
+            route = await ProcessRoute.filter(tenant_id=tenant_id, id=material.process_route_id).first()
+        
+        total_manufacturing_cost = Decimal("0")
+        if route and route.operation_sequence:
+            # 假设 operation_sequence: [{"name": "...", "std_time": 0.5, "labor_rate": 50}, ...]
+            ops = route.operation_sequence
+            if isinstance(ops, list):
+                for op_data in ops:
+                    op_name = op_data.get("name") or op_data.get("operation_name") or "未知工序"
+                    # 尝试从 op_data 获取标准工时
+                    std_time = Decimal(str(op_data.get("std_time") or op_data.get("standard_time") or 0))
+                    # 获取费率，优先取工序级，否则取默认值
+                    labor_rate = Decimal(str(op_data.get("labor_rate") or op_data.get("cost_rate") or 60)) 
+                    
+                    item_total = std_time * labor_rate
+                    total_manufacturing_cost += item_total
+                    
+                    manufacturing_costs.append(QuoteItemResponse(
+                        item_type="labor",
+                        name=op_name,
+                        code=op_data.get("code") or op_data.get("operation_code"),
+                        quantity=float(std_time),
+                        unit="小时",
+                        unit_cost=float(labor_rate),
+                        total_cost=float(item_total),
+                        remark="基于工艺路线工时预估"
+                    ))
+
+        total_estimated_cost = total_material_cost + total_manufacturing_cost
+        # 默认建议报价加价比例 (如 20%)
+        suggested_price = total_estimated_cost * Decimal("1.2")
+
+        return QuoteBreakdownResponse(
+            material_id=material.id,
+            material_code=material.main_code,
+            material_name=material.name,
+            material_spec=material.specification,
+            material_costs=material_costs,
+            manufacturing_costs=manufacturing_costs,
+            total_material_cost=float(total_material_cost),
+            total_manufacturing_cost=float(total_manufacturing_cost),
+            total_estimated_cost=float(total_estimated_cost),
+            suggested_price=float(suggested_price)
+        )

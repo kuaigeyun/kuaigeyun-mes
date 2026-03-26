@@ -195,11 +195,12 @@ class BatchingOrderService(AppBaseService[BatchingOrder]):
             deleted_at__isnull=True,
         ).order_by("id")
 
-        from apps.kuaizhizao.services.document_lifecycle_service import get_batching_order_lifecycle
-
+        from apps.kuaizhizao.services.document_lifecycle_service import get_batching_order_lifecycle, get_document_milestones
+        milestones = await get_document_milestones(order.tenant_id, "batching_order", order.id)
+        
         response = BatchingOrderWithItemsResponse.model_validate(order)
         response.items = [BatchingOrderItemResponse.model_validate(item) for item in items]
-        response.lifecycle = get_batching_order_lifecycle(order)
+        response.lifecycle = get_batching_order_lifecycle(order, milestones=milestones)
         return response
 
     async def update_batching_order(

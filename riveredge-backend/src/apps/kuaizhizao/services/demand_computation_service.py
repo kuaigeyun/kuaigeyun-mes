@@ -322,12 +322,40 @@ class DemandComputationService:
         computation: DemandComputation,
         items: List[DemandComputationItem]
     ) -> DemandComputationResponse:
-        """构建计算响应对象"""
+        """构建计算响应对象，填充计划员赋能增强字段"""
         from apps.kuaizhizao.services.document_lifecycle_service import get_demand_computation_lifecycle
 
-        item_responses = [
-            DemandComputationItemResponse.model_validate(item) for item in items
-        ]
+        today = date.today()
+        item_responses = []
+        for item in items:
+            resp = DemandComputationItemResponse.model_validate(item)
+            
+            # 1. 计算就绪度 (Readiness)
+            req_qty = float(item.gross_requirement or item.required_quantity or 0)
+            avail_qty = float(item.available_inventory or 0)
+            
+            if req_qty <= 0:
+                resp.readiness_status = "Ready"
+                resp.readiness_rate = 1.0
+            else:
+                resp.readiness_rate = min(1.0, avail_qty / req_qty)
+                if avail_qty >= req_qty:
+                    resp.readiness_status = "Ready"
+                elif avail_qty > 0:
+                    resp.readiness_status = "Partial"
+                else:
+                    resp.readiness_status = "Shortage"
+            
+            # 2. 计算交期风险 (Lead Time Risk)
+            # 如果计划开始日期早于今天，说明已经产生延迟风险
+            is_risk = False
+            start_date = item.production_start_date or item.procurement_start_date
+            if start_date and start_date < today and (item.net_requirement or 0) > 0:
+                is_risk = True
+            resp.is_overdue_risk = is_risk
+            
+            item_responses.append(resp)
+
         lifecycle = get_demand_computation_lifecycle(computation)
 
         return DemandComputationResponse(
@@ -524,10 +552,31 @@ class DemandComputationService:
                 # 统一需求计算（原 MRP/LRP 合并为单一实现，类型字段恒为 MRP）
                 await self._execute_mrp_computation(tenant_id, computation)
 
+                # 计算汇总信息 (新：计划员赋能增强，用于列表页展示)
+                items = await DemandComputationItem.filter(tenant_id=tenant_id, computation_id=computation_id).all()
+                shortage_count = 0
+                risk_count = 0
+                today = date.today()
+                for item in items:
+                    req_qty = float(item.gross_requirement or item.required_quantity or 0)
+                    avail_qty = float(item.available_inventory or 0)
+                    if req_qty > 0 and avail_qty < req_qty:
+                        shortage_count += 1
+                    
+                    start_date = item.production_start_date or item.procurement_start_date
+                    if start_date and start_date < today and (item.net_requirement or 0) > 0:
+                        risk_count += 1
+                
+                summary = computation.computation_summary or {}
+                summary["shortage_count"] = shortage_count
+                summary["risk_count"] = risk_count
+                summary["item_count"] = len(items)
+
                 # 更新计算状态为完成，清除失败时的错误信息
                 await DemandComputation.filter(tenant_id=tenant_id, id=computation_id).update(
                     computation_status="完成",
                     computation_end_time=datetime.now(),
+                    computation_summary=summary,
                     error_message=None,
                 )
 
@@ -554,6 +603,96 @@ class DemandComputationService:
             except Exception as update_err:
                 logger.warning(f"更新失败状态时出错: {update_err}")
             raise
+
+    async def get_computation_dynamic_monitor(
+        self,
+        tenant_id: int,
+        computation_id: int
+    ) -> Dict[str, Any]:
+        """
+        获取需求计算的动态变动监控
+        
+        对比上游需求变动与下游执行风险，作为计划员协同的桥梁。
+        """
+        from apps.kuaizhizao.models.demand import Demand
+        from apps.kuaizhizao.models.document_relation import DocumentRelation
+        from apps.kuaizhizao.models.work_order import WorkOrder
+        from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+        from datetime import datetime
+        
+        computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
+        if not computation:
+            raise NotFoundError(f"需求计算不存在: {computation_id}")
+            
+        comp_time = computation.computation_end_time or computation.updated_at
+        
+        # 1. 监控上游需求变动
+        upstream_alerts = []
+        demand_id_list = computation.demand_ids if computation.demand_ids else [computation.demand_id]
+        demands = await Demand.filter(tenant_id=tenant_id, id__in=demand_id_list).all()
+        for d in demands:
+            if d.updated_at > comp_time:
+                upstream_alerts.append({
+                    "type": "demand_updated",
+                    "id": d.id,
+                    "code": d.demand_code,
+                    "name": d.demand_name,
+                    "updated_at": d.updated_at,
+                    "message": f"源需求单 {d.demand_code} 在计算后发生了更新（更新于 {d.updated_at.strftime('%m-%d %H:%M')}），说明当前计算依据已偏离。"
+                })
+        
+        # 2. 监控下游执行风险 (延期)
+        downstream_alerts = []
+        now = datetime.now()
+        
+        # 获取所有下推关系
+        relations = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="demand_computation",
+            source_id=computation_id,
+            relation_mode="push"
+        ).all()
+        
+        for rel in relations:
+            if rel.target_type == "work_order":
+                wo = await WorkOrder.get_or_none(tenant_id=tenant_id, id=rel.target_id)
+                if wo and wo.status not in ("completed", "cancelled", "完成", "已取消"):
+                    if wo.planned_end_date and wo.planned_end_date < now:
+                        downstream_alerts.append({
+                            "type": "work_order_overdue",
+                            "id": wo.id,
+                            "code": wo.code,
+                            "name": wo.product_name,
+                            "planned_end_date": wo.planned_end_date,
+                            "status": wo.status,
+                            "message": f"下推工单 {wo.code} ({wo.product_name}) 已逾期，原计划结束日期: {wo.planned_end_date.strftime('%Y-%m-%d')}。"
+                        })
+            elif rel.target_type == "purchase_order":
+                po = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=rel.target_id)
+                if po and po.status not in ("已完成", "已取消", "completed", "cancelled"):
+                    if po.delivery_date:
+                        # DateField 转换为 datetime 比较
+                        delivery_dt = datetime.combine(po.delivery_date, datetime.min.time())
+                        if delivery_dt < now:
+                            downstream_alerts.append({
+                                "type": "purchase_order_overdue",
+                                "id": po.id,
+                                "code": po.order_code,
+                                "name": po.supplier_name,
+                                "delivery_date": po.delivery_date,
+                                "status": po.status,
+                                "message": f"下推采购单 {po.order_code} ({po.supplier_name}) 预计到货已逾期，日期为 {po.delivery_date.strftime('%Y-%m-%d')}。"
+                            })
+                        
+        return {
+            "computation_id": computation_id,
+            "computation_code": computation.computation_code,
+            "has_upstream_change": len(upstream_alerts) > 0,
+            "has_downstream_risk": len(downstream_alerts) > 0,
+            "upstream_alerts": upstream_alerts,
+            "downstream_alerts": downstream_alerts,
+            "monitor_time": now
+        }
 
     async def preview_execute_computation(
         self,

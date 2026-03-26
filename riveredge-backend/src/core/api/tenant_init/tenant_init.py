@@ -22,6 +22,11 @@ class RunInitRequest(BaseModel):
     keys: List[str] = Field(..., description="要执行的初始化项 key 列表")
 
 
+class RunIndustryPresetRequest(BaseModel):
+    """执行行业预设请求"""
+    industry_code: str = Field(..., description="行业预设代码 (如 sme_manufacturing)")
+
+
 class RunInitResponse(BaseModel):
     """执行初始化响应"""
     results: dict = Field(..., description="各初始化项执行结果")
@@ -69,3 +74,44 @@ async def run_init_items(
         results=results,
         message=f"执行完成，成功 {success_count}/{len(data.keys)} 项",
     )
+
+
+@router.get("/industry-presets")
+async def get_industry_presets(
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取行业预设模板列表
+    
+    返回系统支持的所有行业预设模板（一键建账），供新建组织或初始化时选择。
+    """
+    return TenantInitDataService.get_industry_presets()
+
+
+@router.post("/run-industry-preset", response_model=RunInitResponse)
+async def run_industry_preset(
+    data: RunIndustryPresetRequest,
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user_dep),
+):
+    """
+    执行行业预设初始化（一键建账）
+    
+    根据选定的行业类型，自动注入该行业对应的全套基础数据（部门、角色、仓库、工序等）。
+    """
+    try:
+        results = await TenantInitDataService.run_industry_preset(
+            tenant_id=tenant_id,
+            industry_code=data.industry_code,
+            current_user_id=current_user.id,
+        )
+        success_count = sum(1 for r in results.values() if r.get("success"))
+        return RunInitResponse(
+            results=results,
+            message=f"行业预设[{data.industry_code}]执行完成，成功 {success_count}/{len(results)} 项",
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )

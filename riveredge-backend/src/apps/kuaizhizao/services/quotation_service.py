@@ -232,8 +232,9 @@ class QuotationService:
                 tenant_id=tenant_id, quotation_id=quotation_id
             ).order_by("id")
         resp = self._quotation_to_response(quotation, items=items)
-        from apps.kuaizhizao.services.document_lifecycle_service import get_quotation_lifecycle
-        resp.lifecycle = get_quotation_lifecycle(quotation)
+        from apps.kuaizhizao.services.document_lifecycle_service import get_quotation_lifecycle, get_document_milestones
+        milestones = await get_document_milestones(quotation.tenant_id, "quotation", quotation.id)
+        resp.lifecycle = get_quotation_lifecycle(quotation, milestones=milestones)
         return resp
 
     async def list_quotations(

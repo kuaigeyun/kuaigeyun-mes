@@ -392,10 +392,16 @@ class ExceptionProcessService(AppBaseService[ExceptionProcessRecord]):
             deleted_at__isnull=True,
         ).order_by("action_at")
 
-        return ExceptionProcessRecordDetailResponse(
+        # 获取里程碑数据
+        from apps.kuaizhizao.services.document_lifecycle_service import get_exception_process_lifecycle, get_document_milestones
+        milestones = await get_document_milestones(process_record.tenant_id, "exception_process", process_record.id)
+        
+        detail = ExceptionProcessRecordDetailResponse(
             **ExceptionProcessRecordResponse.model_validate(process_record).model_dump(),
             histories=[ExceptionProcessHistoryResponse.model_validate(h) for h in histories],
         )
+        detail.lifecycle = get_exception_process_lifecycle(process_record, milestones=milestones)
+        return detail
 
     async def list_process_records(
         self,

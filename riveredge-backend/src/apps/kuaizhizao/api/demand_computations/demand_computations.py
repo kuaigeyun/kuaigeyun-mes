@@ -10,6 +10,7 @@ Date: 2025-01-14
 from typing import Optional, Dict, Any
 from fastapi import APIRouter, Depends, Query, Path, Body, HTTPException, status
 from loguru import logger
+from tortoise.expressions import Q
 
 from core.api.deps import get_current_user, get_current_tenant
 from infra.models.user import User
@@ -91,6 +92,16 @@ async def get_demand_computation_statistics(
         logger.warning(f"demand-computation-statistics completed_count: {e}")
         completed_count = 0
 
+    try:
+        # 统计含有缺料或交期风险的计算数
+        risk_count = await base.filter(
+            Q(computation_summary__contains={"shortage_count": 0}, _negated=True) | 
+            Q(computation_summary__contains={"risk_count": 0}, _negated=True)
+        ).count()
+    except Exception as e:
+        logger.warning(f"demand-computation-statistics risk_count: {e}")
+        risk_count = 0
+
     return {
         "total_count": total_count,
         "mts_count": mts_count,
@@ -99,6 +110,7 @@ async def get_demand_computation_statistics(
         "lrp_count": mto_count,
         "pending_count": pending_count,
         "completed_count": completed_count,
+        "risk_count": risk_count,
     }
 
 
@@ -284,6 +296,28 @@ async def get_computation_snapshots(
         )
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.get("/{computation_id}/dynamic-monitor", summary="获取需求计算动态变动监控")
+async def get_dynamic_monitor(
+    computation_id: int = Path(..., description="计算ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取需求计算的动态变动监控。
+    包括上游需求变更感应与下游执行进度追踪。
+    """
+    try:
+        return await computation_service.get_computation_dynamic_monitor(
+            tenant_id=tenant_id,
+            computation_id=computation_id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.exception("获取动态变动监控失败")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.get("/{computation_id}/push-records", summary="获取需求计算下推记录")

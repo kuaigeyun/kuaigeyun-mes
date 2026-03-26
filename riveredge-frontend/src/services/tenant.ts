@@ -215,6 +215,8 @@ export interface CreateTenantData {
   max_users?: number;
   max_storage?: number;
   expires_at?: string;
+  /** 行业预设代码 (用于一键建账) */
+  industry_preset?: string | null;
   /** 可选初始化项 key 列表。不传=全量，[]=仅必选 */
   init_data_options?: string[] | null;
 }

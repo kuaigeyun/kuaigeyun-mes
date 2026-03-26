@@ -125,6 +125,11 @@ class DemandComputationItemResponse(DemandComputationItemBase):
     id: int
     computation_id: int
     
+    # 计划员赋能增强字段 (Computed)
+    readiness_status: Optional[str] = Field(None, description="物料就绪状态 (Ready/Partial/Shortage)")
+    readiness_rate: Optional[float] = Field(None, description="库存就绪比例 (0.0-1.0)")
+    is_overdue_risk: bool = Field(False, description="是否存在交期风险")
+    
     class Config:
         from_attributes = True
 

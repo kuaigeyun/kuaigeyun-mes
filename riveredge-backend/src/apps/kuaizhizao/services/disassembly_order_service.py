@@ -96,8 +96,12 @@ class DisassemblyOrderService(AppBaseService[DisassemblyOrder]):
             deleted_at__isnull=True
         ).order_by('id')
 
+        from apps.kuaizhizao.services.document_lifecycle_service import get_disassembly_order_lifecycle, get_document_milestones
+        milestones = await get_document_milestones(order.tenant_id, "disassembly_order", order.id)
+        
         response = DisassemblyOrderWithItemsResponse.model_validate(order)
         response.items = [DisassemblyOrderItemResponse.model_validate(item) for item in items]
+        response.lifecycle = get_disassembly_order_lifecycle(order, milestones=milestones)
         return response
 
     async def update_disassembly_order(

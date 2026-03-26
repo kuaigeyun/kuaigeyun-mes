@@ -951,27 +951,45 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
             if work_order.status not in ['进行中', '已完成']:
                 raise BusinessLogicError(f"工单状态为 {work_order.status}，无法创建入库单")
             
-            # 2. 获取入库数量
+            # 2. 获取入库数量（优先从成品检验单获取合格数量）
             if receipt_quantity is None:
-                # 从报工记录获取合格数量
-                reporting_records = await ReportingRecord.filter(
+                from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
+                
+                # 检查是否存在已合格的成品检验单
+                qc_records = await FinishedGoodsInspection.filter(
                     tenant_id=tenant_id,
-                    work_order_id=work_order_id
+                    work_order_id=work_order_id,
+                    quality_status='合格'
                 ).all()
                 
-                if not reporting_records:
-                    raise ValidationError("工单没有报工记录，无法自动获取入库数量")
+                if qc_records:
+                    total_qc_qualified = sum(float(qc.qualified_quantity or 0) for qc in qc_records)
+                    # 检查是否已有入库记录，避免超入（简化处理：暂不进行复杂的已入库扣减，后续可增强）
+                    if total_qc_qualified > 0:
+                        receipt_quantity = total_qc_qualified
+                        logger.info(f"工单一键入库：自动从成品检验单获取合格数量 {receipt_quantity}")
                 
-                # 汇总所有报工记录的合格数量
-                total_qualified = sum(
-                    float(record.qualified_quantity or 0) 
-                    for record in reporting_records
-                )
-                
-                if total_qualified <= 0:
-                    raise ValidationError("报工合格数量为0，无法创建入库单")
-                
-                receipt_quantity = total_qualified
+                if receipt_quantity is None:
+                    # 如果没有合格的质检单，回退到从报工记录获取（可能适用于免检物料）
+                    reporting_records = await ReportingRecord.filter(
+                        tenant_id=tenant_id,
+                        work_order_id=work_order_id
+                    ).all()
+                    
+                    if not reporting_records:
+                        raise ValidationError("工单没有质检合格记录或报工记录，无法自动获取入库数量")
+                    
+                    # 汇总所有报工记录的合格数量
+                    total_qualified = sum(
+                        float(record.qualified_quantity or 0) 
+                        for record in reporting_records
+                    )
+                    
+                    if total_qualified <= 0:
+                        raise ValidationError("报工合格数量为0，无法创建入库单")
+                    
+                    receipt_quantity = total_qualified
+                    logger.info(f"工单一键入库：未找到质检单，从报工记录获取合格数量 {receipt_quantity}")
             else:
                 receipt_quantity = float(receipt_quantity)
             
@@ -1847,14 +1865,15 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
 
     async def get_purchase_receipt_by_id(self, tenant_id: int, receipt_id: int) -> PurchaseReceiptWithItemsResponse:
         """根据ID获取采购入库单（含明细）"""
-        from apps.kuaizhizao.services.document_lifecycle_service import get_purchase_receipt_lifecycle
+        from apps.kuaizhizao.services.document_lifecycle_service import get_purchase_receipt_lifecycle, get_document_milestones
 
         receipt = await PurchaseReceipt.get_or_none(tenant_id=tenant_id, id=receipt_id)
         if not receipt:
             raise NotFoundError(f"采购入库单不存在: {receipt_id}")
         items = await PurchaseReceiptItem.filter(tenant_id=tenant_id, receipt_id=receipt_id).all()
         resp = PurchaseReceiptWithItemsResponse.model_validate(receipt)
-        resp.lifecycle = get_purchase_receipt_lifecycle(receipt)
+        milestones = await get_document_milestones(receipt.tenant_id, "purchase_receipt", receipt.id)
+        resp.lifecycle = get_purchase_receipt_lifecycle(receipt, milestones=milestones)
         resp.items = [PurchaseReceiptItemResponse.model_validate(i) for i in items]
         return resp
 
@@ -3203,11 +3222,12 @@ class OtherInboundService(AppBaseService[OtherInbound]):
             raise NotFoundError(f"其他入库单不存在: {inbound_id}")
 
         items = await OtherInboundItem.filter(tenant_id=tenant_id, inbound_id=inbound_id).all()
-        from apps.kuaizhizao.services.document_lifecycle_service import get_other_inbound_lifecycle
+        from apps.kuaizhizao.services.document_lifecycle_service import get_other_inbound_lifecycle, get_document_milestones
 
         response = OtherInboundWithItemsResponse.model_validate(inbound)
+        milestones = await get_document_milestones(inbound.tenant_id, "other_inbound", inbound.id)
+        response.lifecycle = get_other_inbound_lifecycle(inbound, milestones=milestones)
         response.items = [OtherInboundItemResponse.model_validate(i) for i in items]
-        response.lifecycle = get_other_inbound_lifecycle(inbound)
         return response
 
     async def list_other_inbounds(

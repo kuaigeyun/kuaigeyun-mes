@@ -1000,6 +1000,64 @@ async def get_menu_badge_counts(
     except Exception as e:
         logger.warning(f"menu-badge-counts demand_computation: {e}")
         counts["demand_computation"] = 0
+
+    try:
+        # 设备点检：待点检数量
+        from apps.kuaizhizao.models.equipment_point_inspection import EquipmentPointInspectionRecord
+        counts["equipment_inspection"] = await EquipmentPointInspectionRecord.filter(
+            tenant_id=tenant_id,
+            status="待点检",
+            deleted_at__isnull=True
+        ).count()
+    except Exception as e:
+        logger.warning(f"menu-badge-counts equipment_inspection: {e}")
+        counts["equipment_inspection"] = 0
+
+    try:
+        # 备品备件：低于安全库存的数量
+        from apps.kuaizhizao.models.spare_part import SparePart, SparePartInventory
+        from tortoise.functions import Sum
+        
+        # 获取所有备件及其当前总库存
+        # 注意：这里简单的逻辑是统计有多少种备件低于安全库存
+        all_parts = await SparePart.filter(tenant_id=tenant_id, is_active=True, deleted_at__isnull=True)
+        alert_count = 0
+        for part in all_parts:
+            # 聚合该备件在所有库位的库存
+            total_stock_data = await SparePartInventory.filter(
+                tenant_id=tenant_id, 
+                spare_part_id=part.id, 
+                deleted_at__isnull=True
+            ).annotate(total=Sum("stock_quantity")).values("total")
+            
+            total_stock = (total_stock_data[0]["total"] or 0) if total_stock_data else 0
+            if total_stock < part.safety_stock:
+                alert_count += 1
+        counts["spare_part"] = alert_count
+    except Exception as e:
+        logger.warning(f"menu-badge-counts spare_part: {e}")
+        counts["spare_part"] = 0
+
+    try:
+        # 财务核算：应收/应付待审核 + 逾期 + 对账单待确认
+        from apps.kuaicaiwu.models.receivable import Receivable
+        from apps.kuaicaiwu.models.payable import Payable
+        from apps.kuaicaiwu.models.partner_statement import PartnerStatement
+        
+        c1 = await Receivable.filter(tenant_id=tenant_id, review_status__in=["待审核", "PENDING_REVIEW"], deleted_at__isnull=True).count()
+        c2 = await Receivable.filter(tenant_id=tenant_id, status="未收款", due_date__lt=now_date, deleted_at__isnull=True).count()
+        c3 = await Payable.filter(tenant_id=tenant_id, review_status__in=["待审核", "PENDING_REVIEW"], deleted_at__isnull=True).count()
+        c4 = await PartnerStatement.filter(tenant_id=tenant_id, status__in=["Draft", "待确认"], deleted_at__isnull=True).count()
+        
+        counts["finance_settlement"] = {
+            "overdue": c2,
+            "pending": c1 + c3 + c4,
+            "in_progress": 0
+        }
+    except Exception as e:
+        logger.warning(f"menu-badge-counts finance_settlement: {e}")
+        counts["finance_settlement"] = 0
+
     return counts
 
 

@@ -115,8 +115,31 @@ class PurchaseOrderItem(BaseModel):
     # 备注
     notes = fields.TextField(null=True, description="备注")
 
+    # 费用分摊 (V2 增强)
+    landing_cost = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="分摊杂费/落地成本")
+    additional_fees_details = fields.JSONField(null=True, description="杂费分摊明细 (JSON)")
+
     class Meta:
         table = "apps_kuaizhizao_purchase_order_items"
         table_description = "快格轻制造 - 采购订单明细"
 
 
+class PurchaseOrderChange(BaseModel):
+    """
+    采购订单变更记录 (Audit Ready)
+    """
+    tenant_id = fields.IntField(description="租户ID")
+    order = fields.ForeignKeyField("models.PurchaseOrder", related_name="changes", description="关联订单")
+    
+    change_type = fields.CharField(max_length=50, description="变更类型 (Modify/Cancel/Price/Quantity)")
+    field_name = fields.CharField(max_length=100, null=True, description="变更字段")
+    old_value = fields.TextField(null=True, description="旧值")
+    new_value = fields.TextField(null=True, description="新值")
+    
+    reason = fields.TextField(null=True, description="变更原因")
+    operator_id = fields.IntField(description="操作人ID")
+    operator_name = fields.CharField(max_length=100, description="操作人姓名")
+
+    class Meta:
+        table = "apps_kuaizhizao_purchase_order_changes"
+        table_description = "快格轻制造 - 采购订单变更日志"

@@ -544,6 +544,7 @@ class TenantService:
         tenant_id: int,
         init_data_options: Optional[List[str]] = None,
         current_user_id: Optional[int] = None,
+        industry_preset: Optional[str] = None,
     ) -> None:
         """
         初始化组织数据
@@ -571,25 +572,38 @@ class TenantService:
             import traceback
             logger.error(traceback.format_exc())
 
-        # 2. 执行可选初始化
-        if init_data_options is None:
-            # 向后兼容：未指定时执行全部可选项
-            optional_keys = [i["key"] for i in TenantInitDataService.INIT_ITEMS_OPTIONAL]
-        else:
-            optional_keys = init_data_options
-
-        if optional_keys:
+        # 2. 执行可选初始化或行业预设
+        if industry_preset:
             try:
-                await TenantInitDataService.run_optional(
+                await TenantInitDataService.run_industry_preset(
                     tenant_id=tenant_id,
-                    selected_keys=optional_keys,
+                    industry_code=industry_preset,
                     current_user_id=current_user_id,
                 )
-                logger.info(f"组织 {tenant_id} 可选数据初始化完成: {optional_keys}")
+                logger.info(f"组织 {tenant_id} 行业预设初始化完成: {industry_preset}")
             except Exception as e:
-                logger.error(f"组织 {tenant_id} 可选数据初始化失败: {e}")
+                logger.error(f"组织 {tenant_id} 行业预设初始化失败: {e}")
                 import traceback
                 logger.error(traceback.format_exc())
+        else:
+            if init_data_options is None:
+                # 向后兼容：未指定时执行全部可选项
+                optional_keys = [i["key"] for i in TenantInitDataService.INIT_ITEMS_OPTIONAL]
+            else:
+                optional_keys = init_data_options
+
+            if optional_keys:
+                try:
+                    await TenantInitDataService.run_optional(
+                        tenant_id=tenant_id,
+                        selected_keys=optional_keys,
+                        current_user_id=current_user_id,
+                    )
+                    logger.info(f"组织 {tenant_id} 可选数据初始化完成: {optional_keys}")
+                except Exception as e:
+                    logger.error(f"组织 {tenant_id} 可选数据初始化失败: {e}")
+                    import traceback
+                    logger.error(traceback.format_exc())
 
         # 3. 显式同步应用级菜单到数据库（确保注册后菜单立即可用）
         # 应用注册时可能因时序等原因未完成菜单同步，此处统一兜底
