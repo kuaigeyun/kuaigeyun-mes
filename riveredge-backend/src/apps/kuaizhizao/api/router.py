@@ -32,6 +32,7 @@ from .computation_configs.computation_configs import router as computation_confi
 from .scheduling_configs.scheduling_configs import router as scheduling_config_router
 from .dashboards.dashboards import router as dashboard_router
 from .reports.reports import router as reports_router
+from .wave_pickings.wave_pickings import router as wave_picking_router
 
 # 导入设备管理路由
 from .equipment.equipment import router as equipment_router
@@ -106,6 +107,9 @@ router.include_router(traceability_router, prefix="/traceability")
 
 # 注册报表路由
 router.include_router(reports_router)
+
+# 注册波次拣货路由
+router.include_router(wave_picking_router)
 
 @router.get("/health")
 async def health_check():

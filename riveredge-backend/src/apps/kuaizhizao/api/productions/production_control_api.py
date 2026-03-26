@@ -4,7 +4,7 @@
 
 from fastapi import APIRouter, Depends, Query
 from typing import List
-from core.dependencies.auth import get_current_user
+from core.api.deps import get_current_user
 from apps.kuaizhizao.services.production_control_service import ProductionControlService
 from apps.kuaizhizao.schemas.production_control import (
     MaterialReadinessItem, ResourceLoadItem, DeliveryRiskItem, ControlTowerSummary,

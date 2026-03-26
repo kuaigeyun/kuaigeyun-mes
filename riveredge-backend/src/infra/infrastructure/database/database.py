@@ -184,6 +184,8 @@ TORTOISE_ORM = {
                 "apps.master_data.models.performance",  # 绩效数据模型（假期、技能）
                 "apps.master_data.models.employee_performance",  # 员工绩效模型（配置、计件单价、工时单价、KPI、汇总）
                 "apps.master_data.models.product",  # 产品模型
+                "apps.master_data.models.bom_change",  # BOM变更记录
+                "apps.master_data.models.process_route_change",  # 工艺路线变更记录
                 # 快格轻制造模型
                 "apps.kuaizhizao.models.work_order",  # 工单模型
                 "apps.kuaizhizao.models.work_order_operation",  # 工单工序模型
@@ -242,6 +244,47 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.outsource_work_order",  # 委外工单模型（OutsourceWorkOrder、OutsourceMaterialIssue、OutsourceMaterialReceipt）
                 "apps.kuaizhizao.models.document_relation",  # 单据关联模型
                 "apps.kuaizhizao.models.purchase_logistics",  # 采购物流记录模型
+                "apps.kuaizhizao.models.assembly_order",  # 装配单模型
+                "apps.kuaizhizao.models.assembly_material_binding",  # 装配物料绑定模型
+                "apps.kuaizhizao.models.backflush_record",  # 物料倒冲记录模型
+                "apps.kuaizhizao.models.batching_order",  # 备料单模型
+                "apps.kuaizhizao.models.computation_config",  # 需求计算参数配置模型
+                "apps.kuaizhizao.models.customer_material_registration",  # 客户来料登记模型
+                "apps.kuaizhizao.models.delivery_delay_exception",  # 延期异常模型
+                "apps.kuaizhizao.models.delivery_notice",  # 送货通知模型
+                "apps.kuaizhizao.models.disassembly_order",  # 拆解单模型
+                "apps.kuaizhizao.models.document_node_timing",  # 单据节点耗时模型
+                "apps.kuaizhizao.models.equipment",  # 设备基础模型
+                "apps.kuaizhizao.models.equipment_fault",  # 设备故障模型
+                "apps.kuaizhizao.models.equipment_point_inspection",  # 设备点检模型
+                "apps.kuaizhizao.models.equipment_status_monitor",  # 设备状态监控模型
+                "apps.kuaizhizao.models.exception_process_record",  # 异常处理记录模型
+                "apps.kuaizhizao.models.inspection_plan",  # 质检方案模型
+                "apps.kuaizhizao.models.inventory_alert",  # 库存预警模型
+                "apps.kuaizhizao.models.inventory_transfer",  # 库存调拨模型
+                "apps.kuaizhizao.models.launch_countdown",  # 上线倒计时模型
+                "apps.kuaizhizao.models.line_side_inventory",  # 线边仓库存模型
+                "apps.kuaizhizao.models.maintenance_plan",  # 维护计划模型
+                "apps.kuaizhizao.models.maintenance_reminder",  # 维护提醒模型
+                "apps.kuaizhizao.models.material_borrow",  # 物料借出模型
+                "apps.kuaizhizao.models.material_call_request",  # 叫料请求模型
+                "apps.kuaizhizao.models.material_return",  # 物料退回（非生产）模型
+                "apps.kuaizhizao.models.material_shortage_exception",  # 缺料异常模型
+                "apps.kuaizhizao.models.mold",  # 模具模型
+                "apps.kuaizhizao.models.other_inbound",  # 其他入库模型
+                "apps.kuaizhizao.models.other_outbound",  # 其他出库模型
+                "apps.kuaizhizao.models.quality_exception",  # 质量异常模型
+                "apps.kuaizhizao.models.quality_standard",  # 质量标准模型
+                "apps.kuaizhizao.models.quotation",  # 报价单模型
+                "apps.kuaizhizao.models.receipt_notice",  # 收货通知模型
+                "apps.kuaizhizao.models.replenishment_suggestion",  # 补货建议模型
+                "apps.kuaizhizao.models.sample_trial",  # 样品试用模型
+                "apps.kuaizhizao.models.scheduling_config",  # 排程配置模型
+                "apps.kuaizhizao.models.shipment_notice",  # 发货通知模型
+                "apps.kuaizhizao.models.spare_part",  # 备品备件模型
+                "apps.kuaizhizao.models.state_transition",  # 状态流转规则模型
+                "apps.kuaizhizao.models.stocktaking",  # 库存盘点模型
+                "apps.kuaizhizao.models.tool",  # 工装器具模型
             ],
             "default_connection": "default",
         },
