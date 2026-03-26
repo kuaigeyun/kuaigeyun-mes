@@ -928,10 +928,16 @@ async def get_menu_badge_counts(
             tenant_id=tenant_id, deleted_at__isnull=True,
             status="待检验",
         ).count()
+        counts["incoming_inspection"] = c1
+        counts["process_inspection"] = c2
+        counts["finished_goods_inspection"] = c3
         counts["quality_inspection"] = c1 + c2 + c3
     except Exception as e:
         logger.warning(f"menu-badge-counts quality_inspection: {e}")
         counts["quality_inspection"] = 0
+        counts["incoming_inspection"] = 0
+        counts["process_inspection"] = 0
+        counts["finished_goods_inspection"] = 0
     try:
         # 生产计划：未执行
         from apps.kuaizhizao.models.production_plan import ProductionPlan

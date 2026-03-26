@@ -53,6 +53,7 @@ const ShipmentNoticesPage = lazy(() => import('./pages/sales-management/shipment
 const SampleTrialsPage = lazy(() => import('./pages/sales-management/sample-trials'));
 
 // 质量管理页面
+const InspectionCenterPage = lazy(() => import('./pages/quality-management/inspection-center'));
 const IncomingInspectionPage = lazy(() => import('./pages/quality-management/incoming-inspection'));
 const ProcessInspectionPage = lazy(() => import('./pages/quality-management/process-inspection'));
 const FinishedGoodsInspectionPage = lazy(() => import('./pages/quality-management/finished-goods-inspection'));
@@ -158,6 +159,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="production-execution/work-orders/:id/kiosk" element={withPageSuspense(WorkOrderDetailKioskPage)} />
 
       {/* 质量管理路由 */}
+      <Route path="quality-management/inspection-center" element={withPageSuspense(InspectionCenterPage)} />
       <Route path="quality-management/incoming-inspection" element={withPageSuspense(IncomingInspectionPage)} />
       <Route path="quality-management/process-inspection" element={withPageSuspense(ProcessInspectionPage)} />
       <Route path="quality-management/finished-goods-inspection" element={withPageSuspense(FinishedGoodsInspectionPage)} />

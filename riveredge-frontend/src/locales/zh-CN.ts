@@ -1577,6 +1577,7 @@ export default {
   'app.kuaizhizao.menu.sales-management.quotations': '报价单',
   'app.kuaizhizao.menu.sales-management.sample-trials': '样品试用单',
   'app.kuaizhizao.menu.quality-management': '质量管理',
+  'app.kuaizhizao.menu.quality-management.inspection-center': '质检中心',
   'app.kuaizhizao.menu.quality-management.incoming-inspection': '来料检验',
   'app.kuaizhizao.menu.quality-management.traceability': '追溯管理',
   'app.kuaizhizao.menu.quality-management.inspection-plans': '质检方案',
