@@ -101,6 +101,7 @@ const StocktakingPage = lazy(() => import('./pages/warehouse-management/stocktak
 const InventoryTransferPage = lazy(() => import('./pages/warehouse-management/inventory-transfer'));
 const AssemblyOrdersPage = lazy(() => import('./pages/warehouse-management/assembly-orders'));
 const BatchingCenterPage = lazy(() => import('./pages/warehouse-management/batching-center'));
+const MaterialCallsPage = lazy(() => import('./pages/warehouse-management/material-calls'));
 const DisassemblyOrdersPage = lazy(() => import('./pages/warehouse-management/disassembly-orders'));
 const InventoryAlertPage = lazy(() => import('./pages/warehouse-management/inventory-alert'));
 const PackingBindingPage = lazy(() => import('./pages/production-execution/packing-binding'));
@@ -204,6 +205,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="warehouse-management/inventory-transfer" element={withPageSuspense(InventoryTransferPage)} />
       <Route path="warehouse-management/delivery-notes" element={withPageSuspense(DeliveryNotesPage)} />
       <Route path="warehouse-management/batching-center" element={withPageSuspense(BatchingCenterPage)} />
+      <Route path="warehouse-management/material-calls" element={withPageSuspense(MaterialCallsPage)} />
       <Route path="warehouse-management/assembly-orders" element={withPageSuspense(AssemblyOrdersPage)} />
       <Route path="warehouse-management/disassembly-orders" element={withPageSuspense(DisassemblyOrdersPage)} />
       <Route path="warehouse-management/batch-inventory-query" element={withPageSuspense(BatchInventoryQueryPage)} />

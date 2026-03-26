@@ -1926,6 +1926,7 @@ export default {
   'app.kuaizhizao.menu.warehouse-management.document-efficiency': '单据效率分析',
   'app.kuaizhizao.menu.warehouse-management.delivery-notes': '送货单',
   'app.kuaizhizao.menu.warehouse-management.batching-center': '配料中心',
+  'app.kuaizhizao.menu.warehouse-management.material-calls': '现场叫料监控',
   'app.kuaizhizao.menu.warehouse-management.stocktaking': '盘点单',
   'app.kuaizhizao.menu.warehouse-management.inventory-transfer': '调拨单',
   'app.kuaizhizao.menu.warehouse-management.assembly-orders': '组装单',

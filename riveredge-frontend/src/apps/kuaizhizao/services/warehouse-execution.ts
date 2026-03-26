@@ -24,6 +24,9 @@ export const warehouseApi = {
           warehouse_name: params.warehouse_name,
         },
       }),
+    /** 获取仓库主动备料提醒列表 */
+    getMaterialPrepReminders: async (params?: { skip?: number; limit?: number }) =>
+      apiRequest('/apps/kuaizhizao/production-pickings/material-prep-reminders', { method: 'GET', params }),
   },
   productionReturn: {
     list: async (params?: any) => apiRequest('/apps/kuaizhizao/production-returns', { method: 'GET', params }),
@@ -37,6 +40,12 @@ export const warehouseApi = {
         method: 'GET',
         params: templateUuid ? { template_uuid: templateUuid } : undefined,
       }),
+  },
+  materialCall: {
+    list: async (params?: any) => apiRequest('/apps/kuaizhizao/material-calls', { method: 'GET', params }),
+    create: async (data: any) => apiRequest('/apps/kuaizhizao/material-calls', { method: 'POST', data }),
+    update: async (id: number, data: any) => apiRequest(`/apps/kuaizhizao/material-calls/${id}`, { method: 'PATCH', data }),
+    cancel: async (id: number) => apiRequest(`/apps/kuaizhizao/material-calls/${id}/cancel`, { method: 'POST' }),
   },
   otherInbound: {
     list: async (params?: any) => apiRequest('/apps/kuaizhizao/other-inbounds', { method: 'GET', params }),

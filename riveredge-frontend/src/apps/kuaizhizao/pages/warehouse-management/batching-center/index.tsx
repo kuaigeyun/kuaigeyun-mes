@@ -11,7 +11,10 @@
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormTextArea, ProFormDatePicker, ProFormRadio, ProFormDependency, ProFormItem } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, message, Card, Table, Form as AntForm, InputNumber, Row, Col } from 'antd';
-import { PlusOutlined, DeleteOutlined, EyeOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, EyeOutlined, CheckCircleOutlined, BellOutlined } from '@ant-design/icons';
+import { useQuery } from '@tanstack/react-query';
+import { warehouseApi } from '../../../services/warehouse-execution';
+import { List, Typography, Progress } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
@@ -66,13 +69,14 @@ const BatchingCenterPage: React.FC = () => {
   const defaultBatchingItem = { material_id: undefined, material_code: '', material_name: '', material_unit: '', required_quantity: 1 };
 
   /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码 */
-  const handleCreate = () => {
+  const handleCreate = (workOrderId?: number) => {
     setCreateModalVisible(true);
     setTimeout(() => {
       formRef.current?.resetFields();
       formRef.current?.setFieldsValue({
         create_mode: 'from_work_order',
         batching_date: dayjs(),
+        work_order_id: workOrderId,
         items: [defaultBatchingItem],
       });
     }, 0);
@@ -235,6 +239,7 @@ const BatchingCenterPage: React.FC = () => {
 
   return (
     <ListPageTemplate>
+      <MaterialPrepReminders onCreateBatching={handleCreate} />
       <UniTable<BatchingOrder>
         headerTitle="配料单"
         actionRef={actionRef}
@@ -537,6 +542,65 @@ const BatchingCenterPage: React.FC = () => {
         )}
       </DetailDrawerTemplate>
     </ListPageTemplate>
+  );
+};
+
+/**
+ * 主动备料提醒组件
+ */
+const MaterialPrepReminders: React.FC<{ onCreateBatching: (workOrderId: number) => void }> = ({
+  onCreateBatching,
+}) => {
+  const { data: reminders, isLoading } = useQuery({
+    queryKey: ['materialPrepReminders'],
+    queryFn: () => warehouseApi.productionPicking.getMaterialPrepReminders({ limit: 5 }),
+    staleTime: 30000,
+  });
+
+  if (!reminders?.items?.length) return null;
+
+  return (
+    <Card
+      size="small"
+      title={
+        <Space>
+          <BellOutlined style={{ color: '#faad14' }} />
+          <Typography.Text strong>智能备料提醒 (齐套工单)</Typography.Text>
+        </Space>
+      }
+      style={{ marginBottom: 16, border: '1px solid #ffe58f', background: '#fffbe6' }}
+      styles={{ body: { padding: '0 12px' } }}
+    >
+      <List
+        size="small"
+        loading={isLoading}
+        dataSource={reminders.items}
+        renderItem={(item: any) => (
+          <List.Item
+            extra={
+              <Button type="primary" size="small" onClick={() => onCreateBatching(item.work_order_id)}>
+                立即配料
+              </Button>
+            }
+          >
+            <List.Item.Meta
+              title={
+                <Space>
+                  <Typography.Text code>{item.work_order_code}</Typography.Text>
+                  <Tag color="green">齐套率 {Math.round(item.kitting_rate * 100)}%</Tag>
+                </Space>
+              }
+              description={
+                <Space size="large" style={{ fontSize: '12px', color: '#666' }}>
+                  <span>推荐仓库: {item.suggested_warehouse_name || '主仓'}</span>
+                  <span>计划开始: {item.planned_start_date ? dayjs(item.planned_start_date).format('MM-DD HH:mm') : '-'}</span>
+                </Space>
+              }
+            />
+          </List.Item>
+        )}
+      />
+    </Card>
   );
 };
 

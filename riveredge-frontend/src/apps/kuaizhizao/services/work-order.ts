@@ -147,6 +147,10 @@ export const workOrderApi = {
     if (templateUuid) params.set('template_uuid', templateUuid);
     return `/api/v1/apps/kuaizhizao/work-orders/${id}/print?${params}`;
   },
+
+  /** 获取工单齐套性分析 */
+  getKittingAnalysis: async (id: string) =>
+    apiRequest(`/apps/kuaizhizao/work-orders/${id}/kitting-analysis`, { method: 'GET' }),
 };
 
 export const reworkOrderApi = {
