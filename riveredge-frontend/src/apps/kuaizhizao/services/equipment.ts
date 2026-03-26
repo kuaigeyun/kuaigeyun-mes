@@ -293,3 +293,34 @@ export const maintenanceReminderApi = {
   },
 };
 
+// 设备点检相关接口
+export const equipmentInspectionApi = {
+  // 创建点检记录
+  create: async (data: any) => {
+    return apiRequest('/apps/kuaizhizao/equipment-inspections', { method: 'POST', data });
+  },
+
+  // 获取设备点检历史
+  getHistory: async (equipmentId: number) => {
+    return apiRequest(`/apps/kuaizhizao/equipment-inspections/history/${equipmentId}`, { method: 'GET' });
+  },
+};
+
+// 备品备件相关接口
+export const sparePartApi = {
+  // 获取备件列表
+  list: async () => {
+    return apiRequest('/apps/kuaizhizao/spare-parts', { method: 'GET' });
+  },
+
+  // 获取低库存预警
+  getAlerts: async () => {
+    return apiRequest('/apps/kuaizhizao/spare-parts/alerts', { method: 'GET' });
+  },
+
+  // 获取库存列表
+  listInventory: async () => {
+    return apiRequest('/apps/kuaizhizao/spare-parts/inventory', { method: 'GET' });
+  },
+};
+

@@ -9,7 +9,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ActionType, ProColumns, ProFormSelect, ProFormTextArea, ProFormDigit, ProFormItem } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormSelect, ProFormTextArea, ProFormDigit, ProFormItem, ProFormDependency } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Card, Row, Col, Table, Modal } from 'antd';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
@@ -21,8 +21,9 @@ import { UniWorkflowActions } from '../../../../../components/uni-workflow-actio
 import { getIncomingInspectionLifecycle } from '../../../utils/incomingInspectionLifecycle';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../../../../../services/api';
-import { qualityApi } from '../../../services/production';
+import { qualityApi, workOrderApi } from '../../../services/production';
 import { getDocumentRelations } from '../../../services/document-relation';
+import type { DocumentRelationData } from '../../../../../components/document-relation-display';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 import { downloadFile } from '../../../services/common';
 
@@ -65,6 +66,51 @@ interface ProcessInspection {
   lifecycle?: { main_stages?: Array<unknown> };
 }
 
+/**
+ * 工序选择子组件 (Process Inspection)
+ * 封装在 ProFormDependency 中使用，处理联动逻辑
+ */
+const OperationSelect: React.FC<{ 
+  workOrderId?: number; 
+  value?: number; 
+  onChange?: (val: number) => void;
+  placeholder?: string;
+  disabled?: boolean;
+}> = ({ workOrderId, value, onChange, placeholder, disabled }) => {
+  const [options, setOptions] = useState<Array<{ label: string; value: number }>>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (workOrderId) {
+      setLoading(true);
+      workOrderApi.getOperations(workOrderId.toString())
+        .then(response => {
+          const data = Array.isArray(response) ? response : (response.data || []);
+          setOptions(data.map((op: any) => ({
+            label: `${op.operation_name} (${op.sequence || ''})`,
+            value: op.operation_id,
+          })));
+        })
+        .catch(() => setOptions([]))
+        .finally(() => setLoading(false));
+    } else {
+      setOptions([]);
+    }
+  }, [workOrderId]);
+
+  return (
+    <UniDropdown
+      placeholder={placeholder}
+      showSearch
+      loading={loading}
+      disabled={disabled || !workOrderId}
+      options={options}
+      value={value}
+      onChange={onChange}
+    />
+  );
+};
+
 const DISPOSAL_METHOD_FALLBACK = [
   { label: '返工', value: 'rework' },
   { label: '报废', value: 'scrap' },
@@ -106,7 +152,7 @@ const ProcessInspectionPage: React.FC = () => {
   // 详情Drawer状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [inspectionDetail, setInspectionDetail] = useState<ProcessInspection | null>(null);
-  const [documentRelations, setDocumentRelations] = useState<DocumentRelation | null>(null);
+  const [documentRelations, setDocumentRelations] = useState<DocumentRelationData | null>(null);
 
   // 从工单创建Modal状态
   const [createFromWorkOrderModalVisible, setCreateFromWorkOrderModalVisible] = useState(false);
@@ -118,7 +164,7 @@ const ProcessInspectionPage: React.FC = () => {
   // 创建不合格品记录Modal状态
   const [createDefectModalVisible, setCreateDefectModalVisible] = useState(false);
   const [currentDefectInspection, setCurrentDefectInspection] = useState<ProcessInspection | null>(null);
-  const defectFormRef = useRef<any>(null); // Ant Design ProForm instances often have 'any' type due to dynamic nature
+  const defectFormRef = useRef<any>(null);
 
   // 统计数据（从接口获取）
   const { data: statsData } = useQuery({
@@ -646,48 +692,50 @@ const ProcessInspectionPage: React.FC = () => {
         width={MODAL_CONFIG.SMALL_WIDTH}
         formRef={createFromWorkOrderFormRef}
       >
-        <ProFormSelect
+        <ProFormItem
           name="work_order_id"
           label="选择工单"
-          placeholder="请选择工单"
           rules={[{ required: true, message: '请选择工单' }]}
-          request={async () => {
-            try {
-              const { workOrderApi } = await import('../../../services/production');
-              const response = await workOrderApi.list({
-                skip: 0,
-                limit: 1000,
-                status: '进行中',
-              });
-              const data = Array.isArray(response) ? response : (response.data || []);
-              return data.map((wo: any) => ({
-                label: `${wo.code} - ${wo.name}`,
-                value: wo.id,
-              }));
-            } catch (error) {
-              return [];
-            }
-          }}
-        />
-        <ProFormSelect
-          name="operation_id"
-          label="选择工序"
-          placeholder="请先选择工单"
-          rules={[{ required: true, message: '请选择工序' }]}
-          dependencies={['work_order_id']}
-          request={async (params) => {
-            if (!params.work_order_id) return [];
-            try {
-              // 获取工单的工艺路线，然后获取工序列表
-              const { workOrderApi } = await import('../../../services/production');
-              await workOrderApi.get(params.work_order_id.toString());
-              // TODO: 根据工艺路线获取工序列表
-              return [];
-            } catch (error) {
-              return [];
-            }
-          }}
-        />
+        >
+          <UniDropdown
+            placeholder="请选择工单"
+            showSearch
+            advancedSearch={{
+              label: '高级搜索工单',
+              fields: [
+                { name: 'code', label: '工单编码', type: 'text' },
+                { name: 'name', label: '工单名称', type: 'text' },
+              ],
+              onSearch: async (params) => {
+                const response = await workOrderApi.list({
+                  ...params,
+                  skip: 0,
+                  limit: 100,
+                  status: '进行中',
+                });
+                const data = Array.isArray(response) ? response : (response.data || []);
+                return data.map((wo: any) => ({
+                  label: `${wo.code} - ${wo.name}`,
+                  value: wo.id,
+                }));
+              },
+            }}
+          />
+        </ProFormItem>
+        <ProFormDependency name={['work_order_id']}>
+          {({ work_order_id }) => (
+            <ProFormItem
+              name="operation_id"
+              label="选择工序"
+              rules={[{ required: true, message: '请选择工序' }]}
+            >
+              <OperationSelect 
+                workOrderId={work_order_id} 
+                placeholder={work_order_id ? "请选择工序" : "请先选择工单"}
+              />
+            </ProFormItem>
+          )}
+        </ProFormDependency>
       </FormModalTemplate>
 
       {/* 过程检验详情 Drawer */}
@@ -736,7 +784,7 @@ const ProcessInspectionPage: React.FC = () => {
               {/* 单据关联展示 */}
               {documentRelations && (
                 <Card title="单据关联" style={{ marginBottom: 16 }}>
-                  {documentRelations.upstream_count > 0 && (
+                  {(documentRelations.upstream_count || 0) > 0 && (
                     <div style={{ marginBottom: 16 }}>
                       <div style={{ marginBottom: 8, fontWeight: 'bold' }}>
                         上游单据 ({documentRelations.upstream_count})
@@ -754,7 +802,7 @@ const ProcessInspectionPage: React.FC = () => {
                       />
                     </div>
                   )}
-                  {documentRelations.upstream_count === 0 && (
+                  {(documentRelations.upstream_count || 0) === 0 && (
                     <div style={{ textAlign: 'center', color: '#999', padding: '20px 0' }}>
                       暂无关联单据
                     </div>

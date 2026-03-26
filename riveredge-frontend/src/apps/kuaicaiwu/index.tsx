@@ -35,6 +35,10 @@ const CostOptimizationPage = lazy(() => import('./pages/cost-management/cost-opt
 const CostReportPage = lazy(() => import('./pages/cost-management/cost-report'));
 const CostCalculationTabsPage = lazy(() => import('./pages/cost-management/cost-calculation-tabs'));
 
+// 管理报表
+const ManagementDashboard = lazy(() => import('./pages/management-dashboard'));
+const SettlementPage = lazy(() => import('./pages/finance-management/settlement'));
+
 const KuaicaiwuApp: React.FC = () => {
   return (
     <Routes>
@@ -48,6 +52,7 @@ const KuaicaiwuApp: React.FC = () => {
       <Route path="finance-management/invoices" element={withPageSuspense(InvoiceListPage)} />
       <Route path="finance-management/invoices/:code" element={withPageSuspense(InvoiceDetailPage)} />
       <Route path="finance-management/sales-invoices" element={withPageSuspense(InvoiceListPage)} />
+      <Route path="finance-management/settlement" element={withPageSuspense(SettlementPage)} />
 
       {/* 成本管理路由 */}
       <Route path="cost-management/cost-rules" element={withPageSuspense(CostRulesPage)} />
@@ -60,6 +65,7 @@ const KuaicaiwuApp: React.FC = () => {
       <Route path="cost-management/outsource-cost" element={withPageSuspense(CostCalculationTabsPage)} />
       <Route path="cost-management/purchase-cost" element={withPageSuspense(CostCalculationTabsPage)} />
       <Route path="cost-management/quality-cost" element={withPageSuspense(CostCalculationTabsPage)} />
+      <Route path="management-dashboard" element={withPageSuspense(ManagementDashboard)} />
 
       {/* 默认路由 */}
       <Route path="" element={

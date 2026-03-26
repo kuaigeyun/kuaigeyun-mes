@@ -139,6 +139,9 @@ const MENU_BADGE_PATH_KEY: Record<string, string> = {
   '/apps/kuaizhizao/plan-management/demand-computation': 'demand_computation',
   '/apps/kuaizhizao/equipment-management/equipment': 'equipment',
   '/apps/kuaizhizao/equipment-management/molds': 'mold',
+  '/apps/kuaizhizao/equipment-management/inspection': 'equipment_inspection',
+  '/apps/kuaizhizao/equipment-management/spare-parts': 'spare_part',
+  '/apps/kuaicaiwu/finance-management/settlement': 'finance_settlement',
 };
 
 // 聚焦“搜索框”未输入时展示的固定常用菜单（制造业日常最常用单据 Top8）
@@ -545,7 +548,7 @@ const getMenuConfig = (t: (key: string) => string): PermissionMenuDataItem[] => 
         { path: '/system/data-sources', name: t('menu.system.data-sources'), icon: getMenuIcon(t('menu.system.data-sources'), '/system/data-sources') },
         { path: '/system/application-connections', name: t('menu.system.application-connections'), icon: getMenuIcon(t('menu.system.application-connections'), '/system/application-connections') },
         { path: '/system/datasets', name: t('menu.system.datasets'), icon: getMenuIcon(t('menu.system.datasets'), '/system/datasets') },
-        { path: '/system/datasets/page-metrics', name: t('menu.system.datasets.pageMetrics', '页面指标配置'), icon: getMenuIcon(t('menu.system.datasets'), '/system/datasets/page-metrics') },
+        { path: '/system/datasets/page-metrics', name: t('menu.system.datasets.pageMetrics') || '页面指标配置', icon: getMenuIcon(t('menu.system.datasets'), '/system/datasets/page-metrics') },
       ]},
       { key: 'process-management-group', type: 'group', name: t('menu.group.process-management'), label: t('menu.group.process-management'), className: 'riveredge-menu-group-title', children: [
         { path: '/system/approval-processes', name: t('menu.system.approval-processes'), icon: getMenuIcon(t('menu.system.approval-processes'), '/system/approval-processes'), children: [{ path: '/system/approval-processes/designer', name: t('path.system.approval-processes.designer'), hideInMenu: true }] },
@@ -4251,13 +4254,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           // Menu 会为有 path 的菜单项自动创建 <a> 标签，需要阻止默认行为
           onClick: (info) => {
             // 如果菜单项有 path，阻止默认的链接跳转行为
-            const menuItem = info.item;
+            // 使用 type assertion 绕过 ReactInstance 类型限制
+            const menuItem = info.item as any;
             if (menuItem && menuItem.props && menuItem.props.path) {
               const path = menuItem.props.path;
               // 外部链接已经在 menuItemRender 中处理，这里只阻止内部路由的默认行为
               if (path && !path.startsWith('http://') && !path.startsWith('https://')) {
                 // 完全阻止默认行为，让 Link 组件处理路由
-                // React Router 的 Link 组件会阻止默认行为并使用 navigate() 进行路由跳转
                 info.domEvent.preventDefault();
                 info.domEvent.stopPropagation();
               }

@@ -21,8 +21,9 @@ import { UniWorkflowActions } from '../../../../../components/uni-workflow-actio
 import { getIncomingInspectionLifecycle } from '../../../utils/incomingInspectionLifecycle';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../../../../../services/api';
-import { qualityApi } from '../../../services/production';
+import { qualityApi, workOrderApi } from '../../../services/production';
 import { getDocumentRelations } from '../../../services/document-relation';
+import type { DocumentRelationData } from '../../../../../components/document-relation-display';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 import { downloadFile } from '../../../services/common';
 
@@ -104,7 +105,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
   // 详情Drawer状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [inspectionDetail, setInspectionDetail] = useState<FinishedGoodsInspection | null>(null);
-  const [documentRelations, setDocumentRelations] = useState<DocumentRelation | null>(null);
+  const [documentRelations, setDocumentRelations] = useState<DocumentRelationData | null>(null);
 
   // 从工单创建Modal状态
   const [createFromWorkOrderModalVisible, setCreateFromWorkOrderModalVisible] = useState(false);
@@ -638,29 +639,36 @@ const FinishedGoodsInspectionPage: React.FC = () => {
         width={MODAL_CONFIG.SMALL_WIDTH}
         formRef={createFromWorkOrderFormRef}
       >
-        <ProFormSelect
+        <ProFormItem
           name="work_order_id"
           label="选择工单"
-          placeholder="请选择工单"
           rules={[{ required: true, message: '请选择工单' }]}
-          request={async () => {
-            try {
-              const { workOrderApi } = await import('../../../services/production');
-              const response = await workOrderApi.list({
-                skip: 0,
-                limit: 1000,
-                status: '进行中',
-              });
-              const data = Array.isArray(response) ? response : (response.data || []);
-              return data.map((wo: any) => ({
-                label: `${wo.code} - ${wo.name}`,
-                value: wo.id,
-              }));
-            } catch (error) {
-              return [];
-            }
-          }}
-        />
+        >
+          <UniDropdown
+            placeholder="请选择工单"
+            showSearch
+            advancedSearch={{
+              label: '高级搜索工单',
+              fields: [
+                { name: 'code', label: '工单编码', type: 'text' },
+                { name: 'name', label: '工单名称', type: 'text' },
+              ],
+              onSearch: async (params) => {
+                const response = await workOrderApi.list({
+                  ...params,
+                  skip: 0,
+                  limit: 100,
+                  status: '进行中',
+                });
+                const data = Array.isArray(response) ? response : (response.data || []);
+                return data.map((wo: any) => ({
+                  label: `${wo.code} - ${wo.name}`,
+                  value: wo.id,
+                }));
+              },
+            }}
+          />
+        </ProFormItem>
       </FormModalTemplate>
 
       {/* 成品检验详情 Drawer */}
@@ -709,7 +717,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
               {/* 单据关联展示 */}
               {documentRelations && (
                 <Card title="单据关联" style={{ marginBottom: 16 }}>
-                  {documentRelations.upstream_count > 0 && (
+                  {(documentRelations.upstream_count || 0) > 0 && (
                     <div style={{ marginBottom: 16 }}>
                       <div style={{ marginBottom: 8, fontWeight: 'bold' }}>
                         上游单据 ({documentRelations.upstream_count})
@@ -727,7 +735,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
                       />
                     </div>
                   )}
-                  {documentRelations.upstream_count === 0 && (
+                  {(documentRelations.upstream_count || 0) === 0 && (
                     <div style={{ textAlign: 'center', color: '#999', padding: '20px 0' }}>
                       暂无关联单据
                     </div>

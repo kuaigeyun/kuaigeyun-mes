@@ -24,6 +24,7 @@ const DemandManagementPage = lazy(() => import('./pages/plan-management/demand-m
 const DemandComputationPage = lazy(() => import('./pages/plan-management/demand-computation'));
 const ComputationConfigPage = lazy(() => import('./pages/plan-management/computation-config'));
 const SchedulingPage = lazy(() => import('./pages/plan-management/scheduling'));
+const MESDashboard = lazy(() => import('./pages/dashboard'));
 
 // 生产执行页面
 const WorkOrdersPage = lazy(() => import('./pages/production-execution/work-orders'));
@@ -75,6 +76,10 @@ const ToolUsagesPage = lazy(() => import('./pages/equipment-management/tool-usag
 const ToolMaintenancesPage = lazy(() => import('./pages/equipment-management/tool-maintenances'));
 const ToolCalibrationsPage = lazy(() => import('./pages/equipment-management/tool-calibrations'));
 const ToolMaintenanceRemindersPage = lazy(() => import('./pages/equipment-management/tool-maintenance-reminders'));
+
+// 设备点检与备件
+const EquipmentInspectionPage = lazy(() => import('./pages/equipment-management/inspection'));
+const SparePartsPage = lazy(() => import('./pages/equipment-management/spare-parts'));
 
 // 财务管理（发票、应收应付已迁至 kuaicaiwu）
 
@@ -181,6 +186,8 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="equipment-management/tool-maintenances" element={withPageSuspense(ToolMaintenancesPage)} />
       <Route path="equipment-management/tool-calibrations" element={withPageSuspense(ToolCalibrationsPage)} />
       <Route path="equipment-management/tool-maintenance-reminders" element={withPageSuspense(ToolMaintenanceRemindersPage)} />
+      <Route path="equipment-management/inspection" element={withPageSuspense(EquipmentInspectionPage)} />
+      <Route path="equipment-management/spare-parts" element={withPageSuspense(SparePartsPage)} />
 
       {/* 绩效管理路由 */}
       <Route path="performance/holidays" element={withPageSuspense(HolidaysPage)} />
@@ -265,12 +272,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="warehouse-management/reports/stocktaking-history" element={<PlaceholderPage title="盘点单历史与差异" />} />
       <Route path="warehouse-management/reports/transfer-tracking" element={<PlaceholderPage title="调拨单跟踪" />} />
       {/* 默认路由 - 应用首页 */}
-      <Route path="" element={
-        <div style={{ padding: '24px', textAlign: 'center' }}>
-          <h2>快格轻制造</h2>
-          <p>轻量级MES系统 - 专注生产执行核心流程</p>
-        </div>
-      } />
+      <Route path="" element={withPageSuspense(MESDashboard)} />
     </Routes>
   );
 };

@@ -105,6 +105,8 @@ import { Area } from '@ant-design/charts';
 import { QRCodeGenerator } from '../../../../../components/qrcode'
 import { qrcodeApi } from '../../../../../services/qrcode'
 import { workOrderApi, reworkOrderApi, outsourceOrderApi, getWorkOrderStatistics } from '../../../services/production'
+import { UniDropdown } from '../../../../../components/uni-dropdown'
+import { UniMaterialSelect } from '../../../../../components/uni-material-select'
 import { stateTransitionApi, AvailableTransition } from '../../../services/state-transition'
 import { listSalesOrders } from '../../../services/sales'
 import { getSalesOrder } from '../../../services/sales-order'
@@ -3543,26 +3545,28 @@ const WorkOrdersPage: React.FC = () => {
         <ProFormText name="production_mode" initialValue="MTS" hidden />
 
         {/* 产品与数量 */}
-        <ProFormSelect
-          name="product_id"
-          label="产品"
-          placeholder="请选择产品"
-          options={productOptionsList.map((product: any) => ({
-            label: `${product.code || product.mainCode} - ${product.name}`,
-            value: product.id,
-          }))}
-          rules={[{ required: true, message: '请选择产品' }]}
-          disabled={isEdit}
-          fieldProps={{
-            showSearch: true,
-            filterOption: (input: string, option: any) =>
-              (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
-            onChange: async (value: number | undefined) => {
+        <Col span={10}>
+          <UniMaterialSelect
+            name="product_id"
+            label="产品"
+            placeholder="请选择产品"
+            required
+            disabled={isEdit}
+            fallbackOption={
+              isEdit && currentWorkOrder?.product_id
+                ? {
+                    value: currentWorkOrder.product_id,
+                    label:
+                      `${currentWorkOrder.product_code || ''} - ${currentWorkOrder.product_name || ''}`.trim() ||
+                      String(currentWorkOrder.product_id),
+                  }
+                : undefined
+            }
+            onChange={async (value, material) => {
               if (value) {
-                const selectedMaterial = productOptionsList.find((p: any) => p.id === value)
-                if (selectedMaterial) {
+                if (material) {
                   try {
-                    const materialDetail = await materialApi.get(selectedMaterial.uuid)
+                    const materialDetail = await materialApi.get(material.uuid)
                     const sourceType = materialDetail.sourceType || materialDetail.source_type
                     const sourceTypeNames: Record<string, string> = {
                       Make: '自制件',
@@ -3579,31 +3583,26 @@ const WorkOrdersPage: React.FC = () => {
                     } else if (sourceType === 'Phantom') {
                       canCreateWorkOrder = false
                       validationErrors.push('虚拟件不应创建工单')
-                    } else if (sourceType === 'Make')
-                      validationErrors.push('自制件需配置BOM和工艺路线')
+                    } else if (sourceType === 'Make') validationErrors.push('自制件需配置BOM和工艺路线')
                     else if (sourceType === 'Outsource')
                       validationErrors.push('委外件需配置委外供应商和工序')
-                    else if (sourceType === 'Configure')
-                      validationErrors.push('配置件需填写属性')
+                    else if (sourceType === 'Configure') validationErrors.push('配置件需填写属性')
                     setSelectedMaterialSourceInfo({
                       sourceType,
-                      sourceTypeName: sourceType
-                        ? sourceTypeNames[sourceType] || sourceType
-                        : undefined,
+                      sourceTypeName: sourceType ? sourceTypeNames[sourceType] || sourceType : undefined,
                       validationErrors: validationErrors.length > 0 ? validationErrors : undefined,
                       canCreateWorkOrder,
                     })
-                    loadProcessRouteForMaterial(selectedMaterial.uuid)
+                    loadProcessRouteForMaterial(material.uuid)
                   } catch (error) {
                     console.error('获取物料详情失败:', error)
                     setSelectedMaterialSourceInfo(null)
                   }
                 } else setSelectedMaterialSourceInfo(null)
               } else setSelectedMaterialSourceInfo(null)
-            },
-          }}
-          colProps={{ span: 10 }}
-        />
+            }}
+          />
+        </Col>
         {selectedMaterialSourceInfo?.sourceType === 'Configure' && !isEdit && (
           <ProFormText
             name="variant_attributes"
@@ -3727,21 +3726,36 @@ const WorkOrdersPage: React.FC = () => {
           fieldProps={{ style: { width: '100%' } }}
         />
 
-        <ProFormSelect
-          name="process_route_id"
-          label="工艺路线"
-          placeholder="选择后自动加载工序"
-          options={processRouteList.map(route => ({
-            label: `${route.code} - ${route.name}`,
-            value: route.id,
-          }))}
-          disabled={isEdit && String(currentWorkOrder?.status || '') !== 'draft'}
-          colProps={{ span: 24 }}
-          fieldProps={{
-            showSearch: true,
-            filterOption: (input: string, option: any) =>
-              (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
-            onChange: async (value: number | undefined) => {
+        <ProForm.Item name="process_route_id" label="工艺路线" colProps={{ span: 24 }}>
+          <UniDropdown
+            placeholder="选择后自动加载工序"
+            options={processRouteList.map(route => ({
+              label: `${route.code} - ${route.name}`,
+              value: route.id,
+            }))}
+            disabled={isEdit && String(currentWorkOrder?.status || '') !== 'draft'}
+            showSearch
+            allowClear
+            advancedSearch={{
+              label: '高级搜索',
+              fields: [
+                { name: 'code', label: '工艺路线编码' },
+                { name: 'name', label: '工艺路线名称' },
+              ],
+              onSearch: async (values) => {
+                try {
+                  const res = await processRouteApi.list({ ...values, limit: 100 });
+                  const list = Array.isArray(res) ? res : (res as any)?.data || [];
+                  return list.map((r: any) => ({
+                    value: r.id,
+                    label: `${r.code ?? ''} - ${r.name ?? ''}`.trim() || String(r.id),
+                  }));
+                } catch {
+                  return [];
+                }
+              },
+            }}
+            onChange={async (value) => {
               if (value) {
                 try {
                   const route = processRouteList.find(r => r.id === value)
@@ -3787,9 +3801,9 @@ const WorkOrdersPage: React.FC = () => {
                   allow_operation_jump: false,
                 })
               }
-            },
-          }}
-        />
+            }}
+          />
+        </ProForm.Item>
         <Form.Item name="operations" hidden />
         <Form.Item
           label="工艺路线工序清单"

@@ -27,6 +27,7 @@ import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import dayjs from 'dayjs';
 import { listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder, approvePurchaseOrder, submitPurchaseOrder, pushPurchaseOrderToReceipt, pushPurchaseOrderToReceiptPreview, pushPurchaseOrderToReceiptNotice, pushPurchaseOrderToInvoice, getPurchaseOrderStatistics, PurchaseOrder, PurchaseOrderItem } from '../../../services/purchase';
+import { supplierApi } from '../../../../master-data/services/supply-chain';
 import { getApprovalStatus, ApprovalStatusResponse } from '../../../../../services/approvalInstance';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
@@ -1276,6 +1277,27 @@ const PurchaseOrdersPage: React.FC = () => {
                 quickCreate={{
                   label: '快速新建',
                   onClick: () => setSupplierCreateVisible(true),
+                }}
+                advancedSearch={{
+                  label: '高级搜索',
+                  fields: [
+                    { name: 'code', label: '供应商编码' },
+                    { name: 'name', label: '供应商名称' },
+                    { name: 'contact_person', label: '联系人' },
+                  ],
+                  onSearch: async (values) => {
+                    try {
+                      // 这里假设 supplierApi.list 支持这些过滤参数，通常后端是支持的
+                      const res = await supplierApi.list({ ...values, limit: 100 });
+                      const list = Array.isArray(res) ? res : (res as any)?.data || [];
+                      return list.map((s: any) => ({
+                        value: s.id ?? s.supplier_id,
+                        label: `${s.code ?? s.supplier_code ?? ''} - ${s.name ?? s.supplier_name ?? ''}`.trim() || String(s.id ?? s.supplier_id),
+                      }));
+                    } catch {
+                      return [];
+                    }
+                  },
                 }}
               />
             </ProForm.Item>

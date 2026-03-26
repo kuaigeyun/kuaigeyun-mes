@@ -23,6 +23,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../../../../../services/api';
 import { qualityApi, warehouseApi } from '../../../services/production';
 import { getDocumentRelations } from '../../../services/document-relation';
+import type { DocumentRelationData } from '../../../../../components/document-relation-display';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 import { downloadFile } from '../../../services/common';
 
@@ -99,7 +100,7 @@ const IncomingInspectionPage: React.FC = () => {
   // 详情Drawer状态
   const [detailVisible, setDetailVisible] = useState(false);
   const [inspectionDetail, setInspectionDetail] = useState<IncomingInspection | null>(null);
-  const [documentRelations, setDocumentRelations] = useState<DocumentRelation | null>(null);
+  const [documentRelations, setDocumentRelations] = useState<DocumentRelationData | null>(null);
 
   // 从采购入库单创建Modal状态
   const [createFromReceiptModalVisible, setCreateFromReceiptModalVisible] = useState(false);
@@ -816,28 +817,36 @@ const IncomingInspectionPage: React.FC = () => {
         width={MODAL_CONFIG.SMALL_WIDTH}
         formRef={createFromReceiptFormRef}
       >
-        <ProFormSelect
+        <ProFormItem
           name="purchase_receipt_id"
           label="选择采购入库单"
-          placeholder="请选择采购入库单"
           rules={[{ required: true, message: '请选择采购入库单' }]}
-          request={async () => {
-            try {
-              const response = await warehouseApi.purchaseReceipt.list({
-                skip: 0,
-                limit: 1000,
-                status: '已入库',
-              });
-              const data = Array.isArray(response) ? response : (response.data || []);
-              return data.map((receipt: any) => ({
-                label: `${receipt.receipt_code} - ${receipt.supplier_name}`,
-                value: receipt.id,
-              }));
-            } catch (error) {
-              return [];
-            }
-          }}
-        />
+        >
+          <UniDropdown
+            placeholder="请选择采购入库单"
+            showSearch
+            advancedSearch={{
+              label: '高级搜索采购入库单',
+              fields: [
+                { name: 'receipt_code', label: '入库单号', type: 'text' },
+                { name: 'supplier_name', label: '供应商名称', type: 'text' },
+              ],
+              onSearch: async (params) => {
+                const response = await warehouseApi.purchaseReceipt.list({
+                  ...params,
+                  skip: 0,
+                  limit: 100,
+                  status: '已入库',
+                });
+                const data = Array.isArray(response) ? response : (response.data || []);
+                return data.map((receipt: any) => ({
+                  label: `${receipt.receipt_code} - ${receipt.supplier_name}`,
+                  value: receipt.id,
+                }));
+              },
+            }}
+          />
+        </ProFormItem>
       </FormModalTemplate>
 
       {/* 创建不合格品记录Modal */}

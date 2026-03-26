@@ -5,13 +5,14 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProFormSelect, ProFormDigit, ProFormTextArea, ProFormRadio, ProFormText, ProFormDatePicker, ProFormSwitch } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormSelect, ProFormRadio, ProFormDigit, ProFormTextArea, ProFormItem, ProFormText, ProFormDatePicker, ProFormSwitch } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Card, Row, Col, Input, Alert, Spin, Form, Radio, theme as AntdTheme } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from 'react-router-dom';
 import { QrcodeOutlined, ScanOutlined, ClockCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, DeleteOutlined, WarningOutlined, PlusOutlined, MinusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG, type StatCard } from '../../../../../components/layout-templates';
 import { SimpleSparkline } from '../../../../../components';
@@ -1028,6 +1029,7 @@ const ReportingPage: React.FC = () => {
         setWorkOrderOperations([]);
         setCurrentOperation(null);
         setScanWorkOrderCode('');
+        invalidateStatistics();
         actionRef.current?.reload();
         return;
       }
@@ -1526,35 +1528,56 @@ const ReportingPage: React.FC = () => {
         formRef={formRef}
         grid={true}
       >
-        <ProFormSelect
-          name="work_order_id"
-          label="工单"
-          placeholder="请选择工单"
-          rules={[{ required: true, message: '请选择工单' }]}
-          options={(Array.isArray(reportWorkOrders) ? reportWorkOrders : []).map((wo: any) => ({
-            label: `${wo.code || wo.work_order_code || ''} - ${wo.name || wo.work_order_name || ''}`,
-            value: wo.id,
-          }))}
-          colProps={{ span: 12 }}
-          fieldProps={{
-            onChange: (value: number) => handleReportWorkOrderChange(value),
-          }}
-        />
-        <ProFormSelect
-          name="operation_id"
-          label="工序"
-          placeholder="请先选择工单"
-          rules={[{ required: true, message: '请选择工序' }]}
-          options={(Array.isArray(reportOperations) ? reportOperations : []).map((op: any) => ({
-            label: `${op.operation_name || op.name} (${op.sequence || ''})`,
-            value: op.operation_id,
-          }))}
-          colProps={{ span: 12 }}
-          fieldProps={{
-            disabled: (Array.isArray(reportOperations) ? reportOperations : []).length === 0,
-            onChange: (value: number) => handleReportOperationChange(value),
-          }}
-        />
+        <Col span={12}>
+          <ProFormItem
+            name="work_order_id"
+            label="工单"
+            rules={[{ required: true, message: '请选择工单' }]}
+          >
+            <UniDropdown
+              placeholder="请选择工单"
+              showSearch
+              options={(Array.isArray(reportWorkOrders) ? reportWorkOrders : []).map((wo: any) => ({
+                label: `${wo.code || wo.work_order_code || ''} - ${wo.name || wo.work_order_name || ''}`,
+                value: wo.id,
+              }))}
+              onChange={(value: any) => handleReportWorkOrderChange(value as number)}
+              advancedSearch={{
+                label: '高级搜索工单',
+                fields: [
+                  { name: 'code', label: '工单编码', type: 'text' },
+                  { name: 'name', label: '工单名称', type: 'text' },
+                ],
+                onSearch: async (params) => {
+                  const res = await workOrderApi.list({ ...params, status: 'in_progress' });
+                  const list = Array.isArray(res) ? res : (res as any)?.items ?? [];
+                  return list.map((wo: any) => ({
+                    label: `${wo.code} - ${wo.name}`,
+                    value: wo.id,
+                  }));
+                },
+              }}
+            />
+          </ProFormItem>
+        </Col>
+        <Col span={12}>
+          <ProFormItem
+            name="operation_id"
+            label="工序"
+            rules={[{ required: true, message: '请选择工序' }]}
+          >
+            <UniDropdown
+              placeholder={reportWorkOrderId ? "请选择工序" : "请先选择工单"}
+              showSearch
+              disabled={!reportWorkOrderId || (Array.isArray(reportOperations) ? reportOperations : []).length === 0}
+              options={(Array.isArray(reportOperations) ? reportOperations : []).map((op: any) => ({
+                label: `${op.operation_name || op.name} (${op.sequence || ''})`,
+                value: op.operation_id,
+              }))}
+              onChange={(value: any) => handleReportOperationChange(value as number)}
+            />
+          </ProFormItem>
+        </Col>
         {(Array.isArray(reportOperations) ? reportOperations : []).find((op: any) => op.operation_id === reportOperationId)?.reporting_type === 'status' ? (
           <ProFormRadio.Group
             name="completed_status"
@@ -1670,19 +1693,19 @@ const ReportingPage: React.FC = () => {
             {workOrderOperations.length > 0 && (
               <div style={{ marginBottom: 16 }}>
                 <div style={{ marginBottom: 8, fontWeight: 'bold' }}>选择工序：</div>
-                <ProFormSelect
-                  name="operation_id"
-                  placeholder="请选择工序"
-                  options={workOrderOperations.map((op: any) => ({
-                    label: `${op.operation_name} (${op.status === 'completed' ? '已完成' : op.status === 'in_progress' ? '进行中' : '待开始'})`,
-                    value: op.operation_id,
-                    disabled: op.status === 'completed',
-                  }))}
-                  fieldProps={{
-                    onChange: handleSelectOperation,
-                    value: currentOperation?.operation_id,
-                  }}
-                />
+                <ProFormItem name="operation_id">
+                  <UniDropdown
+                    placeholder="请选择工序"
+                    showSearch
+                    options={workOrderOperations.map((op: any) => ({
+                      label: `${op.operation_name} (${op.status === 'completed' ? '已完成' : op.status === 'in_progress' ? '进行中' : '待开始'})`,
+                      value: op.operation_id,
+                      disabled: op.status === 'completed',
+                    }))}
+                    value={currentOperation?.operation_id}
+                    onChange={(val: any) => handleSelectOperation(val as number)}
+                  />
+                </ProFormItem>
               </div>
             )}
 
