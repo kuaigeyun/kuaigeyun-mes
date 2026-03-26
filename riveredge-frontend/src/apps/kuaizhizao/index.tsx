@@ -24,6 +24,7 @@ const DemandManagementPage = lazy(() => import('./pages/plan-management/demand-m
 const DemandComputationPage = lazy(() => import('./pages/plan-management/demand-computation'));
 const ComputationConfigPage = lazy(() => import('./pages/plan-management/computation-config'));
 const SchedulingPage = lazy(() => import('./pages/plan-management/scheduling'));
+const ProductionControlTower = lazy(() => import('./pages/plan-management/production-plans/ProductionControlTower'));
 const MESDashboard = lazy(() => import('./pages/dashboard'));
 
 // 生产执行页面
@@ -127,6 +128,7 @@ const KuaizhizaoApp: React.FC = () => {
       {/* 计划管理路由 */}
       <Route path="plan-management/demand-management" element={withPageSuspense(DemandManagementPage)} />
       <Route path="plan-management/demand-computation" element={withPageSuspense(DemandComputationPage)} />
+      <Route path="plan-management/production-control-tower" element={withPageSuspense(ProductionControlTower)} />
       <Route path="plan-management/computation-config" element={withPageSuspense(ComputationConfigPage)} />
       <Route path="plan-management/scheduling" element={withPageSuspense(SchedulingPage)} />
 

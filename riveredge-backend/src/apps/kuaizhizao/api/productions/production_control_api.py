@@ -1,0 +1,76 @@
+"""
+生产计划管控塔 API 控制器
+"""
+
+from fastapi import APIRouter, Depends, Query
+from typing import List
+from core.dependencies.auth import get_current_user
+from apps.kuaizhizao.services.production_control_service import ProductionControlService
+from apps.kuaizhizao.schemas.production_control import (
+    MaterialReadinessItem, ResourceLoadItem, DeliveryRiskItem, ControlTowerSummary,
+    BulkReleaseRequest
+)
+from apps.kuaizhizao.models.work_order import WorkOrder
+
+router = APIRouter(prefix="/production-control", tags=["生产计划管控塔"])
+service = ProductionControlService()
+
+
+@router.get("/readiness", response_model=List[MaterialReadinessItem])
+async def get_material_readiness(
+    current_user=Depends(get_current_user)
+):
+    """获取全局齐套性分析"""
+    return await service.get_global_material_readiness(current_user.tenant_id)
+
+
+@router.get("/resource-load", response_model=List[ResourceLoadItem])
+async def get_resource_load(
+    days: int = Query(14, description="分析天数"),
+    current_user=Depends(get_current_user)
+):
+    """获取工作中心资源负荷分析"""
+    return await service.get_resource_load_analysis(current_user.tenant_id, days)
+
+
+@router.get("/risks", response_model=List[DeliveryRiskItem])
+async def get_delivery_risks(
+    current_user=Depends(get_current_user)
+):
+    """获取交期风险预警"""
+    return await service.get_delivery_risk_orders(current_user.tenant_id)
+
+
+@router.get("/summary", response_model=ControlTowerSummary)
+async def get_control_tower_summary(
+    current_user=Depends(get_current_user)
+):
+    """获取管控塔核心指标汇总"""
+    tenant_id = current_user.tenant_id
+    
+    readiness = await service.get_global_material_readiness(tenant_id)
+    load = await service.get_resource_load_analysis(tenant_id)
+    risks = await service.get_delivery_risk_orders(tenant_id)
+    
+    total_wip = await WorkOrder.filter(
+        tenant_id=tenant_id,
+        status__in=['released', 'in_progress'],
+        deleted_at__isnull=True
+    ).count()
+    
+    return ControlTowerSummary(
+        material_readiness=readiness,
+        resource_load=load,
+        delivery_risks=risks,
+        total_wip_count=total_wip,
+        total_risk_count=len(risks)
+    )
+
+
+@router.post("/release-kitted")
+async def bulk_release_kitted_orders(
+    req: BulkReleaseRequest,
+    current_user=Depends(get_current_user)
+):
+    """批量下达齐套工单"""
+    return await service.release_kitted_work_orders(current_user.tenant_id, req.work_order_ids)

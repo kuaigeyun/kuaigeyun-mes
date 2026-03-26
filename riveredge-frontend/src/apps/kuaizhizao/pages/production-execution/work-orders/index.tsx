@@ -104,7 +104,7 @@ import { SimpleSparkline } from '../../../../../components';
 import { Area } from '@ant-design/charts';
 import { QRCodeGenerator } from '../../../../../components/qrcode'
 import { qrcodeApi } from '../../../../../services/qrcode'
-import { workOrderApi, reworkOrderApi, outsourceOrderApi, getWorkOrderStatistics } from '../../../services/production'
+import { workOrderApi, reworkOrderApi, outsourceOrderApi, getWorkOrderStatistics, productionControlApi } from '../../../services/production'
 import { UniDropdown } from '../../../../../components/uni-dropdown'
 import { UniMaterialSelect } from '../../../../../components/uni-material-select'
 import { stateTransitionApi, AvailableTransition } from '../../../services/state-transition'
@@ -176,6 +176,8 @@ interface WorkOrder {
   updated_at?: string
   /** 制造模式（fabrication加工型/assembly装配型），来自产品物料 */
   manufacturing_mode?: 'fabrication' | 'assembly'
+  /** 齐套率 (%) */
+  readiness_rate?: number
 }
 
 const WorkOrdersPage: React.FC = () => {
@@ -1926,6 +1928,24 @@ const WorkOrdersPage: React.FC = () => {
     }
   }
 
+  /** 齐套自动下达 (Phase 2) */
+  const handleSmartReleaseKitted = async () => {
+    Modal.confirm({
+      title: '齐套自动下达',
+      content: '系统将自动扫描所有未下达的工单，并将其中 100% 齐套的工单批量下达。是否确认？',
+      onOk: async () => {
+        try {
+          const res = await productionControlApi.releaseKitted([]);
+          messageApi.success(`齐套下达成功：共下达 ${res.count} 个工单`);
+          invalidateStatistics();
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '齐套下达失败');
+        }
+      },
+    });
+  };
+
   /**
    * 处理下达工单
    */
@@ -2966,6 +2986,32 @@ const WorkOrdersPage: React.FC = () => {
       hideInSearch: false,
     },
     {
+      title: '齐套率',
+      dataIndex: 'readiness_rate',
+      width: 120,
+      valueType: 'digit',
+      render: (text, record) => {
+        const rate = record.readiness_rate ?? 0;
+        return (
+          <Space direction="vertical" style={{ width: '100%' }}>
+            <Progress
+              percent={rate}
+              size="small"
+              status={rate === 100 ? 'success' : rate > 0 ? 'active' : 'normal'}
+              strokeColor={rate === 100 ? '#52c41a' : rate >= 80 ? '#faad14' : '#ff4d4f'}
+            />
+          </Space>
+        );
+      },
+      fieldProps: {
+        placeholder: '齐套率 (%)',
+        min: 0,
+        max: 100,
+      },
+      sorter: true,
+      hideInSearch: false,
+    },
+    {
       title: '销售订单',
       dataIndex: 'sales_order_code',
       width: 120,
@@ -3427,6 +3473,14 @@ const WorkOrdersPage: React.FC = () => {
               disabled={selectedRowKeys.length === 0}
             >
               批量下达
+            </Button>,
+            <Button
+              key="smartRelease"
+              style={{ backgroundColor: '#52c41a', color: '#fff', borderColor: '#52c41a' }}
+              icon={<PlayCircleOutlined />}
+              onClick={handleSmartReleaseKitted}
+            >
+              齐套自动下达
             </Button>,
             <Button
               key="batchFreeze"

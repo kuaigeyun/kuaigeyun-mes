@@ -217,6 +217,7 @@ class WorkOrderListResponse(BaseModel):
     completed_quantity: Decimal = Field(default=Decimal("0"), description="已完成数量")
     work_center_name: Optional[str] = Field(None, description="工作中心名称")
     created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    readiness_rate: Optional[float] = Field(None, description="齐套率 (%)")
     created_at: datetime = Field(..., description="创建时间")
     operations: Optional[List[WorkOrderOperationMinimalForGantt]] = Field(None, description="工序列表（include_operations=true 时返回）")
 

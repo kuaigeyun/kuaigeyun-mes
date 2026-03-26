@@ -1080,6 +1080,33 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     work_orders_to_update.append(wo)
 
                 item_dict = WorkOrderListResponse.model_validate(wo).model_dump()
+                
+                # 计算齐套率 (Phase 2: Control Tower 齐套可视化)
+                # 仅针对待执行和进行中的工单进行计算，避免性能浪费
+                if wo.status in ['draft', 'released', 'in_progress']:
+                    try:
+                        shortage_info = await self.check_material_shortage(tenant_id, wo.id)
+                        
+                        # 获取品种总数
+                        variant_attrs = getattr(wo, "variant_attributes", None)
+                        cfg_selections = getattr(wo, "configurable_selections", None)
+                        requirements = await calculate_material_requirements_from_bom(
+                            tenant_id=tenant_id,
+                            material_id=wo.product_id,
+                            required_quantity=float(wo.quantity),
+                            only_approved=True,
+                            variant_attributes=variant_attrs,
+                            configurable_selections=cfg_selections,
+                        )
+                        total_vars = len(requirements)
+                        shortage_vars = shortage_info.get("total_shortage_count", 0)
+                        ready_vars = total_vars - shortage_vars
+                        
+                        item_dict["readiness_rate"] = round((ready_vars / total_vars * 100), 2) if total_vars > 0 else 100.0
+                    except Exception as e:
+                        logger.warning(f"由于异常，工单 {wo.code} 齐套率计算跳过: {e}")
+                        item_dict["readiness_rate"] = 0.0
+
                 if include_operations:
                     item_dict["operations"] = operations_map.get(wo.id, [])
                 result.append(WorkOrderListResponse.model_validate(item_dict))

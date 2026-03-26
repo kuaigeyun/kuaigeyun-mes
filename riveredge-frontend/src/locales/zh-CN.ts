@@ -1537,11 +1537,11 @@ export default {
 
   // 快制造应用菜单翻译
   'app.kuaizhizao.menu.plan-management': '计划管理',
-  'app.kuaizhizao.menu.plan-management.demand-management': '需求计划',
-  'app.kuaizhizao.menu.plan-management.unified-demand-management': '统一需求计划',
-  'app.kuaizhizao.menu.plan-management.demand-computation': '需求计算',
+  'app.kuaizhizao.menu.plan-management.demand-management': '原始需求管理',
+  'app.kuaizhizao.menu.plan-management.demand-computation': '需求计算与排产',
+  'app.kuaizhizao.menu.plan-management.control-tower': '生产计划管控塔',
   'app.kuaizhizao.menu.plan-management.production-plans': '生产计划',
-  'app.kuaizhizao.menu.plan-management.scheduling': '排程管理',
+  'app.kuaizhizao.menu.plan-management.scheduling': '排程调度管理',
   'app.kuaizhizao.menu.plan-management.computation-config': '计算配置',
   'app.kuaizhizao.menu.plan-management.computation-history': '计算历史',
   'app.kuaizhizao.menu.production-execution': '生产执行',
