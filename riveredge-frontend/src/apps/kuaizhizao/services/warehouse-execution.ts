@@ -151,6 +151,12 @@ export const warehouseApi = {
     delete: async (id: string) => apiRequest(`/apps/kuaizhizao/sales-returns/${id}`, { method: 'DELETE' }),
     get: async (id: string) => apiRequest(`/apps/kuaizhizao/sales-returns/${id}`, { method: 'GET' }),
     confirm: async (id: string) => apiRequest(`/apps/kuaizhizao/sales-returns/${id}/confirm`, { method: 'POST' }),
+    pullFromSalesOrder: async (data: {
+      sales_order_id: number;
+      warehouse_id: number;
+      warehouse_name?: string;
+      return_quantities?: Record<number, number>;
+    }) => apiRequest('/apps/kuaizhizao/sales-returns/pull-from-sales-order', { method: 'POST', data }),
   },
   purchaseReturn: {
     list: async (params?: any) => apiRequest('/apps/kuaizhizao/purchase-returns', { method: 'GET', params }),
@@ -158,6 +164,12 @@ export const warehouseApi = {
     delete: async (id: string) => apiRequest(`/apps/kuaizhizao/purchase-returns/${id}`, { method: 'DELETE' }),
     get: async (id: string) => apiRequest(`/apps/kuaizhizao/purchase-returns/${id}`, { method: 'GET' }),
     confirm: async (id: string) => apiRequest(`/apps/kuaizhizao/purchase-returns/${id}/confirm`, { method: 'POST' }),
+    pullFromPurchaseOrder: async (data: {
+      purchase_order_id: number;
+      warehouse_id: number;
+      warehouse_name?: string;
+      return_quantities?: Record<number, number>;
+    }) => apiRequest('/apps/kuaizhizao/purchase-returns/pull-from-purchase-order', { method: 'POST', data }),
   },
   replenishmentSuggestion: {
     list: async (params?: any) => apiRequest('/apps/kuaizhizao/replenishment-suggestions', { method: 'GET', params }),

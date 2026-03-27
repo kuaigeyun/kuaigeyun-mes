@@ -2154,6 +2154,32 @@ async def create_sales_return(
     )
 
 
+@router.post("/sales-returns/pull-from-sales-order", response_model=SalesReturnResponse, summary="从销售订单下推销售退货单")
+async def pull_sales_return_from_sales_order(
+    request: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SalesReturnResponse:
+    sales_order_id = request.get("sales_order_id")
+    warehouse_id = request.get("warehouse_id")
+    warehouse_name = request.get("warehouse_name")
+    return_quantities = request.get("return_quantities")
+
+    if not sales_order_id:
+        raise ValidationError("必须提供销售订单ID")
+    if not warehouse_id:
+        raise ValidationError("必须提供退货仓库ID")
+
+    return await SalesReturnService().pull_from_sales_order(
+        tenant_id=tenant_id,
+        sales_order_id=int(sales_order_id),
+        created_by=current_user.id,
+        warehouse_id=int(warehouse_id),
+        warehouse_name=warehouse_name,
+        return_quantities=return_quantities if isinstance(return_quantities, dict) else None,
+    )
+
+
 @router.get("/sales-returns", response_model=List[SalesReturnResponse], summary="获取销售退货单列表")
 async def list_sales_returns(
     skip: int = Query(0, ge=0, description="跳过数量"),
@@ -2445,6 +2471,32 @@ async def create_purchase_return(
         tenant_id=tenant_id,
         return_data=return_data,
         created_by=current_user.id
+    )
+
+
+@router.post("/purchase-returns/pull-from-purchase-order", response_model=PurchaseReturnResponse, summary="从采购订单下推采购退货单")
+async def pull_purchase_return_from_purchase_order(
+    request: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PurchaseReturnResponse:
+    purchase_order_id = request.get("purchase_order_id")
+    warehouse_id = request.get("warehouse_id")
+    warehouse_name = request.get("warehouse_name")
+    return_quantities = request.get("return_quantities")
+
+    if not purchase_order_id:
+        raise ValidationError("必须提供采购订单ID")
+    if not warehouse_id:
+        raise ValidationError("必须提供退货仓库ID")
+
+    return await PurchaseReturnService().pull_from_purchase_order(
+        tenant_id=tenant_id,
+        purchase_order_id=int(purchase_order_id),
+        created_by=current_user.id,
+        warehouse_id=int(warehouse_id),
+        warehouse_name=warehouse_name,
+        return_quantities=return_quantities if isinstance(return_quantities, dict) else None,
     )
 
 

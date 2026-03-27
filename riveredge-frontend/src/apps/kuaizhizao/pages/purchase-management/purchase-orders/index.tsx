@@ -13,7 +13,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormUploadButton, ProFormItem } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Card, Row, Col, Table, Empty, Timeline, Divider, Form as AntForm, Input, InputNumber, DatePicker, Switch, List, Typography, theme, Dropdown } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, ClockCircleOutlined, CheckCircleTwoTone, CloseCircleTwoTone, SendOutlined, DownOutlined, FileTextOutlined, InboxOutlined, DollarOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, ClockCircleOutlined, CheckCircleTwoTone, CloseCircleTwoTone, SendOutlined, DownOutlined, FileTextOutlined, InboxOutlined, DollarOutlined, RollbackOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { getFileDownloadUrl, uploadMultipleFiles } from '../../../../../services/file';
@@ -29,7 +29,7 @@ import {
   listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, updatePurchaseOrder,
   deletePurchaseOrder, approvePurchaseOrder, submitPurchaseOrder,
   pushPurchaseOrderToReceipt, pushPurchaseOrderToReceiptPreview,
-  pushPurchaseOrderToReceiptNotice, pushPurchaseOrderToInvoice,
+  pushPurchaseOrderToReceiptNotice, pushPurchaseOrderToInvoice, pushPurchaseOrderToPurchaseReturn,
   getPurchaseOrderStatistics, expeditePurchaseOrder,
   PurchaseOrder, PurchaseOrderItem
 } from '../../../services/purchase';
@@ -234,6 +234,12 @@ const PurchaseOrdersPage: React.FC = () => {
   const [pushToNoticeVisible, setPushToNoticeVisible] = useState(false);
   const [pushToNoticeOrder, setPushToNoticeOrder] = useState<PurchaseOrderDetail | null>(null);
   const [pushToNoticeQuantities, setPushToNoticeQuantities] = useState<Record<number, number>>({});
+  const [pushToReturnVisible, setPushToReturnVisible] = useState(false);
+  const [pushToReturnOrder, setPushToReturnOrder] = useState<PurchaseOrderDetail | null>(null);
+  const [pushToReturnQuantities, setPushToReturnQuantities] = useState<Record<number, number>>({});
+  const [pushToReturnWarehouseId, setPushToReturnWarehouseId] = useState<number | undefined>(undefined);
+  const [pushToReturnWarehouseName, setPushToReturnWarehouseName] = useState('');
+  const [pushToReturnLoading, setPushToReturnLoading] = useState(false);
   // 费用分摊 Modal
   const [landingCostModalVisible, setLandingCostModalVisible] = useState(false);
   const [landingCostOrder, setLandingCostOrder] = useState<PurchaseOrder | null>(null);
@@ -351,6 +357,7 @@ const PurchaseOrdersPage: React.FC = () => {
                   { key: 'receipt-notice', label: '收货通知', icon: <FileTextOutlined />, onClick: () => handlePushToNotice(record) },
                   { key: 'receipt', label: '采购入库', icon: <InboxOutlined />, onClick: () => handlePushToReceipt(record) },
                   { key: 'invoice', label: '采购发票', icon: <DollarOutlined />, onClick: () => handlePushToInvoice(record) },
+                  { key: 'purchase-return', label: '下推采购退货单', icon: <RollbackOutlined />, onClick: () => handlePushToReturn(record) },
                 ],
               }}
             >
@@ -564,6 +571,69 @@ const PurchaseOrdersPage: React.FC = () => {
       messageApi.error(error?.response?.data?.detail || error.message || '下推采购发票失败');
     } finally {
       setPushToInvoiceLoading(false);
+    }
+  };
+
+  const handlePushToReturn = async (record: PurchaseOrder) => {
+    try {
+      const detail = await getPurchaseOrder(record.id!);
+      const items = (detail.items || []).filter((it: PurchaseOrderItem) => Number(it.received_quantity ?? 0) > 0);
+      if (items.length === 0) {
+        messageApi.warning('采购单暂无可退货数量（已到货数量为 0）');
+        return;
+      }
+      const quantities: Record<number, number> = {};
+      items.forEach((it: PurchaseOrderItem) => {
+        if (it.id != null) quantities[it.id] = Number(it.received_quantity ?? 0);
+      });
+      setPushToReturnOrder(detail as PurchaseOrderDetail);
+      setPushToReturnQuantities(quantities);
+      setPushToReturnVisible(true);
+    } catch {
+      messageApi.error('加载采购订单详情失败');
+    }
+  };
+
+  const handlePushToReturnConfirm = async () => {
+    if (!pushToReturnOrder?.id) return;
+    if (!pushToReturnWarehouseId || pushToReturnWarehouseId <= 0) {
+      messageApi.warning('请先填写退货仓库ID');
+      return;
+    }
+    const items = (pushToReturnOrder.items || []).filter((it: PurchaseOrderItem) => Number(it.received_quantity ?? 0) > 0);
+    for (const it of items) {
+      if (it.id == null) continue;
+      const qty = pushToReturnQuantities[it.id] ?? 0;
+      const max = Number(it.received_quantity ?? 0);
+      if (qty <= 0) continue;
+      if (qty > max) {
+        messageApi.error(`物料 ${it.material_code || it.material_name} 的退货数量不能超过可退数量 ${max}`);
+        return;
+      }
+    }
+    setPushToReturnLoading(true);
+    try {
+      const result = await pushPurchaseOrderToPurchaseReturn({
+        purchase_order_id: pushToReturnOrder.id,
+        warehouse_id: pushToReturnWarehouseId,
+        warehouse_name: pushToReturnWarehouseName || undefined,
+        return_quantities: pushToReturnQuantities,
+      });
+      messageApi.success(`成功生成采购退货单：${result.return_code || '已创建'}`);
+      setPushToReturnVisible(false);
+      setPushToReturnOrder(null);
+      setPushToReturnQuantities({});
+      setPushToReturnWarehouseId(undefined);
+      setPushToReturnWarehouseName('');
+      invalidateStatistics();
+      actionRef.current?.reload();
+      if (detailDrawerVisible && orderDetail?.id === pushToReturnOrder.id) {
+        getPurchaseOrder(pushToReturnOrder.id).then(setOrderDetail);
+      }
+    } catch (error: any) {
+      messageApi.error(error?.response?.data?.detail || error.message || '下推采购退货失败');
+    } finally {
+      setPushToReturnLoading(false);
     }
   };
 
@@ -1798,6 +1868,7 @@ const PurchaseOrdersPage: React.FC = () => {
                           { key: 'receipt-notice', label: '收货通知', icon: <FileTextOutlined />, onClick: () => handlePushToNotice(orderDetail) },
                           { key: 'receipt', label: '采购入库', icon: <InboxOutlined />, onClick: () => handlePushToReceipt(orderDetail) },
                           { key: 'invoice', label: '采购发票', icon: <DollarOutlined />, onClick: () => handlePushToInvoice(orderDetail) },
+                          { key: 'purchase-return', label: '下推采购退货单', icon: <RollbackOutlined />, onClick: () => handlePushToReturn(orderDetail) },
                         ],
                       }}
                     >
@@ -2177,6 +2248,81 @@ const PurchaseOrdersPage: React.FC = () => {
                       value={pushToNoticeQuantities[record.id] ?? 0}
                       onChange={(v) =>
                         setPushToNoticeQuantities((prev) => ({
+                          ...prev,
+                          [record.id!]: Number(v) || 0,
+                        }))
+                      }
+                      style={{ width: 100 }}
+                    />
+                  ) : null),
+                },
+              ]}
+            />
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        title="下推到采购退货"
+        open={pushToReturnVisible}
+        onCancel={() => {
+          setPushToReturnVisible(false);
+          setPushToReturnOrder(null);
+          setPushToReturnQuantities({});
+          setPushToReturnWarehouseId(undefined);
+          setPushToReturnWarehouseName('');
+        }}
+        onOk={handlePushToReturnConfirm}
+        confirmLoading={pushToReturnLoading}
+        okText="确认下推"
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        destroyOnClose
+      >
+        {pushToReturnOrder && (
+          <div>
+            <p style={{ marginBottom: 12 }}>
+              从采购订单 <strong>{pushToReturnOrder.order_code}</strong> 下推生成采购退货单，可修改各明细退货数量（不超过已到货数量）：
+            </p>
+            <Row gutter={12} style={{ marginBottom: 12 }}>
+              <Col span={8}>
+                <InputNumber
+                  min={1}
+                  style={{ width: '100%' }}
+                  value={pushToReturnWarehouseId}
+                  onChange={(v) => setPushToReturnWarehouseId(Number(v) || undefined)}
+                  placeholder="退货仓库ID"
+                />
+              </Col>
+              <Col span={16}>
+                <Input
+                  value={pushToReturnWarehouseName}
+                  onChange={(e) => setPushToReturnWarehouseName(e.target.value)}
+                  placeholder="退货仓库名称（可选）"
+                />
+              </Col>
+            </Row>
+            <Table
+              size="small"
+              dataSource={(pushToReturnOrder.items || []).filter((it: PurchaseOrderItem) => (it.received_quantity ?? 0) > 0)}
+              rowKey="id"
+              pagination={false}
+              scroll={{ x: 700 }}
+              columns={[
+                { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                { title: '物料名称', dataIndex: 'material_name', width: 150 },
+                { title: '采购数量', dataIndex: 'ordered_quantity', width: 100, align: 'right' },
+                { title: '已到货', dataIndex: 'received_quantity', width: 90, align: 'right' },
+                {
+                  title: '退货数量',
+                  width: 140,
+                  align: 'right',
+                  render: (_: any, record: PurchaseOrderItem) => (record.id != null ? (
+                    <InputNumber
+                      min={0}
+                      max={Number(record.received_quantity ?? 0)}
+                      value={pushToReturnQuantities[record.id] ?? 0}
+                      onChange={(v) =>
+                        setPushToReturnQuantities((prev) => ({
                           ...prev,
                           [record.id!]: Number(v) || 0,
                         }))

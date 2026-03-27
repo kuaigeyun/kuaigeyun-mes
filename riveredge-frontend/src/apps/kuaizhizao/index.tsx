@@ -45,6 +45,7 @@ const PurchaseOrdersPage = lazy(() => import('./pages/purchase-management/purcha
 const PurchaseRequisitionsPage = lazy(() => import('./pages/purchase-management/purchase-requisitions'));
 const ReceiptNoticesPage = lazy(() => import('./pages/purchase-management/receipt-notices'));
 const LogisticsTrackingPage = lazy(() => import('./pages/purchase-management/logistics-tracking'));
+const PurchaseReturnsPage = lazy(() => import('./pages/purchase-management/purchase-returns'));
 
 // 销售管理页面
 const SalesForecastsPage = lazy(() => import('./pages/sales-management/sales-forecasts'));
@@ -53,6 +54,7 @@ const SalesOrdersPage = lazy(() => import('./pages/sales-management/sales-orders
 const DeliveryNotesPage = lazy(() => import('./pages/warehouse-management/delivery-notes'));
 const ShipmentNoticesPage = lazy(() => import('./pages/sales-management/shipment-notices'));
 const SampleTrialsPage = lazy(() => import('./pages/sales-management/sample-trials'));
+const SalesReturnsPage = lazy(() => import('./pages/sales-management/sales-returns'));
 
 // 质量管理页面
 const InspectionCenterPage = lazy(() => import('./pages/quality-management/inspection-center'));
@@ -137,6 +139,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="purchase-management/purchase-requisitions" element={withPageSuspense(PurchaseRequisitionsPage)} />
       <Route path="purchase-management/receipt-notices" element={withPageSuspense(ReceiptNoticesPage)} />
       <Route path="purchase-management/logistics-tracking" element={withPageSuspense(LogisticsTrackingPage)} />
+      <Route path="purchase-management/purchase-returns" element={withPageSuspense(PurchaseReturnsPage)} />
 
       {/* 生产执行路由 */}
       <Route path="production-execution/work-orders" element={withPageSuspense(WorkOrdersPage)} />
@@ -162,6 +165,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="sales-management/sales-orders" element={withPageSuspense(SalesOrdersPage)} />
       <Route path="sales-management/shipment-notices" element={withPageSuspense(ShipmentNoticesPage)} />
       <Route path="sales-management/sample-trials" element={withPageSuspense(SampleTrialsPage)} />
+      <Route path="sales-management/sales-returns" element={withPageSuspense(SalesReturnsPage)} />
 
       <Route path="production-execution/work-orders/:id/kiosk" element={withPageSuspense(WorkOrderDetailKioskPage)} />
 

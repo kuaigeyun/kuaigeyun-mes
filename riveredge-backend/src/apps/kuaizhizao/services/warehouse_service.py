@@ -2818,6 +2818,94 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             
             return SalesReturnResponse.model_validate(return_obj)
 
+    async def pull_from_sales_order(
+        self,
+        tenant_id: int,
+        sales_order_id: int,
+        created_by: int,
+        warehouse_id: int,
+        warehouse_name: Optional[str] = None,
+        return_quantities: Optional[Dict[int, float]] = None,
+    ) -> SalesReturnResponse:
+        """从销售订单下推生成销售退货单。"""
+        from apps.kuaizhizao.models.sales_order import SalesOrder
+        from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+        from apps.kuaizhizao.schemas.warehouse import SalesReturnItemCreate
+
+        sales_order = await SalesOrder.get_or_none(tenant_id=tenant_id, id=sales_order_id)
+        if not sales_order:
+            raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+
+        order_items = await SalesOrderItem.filter(tenant_id=tenant_id, sales_order_id=sales_order_id).all()
+        if not order_items:
+            raise BusinessLogicError("销售订单没有明细，无法下推销售退货单")
+
+        return_items: List[SalesReturnItemCreate] = []
+        for item in order_items:
+            delivered_qty = Decimal(str(item.delivered_quantity or 0))
+            if delivered_qty <= 0:
+                continue
+            selected_qty = Decimal(str(return_quantities.get(item.id, delivered_qty))) if return_quantities and item.id in return_quantities else delivered_qty
+            if selected_qty <= 0:
+                continue
+            if selected_qty > delivered_qty:
+                raise BusinessLogicError(f"物料 {item.material_code or item.material_name} 的退货数量不能超过可退数量 {delivered_qty}")
+            unit_price = Decimal(str(item.unit_price or 0))
+            total_amount = selected_qty * unit_price
+            return_items.append(
+                SalesReturnItemCreate(
+                    material_id=item.material_id,
+                    material_code=item.material_code,
+                    material_name=item.material_name,
+                    material_spec=item.material_spec,
+                    material_unit=item.material_unit,
+                    return_quantity=float(selected_qty),
+                    unit_price=float(unit_price),
+                    total_amount=float(total_amount),
+                    status="待退货",
+                )
+            )
+
+        if not return_items:
+            raise BusinessLogicError("没有可退货的明细")
+
+        return_data = SalesReturnCreate(
+            sales_order_id=sales_order.id,
+            sales_order_code=sales_order.order_code,
+            customer_id=sales_order.customer_id,
+            customer_name=sales_order.customer_name,
+            warehouse_id=warehouse_id,
+            warehouse_name=warehouse_name or f"仓库{warehouse_id}",
+            status="待退货",
+            return_reason="订单退货",
+            notes=f"从销售订单 {sales_order.order_code} 下推生成",
+            items=return_items,
+        )
+        created = await self.create_sales_return(tenant_id=tenant_id, return_data=return_data, created_by=created_by)
+
+        try:
+            from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+            from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+            await DocumentRelationNewService().create_relation(
+                tenant_id=tenant_id,
+                relation_data=DocumentRelationCreate(
+                    source_type="sales_order",
+                    source_id=sales_order.id,
+                    source_code=sales_order.order_code,
+                    target_type="sales_return",
+                    target_id=created.id,
+                    target_code=created.return_code,
+                    relation_type="source",
+                    relation_mode="push",
+                    relation_desc="销售订单下推销售退货单",
+                ),
+                created_by=created_by,
+            )
+        except Exception as rel_err:
+            logger.warning("建立销售订单→销售退货关联失败: %s", rel_err)
+
+        return created
+
     async def get_sales_return_by_id(self, tenant_id: int, return_id: int) -> SalesReturnResponse:
         """根据ID获取销售退货单"""
         return_obj = await SalesReturn.get_or_none(tenant_id=tenant_id, id=return_id)
@@ -3070,6 +3158,93 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                     logger.warning("建立采购入库→采购退货 单据关联失败: %s", e)
             
             return PurchaseReturnResponse.model_validate(return_obj)
+
+    async def pull_from_purchase_order(
+        self,
+        tenant_id: int,
+        purchase_order_id: int,
+        created_by: int,
+        warehouse_id: int,
+        warehouse_name: Optional[str] = None,
+        return_quantities: Optional[Dict[int, float]] = None,
+    ) -> PurchaseReturnResponse:
+        """从采购订单下推生成采购退货单。"""
+        from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
+        from apps.kuaizhizao.schemas.warehouse import PurchaseReturnItemCreate
+
+        purchase_order = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=purchase_order_id)
+        if not purchase_order:
+            raise NotFoundError(f"采购订单不存在: {purchase_order_id}")
+
+        order_items = await PurchaseOrderItem.filter(tenant_id=tenant_id, purchase_order_id=purchase_order_id).all()
+        if not order_items:
+            raise BusinessLogicError("采购订单没有明细，无法下推采购退货单")
+
+        return_items: List[PurchaseReturnItemCreate] = []
+        for item in order_items:
+            received_qty = Decimal(str(item.received_quantity or 0))
+            if received_qty <= 0:
+                continue
+            selected_qty = Decimal(str(return_quantities.get(item.id, received_qty))) if return_quantities and item.id in return_quantities else received_qty
+            if selected_qty <= 0:
+                continue
+            if selected_qty > received_qty:
+                raise BusinessLogicError(f"物料 {item.material_code or item.material_name} 的退货数量不能超过可退数量 {received_qty}")
+            unit_price = Decimal(str(item.unit_price or 0))
+            total_amount = selected_qty * unit_price
+            return_items.append(
+                PurchaseReturnItemCreate(
+                    material_id=item.material_id,
+                    material_code=item.material_code,
+                    material_name=item.material_name,
+                    material_spec=item.material_spec,
+                    material_unit=item.unit,
+                    return_quantity=float(selected_qty),
+                    unit_price=float(unit_price),
+                    total_amount=float(total_amount),
+                    status="待退货",
+                )
+            )
+
+        if not return_items:
+            raise BusinessLogicError("没有可退货的明细")
+
+        return_data = PurchaseReturnCreate(
+            purchase_order_id=purchase_order.id,
+            purchase_order_code=purchase_order.order_code,
+            supplier_id=purchase_order.supplier_id,
+            supplier_name=purchase_order.supplier_name,
+            warehouse_id=warehouse_id,
+            warehouse_name=warehouse_name or f"仓库{warehouse_id}",
+            status="待退货",
+            return_reason="订单退货",
+            notes=f"从采购订单 {purchase_order.order_code} 下推生成",
+            items=return_items,
+        )
+        created = await self.create_purchase_return(tenant_id=tenant_id, return_data=return_data, created_by=created_by)
+
+        try:
+            from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+            from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+            await DocumentRelationNewService().create_relation(
+                tenant_id=tenant_id,
+                relation_data=DocumentRelationCreate(
+                    source_type="purchase_order",
+                    source_id=purchase_order.id,
+                    source_code=purchase_order.order_code,
+                    target_type="purchase_return",
+                    target_id=created.id,
+                    target_code=created.return_code,
+                    relation_type="source",
+                    relation_mode="push",
+                    relation_desc="采购订单下推采购退货单",
+                ),
+                created_by=created_by,
+            )
+        except Exception as rel_err:
+            logger.warning("建立采购订单→采购退货关联失败: %s", rel_err)
+
+        return created
 
     async def get_purchase_return_by_id(self, tenant_id: int, return_id: int) -> PurchaseReturnResponse:
         """根据ID获取采购退货单"""

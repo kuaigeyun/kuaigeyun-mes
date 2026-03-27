@@ -400,6 +400,23 @@ export async function pushSalesOrderToInvoice(salesOrderId: number): Promise<Pus
   });
 }
 
+export interface PushToSalesReturnResponse {
+  id: number;
+  return_code?: string;
+}
+
+export async function pushSalesOrderToSalesReturn(data: {
+  sales_order_id: number;
+  warehouse_id: number;
+  warehouse_name?: string;
+  return_quantities?: Record<number, number>;
+}): Promise<PushToSalesReturnResponse> {
+  return apiRequest<PushToSalesReturnResponse>('/apps/kuaizhizao/sales-returns/pull-from-sales-order', {
+    method: 'POST',
+    data,
+  });
+}
+
 /**
  * 撤回销售订单
  */

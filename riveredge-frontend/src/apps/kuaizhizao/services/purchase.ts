@@ -258,6 +258,18 @@ export async function pushPurchaseOrderToInvoice(id: number): Promise<any> {
   });
 }
 
+export async function pushPurchaseOrderToPurchaseReturn(data: {
+  purchase_order_id: number;
+  warehouse_id: number;
+  warehouse_name?: string;
+  return_quantities?: Record<number, number>;
+}): Promise<{ id: number; return_code?: string }> {
+  return apiRequest<{ id: number; return_code?: string }>('/apps/kuaizhizao/purchase-returns/pull-from-purchase-order', {
+    method: 'POST',
+    data,
+  });
+}
+
 /** 物料价格历史响应接口 */
 export interface MaterialPriceHistoryResponse {
   material_id: number;

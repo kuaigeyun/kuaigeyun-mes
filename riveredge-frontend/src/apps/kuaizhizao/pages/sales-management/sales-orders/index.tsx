@@ -46,6 +46,7 @@ import {
   pushSalesOrderToWorkOrder,
   pushSalesOrderToShipmentNotice,
   pushSalesOrderToInvoice,
+  pushSalesOrderToSalesReturn,
   withdrawSalesOrderFromComputation,
   createSalesOrderReminder,
   bulkDeleteSalesOrders,
@@ -719,6 +720,12 @@ const SalesOrdersPage: React.FC = () => {
     orderId: number;
   } | null>(null);
   const [pushPreviewConfirming, setPushPreviewConfirming] = useState(false);
+  const [pushToReturnVisible, setPushToReturnVisible] = useState(false);
+  const [pushToReturnOrder, setPushToReturnOrder] = useState<SalesOrder | null>(null);
+  const [pushToReturnQuantities, setPushToReturnQuantities] = useState<Record<number, number>>({});
+  const [pushToReturnWarehouseId, setPushToReturnWarehouseId] = useState<number | undefined>(undefined);
+  const [pushToReturnWarehouseName, setPushToReturnWarehouseName] = useState<string>('');
+  const [pushToReturnLoading, setPushToReturnLoading] = useState(false);
 
   /**
    * 打开下推预览：先拉取预览，再展示弹窗
@@ -807,6 +814,67 @@ const SalesOrdersPage: React.FC = () => {
         }
       },
     });
+  };
+
+  /** 打开下推销售退货弹窗 */
+  const handlePushToSalesReturn = async (id: number) => {
+    try {
+      const detail = await getSalesOrder(id, true, false);
+      const items = (detail.items || []).filter((it) => Number(it.delivered_quantity || 0) > 0);
+      if (items.length === 0) {
+        messageApi.warning('销售订单暂无可退货数量（已交货数量为 0）');
+        return;
+      }
+      const quantities: Record<number, number> = {};
+      items.forEach((it) => {
+        if (it.id != null) quantities[it.id] = Number(it.delivered_quantity || 0);
+      });
+      setPushToReturnOrder(detail);
+      setPushToReturnQuantities(quantities);
+      setPushToReturnVisible(true);
+    } catch (error: any) {
+      messageApi.error(error?.response?.data?.detail || error?.message || '加载销售订单详情失败');
+    }
+  };
+
+  /** 确认下推销售退货 */
+  const handlePushToSalesReturnConfirm = async () => {
+    if (!pushToReturnOrder?.id) return;
+    if (!pushToReturnWarehouseId || pushToReturnWarehouseId <= 0) {
+      messageApi.warning('请先填写退货仓库ID');
+      return;
+    }
+    const items = (pushToReturnOrder.items || []).filter((it) => Number(it.delivered_quantity || 0) > 0);
+    for (const it of items) {
+      if (it.id == null) continue;
+      const qty = Number(pushToReturnQuantities[it.id] || 0);
+      const max = Number(it.delivered_quantity || 0);
+      if (qty <= 0) continue;
+      if (qty > max) {
+        messageApi.error(`物料 ${it.material_code || it.material_name} 的退货数量不能超过可退数量 ${max}`);
+        return;
+      }
+    }
+    setPushToReturnLoading(true);
+    try {
+      const result = await pushSalesOrderToSalesReturn({
+        sales_order_id: pushToReturnOrder.id,
+        warehouse_id: pushToReturnWarehouseId,
+        warehouse_name: pushToReturnWarehouseName || undefined,
+        return_quantities: pushToReturnQuantities,
+      });
+      messageApi.success(`成功生成销售退货单：${result?.return_code || '已创建'}`);
+      setPushToReturnVisible(false);
+      setPushToReturnOrder(null);
+      setPushToReturnQuantities({});
+      setPushToReturnWarehouseId(undefined);
+      setPushToReturnWarehouseName('');
+      refreshDrawerOrder(pushToReturnOrder.id);
+    } catch (error: any) {
+      messageApi.error(error?.response?.data?.detail || error?.message || '下推销售退货失败');
+    } finally {
+      setPushToReturnLoading(false);
+    }
   };
 
   /** 直推工单（含预览） */
@@ -1187,6 +1255,7 @@ const SalesOrdersPage: React.FC = () => {
                   { type: 'divider' },
                   { key: 'shipment', label: t('app.kuaizhizao.salesOrder.shipmentNotice'), icon: <SendOutlined />, onClick: () => handlePushToShipmentNotice(record.id!) },
                   { key: 'invoice', label: t('app.kuaizhizao.salesOrder.salesInvoice'), icon: <FileTextOutlined />, onClick: () => handlePushToInvoice(record.id!) },
+                  { key: 'sales-return', label: '下推销售退货单', icon: <RollbackOutlined />, onClick: () => handlePushToSalesReturn(record.id!) },
                   ...(record.pushed_to_computation ? [{ type: 'divider' as const }, { key: 'withdraw', label: t('app.kuaizhizao.salesOrder.withdrawComputation'), icon: <RollbackOutlined />, onClick: () => handleWithdrawFromComputation(record.id!) }] : []),
                 ],
               }}
@@ -2626,6 +2695,7 @@ const SalesOrdersPage: React.FC = () => {
                       { type: 'divider' },
                       { key: 'shipment', label: t('app.kuaizhizao.salesOrder.shipmentNotice'), icon: <SendOutlined />, onClick: () => handlePushToShipmentNotice(currentSalesOrder.id!) },
                       { key: 'invoice', label: t('app.kuaizhizao.salesOrder.salesInvoice'), icon: <FileTextOutlined />, onClick: () => handlePushToInvoice(currentSalesOrder.id!) },
+                      { key: 'sales-return', label: '下推销售退货单', icon: <RollbackOutlined />, onClick: () => handlePushToSalesReturn(currentSalesOrder.id!) },
                     ],
                   }}
                 >
@@ -2979,6 +3049,75 @@ const SalesOrdersPage: React.FC = () => {
             )}
           </div>
         ) : null}
+      </Modal>
+
+      <Modal
+        title="下推销售退货单"
+        open={pushToReturnVisible}
+        onCancel={() => {
+          setPushToReturnVisible(false);
+          setPushToReturnOrder(null);
+          setPushToReturnQuantities({});
+          setPushToReturnWarehouseId(undefined);
+          setPushToReturnWarehouseName('');
+        }}
+        onOk={handlePushToSalesReturnConfirm}
+        confirmLoading={pushToReturnLoading}
+        okText="确认下推"
+        width={720}
+        destroyOnClose
+      >
+        {pushToReturnOrder && (
+          <>
+            <p style={{ marginBottom: 12 }}>
+              从销售订单 <strong>{pushToReturnOrder.order_code}</strong> 下推生成销售退货单，可调整各明细退货数量（不超过已交货数量）。
+            </p>
+            <Row gutter={12} style={{ marginBottom: 12 }}>
+              <Col span={8}>
+                <InputNumber
+                  min={1}
+                  style={{ width: '100%' }}
+                  value={pushToReturnWarehouseId}
+                  onChange={(v) => setPushToReturnWarehouseId(Number(v) || undefined)}
+                  placeholder="退货仓库ID"
+                />
+              </Col>
+              <Col span={16}>
+                <Input
+                  value={pushToReturnWarehouseName}
+                  onChange={(e) => setPushToReturnWarehouseName(e.target.value)}
+                  placeholder="退货仓库名称（可选）"
+                />
+              </Col>
+            </Row>
+            <Table
+              size="small"
+              rowKey="id"
+              pagination={false}
+              dataSource={(pushToReturnOrder.items || []).filter((it) => Number(it.delivered_quantity || 0) > 0)}
+              columns={[
+                { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                { title: '物料名称', dataIndex: 'material_name', width: 150 },
+                { title: '订单数量', dataIndex: 'required_quantity', width: 100, align: 'right' },
+                { title: '已交货', dataIndex: 'delivered_quantity', width: 100, align: 'right' },
+                {
+                  title: '退货数量',
+                  width: 120,
+                  align: 'right',
+                  render: (_: any, record: SalesOrderItem) => record.id != null ? (
+                    <InputNumber
+                      min={0}
+                      max={Number(record.delivered_quantity || 0)}
+                      value={pushToReturnQuantities[record.id] ?? 0}
+                      onChange={(v) => setPushToReturnQuantities((prev) => ({ ...prev, [record.id!]: Number(v) || 0 }))}
+                      style={{ width: 100 }}
+                    />
+                  ) : null,
+                },
+              ]}
+            />
+          </>
+        )}
       </Modal>
 
       {/* 下推预览弹窗 */}
