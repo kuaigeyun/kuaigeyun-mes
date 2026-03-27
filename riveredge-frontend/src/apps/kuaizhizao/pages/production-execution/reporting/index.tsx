@@ -1390,7 +1390,9 @@ const ReportingPage: React.FC = () => {
           valueStyle: { color: token.colorPrimary },
           description: (
             <div style={{ color: token.colorTextSecondary }}>
-              本月预提 ¥{((statistics.estimated_wages ?? 0) * 1.1).toFixed(2)}
+              {t('app.kuaizhizao.reporting.statEstimatedWagesAccrualHint', {
+                amount: ((statistics.estimated_wages ?? 0) * 1.1).toFixed(2),
+              })}
             </div>
           ),
           backgroundChart: (
@@ -1416,7 +1418,10 @@ const ReportingPage: React.FC = () => {
           title: t('app.kuaizhizao.reporting.statExceptionReports'),
           value: statistics.exception_reports ?? 0,
           valueStyle: (statistics.exception_reports ?? 0) > 0 ? { color: token.colorWarning } : undefined,
-          description: (statistics.exception_reports ?? 0) > 0 ? '需优先响应' : '近期无异常',
+          description:
+            (statistics.exception_reports ?? 0) > 0
+              ? t('app.kuaizhizao.reporting.statExceptionPriority')
+              : t('app.kuaizhizao.reporting.statExceptionNoneRecent'),
           backgroundChart: (
             <SimpleSparkline 
               data={[1, 0, 2, 0, 1, 0, 0]} 
@@ -1431,7 +1436,11 @@ const ReportingPage: React.FC = () => {
           valueStyle: { color: '#fa8c16' }, // Orange
           description: (statistics.efficiency ?? 0) > 0 || (statistics as any).efficiency_yoy ? (
             <div style={{ color: ((statistics as any).efficiency_yoy ?? 5) >= 0 ? '#52c41a' : '#ff4d4f' }}>
-              较基准 {(statistics as any).efficiency_yoy ? `${(statistics as any).efficiency_yoy > 0 ? '+' : ''}${(statistics as any).efficiency_yoy}%` : '+5%'}
+              {t('app.kuaizhizao.reporting.statEfficiencyVsBaseline', {
+                value: (statistics as any).efficiency_yoy
+                  ? `${(statistics as any).efficiency_yoy > 0 ? '+' : ''}${(statistics as any).efficiency_yoy}%`
+                  : '+5%',
+              })}
             </div>
           ) : null,
           backgroundChart: (

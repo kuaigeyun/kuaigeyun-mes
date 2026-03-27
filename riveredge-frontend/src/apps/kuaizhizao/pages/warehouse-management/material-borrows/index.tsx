@@ -7,13 +7,15 @@
  * @date 2026-02-19
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form as AntForm, InputNumber, Input, DatePicker, Row, Col } from 'antd';
-import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, PrinterOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, PrinterOutlined, ShoppingOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
+import type { Material } from '../../../../master-data/types/material';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import CodeField from '../../../../../components/code-field';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
@@ -21,6 +23,7 @@ import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFI
 import { warehouseApi } from '../../../services/production';
 import { getMaterialBorrowLifecycle } from '../../../utils/materialBorrowLifecycle';
 import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
+import { useTranslation } from 'react-i18next';
 
 interface MaterialBorrow {
   id?: number;
@@ -56,6 +59,7 @@ interface MaterialBorrowItem {
 }
 
 const MaterialBorrowsPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -65,6 +69,7 @@ const MaterialBorrowsPage: React.FC = () => {
 
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [syncModalVisible, setSyncModalVisible] = useState(false);
+  const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const formRef = useRef<any>(null);
   const [warehouseList, setWarehouseList] = useState<any[]>([]);
   const defaultBorrowItem = { material_id: undefined, material_code: '', material_name: '', material_unit: '', borrow_quantity: 1 };
@@ -221,6 +226,22 @@ const MaterialBorrowsPage: React.FC = () => {
       messageApi.error('打印失败');
     }
   };
+
+  const appendBorrowItemsFromMaterials = useCallback(
+    (selected: Material[]) => {
+      const current = formRef.current?.getFieldValue('items') ?? [];
+      const newRows = selected.map((m) => ({
+        ...defaultBorrowItem,
+        material_id: m.id,
+        material_code: m.mainCode ?? m.code ?? '',
+        material_name: m.name ?? '',
+        material_unit: m.baseUnit ?? '',
+      }));
+      formRef.current?.setFieldsValue({ items: [...current, ...newRows] });
+      messageApi.success(t('app.kuaizhizao.common.materialBatchAdded', { count: selected.length }));
+    },
+    [messageApi, t]
+  );
 
   /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码 */
   const handleCreate = () => {
@@ -521,7 +542,19 @@ const MaterialBorrowsPage: React.FC = () => {
                         scroll={fields.length > 0 ? { x: totalWidth } : undefined}
                         style={{ width: '100%', margin: 0 }}
                         footer={() => (
-                          <Button type="dashed" icon={<PlusOutlined />} onClick={() => add(defaultBorrowItem)} block>添加明细</Button>
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
+                            <Button type="dashed" icon={<PlusOutlined />} style={{ flex: 1, minWidth: 120 }} onClick={() => add(defaultBorrowItem)}>
+                              添加明细
+                            </Button>
+                            <Button
+                              type="default"
+                              icon={<ShoppingOutlined />}
+                              style={{ flex: 1, minWidth: 120 }}
+                              onClick={() => setMaterialPickerOpen(true)}
+                            >
+                              {t('app.kuaizhizao.common.materialBatchSelect')}
+                            </Button>
+                          </div>
                         )}
                       />
                     </div>
@@ -539,6 +572,12 @@ const MaterialBorrowsPage: React.FC = () => {
         onClose={() => setSyncModalVisible(false)}
         onConfirm={handleSyncConfirm}
         title="从数据集同步借料单"
+      />
+
+      <MaterialBatchPickerModal
+        open={materialPickerOpen}
+        onCancel={() => setMaterialPickerOpen(false)}
+        onConfirm={appendBorrowItemsFromMaterials}
       />
     </>
   );

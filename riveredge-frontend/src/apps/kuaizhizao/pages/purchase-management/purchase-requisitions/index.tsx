@@ -2,14 +2,16 @@
  * 采购申请管理页面
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Table, Form as AntForm, Input, InputNumber, Select, Dropdown, Row, Col, Checkbox } from 'antd';
-import { EyeOutlined, SwapOutlined, ThunderboltOutlined, MoreOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { EyeOutlined, SwapOutlined, ThunderboltOutlined, MoreOutlined, PlusOutlined, DeleteOutlined, ShoppingOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerActions, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
+import type { Material } from '../../../../master-data/types/material';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { downloadFile } from '../../../../../utils';
@@ -34,8 +36,10 @@ import DocumentTrackingPanel from '../../../../../components/document-tracking-p
 import { supplierApi } from '../../../../master-data/services/supply-chain';
 import { ROUTES } from '../../../constants/routes';
 import { PriceHistoryInsight, SupplierPerformanceTag, MultiSupplierPriceComparison } from '../purchase-orders/ProcurementEmpowermentComponents';
+import { useTranslation } from 'react-i18next';
 
 const PurchaseRequisitionsPage: React.FC = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { message: messageApi, modal: modalApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
@@ -47,6 +51,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const [previewCode, setPreviewCode] = useState<string | null>(null);
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
   const [effectiveAutoGen, setEffectiveAutoGen] = useState<boolean | null>(null);
+  const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
 
   const initialCreateItems = [
     { material_id: undefined, material_code: '', material_name: '', material_spec: '', unit: '件', quantity: 1, suggested_unit_price: 0 },
@@ -58,6 +63,24 @@ const PurchaseRequisitionsPage: React.FC = () => {
       setSupplierList(list);
     }).catch(() => setSupplierList([]));
   }, []);
+
+  const appendRequisitionItemsFromMaterials = useCallback(
+    (selected: Material[]) => {
+      const current = createFormRef.current?.getFieldValue('items') ?? [];
+      const newRows = selected.map((m) => ({
+        material_id: m.id,
+        material_code: m.mainCode ?? m.code ?? '',
+        material_name: m.name ?? '',
+        material_spec: m.specification ?? '',
+        unit: m.baseUnit ?? '件',
+        quantity: 1,
+        suggested_unit_price: 0,
+      }));
+      createFormRef.current?.setFieldsValue({ items: [...current, ...newRows] });
+      messageApi.success(t('app.kuaizhizao.common.materialBatchAdded', { count: selected.length }));
+    },
+    [messageApi, t]
+  );
 
   const columns: ProColumns<PurchaseRequisition>[] = [
     { title: '申请编码', dataIndex: 'requisition_code', width: 150, fixed: 'left' },
@@ -658,9 +681,34 @@ const PurchaseRequisitionsPage: React.FC = () => {
                       pagination={false}
                       columns={reqDetailColumns}
                       footer={() => (
-                        <Button type="dashed" icon={<PlusOutlined />} onClick={() => add({ material_id: undefined, material_code: '', material_name: '', material_spec: '', unit: '件', quantity: 1, suggested_unit_price: 0 })} block>
-                          添加明细
-                        </Button>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
+                          <Button
+                            type="dashed"
+                            icon={<PlusOutlined />}
+                            style={{ flex: 1, minWidth: 120 }}
+                            onClick={() =>
+                              add({
+                                material_id: undefined,
+                                material_code: '',
+                                material_name: '',
+                                material_spec: '',
+                                unit: '件',
+                                quantity: 1,
+                                suggested_unit_price: 0,
+                              })
+                            }
+                          >
+                            添加明细
+                          </Button>
+                          <Button
+                            type="default"
+                            icon={<ShoppingOutlined />}
+                            style={{ flex: 1, minWidth: 120 }}
+                            onClick={() => setMaterialPickerOpen(true)}
+                          >
+                            {t('app.kuaizhizao.common.materialBatchSelect')}
+                          </Button>
+                        </div>
                       )}
                     />
                   </div>
@@ -670,6 +718,11 @@ const PurchaseRequisitionsPage: React.FC = () => {
           </ProForm.Item>
         </ProFormItem>
         <ProFormTextArea name="notes" label="备注" placeholder="备注" />
+        <MaterialBatchPickerModal
+          open={materialPickerOpen}
+          onCancel={() => setMaterialPickerOpen(false)}
+          onConfirm={appendRequisitionItemsFromMaterials}
+        />
       </FormModalTemplate>
 
       <DetailDrawerTemplate

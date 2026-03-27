@@ -6,7 +6,7 @@
 
 import { ProLayout } from '@ant-design/pro-components';
 import { useNavigate, useLocation, Navigate, Link } from 'react-router-dom';
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Spin, theme } from 'antd';
 import type { MenuDataItem } from '@ant-design/pro-components';
 import {
@@ -78,6 +78,7 @@ import { getAvatarUrl, getAvatarText, getAvatarFontSize, getCachedAvatarUrl, toR
 import { triggerNew, hasNewHandler } from '../utils/globalNewShortcut';
 import { triggerSubmit, hasSubmitHandler } from '../utils/globalSubmitShortcut';
 import { CODE_FONT_FAMILY } from '../constants/fonts';
+import { clearSessionScopedQueries } from '../utils/clearSessionQueries';
 import { getFilePreview } from '../services/file';
 import Lottie from 'lottie-react';
 import assistAnimation from '../../static/lottie/assist.json';
@@ -713,6 +714,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
 
   const queryClient = useQueryClient();
+
+  /** 登出前清理租户相关 Query 缓存，避免重新登录后仍显示旧侧边栏菜单（applicationMenus staleTime 内不 refetch） */
+  const performLogout = useCallback(() => {
+    clearSessionScopedQueries(queryClient);
+    logout();
+    navigate('/login', { replace: true });
+  }, [queryClient, logout, navigate]);
 
   // 站点设置：统一从 configStore 获取（app.tsx 初始化时已 fetchConfigs，site-settings 保存时会 refresh）
   const siteName = (useConfigStore((s) => (s.getConfig('site_name', '') as string)?.trim()) || '') || 'RiverEdge SaaS';
@@ -1426,7 +1434,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   /**
    * 用户菜单项
    */
-  const getUserMenuItems = (logout: () => void, t: (key: string) => string): MenuProps['items'] => [
+  const getUserMenuItems = (t: (key: string) => string): MenuProps['items'] => [
     {
       key: 'profile',
       icon: <UserOutlined />,
@@ -1464,7 +1472,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       key: 'logout',
       icon: <LogoutOutlined />,
       label: t('ui.logout'),
-      onClick: logout,
     },
   ];
 
@@ -1488,9 +1495,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         handleLockScreen();
         break;
       case 'logout':
-        logout();
-        // ⚠️ 关键修复：退出登录后使用 navigate 跳转，避免页面刷新
-        navigate('/login', { replace: true });
+        performLogout();
         break;
     }
   };
@@ -4166,7 +4171,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               <Dropdown
                 key="user"
                 menu={{
-                  items: getUserMenuItems(logout, t),
+                  items: getUserMenuItems(t),
                   onClick: handleUserMenuClick,
                 }}
                 placement="bottomRight"

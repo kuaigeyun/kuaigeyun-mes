@@ -9,13 +9,15 @@
  * @date 2025-01-14
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions, ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Drawer, Table, Input, InputNumber, Select, Tabs, Alert, Row, Col, Spin, Form as AntForm, DatePicker, Typography } from 'antd';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
-import { EyeOutlined, EditOutlined, CheckCircleOutlined, CloseCircleOutlined, SendOutlined, ArrowDownOutlined, MergeCellsOutlined, DeleteOutlined, ApartmentOutlined, PlusOutlined } from '@ant-design/icons';
+import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
+import type { Material } from '../../../../master-data/types/material';
+import { EyeOutlined, EditOutlined, CheckCircleOutlined, CloseCircleOutlined, SendOutlined, ArrowDownOutlined, MergeCellsOutlined, DeleteOutlined, ApartmentOutlined, PlusOutlined, ShoppingOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG, type StatCard } from '../../../../../components/layout-templates';
@@ -49,6 +51,7 @@ import { getDemandLifecycle } from '../../../utils/demandLifecycle';
 import dayjs from 'dayjs';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { usePageMetrics } from '../../../../../hooks/usePageMetrics';
+import { useTranslation } from 'react-i18next';
 
 /** 根据字典 code 和 value 获取标签，无匹配时返回原值（支持大小写不敏感匹配） */
 function getDictLabel(map: Record<string, Record<string, string>>, code: string, value: string | undefined): string {
@@ -97,6 +100,7 @@ function reviewStatusDisplayText(reviewStatus: string | undefined): string {
 }
 
 const DemandManagementPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const location = useLocation();
@@ -122,6 +126,7 @@ const DemandManagementPage: React.FC = () => {
   const [createPlanModalVisible, setCreatePlanModalVisible] = useState(false);
   const [createPlanLoading, setCreatePlanLoading] = useState(false);
   const createPlanFormRef = useRef<ProFormInstance>(null);
+  const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [currentId, setCurrentId] = useState<number | null>(null);
   const [isEditingDraft, setIsEditingDraft] = useState(false); // 当前编辑的需求是否为草稿（草稿可改更多字段）
@@ -174,6 +179,23 @@ const DemandManagementPage: React.FC = () => {
     };
     loadDicts();
   }, []);
+
+  const appendDemandPlanItemsFromMaterials = useCallback(
+    (selected: Material[]) => {
+      const current = createPlanFormRef.current?.getFieldValue('items') ?? [];
+      const newRows = selected.map((m) => ({
+        material_id: m.id,
+        material_code: m.mainCode ?? m.code ?? '',
+        material_name: m.name ?? '',
+        material_unit: m.baseUnit ?? '',
+        required_quantity: 0,
+        delivery_date: dayjs(),
+      }));
+      createPlanFormRef.current?.setFieldsValue({ items: [...current, ...newRows] });
+      messageApi.success(t('app.kuaizhizao.common.materialBatchAdded', { count: selected.length }));
+    },
+    [messageApi, t]
+  );
 
   /** 新建计划（需求计划）提交 */
   const handleCreatePlanSubmit = async (values: any) => {
@@ -948,23 +970,33 @@ const DemandManagementPage: React.FC = () => {
                         scroll={fields.length > 0 ? { x: totalWidth } : undefined}
                         style={{ width: '100%', margin: 0 }}
                         footer={() => (
-                          <Button
-                            type="dashed"
-                            icon={<PlusOutlined />}
-                            onClick={() =>
-                              add({
-                                material_id: undefined,
-                                material_code: '',
-                                material_name: '',
-                                material_unit: '',
-                                required_quantity: 0,
-                                delivery_date: dayjs(),
-                              })
-                            }
-                            block
-                          >
-                            添加明细
-                          </Button>
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
+                            <Button
+                              type="dashed"
+                              icon={<PlusOutlined />}
+                              style={{ flex: 1, minWidth: 120 }}
+                              onClick={() =>
+                                add({
+                                  material_id: undefined,
+                                  material_code: '',
+                                  material_name: '',
+                                  material_unit: '',
+                                  required_quantity: 0,
+                                  delivery_date: dayjs(),
+                                })
+                              }
+                            >
+                              添加明细
+                            </Button>
+                            <Button
+                              type="default"
+                              icon={<ShoppingOutlined />}
+                              style={{ flex: 1, minWidth: 120 }}
+                              onClick={() => setMaterialPickerOpen(true)}
+                            >
+                              {t('app.kuaizhizao.common.materialBatchSelect')}
+                            </Button>
+                          </div>
                         )}
                       />
                     </div>
@@ -981,6 +1013,12 @@ const DemandManagementPage: React.FC = () => {
           </Col>
         </Row>
       </FormModalTemplate>
+
+      <MaterialBatchPickerModal
+        open={materialPickerOpen}
+        onCancel={() => setMaterialPickerOpen(false)}
+        onConfirm={appendDemandPlanItemsFromMaterials}
+      />
 
       {/* 编辑需求 Modal：非草稿仅可改优先级和备注；草稿可改更多字段 */}
       <Modal

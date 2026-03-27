@@ -3224,7 +3224,8 @@ const WorkOrdersPage: React.FC = () => {
     const text = diff > 0 ? `+${diff}` : diff < 0 ? `${diff}` : '0';
     return (
       <span style={{ marginLeft: 8, fontSize: 13, color }}>
-        <span style={{ color: 'rgba(0,0,0,0.45)' }}>较昨日</span> {text}
+        <span style={{ color: 'rgba(0,0,0,0.45)' }}>{t('app.kuaizhizao.workOrder.statVsYesterday')}</span>{' '}
+        {text}
       </span>
     );
   };
@@ -3257,13 +3258,13 @@ const WorkOrdersPage: React.FC = () => {
     : statistics
     ? [
         {
-          title: t('app.kuaizhizao.workOrder.statOverdue', '逾期工单'),
+          title: t('app.kuaizhizao.workOrder.statOverdue'),
           value: statistics.overdue_count ?? 0,
           description:
             statistics.overdue_count !== undefined &&
             statistics.yesterday_overdue_count !== undefined ? (
               <div>
-                今日: {statistics.overdue_count}{' '}
+                {t('app.kuaizhizao.workOrder.statTodayPrefix')}: {statistics.overdue_count}{' '}
                 {renderDOD(statistics.overdue_count, statistics.yesterday_overdue_count)}
               </div>
             ) : undefined,
@@ -3278,13 +3279,13 @@ const WorkOrdersPage: React.FC = () => {
               : undefined,
         },
         {
-          title: t('app.kuaizhizao.workOrder.statCompletedToday', '今日完成'),
+          title: t('app.kuaizhizao.workOrder.statCompletedToday'),
           value: statistics.completed_today_count ?? 0,
           description:
             statistics.completed_today_count !== undefined &&
             statistics.yesterday_completed_count !== undefined ? (
               <div>
-                今日: {statistics.completed_today_count}{' '}
+                {t('app.kuaizhizao.workOrder.statTodayPrefix')}: {statistics.completed_today_count}{' '}
                 {renderDOD(statistics.completed_today_count, statistics.yesterday_completed_count)}
               </div>
             ) : undefined,
@@ -3299,12 +3300,12 @@ const WorkOrdersPage: React.FC = () => {
               : undefined,
         },
         {
-          title: t('app.kuaizhizao.workOrder.statTotalWip', '在制品'),
+          title: t('app.kuaizhizao.workOrder.statTotalWip'),
           value: statistics.total_wip ?? 0,
           description:
             statistics.total_wip !== undefined && statistics.yesterday_wip !== undefined ? (
               <div>
-                今日: {statistics.total_wip}{' '}
+                {t('app.kuaizhizao.workOrder.statTodayPrefix')}: {statistics.total_wip}{' '}
                 {renderDOD(statistics.total_wip, statistics.yesterday_wip)}
               </div>
             ) : undefined,
@@ -3319,13 +3320,13 @@ const WorkOrdersPage: React.FC = () => {
               : undefined,
         },
         {
-          title: t('app.kuaizhizao.workOrder.statQualifiedOutputToday', '当日合格产出'),
+          title: t('app.kuaizhizao.workOrder.statQualifiedOutputToday'),
           value: statistics.qualified_output_today ?? 0,
           description:
             statistics.qualified_output_today !== undefined &&
             statistics.yesterday_qualified_output !== undefined ? (
               <div>
-                今日: {statistics.qualified_output_today}{' '}
+                {t('app.kuaizhizao.workOrder.statTodayPrefix')}: {statistics.qualified_output_today}{' '}
                 {renderDOD(statistics.qualified_output_today, statistics.yesterday_qualified_output)}
               </div>
             ) : undefined,
@@ -3333,13 +3334,13 @@ const WorkOrdersPage: React.FC = () => {
           backgroundChart: renderTrendChart(statistics.trend_output ?? [], '#52c41a'),
         },
         {
-          title: t('app.kuaizhizao.workOrder.statPendingRelease', '待下达'),
+          title: t('app.kuaizhizao.workOrder.statPendingRelease'),
           value: statistics.draft_count ?? 0,
           description:
             statistics.draft_count !== undefined &&
             statistics.yesterday_draft_count !== undefined ? (
               <div>
-                今日: {statistics.draft_count}{' '}
+                {t('app.kuaizhizao.workOrder.statTodayPrefix')}: {statistics.draft_count}{' '}
                 {renderDOD(statistics.draft_count, statistics.yesterday_draft_count)}
               </div>
             ) : undefined,

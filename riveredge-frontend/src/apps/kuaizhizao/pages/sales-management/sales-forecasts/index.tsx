@@ -7,10 +7,10 @@
  * @date 2026-02-02
  */
 
-import React, { useRef, useState, useEffect } from 'react'
+import React, { useRef, useState, useEffect, useCallback } from 'react'
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions, ProFormInstance, ProFormSelect } from '@ant-design/pro-components'
 import { App, Button, Tag, Space, Drawer, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker } from 'antd'
-import { PlusOutlined, DeleteOutlined, EyeOutlined, EditOutlined, ArrowDownOutlined } from '@ant-design/icons'
+import { PlusOutlined, DeleteOutlined, EyeOutlined, EditOutlined, ArrowDownOutlined, ShoppingOutlined } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -21,6 +21,8 @@ import { ListPageTemplate, FormModalTemplate, type StatCard } from '../../../../
 import { getBusinessConfig } from '../../../../../services/businessConfig'
 import { UniTable } from '../../../../../components/uni-table'
 import { UniMaterialSelect } from '../../../../../components/uni-material-select'
+import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal'
+import type { Material } from '../../../../master-data/types/material'
 import {
   listSalesForecasts,
   getSalesForecast,
@@ -95,6 +97,7 @@ export default function SalesForecastsPage() {
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null)
   const [effectiveAutoGen, setEffectiveAutoGen] = useState<boolean | null>(null)
   const [drawerVisible, setDrawerVisible] = useState(false)
+  const [materialPickerOpen, setMaterialPickerOpen] = useState(false)
   const [auditEnabled, setAuditEnabled] = useState(true)
 
   useEffect(() => {
@@ -156,6 +159,23 @@ export default function SalesForecastsPage() {
     confidence_level: 1.0,
     forecast_method: 'MANUAL',
   }
+
+  const appendForecastItemsFromMaterials = useCallback(
+    (selected: Material[]) => {
+      const current = formRef.current?.getFieldValue('items') ?? []
+      const newRows = selected.map((m) => ({
+        ...defaultForecastItem,
+        material_id: m.id,
+        material_code: m.mainCode ?? m.code ?? '',
+        material_name: m.name ?? '',
+        material_spec: m.specification ?? '',
+        material_unit: m.baseUnit ?? '件',
+      }))
+      formRef.current?.setFieldsValue({ items: [...current, ...newRows] })
+      messageApi.success(t('app.kuaizhizao.common.materialBatchAdded', { count: selected.length }))
+    },
+    [messageApi, t]
+  )
 
   const handleCreate = async () => {
     setIsEdit(false);
@@ -1091,14 +1111,24 @@ export default function SalesForecastsPage() {
                       pagination={false}
                       columns={forecastItemColumns}
                       footer={() => (
-                        <Button
-                          type="dashed"
-                          icon={<PlusOutlined />}
-                          onClick={() => add(defaultForecastItem)}
-                          block
-                        >
-                          {t('common.addDetail')}
-                        </Button>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
+                          <Button
+                            type="dashed"
+                            icon={<PlusOutlined />}
+                            style={{ flex: 1, minWidth: 120 }}
+                            onClick={() => add(defaultForecastItem)}
+                          >
+                            {t('common.addDetail')}
+                          </Button>
+                          <Button
+                            type="default"
+                            icon={<ShoppingOutlined />}
+                            style={{ flex: 1, minWidth: 120 }}
+                            onClick={() => setMaterialPickerOpen(true)}
+                          >
+                            {t('app.kuaizhizao.common.materialBatchSelect')}
+                          </Button>
+                        </div>
                       )}
                     />
                   </div>
@@ -1109,6 +1139,12 @@ export default function SalesForecastsPage() {
         </div>
         <ProFormTextArea name="notes" label={t('app.kuaizhizao.salesForecast.notes')} placeholder="-" />
       </FormModalTemplate>
+
+      <MaterialBatchPickerModal
+        open={materialPickerOpen}
+        onCancel={() => setMaterialPickerOpen(false)}
+        onConfirm={appendForecastItemsFromMaterials}
+      />
 
       <Drawer
         title={

@@ -134,9 +134,14 @@ const SalesOrdersPage: React.FC = () => {
   const [feeTypeOptions, setFeeTypeOptions] = useState<any[]>([]);
 
   useEffect(() => {
-    getDictionaryItemList('FEE_TYPE').then((res) => {
-      setFeeTypeOptions(res || []);
-    });
+    getDataDictionaryByCode('FEE_TYPE')
+      .then((dict) => getDictionaryItemList(dict.uuid))
+      .then((res) => {
+        setFeeTypeOptions(res || []);
+      })
+      .catch(() => {
+        setFeeTypeOptions([]);
+      });
   }, []);
 
   // 销售订单审核开关（从业务配置加载）

@@ -7,13 +7,13 @@
  * @date 2025-12-30
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormUploadButton, ProFormItem } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Card, Row, Col, Table, Empty, Timeline, Divider, Form as AntForm, Input, InputNumber, DatePicker, Switch, List, Typography, theme, Dropdown } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, ClockCircleOutlined, CheckCircleTwoTone, CloseCircleTwoTone, SendOutlined, DownOutlined, FileTextOutlined, InboxOutlined, DollarOutlined, RollbackOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, ClockCircleOutlined, CheckCircleTwoTone, CloseCircleTwoTone, SendOutlined, DownOutlined, FileTextOutlined, InboxOutlined, DollarOutlined, RollbackOutlined, ShoppingOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { getFileDownloadUrl, uploadMultipleFiles } from '../../../../../services/file';
@@ -24,6 +24,8 @@ import { SimpleSparkline } from '../../../../../components';
 import CodeField from '../../../../../components/code-field';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
+import type { Material } from '../../../../master-data/types/material';
 import FeeDetailsTable from '../../../../../components/FeeDetailsTable';
 import dayjs from 'dayjs';
 import {
@@ -115,6 +117,165 @@ function formatAmount(val: unknown): string {
   return (isNaN(num) ? 0 : num).toLocaleString();
 }
 
+function formatMoneyYuan(n: number): string {
+  const v = Number.isFinite(n) ? n : 0;
+  return `¥${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/** 数值输入框宽度自适应：按内容长度估算，并限制在合理区间 */
+function adaptiveNumberInputStyle(
+  value: unknown,
+  options?: { minCh?: number; maxCh?: number; extraCh?: number; reservePx?: number }
+): React.CSSProperties {
+  const minCh = options?.minCh ?? 8;
+  const maxCh = options?.maxCh ?? 14;
+  const extraCh = options?.extraCh ?? 3;
+  const reservePx = options?.reservePx ?? 0;
+  const text = String(value ?? '');
+  const ch = Math.max(minCh, Math.min(maxCh, text.length + extraCh));
+  return {
+    width: reservePx > 0 ? `calc(${ch}ch + ${reservePx}px)` : `${ch}ch`,
+    maxWidth: '100%',
+  };
+}
+
+/** 与采购明细表格中价税逻辑一致，用于表单内实时汇总 */
+function computePurchaseOrderFormTotals(
+  items: any[] | undefined,
+  feeDetails: any[] | undefined,
+  priceType: string | undefined,
+) {
+  const pt = priceType ?? 'tax_exclusive';
+  const rows = Array.isArray(items) ? items : [];
+  let goodsExcl = 0;
+  let taxAmount = 0;
+  let goodsIncl = 0;
+
+  for (const row of rows) {
+    const qty = Number(row?.ordered_quantity) || 0;
+    const price = Number(row?.unit_price) || 0;
+    const taxRate = Number(row?.tax_rate) || 0;
+    if (pt === 'tax_inclusive' && price > 0) {
+      const exclAmt = (qty * price) / (1 + taxRate / 100);
+      const taxAmt = exclAmt * (taxRate / 100);
+      goodsExcl += exclAmt;
+      taxAmount += taxAmt;
+      goodsIncl += exclAmt + taxAmt;
+    } else {
+      const exclAmt = qty * price;
+      goodsExcl += exclAmt;
+      goodsIncl += exclAmt;
+    }
+  }
+
+  let otherSideFees = 0;
+  let ourSideFees = 0;
+  for (const fee of feeDetails || []) {
+    const amt = Number(fee?.amount) || 0;
+    if (fee?.bearer === 'other_side') otherSideFees += amt;
+    else ourSideFees += amt;
+  }
+
+  const estimatedPayable = goodsIncl + otherSideFees;
+  // 对方承担费用不计入我方总成本
+  const estimatedTotalCost = goodsIncl + ourSideFees;
+
+  return {
+    goodsExcl,
+    taxAmount,
+    goodsIncl,
+    otherSideFees,
+    ourSideFees,
+    estimatedPayable,
+    estimatedTotalCost,
+  };
+}
+
+/** 费用明细下方：货值 / 税额 / 含税货值 / 对方费用 / 我方成本 / 预计应付 / 预计总成本 */
+const PurchaseOrderFeeTotalsSummary: React.FC<{
+  getFieldValue: (name: string) => any;
+}> = ({ getFieldValue }) => {
+  const { token } = theme.useToken();
+  const sums = computePurchaseOrderFormTotals(
+    getFieldValue('items'),
+    getFieldValue('fee_details'),
+    getFieldValue('price_type'),
+  );
+
+  const cells: { label: string; hint?: string; value: number; tone?: 'neutral' | 'our' | 'other' }[] = [
+    { label: '货值', hint: '不含税货款合计', value: sums.goodsExcl, tone: 'neutral' },
+    { label: '税额', value: sums.taxAmount, tone: 'neutral' },
+    { label: '含税货值', value: sums.goodsIncl, tone: 'neutral' },
+    { label: '对方费用', value: sums.otherSideFees, tone: 'other' },
+    { label: '我方成本', value: sums.ourSideFees, tone: 'our' },
+    { label: '预计应付', hint: '含税货值 + 对方费用', value: sums.estimatedPayable, tone: 'other' },
+    { label: '预计总成本', hint: '含税货值 + 我方成本', value: sums.estimatedTotalCost, tone: 'our' },
+  ];
+
+  return (
+    <div
+      style={{
+        marginBottom: 24,
+        padding: '12px 16px',
+        background: token.colorFillAlter,
+        borderRadius: token.borderRadiusLG,
+        border: `1px solid ${token.colorBorderSecondary}`,
+      }}
+    >
+      <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 10 }}>
+        金额汇总
+      </Typography.Text>
+      <div style={{ overflowX: 'auto', overflowY: 'hidden' }}>
+        <div style={{ display: 'flex', flexWrap: 'nowrap', gap: 8, alignItems: 'stretch', minWidth: 'max-content' }}>
+        {cells.map((c) => (
+          <div
+            key={c.label}
+            style={{
+              minWidth: 104,
+              flex: '0 0 auto',
+              padding: '6px 8px',
+              background:
+                c.tone === 'our'
+                  ? token.colorSuccessBg
+                  : c.tone === 'other'
+                    ? token.colorWarningBg
+                    : token.colorBgContainer,
+              borderRadius: token.borderRadius,
+              border:
+                c.tone === 'our'
+                  ? `1px solid ${token.colorSuccessBorder}`
+                  : c.tone === 'other'
+                    ? `1px solid ${token.colorWarningBorder}`
+                    : `1px solid ${token.colorBorderSecondary}`,
+            }}
+            title={c.hint}
+          >
+            <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', lineHeight: 1.3 }}>
+              {c.label}
+            </Typography.Text>
+            <div
+              style={{
+                fontSize: 14,
+                fontWeight: 600,
+                marginTop: 3,
+                color:
+                  c.tone === 'our'
+                    ? token.colorSuccessText
+                    : c.tone === 'other'
+                      ? token.colorWarningText
+                      : token.colorText,
+              }}
+            >
+              {formatMoneyYuan(c.value)}
+            </div>
+          </div>
+        ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const PurchaseOrdersPage: React.FC = () => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
@@ -125,6 +286,7 @@ const PurchaseOrdersPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const tableSearchFormRef = useRef<any>(null);
   const [, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
 
   const { statCards: pageMetricCards, hasConfig: hasPageMetricConfig } = usePageMetrics();
   const invalidateStatistics = () => {
@@ -228,10 +390,51 @@ const PurchaseOrdersPage: React.FC = () => {
   const [feeTypeOptions, setFeeTypeOptions] = useState<any[]>([]);
 
   useEffect(() => {
-    getDictionaryItemList('FEE_TYPE').then((res) => {
-      setFeeTypeOptions(res || []);
-    });
+    getDataDictionaryByCode('FEE_TYPE')
+      .then((dict) => getDictionaryItemList(dict.uuid))
+      .then((res) => {
+        setFeeTypeOptions(res || []);
+      })
+      .catch(() => {
+        setFeeTypeOptions([]);
+      });
   }, []);
+
+  const appendPurchaseItemsFromMaterials = useCallback(
+    (selected: Material[]) => {
+      if (!selected?.length) return;
+      const mainDelivery = formRef.current?.getFieldValue('delivery_date');
+      const defaultDate =
+        mainDelivery != null ? (dayjs.isDayjs(mainDelivery) ? mainDelivery : dayjs(mainDelivery)) : dayjs();
+      const current = formRef.current?.getFieldValue('items') ?? [];
+      const newRows = selected.map((m) => ({
+        material_id: m.id,
+        material_code: m.mainCode ?? m.code ?? '',
+        material_name: m.name ?? '',
+        material_spec: m.specification ?? '',
+        unit: m.baseUnit ?? '件',
+        ordered_quantity: 1,
+        unit_price: 0,
+        tax_rate: 0,
+        required_date: defaultDate,
+      }));
+      const firstRow = current?.[0];
+      const firstRowEmpty =
+        current.length === 1 &&
+        !firstRow?.material_id &&
+        !(firstRow?.material_code && String(firstRow.material_code).trim()) &&
+        !(firstRow?.material_name && String(firstRow.material_name).trim());
+
+      if (firstRowEmpty) {
+        formRef.current?.setFieldsValue({ items: [newRows[0], ...newRows.slice(1)] });
+      } else {
+        formRef.current?.setFieldsValue({ items: [...current, ...newRows] });
+      }
+      messageApi.success(t('app.kuaizhizao.common.materialBatchAdded', { count: selected.length }));
+    },
+    [messageApi, t]
+  );
+
   const [pushToReceiptOrder, setPushToReceiptOrder] = useState<PurchaseOrderDetail | null>(null);
   const [pushToReceiptQuantities, setPushToReceiptQuantities] = useState<Record<number, number>>({});
   const [pushToReceiptBatchNumbers, setPushToReceiptBatchNumbers] = useState<Record<number, string>>({});
@@ -398,7 +601,7 @@ const PurchaseOrdersPage: React.FC = () => {
   ];
 
   const [pushToNoticeLoading, setPushToNoticeLoading] = useState(false);
-  const [pushToNoticeLoading, setPushToNoticeLoading] = useState(false);
+  const [pushToInvoiceLoading, setPushToInvoiceLoading] = useState(false);
 
   // 处理详情查看
   const handleDetail = async (record: PurchaseOrder) => {
@@ -1477,8 +1680,6 @@ const PurchaseOrdersPage: React.FC = () => {
           <Col span={12} />
         </Row>
 
-        <FeeDetailsTable name="fee_details" label="费用明细（物流/包装等）" />
-        
         {/* V2 审计：非草稿订单变更需填写原因 */}
         <AntForm.Item noStyle shouldUpdate>
           {() => {
@@ -1599,17 +1800,29 @@ const PurchaseOrdersPage: React.FC = () => {
                   {
                     title: showTaxColumns ? '含税单价' : '单价',
                     dataIndex: 'unit_price',
-                    width: 100,
                     align: 'right' as const,
                     render: (_: any, __: any, index: number) => (
-                      <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id}>
+                      <AntForm.Item
+                        noStyle
+                        shouldUpdate={(prev: any, curr: any) =>
+                          prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id ||
+                          prev?.items?.[index]?.unit_price !== curr?.items?.[index]?.unit_price
+                        }
+                      >
                         {({ getFieldValue }: any) => {
                           const items = getFieldValue('items') ?? [];
                           const row = items[index];
                           return (
                             <Space size={4}>
                               <AntForm.Item name={[index, 'unit_price']} rules={[{ required: true, message: '必填' }, { type: 'number', min: 0, message: '≥0' }]} style={{ margin: 0 }}>
-                                <InputNumber placeholder={showTaxColumns ? '含税单价' : '单价'} min={0} precision={4} prefix="¥" style={{ width: '100%' }} size="small" />
+                                <InputNumber
+                                  placeholder={showTaxColumns ? '含税单价' : '单价'}
+                                  min={0}
+                                  precision={2}
+                                  prefix="¥"
+                                  style={adaptiveNumberInputStyle(row?.unit_price, { minCh: 9, maxCh: 16, extraCh: 5, reservePx: 28 })}
+                                  size="small"
+                                />
                               </AntForm.Item>
                               {row?.material_id && <PriceHistoryInsight materialId={row.material_id} currentPrice={Number(row.unit_price) || 0} />}
                             </Space>
@@ -1622,7 +1835,6 @@ const PurchaseOrdersPage: React.FC = () => {
                     ? [
                         {
                           title: '不含税金额',
-                          width: 110,
                           align: 'right' as const,
                           render: (_: any, __: any, index: number) => (
                             <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
@@ -1664,17 +1876,31 @@ const PurchaseOrdersPage: React.FC = () => {
                             </span>
                           ),
                           dataIndex: 'tax_rate',
-                          width: 100,
                           align: 'right' as const,
                           render: (_: any, __: any, index: number) => (
-                            <AntForm.Item name={[index, 'tax_rate']} initialValue={0} style={{ margin: 0 }}>
-                              <InputNumber placeholder="0" min={0} max={100} precision={2} addonAfter="%" style={{ width: '100%' }} size="small" />
+                            <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index]?.tax_rate !== curr?.items?.[index]?.tax_rate}>
+                              {({ getFieldValue }: any) => {
+                                const items = getFieldValue('items') ?? [];
+                                const row = items[index];
+                                return (
+                                  <AntForm.Item name={[index, 'tax_rate']} initialValue={0} style={{ margin: 0 }}>
+                                    <InputNumber
+                                      placeholder="0"
+                                      min={0}
+                                      max={100}
+                                      precision={2}
+                                      addonAfter="%"
+                                      style={adaptiveNumberInputStyle(row?.tax_rate, { minCh: 7, maxCh: 11, extraCh: 3 })}
+                                      size="small"
+                                    />
+                                  </AntForm.Item>
+                                );
+                              }}
                             </AntForm.Item>
                           ),
                         },
                         {
                           title: '税额',
-                          width: 100,
                           align: 'right' as const,
                           render: (_: any, __: any, index: number) => (
                             <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
@@ -1695,7 +1921,6 @@ const PurchaseOrdersPage: React.FC = () => {
                     : []),
                   {
                     title: showTaxColumns ? '价税合计' : '总价',
-                    width: 120,
                     align: 'right' as const,
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
@@ -1739,23 +1964,40 @@ const PurchaseOrdersPage: React.FC = () => {
                       rowKey="key"
                       pagination={false}
                       columns={orderDetailColumns}
+                      tableLayout="auto"
+                      scroll={fields.length > 0 ? { x: 'max-content' } : undefined}
                       footer={() => (
-                        <Button
-                          type="dashed"
-                          icon={<PlusOutlined />}
-                          onClick={() => {
-                            const mainDelivery = formRef.current?.getFieldValue('delivery_date');
-                            const defaultDate = mainDelivery != null ? (dayjs.isDayjs(mainDelivery) ? mainDelivery : dayjs(mainDelivery)) : dayjs();
-                            add({
-                              ...defaultOrderItem,
-                              tax_rate: 0,
-                              required_date: defaultDate,
-                            });
-                          }}
-                          block
-                        >
-                          添加明细
-                        </Button>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
+                          <Button
+                            type="dashed"
+                            icon={<PlusOutlined />}
+                            style={{ flex: 1, minWidth: 120 }}
+                            onClick={() => {
+                              const mainDelivery = formRef.current?.getFieldValue('delivery_date');
+                              const defaultDate =
+                                mainDelivery != null
+                                  ? dayjs.isDayjs(mainDelivery)
+                                    ? mainDelivery
+                                    : dayjs(mainDelivery)
+                                  : dayjs();
+                              add({
+                                ...defaultOrderItem,
+                                tax_rate: 0,
+                                required_date: defaultDate,
+                              });
+                            }}
+                          >
+                            添加明细
+                          </Button>
+                          <Button
+                            type="default"
+                            icon={<ShoppingOutlined />}
+                            style={{ flex: 1, minWidth: 120 }}
+                            onClick={() => setMaterialPickerOpen(true)}
+                          >
+                            {t('app.kuaizhizao.common.materialBatchSelect')}
+                          </Button>
+                        </div>
                       )}
                     />
                   </div>
@@ -1768,6 +2010,22 @@ const PurchaseOrdersPage: React.FC = () => {
             }}
           </AntForm.Item>
         </div>
+
+        <FeeDetailsTable name="fee_details" label="费用明细（物流/包装等）" />
+
+        <AntForm.Item
+          noStyle
+          shouldUpdate={(prev, curr) =>
+            prev?.items !== curr?.items ||
+            prev?.fee_details !== curr?.fee_details ||
+            prev?.price_type !== curr?.price_type
+          }
+        >
+          {({ getFieldValue }: { getFieldValue: (n: string) => any }) => (
+            <PurchaseOrderFeeTotalsSummary getFieldValue={getFieldValue} />
+          )}
+        </AntForm.Item>
+
         <ProFormText name="supplier_name" hidden />
         <ProFormUploadButton
           name="attachments"
@@ -1794,6 +2052,11 @@ const PurchaseOrdersPage: React.FC = () => {
           label="备注"
           placeholder="请输入备注信息"
           fieldProps={{ rows: 3 }}
+        />
+        <MaterialBatchPickerModal
+          open={materialPickerOpen}
+          onCancel={() => setMaterialPickerOpen(false)}
+          onConfirm={appendPurchaseItemsFromMaterials}
         />
       </FormModalTemplate>
 

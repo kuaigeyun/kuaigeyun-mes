@@ -343,7 +343,6 @@ async def list_sales_orders(
             keyword=keyword,
             order_by=safe_order_by,
             include_items=include_items,
-            current_user=current_user,
         )
         return result
     except Exception as e:

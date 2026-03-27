@@ -8,13 +8,15 @@
  * @date 2026-02-19
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form as AntForm, InputNumber, Input, Row, Col, Select } from 'antd';
-import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, ThunderboltOutlined, ShoppingOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
+import type { Material } from '../../../../master-data/types/material';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import CodeField from '../../../../../components/code-field';
@@ -22,6 +24,7 @@ import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../s
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { getOtherInboundLifecycle } from '../../../utils/otherInboundLifecycle';
+import { useTranslation } from 'react-i18next';
 import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
 import { materialApi, materialBatchApi, materialSerialApi } from '../../../../master-data/services/material';
 import { batchRuleApi, serialRuleApi } from '../../../../master-data/services/batchSerialRules';
@@ -89,6 +92,7 @@ const defaultInboundItem = {
 };
 
 const OtherInboundPage: React.FC = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
@@ -98,6 +102,7 @@ const OtherInboundPage: React.FC = () => {
 
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const formRef = useRef<any>(null);
+  const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const [warehouseList, setWarehouseList] = useState<any[]>([]);
   const [reasonTypeOptions, setReasonTypeOptions] = useState<Array<{ label: string; value: string }>>(REASON_TYPES_FALLBACK);
   const [reasonTypeLoading, setReasonTypeLoading] = useState(false);
@@ -222,6 +227,22 @@ const OtherInboundPage: React.FC = () => {
       },
     });
   };
+
+  const appendOtherInboundItemsFromMaterials = useCallback(
+    (selected: Material[]) => {
+      const current = formRef.current?.getFieldValue('items') ?? [];
+      const newRows = selected.map((m) => ({
+        ...defaultInboundItem,
+        material_id: m.id,
+        material_code: m.mainCode ?? m.code ?? '',
+        material_name: m.name ?? '',
+        material_unit: m.baseUnit ?? '',
+      }));
+      formRef.current?.setFieldsValue({ items: [...current, ...newRows] });
+      messageApi.success(t('app.kuaizhizao.common.materialBatchAdded', { count: selected.length }));
+    },
+    [messageApi, t]
+  );
 
   /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码 */
   const handleCreate = () => {
@@ -667,7 +688,19 @@ const OtherInboundPage: React.FC = () => {
                           },
                         }}
                         footer={() => (
-                          <Button type="dashed" icon={<PlusOutlined />} onClick={() => add(defaultInboundItem)} block>添加明细</Button>
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
+                            <Button type="dashed" icon={<PlusOutlined />} style={{ flex: 1, minWidth: 120 }} onClick={() => add(defaultInboundItem)}>
+                              添加明细
+                            </Button>
+                            <Button
+                              type="default"
+                              icon={<ShoppingOutlined />}
+                              style={{ flex: 1, minWidth: 120 }}
+                              onClick={() => setMaterialPickerOpen(true)}
+                            >
+                              {t('app.kuaizhizao.common.materialBatchSelect')}
+                            </Button>
+                          </div>
                         )}
                       />
                     </div>
@@ -679,6 +712,12 @@ const OtherInboundPage: React.FC = () => {
         </ProFormItem>
         <ProFormTextArea name="notes" label="备注" placeholder="可选" fieldProps={{ rows: 2 }} />
       </FormModalTemplate>
+
+      <MaterialBatchPickerModal
+        open={materialPickerOpen}
+        onCancel={() => setMaterialPickerOpen(false)}
+        onConfirm={appendOtherInboundItemsFromMaterials}
+      />
     </>
   );
 };

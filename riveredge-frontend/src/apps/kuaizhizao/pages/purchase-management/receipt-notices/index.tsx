@@ -8,14 +8,16 @@
  * @date 2026-02-22
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form as AntForm, Select, InputNumber, Input, DatePicker, Row, Col } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, ShoppingOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
+import type { Material } from '../../../../master-data/types/material';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { receiptNoticeApi } from '../../../services/receipt-notice';
@@ -23,6 +25,7 @@ import { getReceiptNoticeLifecycle } from '../../../utils/receiptNoticeLifecycle
 import { listPurchaseOrders, getPurchaseOrder } from '../../../services/purchase';
 import { testGenerateCode, generateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
+import { useTranslation } from 'react-i18next';
 
 interface ReceiptNotice {
   id?: number;
@@ -59,6 +62,7 @@ const STATUS_MAP: Record<string, { text: string; color: string }> = {
 const defaultReceiptItem = { material_id: undefined, material_code: '', material_name: '', material_unit: '件', notice_quantity: 1, unit_price: 0 };
 
 const ReceiptNoticesPage: React.FC = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
@@ -70,6 +74,7 @@ const ReceiptNoticesPage: React.FC = () => {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const formRef = useRef<any>(null);
+  const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const [purchaseOrderList, setPurchaseOrderList] = useState<any[]>([]);
   const [previewCode, setPreviewCode] = useState<string | null>(null);
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
@@ -85,6 +90,23 @@ const ReceiptNoticesPage: React.FC = () => {
     };
     load();
   }, []);
+
+  const appendReceiptNoticeItemsFromMaterials = useCallback(
+    (selected: Material[]) => {
+      const current = formRef.current?.getFieldValue('items') ?? [];
+      const newRows = selected.map((m) => ({
+        material_id: m.id,
+        material_code: m.mainCode ?? m.code ?? '',
+        material_name: m.name ?? '',
+        material_unit: m.baseUnit ?? '件',
+        notice_quantity: 1,
+        unit_price: 0,
+      }));
+      formRef.current?.setFieldsValue({ items: [...current, ...newRows] });
+      messageApi.success(t('app.kuaizhizao.common.materialBatchAdded', { count: selected.length }));
+    },
+    [messageApi, t]
+  );
 
   const columns: ProColumns<ReceiptNotice>[] = [
     { title: '通知单号', dataIndex: 'notice_code', width: 140, ellipsis: true, fixed: 'left' },
@@ -535,7 +557,19 @@ const ReceiptNoticesPage: React.FC = () => {
                     pagination={false}
                     columns={cols}
                     footer={() => (
-                      <Button type="dashed" icon={<PlusOutlined />} onClick={() => add(defaultReceiptItem)} block>添加明细</Button>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
+                        <Button type="dashed" icon={<PlusOutlined />} style={{ flex: 1, minWidth: 120 }} onClick={() => add(defaultReceiptItem)}>
+                          添加明细
+                        </Button>
+                        <Button
+                          type="default"
+                          icon={<ShoppingOutlined />}
+                          style={{ flex: 1, minWidth: 120 }}
+                          onClick={() => setMaterialPickerOpen(true)}
+                        >
+                          {t('app.kuaizhizao.common.materialBatchSelect')}
+                        </Button>
+                      </div>
                     )}
                   />
                 </div>
@@ -697,6 +731,12 @@ const ReceiptNoticesPage: React.FC = () => {
       >
         {renderEditForm()}
       </FormModalTemplate>
+
+      <MaterialBatchPickerModal
+        open={materialPickerOpen}
+        onCancel={() => setMaterialPickerOpen(false)}
+        onConfirm={appendReceiptNoticeItemsFromMaterials}
+      />
     </>
   );
 };

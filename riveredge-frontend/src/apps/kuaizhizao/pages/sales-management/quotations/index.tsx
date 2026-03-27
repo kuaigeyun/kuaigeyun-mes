@@ -7,15 +7,17 @@
  * @date 2026-02-19
  */
 
-import React, { useRef, useState, useEffect, Suspense, lazy } from 'react';
+import React, { useRef, useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, Dropdown, List, Typography } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, MoreOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, MoreOutlined, ShoppingOutlined } from '@ant-design/icons';
 import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
+import type { Material } from '../../../../master-data/types/material';
 import { CustomerFormModal } from '../../../../master-data/components/CustomerFormModal';
 import { customerApi } from '../../../../master-data/services/supply-chain';
 const LazyUniImport = lazy(() => import('../../../../../components/uni-import').then(m => ({ default: m.UniImport })));
@@ -40,6 +42,7 @@ import dayjs from 'dayjs';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { batchImport } from '../../../../../utils/batchOperations';
+import { useTranslation } from 'react-i18next';
 
 const STATUS_MAP: Record<string, { text: string; color: string }> = {
   草稿: { text: '草稿', color: 'default' },
@@ -50,6 +53,7 @@ const STATUS_MAP: Record<string, { text: string; color: string }> = {
 };
 
 const QuotationsPage: React.FC = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
@@ -70,6 +74,7 @@ const QuotationsPage: React.FC = () => {
   const [usersLoading, setUsersLoading] = useState(false);
   const [materialList, setMaterialList] = useState<any[]>([]);
   const [customerCreateVisible, setCustomerCreateVisible] = useState(false);
+  const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   /** 发货方式字典选项（数据字典 SHIPPING_METHOD） */
   const [shippingMethodOptions, setShippingMethodOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [shippingMethodLoading, setShippingMethodLoading] = useState(false);
@@ -759,6 +764,30 @@ const QuotationsPage: React.FC = () => {
     { title: '关联销售订单', dataIndex: 'sales_order_code' },
     { title: '备注', dataIndex: 'notes', span: 2 },
   ];
+
+  const appendQuotationItemsFromMaterials = useCallback(
+    (selected: Material[]) => {
+      const mainDelivery = formRef.current?.getFieldValue('delivery_date');
+      const defaultDelivery =
+        mainDelivery != null ? (dayjs.isDayjs(mainDelivery) ? mainDelivery : dayjs(mainDelivery)) : dayjs();
+      const current = formRef.current?.getFieldValue('items') ?? [];
+      const newRows = selected.map((m) => ({
+        material_id: m.id,
+        material_code: m.mainCode ?? m.code ?? '',
+        material_name: m.name ?? '',
+        material_spec: m.specification ?? '',
+        material_unit: m.baseUnit ?? '',
+        quote_quantity: 1,
+        unit_price: 0,
+        delivery_date: defaultDelivery,
+        notes: '',
+      }));
+      formRef.current?.setFieldsValue({ items: [...current, ...newRows] });
+      messageApi.success(t('app.kuaizhizao.common.materialBatchAdded', { count: selected.length }));
+    },
+    [messageApi, t]
+  );
+
   const formItemContent = (
     <>
       <Row gutter={16}>
@@ -1107,26 +1136,36 @@ const QuotationsPage: React.FC = () => {
                     scroll={fields.length > 0 ? { x: totalWidth } : undefined}
                     style={{ width: '100%', margin: 0 }}
                     footer={() => (
-                      <Button
-                        type="dashed"
-                        icon={<PlusOutlined />}
-                        onClick={() => {
-                          add({
-                            material_id: undefined,
-                            material_code: '',
-                            material_name: '',
-                            material_spec: '',
-                            material_unit: '',
-                            quote_quantity: 0,
-                            unit_price: 0,
-                            delivery_date: undefined,
-                            notes: '',
-                          });
-                        }}
-                        block
-                      >
-                        添加明细
-                      </Button>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
+                        <Button
+                          type="dashed"
+                          icon={<PlusOutlined />}
+                          style={{ flex: 1, minWidth: 120 }}
+                          onClick={() => {
+                            add({
+                              material_id: undefined,
+                              material_code: '',
+                              material_name: '',
+                              material_spec: '',
+                              material_unit: '',
+                              quote_quantity: 0,
+                              unit_price: 0,
+                              delivery_date: undefined,
+                              notes: '',
+                            });
+                          }}
+                        >
+                          添加明细
+                        </Button>
+                        <Button
+                          type="default"
+                          icon={<ShoppingOutlined />}
+                          style={{ flex: 1, minWidth: 120 }}
+                          onClick={() => setMaterialPickerOpen(true)}
+                        >
+                          {t('app.kuaizhizao.common.materialBatchSelect')}
+                        </Button>
+                      </div>
                     )}
                   />
                 </div>
@@ -1137,6 +1176,11 @@ const QuotationsPage: React.FC = () => {
         </ProForm.Item>
       </div>
       <ProFormTextArea name="notes" label="备注" fieldProps={{ rows: 2 }} />
+      <MaterialBatchPickerModal
+        open={materialPickerOpen}
+        onCancel={() => setMaterialPickerOpen(false)}
+        onConfirm={appendQuotationItemsFromMaterials}
+      />
     </>
   );
 

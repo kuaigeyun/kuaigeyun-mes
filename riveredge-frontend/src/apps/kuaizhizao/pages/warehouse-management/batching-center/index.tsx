@@ -8,7 +8,7 @@
  * Date: 2026-02-28
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormTextArea, ProFormDatePicker, ProFormRadio, ProFormDependency, ProFormItem } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, message, Card, Table, Form as AntForm, InputNumber, Row, Col } from 'antd';
 import { PlusOutlined, DeleteOutlined, EyeOutlined, CheckCircleOutlined, BellOutlined } from '@ant-design/icons';
@@ -23,6 +23,9 @@ import { batchingOrderApi } from '../../../services/batching-order';
 import { getBatchingOrderStageName, getBatchingOrderLifecycle } from '../../../utils/batchingOrderLifecycle';
 import { workOrderApi } from '../../../services/production';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
+import type { Material } from '../../../../master-data/types/material';
+import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 
 interface BatchingOrder {
@@ -59,14 +62,32 @@ interface BatchingOrderItem {
 }
 
 const BatchingCenterPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
 
   const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<BatchingOrder | null>(null);
   const formRef = useRef<any>(null);
   const defaultBatchingItem = { material_id: undefined, material_code: '', material_name: '', material_unit: '', required_quantity: 1 };
+
+  const appendBatchingItemsFromMaterials = useCallback(
+    (selected: Material[]) => {
+      const current = formRef.current?.getFieldValue('items') ?? [];
+      const newRows = selected.map((m) => ({
+        ...defaultBatchingItem,
+        material_id: m.id,
+        material_code: m.mainCode ?? m.code ?? '',
+        material_name: m.name ?? '',
+        material_unit: m.baseUnit ?? '',
+      }));
+      formRef.current?.setFieldsValue({ items: [...current, ...newRows] });
+      messageApi.success(t('app.kuaizhizao.common.materialBatchAdded', { count: selected.length }));
+    },
+    [messageApi, t]
+  );
 
   /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码 */
   const handleCreate = (workOrderId?: number) => {
@@ -416,7 +437,19 @@ const BatchingCenterPage: React.FC = () => {
                               scroll={fields.length > 0 ? { x: totalWidth } : undefined}
                               style={{ width: '100%', margin: 0 }}
                               footer={() => (
-                                <Button type="dashed" icon={<PlusOutlined />} onClick={() => add(defaultBatchingItem)} block>添加明细</Button>
+                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
+                                  <Button type="dashed" icon={<PlusOutlined />} style={{ flex: 1, minWidth: 120 }} onClick={() => add(defaultBatchingItem)}>
+                                    添加明细
+                                  </Button>
+                                  <Button
+                                    type="default"
+                                    icon={<ShoppingOutlined />}
+                                    style={{ flex: 1, minWidth: 120 }}
+                                    onClick={() => setMaterialPickerOpen(true)}
+                                  >
+                                    {t('app.kuaizhizao.common.materialBatchSelect')}
+                                  </Button>
+                                </div>
                               )}
                             />
                           </div>
@@ -467,6 +500,12 @@ const BatchingCenterPage: React.FC = () => {
           colProps={{ span: 24 }}
         />
       </FormModalTemplate>
+
+      <MaterialBatchPickerModal
+        open={materialPickerOpen}
+        onCancel={() => setMaterialPickerOpen(false)}
+        onConfirm={appendBatchingItemsFromMaterials}
+      />
 
       {/* 详情 Drawer */}
       <DetailDrawerTemplate

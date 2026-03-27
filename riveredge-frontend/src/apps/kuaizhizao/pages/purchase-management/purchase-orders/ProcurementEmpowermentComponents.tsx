@@ -143,6 +143,13 @@ export const PriceHistoryInsight: React.FC<{ materialId: number; currentPrice?: 
     queryFn: () => getMaterialPriceHistory(materialId),
     enabled: !!materialId,
   });
+  const toNumber = (v: unknown): number => {
+    const n = typeof v === 'number' ? v : Number(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+  const avgPrice = toNumber(data?.average_price);
+  const minPrice = toNumber(data?.min_price);
+  const maxPrice = toNumber(data?.max_price);
 
   const content = (
     <div style={{ width: 450 }}>
@@ -155,15 +162,15 @@ export const PriceHistoryInsight: React.FC<{ materialId: number; currentPrice?: 
           <Space split={<div style={{ width: 1, height: 14, background: '#f0f0f0' }} />} style={{ marginBottom: 12, width: '100%', justifyContent: 'space-around' }}>
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>平均成交价</div>
-              <Text strong style={{ color: '#1890ff' }}>¥{data.average_price.toFixed(2)}</Text>
+              <Text strong style={{ color: '#1890ff' }}>¥{avgPrice.toFixed(2)}</Text>
             </div>
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>历史最低价</div>
-              <Text strong style={{ color: '#52c41a' }}>¥{data.min_price.toFixed(2)}</Text>
+              <Text strong style={{ color: '#52c41a' }}>¥{minPrice.toFixed(2)}</Text>
             </div>
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>历史最高价</div>
-              <Text strong style={{ color: '#ff4d4f' }}>¥{data.max_price.toFixed(2)}</Text>
+              <Text strong style={{ color: '#ff4d4f' }}>¥{maxPrice.toFixed(2)}</Text>
             </div>
           </Space>
           
@@ -179,19 +186,19 @@ export const PriceHistoryInsight: React.FC<{ materialId: number; currentPrice?: 
                 dataIndex: 'unit_price', 
                 key: 'price', 
                 render: (p) => (
-                  <Text strong style={{ color: currentPrice && p < currentPrice ? '#52c41a' : 'inherit' }}>
-                    ¥{p.toFixed(2)}
+                  <Text strong style={{ color: currentPrice && toNumber(p) < currentPrice ? '#52c41a' : 'inherit' }}>
+                    ¥{toNumber(p).toFixed(2)}
                   </Text>
                 ) 
               },
             ]}
           />
-          {currentPrice && data.average_price > 0 && (
+          {currentPrice && avgPrice > 0 && (
             <div style={{ marginTop: 12, padding: '8px 12px', background: '#f0faff', borderRadius: 4 }}>
               <Text>
                 当前报价较历史均价: 
-                <Text strong style={{ color: currentPrice <= data.average_price ? '#52c41a' : '#ff4d4f', marginLeft: 4 }}>
-                  {currentPrice <= data.average_price ? '调低' : '调高'} {Math.abs(((currentPrice - data.average_price) / data.average_price) * 100).toFixed(1)}%
+                <Text strong style={{ color: currentPrice <= avgPrice ? '#52c41a' : '#ff4d4f', marginLeft: 4 }}>
+                  {currentPrice <= avgPrice ? '调低' : '调高'} {Math.abs(((currentPrice - avgPrice) / avgPrice) * 100).toFixed(1)}%
                 </Text>
               </Text>
             </div>

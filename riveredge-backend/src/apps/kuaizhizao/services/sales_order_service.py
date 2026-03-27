@@ -89,6 +89,7 @@ class SalesOrderService:
     ) -> SalesOrderResponse:
         """将 SalesOrder 转为 SalesOrderResponse"""
         from apps.kuaizhizao.services.document_lifecycle_service import get_sales_order_lifecycle
+
         lifecycle = get_sales_order_lifecycle(
             order,
             items=items,
@@ -126,6 +127,9 @@ class SalesOrderService:
             "shipping_method": order.shipping_method,
             "payment_terms": order.payment_terms,
             "notes": order.notes,
+            "attachments": getattr(order, "attachments", None),
+            "fee_details": getattr(order, "fee_details", None),
+            "total_fee_amount": getattr(order, "total_fee_amount", None) or Decimal("0"),
             "is_active": order.is_active,
             "created_by": order.created_by,
             "updated_by": order.updated_by,
@@ -180,6 +184,8 @@ class SalesOrderService:
                     tax_rate=getattr(it, "tax_rate", None) or Decimal("0"),
                     item_amount=it.total_amount,
                     notes=it.notes,
+                    variant_attributes=getattr(it, "variant_attributes", None),
+                    configurable_selections=getattr(it, "configurable_selections", None),
                     delivered_quantity=it.delivered_quantity,
                     remaining_quantity=it.remaining_quantity,
                     delivery_status=it.delivery_status,
@@ -192,9 +198,7 @@ class SalesOrderService:
             ]
         return SalesOrderResponse(**base)
 
-    async def _get_linked_demand(
-        self, tenant_id: int, sales_order_id: int
-    ) -> Optional[Demand]:
+    async def _get_linked_demand(self, tenant_id: int, sales_order_id: int) -> Optional[Demand]:
         """获取与销售订单关联的 Demand（下推时生成）"""
         return await Demand.get_or_none(
             tenant_id=tenant_id,
@@ -204,7 +208,7 @@ class SalesOrderService:
         )
 
     async def _sync_demand_if_exists(self, tenant_id: int, order_id: int, operator_id: int) -> bool:
-        """如果存在关联需求，则同步并重算快照，返回是否同步成功"""
+        """如果存在关联需求，则同步并重算快照，返回是否同步成功。"""
         demand = await self._get_linked_demand(tenant_id, order_id)
         if demand:
             from apps.kuaizhizao.services.demand_service import DemandService

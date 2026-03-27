@@ -7,13 +7,13 @@
  * @date 2025-12-30
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ActionType, ProColumns, ModalForm, ProFormText, ProFormDateRangePicker, ProFormList, ProFormGroup, ProFormDigit, ProFormDatePicker, ProFormItem } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ModalForm, ProFormText, ProFormDateRangePicker, ProFormList, ProFormGroup, ProFormDigit, ProFormDatePicker, ProFormItem, ProFormInstance } from '@ant-design/pro-components';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { App, Button, Tag, Space, Modal, Card, Row, Col, Table, theme } from 'antd';
-import { EyeOutlined, EditOutlined, DeleteOutlined, PlayCircleOutlined } from '@ant-design/icons';
+import { EyeOutlined, EditOutlined, DeleteOutlined, PlayCircleOutlined, ShoppingOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerActions, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { planningApi } from '../../../services/production';
@@ -23,6 +23,10 @@ import { UniWorkflowActions } from '../../../../../components/uni-workflow-actio
 import { apiRequest } from '../../../../../services/api';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 import { materialApi } from '../../../../master-data/services/material';
+import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
+import type { Material } from '../../../../master-data/types/material';
+import { useTranslation } from 'react-i18next';
+import dayjs from 'dayjs';
 import ProductionControlTower from './ProductionControlTower';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { batchImport } from '../../../../../utils/batchOperations';
@@ -83,6 +87,7 @@ const PLAN_TYPE_FALLBACK = [
 ];
 
 const ProductionPlansPage: React.FC = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
@@ -112,6 +117,24 @@ const ProductionPlansPage: React.FC = () => {
   const [createModalVisible, setCreateModalVisible] = useState<boolean>(false);
   const [currentPlan, setCurrentPlan] = useState<ProductionPlan | null>(null);
   const [syncModalVisible, setSyncModalVisible] = useState(false);
+  const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
+  const createPlanFormRef = useRef<ProFormInstance>(null);
+
+  const appendProductionPlanItemsFromMaterials = useCallback(
+    (selected: Material[]) => {
+      const current = createPlanFormRef.current?.getFieldValue('items') ?? [];
+      const newRows = selected.map((m) => ({
+        material_id: m.id,
+        material_code: m.mainCode ?? m.code ?? '',
+        material_name: m.name ?? '',
+        planned_quantity: 1,
+        planned_date: dayjs(),
+      }));
+      createPlanFormRef.current?.setFieldsValue({ items: [...current, ...newRows] });
+      messageApi.success(t('app.kuaizhizao.common.materialBatchAdded', { count: selected.length }));
+    },
+    [messageApi, t]
+  );
 
   // 表格列定义
   const columns: ProColumns<ProductionPlan>[] = [
@@ -513,6 +536,7 @@ const ProductionPlansPage: React.FC = () => {
         title="创建生产计划"
         open={createModalVisible}
         onOpenChange={setCreateModalVisible}
+        formRef={createPlanFormRef}
         width={MODAL_CONFIG.LARGE_WIDTH}
         onFinish={async (values) => {
           try {
@@ -567,7 +591,18 @@ const ProductionPlansPage: React.FC = () => {
             <ProFormDatePicker name="planned_date" label="计划日期" width="xs" rules={[{ required: true }]} />
           </ProFormGroup>
         </ProFormList>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%', marginTop: 8 }}>
+          <Button type="default" icon={<ShoppingOutlined />} onClick={() => setMaterialPickerOpen(true)}>
+            {t('app.kuaizhizao.common.materialBatchSelect')}
+          </Button>
+        </div>
       </ModalForm>
+
+      <MaterialBatchPickerModal
+        open={materialPickerOpen}
+        onCancel={() => setMaterialPickerOpen(false)}
+        onConfirm={appendProductionPlanItemsFromMaterials}
+      />
 
       <DetailDrawerTemplate
         title={`生产计划详情 - ${currentPlan?.plan_code || ''}`}

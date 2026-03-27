@@ -72,6 +72,25 @@ const FeeDetailsTable: React.FC<FeeDetailsTableProps> = ({
         },
       }}
     >
+      <style>{`
+        .fee-details-row .ant-form-item {
+          margin-bottom: 0 !important;
+        }
+        .fee-details-row .ant-pro-form-group {
+          margin-bottom: 0 !important;
+        }
+        .fee-details-row .ant-pro-form-list-action {
+          margin: 0 !important;
+          padding: 0 !important;
+          height: 100%;
+          display: flex;
+          align-items: center;
+        }
+        .fee-details-row .ant-pro-form-list-action .ant-btn,
+        .fee-details-row .ant-pro-form-list-action .anticon {
+          line-height: 1 !important;
+        }
+      `}</style>
       <ProFormList
         name={name}
         copyIconProps={false}
@@ -82,18 +101,39 @@ const FeeDetailsTable: React.FC<FeeDetailsTableProps> = ({
         }}
         itemRender={({ listDom, action }, { index }) => (
           <div
+            className="fee-details-row"
             key={index}
             style={{
-              padding: '12px 16px',
-              marginBottom: 12,
+              padding: '6px 16px',
+              marginBottom: 8,
               backgroundColor: token.colorFillQuaternary,
               borderRadius: token.borderRadius,
               border: `1px solid ${token.colorBorderSecondary}`,
             }}
           >
-            {listDom}
-            <div style={{ textAlign: 'right', marginTop: 8 }}>
-              {action}
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                flexWrap: 'nowrap',
+                gap: 8,
+                width: '100%',
+              }}
+            >
+              <div style={{ flex: '1 1 auto', minWidth: 0, overflow: 'hidden' }}>{listDom}</div>
+              <div
+                style={{
+                  flexShrink: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  alignSelf: 'center',
+                  minHeight: 40,
+                  paddingBottom: 0,
+                }}
+              >
+                {action}
+              </div>
             </div>
           </div>
         )}

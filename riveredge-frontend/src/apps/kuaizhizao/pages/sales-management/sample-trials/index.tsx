@@ -7,16 +7,18 @@
  * @date 2026-02-19
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, DatePicker, Row, Col, Select } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, ExportOutlined, PrinterOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, ExportOutlined, PrinterOutlined, ShoppingOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
+import type { Material } from '../../../../master-data/types/material';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate } from '../../../../../components/layout-templates';
 import { sampleTrialApi } from '../../../services/sample-trial';
@@ -26,6 +28,7 @@ import { warehouseApi } from '../../../../master-data/services/warehouse';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { batchImport } from '../../../../../utils/batchOperations';
+import { useTranslation } from 'react-i18next';
 
 interface SampleTrial {
   id?: number;
@@ -62,6 +65,7 @@ const STATUS_MAP: Record<string, { text: string; color: string }> = {
 };
 
 const SampleTrialsPage: React.FC = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
@@ -77,6 +81,7 @@ const SampleTrialsPage: React.FC = () => {
   const [createOutboundTrialId, setCreateOutboundTrialId] = useState<number | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [syncModalVisible, setSyncModalVisible] = useState(false);
+  const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const formRef = useRef<any>(null);
   const outboundFormRef = useRef<any>(null);
   const [customerList, setCustomerList] = useState<any[]>([]);
@@ -444,6 +449,23 @@ const SampleTrialsPage: React.FC = () => {
 
   const defaultTrialItem = { material_id: undefined, material_code: '', material_name: '', material_spec: '', material_unit: '件', trial_quantity: 1, unit_price: 0 };
 
+  const appendSampleTrialItemsFromMaterials = useCallback(
+    (selected: Material[]) => {
+      const current = formRef.current?.getFieldValue('items') ?? [];
+      const newRows = selected.map((m) => ({
+        ...defaultTrialItem,
+        material_id: m.id,
+        material_code: m.mainCode ?? m.code ?? '',
+        material_name: m.name ?? '',
+        material_spec: m.specification ?? '',
+        material_unit: m.baseUnit ?? '件',
+      }));
+      formRef.current?.setFieldsValue({ items: [...current, ...newRows] });
+      messageApi.success(t('app.kuaizhizao.common.materialBatchAdded', { count: selected.length }));
+    },
+    [messageApi, t]
+  );
+
   /**
    * 处理新建样品试用单
    * 参考销售订单：先打开弹窗，再请求 testGenerateCode 预填编码（不占用序号）
@@ -787,14 +809,24 @@ const SampleTrialsPage: React.FC = () => {
                     scroll={fields.length > 0 ? { x: totalWidth } : undefined}
                     style={{ width: '100%', margin: 0 }}
                     footer={() => (
-                      <Button
-                        type="dashed"
-                        icon={<PlusOutlined />}
-                        onClick={() => add({ material_id: undefined, material_code: '', material_name: '', material_unit: '', trial_quantity: 1, unit_price: 0 })}
-                        block
-                      >
-                        添加明细
-                      </Button>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
+                        <Button
+                          type="dashed"
+                          icon={<PlusOutlined />}
+                          style={{ flex: 1, minWidth: 120 }}
+                          onClick={() => add({ ...defaultTrialItem })}
+                        >
+                          添加明细
+                        </Button>
+                        <Button
+                          type="default"
+                          icon={<ShoppingOutlined />}
+                          style={{ flex: 1, minWidth: 120 }}
+                          onClick={() => setMaterialPickerOpen(true)}
+                        >
+                          {t('app.kuaizhizao.common.materialBatchSelect')}
+                        </Button>
+                      </div>
                     )}
                   />
                 </div>
@@ -917,6 +949,12 @@ const SampleTrialsPage: React.FC = () => {
       >
         {sampleTrialFormContent}
       </FormModalTemplate>
+
+      <MaterialBatchPickerModal
+        open={materialPickerOpen}
+        onCancel={() => setMaterialPickerOpen(false)}
+        onConfirm={appendSampleTrialItemsFromMaterials}
+      />
 
       <Modal
         title="创建样品出库"

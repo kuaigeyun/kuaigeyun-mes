@@ -4,12 +4,15 @@
  * 提供入库单的管理功能，支持多种入库类型：采购入库、成品入库（产品入库）、生产退料等。
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProFormDigit, ProFormItem } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Card, Table, Row, Col, Form, Form as AntForm, InputNumber, Input } from 'antd';
-import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, InboxOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, InboxOutlined, ShoppingOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
+import type { Material } from '../../../../master-data/types/material';
+import { useTranslation } from 'react-i18next';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
@@ -75,6 +78,7 @@ interface InboundOrderItem {
 }
 
 const InboundPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   // Modal 相关状态（创建入库单）
@@ -103,6 +107,7 @@ const InboundPage: React.FC = () => {
   const [purchaseSourceType, setPurchaseSourceType] = useState<'purchase_order' | 'receipt_notice'>('purchase_order');
   const [purchaseSourceOptions, setPurchaseSourceOptions] = useState<{ label: string; value: number }[]>([]);
   const [sourceLoading, setSourceLoading] = useState(false);
+  const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
 
   const defaultPurchaseItem = {
     purchase_order_item_id: 0,
@@ -115,6 +120,22 @@ const InboundPage: React.FC = () => {
     qualified_quantity: 1,
     unqualified_quantity: 0,
   };
+
+  const appendPurchaseInboundItemsFromMaterials = useCallback(
+    (selected: Material[]) => {
+      const current = formRef.current?.getFieldValue('items') ?? [];
+      const newRows = selected.map((m) => ({
+        ...defaultPurchaseItem,
+        material_id: m.id,
+        material_code: m.mainCode ?? m.code ?? '',
+        material_name: m.name ?? '',
+        material_unit: m.baseUnit ?? '',
+      }));
+      formRef.current?.setFieldsValue({ items: [...current, ...newRows] });
+      messageApi.success(t('app.kuaizhizao.common.materialBatchAdded', { count: selected.length }));
+    },
+    [messageApi, t]
+  );
 
   const handleCreate = () => {
     setInboundType('purchase');
@@ -1027,9 +1048,19 @@ const InboundPage: React.FC = () => {
                           },
                         ]}
                       />
-                      <Button type="dashed" icon={<PlusOutlined />} onClick={() => add(defaultPurchaseItem)} block style={{ marginTop: 8 }}>
-                        添加明细
-                      </Button>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%', marginTop: 8 }}>
+                        <Button type="dashed" icon={<PlusOutlined />} style={{ flex: 1, minWidth: 120 }} onClick={() => add(defaultPurchaseItem)}>
+                          添加明细
+                        </Button>
+                        <Button
+                          type="default"
+                          icon={<ShoppingOutlined />}
+                          style={{ flex: 1, minWidth: 120 }}
+                          onClick={() => setMaterialPickerOpen(true)}
+                        >
+                          {t('app.kuaizhizao.common.materialBatchSelect')}
+                        </Button>
+                      </div>
                     </div>
                   )}
                 </AntForm.List>
@@ -1087,6 +1118,12 @@ const InboundPage: React.FC = () => {
           </>
         )}
       </FormModalTemplate>
+
+      <MaterialBatchPickerModal
+        open={materialPickerOpen}
+        onCancel={() => setMaterialPickerOpen(false)}
+        onConfirm={appendPurchaseInboundItemsFromMaterials}
+      />
 
       <Modal
         title="批量入库"
