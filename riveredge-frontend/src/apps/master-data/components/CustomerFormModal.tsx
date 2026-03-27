@@ -71,7 +71,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
   useEffect(() => {
     if (!open) return;
     formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({ isActive: true });
+    formRef.current?.setFieldsValue({ isActive: true, isPublic: false });
     if (!editUuid) {
       (async () => {
         let ruleCode = getPageRuleCode(PAGE_CODE);
@@ -88,16 +88,16 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
           testGenerateCode({ rule_code: ruleCode })
             .then((res) => {
               setPreviewCode(res.code);
-              formRef.current?.setFieldsValue({ code: res.code, isActive: true });
+              formRef.current?.setFieldsValue({ code: res.code, isActive: true, isPublic: false });
             })
             .catch(() => {
               setPreviewCode(null);
-              formRef.current?.setFieldsValue({ isActive: true });
+              formRef.current?.setFieldsValue({ isActive: true, isPublic: false });
             });
         } else {
           setPreviewCode(null);
           setEffectiveRuleCode(null);
-          formRef.current?.setFieldsValue({ isActive: true });
+          formRef.current?.setFieldsValue({ isActive: true, isPublic: false });
         }
       })();
       return;
@@ -130,6 +130,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
               : undefined,
           salesmanId: detail.salesmanId,
           isActive: detail.isActive ?? true,
+          isPublic: detail.isPublic ?? false,
         });
       })
       .catch((err: any) => {
@@ -162,6 +163,9 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
         if (values.isActive === undefined) {
           values.isActive = true;
         }
+        if (values.isPublic === undefined) {
+          values.isPublic = false;
+        }
         const created = await customerApi.create(values as CustomerCreate);
         messageApi.success(t('common.createSuccess'));
         onSuccess(created);
@@ -192,7 +196,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
       loading={formLoading}
       width={MODAL_CONFIG.STANDARD_WIDTH}
       formRef={formRef as React.RefObject<ProFormInstance>}
-      initialValues={{ isActive: true }}
+      initialValues={{ isActive: true, isPublic: false }}
       layout="vertical"
       grid
     >

@@ -25,6 +25,7 @@ export interface Customer {
   salesmanId?: number;
   salesmanName?: string;
   isActive: boolean;
+  isPublic?: boolean;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;
@@ -48,6 +49,7 @@ export interface CustomerCreate {
   salesmanId?: number;
   salesmanName?: string;
   isActive?: boolean;
+  isPublic?: boolean;
 }
 
 export interface CustomerUpdate {
@@ -68,6 +70,7 @@ export interface CustomerUpdate {
   salesmanId?: number;
   salesmanName?: string;
   isActive?: boolean;
+  isPublic?: boolean;
 }
 
 export interface CustomerListParams {

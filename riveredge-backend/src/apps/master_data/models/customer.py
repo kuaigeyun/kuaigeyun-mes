@@ -83,6 +83,7 @@ class Customer(BaseModel):
     
     # 状态信息
     is_active = fields.BooleanField(default=True, description="是否启用")
+    is_public = fields.BooleanField(default=False, description="是否公共（false=私有，true=公共）")
     
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")

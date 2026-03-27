@@ -55,6 +55,8 @@ class SupplyChainService:
         create_data = data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict()
         if create_data.get("is_active") is None:
             create_data["is_active"] = True
+        if create_data.get("is_public") is None:
+            create_data["is_public"] = False
         try:
             customer = await Customer.create(
                 tenant_id=tenant_id,
@@ -138,9 +140,9 @@ class SupplyChainService:
                 Q(code__icontains=keyword) | Q(name__icontains=keyword)
             )
 
-        # 业务员数据隔离：普通用户只能看到自己负责的客户
+        # 业务员数据隔离：普通用户只能看到自己负责的客户 + 公共客户
         if current_user and current_user.is_regular_user():
-            query = query.filter(salesman_id=current_user.id)
+            query = query.filter(Q(salesman_id=current_user.id) | Q(is_public=True))
         
         customers = await query.offset(skip).limit(limit).order_by("code").all()
         

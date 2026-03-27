@@ -11,14 +11,36 @@ import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { customerFollowUpApi, type CustomerFollowUp } from '../../../services/customer-follow-up';
 import { listQuotations, type Quotation } from '../../../services/quotation';
 import { listSalesOrders, type SalesOrder } from '../../../services/sales-order';
 import { customerApi, getDictionaryOptions } from '../../../../master-data/services/supply-chain';
 import type { Customer } from '../../../../master-data/types/supply-chain';
+import { apiRequest } from '../../../../../services/api';
 
 const DICT_CODE = 'SALES_FOLLOW_UP_TYPE';
+
+const extractArrayFromResponse = (raw: any): any[] => {
+  if (Array.isArray(raw)) return raw;
+  if (Array.isArray(raw?.items)) return raw.items;
+  if (Array.isArray(raw?.data)) return raw.data;
+  if (Array.isArray(raw?.data?.items)) return raw.data.items;
+  if (Array.isArray(raw?.data?.data)) return raw.data.data;
+  return [];
+};
+
+const getCustomerId = (c: any): number | null => {
+  const id = Number(c?.id ?? c?.customer_id);
+  return Number.isFinite(id) ? id : null;
+};
+
+const getCustomerName = (c: any): string => {
+  const code = String(c?.code ?? c?.customer_code ?? '').trim();
+  const name = String(c?.name ?? c?.customer_name ?? '').trim();
+  return `${code} ${name}`.trim();
+};
 
 const CustomerFollowUpsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -126,15 +148,29 @@ const CustomerFollowUpsPage: React.FC = () => {
   }, [salesOrderOptions, editing]);
 
   const loadDictAndCustomers = async () => {
-    try {
-      const [cust, dictOpts] = await Promise.all([
-        customerApi.list({ limit: 2000, isActive: true } as any),
-        getDictionaryOptions(DICT_CODE),
-      ]);
-      setCustomers(Array.isArray(cust) ? cust : []);
-      setActivityOptions(dictOpts);
-    } catch {
-      setCustomers([]);
+    const [custRes, custRes2, dictRes] = await Promise.allSettled([
+      apiRequest<unknown>('/apps/master-data/supply-chain/customers', {
+        params: { limit: 2000, is_active: true },
+      }),
+      customerApi.list({ limit: 2000, isActive: true } as any),
+      getDictionaryOptions(DICT_CODE),
+    ]);
+
+    const primaryList = custRes.status === 'fulfilled' ? extractArrayFromResponse(custRes.value as any) : [];
+    const fallbackList =
+      custRes2.status === 'fulfilled' ? extractArrayFromResponse(custRes2.value as any) : [];
+    const merged = [...primaryList, ...fallbackList];
+    const uniq = new Map<number, any>();
+    for (const c of merged) {
+      const id = getCustomerId(c);
+      if (id == null) continue;
+      if (!uniq.has(id)) uniq.set(id, c);
+    }
+    setCustomers(Array.from(uniq.values()) as Customer[]);
+
+    if (dictRes.status === 'fulfilled') {
+      setActivityOptions(dictRes.value || []);
+    } else {
       setActivityOptions([]);
     }
   };
@@ -173,7 +209,8 @@ const CustomerFollowUpsPage: React.FC = () => {
   const submit = async () => {
     try {
       const v = await form.validateFields();
-      const customer = customers.find((c) => c.id === v.customer_id);
+      const customerId = Number(v.customer_id);
+      const customer = customers.find((c: any) => getCustomerId(c) === customerId);
       if (!customer) {
         message.error(t('app.kuaizhizao.customerFollowUp.customerRequired'));
         return;
@@ -185,7 +222,7 @@ const CustomerFollowUpsPage: React.FC = () => {
           : null;
       if (editing) {
         await customerFollowUpApi.update(editing.id, {
-          customer_name: customer.name,
+          customer_name: (customer as any).name ?? (customer as any).customer_name ?? '',
           activity_type_code: v.activity_type_code,
           content: v.content,
           occurred_at: occurred,
@@ -196,7 +233,7 @@ const CustomerFollowUpsPage: React.FC = () => {
         message.success(t('pages.system.siteSettings.saveSuccess'));
       } else {
         await customerFollowUpApi.create({
-          customer_id: v.customer_id,
+          customer_id: customerId,
           activity_type_code: v.activity_type_code,
           content: v.content,
           occurred_at: occurred,
@@ -334,14 +371,24 @@ const CustomerFollowUpsPage: React.FC = () => {
             showSizeChanger: true,
           }}
           toolBarRender={() => [
-            <Select
+            <Button key="new" type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+              {t('app.kuaizhizao.customerFollowUp.new')}
+            </Button>,
+            <UniDropdown
               key="cust"
               allowClear
+              showSearch
               placeholder={t('app.kuaizhizao.customerFollowUp.filterCustomer')}
               style={{ width: 200 }}
-              options={customers.map((c) => ({ label: `${c.code} ${c.name}`, value: c.id }))}
+              options={customers
+                .map((c: any) => {
+                  const id = getCustomerId(c);
+                  if (id == null) return null;
+                  return { label: getCustomerName(c) || String(id), value: id };
+                })
+                .filter(Boolean) as Array<{ label: string; value: number }>}
               onChange={(v) => {
-                filtersRef.current.customer_id = v ?? undefined;
+                filtersRef.current.customer_id = v != null ? Number(v) : undefined;
                 reloadTable();
               }}
             />,
@@ -353,9 +400,6 @@ const CustomerFollowUpsPage: React.FC = () => {
                 reloadTable();
               }}
             />,
-            <Button key="new" type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-              {t('app.kuaizhizao.customerFollowUp.new')}
-            </Button>,
           ]}
           request={async (params, _sort, _filter, searchFormValues) => {
             const f = filtersRef.current;
@@ -404,15 +448,20 @@ const CustomerFollowUpsPage: React.FC = () => {
                 label={t('app.kuaizhizao.customerFollowUp.fieldCustomer')}
                 rules={[{ required: true, message: t('common.required') }]}
               >
-                <Select
+                <UniDropdown
                   showSearch
                   optionFilterProp="label"
                   disabled={!!editing}
-                  options={customers.map((c) => ({
-                    label: `${c.code} ${c.name}`,
-                    value: c.id,
-                  }))}
-                  onChange={() => {
+                  options={customers
+                    .map((c: any) => {
+                      const id = getCustomerId(c);
+                      if (id == null) return null;
+                      return { label: getCustomerName(c) || String(id), value: id };
+                    })
+                    .filter(Boolean) as Array<{ label: string; value: number }>}
+                  onChange={(value) => {
+                    const customerId = value != null ? Number(value) : undefined;
+                    form.setFieldsValue({ customer_id: customerId });
                     form.setFieldsValue({ quotation_id: undefined, sales_order_id: undefined });
                   }}
                 />
@@ -422,7 +471,7 @@ const CustomerFollowUpsPage: React.FC = () => {
                 label={t('app.kuaizhizao.customerFollowUp.fieldActivityType')}
                 rules={[{ required: true, message: t('common.required') }]}
               >
-                <Select options={activityOptions} />
+                <UniDropdown showSearch options={activityOptions} />
               </Form.Item>
               <Form.Item
                 name="occurred_at"

@@ -138,6 +138,19 @@ export const customerFormSchema: FieldConfig[] = [
     allowClear: true,
   },
   {
+    name: 'isPublic',
+    type: 'select',
+    labelKey: 'field.customer.visibility',
+    placeholderKey: 'field.customer.visibilityPlaceholder',
+    colSpan: 12,
+    required: true,
+    options: [
+      { labelKey: 'field.customer.visibilityPrivate', value: false },
+      { labelKey: 'field.customer.visibilityPublic', value: true },
+    ],
+    rules: [{ required: true, messageKey: 'field.customer.visibilityRequired' }],
+  },
+  {
     name: 'address',
     type: 'textarea',
     labelKey: 'field.customer.address',

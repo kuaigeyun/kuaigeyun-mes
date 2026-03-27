@@ -31,6 +31,7 @@ class CustomerBase(BaseModel):
     lead_source_code: Optional[str] = Field(None, max_length=50, description="来源渠道字典值", alias="leadSourceCode")
     credit_limit: Optional[Decimal] = Field(None, description="信用额度", alias="creditLimit")
     is_active: bool = Field(True, alias="isActive", description="是否启用")
+    is_public: bool = Field(False, alias="isPublic", description="是否公共（false=私有，true=公共）")
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -74,6 +75,7 @@ class CustomerUpdate(BaseModel):
     lead_source_code: Optional[str] = Field(None, max_length=50, description="来源渠道字典值", alias="leadSourceCode")
     credit_limit: Optional[Decimal] = Field(None, description="信用额度", alias="creditLimit")
     is_active: Optional[bool] = Field(None, alias="isActive", description="是否启用")
+    is_public: Optional[bool] = Field(None, alias="isPublic", description="是否公共（false=私有，true=公共）")
 
     model_config = ConfigDict(populate_by_name=True)
 
