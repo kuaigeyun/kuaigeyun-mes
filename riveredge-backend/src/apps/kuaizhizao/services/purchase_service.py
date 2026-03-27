@@ -20,7 +20,7 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError, Business
 from loguru import logger
 
 from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem, PurchaseOrderChange
-from apps.kuaizhizao.models.supplier import Supplier
+from apps.master_data.models.supplier import Supplier
 from apps.master_data.models.material import Material
 from apps.kuaizhizao.schemas.purchase import (
     PurchaseOrderCreate, PurchaseOrderUpdate, PurchaseOrderResponse,
@@ -75,6 +75,12 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 'created_by': created_by,
                 'updated_by': created_by
             })
+
+            # 自动带出归属采购员
+            if not order_dict.get("buyer_id") and order_dict.get("supplier_id"):
+                if supplier and supplier.buyer_id:
+                    order_dict["buyer_id"] = supplier.buyer_id
+                    order_dict["buyer_name"] = supplier.buyer_name
 
             order = await PurchaseOrder.create(**order_dict)
 
@@ -158,7 +164,8 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
     async def list_purchase_orders(
         self,
         tenant_id: int,
-        params: PurchaseOrderListParams
+        params: PurchaseOrderListParams,
+        current_user: Optional[CurrentUser] = None
     ) -> Dict[str, Any]:
         """
         获取采购订单列表
@@ -171,6 +178,10 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             List[PurchaseOrderListResponse]: 订单列表
         """
         query = PurchaseOrder.filter(tenant_id=tenant_id)
+
+        # 采购员数据隔离：普通用户只能看到自己负责的订单
+        if current_user and current_user.is_regular_user():
+            query = query.filter(buyer_id=current_user.id)
 
         # 应用筛选条件
         if params.supplier_id:

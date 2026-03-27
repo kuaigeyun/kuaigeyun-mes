@@ -68,6 +68,7 @@ export interface QuotationListParams {
   skip?: number;
   limit?: number;
   status?: string;
+  salesman_id?: number;
   start_date?: string;
   end_date?: string;
 }

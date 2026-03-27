@@ -58,6 +58,7 @@ import {
   List,
   Switch,
 } from 'antd'
+import type { MenuProps } from 'antd'
 import {
   PlusOutlined,
   EditOutlined,
@@ -3488,66 +3489,82 @@ const WorkOrdersPage: React.FC = () => {
             expandedRowRender: renderExpandedRow,
             expandRowByClick: true, // 支持双击行展开
           }}
-          toolBarRender={() => [
-            <Button
-              key="urgent-simulate"
-              icon={<PlusOutlined />}
-              danger
-              type="primary"
-              onClick={() => setUrgentSimulationVisible(true)}
-            >
-              紧急插单模拟
-            </Button>,
-            <Button
-              key="batch-qrcode"
-              icon={<QrcodeOutlined />}
-              disabled={selectedRowKeys.length === 0}
-              onClick={handleBatchGenerateQRCode}
-            >
-              批量生成二维码
-            </Button>,
-            <Button
-              key="batchPriority"
-              onClick={handleBatchSetPriority}
-              disabled={selectedRowKeys.length === 0}
-            >
-              批量设置优先级
-            </Button>,
-            <Button
-              key="batchRelease"
-              type="primary"
-              onClick={handleBatchRelease}
-              disabled={selectedRowKeys.length === 0}
-            >
-              批量下达
-            </Button>,
-            <Button
-              key="smartRelease"
-              style={{ backgroundColor: '#52c41a', color: '#fff', borderColor: '#52c41a' }}
-              icon={<PlayCircleOutlined />}
-              onClick={handleSmartReleaseKitted}
-            >
-              齐套自动下达
-            </Button>,
-            <Button
-              key="batchFreeze"
-              onClick={handleBatchFreeze}
-              disabled={selectedRowKeys.length === 0}
-            >
-              批量冻结
-            </Button>,
-            <Button
-              key="batchCancel"
-              danger
-              onClick={handleBatchCancel}
-              disabled={selectedRowKeys.length === 0}
-            >
-              批量取消
-            </Button>,
-            <Button key="merge" onClick={handleMerge} disabled={selectedRowKeys.length < 2}>
-              合并工单
-            </Button>,
-          ]}
+          toolBarRender={() => {
+            const hasSelected = selectedRowKeys.length > 0;
+            const hasMultipleSelected = selectedRowKeys.length >= 2;
+
+            const moreBatchMenuItems = useMemo<MenuProps['items']>(() => [
+              {
+                key: 'batch-qrcode',
+                icon: <QrcodeOutlined />,
+                label: '批量生成二维码',
+                onClick: handleBatchGenerateQRCode,
+              },
+              {
+                key: 'batchPriority',
+                label: '批量设置优先级',
+                onClick: handleBatchSetPriority,
+              },
+              {
+                key: 'batchFreeze',
+                label: '批量冻结',
+                onClick: handleBatchFreeze,
+              },
+              {
+                key: 'batchCancel',
+                label: '批量取消',
+                danger: true,
+                onClick: handleBatchCancel,
+              },
+            ], [selectedRowKeys]);
+
+            return [
+              <Button
+                key="urgent-simulate"
+                icon={<PlusOutlined />}
+                danger
+                type="primary"
+                onClick={() => setUrgentSimulationVisible(true)}
+              >
+                紧急插单模拟
+              </Button>,
+              <Button
+                key="smartRelease"
+                style={{ backgroundColor: '#52c41a', color: '#fff', borderColor: '#52c41a' }}
+                icon={<PlayCircleOutlined />}
+                onClick={handleSmartReleaseKitted}
+              >
+                齐套自动下达
+              </Button>,
+              // 批量操作区：仅在有选中时显示
+              hasSelected && (
+                <Button
+                  key="batchRelease"
+                  type="primary"
+                  onClick={handleBatchRelease}
+                >
+                  批量下达
+                </Button>
+              ),
+              hasMultipleSelected && (
+                <Button key="merge" onClick={handleMerge}>
+                  合并工单
+                </Button>
+              ),
+              hasSelected && (
+                <Dropdown 
+                  key="more-batch" 
+                  menu={{ items: moreBatchMenuItems }} 
+                  trigger={['click']}
+                  placement="bottomLeft"
+                >
+                  <Button icon={<MoreOutlined />}>
+                    更多批量操作
+                  </Button>
+                </Dropdown>
+              ),
+            ].filter(Boolean) as React.ReactNode[];
+          }}
           onDelete={handleDelete}
           viewTypes={['table', 'productTree', 'orderTree', 'help']}
           customViews={[

@@ -65,6 +65,10 @@ class Customer(BaseModel):
     # 分类信息
     category = fields.CharField(max_length=50, null=True, description="客户分类")
     
+    # 归属业务员
+    salesman_id = fields.IntField(null=True, description="归属业务员ID（关联 User.id）")
+    salesman_name = fields.CharField(max_length=100, null=True, description="归属业务员姓名")
+    
     # 状态信息
     is_active = fields.BooleanField(default=True, description="是否启用")
     

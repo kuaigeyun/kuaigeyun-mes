@@ -16,6 +16,7 @@ from loguru import logger
 
 from apps.kuaizhizao.models.sales_order import SalesOrder
 from apps.master_data.models.material import Material, BOM
+from apps.master_data.models.customer import Customer
 from apps.master_data.models.process import ProcessRoute
 from apps.kuaizhizao.schemas.quote import QuoteBreakdownResponse, QuoteItemResponse
 from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
@@ -285,6 +286,15 @@ class SalesOrderService:
             order_dict["review_status"] = sales_order_data.review_status
             order_dict["created_by"] = created_by
             order_dict["updated_by"] = created_by
+
+            # 自动带出归属业务员
+            if not order_dict.get("salesman_id") and order_dict.get("customer_id"):
+                from apps.master_data.models.customer import Customer
+                customer = await Customer.get_or_none(id=order_dict["customer_id"], deleted_at__isnull=True)
+                if customer and customer.salesman_id:
+                    order_dict["salesman_id"] = customer.salesman_id
+                    order_dict["salesman_name"] = customer.salesman_name
+
 
             order = await SalesOrder.create(tenant_id=tenant_id, **order_dict)
 

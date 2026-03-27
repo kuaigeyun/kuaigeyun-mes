@@ -91,6 +91,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
           email: detail.email,
           address: detail.address,
           category: detail.category,
+          salesmanId: detail.salesmanId,
           isActive: detail.isActive ?? true,
         });
       })

@@ -1068,52 +1068,77 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                         "assigned_tool_name": op.assigned_tool_name,
                     })
 
-        # 转换为响应格式，添加错误处理
+        # 批量预处理齐套分析数据（消除 N+1 瓶颈）
+        wo_requirements_map: dict[int, list] = {}
+        all_comp_ids = set()
+        for wo in work_orders:
+            if wo.status in ['draft', 'released', 'in_progress']:
+                try:
+                    variant_attrs = getattr(wo, "variant_attributes", None)
+                    cfg_selections = getattr(wo, "configurable_selections", None)
+                    # 转换配置位字典
+                    if cfg_selections and isinstance(cfg_selections, dict):
+                        try:
+                            cfg_selections = {str(k): int(v) for k, v in cfg_selections.items() if v is not None}
+                        except (TypeError, ValueError):
+                            cfg_selections = None
+                    
+                    requirements = await calculate_material_requirements_from_bom(
+                        tenant_id=tenant_id,
+                        material_id=wo.product_id,
+                        required_quantity=float(wo.quantity),
+                        only_approved=True,
+                        variant_attributes=variant_attrs,
+                        configurable_selections=cfg_selections,
+                    )
+                    wo_requirements_map[wo.id] = requirements
+                    for r in requirements:
+                        all_comp_ids.add(r.component_id)
+                except Exception:
+                    continue
+
+        # 一次性获取所有相关的库存数据
+        from apps.kuaizhizao.utils.inventory_helper import batch_get_material_inventory
+        inventory_map = await batch_get_material_inventory(tenant_id, list(all_comp_ids))
+
+        # 转换为响应格式
         result = []
         work_orders_to_update = []
 
         for wo in work_orders:
             try:
-                # 确保 created_by_name 不为空（使用批量预取结果）
+                # 确定创建人名称
                 if not wo.created_by_name and wo.created_by:
                     wo.created_by_name = user_name_map.get(wo.created_by, "未知用户")
                     work_orders_to_update.append(wo)
 
                 item_dict = WorkOrderListResponse.model_validate(wo).model_dump()
                 
-                # 计算齐套率 (Phase 2: Control Tower 齐套可视化)
-                # 仅针对待执行和进行中的工单进行计算，避免性能浪费
-                if wo.status in ['draft', 'released', 'in_progress']:
-                    try:
-                        shortage_info = await self.check_material_shortage(tenant_id, wo.id)
-                        
-                        # 获取品种总数
-                        variant_attrs = getattr(wo, "variant_attributes", None)
-                        cfg_selections = getattr(wo, "configurable_selections", None)
-                        requirements = await calculate_material_requirements_from_bom(
-                            tenant_id=tenant_id,
-                            material_id=wo.product_id,
-                            required_quantity=float(wo.quantity),
-                            only_approved=True,
-                            variant_attributes=variant_attrs,
-                            configurable_selections=cfg_selections,
-                        )
-                        total_vars = len(requirements)
-                        shortage_vars = shortage_info.get("total_shortage_count", 0)
-                        ready_vars = total_vars - shortage_vars
-                        
-                        item_dict["readiness_rate"] = round((ready_vars / total_vars * 100), 2) if total_vars > 0 else 100.0
-                    except Exception as e:
-                        logger.warning(f"由于异常，工单 {wo.code} 齐套率计算跳过: {e}")
+                # 从预处理数据中计算齐套率
+                requirements = wo_requirements_map.get(wo.id)
+                if requirements is not None:
+                    total_vars = len(requirements)
+                    shortage_vars = 0
+                    for r in requirements:
+                        available = inventory_map.get(r.component_id, Decimal("0"))
+                        if available < Decimal(str(r.gross_requirement)):
+                            shortage_vars += 1
+                    
+                    ready_vars = total_vars - shortage_vars
+                    item_dict["readiness_rate"] = round((ready_vars / total_vars * 100), 2) if total_vars > 0 else 100.0
+                else:
+                    # 如果不需要计算或计算失败，根据状态给个默认值
+                    if wo.status == 'completed':
+                        item_dict["readiness_rate"] = 100.0
+                    elif wo.status == 'cancelled':
                         item_dict["readiness_rate"] = 0.0
 
                 if include_operations:
                     item_dict["operations"] = operations_map.get(wo.id, [])
+                
                 result.append(WorkOrderListResponse.model_validate(item_dict))
             except Exception as e:
-                logger.error(f"序列化工单 {wo.id} 失败: {str(e)}")
-                logger.error(f"工单数据: id={wo.id}, code={wo.code}, created_by_name={wo.created_by_name}")
-                logger.exception(e)
+                logger.error(f"处理工单 {wo.id} 数据失败: {str(e)}")
                 continue
 
         # 批量更新 created_by_name 为空的工单（性能优化：使用 bulk_update 减少数据库往返）

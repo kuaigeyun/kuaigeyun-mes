@@ -6,14 +6,14 @@
 
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProDescriptionsItemType } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
-import { customerApi } from '../../../services/supply-chain';
+import { customerApi, getUserOptions } from '../../../services/supply-chain';
 import { CustomerFormModal } from '../../../components/CustomerFormModal';
 import type { Customer, CustomerCreate } from '../../../types/supply-chain';
 import { batchImport } from '../../../../../utils/batchOperations';
@@ -30,7 +30,6 @@ const CustomersPage: React.FC = () => {
   
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
-  const [currentCustomerUuid, setCurrentCustomerUuid] = useState<string | null>(null);
   const [customerDetail, setCustomerDetail] = useState<Customer | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   
@@ -116,12 +115,8 @@ const CustomersPage: React.FC = () => {
     });
   };
 
-  /**
-   * 处理打开详情
-   */
   const handleOpenDetail = async (record: Customer) => {
     try {
-      setCurrentCustomerUuid(record.uuid);
       setDrawerVisible(true);
       setDetailLoading(true);
       
@@ -139,7 +134,6 @@ const CustomersPage: React.FC = () => {
    */
   const handleCloseDetail = () => {
     setDrawerVisible(false);
-    setCurrentCustomerUuid(null);
     setCustomerDetail(null);
   };
 
@@ -389,6 +383,7 @@ const CustomersPage: React.FC = () => {
         t('field.customer.email'),
         t('field.customer.address'),
         t('field.customer.category'),
+        t('field.customer.salesman'),
         t('app.master-data.warehouses.status'),
         t('common.createdAt'),
       ];
@@ -404,6 +399,7 @@ const CustomersPage: React.FC = () => {
           item.email || '',
           item.address || '',
           item.category || '',
+          item.salesmanName || '',
           (item.isActive ?? (item as any)?.is_active) ? t('common.enabled') : t('common.disabled'),
           item.createdAt ? new Date(item.createdAt).toLocaleString() : '',
         ];
@@ -471,6 +467,17 @@ const CustomersPage: React.FC = () => {
       hideInSearch: true,
     },
     {
+      title: t('field.customer.salesman'),
+      dataIndex: 'salesmanName',
+      width: 120,
+      valueType: 'select',
+      request: getUserOptions,
+      // 使用 salesmanId 进行搜索
+      fieldProps: {
+        name: 'salesmanId',
+      },
+    },
+    {
       title: t('app.master-data.warehouses.status'),
       dataIndex: 'isActive',
       width: 100,
@@ -534,7 +541,7 @@ const CustomersPage: React.FC = () => {
   ];
 
   // 详情列定义
-  const detailColumns: ProDescriptionsItemType<Customer>[] = [
+  const detailColumns: ProDescriptionsItemProps<Customer>[] = [
     {
       title: t('field.customer.code'),
       dataIndex: 'code',
@@ -569,6 +576,10 @@ const CustomersPage: React.FC = () => {
       dataIndex: 'category',
     },
     {
+      title: t('field.customer.salesman'),
+      dataIndex: 'salesmanName',
+    },
+    {
       title: t('app.master-data.warehouses.status'),
       dataIndex: 'isActive',
       render: (_, record) => (
@@ -595,7 +606,7 @@ const CustomersPage: React.FC = () => {
       <UniTable<Customer>
         actionRef={actionRef}
         columns={columns}
-        request={async (params, sort, _filter, searchFormValues) => {
+        request={async (params, _sort, __filter, searchFormValues) => {
           // 处理搜索参数
           const apiParams: any = {
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
@@ -610,6 +621,11 @@ const CustomersPage: React.FC = () => {
           // 分类筛选
           if (searchFormValues?.category !== undefined && searchFormValues.category !== '' && searchFormValues.category !== null) {
             apiParams.category = searchFormValues.category;
+          }
+          
+          // 业务员筛选
+          if (searchFormValues?.salesmanId !== undefined && searchFormValues.salesmanId !== '' && searchFormValues.salesmanId !== null) {
+            apiParams.salesmanId = searchFormValues.salesmanId;
           }
           
           try {

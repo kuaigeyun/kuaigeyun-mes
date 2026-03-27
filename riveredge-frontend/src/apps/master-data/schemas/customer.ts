@@ -3,6 +3,7 @@
  */
 
 import type { FieldConfig } from './form-schemas';
+import { getUserOptions } from '../services/supply-chain';
 
 export const customerFormSchema: FieldConfig[] = [
   {
@@ -79,6 +80,15 @@ export const customerFormSchema: FieldConfig[] = [
     maxLength: 50,
     colSpan: 12,
     rules: [{ maxLength: 50, messageKey: 'field.customer.categoryMaxLength' }],
+  },
+  {
+    name: 'salesmanId',
+    type: 'select',
+    labelKey: 'field.customer.salesman',
+    placeholderKey: 'field.customer.salesmanPlaceholder',
+    colSpan: 12,
+    optionsApi: getUserOptions,
+    allowClear: true,
   },
   {
     name: 'address',

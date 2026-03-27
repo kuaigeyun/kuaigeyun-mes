@@ -203,3 +203,77 @@ async def get_material_detailed_locations(
 
     return locations
 
+
+async def batch_get_material_inventory(
+    tenant_id: int,
+    material_ids: list[int],
+    warehouse_id: Optional[int] = None
+) -> Dict[int, Decimal]:
+    """
+    批量获取物料的可用库存数量（性能优化版，减少数据库往返）
+
+    Args:
+        tenant_id: 租户ID
+        material_ids: 物料ID列表
+        warehouse_id: 仓库ID（可选）
+
+    Returns:
+        Dict[int, Decimal]: material_id -> available_quantity
+    """
+    if not material_ids:
+        return {}
+
+    inventory_map: Dict[int, Decimal] = {mid: Decimal("0") for mid in material_ids}
+    
+    # 1. 批量查询 MaterialBatch
+    try:
+        from apps.master_data.models.material_batch import MaterialBatch
+        from tortoise.functions import Sum
+
+        today = date.today()
+        batch_rows = await MaterialBatch.filter(
+            tenant_id=tenant_id,
+            material_id__in=material_ids,
+            deleted_at__isnull=True,
+            status="in_stock",
+            quantity__gt=0,
+        ).filter(
+            Q(expiry_date__isnull=True) | Q(expiry_date__gte=today)
+        ).group_by("material_id").values("material_id", total=Sum("quantity"))
+
+        for row in batch_rows:
+            mid = row["material_id"]
+            qty = row["total"] or Decimal("0")
+            inventory_map[mid] += qty
+    except Exception as e:
+        logger.warning(f"MaterialBatch 批量查询失败: {e}")
+
+    # 2. 批量查询 LineSideInventory
+    try:
+        from apps.kuaizhizao.models.line_side_inventory import LineSideInventory
+
+        line_query = LineSideInventory.filter(
+            tenant_id=tenant_id,
+            material_id__in=material_ids,
+            deleted_at__isnull=True,
+            status="available",
+        )
+        if warehouse_id is not None:
+            line_query = line_query.filter(warehouse_id=warehouse_id)
+
+        line_items = await line_query.all()
+        for item in line_items:
+            mid = item.material_id
+            available = (item.quantity or Decimal("0")) - (item.reserved_quantity or Decimal("0"))
+            if available > 0:
+                inventory_map[mid] += available
+    except Exception as e:
+        logger.warning(f"LineSideInventory 批量查询失败: {e}")
+
+    # 确保数值不小于 0
+    for mid in inventory_map:
+        if inventory_map[mid] < 0:
+            inventory_map[mid] = Decimal("0")
+
+    return inventory_map
+

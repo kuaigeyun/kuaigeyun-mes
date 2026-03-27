@@ -89,6 +89,7 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
           email: detail.email,
           address: detail.address,
           category: detail.category,
+          buyerId: detail.buyerId,
           isActive: detail.isActive ?? true,
         });
       })

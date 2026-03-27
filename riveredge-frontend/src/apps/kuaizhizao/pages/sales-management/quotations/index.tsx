@@ -66,6 +66,8 @@ const QuotationsPage: React.FC = () => {
   const formRef = useRef<any>(null);
   const [customerList, setCustomerList] = useState<any[]>([]);
   const [customersLoading, setCustomersLoading] = useState(false);
+  const [userList, setUserList] = useState<any[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
   const [materialList, setMaterialList] = useState<any[]>([]);
   const [customerCreateVisible, setCustomerCreateVisible] = useState(false);
   /** 发货方式字典选项（数据字典 SHIPPING_METHOD） */
@@ -78,20 +80,26 @@ const QuotationsPage: React.FC = () => {
   useEffect(() => {
     const load = async () => {
       setCustomersLoading(true);
+      setUsersLoading(true);
       try {
-        const [custRes, matRes] = await Promise.all([
+        const [custRes, matRes, userRes] = await Promise.all([
           apiRequest<unknown>('/apps/master-data/supply-chain/customers', { params: { limit: 1000, is_active: true } }),
           apiRequest<unknown>('/apps/master-data/materials', { params: { limit: 1000, is_active: true } }),
+          apiRequest<unknown>('/core/users', { params: { limit: 1000, is_active: true } }),
         ]);
         const custList = Array.isArray(custRes) ? custRes : (custRes as any)?.data ?? (custRes as any)?.items ?? [];
         const matList = Array.isArray(matRes) ? matRes : (matRes as any)?.data ?? (matRes as any)?.items ?? [];
+        const usrList = Array.isArray(userRes) ? userRes : (userRes as any)?.data ?? (userRes as any)?.items ?? [];
         setCustomerList(Array.isArray(custList) ? custList : []);
         setMaterialList(Array.isArray(matList) ? matList : []);
+        setUserList(Array.isArray(usrList) ? usrList : []);
       } catch {
         setCustomerList([]);
         setMaterialList([]);
+        setUserList([]);
       } finally {
         setCustomersLoading(false);
+        setUsersLoading(false);
       }
     };
     load();
@@ -223,6 +231,7 @@ const QuotationsPage: React.FC = () => {
         customer_name: detail.customer_name,
         customer_contact: detail.customer_contact,
         customer_phone: detail.customer_phone,
+        salesman_id: detail.salesman_id,
         salesman_name: detail.salesman_name,
         shipping_address: detail.shipping_address,
         shipping_method: detail.shipping_method,
@@ -638,6 +647,7 @@ const QuotationsPage: React.FC = () => {
       customer_name: customerName,
       customer_contact: values.customer_contact,
       customer_phone: values.customer_phone,
+      salesman_id: values.salesman_id,
       salesman_name: values.salesman_name,
       shipping_address: values.shipping_address,
       shipping_method: values.shipping_method,
@@ -679,6 +689,7 @@ const QuotationsPage: React.FC = () => {
       customer_name: customerName,
       customer_contact: values.customer_contact,
       customer_phone: values.customer_phone,
+      salesman_id: values.salesman_id,
       salesman_name: values.salesman_name,
       shipping_address: values.shipping_address,
       shipping_method: values.shipping_method,
@@ -789,13 +800,15 @@ const QuotationsPage: React.FC = () => {
                 value: c.id ?? c.customer_id,
                 label: `${c.code ?? c.customer_code ?? ''} - ${c.name ?? c.customer_name ?? ''}`.trim() || String(c.id ?? c.customer_id),
               }))}
-              onChange={(value, option: any) => {
+              onChange={(value, _option: any) => {
                 const c = customerList.find((x: any) => (x.id ?? x.customer_id) === value);
                 if (c) {
                   formRef.current?.setFieldsValue({
                     customer_name: c.name ?? c.customer_name,
                     customer_contact: c.contact_person ?? c.contact ?? c.customer_contact,
                     customer_phone: c.phone ?? c.customer_phone,
+                    salesman_id: c.salesman_id,
+                    salesman_name: c.salesman_name,
                   });
                 }
               }}
@@ -869,7 +882,23 @@ const QuotationsPage: React.FC = () => {
           <ProFormText name="customer_phone" label="电话" />
         </Col>
         <Col span={6}>
-          <ProFormText name="salesman_name" label="销售员" />
+          <ProForm.Item name="salesman_id" label="销售员">
+            <UniDropdown
+              placeholder="请选择销售员"
+              showSearch
+              allowClear
+              loading={usersLoading}
+              style={{ width: '100%' }}
+              options={userList.map((u: any) => ({
+                value: u.id,
+                label: u.full_name || u.username,
+              }))}
+              onChange={(_val, opt: any) => {
+                formRef.current?.setFieldsValue({ salesman_name: opt?.label });
+              }}
+            />
+          </ProForm.Item>
+          <Form.Item name="salesman_name" hidden><Input /></Form.Item>
         </Col>
         <Col span={12}>
           <ProFormText name="shipping_address" label="收货地址" placeholder="请输入收货地址" />
@@ -1180,6 +1209,7 @@ const QuotationsPage: React.FC = () => {
                 skip: ((params.current || 1) - 1) * (params.pageSize || 20),
                 limit: params.pageSize || 20,
                 status: params.lifecycle ?? params.status,
+                salesman_id: params.salesman_id,
                 start_date: params.start_date,
                 end_date: params.end_date,
               });

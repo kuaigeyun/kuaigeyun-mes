@@ -5,6 +5,7 @@
  */
 
 import { api } from '../../../services/api';
+import { getUserList } from '../../../services/user';
 import type {
   Customer,
   CustomerCreate,
@@ -94,5 +95,21 @@ export const supplierApi = {
   delete: async (uuid: string): Promise<void> => {
     return api.delete(`/apps/master-data/supply-chain/suppliers/${uuid}`);
   },
+};
+
+/**
+ * 获取用户选项列表（供 Schema Form 使用）
+ */
+export const getUserOptions = async () => {
+  try {
+    const res = await getUserList({ page: 1, page_size: 1000, is_active: true });
+    return res.items.map((user: any) => ({
+      label: user.full_name || user.username,
+      value: user.id || user.uuid, // 后端 salesman_id 是 int，所以优先用 id
+    }));
+  } catch (error) {
+    console.error('获取用户列表失败:', error);
+    return [];
+  }
 };
 

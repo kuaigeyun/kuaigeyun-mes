@@ -27,6 +27,10 @@ class PurchaseOrder(BaseModel):
     supplier_contact = fields.CharField(max_length=100, null=True, description="供应商联系人")
     supplier_phone = fields.CharField(max_length=20, null=True, description="供应商电话")
 
+    # 归属采购员
+    buyer_id = fields.IntField(null=True, description="归属采购员ID（关联 User.id）")
+    buyer_name = fields.CharField(max_length=100, null=True, description="归属采购员姓名")
+
     # 订单基本信息
     order_date = fields.DateField(description="订单日期")
     delivery_date = fields.DateField(description="要求到货日期")

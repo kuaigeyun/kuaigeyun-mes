@@ -65,6 +65,10 @@ class Supplier(BaseModel):
     # 分类信息
     category = fields.CharField(max_length=50, null=True, description="供应商分类")
     
+    # 归属采购员
+    buyer_id = fields.IntField(null=True, description="归属采购员ID（关联 User.id）")
+    buyer_name = fields.CharField(max_length=100, null=True, description="归属采购员姓名")
+    
     # 状态信息
     is_active = fields.BooleanField(default=True, description="是否启用")
     

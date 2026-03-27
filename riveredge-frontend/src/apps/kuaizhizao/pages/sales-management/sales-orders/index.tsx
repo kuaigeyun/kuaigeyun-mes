@@ -9,7 +9,7 @@
  */
 
 import { getBusinessConfig } from '../../../../../services/businessConfig';
-import React, { useRef, useState, useEffect, useCallback, Suspense, lazy } from 'react';
+import React, { useRef, useState, useEffect, Suspense, lazy } from 'react';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions, ProFormUploadButton } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Drawer, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Progress, Tooltip, Dropdown, Select, theme as AntdTheme } from 'antd';
 import { EyeOutlined, EditOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, ImportOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, ApartmentOutlined } from '@ant-design/icons';
@@ -29,7 +29,7 @@ import { CalculatorOutlined } from '@ant-design/icons';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { getSalesOrderLifecycle } from '../../../utils/salesOrderLifecycle';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
-import { ListPageTemplate, FormModalTemplate, type StatCard, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, type StatCard } from '../../../../../components/layout-templates';
 import { AmountDisplay } from '../../../../../components/permission';
 import { Area } from '@ant-design/charts';
 import {
@@ -392,17 +392,16 @@ const SalesOrdersPage: React.FC = () => {
           return base;
         });
         const customerId = data.customer_id ?? customers.find(c => c.name === data.customer_name)?.id;
+        const salesmanId = data.salesman_id;
         const salesmanName = data.salesman_name;
-        const matchedUser = users.find(u => (u.full_name || u.username) === salesmanName);
-        const salesmanUuid = matchedUser ? matchedUser.uuid : (salesmanName ? `__name__${salesmanName}` : undefined);
-        setLegacySalesmanName(salesmanName && !matchedUser ? salesmanName : null);
 
         // 转换主表单的日期字段为 dayjs 对象
         const formData = {
           ...data,
           items,
           customer_id: customerId,
-          salesman_uuid: salesmanUuid,
+          salesman_id: salesmanId,
+          salesman_name: salesmanName,
           order_date: data.order_date ? dayjs(data.order_date) : undefined,
           delivery_date: data.delivery_date ? dayjs(data.delivery_date) : undefined,
           attachments: (data as any).attachments || [],
@@ -558,16 +557,8 @@ const SalesOrdersPage: React.FC = () => {
         if (c) values.customer_name = c.name;
       }
 
-      // 销售员：从 salesman_uuid 解析 salesman_name，后端只需 salesman_name
-      if (values.salesman_uuid != null) {
-        if (typeof values.salesman_uuid === 'string' && values.salesman_uuid.startsWith('__name__')) {
-          values.salesman_name = values.salesman_uuid.replace(/^__name__/, '');
-        } else {
-          const u = users.find(x => x.uuid === values.salesman_uuid);
-          if (u) values.salesman_name = u.full_name || u.username;
-        }
-      }
-      delete values.salesman_uuid;
+      // 销售员：后端只需 salesman_id 和 salesman_name
+      // salesman_id 已经在表单中了，salesman_name 也在表单中（隐藏域）
 
       const q = (it: SalesOrderItem) => Number((it as any).required_quantity) || 0;
       const p = (it: SalesOrderItem) => Number((it as any).unit_price) || 0;
@@ -667,7 +658,7 @@ const SalesOrdersPage: React.FC = () => {
         // 非草稿（即点击了“提交订单”或“更新”），则执行提交。编辑时若 update 已自动审核则跳过 submit，避免重复审核
         const alreadyApproved = updateRes?.status === 'AUDITED' || updateRes?.status === '已审核';
         try {
-          const submitRes = alreadyApproved ? updateRes : await submitSalesOrder(orderId);
+          const submitRes = alreadyApproved ? updateRes : await submitSalesOrder(orderId!);
           // 判断后端返回的状态是否已经是“已审核”
           const isApproved = submitRes?.status === 'AUDITED' || submitRes?.status === '已审核';
           const syncTip = submitRes?.demand_synced ? t('app.kuaizhizao.salesOrder.demandSyncTip') : '';
@@ -697,21 +688,7 @@ const SalesOrdersPage: React.FC = () => {
     }
   };
 
-  const onModalSubmit = async (isDraft: boolean) => {
-    try {
-      const values = await formRef.current?.validateFields();
-      if (values) {
-        await handleSaveInternal(values, isDraft);
-      }
-    } catch (err: any) {
-      // 表单校验失败（如必填项未填），由表单项显示错误，不重复弹窗
-      if (err?.errorFields?.length) {
-        messageApi.warning(err?.message ?? t('app.kuaizhizao.salesOrder.completeRequired'));
-      } else {
-        messageApi.error(err?.message ?? t('app.kuaizhizao.salesOrder.operationFailed'));
-      }
-    }
-  };
+  // (onModalSubmit removed as it was unused)
 
   const handleSaveDraft = async () => {
     try {
@@ -1099,6 +1076,17 @@ const SalesOrdersPage: React.FC = () => {
     { title: t('app.kuaizhizao.salesOrder.orderDate'), dataIndex: 'order_date', valueType: 'date', width: 120, sorter: true, hideInSearch: true },
     // 订单日期范围（仅搜索）
     { title: t('app.kuaizhizao.salesOrder.orderDate'), dataIndex: 'order_date', valueType: 'dateRange', width: 120, hideInTable: true, hideInSearch: false, fieldProps: { placeholder: [t('common.startDate') ?? '开始日期', t('common.endDate') ?? '结束日期'] } },
+    {
+      title: t('app.kuaizhizao.salesOrder.salesman'),
+      dataIndex: 'salesman_id',
+      hideInTable: true,
+      valueType: 'select',
+      fieldProps: {
+        showSearch: true,
+        options: users.map(u => ({ label: u.full_name || u.username, value: u.id })),
+      },
+    },
+    { title: t('app.kuaizhizao.salesOrder.salesman'), dataIndex: 'salesman_name', width: 100, hideInSearch: true },
     { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', valueType: 'date', width: 120, sorter: true },
     { title: t('app.kuaizhizao.salesOrder.totalQuantity'), dataIndex: 'total_quantity', width: 100, align: 'right' as const, sorter: true },
     { title: t('app.kuaizhizao.salesOrder.totalAmountLabel'), dataIndex: 'total_amount', width: 120, align: 'right' as const, sorter: true, render: (_: unknown, r: SalesOrder) => <AmountDisplay resource="sales_order" value={r.total_amount} /> },
@@ -1586,7 +1574,7 @@ const SalesOrdersPage: React.FC = () => {
           toolBarButtonSize="middle"
           columns={columns}
           rowKey={dataViewMode === 'detail' ? '_rowKey' : 'id'}
-          request={async (params: any, sort: any, _filter: any, searchFormValues: any) => {
+          request={async (params: any, sort: any, _filter: any, searchFormValues: any): Promise<any> => {
             const apiParams: any = {
               skip: ((params.current || 1) - 1) * (params.pageSize || 20),
               limit: params.pageSize || 20,
@@ -1937,6 +1925,8 @@ const SalesOrdersPage: React.FC = () => {
                       customer_name: c?.name ?? undefined,
                       customer_contact: c?.contactPerson ?? (c as any)?.contact ?? undefined,
                       customer_phone: c?.phone ?? undefined,
+                      salesman_id: c?.salesmanId,
+                      salesman_name: c?.salesmanName,
                     });
                   }}
                   quickCreate={{
@@ -1995,47 +1985,23 @@ const SalesOrdersPage: React.FC = () => {
               />
             </Col>
             <Col span={6}>
-              <ProForm.Item name="salesman_uuid" label="销售员姓名">
+              <ProForm.Item name="salesman_id" label={t('app.kuaizhizao.salesOrder.salesman')}>
                 <UniDropdown
                   placeholder="请选择销售员"
                   showSearch
                   allowClear
                   loading={usersLoading}
                   style={{ width: '100%' }}
-                  options={[
-                    ...users.map((u) => ({
-                      label: u.full_name ? `${u.full_name} (${u.username})` : u.username,
-                      value: u.uuid,
-                    })),
-                    ...(legacySalesmanName
-                      ? [{ label: legacySalesmanName, value: `__name__${legacySalesmanName}` }]
-                      : []),
-                  ]}
-                  advancedSearch={{
-                    label: '高级搜索',
-                    fields: [
-                      { name: 'username', label: '账号' },
-                      { name: 'full_name', label: '姓名' },
-                      { name: 'phone', label: '手机号' },
-                    ],
-                    onSearch: async (searchValues) => {
-                      const result = await getUserList({
-                        page: 1,
-                        page_size: 100,
-                        is_active: true,
-                        ...(searchValues.username?.trim() && { username: searchValues.username.trim() }),
-                        ...(searchValues.full_name?.trim() && { full_name: searchValues.full_name.trim() }),
-                        ...(searchValues.phone?.trim() && { phone: searchValues.phone.trim() }),
-                      });
-                      const list = result.items || [];
-                      return list.map((u) => ({
-                        value: u.uuid,
-                        label: u.full_name ? `${u.full_name} (${u.username})` : u.username,
-                      }));
-                    },
+                  options={users.map((u) => ({
+                    label: u.full_name ? `${u.full_name} (${u.username})` : u.username,
+                    value: u.id,
+                  }))}
+                  onChange={(_val, opt: any) => {
+                    formRef.current?.setFieldsValue({ salesman_name: opt?.label });
                   }}
                 />
               </ProForm.Item>
+              <AntForm.Item name="salesman_name" hidden><Input /></AntForm.Item>
             </Col>
             <Col span={12}>
               <ProFormText
@@ -2154,7 +2120,7 @@ const SalesOrdersPage: React.FC = () => {
                                     formItemProps={{ style: { margin: 0 } }}
                                     showQuickCreate
                                     showAdvancedSearch
-                                    onChange={(val, material) => {
+                                    onChange={(_val, material) => {
                                       formRef.current?.setFieldValue(['items', index, '_sourceType'], material?.sourceType || (material as any)?.source_type);
                                     }}
                                   />

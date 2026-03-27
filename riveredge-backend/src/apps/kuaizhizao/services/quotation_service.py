@@ -16,6 +16,7 @@ from loguru import logger
 
 from apps.kuaizhizao.models.quotation import Quotation
 from apps.kuaizhizao.models.quotation_item import QuotationItem
+from apps.master_data.models.customer import Customer
 from apps.kuaizhizao.models.sales_order import SalesOrder
 from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
 from apps.kuaizhizao.schemas.quotation import (
@@ -178,6 +179,13 @@ class QuotationService:
             q_dict["created_by"] = created_by
             q_dict["updated_by"] = created_by
 
+            # 自动带出归属业务员
+            if not q_dict.get("salesman_id") and q_dict.get("customer_id"):
+                customer = await Customer.get_or_none(id=q_dict["customer_id"], deleted_at__isnull=True)
+                if customer and customer.salesman_id:
+                    q_dict["salesman_id"] = customer.salesman_id
+                    q_dict["salesman_name"] = customer.salesman_name
+
             quotation = await Quotation.create(tenant_id=tenant_id, **q_dict)
 
             total_qty = Decimal("0")
@@ -245,15 +253,28 @@ class QuotationService:
         status: Optional[str] = None,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
+        keyword: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> QuotationListResponse:
         """获取报价单列表"""
+        from tortoise.expressions import Q
+        from infra.models.user import User
+
         query = Quotation.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        
+        # 业务员数据隔离：普通用户只能看到自己负责的报价单
+        if current_user and current_user.is_regular_user():
+            query = query.filter(salesman_id=current_user.id)
         if status:
             query = query.filter(status=status)
         if start_date:
             query = query.filter(quotation_date__gte=start_date)
         if end_date:
             query = query.filter(quotation_date__lte=end_date)
+        if keyword:
+            query = query.filter(
+                Q(quotation_code__icontains=keyword) | Q(customer_name__icontains=keyword)
+            )
         total = await query.count()
         quotations = await query.offset(skip).limit(limit).order_by("-created_at")
         from apps.kuaizhizao.services.document_lifecycle_service import get_quotation_lifecycle

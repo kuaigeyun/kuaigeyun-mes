@@ -73,6 +73,7 @@ async def list_purchase_orders(
     delivery_date_from: Optional[date] = Query(None, description="到货日期从"),
     delivery_date_to: Optional[date] = Query(None, description="到货日期到"),
     keyword: Optional[str] = Query(None, description="关键词搜索"),
+    current_user: CurrentUser = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):
     """
@@ -93,7 +94,7 @@ async def list_purchase_orders(
         keyword=keyword
     )
 
-    return await PurchaseService().list_purchase_orders(tenant_id, params)
+    return await PurchaseService().list_purchase_orders(tenant_id, params, current_user=current_user)
 
 
 @router.get("/purchase-orders/statistics", summary="获取采购订单统计（用于指标卡片）")

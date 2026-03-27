@@ -13,7 +13,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
-import { supplierApi } from '../../../services/supply-chain';
+import { supplierApi, getUserOptions } from '../../../services/supply-chain';
 import { SupplierFormModal } from '../../../components/SupplierFormModal';
 import type { Supplier, SupplierCreate } from '../../../types/supply-chain';
 import { batchImport } from '../../../../../utils/batchOperations';
@@ -31,7 +31,6 @@ const SuppliersPage: React.FC = () => {
   
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
-  const [currentSupplierUuid, setCurrentSupplierUuid] = useState<string | null>(null);
   const [supplierDetail, setSupplierDetail] = useState<Supplier | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   
@@ -122,7 +121,6 @@ const SuppliersPage: React.FC = () => {
    */
   const handleOpenDetail = async (record: Supplier) => {
     try {
-      setCurrentSupplierUuid(record.uuid);
       setDrawerVisible(true);
       setDetailLoading(true);
       
@@ -140,7 +138,6 @@ const SuppliersPage: React.FC = () => {
    */
   const handleCloseDetail = () => {
     setDrawerVisible(false);
-    setCurrentSupplierUuid(null);
     setSupplierDetail(null);
   };
 
@@ -391,6 +388,7 @@ const SuppliersPage: React.FC = () => {
         t('field.supplier.email'),
         t('field.supplier.address'),
         t('field.supplier.category'),
+        t('field.supplier.buyer'),
         t('app.master-data.warehouses.status'),
         t('common.createdAt'),
       ];
@@ -406,6 +404,7 @@ const SuppliersPage: React.FC = () => {
           item.email || '',
           item.address || '',
           item.category || '',
+          item.buyerName || '',
           item.isActive ? t('common.enabled') : t('common.disabled'),
           item.createdAt ? new Date(item.createdAt).toLocaleString() : '',
         ];
@@ -477,6 +476,16 @@ const SuppliersPage: React.FC = () => {
       dataIndex: 'category',
       width: 120,
       hideInSearch: true,
+    },
+    {
+      title: t('field.supplier.buyer'),
+      dataIndex: 'buyerName',
+      width: 120,
+      valueType: 'select',
+      request: getUserOptions,
+      fieldProps: {
+        name: 'buyerId',
+      },
     },
     {
       title: t('app.master-data.warehouses.status'),
@@ -582,6 +591,10 @@ const SuppliersPage: React.FC = () => {
       dataIndex: 'category',
     },
     {
+      title: t('field.supplier.buyer'),
+      dataIndex: 'buyerName',
+    },
+    {
       title: t('app.master-data.warehouses.status'),
       dataIndex: 'isActive',
       render: (_, record) => (
@@ -608,7 +621,7 @@ const SuppliersPage: React.FC = () => {
       <UniTable<Supplier>
         actionRef={actionRef}
         columns={columns}
-        request={async (params, sort, _filter, searchFormValues) => {
+        request={async (params, _sort, __filter, searchFormValues) => {
           // 处理搜索参数
           const apiParams: any = {
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
@@ -623,6 +636,11 @@ const SuppliersPage: React.FC = () => {
           // 分类筛选
           if (searchFormValues?.category !== undefined && searchFormValues.category !== '' && searchFormValues.category !== null) {
             apiParams.category = searchFormValues.category;
+          }
+          
+          // 采购员筛选
+          if (searchFormValues?.buyerId !== undefined && searchFormValues.buyerId !== '' && searchFormValues.buyerId !== null) {
+            apiParams.buyerId = searchFormValues.buyerId;
           }
 
           // 搜索参数处理

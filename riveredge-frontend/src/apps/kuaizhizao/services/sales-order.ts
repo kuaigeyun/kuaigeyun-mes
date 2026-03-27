@@ -113,6 +113,7 @@ export interface SalesOrderListParams {
   end_date?: string;
   customer_name?: string;
   order_code?: string;
+  salesman_id?: number;
   keyword?: string;
   order_by?: string;
   include_items?: boolean;

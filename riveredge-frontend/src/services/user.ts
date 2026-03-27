@@ -14,6 +14,7 @@ import { apiRequest } from './api';
  * 用户信息接口
  */
 export interface User {
+  id: number;
   uuid: string;
   username: string;
   email?: string;

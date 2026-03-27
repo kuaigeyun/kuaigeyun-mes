@@ -57,10 +57,11 @@ async def list_quotations(
     status: Optional[str] = Query(None),
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
+    keyword: Optional[str] = Query(None, description="关键词搜索（编码、客户）"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """获取报价单列表，支持按状态、日期筛选"""
+    """获取报价单列表，支持按状态、日期、关键词筛选"""
     try:
         return await quotation_service.list_quotations(
             tenant_id=tenant_id,
@@ -69,6 +70,8 @@ async def list_quotations(
             status=status,
             start_date=start_date,
             end_date=end_date,
+            keyword=keyword,
+            current_user=current_user,
         )
     except Exception as e:
         logger.error("获取报价单列表失败: %s", e)

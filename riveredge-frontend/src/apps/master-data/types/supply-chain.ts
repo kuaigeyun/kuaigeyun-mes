@@ -16,6 +16,8 @@ export interface Customer {
   email?: string;
   address?: string;
   category?: string;
+  salesmanId?: number;
+  salesmanName?: string;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -31,6 +33,8 @@ export interface CustomerCreate {
   email?: string;
   address?: string;
   category?: string;
+  salesmanId?: number;
+  salesmanName?: string;
   isActive?: boolean;
 }
 
@@ -43,6 +47,8 @@ export interface CustomerUpdate {
   email?: string;
   address?: string;
   category?: string;
+  salesmanId?: number;
+  salesmanName?: string;
   isActive?: boolean;
 }
 
@@ -51,6 +57,8 @@ export interface CustomerListParams {
   limit?: number;
   category?: string;
   isActive?: boolean;
+  keyword?: string;
+  salesmanId?: number;
 }
 
 export interface Supplier {
@@ -65,6 +73,8 @@ export interface Supplier {
   email?: string;
   address?: string;
   category?: string;
+  buyerId?: number;
+  buyerName?: string;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -80,6 +90,8 @@ export interface SupplierCreate {
   email?: string;
   address?: string;
   category?: string;
+  buyerId?: number;
+  buyerName?: string;
   isActive?: boolean;
 }
 
@@ -92,6 +104,8 @@ export interface SupplierUpdate {
   email?: string;
   address?: string;
   category?: string;
+  buyerId?: number;
+  buyerName?: string;
   isActive?: boolean;
 }
 
@@ -101,7 +115,7 @@ export interface SupplierListParams {
   category?: string;
   isActive?: boolean;
   keyword?: string;
+  buyerId?: number;
   code?: string;
   name?: string;
 }
-

@@ -53,7 +53,8 @@ async def list_customers(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     category: Optional[str] = Query(None, description="客户分类（过滤）"),
-    is_active: Optional[bool] = Query(None, description="是否启用")
+    is_active: Optional[bool] = Query(None, description="是否启用"),
+    keyword: Optional[str] = Query(None, description="搜索关键词（编号或名称）")
 ):
     """
     获取客户列表
@@ -62,8 +63,9 @@ async def list_customers(
     - **limit**: 限制数量（默认：100，最大：1000）
     - **category**: 客户分类（可选，用于过滤）
     - **is_active**: 是否启用（可选）
+    - **keyword**: 搜索关键词（可选）
     """
-    return await SupplyChainService.list_customers(tenant_id, skip, limit, category, is_active)
+    return await SupplyChainService.list_customers(tenant_id, skip, limit, category, is_active, keyword, current_user)
 
 
 @router.get("/customers/{customer_uuid}", response_model=CustomerResponse, summary="获取客户详情")
@@ -180,7 +182,7 @@ async def list_suppliers(
     - **code**: 供应商编码（精确匹配）
     - **name**: 供应商名称（模糊匹配）
     """
-    return await SupplyChainService.list_suppliers(tenant_id, skip, limit, category, is_active, keyword, code, name)
+    return await SupplyChainService.list_suppliers(tenant_id, skip, limit, category, is_active, keyword, code, name, current_user)
 
 
 @router.get("/suppliers/{supplier_uuid}", response_model=SupplierResponse, summary="获取供应商详情")

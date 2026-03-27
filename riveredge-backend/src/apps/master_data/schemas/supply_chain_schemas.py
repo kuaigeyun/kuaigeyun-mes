@@ -20,6 +20,8 @@ class CustomerBase(BaseModel):
     email: Optional[str] = Field(None, max_length=100, description="邮箱")
     address: Optional[str] = Field(None, description="地址")
     category: Optional[str] = Field(None, max_length=50, description="客户分类")
+    salesman_id: Optional[int] = Field(None, description="归属业务员ID", alias="salesmanId")
+    salesman_name: Optional[str] = Field(None, max_length=100, description="归属业务员姓名", alias="salesmanName")
     is_active: bool = Field(True, alias="isActive", description="是否启用")
 
     model_config = ConfigDict(populate_by_name=True)
@@ -55,6 +57,8 @@ class CustomerUpdate(BaseModel):
     email: Optional[str] = Field(None, max_length=100, description="邮箱")
     address: Optional[str] = Field(None, description="地址")
     category: Optional[str] = Field(None, max_length=50, description="客户分类")
+    salesman_id: Optional[int] = Field(None, description="归属业务员ID", alias="salesmanId")
+    salesman_name: Optional[str] = Field(None, max_length=100, description="归属业务员姓名", alias="salesmanName")
     is_active: Optional[bool] = Field(None, alias="isActive", description="是否启用")
 
     model_config = ConfigDict(populate_by_name=True)
@@ -98,6 +102,8 @@ class SupplierBase(BaseModel):
     email: Optional[str] = Field(None, max_length=100, description="邮箱")
     address: Optional[str] = Field(None, description="地址")
     category: Optional[str] = Field(None, max_length=50, description="供应商分类")
+    buyer_id: Optional[int] = Field(None, description="归属采购员ID", alias="buyerId")
+    buyer_name: Optional[str] = Field(None, max_length=100, description="归属采购员姓名", alias="buyerName")
     is_active: bool = Field(True, alias="isActive", description="是否启用")
 
     model_config = ConfigDict(populate_by_name=True)
@@ -133,6 +139,8 @@ class SupplierUpdate(BaseModel):
     email: Optional[str] = Field(None, max_length=100, description="邮箱")
     address: Optional[str] = Field(None, description="地址")
     category: Optional[str] = Field(None, max_length=50, description="供应商分类")
+    buyer_id: Optional[int] = Field(None, description="归属采购员ID", alias="buyerId")
+    buyer_name: Optional[str] = Field(None, max_length=100, description="归属采购员姓名", alias="buyerName")
     is_active: Optional[bool] = Field(None, alias="isActive", description="是否启用")
 
     model_config = ConfigDict(populate_by_name=True)

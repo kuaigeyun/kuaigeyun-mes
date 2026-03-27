@@ -38,6 +38,8 @@ export interface PurchaseOrder {
   reviewer_name?: string;
   review_time?: string;
   review_remarks?: string;
+  buyer_id?: number;
+  buyer_name?: string;
   notes?: string;
   items_count?: number;
   created_at?: string;
@@ -79,6 +81,7 @@ export interface PurchaseOrderListParams {
   order_date_to?: string;
   delivery_date_from?: string;
   delivery_date_to?: string;
+  buyer_id?: number;
   keyword?: string;
 }
 

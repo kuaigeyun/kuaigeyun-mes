@@ -15,6 +15,7 @@ from apps.master_data.schemas.supply_chain_schemas import (
     SupplierCreate, SupplierUpdate, SupplierResponse
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.models.user import User
 
 
 class SupplyChainService:
@@ -102,7 +103,9 @@ class SupplyChainService:
         skip: int = 0,
         limit: int = 100,
         category: Optional[str] = None,
-        is_active: Optional[bool] = None
+        is_active: Optional[bool] = None,
+        keyword: Optional[str] = None,
+        current_user: Optional[User] = None
     ) -> List[CustomerResponse]:
         """
         获取客户列表
@@ -113,6 +116,8 @@ class SupplyChainService:
             limit: 限制数量
             category: 客户分类（可选，用于过滤）
             is_active: 是否启用（可选）
+            keyword: 搜索关键词（编号或名称）
+            current_user: 当前用户（用于数据隔离）
             
         Returns:
             List[CustomerResponse]: 客户列表
@@ -127,6 +132,15 @@ class SupplyChainService:
         
         if is_active is not None:
             query = query.filter(is_active=is_active)
+
+        if keyword:
+            query = query.filter(
+                Q(code__icontains=keyword) | Q(name__icontains=keyword)
+            )
+
+        # 业务员数据隔离：普通用户只能看到自己负责的客户
+        if current_user and current_user.is_regular_user():
+            query = query.filter(salesman_id=current_user.id)
         
         customers = await query.offset(skip).limit(limit).order_by("code").all()
         
@@ -302,7 +316,8 @@ class SupplyChainService:
         is_active: Optional[bool] = None,
         keyword: Optional[str] = None,
         code: Optional[str] = None,
-        name: Optional[str] = None
+        name: Optional[str] = None,
+        current_user: Optional[User] = None
     ) -> List[SupplierResponse]:
         """
         获取供应商列表
@@ -316,6 +331,7 @@ class SupplyChainService:
             keyword: 搜索关键词（供应商编码或名称）
             code: 供应商编码（精确匹配）
             name: 供应商名称（模糊匹配）
+            current_user: 当前用户（用于数据隔离）
 
         Returns:
             List[SupplierResponse]: 供应商列表
@@ -345,6 +361,10 @@ class SupplyChainService:
         if name:
             # 模糊匹配供应商名称
             query = query.filter(name__icontains=name)
+
+        # 采购员数据隔离：普通用户只能看到自己负责的供应商
+        if current_user and current_user.is_regular_user():
+            query = query.filter(buyer_id=current_user.id)
         
         suppliers = await query.offset(skip).limit(limit).order_by("code").all()
         

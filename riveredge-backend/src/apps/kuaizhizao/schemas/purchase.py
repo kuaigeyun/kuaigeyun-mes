@@ -29,6 +29,8 @@ class PurchaseOrderBase(BaseSchema):
     supplier_name: str = Field(..., max_length=200, description="供应商名称")
     supplier_contact: Optional[str] = Field(None, max_length=100, description="供应商联系人")
     supplier_phone: Optional[str] = Field(None, max_length=20, description="供应商电话")
+    buyer_id: Optional[int] = Field(None, description="归属采购员ID", alias="buyerId")
+    buyer_name: Optional[str] = Field(None, max_length=100, description="归属采购员姓名", alias="buyerName")
     order_date: date = Field(..., description="订单日期")
     delivery_date: date = Field(..., description="要求到货日期")
     order_type: str = Field("标准采购", max_length=20, description="订单类型")
@@ -127,35 +129,41 @@ class PurchaseOrderItemResponse(PurchaseOrderItemBase):
 
 
 # === 扩展响应 ===
-class MaterialPriceHistory(BaseModel):
-    """物料价格历史"""
-    order_code: str
-    order_date: date
-    supplier_name: str
-    unit_price: Decimal
-    currency: str
-
-
-class MaterialPriceHistoryResponse(BaseModel):
-    """物料价格历史响应"""
-    material_id: int
-    history: List[MaterialPriceHistory]
-
-
-class PurchaseTrackingEvent(BaseModel):
-    """采购追踪事件"""
-    event_time: datetime
-    event_type: str
-    description: str
-    operator: Optional[str] = None
-
-
-class PurchaseTrackingResponse(BaseModel):
-    """采购追踪响应"""
+class MaterialPriceHistoryItem(BaseModel):
+    """物料成交价记录项"""
     order_id: int
     order_code: str
+    order_date: date
+    supplier_id: int
+    supplier_name: str
+    unit_price: Decimal
+    currency: Optional[str] = None
+
+class MaterialPriceHistoryResponse(BaseModel):
+    """物料成交价查询响应"""
+    material_id: int
+    history_items: List[MaterialPriceHistoryItem] = Field(default_factory=list)
+    average_price: Decimal = Field(default=Decimal(0))
+    min_price: Decimal = Field(default=Decimal(0))
+    max_price: Decimal = Field(default=Decimal(0))
+
+
+class PurchaseTrackingNode(BaseModel):
+    """单据追踪节点信息"""
+    node_name: str
     status: str
-    events: List[PurchaseTrackingEvent]
+    time: Optional[datetime] = None
+    operator: Optional[str] = None
+    detail: Optional[str] = None
+    is_completed: bool = False
+    is_warning: bool = False
+
+class PurchaseTrackingResponse(BaseModel):
+    """全链路追踪响应"""
+    order_id: int
+    order_code: str
+    overall_progress: int = 0
+    nodes: List[PurchaseTrackingNode] = Field(default_factory=list)
 
 
 class SupplierPerformanceResponse(BaseModel):

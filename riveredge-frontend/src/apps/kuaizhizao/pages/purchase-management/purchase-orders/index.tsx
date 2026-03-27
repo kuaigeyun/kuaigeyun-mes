@@ -10,13 +10,12 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormUploadButton, ProFormItem } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormUploadButton, ProFormItem } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Card, Row, Col, Table, Empty, Timeline, Divider, Form as AntForm, Input, InputNumber, DatePicker, Switch, List, Typography, theme, Dropdown } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, ClockCircleOutlined, CheckCircleTwoTone, CloseCircleTwoTone, SendOutlined, DownOutlined, FileTextOutlined, InboxOutlined, DollarOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
-import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { getFileDownloadUrl, uploadMultipleFiles } from '../../../../../services/file';
 import { UniTable } from '../../../../../components/uni-table';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
@@ -40,6 +39,7 @@ import { supplierApi } from '../../../../master-data/services/supply-chain';
 import { getApprovalStatus, ApprovalStatusResponse } from '../../../../../services/approvalInstance';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
+import { getUserList, type User } from '../../../../../services/user';
 import {
   DocumentStatus,
   ReviewStatusEnum,
@@ -76,10 +76,10 @@ const PO_WORKFLOW_REJECTED_STATUSES = [
 ];
 
 /** 指标卡迷你图默认序列：模块级稳定引用，避免每次 render 新数组触发图表无限 update（G2 interval 报错） */
-const PO_STAT_SPARKLINE_ARRIVAL = Object.freeze([60, 75, 80, 78, 85, 90, 88]);
-const PO_STAT_SPARKLINE_ANNUAL = Object.freeze([1000, 2000, 1500, 3000, 2500, 4000, 3500]);
-const PO_STAT_SPARKLINE_SUPPLIER = Object.freeze([92, 95, 88, 96, 94, 98, 95]);
-const PO_STAT_SPARKLINE_OVERDUE = Object.freeze([5, 8, 3, 12, 7, 15, 10]);
+const PO_STAT_SPARKLINE_ARRIVAL = [60, 75, 80, 78, 85, 90, 88];
+const PO_STAT_SPARKLINE_ANNUAL = [1000, 2000, 1500, 3000, 2500, 4000, 3500];
+const PO_STAT_SPARKLINE_SUPPLIER = [92, 95, 88, 96, 94, 98, 95];
+const PO_STAT_SPARKLINE_OVERDUE = [5, 8, 3, 12, 7, 15, 10];
 
 import { getPurchaseOrderLifecycle } from '../../../utils/purchaseOrderLifecycle';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
@@ -123,7 +123,7 @@ const PurchaseOrdersPage: React.FC = () => {
   const queryClient = useQueryClient();
   const actionRef = useRef<ActionType>(null);
   const tableSearchFormRef = useRef<any>(null);
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const { statCards: pageMetricCards, hasConfig: hasPageMetricConfig } = usePageMetrics();
   const invalidateStatistics = () => {
@@ -144,7 +144,19 @@ const PurchaseOrdersPage: React.FC = () => {
         setSuppliersLoading(false);
       }
     };
+    const loadUsers = async () => {
+      setUsersLoading(true);
+      try {
+        const res = await getUserList({ page_size: 1000, is_active: true });
+        setUsers(res.items || []);
+      } catch {
+        setUsers([]);
+      } finally {
+        setUsersLoading(false);
+      }
+    };
     loadSuppliers();
+    loadUsers();
   }, []);
 
   useEffect(() => {
@@ -201,6 +213,8 @@ const PurchaseOrdersPage: React.FC = () => {
   const [orderTypeLoading, setOrderTypeLoading] = useState(false);
   const [currencyOptions, setCurrencyOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [currencyLoading, setCurrencyLoading] = useState(false);
+  const [users, setUsers] = useState<User[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
 
   // 审批流程相关状态
   const [approvalStatus, setApprovalStatus] = useState<ApprovalStatusResponse | null>(null);
@@ -220,11 +234,6 @@ const PurchaseOrdersPage: React.FC = () => {
   const [pushToNoticeVisible, setPushToNoticeVisible] = useState(false);
   const [pushToNoticeOrder, setPushToNoticeOrder] = useState<PurchaseOrderDetail | null>(null);
   const [pushToNoticeQuantities, setPushToNoticeQuantities] = useState<Record<number, number>>({});
-  const [pushToNoticeLoading, setPushToNoticeLoading] = useState(false);
-
-  // 下推采购发票 loading
-  const [pushToInvoiceLoading, setPushToInvoiceLoading] = useState(false);
-
   // 费用分摊 Modal
   const [landingCostModalVisible, setLandingCostModalVisible] = useState(false);
   const [landingCostOrder, setLandingCostOrder] = useState<PurchaseOrder | null>(null);
@@ -242,6 +251,12 @@ const PurchaseOrdersPage: React.FC = () => {
       title: '供应商',
       dataIndex: 'supplier_name',
       width: 150,
+      ellipsis: true,
+    },
+    {
+      title: '采购员',
+      dataIndex: 'buyer_name',
+      width: 120,
       ellipsis: true,
     },
     {
@@ -270,7 +285,7 @@ const PurchaseOrdersPage: React.FC = () => {
         已驳回: { text: '已驳回' },
         已取消: { text: '已取消' },
       },
-      render: (_: unknown, record: PurchaseOrder) => {
+      render: (_: any, record: PurchaseOrder) => {
         const lifecycle = getPurchaseOrderLifecycle(record);
         const stageName = lifecycle.stageName ?? record.status ?? '草稿';
         const colorMap: Record<string, string> = {
@@ -290,7 +305,7 @@ const PurchaseOrdersPage: React.FC = () => {
       dataIndex: 'total_amount',
       width: 120,
       align: 'right',
-      render: (text) => `¥${formatAmount(text)}`,
+      render: (text: any) => `¥${formatAmount(text)}`,
     },
     {
       title: '总数量',
@@ -299,22 +314,10 @@ const PurchaseOrdersPage: React.FC = () => {
       align: 'right',
     },
     {
-      title: '明细数量',
-      dataIndex: 'items_count',
-      width: 100,
-      align: 'center',
-    },
-    {
-      title: '创建时间',
-      dataIndex: 'created_at',
-      valueType: 'dateTime',
-      width: 160,
-    },
-    {
       title: '操作',
       width: 240,
       fixed: 'right',
-      render: (_, record) => (
+      render: (_: any, record: PurchaseOrder) => (
         <Space>
           <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
             详情
@@ -378,6 +381,9 @@ const PurchaseOrdersPage: React.FC = () => {
       ),
     },
   ];
+
+  const [pushToNoticeLoading, setPushToNoticeLoading] = useState(false);
+  const [pushToInvoiceLoading, setPushToInvoiceLoading] = useState(false);
 
   // 处理详情查看
   const handleDetail = async (record: PurchaseOrder) => {
@@ -816,6 +822,8 @@ const PurchaseOrdersPage: React.FC = () => {
           delivery_date: detail.delivery_date,
           order_type: detail.order_type || '标准采购',
           price_type: 'tax_exclusive',
+          buyer_id: detail.buyer_id,
+          buyer_name: detail.buyer_name,
           notes: detail.notes,
           attachments: (detail as any).attachments || [],
           items: items.length > 0 ? items : [defaultOrderItem],
@@ -972,17 +980,17 @@ const PurchaseOrdersPage: React.FC = () => {
     {
       title: '状态',
       dataIndex: 'status',
-      render: (status) => {
+      render: (status: any) => {
         const config = getStatusDisplay(status);
-        return <Tag color={config.color}>{config.text}</Tag>;
+        return <Tag color={config.color}>{config.text}</Tag> as any;
       },
     },
     {
       title: '审核状态',
       dataIndex: 'review_status',
-      render: (status) => {
+      render: (status: any) => {
         const config = getReviewStatusDisplay(status);
-        return <Tag color={config.color}>{config.text}</Tag>;
+        return <Tag color={config.color}>{config.text}</Tag> as any;
       },
     },
     {
@@ -1029,7 +1037,7 @@ const PurchaseOrdersPage: React.FC = () => {
           ),
           backgroundChart: (
             <SimpleSparkline
-              data={statistics.trends?.arrival_rate ?? PO_STAT_SPARKLINE_ARRIVAL}
+              data={statistics?.trends?.arrival_rate || [...PO_STAT_SPARKLINE_ARRIVAL]}
               color={token.colorPrimary}
             />
           ),
@@ -1067,7 +1075,7 @@ const PurchaseOrdersPage: React.FC = () => {
           ),
           backgroundChart: (
             <SimpleSparkline
-              data={statistics.trends?.annual_total ?? PO_STAT_SPARKLINE_ANNUAL}
+              data={statistics?.trends?.annual_total || [...PO_STAT_SPARKLINE_ANNUAL]}
               color="#2f54eb"
             />
           ),
@@ -1297,6 +1305,8 @@ const PurchaseOrdersPage: React.FC = () => {
                       supplier_name: s.name ?? s.supplier_name,
                       supplier_contact: s.contact_person ?? s.contactPerson ?? s.supplier_contact,
                       supplier_phone: s.phone ?? s.supplier_phone,
+                      buyer_id: s.buyerId || s.buyer_id,
+                      buyer_name: s.buyerName || s.buyer_name,
                     });
                   }
                 }}
@@ -1348,12 +1358,32 @@ const PurchaseOrdersPage: React.FC = () => {
             <ProForm.Item name="order_type" label="订单类型" initialValue="标准采购">
               <UniDropdown
                 placeholder="请选择订单类型"
-                showSearch
-                allowClear={false}
-                loading={orderTypeLoading}
-                style={{ width: '100%' }}
                 options={orderTypeOptions}
-                quickCreate={{ label: '数据字典管理', onClick: () => navigate('/system/data-dictionaries') }}
+                loading={orderTypeLoading}
+              />
+            </ProForm.Item>
+          </Col>
+          <Col span={6}>
+            <ProForm.Item name="buyer_id" label="采购员">
+              <UniDropdown
+                placeholder="请选择采购员"
+                showSearch
+                allowClear
+                loading={usersLoading}
+                options={users.map(u => ({ label: u.full_name || u.username, value: u.id }))}
+                onChange={(_val, opt: any) => {
+                  formRef.current?.setFieldsValue({ buyer_name: opt?.label });
+                }}
+              />
+            </ProForm.Item>
+            <AntForm.Item name="buyer_name" hidden><Input /></AntForm.Item>
+          </Col>
+          <Col span={6}>
+            <ProForm.Item name="currency" label="币种" initialValue="CNY">
+              <UniDropdown
+                placeholder="请选择币种"
+                options={currencyOptions}
+                loading={currencyLoading}
               />
             </ProForm.Item>
           </Col>
