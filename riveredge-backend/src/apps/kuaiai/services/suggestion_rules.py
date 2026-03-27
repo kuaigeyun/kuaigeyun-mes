@@ -178,7 +178,7 @@ class ProductionEfficiencyRule(SuggestionRule):
                 priority=SuggestionPriority.MEDIUM,
                 title="生产效率偏低",
                 content=f"当前生产效率 {current_efficiency:.1f}%，低于目标效率 {target_efficiency:.1f}%，建议优化生产流程。",
-                action="/apps/kuaizhizao/analysis-center",
+                action="/apps/kuaireport/analysis-center/document-efficiency",
                 action_label="查看看板",
                 metadata=efficiency,
             ))

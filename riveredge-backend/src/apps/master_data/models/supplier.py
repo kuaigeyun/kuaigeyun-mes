@@ -68,6 +68,18 @@ class Supplier(BaseModel):
     # 归属采购员
     buyer_id = fields.IntField(null=True, description="归属采购员ID（关联 User.id）")
     buyer_name = fields.CharField(max_length=100, null=True, description="归属采购员姓名")
+
+    # 扩展业务信息（字典项存 value）
+    contact_title = fields.CharField(max_length=100, null=True, description="联系人职位")
+    industry_code = fields.CharField(max_length=50, null=True, description="所属行业（数据字典 INDUSTRY_SECTOR）")
+    supplier_level_code = fields.CharField(max_length=50, null=True, description="供应商等级（数据字典 SUPPLIER_LEVEL）")
+    estimated_annual_purchase = fields.DecimalField(
+        max_digits=18, decimal_places=2, null=True, description="预估年采购额（本企业向该供应商）"
+    )
+    source_channel_code = fields.CharField(max_length=50, null=True, description="来源渠道（数据字典 PARTNER_SOURCE_CHANNEL）")
+    credit_limit = fields.DecimalField(
+        max_digits=18, decimal_places=2, null=True, description="授信额度"
+    )
     
     # 状态信息
     is_active = fields.BooleanField(default=True, description="是否启用")

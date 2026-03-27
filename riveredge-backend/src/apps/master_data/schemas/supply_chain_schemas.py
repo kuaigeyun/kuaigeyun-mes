@@ -4,6 +4,8 @@
 定义供应链数据的 Pydantic Schema（客户、供应商），用于数据验证和序列化。
 """
 
+from decimal import Decimal
+
 from pydantic import BaseModel, Field, validator, ConfigDict
 from typing import Optional
 from datetime import datetime
@@ -22,6 +24,12 @@ class CustomerBase(BaseModel):
     category: Optional[str] = Field(None, max_length=50, description="客户分类")
     salesman_id: Optional[int] = Field(None, description="归属业务员ID", alias="salesmanId")
     salesman_name: Optional[str] = Field(None, max_length=100, description="归属业务员姓名", alias="salesmanName")
+    contact_title: Optional[str] = Field(None, max_length=100, description="联系人职位", alias="contactTitle")
+    industry_code: Optional[str] = Field(None, max_length=50, description="所属行业字典值", alias="industryCode")
+    customer_level_code: Optional[str] = Field(None, max_length=50, description="客户级别字典值", alias="customerLevelCode")
+    estimated_annual_purchase: Optional[Decimal] = Field(None, description="预估年采购量", alias="estimatedAnnualPurchase")
+    lead_source_code: Optional[str] = Field(None, max_length=50, description="来源渠道字典值", alias="leadSourceCode")
+    credit_limit: Optional[Decimal] = Field(None, description="信用额度", alias="creditLimit")
     is_active: bool = Field(True, alias="isActive", description="是否启用")
 
     model_config = ConfigDict(populate_by_name=True)
@@ -59,6 +67,12 @@ class CustomerUpdate(BaseModel):
     category: Optional[str] = Field(None, max_length=50, description="客户分类")
     salesman_id: Optional[int] = Field(None, description="归属业务员ID", alias="salesmanId")
     salesman_name: Optional[str] = Field(None, max_length=100, description="归属业务员姓名", alias="salesmanName")
+    contact_title: Optional[str] = Field(None, max_length=100, description="联系人职位", alias="contactTitle")
+    industry_code: Optional[str] = Field(None, max_length=50, description="所属行业字典值", alias="industryCode")
+    customer_level_code: Optional[str] = Field(None, max_length=50, description="客户级别字典值", alias="customerLevelCode")
+    estimated_annual_purchase: Optional[Decimal] = Field(None, description="预估年采购量", alias="estimatedAnnualPurchase")
+    lead_source_code: Optional[str] = Field(None, max_length=50, description="来源渠道字典值", alias="leadSourceCode")
+    credit_limit: Optional[Decimal] = Field(None, description="信用额度", alias="creditLimit")
     is_active: Optional[bool] = Field(None, alias="isActive", description="是否启用")
 
     model_config = ConfigDict(populate_by_name=True)
@@ -104,6 +118,12 @@ class SupplierBase(BaseModel):
     category: Optional[str] = Field(None, max_length=50, description="供应商分类")
     buyer_id: Optional[int] = Field(None, description="归属采购员ID", alias="buyerId")
     buyer_name: Optional[str] = Field(None, max_length=100, description="归属采购员姓名", alias="buyerName")
+    contact_title: Optional[str] = Field(None, max_length=100, description="联系人职位", alias="contactTitle")
+    industry_code: Optional[str] = Field(None, max_length=50, description="所属行业字典值", alias="industryCode")
+    supplier_level_code: Optional[str] = Field(None, max_length=50, description="供应商级别字典值", alias="supplierLevelCode")
+    estimated_annual_purchase: Optional[Decimal] = Field(None, description="预估年采购额", alias="estimatedAnnualPurchase")
+    source_channel_code: Optional[str] = Field(None, max_length=50, description="来源渠道字典值", alias="sourceChannelCode")
+    credit_limit: Optional[Decimal] = Field(None, description="授信额度", alias="creditLimit")
     is_active: bool = Field(True, alias="isActive", description="是否启用")
 
     model_config = ConfigDict(populate_by_name=True)
@@ -141,6 +161,12 @@ class SupplierUpdate(BaseModel):
     category: Optional[str] = Field(None, max_length=50, description="供应商分类")
     buyer_id: Optional[int] = Field(None, description="归属采购员ID", alias="buyerId")
     buyer_name: Optional[str] = Field(None, max_length=100, description="归属采购员姓名", alias="buyerName")
+    contact_title: Optional[str] = Field(None, max_length=100, description="联系人职位", alias="contactTitle")
+    industry_code: Optional[str] = Field(None, max_length=50, description="所属行业字典值", alias="industryCode")
+    supplier_level_code: Optional[str] = Field(None, max_length=50, description="供应商级别字典值", alias="supplierLevelCode")
+    estimated_annual_purchase: Optional[Decimal] = Field(None, description="预估年采购额", alias="estimatedAnnualPurchase")
+    source_channel_code: Optional[str] = Field(None, max_length=50, description="来源渠道字典值", alias="sourceChannelCode")
+    credit_limit: Optional[Decimal] = Field(None, description="授信额度", alias="creditLimit")
     is_active: Optional[bool] = Field(None, alias="isActive", description="是否启用")
 
     model_config = ConfigDict(populate_by_name=True)

@@ -10,7 +10,7 @@
  */
 
 import React, { Suspense, lazy } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import PageSkeleton from '../../components/page-skeleton';
 import PlaceholderPage from './components/PlaceholderPage';
 
@@ -54,6 +54,7 @@ const SalesOrdersPage = lazy(() => import('./pages/sales-management/sales-orders
 const DeliveryNotesPage = lazy(() => import('./pages/warehouse-management/delivery-notes'));
 const ShipmentNoticesPage = lazy(() => import('./pages/sales-management/shipment-notices'));
 const SampleTrialsPage = lazy(() => import('./pages/sales-management/sample-trials'));
+const CustomerFollowUpsPage = lazy(() => import('./pages/sales-management/customer-follow-ups'));
 const SalesReturnsPage = lazy(() => import('./pages/sales-management/sales-returns'));
 
 // 质量管理页面
@@ -84,7 +85,13 @@ const ToolMaintenanceRemindersPage = lazy(() => import('./pages/equipment-manage
 const EquipmentInspectionPage = lazy(() => import('./pages/equipment-management/inspection'));
 const SparePartsPage = lazy(() => import('./pages/equipment-management/spare-parts'));
 
-// 财务管理（发票、应收应付已迁至 kuaicaiwu）
+// 成本管理（分析中心已迁至快报表 kuaireport）
+const CostCalculationsPage = lazy(() => import('./pages/cost-management/cost-calculations'));
+const CostComparisonPage = lazy(() => import('./pages/cost-management/cost-comparison'));
+const CostRulesPage = lazy(() => import('./pages/cost-management/cost-rules'));
+const CostDetailsPage = lazy(() => import('./pages/cost-management/cost-details'));
+const CostOptimizationPage = lazy(() => import('./pages/cost-management/cost-optimization'));
+const CostReportPage = lazy(() => import('./pages/cost-management/cost-report'));
 
 // 仓储管理页面
 const InventoryPage = lazy(() => import('./pages/warehouse-management/inventory'));
@@ -124,9 +131,20 @@ const HourlyRatesPage = lazy(() => import('./pages/performance/hourly-rates'));
 const KpiDefinitionsPage = lazy(() => import('./pages/performance/kpi-definitions'));
 const SummariesPage = lazy(() => import('./pages/performance/summaries'));
 
+/** 分析中心已迁至快报表：旧书签 /apps/kuaizhizao/analysis-center/... 跳转至对应快报表路径 */
+const RedirectAnalysisCenterToKuaireport: React.FC = () => {
+  const loc = useLocation();
+  const raw = loc.pathname.replace(/^\/apps\/kuaizhizao\/analysis-center\/?/, '').replace(/\/$/, '');
+  const to = raw
+    ? `/apps/kuaireport/analysis-center/${raw}`
+    : '/apps/kuaireport/analysis-center/document-timing';
+  return <Navigate to={to} replace />;
+};
+
 const KuaizhizaoApp: React.FC = () => {
   return (
     <Routes>
+      <Route path="analysis-center/*" element={<RedirectAnalysisCenterToKuaireport />} />
       {/* 计划管理路由 */}
       <Route path="plan-management/demand-management" element={withPageSuspense(DemandManagementPage)} />
       <Route path="plan-management/demand-computation" element={withPageSuspense(DemandComputationPage)} />
@@ -164,6 +182,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="sales-management/quotations" element={withPageSuspense(QuotationsPage)} />
       <Route path="sales-management/sales-orders" element={withPageSuspense(SalesOrdersPage)} />
       <Route path="sales-management/shipment-notices" element={withPageSuspense(ShipmentNoticesPage)} />
+      <Route path="sales-management/customer-follow-ups" element={withPageSuspense(CustomerFollowUpsPage)} />
       <Route path="sales-management/sample-trials" element={withPageSuspense(SampleTrialsPage)} />
       <Route path="sales-management/sales-returns" element={withPageSuspense(SalesReturnsPage)} />
 
@@ -228,7 +247,14 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="warehouse-management/line-side-warehouse" element={withPageSuspense(LineSideWarehousePage)} />
       <Route path="warehouse-management/backflush-records" element={withPageSuspense(BackflushRecordsPage)} />
 
-      {/* 报表路由（占位） */}
+      {/* 成本管理 */}
+      <Route path="cost-management/cost-calculations" element={withPageSuspense(CostCalculationsPage)} />
+      <Route path="cost-management/cost-comparison" element={withPageSuspense(CostComparisonPage)} />
+      <Route path="cost-management/cost-rules" element={withPageSuspense(CostRulesPage)} />
+      <Route path="cost-management/cost-details" element={withPageSuspense(CostDetailsPage)} />
+      <Route path="cost-management/cost-optimization" element={withPageSuspense(CostOptimizationPage)} />
+      <Route path="cost-management/cost-report" element={withPageSuspense(CostReportPage)} />
+
       <Route path="sales-management/reports/sales-order-query" element={<PlaceholderPage title="销售订单综合查询" />} />
       <Route path="sales-management/reports/order-execution-tracking" element={<PlaceholderPage title="销售订单执行跟踪" />} />
       <Route path="sales-management/reports/customer-sales-summary" element={<PlaceholderPage title="客户销售业绩汇总" />} />

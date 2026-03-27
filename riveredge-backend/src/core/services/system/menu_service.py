@@ -686,7 +686,6 @@ class MenuService:
             # 兼容 title 和 name 字段（manifest.json 使用 title，优先使用 title）
             menu_name = menu_item.get("title") or menu_item.get("name", "")
             
-            # 如果是根菜单（没有父菜单），且应用有自定义名称，则使用应用名称作为菜单名称
             if parent_id is None and app_name:
                 menu_name = app_name
 

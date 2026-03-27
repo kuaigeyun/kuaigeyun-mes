@@ -279,6 +279,7 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.receipt_notice",  # 收货通知模型
                 "apps.kuaizhizao.models.replenishment_suggestion",  # 补货建议模型
                 "apps.kuaizhizao.models.sample_trial",  # 样品试用模型
+                "apps.kuaizhizao.models.customer_follow_up",  # 客户跟进记录模型
                 "apps.kuaizhizao.models.scheduling_config",  # 排程配置模型
                 "apps.kuaizhizao.models.shipment_notice",  # 发货通知模型
                 "apps.kuaizhizao.models.spare_part",  # 备品备件模型

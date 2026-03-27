@@ -4,7 +4,7 @@
  * 提供客户的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
@@ -13,7 +13,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
-import { customerApi, getUserOptions } from '../../../services/supply-chain';
+import { customerApi, getUserOptions, getDictionaryOptions } from '../../../services/supply-chain';
 import { CustomerFormModal } from '../../../components/CustomerFormModal';
 import type { Customer, CustomerCreate } from '../../../types/supply-chain';
 import { batchImport } from '../../../../../utils/batchOperations';
@@ -36,6 +36,37 @@ const CustomersPage: React.FC = () => {
   // Modal 相关状态（创建/编辑客户）
   const [modalVisible, setModalVisible] = useState(false);
   const [editUuid, setEditUuid] = useState<string | null>(null);
+
+  const [dictLabelMaps, setDictLabelMaps] = useState<Record<string, Record<string, string>>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const packs = await Promise.all([
+          getDictionaryOptions('INDUSTRY_SECTOR'),
+          getDictionaryOptions('CUSTOMER_LEVEL'),
+          getDictionaryOptions('PARTNER_SOURCE_CHANNEL'),
+        ]);
+        if (cancelled) return;
+        setDictLabelMaps({
+          INDUSTRY_SECTOR: Object.fromEntries(packs[0].map((o) => [o.value, o.label])),
+          CUSTOMER_LEVEL: Object.fromEntries(packs[1].map((o) => [o.value, o.label])),
+          PARTNER_SOURCE_CHANNEL: Object.fromEntries(packs[2].map((o) => [o.value, o.label])),
+        });
+      } catch {
+        if (!cancelled) setDictLabelMaps({});
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const dictLabel = (dictCode: string, value?: string) => {
+    if (value == null || value === '') return '—';
+    return dictLabelMaps[dictCode]?.[value] ?? value;
+  };
 
   /**
    * 处理新建客户
@@ -379,10 +410,16 @@ const CustomersPage: React.FC = () => {
         t('field.customer.name'),
         t('field.customer.shortName'),
         t('field.customer.contactPerson'),
+        t('field.customer.contactTitle'),
         t('field.customer.phone'),
         t('field.customer.email'),
         t('field.customer.address'),
         t('field.customer.category'),
+        t('field.customer.industry'),
+        t('field.customer.level'),
+        t('field.customer.leadSource'),
+        t('field.customer.estimatedAnnualPurchase'),
+        t('field.customer.creditLimit'),
         t('field.customer.salesman'),
         t('app.master-data.warehouses.status'),
         t('common.createdAt'),
@@ -395,10 +432,24 @@ const CustomersPage: React.FC = () => {
           item.name || '',
           item.shortName || '',
           item.contactPerson || '',
+          item.contactTitle || '',
           item.phone || '',
           item.email || '',
           item.address || '',
           item.category || '',
+          item.industryCode
+            ? dictLabelMaps['INDUSTRY_SECTOR']?.[item.industryCode] ?? item.industryCode
+            : '',
+          item.customerLevelCode
+            ? dictLabelMaps['CUSTOMER_LEVEL']?.[item.customerLevelCode] ?? item.customerLevelCode
+            : '',
+          item.leadSourceCode
+            ? dictLabelMaps['PARTNER_SOURCE_CHANNEL']?.[item.leadSourceCode] ?? item.leadSourceCode
+            : '',
+          item.estimatedAnnualPurchase != null && item.estimatedAnnualPurchase !== ''
+            ? String(item.estimatedAnnualPurchase)
+            : '',
+          item.creditLimit != null && item.creditLimit !== '' ? String(item.creditLimit) : '',
           item.salesmanName || '',
           (item.isActive ?? (item as any)?.is_active) ? t('common.enabled') : t('common.disabled'),
           item.createdAt ? new Date(item.createdAt).toLocaleString() : '',
@@ -465,6 +516,47 @@ const CustomersPage: React.FC = () => {
       dataIndex: 'category',
       width: 120,
       hideInSearch: true,
+    },
+    {
+      title: t('field.customer.industry'),
+      dataIndex: 'industryCode',
+      width: 110,
+      hideInSearch: true,
+      render: (_, r) => dictLabel('INDUSTRY_SECTOR', r.industryCode),
+    },
+    {
+      title: t('field.customer.level'),
+      dataIndex: 'customerLevelCode',
+      width: 100,
+      hideInSearch: true,
+      render: (_, r) => dictLabel('CUSTOMER_LEVEL', r.customerLevelCode),
+    },
+    {
+      title: t('field.customer.leadSource'),
+      dataIndex: 'leadSourceCode',
+      width: 110,
+      hideInSearch: true,
+      render: (_, r) => dictLabel('PARTNER_SOURCE_CHANNEL', r.leadSourceCode),
+    },
+    {
+      title: t('field.customer.estimatedAnnualPurchase'),
+      dataIndex: 'estimatedAnnualPurchase',
+      width: 120,
+      hideInSearch: true,
+      render: (_, r) =>
+        r.estimatedAnnualPurchase != null && r.estimatedAnnualPurchase !== ''
+          ? Number(r.estimatedAnnualPurchase).toLocaleString()
+          : '—',
+    },
+    {
+      title: t('field.customer.creditLimit'),
+      dataIndex: 'creditLimit',
+      width: 110,
+      hideInSearch: true,
+      render: (_, r) =>
+        r.creditLimit != null && r.creditLimit !== ''
+          ? Number(r.creditLimit).toLocaleString()
+          : '—',
     },
     {
       title: t('field.customer.salesman'),
@@ -559,6 +651,10 @@ const CustomersPage: React.FC = () => {
       dataIndex: 'contactPerson',
     },
     {
+      title: t('field.customer.contactTitle'),
+      dataIndex: 'contactTitle',
+    },
+    {
       title: t('field.customer.phone'),
       dataIndex: 'phone',
     },
@@ -574,6 +670,37 @@ const CustomersPage: React.FC = () => {
     {
       title: t('field.customer.category'),
       dataIndex: 'category',
+    },
+    {
+      title: t('field.customer.industry'),
+      dataIndex: 'industryCode',
+      render: (_, r) => dictLabel('INDUSTRY_SECTOR', r.industryCode),
+    },
+    {
+      title: t('field.customer.level'),
+      dataIndex: 'customerLevelCode',
+      render: (_, r) => dictLabel('CUSTOMER_LEVEL', r.customerLevelCode),
+    },
+    {
+      title: t('field.customer.leadSource'),
+      dataIndex: 'leadSourceCode',
+      render: (_, r) => dictLabel('PARTNER_SOURCE_CHANNEL', r.leadSourceCode),
+    },
+    {
+      title: t('field.customer.estimatedAnnualPurchase'),
+      dataIndex: 'estimatedAnnualPurchase',
+      render: (_, r) =>
+        r.estimatedAnnualPurchase != null && r.estimatedAnnualPurchase !== ''
+          ? Number(r.estimatedAnnualPurchase).toLocaleString()
+          : '—',
+    },
+    {
+      title: t('field.customer.creditLimit'),
+      dataIndex: 'creditLimit',
+      render: (_, r) =>
+        r.creditLimit != null && r.creditLimit !== ''
+          ? Number(r.creditLimit).toLocaleString()
+          : '—',
     },
     {
       title: t('field.customer.salesman'),

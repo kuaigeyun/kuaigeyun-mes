@@ -24,6 +24,37 @@ export function extractAppCodeFromPath(path: string | undefined): string | null 
 }
 
 /**
+ * 数据库或历史同步可能把根菜单的 title（形如 app.some-app.name）错误写到子菜单上。
+ * 若仍按该 key 直译，侧边栏会出现多个应用名。此时应走 path / 子节点 path 推导业务标题。
+ */
+function findFirstMenuPathDeep(items?: { path?: string; children?: any[] }[]): string | null {
+  if (!items?.length) return null;
+  for (const item of items) {
+    if (item?.path) return item.path;
+    if (item?.children?.length) {
+      const found = findFirstMenuPathDeep(item.children);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+function isAppNameKeyMisassignedToNonRootPath(
+  name: string,
+  path: string | undefined,
+  children?: { path?: string; children?: any[] }[]
+): boolean {
+  const m = name.match(/^app\.([a-z0-9-]+)\.name$/i);
+  if (!m) return false;
+  const appCode = m[1];
+  const effectivePath = path || findFirstMenuPathDeep(children) || undefined;
+  if (!effectivePath) return false;
+  if (extractAppCodeFromPath(effectivePath) !== appCode) return false;
+  const normalized = effectivePath.replace(/\/$/, '');
+  return normalized !== `/apps/${appCode}`;
+}
+
+/**
  * 应用显示名唯一来源：仅从 locale 的 app.${appCode}.name 取值，避免与 API 返回的 name 竞争
  *
  * @param appCode 应用 code（如 master-data）
@@ -59,8 +90,10 @@ export function translateMenuName(
 
   // 1. 如果 name 是翻译 key（包含点号且不是路径），直接翻译
   if (name.includes('.') && !name.startsWith('/')) {
-    const translated = t(name, { defaultValue: name });
-    if (translated !== name) return translated;
+    if (!isAppNameKeyMisassignedToNonRootPath(name, path)) {
+      const translated = t(name, { defaultValue: name });
+      if (translated !== name) return translated;
+    }
     // 翻译失败时，禁止回退到应用名，否则报表等子菜单会错误显示为「快格轻制造」
     // 直接尝试路径翻译或返回原 key
   }
@@ -109,9 +142,11 @@ export function translateAppMenuItemName(
   // 1. 若 name 本身是翻译 key（如 app.kuaizhizao.menu.warehouse-management.inbound-group），优先直接翻译
   // 修复：分组菜单的 title 为 i18n key 时，此前被路径推导逻辑覆盖，导致二级菜单均显示父级名称
   if (name.includes('.') && !name.startsWith('/')) {
-    const directTranslated = t(name, { defaultValue: name });
-    if (directTranslated !== name && directTranslated.trim() !== '') {
-      return directTranslated;
+    if (!isAppNameKeyMisassignedToNonRootPath(name, path, children)) {
+      const directTranslated = t(name, { defaultValue: name });
+      if (directTranslated !== name && directTranslated.trim() !== '') {
+        return directTranslated;
+      }
     }
   }
 

@@ -30,6 +30,7 @@ from apps.kuaizhizao.schemas.quotation import (
 from apps.kuaizhizao.schemas.sales_order import SalesOrderCreate, SalesOrderItemCreate
 from apps.kuaizhizao.constants import DemandStatus, ReviewStatus
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
+from infra.models.user import User
 from infra.services.business_config_service import BusinessConfigService
 
 
@@ -258,7 +259,6 @@ class QuotationService:
     ) -> QuotationListResponse:
         """获取报价单列表"""
         from tortoise.expressions import Q
-        from infra.models.user import User
 
         query = Quotation.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         

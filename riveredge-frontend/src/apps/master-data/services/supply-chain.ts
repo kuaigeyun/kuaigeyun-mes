@@ -6,6 +6,7 @@
 
 import { api } from '../../../services/api';
 import { getUserList } from '../../../services/user';
+import { getDataDictionaryByCode, getDictionaryItemList } from '../../../services/dataDictionary';
 import type {
   Customer,
   CustomerCreate,
@@ -109,6 +110,19 @@ export const getUserOptions = async () => {
     }));
   } catch (error) {
     console.error('获取用户列表失败:', error);
+    return [];
+  }
+};
+
+/** 数据字典下拉选项（用于客户/供应商表单 optionsMap） */
+export const getDictionaryOptions = async (dictionaryCode: string) => {
+  try {
+    const dict = await getDataDictionaryByCode(dictionaryCode);
+    const items = await getDictionaryItemList(dict.uuid, true);
+    return items
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+      .map((item) => ({ label: item.label, value: item.value }));
+  } catch {
     return [];
   }
 };

@@ -4,7 +4,7 @@
  * 提供供应商的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
@@ -13,7 +13,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
-import { supplierApi, getUserOptions } from '../../../services/supply-chain';
+import { supplierApi, getUserOptions, getDictionaryOptions } from '../../../services/supply-chain';
 import { SupplierFormModal } from '../../../components/SupplierFormModal';
 import type { Supplier, SupplierCreate } from '../../../types/supply-chain';
 import { batchImport } from '../../../../../utils/batchOperations';
@@ -37,6 +37,37 @@ const SuppliersPage: React.FC = () => {
   // Modal 相关状态（创建/编辑供应商）
   const [modalVisible, setModalVisible] = useState(false);
   const [editUuid, setEditUuid] = useState<string | null>(null);
+
+  const [dictLabelMaps, setDictLabelMaps] = useState<Record<string, Record<string, string>>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const packs = await Promise.all([
+          getDictionaryOptions('INDUSTRY_SECTOR'),
+          getDictionaryOptions('SUPPLIER_LEVEL'),
+          getDictionaryOptions('PARTNER_SOURCE_CHANNEL'),
+        ]);
+        if (cancelled) return;
+        setDictLabelMaps({
+          INDUSTRY_SECTOR: Object.fromEntries(packs[0].map((o) => [o.value, o.label])),
+          SUPPLIER_LEVEL: Object.fromEntries(packs[1].map((o) => [o.value, o.label])),
+          PARTNER_SOURCE_CHANNEL: Object.fromEntries(packs[2].map((o) => [o.value, o.label])),
+        });
+      } catch {
+        if (!cancelled) setDictLabelMaps({});
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const dictLabel = (dictCode: string, value?: string) => {
+    if (value == null || value === '') return '—';
+    return dictLabelMaps[dictCode]?.[value] ?? value;
+  };
 
   /**
    * 处理新建供应商
@@ -384,10 +415,16 @@ const SuppliersPage: React.FC = () => {
         t('field.supplier.name'),
         t('field.supplier.shortName'),
         t('field.supplier.contactPerson'),
+        t('field.supplier.contactTitle'),
         t('field.supplier.phone'),
         t('field.supplier.email'),
         t('field.supplier.address'),
         t('field.supplier.category'),
+        t('field.supplier.industry'),
+        t('field.supplier.level'),
+        t('field.supplier.sourceChannel'),
+        t('field.supplier.estimatedAnnualPurchase'),
+        t('field.supplier.creditLimit'),
         t('field.supplier.buyer'),
         t('app.master-data.warehouses.status'),
         t('common.createdAt'),
@@ -400,10 +437,22 @@ const SuppliersPage: React.FC = () => {
           item.name || '',
           item.shortName || '',
           item.contactPerson || '',
+          item.contactTitle || '',
           item.phone || '',
           item.email || '',
           item.address || '',
           item.category || '',
+          item.industryCode ? dictLabelMaps['INDUSTRY_SECTOR']?.[item.industryCode] ?? item.industryCode : '',
+          item.supplierLevelCode
+            ? dictLabelMaps['SUPPLIER_LEVEL']?.[item.supplierLevelCode] ?? item.supplierLevelCode
+            : '',
+          item.sourceChannelCode
+            ? dictLabelMaps['PARTNER_SOURCE_CHANNEL']?.[item.sourceChannelCode] ?? item.sourceChannelCode
+            : '',
+          item.estimatedAnnualPurchase != null && item.estimatedAnnualPurchase !== ''
+            ? String(item.estimatedAnnualPurchase)
+            : '',
+          item.creditLimit != null && item.creditLimit !== '' ? String(item.creditLimit) : '',
           item.buyerName || '',
           item.isActive ? t('common.enabled') : t('common.disabled'),
           item.createdAt ? new Date(item.createdAt).toLocaleString() : '',
@@ -476,6 +525,47 @@ const SuppliersPage: React.FC = () => {
       dataIndex: 'category',
       width: 120,
       hideInSearch: true,
+    },
+    {
+      title: t('field.supplier.industry'),
+      dataIndex: 'industryCode',
+      width: 110,
+      hideInSearch: true,
+      render: (_, r) => dictLabel('INDUSTRY_SECTOR', r.industryCode),
+    },
+    {
+      title: t('field.supplier.level'),
+      dataIndex: 'supplierLevelCode',
+      width: 100,
+      hideInSearch: true,
+      render: (_, r) => dictLabel('SUPPLIER_LEVEL', r.supplierLevelCode),
+    },
+    {
+      title: t('field.supplier.sourceChannel'),
+      dataIndex: 'sourceChannelCode',
+      width: 110,
+      hideInSearch: true,
+      render: (_, r) => dictLabel('PARTNER_SOURCE_CHANNEL', r.sourceChannelCode),
+    },
+    {
+      title: t('field.supplier.estimatedAnnualPurchase'),
+      dataIndex: 'estimatedAnnualPurchase',
+      width: 120,
+      hideInSearch: true,
+      render: (_, r) =>
+        r.estimatedAnnualPurchase != null && r.estimatedAnnualPurchase !== ''
+          ? Number(r.estimatedAnnualPurchase).toLocaleString()
+          : '—',
+    },
+    {
+      title: t('field.supplier.creditLimit'),
+      dataIndex: 'creditLimit',
+      width: 110,
+      hideInSearch: true,
+      render: (_, r) =>
+        r.creditLimit != null && r.creditLimit !== ''
+          ? Number(r.creditLimit).toLocaleString()
+          : '—',
     },
     {
       title: t('field.supplier.buyer'),
@@ -574,6 +664,10 @@ const SuppliersPage: React.FC = () => {
       dataIndex: 'contactPerson',
     },
     {
+      title: t('field.supplier.contactTitle'),
+      dataIndex: 'contactTitle',
+    },
+    {
       title: t('field.supplier.phone'),
       dataIndex: 'phone',
     },
@@ -589,6 +683,37 @@ const SuppliersPage: React.FC = () => {
     {
       title: t('field.supplier.category'),
       dataIndex: 'category',
+    },
+    {
+      title: t('field.supplier.industry'),
+      dataIndex: 'industryCode',
+      render: (_, r) => dictLabel('INDUSTRY_SECTOR', r.industryCode),
+    },
+    {
+      title: t('field.supplier.level'),
+      dataIndex: 'supplierLevelCode',
+      render: (_, r) => dictLabel('SUPPLIER_LEVEL', r.supplierLevelCode),
+    },
+    {
+      title: t('field.supplier.sourceChannel'),
+      dataIndex: 'sourceChannelCode',
+      render: (_, r) => dictLabel('PARTNER_SOURCE_CHANNEL', r.sourceChannelCode),
+    },
+    {
+      title: t('field.supplier.estimatedAnnualPurchase'),
+      dataIndex: 'estimatedAnnualPurchase',
+      render: (_, r) =>
+        r.estimatedAnnualPurchase != null && r.estimatedAnnualPurchase !== ''
+          ? Number(r.estimatedAnnualPurchase).toLocaleString()
+          : '—',
+    },
+    {
+      title: t('field.supplier.creditLimit'),
+      dataIndex: 'creditLimit',
+      render: (_, r) =>
+        r.creditLimit != null && r.creditLimit !== ''
+          ? Number(r.creditLimit).toLocaleString()
+          : '—',
     },
     {
       title: t('field.supplier.buyer'),

@@ -10,10 +10,11 @@ import {
   ClockCircleOutlined,
   RightOutlined
 } from '@ant-design/icons';
-import { Line, TinyLine } from '@ant-design/charts';
+import { Line } from '@ant-design/charts';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { getMenuBadgeCounts } from '../../../../services/dashboard';
+import { getMenuBadgeCounts } from '../../../../../services/dashboard';
+import { SimpleSparkline } from '../../../../../components/common/SimpleSparkline';
 
 const { Title, Text } = Typography;
 
@@ -187,10 +188,9 @@ const InspectionCenter: React.FC = () => {
                   valueStyle={{ color: '#52c41a', fontWeight: 'bold' }}
                 />
                 <div style={{ height: 40, marginTop: 12 }}>
-                  <TinyLine
+                  <SimpleSparkline
                     height={40}
-                    autoFit
-                    smooth
+                    type="line"
                     data={[98, 97, 99, 98, 96, 98, 100]}
                     color="#52c41a"
                   />

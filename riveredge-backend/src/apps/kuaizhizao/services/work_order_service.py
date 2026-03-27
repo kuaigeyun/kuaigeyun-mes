@@ -8,7 +8,7 @@ Date: 2025-01-01
 """
 
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Tuple
 from decimal import Decimal
 
@@ -1644,7 +1644,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             - delay_days: 延期天数
             - status: 工单状态
         """
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         query = WorkOrder.filter(
             tenant_id=tenant_id
         )
@@ -1656,10 +1656,9 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             # 默认只查询未完成的工单
             query = query.filter(status__in=['released', 'in_progress'])
 
-        # 查询有计划结束日期且已过期的工单
+        # 查询有计划结束日期的工单，过期判断在 Python 侧统一时区后处理
         query = query.filter(
             planned_end_date__isnull=False,
-            planned_end_date__lt=now
         )
 
         work_orders = await query.all()
@@ -1667,13 +1666,27 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
         for wo in work_orders:
             if wo.planned_end_date:
+                planned_end = wo.planned_end_date
+                # 统一时间基准，避免 naive / aware datetime 直接相减导致 TypeError
+                if planned_end.tzinfo is None:
+                    planned_end = planned_end.replace(tzinfo=timezone.utc)
+                else:
+                    planned_end = planned_end.astimezone(timezone.utc)
+                if planned_end >= now:
+                    continue
+
                 # 计算延期天数
                 if wo.actual_end_date:
                     # 如果已完工，使用实际结束日期
-                    delay_days = (wo.actual_end_date - wo.planned_end_date).days
+                    actual_end = wo.actual_end_date
+                    if actual_end.tzinfo is None:
+                        actual_end = actual_end.replace(tzinfo=timezone.utc)
+                    else:
+                        actual_end = actual_end.astimezone(timezone.utc)
+                    delay_days = (actual_end - planned_end).days
                 else:
                     # 如果未完工，使用当前日期
-                    delay_days = (now - wo.planned_end_date).days
+                    delay_days = (now - planned_end).days
 
                 # 如果超过阈值，加入列表
                 if delay_days > days_threshold:

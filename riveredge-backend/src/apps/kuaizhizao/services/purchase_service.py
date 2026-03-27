@@ -17,6 +17,7 @@ from tortoise.expressions import Q
 
 from apps.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+from infra.models.user import User as CurrentUser
 from loguru import logger
 
 from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem, PurchaseOrderChange

@@ -3,7 +3,6 @@
  */
 
 import type { FieldConfig } from './form-schemas';
-import { getUserOptions } from '../services/supply-chain';
 
 export const customerFormSchema: FieldConfig[] = [
   {
@@ -52,6 +51,55 @@ export const customerFormSchema: FieldConfig[] = [
     rules: [{ maxLength: 100, messageKey: 'field.customer.contactPersonMaxLength' }],
   },
   {
+    name: 'contactTitle',
+    type: 'text',
+    labelKey: 'field.customer.contactTitle',
+    placeholderKey: 'field.customer.contactTitlePlaceholder',
+    maxLength: 100,
+    colSpan: 12,
+    rules: [{ maxLength: 100, messageKey: 'field.customer.contactTitleMaxLength' }],
+  },
+  {
+    name: 'industryCode',
+    type: 'select',
+    labelKey: 'field.customer.industry',
+    placeholderKey: 'field.customer.industryPlaceholder',
+    colSpan: 12,
+    allowClear: true,
+  },
+  {
+    name: 'customerLevelCode',
+    type: 'select',
+    labelKey: 'field.customer.level',
+    placeholderKey: 'field.customer.levelPlaceholder',
+    colSpan: 12,
+    allowClear: true,
+  },
+  {
+    name: 'leadSourceCode',
+    type: 'select',
+    labelKey: 'field.customer.leadSource',
+    placeholderKey: 'field.customer.leadSourcePlaceholder',
+    colSpan: 12,
+    allowClear: true,
+  },
+  {
+    name: 'estimatedAnnualPurchase',
+    type: 'number',
+    labelKey: 'field.customer.estimatedAnnualPurchase',
+    placeholderKey: 'field.customer.estimatedAnnualPurchasePlaceholder',
+    colSpan: 12,
+    fieldProps: { min: 0, precision: 2, style: { width: '100%' } },
+  },
+  {
+    name: 'creditLimit',
+    type: 'number',
+    labelKey: 'field.customer.creditLimit',
+    placeholderKey: 'field.customer.creditLimitPlaceholder',
+    colSpan: 12,
+    fieldProps: { min: 0, precision: 2, style: { width: '100%' } },
+  },
+  {
     name: 'phone',
     type: 'text',
     labelKey: 'field.customer.phone',
@@ -87,7 +135,6 @@ export const customerFormSchema: FieldConfig[] = [
     labelKey: 'field.customer.salesman',
     placeholderKey: 'field.customer.salesmanPlaceholder',
     colSpan: 12,
-    optionsApi: getUserOptions,
     allowClear: true,
   },
   {

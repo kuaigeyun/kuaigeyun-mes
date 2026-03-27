@@ -94,6 +94,7 @@ from .receipt_notice_item import ReceiptNoticeItem
 from .purchase_logistics import PurchaseLogistics
 from .sample_trial import SampleTrial
 from .sample_trial_item import SampleTrialItem
+from .customer_follow_up import CustomerFollowUp
 # 统一需求模型（新设计）
 from .demand import Demand
 from .demand_item import DemandItem
@@ -219,6 +220,7 @@ __all__ = [
     'PurchaseLogistics',
     'SampleTrial',
     'SampleTrialItem',
+    'CustomerFollowUp',
 
     # 统一需求管理模块（新设计）
     'Demand',
