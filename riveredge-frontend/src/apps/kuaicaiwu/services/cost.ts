@@ -12,6 +12,7 @@ export const costRuleApi = {
   update: async (uuid: string, data: any) => apiRequest(`${COST_BASE}/cost/rules/${uuid}`, { method: 'PUT', data }),
   delete: async (uuid: string) => apiRequest(`${COST_BASE}/cost/rules/${uuid}`, { method: 'DELETE' }),
   get: async (uuid: string) => apiRequest(`${COST_BASE}/cost/rules/${uuid}`, { method: 'GET' }),
+  initPresets: async () => apiRequest(`${COST_BASE}/cost/rules/init-presets`, { method: 'POST' }),
 };
 
 export const costCalculationApi = {
@@ -22,6 +23,7 @@ export const costCalculationApi = {
   compareCosts: async (productId: number) => apiRequest(`${COST_BASE}/cost/calculations/product/${productId}/compare`, { method: 'GET' }),
   analyzeCost: async (productId: number) => apiRequest(`${COST_BASE}/cost/calculations/product/${productId}/analyze`, { method: 'GET' }),
   getOptimization: async (productId: number) => apiRequest(`${COST_BASE}/cost/calculations/product/${productId}/optimization`, { method: 'GET' }),
+  performMonthlySettlement: async (data: any) => apiRequest(`${COST_BASE}/cost/calculations/monthly-settlement`, { method: 'POST', data }),
 };
 
 export const productionCostApi = {

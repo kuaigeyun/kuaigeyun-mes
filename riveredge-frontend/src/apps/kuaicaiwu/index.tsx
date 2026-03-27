@@ -10,7 +10,6 @@
 import React, { Suspense, lazy } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import PageSkeleton from '../../components/page-skeleton';
-import PlaceholderPage from './components/PlaceholderPage';
 
 const withPageSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
   <Suspense fallback={<PageSkeleton />}><LazyComponent /></Suspense>
@@ -37,6 +36,7 @@ const CostComparisonPage = lazy(() => import('./pages/cost-management/cost-compa
 const CostOptimizationPage = lazy(() => import('./pages/cost-management/cost-optimization'));
 const CostReportPage = lazy(() => import('./pages/cost-management/cost-report'));
 const CostCalculationTabsPage = lazy(() => import('./pages/cost-management/cost-calculation-tabs'));
+const MonthlySettlementPage = lazy(() => import('./pages/cost-management/monthly-settlement'));
 
 // 管理报表
 const ManagementDashboard = lazy(() => import('./pages/management-dashboard'));
@@ -70,6 +70,7 @@ const KuaicaiwuApp: React.FC = () => {
       <Route path="cost-management/outsource-cost" element={withPageSuspense(CostCalculationTabsPage)} />
       <Route path="cost-management/purchase-cost" element={withPageSuspense(CostCalculationTabsPage)} />
       <Route path="cost-management/quality-cost" element={withPageSuspense(CostCalculationTabsPage)} />
+      <Route path="cost-management/monthly-settlement" element={withPageSuspense(MonthlySettlementPage)} />
       <Route path="management-dashboard" element={withPageSuspense(ManagementDashboard)} />
 
       {/* 默认路由 */}

@@ -2762,7 +2762,16 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
 
   return (
     <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: '32px', height: '32px' }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          minHeight: '32px',
+          flexWrap: 'wrap',
+          rowGap: 8,
+        }}
+      >
       <Button
           ref={buttonRef}
           onClick={handleOpen}

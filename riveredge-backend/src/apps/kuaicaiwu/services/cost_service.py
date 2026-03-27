@@ -81,6 +81,9 @@ class CostRuleService(AppBaseService[CostRule]):
                 rule_type=cost_rule_data.rule_type,
                 cost_type=cost_rule_data.cost_type,
                 calculation_method=cost_rule_data.calculation_method,
+                allocation_basis=cost_rule_data.allocation_basis,
+                wip_valuation_method=cost_rule_data.wip_valuation_method,
+                source_module=cost_rule_data.source_module,
                 calculation_formula=cost_rule_data.calculation_formula,
                 rule_parameters=cost_rule_data.rule_parameters,
                 is_active=cost_rule_data.is_active,
@@ -142,6 +145,56 @@ class CostRuleService(AppBaseService[CostRule]):
             cost_rule = await self.get_by_id(tenant_id, cost_rule_id, raise_if_not_found=True)
             cost_rule.deleted_at = datetime.utcnow()
             await cost_rule.save()
+
+    async def init_preset_rules(self, tenant_id: int, created_by: int):
+        """初始化中小制造企业常用成本核算规则"""
+        presets = [
+            {
+                "code": "RULE_MAT_WAVG",
+                "name": "直接材料-加权平均法",
+                "rule_type": "材料成本",
+                "cost_type": "直接材料",
+                "calculation_method": "按数量",
+                "allocation_basis": "产量",
+                "source_module": "仓库",
+                "description": "根据当期实际领用数量和系统计算的加权平均单价核算"
+            },
+            {
+                "code": "RULE_LAB_HOUR",
+                "name": "直接人工-工时分摊法",
+                "rule_type": "人工成本",
+                "cost_type": "直接人工",
+                "calculation_method": "按工时",
+                "allocation_basis": "工时",
+                "source_module": "报工",
+                "description": "根据当期总人工费按报工工时比例分摊"
+            },
+            {
+                "code": "RULE_OVH_QTY",
+                "name": "制造费用-产量分摊法",
+                "rule_type": "制造费用",
+                "cost_type": "制造费用",
+                "calculation_method": "按数量",
+                "allocation_basis": "产量",
+                "source_module": "报工",
+                "description": "当期制造费用按各产品产量比例均匀分摊"
+            }
+        ]
+        
+        user_info = await self.get_user_info(created_by)
+        for p in presets:
+            await CostRule.get_or_create(
+                tenant_id=tenant_id,
+                code=p["code"],
+                defaults={
+                    **p,
+                    "uuid": str(uuid.uuid4()),
+                    "created_by": created_by,
+                    "updated_by": created_by,
+                    "created_by_name": user_info["name"],
+                    "updated_by_name": user_info["name"]
+                }
+            )
 
 
 class CostCalculationService(AppBaseService[CostCalculation]):
@@ -564,3 +617,24 @@ class CostCalculationService(AppBaseService[CostCalculation]):
         elif manufacturing_cost_difference < 0:
             analysis_parts.append(f"制造费用节约 {abs(manufacturing_cost_difference)}，可能原因：设备利用率提高、制造费用率下降等")
         return "；".join(analysis_parts) if analysis_parts else "成本差异在合理范围内"
+
+    async def perform_monthly_settlement(
+        self,
+        tenant_id: int,
+        year: int,
+        month: int,
+        indirect_costs: Dict[str, Decimal],
+        created_by: int
+    ) -> List[CostCalculationResponse]:
+        """执行月度成本结转（落地方案）"""
+        # 1. 识别当期所有涉及的成本对象（产品、工单）
+        # 2. 收集当期投入：原材料（Picking）、直接人工（Reporting）、制造费用（Input）
+        # 3. 根据租户配置的 CostRules 进行分摊
+        # 4. 计算 WIP 和 完工入库成本
+        # 5. 生成 CostCalculation 记录
+        
+        logger.info(f"Starting monthly settlement for {tenant_id}, period {year}-{month}")
+        
+        # 这是一个复杂的流程，此处先实现框架
+        # TODO: 详细实现分摊算法
+        return []

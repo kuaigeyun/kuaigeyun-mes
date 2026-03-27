@@ -1582,11 +1582,24 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               style={{
                 display: 'flex',
                 justifyContent: 'space-between',
-                alignItems: 'center',
+                alignItems: 'flex-start',
+                flexWrap: 'wrap',
+                gap: 8,
+                rowGap: 8,
                 width: '100%',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  flexWrap: 'wrap',
+                  rowGap: 8,
+                  minWidth: 0,
+                  flex: '1 1 auto',
+                }}
+              >
                 {beforeSearchButtons}
                 {/* 模糊搜索框 - 去掉放大镜按钮，高度与高级搜索按钮一致（32px） */}
                 <Input

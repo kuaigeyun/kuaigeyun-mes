@@ -9,8 +9,8 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormTextArea, ProFormSwitch, ProFormJsonSchema } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, message } from 'antd';
+import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormTextArea, ProFormSwitch } from '@ant-design/pro-components';
+import { App, Button, Tag, Space } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
@@ -26,6 +26,9 @@ interface CostRule {
   rule_type?: string;
   cost_type?: string;
   calculation_method?: string;
+  allocation_basis?: string;
+  wip_valuation_method?: string;
+  source_module?: string;
   calculation_formula?: any;
   rule_parameters?: any;
   is_active?: boolean;
@@ -63,6 +66,19 @@ const CostRulePage: React.FC = () => {
     formRef.current?.setFieldsValue({
       is_active: true,
     });
+  };
+
+  /**
+   * 处理初始化预置规则
+   */
+  const handleInitPresets = async () => {
+    try {
+      await costRuleApi.initPresets();
+      messageApi.success('预置规则初始化成功');
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '初始化失败');
+    }
   };
 
   /**
@@ -188,7 +204,8 @@ const CostRulePage: React.FC = () => {
       dataIndex: 'rule_type',
       key: 'rule_type',
       width: 120,
-      render: (text: string) => {
+      render: (dom) => {
+        const text = dom as string;
         const typeMap: Record<string, { color: string; text: string }> = {
           '材料成本': { color: 'blue', text: '材料成本' },
           '人工成本': { color: 'green', text: '人工成本' },
@@ -211,12 +228,24 @@ const CostRulePage: React.FC = () => {
       width: 120,
     },
     {
+      title: '分摊基准',
+      dataIndex: 'allocation_basis',
+      key: 'allocation_basis',
+      width: 120,
+    },
+    {
+      title: '来源模块',
+      dataIndex: 'source_module',
+      key: 'source_module',
+      width: 120,
+    },
+    {
       title: '是否启用',
       dataIndex: 'is_active',
       key: 'is_active',
       width: 100,
-      render: (text: boolean) => (
-        <Tag color={text ? 'green' : 'red'}>{text ? '启用' : '禁用'}</Tag>
+      render: (dom) => (
+        <Tag color={!!dom ? 'green' : 'red'}>{!!dom ? '启用' : '禁用'}</Tag>
       ),
     },
     {
@@ -224,7 +253,7 @@ const CostRulePage: React.FC = () => {
       dataIndex: 'created_at',
       key: 'created_at',
       width: 180,
-      render: (text: string) => text ? dayjs(text).format('YYYY-MM-DD HH:mm:ss') : '-',
+      render: (dom) => dom ? dayjs(dom as string).format('YYYY-MM-DD HH:mm:ss') : '-',
     },
     {
       title: '操作',
@@ -266,7 +295,7 @@ const CostRulePage: React.FC = () => {
   /**
    * 详情描述项
    */
-  const detailItems: ProDescriptionsItemType<CostRule>[] = [
+  const detailItems: any[] = [
     {
       title: '规则编码',
       dataIndex: 'code',
@@ -330,13 +359,30 @@ const CostRulePage: React.FC = () => {
 
   return (
     <ListPageTemplate
-      title="成本核算规则管理"
-      onCreate={handleCreate}
-      actionRef={actionRef}
+      toolbarExtra={
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: 16 }}>
+          <Space>
+            <Button 
+              type="primary" 
+              icon={<PlusOutlined />} 
+              onClick={handleCreate}
+            >
+              新建规则
+            </Button>
+            <Button 
+              type="primary" 
+              ghost 
+              onClick={handleInitPresets}
+            >
+              初始化推件规则
+            </Button>
+          </Space>
+        </div>
+      }
     >
       <UniTable<CostRule>
         actionRef={actionRef}
-        request={async (params) => {
+        request={async (params: any) => {
           // 将 ProTable 的分页参数转换为后端期望的格式
           const queryParams: any = {
             skip: (params.current! - 1) * params.pageSize!,
@@ -371,7 +417,7 @@ const CostRulePage: React.FC = () => {
       <FormModalTemplate
         title={isEdit ? '编辑成本核算规则' : '新建成本核算规则'}
         open={modalVisible}
-        onCancel={() => setModalVisible(false)}
+        onClose={() => setModalVisible(false)}
         onFinish={handleSave}
         formRef={formRef}
         width={MODAL_CONFIG.STANDARD_WIDTH}
@@ -418,6 +464,41 @@ const CostRulePage: React.FC = () => {
           ]}
           rules={[{ required: true, message: '请选择计算方法' }]}
         />
+        <ProFormSelect
+          name="allocation_basis"
+          label="分摊基准"
+          placeholder="请选择分摊基准"
+          options={[
+            { label: '产量', value: '产量' },
+            { label: '工时', value: '工时' },
+            { label: '机器工时', value: '机器工时' },
+            { label: '产值', value: '产值' },
+            { label: '平均分摊', value: '平均分摊' },
+            { label: '手动分摊', value: '手动分摊' },
+          ]}
+        />
+        <ProFormSelect
+          name="wip_valuation_method"
+          label="在产品核算方法"
+          placeholder="请选择在产品核算方法"
+          options={[
+            { label: '不计算在产品成本', value: '不计算' },
+            { label: '约当产量法', value: '约当产量法' },
+            { label: '定额成本法', value: '定额成本法' },
+            { label: '在产品只计材料成本', value: '只计材料' },
+          ]}
+        />
+        <ProFormSelect
+          name="source_module"
+          label="费用来源模块"
+          placeholder="请选择费用来源模块"
+          options={[
+            { label: '仓储/领料', value: '仓库' },
+            { label: '报工/生产', value: '报工' },
+            { label: '薪资/人力', value: '薪资' },
+            { label: '采购/发票', value: '采购' },
+          ]}
+        />
         <ProFormTextArea
           name="calculation_formula"
           label="计算公式（JSON格式）"
@@ -455,7 +536,7 @@ const CostRulePage: React.FC = () => {
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        dataSource={costRuleDetail}
+        dataSource={costRuleDetail as any}
         columns={detailItems}
       />
     </ListPageTemplate>

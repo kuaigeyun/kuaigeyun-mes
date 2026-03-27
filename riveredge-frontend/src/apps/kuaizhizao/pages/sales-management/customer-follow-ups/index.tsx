@@ -1,14 +1,20 @@
 /**
  * 客户跟进（销售极简 CRM）
+ *
+ * 布局与「销售退货」等列表页一致：ListPageTemplate + UniTable
  */
 
 import React, { useEffect, useRef, useState, useMemo } from 'react';
-import { App, Button, DatePicker, Form, Input, InputNumber, Modal, Select, Space, Switch, Table } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
+import { ActionType, ProColumns } from '@ant-design/pro-components';
+import { App, Button, Col, DatePicker, Form, Input, Modal, Row, Select, Space, Switch } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
+import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { customerFollowUpApi, type CustomerFollowUp } from '../../../services/customer-follow-up';
+import { listQuotations, type Quotation } from '../../../services/quotation';
+import { listSalesOrders, type SalesOrder } from '../../../services/sales-order';
 import { customerApi, getDictionaryOptions } from '../../../../master-data/services/supply-chain';
 import type { Customer } from '../../../../master-data/types/supply-chain';
 
@@ -17,22 +23,19 @@ const DICT_CODE = 'SALES_FOLLOW_UP_TYPE';
 const CustomerFollowUpsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message } = App.useApp();
-  const [loading, setLoading] = useState(false);
-  const [dataSource, setDataSource] = useState<CustomerFollowUp[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const actionRef = useRef<ActionType>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [activityOptions, setActivityOptions] = useState<{ label: string; value: string }[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<CustomerFollowUp | null>(null);
   const [form] = Form.useForm();
+  const modalCustomerId = Form.useWatch('customer_id', form);
+  const [quotationList, setQuotationList] = useState<Quotation[]>([]);
+  const [salesOrderList, setSalesOrderList] = useState<SalesOrder[]>([]);
+  const [docListsLoading, setDocListsLoading] = useState(false);
   const filtersRef = useRef({
-    keyword: '' as string,
     customer_id: undefined as number | undefined,
     pending_only: false,
-    occurred_from: undefined as string | undefined,
-    occurred_to: undefined as string | undefined,
   });
 
   const activityLabelMap = useMemo(() => {
@@ -43,9 +46,88 @@ const CustomerFollowUpsPage: React.FC = () => {
     return m;
   }, [activityOptions]);
 
+  useEffect(() => {
+    if (!modalOpen) return;
+    let cancelled = false;
+    setDocListsLoading(true);
+    (async () => {
+      try {
+        const [qRes, oRes] = await Promise.all([
+          listQuotations({ limit: 500 }),
+          listSalesOrders({ limit: 500 }),
+        ]);
+        if (cancelled) return;
+        setQuotationList(Array.isArray(qRes.data) ? qRes.data : []);
+        setSalesOrderList(Array.isArray(oRes.data) ? oRes.data : []);
+      } catch {
+        if (!cancelled) {
+          setQuotationList([]);
+          setSalesOrderList([]);
+        }
+      } finally {
+        if (!cancelled) setDocListsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [modalOpen]);
+
+  const quotationOptions = useMemo(() => {
+    if (modalCustomerId == null) return [];
+    return quotationList
+      .filter((q) => q.id != null && q.customer_id === modalCustomerId)
+      .map((q) => ({
+        value: q.id as number,
+        label: [q.quotation_code, q.customer_name].filter(Boolean).join(' · ') || `#${q.id}`,
+      }));
+  }, [quotationList, modalCustomerId]);
+
+  const salesOrderOptions = useMemo(() => {
+    if (modalCustomerId == null) return [];
+    return salesOrderList
+      .filter((o) => o.id != null && o.customer_id === modalCustomerId)
+      .map((o) => ({
+        value: o.id as number,
+        label: [o.order_code, o.customer_name].filter(Boolean).join(' · ') || `#${o.id}`,
+      }));
+  }, [salesOrderList, modalCustomerId]);
+
+  const quotationSelectOptions = useMemo(() => {
+    if (
+      editing?.quotation_id != null &&
+      !quotationOptions.some((o) => o.value === editing.quotation_id)
+    ) {
+      return [
+        ...quotationOptions,
+        {
+          value: editing.quotation_id,
+          label: editing.quotation_code || `#${editing.quotation_id}`,
+        },
+      ];
+    }
+    return quotationOptions;
+  }, [quotationOptions, editing]);
+
+  const salesOrderSelectOptions = useMemo(() => {
+    if (
+      editing?.sales_order_id != null &&
+      !salesOrderOptions.some((o) => o.value === editing.sales_order_id)
+    ) {
+      return [
+        ...salesOrderOptions,
+        {
+          value: editing.sales_order_id,
+          label: editing.sales_order_code || `#${editing.sales_order_id}`,
+        },
+      ];
+    }
+    return salesOrderOptions;
+  }, [salesOrderOptions, editing]);
+
   const loadDictAndCustomers = async () => {
     try {
-        const [cust, dictOpts] = await Promise.all([
+      const [cust, dictOpts] = await Promise.all([
         customerApi.list({ limit: 2000, isActive: true } as any),
         getDictionaryOptions(DICT_CODE),
       ]);
@@ -61,34 +143,9 @@ const CustomerFollowUpsPage: React.FC = () => {
     loadDictAndCustomers();
   }, []);
 
-  const fetchList = async (p = page, ps = pageSize) => {
-    setLoading(true);
-    try {
-      const f = filtersRef.current;
-      const res = await customerFollowUpApi.list({
-        skip: (p - 1) * ps,
-        limit: ps,
-        keyword: f.keyword || undefined,
-        customer_id: f.customer_id,
-        pending_only: f.pending_only || undefined,
-        occurred_from: f.occurred_from,
-        occurred_to: f.occurred_to,
-      });
-      setDataSource(res.items || []);
-      setTotal(res.total ?? 0);
-    } catch (e) {
-      message.error(t('app.kuaizhizao.customerFollowUp.loadFailed'));
-      setDataSource([]);
-      setTotal(0);
-    } finally {
-      setLoading(false);
-    }
+  const reloadTable = () => {
+    actionRef.current?.reload();
   };
-
-  useEffect(() => {
-    fetchList(page, pageSize);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, pageSize]);
 
   const openCreate = () => {
     setEditing(null);
@@ -150,7 +207,7 @@ const CustomerFollowUpsPage: React.FC = () => {
         message.success(t('common.createSuccess'));
       }
       setModalOpen(false);
-      fetchList(page, pageSize);
+      reloadTable();
     } catch (e: any) {
       if (e?.errorFields) return;
       message.error(e?.message || t('common.operationFailed'));
@@ -164,7 +221,7 @@ const CustomerFollowUpsPage: React.FC = () => {
         try {
           await customerFollowUpApi.delete(record.id);
           message.success(t('common.deleteSuccess'));
-          fetchList(page, pageSize);
+          reloadTable();
         } catch {
           message.error(t('common.deleteFailed'));
         }
@@ -172,41 +229,55 @@ const CustomerFollowUpsPage: React.FC = () => {
     });
   };
 
-  const columns: ColumnsType<CustomerFollowUp> = [
+  const columns: ProColumns<CustomerFollowUp>[] = [
+    {
+      title: t('app.kuaizhizao.customerFollowUp.keywordPlaceholder'),
+      dataIndex: 'keyword',
+      hideInTable: true,
+      valueType: 'text',
+    },
     {
       title: t('app.kuaizhizao.customerFollowUp.colCustomer'),
       dataIndex: 'customer_name',
       width: 160,
       ellipsis: true,
+      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.customerFollowUp.colActivityType'),
       dataIndex: 'activity_type_code',
       width: 120,
-      render: (code: string) => activityLabelMap[code] || code,
+      hideInSearch: true,
+      render: (_, row) => activityLabelMap[row.activity_type_code] || row.activity_type_code,
     },
     {
       title: t('app.kuaizhizao.customerFollowUp.colContent'),
       dataIndex: 'content',
       ellipsis: true,
+      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.customerFollowUp.colOccurredAt'),
       dataIndex: 'occurred_at',
       width: 170,
-      render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm') : ''),
+      hideInSearch: true,
+      render: (_, row) =>
+        row.occurred_at ? dayjs(row.occurred_at).format('YYYY-MM-DD HH:mm') : '',
     },
     {
       title: t('app.kuaizhizao.customerFollowUp.colNextFollowUp'),
       dataIndex: 'next_follow_up_at',
       width: 170,
-      render: (v: string | null) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '—'),
+      hideInSearch: true,
+      render: (_, row) =>
+        row.next_follow_up_at ? dayjs(row.next_follow_up_at).format('YYYY-MM-DD HH:mm') : '—',
     },
     {
       title: t('app.kuaizhizao.customerFollowUp.colQuotation'),
       dataIndex: 'quotation_code',
       width: 120,
       ellipsis: true,
+      hideInSearch: true,
       render: (v) => v || '—',
     },
     {
@@ -214,6 +285,7 @@ const CustomerFollowUpsPage: React.FC = () => {
       dataIndex: 'sales_order_code',
       width: 120,
       ellipsis: true,
+      hideInSearch: true,
       render: (v) => v || '—',
     },
     {
@@ -221,12 +293,13 @@ const CustomerFollowUpsPage: React.FC = () => {
       dataIndex: 'created_by_name',
       width: 100,
       ellipsis: true,
+      hideInSearch: true,
     },
     {
       title: t('common.actions'),
-      key: 'actions',
       width: 140,
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) => (
         <Space>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
@@ -247,69 +320,69 @@ const CustomerFollowUpsPage: React.FC = () => {
   ];
 
   return (
-    <div style={{ padding: 24 }}>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: 16,
-        }}
-      >
-        <h2 style={{ margin: 0 }}>{t('app.kuaizhizao.menu.sales-management.customer-follow-ups')}</h2>
-        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-          {t('app.kuaizhizao.customerFollowUp.new')}
-        </Button>
-      </div>
-      <Space wrap style={{ marginBottom: 16 }}>
-        <Input.Search
-          allowClear
-          placeholder={t('app.kuaizhizao.customerFollowUp.keywordPlaceholder')}
-          style={{ width: 220 }}
-          onSearch={(v) => {
-            filtersRef.current.keyword = v.trim();
-            setPage(1);
-            fetchList(1, pageSize);
+    <>
+      <ListPageTemplate style={{ padding: 0 }}>
+        <UniTable<CustomerFollowUp>
+          headerTitle={t('app.kuaizhizao.menu.sales-management.customer-follow-ups')}
+          actionRef={actionRef}
+          rowKey="id"
+          columns={columns}
+          options={{ reload: true, density: true, setting: true }}
+          scroll={{ x: 1200 }}
+          pagination={{
+            defaultPageSize: 20,
+            showSizeChanger: true,
+          }}
+          toolBarRender={() => [
+            <Select
+              key="cust"
+              allowClear
+              placeholder={t('app.kuaizhizao.customerFollowUp.filterCustomer')}
+              style={{ width: 200 }}
+              options={customers.map((c) => ({ label: `${c.code} ${c.name}`, value: c.id }))}
+              onChange={(v) => {
+                filtersRef.current.customer_id = v ?? undefined;
+                reloadTable();
+              }}
+            />,
+            <span key="pendingLabel">{t('app.kuaizhizao.customerFollowUp.pendingOnly')}</span>,
+            <Switch
+              key="pending"
+              onChange={(v) => {
+                filtersRef.current.pending_only = v;
+                reloadTable();
+              }}
+            />,
+            <Button key="new" type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+              {t('app.kuaizhizao.customerFollowUp.new')}
+            </Button>,
+          ]}
+          request={async (params, _sort, _filter, searchFormValues) => {
+            const f = filtersRef.current;
+            const keyword =
+              typeof searchFormValues?.keyword === 'string'
+                ? searchFormValues.keyword.trim() || undefined
+                : undefined;
+            try {
+              const res = await customerFollowUpApi.list({
+                skip: ((params.current || 1) - 1) * (params.pageSize || 20),
+                limit: params.pageSize || 20,
+                keyword,
+                customer_id: f.customer_id,
+                pending_only: f.pending_only || undefined,
+              });
+              return {
+                data: res.items || [],
+                success: true,
+                total: res.total ?? 0,
+              };
+            } catch {
+              message.error(t('app.kuaizhizao.customerFollowUp.loadFailed'));
+              return { data: [], success: false, total: 0 };
+            }
           }}
         />
-        <Select
-          allowClear
-          placeholder={t('app.kuaizhizao.customerFollowUp.filterCustomer')}
-          style={{ width: 200 }}
-          options={customers.map((c) => ({ label: `${c.code} ${c.name}`, value: c.id }))}
-          onChange={(v) => {
-            filtersRef.current.customer_id = v ?? undefined;
-            setPage(1);
-            fetchList(1, pageSize);
-          }}
-        />
-        <span>{t('app.kuaizhizao.customerFollowUp.pendingOnly')}</span>
-        <Switch
-          onChange={(v) => {
-            filtersRef.current.pending_only = v;
-            setPage(1);
-            fetchList(1, pageSize);
-          }}
-        />
-      </Space>
-
-      <Table<CustomerFollowUp>
-        rowKey="id"
-        loading={loading}
-        columns={columns}
-        dataSource={dataSource}
-        scroll={{ x: 1200 }}
-        pagination={{
-          current: page,
-          pageSize,
-          total,
-          showSizeChanger: true,
-          onChange: (p, ps) => {
-            setPage(p);
-            setPageSize(ps || 20);
-          },
-        }}
-      />
+      </ListPageTemplate>
 
       <Modal
         title={
@@ -320,58 +393,91 @@ const CustomerFollowUpsPage: React.FC = () => {
         open={modalOpen}
         onCancel={() => setModalOpen(false)}
         onOk={submit}
-        width={640}
+        width={800}
         destroyOnClose
       >
         <Form form={form} layout="vertical">
-          <Form.Item
-            name="customer_id"
-            label={t('app.kuaizhizao.customerFollowUp.fieldCustomer')}
-            rules={[{ required: true, message: t('common.required') }]}
-          >
-            <Select
-              showSearch
-              optionFilterProp="label"
-              disabled={!!editing}
-              options={customers.map((c) => ({
-                label: `${c.code} ${c.name}`,
-                value: c.id,
-              }))}
-            />
-          </Form.Item>
-          <Form.Item
-            name="activity_type_code"
-            label={t('app.kuaizhizao.customerFollowUp.fieldActivityType')}
-            rules={[{ required: true, message: t('common.required') }]}
-          >
-            <Select options={activityOptions} />
-          </Form.Item>
-          <Form.Item
-            name="content"
-            label={t('app.kuaizhizao.customerFollowUp.fieldContent')}
-            rules={[{ required: true, message: t('common.required') }]}
-          >
-            <Input.TextArea rows={4} />
-          </Form.Item>
-          <Form.Item
-            name="occurred_at"
-            label={t('app.kuaizhizao.customerFollowUp.fieldOccurredAt')}
-            rules={[{ required: true, message: t('common.required') }]}
-          >
-            <DatePicker showTime style={{ width: '100%' }} format="YYYY-MM-DD HH:mm" />
-          </Form.Item>
-          <Form.Item name="next_follow_up_at" label={t('app.kuaizhizao.customerFollowUp.fieldNextFollowUp')}>
-            <DatePicker showTime style={{ width: '100%' }} format="YYYY-MM-DD HH:mm" />
-          </Form.Item>
-          <Form.Item name="quotation_id" label={t('app.kuaizhizao.customerFollowUp.fieldQuotationId')}>
-            <InputNumber style={{ width: '100%' }} min={1} placeholder={t('app.kuaizhizao.customerFollowUp.optionalIdHint')} />
-          </Form.Item>
-          <Form.Item name="sales_order_id" label={t('app.kuaizhizao.customerFollowUp.fieldSalesOrderId')}>
-            <InputNumber style={{ width: '100%' }} min={1} placeholder={t('app.kuaizhizao.customerFollowUp.optionalIdHint')} />
-          </Form.Item>
+          <Row gutter={[20, 0]}>
+            <Col xs={24} md={12}>
+              <Form.Item
+                name="customer_id"
+                label={t('app.kuaizhizao.customerFollowUp.fieldCustomer')}
+                rules={[{ required: true, message: t('common.required') }]}
+              >
+                <Select
+                  showSearch
+                  optionFilterProp="label"
+                  disabled={!!editing}
+                  options={customers.map((c) => ({
+                    label: `${c.code} ${c.name}`,
+                    value: c.id,
+                  }))}
+                  onChange={() => {
+                    form.setFieldsValue({ quotation_id: undefined, sales_order_id: undefined });
+                  }}
+                />
+              </Form.Item>
+              <Form.Item
+                name="activity_type_code"
+                label={t('app.kuaizhizao.customerFollowUp.fieldActivityType')}
+                rules={[{ required: true, message: t('common.required') }]}
+              >
+                <Select options={activityOptions} />
+              </Form.Item>
+              <Form.Item
+                name="occurred_at"
+                label={t('app.kuaizhizao.customerFollowUp.fieldOccurredAt')}
+                rules={[{ required: true, message: t('common.required') }]}
+              >
+                <DatePicker showTime style={{ width: '100%' }} format="YYYY-MM-DD HH:mm" />
+              </Form.Item>
+              <Form.Item name="next_follow_up_at" label={t('app.kuaizhizao.customerFollowUp.fieldNextFollowUp')}>
+                <DatePicker showTime style={{ width: '100%' }} format="YYYY-MM-DD HH:mm" />
+              </Form.Item>
+              <Form.Item name="quotation_id" label={t('app.kuaizhizao.customerFollowUp.fieldLinkedQuotation')}>
+                <Select
+                  allowClear
+                  showSearch
+                  optionFilterProp="label"
+                  loading={docListsLoading}
+                  disabled={modalCustomerId == null}
+                  placeholder={
+                    modalCustomerId == null
+                      ? t('app.kuaizhizao.customerFollowUp.selectCustomerFirst')
+                      : t('app.kuaizhizao.customerFollowUp.optionalSelectDocument')
+                  }
+                  options={quotationSelectOptions}
+                />
+              </Form.Item>
+              <Form.Item name="sales_order_id" label={t('app.kuaizhizao.customerFollowUp.fieldLinkedSalesOrder')}>
+                <Select
+                  allowClear
+                  showSearch
+                  optionFilterProp="label"
+                  loading={docListsLoading}
+                  disabled={modalCustomerId == null}
+                  placeholder={
+                    modalCustomerId == null
+                      ? t('app.kuaizhizao.customerFollowUp.selectCustomerFirst')
+                      : t('app.kuaizhizao.customerFollowUp.optionalSelectDocument')
+                  }
+                  options={salesOrderSelectOptions}
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item
+                name="content"
+                label={t('app.kuaizhizao.customerFollowUp.fieldContent')}
+                rules={[{ required: true, message: t('common.required') }]}
+              >
+                <Input.TextArea rows={10} style={{ resize: 'vertical' }} />
+              </Form.Item>
+            </Col>
+          </Row>
         </Form>
       </Modal>
-    </div>
+    </>
   );
 };
 
