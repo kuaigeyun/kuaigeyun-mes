@@ -1,0 +1,297 @@
+/**
+ * 销售发票列表页
+ *
+ * 管理向客户开具的销项发票，支持关联销售订单和应收单。
+ */
+import React, { useRef, useState, useEffect } from 'react';
+import { ActionType, ProColumns } from '@ant-design/pro-components';
+import { App, Button, Modal, Space, Tag } from 'antd';
+import { ModalForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
+import { CheckCircleOutlined, DeleteOutlined } from '@ant-design/icons';
+import { apiRequest } from '../../../../../services/api';
+import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate } from '../../../../../components/layout-templates';
+import dayjs from 'dayjs';
+
+interface SalesInvoice {
+  id: number;
+  invoice_code: string;
+  customer_id: number;
+  customer_name: string;
+  sales_order_id?: number;
+  sales_order_code?: string;
+  invoice_number: string;
+  invoice_date: string;
+  invoice_type: string;
+  tax_rate: number;
+  invoice_amount: number;
+  tax_amount: number;
+  total_amount: number;
+  status: string;
+  review_status: string;
+  notes?: string;
+  created_at: string;
+}
+
+const STATUS_COLOR: Record<string, string> = {
+  '未审核': 'default',
+  '已审核': 'success',
+  '已驳回': 'error',
+};
+
+const INVOICE_TYPE_OPTIONS = [
+  { label: '增值税专用发票', value: '增值税专用发票' },
+  { label: '增值税普通发票', value: '增值税普通发票' },
+  { label: '电子发票', value: '电子发票' },
+  { label: '收据', value: '收据' },
+];
+
+const TAX_RATE_OPTIONS = [
+  { label: '13%', value: 13 },
+  { label: '9%', value: 9 },
+  { label: '6%', value: 6 },
+  { label: '1%', value: 1 },
+  { label: '0%', value: 0 },
+];
+
+const SalesInvoicesPage: React.FC = () => {
+  const actionRef = useRef<ActionType>();
+  const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [customerOptions, setCustomerOptions] = useState<{ label: string; value: number }[]>([]);
+  const { message: messageApi } = App.useApp();
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await apiRequest<unknown>('/apps/master-data/supply-chain/customers', { params: { limit: 1000, is_active: true } });
+        const list = Array.isArray(res) ? res : (res as any)?.data ?? (res as any)?.items ?? [];
+        setCustomerOptions((Array.isArray(list) ? list : []).map((c: any) => ({
+          label: c.name || c.customer_name || c.code || String(c.id),
+          value: c.id,
+        })));
+      } catch {
+        setCustomerOptions([]);
+      }
+    };
+    load();
+  }, []);
+
+  const handleCreate = async (values: any) => {
+    const invoiceAmount = Number(values.invoice_amount) || 0;
+    const taxRate = Number(values.tax_rate) || 13;
+    const taxAmount = Number((invoiceAmount * taxRate / 100).toFixed(2));
+    const totalAmount = Number((invoiceAmount + taxAmount).toFixed(2));
+    const data = {
+      customer_id: values.customer_id,
+      customer_name: customerOptions.find(o => o.value === values.customer_id)?.label || '',
+      invoice_number: values.invoice_number,
+      invoice_date: values.invoice_date?.format ? values.invoice_date.format('YYYY-MM-DD') : (values.invoice_date || dayjs().format('YYYY-MM-DD')),
+      invoice_type: values.invoice_type || '增值税专用发票',
+      tax_rate: taxRate,
+      invoice_amount: invoiceAmount,
+      tax_amount: taxAmount,
+      total_amount: totalAmount,
+      notes: values.notes,
+    };
+    await apiRequest('/apps/kuaicaiwu/sales-invoices', { method: 'POST', data });
+    messageApi.success('销售发票创建成功');
+    setCreateModalVisible(false);
+    actionRef.current?.reload();
+  };
+
+  const handleApprove = async (record: SalesInvoice) => {
+    Modal.confirm({
+      title: '审核销售发票',
+      content: `确定审核通过发票 ${record.invoice_number}？`,
+      onOk: async () => {
+        try {
+          await apiRequest(`/apps/kuaicaiwu/sales-invoices/${record.id}/approve`, { method: 'POST' });
+          messageApi.success('审核通过');
+          actionRef.current?.reload();
+        } catch (e: any) {
+          messageApi.error(e?.message || '操作失败');
+        }
+      },
+    });
+  };
+
+  const handleDelete = async (record: SalesInvoice) => {
+    Modal.confirm({
+      title: '删除销售发票',
+      content: `确定删除发票 ${record.invoice_number}？已审核的发票不能删除。`,
+      onOk: async () => {
+        try {
+          await apiRequest(`/apps/kuaicaiwu/sales-invoices/${record.id}`, { method: 'DELETE' });
+          messageApi.success('删除成功');
+          actionRef.current?.reload();
+        } catch (e: any) {
+          messageApi.error(e?.message || '操作失败');
+        }
+      },
+    });
+  };
+
+  const columns: ProColumns<SalesInvoice>[] = [
+    {
+      title: '发票编号',
+      dataIndex: 'invoice_code',
+      width: 160,
+      fixed: 'left',
+    },
+    {
+      title: '发票号码',
+      dataIndex: 'invoice_number',
+      width: 160,
+    },
+    {
+      title: '客户名称',
+      dataIndex: 'customer_name',
+      width: 200,
+    },
+    {
+      title: '发票类型',
+      dataIndex: 'invoice_type',
+      width: 140,
+    },
+    {
+      title: '开票日期',
+      dataIndex: 'invoice_date',
+      valueType: 'date',
+      width: 110,
+    },
+    {
+      title: '税率(%)',
+      dataIndex: 'tax_rate',
+      width: 80,
+      render: (_, r) => `${r.tax_rate}%`,
+    },
+    {
+      title: '不含税金额',
+      dataIndex: 'invoice_amount',
+      valueType: 'money',
+      align: 'right',
+      width: 130,
+    },
+    {
+      title: '税额',
+      dataIndex: 'tax_amount',
+      valueType: 'money',
+      align: 'right',
+      width: 110,
+    },
+    {
+      title: '价税合计',
+      dataIndex: 'total_amount',
+      valueType: 'money',
+      align: 'right',
+      width: 130,
+      render: (_, record) => (
+        <span style={{ fontWeight: 'bold', color: '#1677ff' }}>
+          ¥{Number(record.total_amount).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
+        </span>
+      ),
+    },
+    {
+      title: '状态',
+      dataIndex: 'status',
+      width: 90,
+      render: (_, record) => (
+        <Tag color={STATUS_COLOR[record.status] || 'default'}>{record.status}</Tag>
+      ),
+    },
+    {
+      title: '操作',
+      valueType: 'option',
+      fixed: 'right',
+      width: 160,
+      render: (_, record) => (
+        <Space>
+          {record.review_status === '待审核' && (
+            <Button type="link" size="small" icon={<CheckCircleOutlined />} onClick={() => handleApprove(record)}>审核</Button>
+          )}
+          {record.status !== '已审核' && (
+            <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>删除</Button>
+          )}
+        </Space>
+      ),
+    },
+  ];
+
+  return (
+    <ListPageTemplate>
+      <UniTable<SalesInvoice>
+        headerTitle="销售发票"
+        actionRef={actionRef}
+        rowKey="id"
+        search={{ labelWidth: 120 }}
+        showCreateButton
+        createButtonText="开具发票"
+        onCreate={() => setCreateModalVisible(true)}
+        request={async (params) => {
+          const { current, pageSize, ...rest } = params;
+          const res = await apiRequest<any>('/apps/kuaicaiwu/sales-invoices', {
+            params: {
+              skip: ((current || 1) - 1) * (pageSize || 20),
+              limit: pageSize || 20,
+              ...rest,
+            },
+          });
+          return {
+            data: res?.items || [],
+            total: res?.total || 0,
+            success: true,
+          };
+        }}
+        columns={columns}
+      />
+
+      <ModalForm
+        title="开具销售发票"
+        open={createModalVisible}
+        onOpenChange={setCreateModalVisible}
+        onFinish={handleCreate}
+        width={520}
+      >
+        <ProFormSelect
+          name="customer_id"
+          label="客户"
+          options={customerOptions}
+          rules={[{ required: true, message: '请选择客户' }]}
+          placeholder="请选择客户"
+          showSearch
+        />
+        <ProFormText
+          name="invoice_number"
+          label="发票号码"
+          rules={[{ required: true, message: '请输入发票号码' }]}
+          placeholder="请输入票面号码"
+        />
+        <ProFormSelect
+          name="invoice_type"
+          label="发票类型"
+          options={INVOICE_TYPE_OPTIONS}
+          initialValue="增值税专用发票"
+          rules={[{ required: true }]}
+        />
+        <ProFormDatePicker name="invoice_date" label="开票日期" rules={[{ required: true }]} initialValue={dayjs()} fieldProps={{ style: { width: '100%' } }} />
+        <ProFormSelect
+          name="tax_rate"
+          label="税率"
+          options={TAX_RATE_OPTIONS}
+          initialValue={13}
+          rules={[{ required: true }]}
+        />
+        <ProFormDigit
+          name="invoice_amount"
+          label="不含税金额"
+          min={0}
+          rules={[{ required: true, message: '请输入不含税金额' }]}
+          fieldProps={{ precision: 2, style: { width: '100%' } }}
+        />
+        <ProFormTextArea name="notes" label="备注" />
+      </ModalForm>
+    </ListPageTemplate>
+  );
+};
+
+export default SalesInvoicesPage;

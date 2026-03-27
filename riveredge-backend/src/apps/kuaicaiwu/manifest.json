@@ -19,9 +19,12 @@
         "sort_order": 1,
         "children": [
           {"title": "app.kuaicaiwu.menu.finance-management.receivables", "path": "/apps/kuaicaiwu/finance-management/receivables", "permission": "kuaicaiwu:receivable:view", "sort_order": 1},
-          {"title": "app.kuaicaiwu.menu.finance-management.payables", "path": "/apps/kuaicaiwu/finance-management/payables", "permission": "kuaicaiwu:payable:view", "sort_order": 2},
-          {"title": "app.kuaicaiwu.menu.finance-management.purchase-invoices", "path": "/apps/kuaicaiwu/finance-management/purchase-invoices", "permission": "kuaicaiwu:invoice:view", "sort_order": 3},
-          {"title": "app.kuaicaiwu.menu.finance-management.invoices", "path": "/apps/kuaicaiwu/finance-management/invoices", "permission": "kuaicaiwu:invoice:view", "sort_order": 4}
+          {"title": "app.kuaicaiwu.menu.finance-management.receipts", "path": "/apps/kuaicaiwu/finance-management/receipts", "permission": "kuaicaiwu:receivable:view", "sort_order": 2},
+          {"title": "app.kuaicaiwu.menu.finance-management.payables", "path": "/apps/kuaicaiwu/finance-management/payables", "permission": "kuaicaiwu:payable:view", "sort_order": 3},
+          {"title": "app.kuaicaiwu.menu.finance-management.payments", "path": "/apps/kuaicaiwu/finance-management/payments", "permission": "kuaicaiwu:payable:view", "sort_order": 4},
+          {"title": "app.kuaicaiwu.menu.finance-management.sales-invoices", "path": "/apps/kuaicaiwu/finance-management/sales-invoices", "permission": "kuaicaiwu:invoice:view", "sort_order": 5},
+          {"title": "app.kuaicaiwu.menu.finance-management.purchase-invoices", "path": "/apps/kuaicaiwu/finance-management/purchase-invoices", "permission": "kuaicaiwu:invoice:view", "sort_order": 6},
+          {"title": "app.kuaicaiwu.menu.finance-management.settlement", "path": "/apps/kuaicaiwu/finance-management/settlement", "permission": "kuaicaiwu:receivable:view", "sort_order": 7}
         ]
       },
       {

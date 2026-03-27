@@ -212,3 +212,165 @@ class ReceiptRecordBase(BaseSchema):
 class ReceiptRecordCreate(ReceiptRecordBase):
     """收款记录创建schema"""
     pass
+
+
+# === 付款单（独立凭证）===
+
+class PaymentVoucherBase(BaseSchema):
+    """付款单基础schema"""
+    supplier_id: int = Field(..., description="供应商ID")
+    supplier_name: str = Field(..., max_length=200, description="供应商名称")
+    total_amount: float = Field(..., gt=0, description="付款总额")
+    payment_date: date = Field(..., description="付款日期")
+    payment_method: str = Field(..., max_length=50, description="付款方式")
+    bank_account: Optional[str] = Field(None, max_length=100, description="出款账号")
+    notes: Optional[str] = Field(None, description="备注")
+
+
+class PaymentVoucherCreate(PaymentVoucherBase):
+    """付款单创建schema"""
+    pass
+
+
+class PaymentVoucherUpdate(BaseSchema):
+    """付款单更新schema"""
+    payment_date: Optional[date] = None
+    payment_method: Optional[str] = Field(None, max_length=50)
+    bank_account: Optional[str] = Field(None, max_length=100)
+    notes: Optional[str] = None
+
+
+class PaymentVoucherResponse(PaymentVoucherBase):
+    """付款单响应schema"""
+    id: int
+    tenant_id: int
+    payment_code: str
+    settled_amount: float = 0.0
+    unsettled_amount: float = 0.0
+    status: str = "Draft"
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class PaymentVoucherListResponse(BaseSchema):
+    """付款单列表响应schema"""
+    items: List[PaymentVoucherResponse]
+    total: int
+    skip: int
+    limit: int
+
+
+# === 收款单（独立凭证）===
+
+class ReceiptVoucherBase(BaseSchema):
+    """收款单基础schema"""
+    customer_id: int = Field(..., description="客户ID")
+    customer_name: str = Field(..., max_length=200, description="客户名称")
+    total_amount: float = Field(..., gt=0, description="收款总额")
+    receipt_date: date = Field(..., description="收款日期")
+    payment_method: str = Field(..., max_length=50, description="收款方式")
+    bank_account: Optional[str] = Field(None, max_length=100, description="收款账号")
+    notes: Optional[str] = Field(None, description="备注")
+
+
+class ReceiptVoucherCreate(ReceiptVoucherBase):
+    """收款单创建schema"""
+    pass
+
+
+class ReceiptVoucherUpdate(BaseSchema):
+    """收款单更新schema"""
+    receipt_date: Optional[date] = None
+    payment_method: Optional[str] = Field(None, max_length=50)
+    bank_account: Optional[str] = Field(None, max_length=100)
+    notes: Optional[str] = None
+
+
+class ReceiptVoucherResponse(ReceiptVoucherBase):
+    """收款单响应schema"""
+    id: int
+    tenant_id: int
+    receipt_code: str
+    settled_amount: float = 0.0
+    unsettled_amount: float = 0.0
+    status: str = "Draft"
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ReceiptVoucherListResponse(BaseSchema):
+    """收款单列表响应schema"""
+    items: List[ReceiptVoucherResponse]
+    total: int
+    skip: int
+    limit: int
+
+
+# === 销售发票 ===
+
+class SalesInvoiceBase(BaseSchema):
+    """销售发票基础schema"""
+    sales_order_id: Optional[int] = Field(None, description="销售订单ID")
+    sales_order_code: Optional[str] = Field(None, max_length=50, description="销售订单编码")
+    customer_id: int = Field(..., description="客户ID")
+    customer_name: str = Field(..., max_length=200, description="客户名称")
+    invoice_number: str = Field(..., max_length=100, description="发票号码")
+    invoice_date: date = Field(..., description="开票日期")
+    invoice_type: str = Field("增值税专用发票", max_length=50, description="发票类型")
+    tax_rate: float = Field(13.0, ge=0, le=100, description="税率(%)")
+    invoice_amount: float = Field(..., ge=0, description="不含税金额")
+    tax_amount: float = Field(..., ge=0, description="税额")
+    total_amount: float = Field(..., ge=0, description="价税合计")
+    receivable_id: Optional[int] = Field(None, description="关联应收单ID")
+    receivable_code: Optional[str] = Field(None, max_length=50, description="关联应收单编码")
+    attachment_path: Optional[str] = Field(None, max_length=500, description="附件路径")
+    notes: Optional[str] = Field(None, description="备注")
+
+
+class SalesInvoiceCreate(SalesInvoiceBase):
+    """销售发票创建schema"""
+    pass
+
+
+class SalesInvoiceUpdate(BaseSchema):
+    """销售发票更新schema"""
+    invoice_number: Optional[str] = Field(None, max_length=100)
+    invoice_date: Optional[date] = None
+    invoice_type: Optional[str] = Field(None, max_length=50)
+    tax_rate: Optional[float] = None
+    invoice_amount: Optional[float] = None
+    tax_amount: Optional[float] = None
+    total_amount: Optional[float] = None
+    notes: Optional[str] = None
+
+
+class SalesInvoiceResponse(SalesInvoiceBase):
+    """销售发票响应schema"""
+    id: int
+    tenant_id: int
+    invoice_code: str
+    status: str = "未审核"
+    reviewer_id: Optional[int] = None
+    reviewer_name: Optional[str] = None
+    review_time: Optional[datetime] = None
+    review_status: str = "待审核"
+    review_remarks: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class SalesInvoiceListResponse(BaseSchema):
+    """销售发票列表响应schema"""
+    items: List[SalesInvoiceResponse]
+    total: int
+    skip: int
+    limit: int
