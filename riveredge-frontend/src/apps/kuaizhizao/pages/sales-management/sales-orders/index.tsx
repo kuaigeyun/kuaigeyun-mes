@@ -357,7 +357,6 @@ const SalesOrdersPage: React.FC = () => {
   const [customerCreateVisible, setCustomerCreateVisible] = useState(false);
   /** 发货方式字典选项（数据字典 SHIPPING_METHOD） */
   const [shippingMethodOptions, setShippingMethodOptions] = useState<Array<{ label: string; value: string }>>([]);
-  const [shippingMethodLoading, setShippingMethodLoading] = useState(false);
 
   // 敏捷核价相关状态
   const [quoteDrawerVisible, setQuoteDrawerVisible] = useState(false);
@@ -365,7 +364,6 @@ const SalesOrdersPage: React.FC = () => {
   const [activeItemIndex, setActiveItemIndex] = useState<number | null>(null);
   /** 付款条件字典选项（数据字典 PAYMENT_TERMS） */
   const [paymentTermsOptions, setPaymentTermsOptions] = useState<Array<{ label: string; value: string }>>([]);
-  const [paymentTermsLoading, setPaymentTermsLoading] = useState(false);
 
   /**
    * 加载物料列表（无基础资料时使用空数组，不阻塞页面）
@@ -2271,7 +2269,7 @@ const SalesOrdersPage: React.FC = () => {
             </Col>
             <Col span={6}>
               <DictionarySelect
-                dictionaryCode="PAYMENT_TERM"
+                dictionaryCode="PAYMENT_TERMS"
                 name="payment_terms"
                 label="付款条件"
                 placeholder="请选择付款条件"

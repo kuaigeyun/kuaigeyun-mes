@@ -7,7 +7,7 @@
  * @date 2026-02-19
  */
 
-import React, { useRef, useState, useEffect, useCallback, Suspense, lazy } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, Dropdown, List, Typography } from 'antd';
@@ -930,7 +930,7 @@ const QuotationsPage: React.FC = () => {
         </Col>
         <Col span={6}>
           <DictionarySelect
-            dictionaryCode="PAYMENT_TERM"
+            dictionaryCode="PAYMENT_TERMS"
             name="payment_terms"
             label="付款条件"
             placeholder="请选择付款条件"
