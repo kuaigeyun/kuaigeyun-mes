@@ -43,17 +43,20 @@ const CustomersPage: React.FC = () => {
     let cancelled = false;
     (async () => {
       try {
-        const packs = await Promise.all([
-          getDictionaryOptions('INDUSTRY_SECTOR'),
-          getDictionaryOptions('CUSTOMER_LEVEL'),
-          getDictionaryOptions('PARTNER_SOURCE_CHANNEL'),
-        ]);
+        const codes = [
+          'INDUSTRY_SECTOR',
+          'CUSTOMER_LEVEL',
+          'PARTNER_SOURCE_CHANNEL',
+          'CUSTOMER_CATEGORY',
+          'CONTACT_TITLE',
+        ];
+        const packs = await Promise.all(codes.map((c) => getDictionaryOptions(c)));
         if (cancelled) return;
-        setDictLabelMaps({
-          INDUSTRY_SECTOR: Object.fromEntries(packs[0].map((o) => [o.value, o.label])),
-          CUSTOMER_LEVEL: Object.fromEntries(packs[1].map((o) => [o.value, o.label])),
-          PARTNER_SOURCE_CHANNEL: Object.fromEntries(packs[2].map((o) => [o.value, o.label])),
+        const maps: Record<string, Record<string, string>> = {};
+        codes.forEach((code, index) => {
+          maps[code] = Object.fromEntries(packs[index].map((o) => [o.value, o.label]));
         });
+        setDictLabelMaps(maps);
       } catch {
         if (!cancelled) setDictLabelMaps({});
       }
@@ -432,11 +435,15 @@ const CustomersPage: React.FC = () => {
           item.name || '',
           item.shortName || '',
           item.contactPerson || '',
-          item.contactTitle || '',
+          item.contactTitle
+            ? dictLabelMaps['CONTACT_TITLE']?.[item.contactTitle] ?? item.contactTitle
+            : '',
           item.phone || '',
           item.email || '',
           item.address || '',
-          item.category || '',
+          item.category
+            ? dictLabelMaps['CUSTOMER_CATEGORY']?.[item.category] ?? item.category
+            : '',
           item.industryCode
             ? dictLabelMaps['INDUSTRY_SECTOR']?.[item.industryCode] ?? item.industryCode
             : '',
@@ -500,6 +507,13 @@ const CustomersPage: React.FC = () => {
       hideInSearch: true,
     },
     {
+      title: t('field.customer.contactTitle'),
+      dataIndex: 'contactTitle',
+      width: 120,
+      hideInSearch: true,
+      render: (_, r) => dictLabel('CONTACT_TITLE', r.contactTitle),
+    },
+    {
       title: t('field.customer.phone'),
       dataIndex: 'phone',
       width: 150,
@@ -516,6 +530,7 @@ const CustomersPage: React.FC = () => {
       dataIndex: 'category',
       width: 120,
       hideInSearch: true,
+      render: (_, r) => dictLabel('CUSTOMER_CATEGORY', r.category),
     },
     {
       title: t('field.customer.industry'),

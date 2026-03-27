@@ -16,9 +16,11 @@ import {
   ProFormDigit,
   ProFormDatePicker,
   ProFormDateTimePicker,
-  ProFormSelect,
   ProFormTreeSelect,
+  ProFormRadio,
+  ProFormField,
 } from '@ant-design/pro-components';
+import { UniDropdown } from '../uni-dropdown';
 import type { FieldConfig } from './form-schemas';
 
 export interface SchemaFormRendererProps {
@@ -124,26 +126,47 @@ export const SchemaFormRenderer: React.FC<SchemaFormRendererProps> = ({
 
         if (field.type === 'select') {
           const optionsFromMap = optionsMap[field.name];
-          const options = optionsFromMap ?? (field.options?.map((o) => ({ label: t(o.labelKey), value: o.value })) ?? []);
+          const options =
+            optionsFromMap ??
+            (field.options?.map((o) => ({ label: t(o.labelKey), value: o.value })) ?? []);
           const selectDisabled = (field.disabledWhenEdit && isEdit) || field.fieldProps?.disabled;
           return (
-            <ProFormSelect
+            <ProFormField
               key={field.name}
               name={field.name}
               label={label}
-              placeholder={placeholder}
+              colProps={{ span: colSpan }}
+              rules={rules}
+              extra={extraContent}
+              renderFormItem={(p: any) => (
+                <UniDropdown
+                  {...p.fieldProps}
+                  placeholder={placeholder}
+                  options={options}
+                  disabled={selectDisabled}
+                  allowClear={field.allowClear ?? true}
+                  mode={field.mode}
+                  {...field.fieldProps}
+                />
+              )}
+            />
+          );
+        }
+
+        if (field.type === 'radio') {
+          const options =
+            optionsMap[field.name] ??
+            (field.options?.map((o) => ({ label: t(o.labelKey as string), value: o.value })) ?? []);
+          return (
+            <ProFormRadio.Group
+              key={field.name}
+              name={field.name}
+              label={label}
               colProps={{ span: colSpan }}
               rules={rules}
               options={options}
-              extra={extraContent}
               fieldProps={{
-                showSearch: true,
-                filterOption: (input: string, option: any) =>
-                  (option?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()),
-                allowClear: field.allowClear,
-                mode: field.mode,
-                optionFilterProp: 'label',
-                disabled: selectDisabled,
+                optionType: field.fieldProps?.optionType || 'button',
                 ...field.fieldProps,
               }}
             />

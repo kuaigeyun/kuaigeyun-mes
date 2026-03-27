@@ -291,6 +291,10 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   onRowSelectionChange?: (selectedRowKeys: React.Key[]) => void
   /**
+   * 选中的行键数组（用于受控模式，例如在外部清除选中状态）
+   */
+  selectedRowKeys?: React.Key[]
+  /**
    * 行选择 checkbox 的 getCheckboxProps（用于树形表禁止勾选子行等）
    */
   rowSelectionGetCheckboxProps?: (record: T) => { disabled?: boolean }
@@ -594,6 +598,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   afterSearchButtons,
   enableRowSelection = false,
   onRowSelectionChange,
+  selectedRowKeys: selectedRowKeysProp,
   rowSelectionGetCheckboxProps,
   enableRowEdit = false,
   onRowEditSave,
@@ -686,8 +691,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     ProFormInstance | undefined
   >
 
-  // 存储选中的行键
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
+  // 存储选中的行键（支持外部受控与内部自持两种模式）
+  const [internalSelectedRowKeys, setInternalSelectedRowKeys] = useState<React.Key[]>([])
+  const selectedRowKeys = selectedRowKeysProp !== undefined ? selectedRowKeysProp : internalSelectedRowKeys
+
   // 导入弹窗可见状态（用于 showImportButton 时）
   const [importModalVisible, setImportModalVisible] = useState(false)
 
@@ -1336,7 +1343,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
    * 处理行选择变化
    */
   const handleRowSelectionChange = (keys: React.Key[]) => {
-    setSelectedRowKeys(keys)
+    setInternalSelectedRowKeys(keys)
     if (onRowSelectionChange) {
       onRowSelectionChange(keys)
     }
@@ -1734,7 +1741,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                   ) {
                     // 使用 requestAnimationFrame 延迟更新，避免在渲染过程中更新
                     requestAnimationFrame(() => {
-                      setSelectedRowKeys(newKeys)
+                      setInternalSelectedRowKeys(newKeys)
                     })
                   }
                 }

@@ -1,15 +1,17 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { Form, App } from 'antd';
 import { useDebounceFn } from 'ahooks';
-import { useNavigate } from 'react-router-dom';
 import { Material } from '../../apps/master-data/types/material';
 import { materialApi } from '../../apps/master-data/services/material';
 import { UniDropdown } from '../uni-dropdown';
 import type { QuickCreateConfig } from '../uni-dropdown/types';
 import { NamePath } from 'antd/es/form/interface';
+import { MaterialFormModal } from '../../apps/master-data/components/MaterialFormModal';
 
-/** 从物料对象获取字段值，兼容 API 返回的 snake_case（如 main_code）与 camelCase（如 mainCode） */
 function getMaterialField(m: Record<string, any>, field: string): any {
+  if (field.includes('.')) {
+    return field.split('.').reduce((obj, key) => (obj && typeof obj === 'object' ? obj[key] : undefined), m);
+  }
   let v = m[field];
   if (v !== undefined && v !== null) return v;
   const snake = field.replace(/([A-Z])/g, '_$1').toLowerCase();
@@ -86,10 +88,16 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
   ...restProps
 }) => {
   const form = Form.useFormInstance();
-  const navigate = useNavigate();
+  const [materialModalVisible, setMaterialModalVisible] = useState(false);
+
   const effectiveQuickCreate =
     quickCreateProp ??
-    (showQuickCreate ? { label: '物料管理', onClick: () => navigate('/apps/master-data/materials') } : undefined);
+    (showQuickCreate
+      ? {
+          label: '快速新增物料',
+          onClick: () => setMaterialModalVisible(true),
+        }
+      : undefined);
   const { message } = App.useApp();
   const [data, setData] = useState<Material[]>([]);
   const [loading, setLoading] = useState(false);
@@ -153,7 +161,7 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
   // Form.Item 会合并子组件的 onChange（先 trigger 再 child.onChange），因此 mergedOnChange 会被调用
   // 不再在此处 setFieldValue，由 Form.Item 的 trigger 负责更新表单；getValueFromEvent 负责规范化存储为 number
   const mergedOnChange = (val: number | undefined, opt: any) => {
-    const numVal = val != null && val !== '' ? Number(val) : undefined;
+    const numVal = (val as any) != null && (val as any) !== '' ? Number(val) : undefined;
     handleChange(numVal, opt);
   };
 
@@ -166,7 +174,7 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
         value: item.id,
       };
     });
-    if (fallbackOption && !opts.some((o) => o.value === fallbackOption.value)) {
+    if (fallbackOption && !opts.some((o) => Number(o.value) === Number(fallbackOption.value))) {
       opts.unshift(fallbackOption);
     }
     return opts;
@@ -226,6 +234,23 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
             : undefined
         }
         {...restProps}
+      />
+      <MaterialFormModal
+        open={materialModalVisible}
+        onClose={() => setMaterialModalVisible(false)}
+        onSuccess={(newMaterial) => {
+          // 1. 将新物料加入当前下拉列表（避免立即触发再次 fetch）
+          setData((prev) => [newMaterial, ...prev.filter((m) => m.id !== newMaterial.id)]);
+          
+          // 2. 自动选中该物料
+          if (form) {
+            form.setFieldValue(name, newMaterial.id);
+            // 触发 handleChange 以执行 fillMapping
+            handleChange(newMaterial.id, { label: `${newMaterial.mainCode || newMaterial.code} - ${newMaterial.name}`, value: newMaterial.id });
+          }
+          
+          setMaterialModalVisible(false);
+        }}
       />
     </Form.Item>
   );

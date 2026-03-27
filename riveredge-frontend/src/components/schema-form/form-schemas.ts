@@ -14,6 +14,7 @@ export type FieldType =
   | 'switch'
   | 'select'
   | 'treeSelect'
+  | 'radio'
   | 'upload'
   | 'slot';
 

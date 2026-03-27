@@ -57,6 +57,12 @@ class SupplyChainService:
             create_data["is_active"] = True
         if create_data.get("is_public") is None:
             create_data["is_public"] = False
+        # 自动回填业务员姓名
+        if create_data.get("salesman_id"):
+            salesman = await User.filter(id=create_data["salesman_id"]).first()
+            if salesman:
+                create_data["salesman_name"] = salesman.full_name or salesman.username
+        
         try:
             customer = await Customer.create(
                 tenant_id=tenant_id,
@@ -194,6 +200,15 @@ class SupplyChainService:
         for key, value in update_data.items():
             setattr(customer, key, value)
         
+        # 自动回填业务员姓名
+        if "salesman_id" in update_data:
+            if update_data["salesman_id"]:
+                salesman = await User.filter(id=update_data["salesman_id"]).first()
+                if salesman:
+                    customer.salesman_name = salesman.full_name or salesman.username
+            else:
+                customer.salesman_name = None
+
         try:
             await customer.save()
         except IntegrityError as e:
@@ -267,6 +282,12 @@ class SupplyChainService:
         create_data = data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict()
         if create_data.get("is_active") is None:
             create_data["is_active"] = True
+        # 自动回填采购员姓名
+        if create_data.get("buyer_id"):
+            buyer = await User.filter(id=create_data["buyer_id"]).first()
+            if buyer:
+                create_data["buyer_name"] = buyer.full_name or buyer.username
+
         try:
             supplier = await Supplier.create(
                 tenant_id=tenant_id,
@@ -418,6 +439,15 @@ class SupplyChainService:
         for key, value in update_data.items():
             setattr(supplier, key, value)
         
+        # 自动回填采购员姓名
+        if "buyer_id" in update_data:
+            if update_data["buyer_id"]:
+                buyer = await User.filter(id=update_data["buyer_id"]).first()
+                if buyer:
+                    supplier.buyer_name = buyer.full_name or buyer.username
+            else:
+                supplier.buyer_name = None
+
         try:
             await supplier.save()
         except IntegrityError as e:

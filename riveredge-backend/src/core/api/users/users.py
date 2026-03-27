@@ -210,7 +210,7 @@ async def create_user(
 @router.get("", response_model=UserListResponse)
 async def get_user_list(
     page: int = Query(1, ge=1, description="页码"),
-    page_size: int = Query(20, ge=1, le=100, description="每页数量"),
+    page_size: int = Query(20, ge=1, le=1000, description="每页数量"),
     keyword: Optional[str] = Query(None, description="关键词搜索"),
     username: Optional[str] = Query(None, description="用户名筛选"),
     email: Optional[str] = Query(None, description="邮箱筛选"),

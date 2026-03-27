@@ -13,6 +13,7 @@ import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
 import { customerApi, getUserOptions, getDictionaryOptions } from '../services/supply-chain';
 import { testGenerateCode, generateCode, getCodeRulePageConfig } from '../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../utils/codeRulePage';
+import { useGlobalStore } from '../../../stores/globalStore';
 import type { Customer, CustomerCreate, CustomerUpdate } from '../types/supply-chain';
 import { SchemaFormRenderer } from '../../../components/schema-form';
 import { customerFormSchema } from '../schemas/customer';
@@ -50,17 +51,21 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
     if (!open) return;
     (async () => {
       try {
-        const [users, industry, level, lead] = await Promise.all([
+        const [users, industry, level, lead, category, contactTitle] = await Promise.all([
           getUserOptions(),
           getDictionaryOptions('INDUSTRY_SECTOR'),
           getDictionaryOptions('CUSTOMER_LEVEL'),
           getDictionaryOptions('PARTNER_SOURCE_CHANNEL'),
+          getDictionaryOptions('CUSTOMER_CATEGORY'),
+          getDictionaryOptions('CONTACT_TITLE'),
         ]);
         setOptionsMap({
           salesmanId: users,
           industryCode: industry,
           customerLevelCode: level,
           leadSourceCode: lead,
+          category,
+          contactTitle,
         });
       } catch {
         setOptionsMap({});
@@ -70,8 +75,13 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
 
   useEffect(() => {
     if (!open) return;
+    const currentUser = useGlobalStore.getState().currentUser;
     formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({ isActive: true, isPublic: false });
+    formRef.current?.setFieldsValue({
+      isActive: true,
+      isPublic: false,
+      salesmanId: currentUser?.id,
+    });
     if (!editUuid) {
       (async () => {
         let ruleCode = getPageRuleCode(PAGE_CODE);
@@ -88,16 +98,29 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
           testGenerateCode({ rule_code: ruleCode })
             .then((res) => {
               setPreviewCode(res.code);
-              formRef.current?.setFieldsValue({ code: res.code, isActive: true, isPublic: false });
+              formRef.current?.setFieldsValue({
+                code: res.code,
+                isActive: true,
+                isPublic: false,
+                salesmanId: currentUser?.id,
+              });
             })
             .catch(() => {
               setPreviewCode(null);
-              formRef.current?.setFieldsValue({ isActive: true, isPublic: false });
+              formRef.current?.setFieldsValue({
+                isActive: true,
+                isPublic: false,
+                salesmanId: currentUser?.id,
+              });
             });
         } else {
           setPreviewCode(null);
           setEffectiveRuleCode(null);
-          formRef.current?.setFieldsValue({ isActive: true, isPublic: false });
+          formRef.current?.setFieldsValue({
+            isActive: true,
+            isPublic: false,
+            salesmanId: currentUser?.id,
+          });
         }
       })();
       return;

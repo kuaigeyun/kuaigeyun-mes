@@ -15,12 +15,13 @@ import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, 
 import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
+import { UniImport } from '../../../../../components/uni-import';
+import { DictionarySelect } from '../../../../../components/dictionary-select';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
 import type { Material } from '../../../../master-data/types/material';
 import { CustomerFormModal } from '../../../../master-data/components/CustomerFormModal';
 import { customerApi } from '../../../../master-data/services/supply-chain';
-const LazyUniImport = lazy(() => import('../../../../../components/uni-import').then(m => ({ default: m.UniImport })));
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DRAWER_CONFIG, FormModalTemplate } from '../../../../../components/layout-templates';
 import { AmountDisplay } from '../../../../../components/permission';
@@ -77,10 +78,8 @@ const QuotationsPage: React.FC = () => {
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   /** 发货方式字典选项（数据字典 SHIPPING_METHOD） */
   const [shippingMethodOptions, setShippingMethodOptions] = useState<Array<{ label: string; value: string }>>([]);
-  const [shippingMethodLoading, setShippingMethodLoading] = useState(false);
   /** 付款条件字典选项（数据字典 PAYMENT_TERMS） */
   const [paymentTermsOptions, setPaymentTermsOptions] = useState<Array<{ label: string; value: string }>>([]);
-  const [paymentTermsLoading, setPaymentTermsLoading] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -110,36 +109,27 @@ const QuotationsPage: React.FC = () => {
     load();
   }, []);
 
-  /** 加载发货方式、付款条件数据字典 */
   useEffect(() => {
     const loadShippingMethod = async () => {
       try {
-        setShippingMethodLoading(true);
         const dict = await getDataDictionaryByCode('SHIPPING_METHOD');
         const items = await getDictionaryItemList(dict.uuid, true);
         setShippingMethodOptions(
           items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value }))
         );
       } catch (e: any) {
-        console.warn('发货方式字典未配置或加载失败:', e?.message || e);
         setShippingMethodOptions([]);
-      } finally {
-        setShippingMethodLoading(false);
       }
     };
     const loadPaymentTerms = async () => {
       try {
-        setPaymentTermsLoading(true);
         const dict = await getDataDictionaryByCode('PAYMENT_TERMS');
         const items = await getDictionaryItemList(dict.uuid, true);
         setPaymentTermsOptions(
           items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value }))
         );
       } catch (e: any) {
-        console.warn('付款条件字典未配置或加载失败:', e?.message || e);
         setPaymentTermsOptions([]);
-      } finally {
-        setPaymentTermsLoading(false);
       }
     };
     loadShippingMethod();
@@ -929,40 +919,36 @@ const QuotationsPage: React.FC = () => {
           </ProForm.Item>
           <Form.Item name="salesman_name" hidden><Input /></Form.Item>
         </Col>
+        <Col span={6}>
+          <DictionarySelect
+            dictionaryCode="SHIPPING_METHOD"
+            name="shipping_method"
+            label="发货方式"
+            placeholder="请选择发货方式"
+            formRef={formRef}
+          />
+        </Col>
+        <Col span={6}>
+          <DictionarySelect
+            dictionaryCode="PAYMENT_TERM"
+            name="payment_terms"
+            label="付款条件"
+            placeholder="请选择付款条件"
+            formRef={formRef}
+          />
+        </Col>
         <Col span={12}>
           <ProFormText name="shipping_address" label="收货地址" placeholder="请输入收货地址" />
         </Col>
         <Col span={6}>
-          <ProForm.Item name="shipping_method" label="发货方式">
-            <UniDropdown
-              placeholder="请选择发货方式"
-              showSearch
-              allowClear
-              loading={shippingMethodLoading}
-              style={{ width: '100%' }}
-              options={shippingMethodOptions}
-              quickCreate={{
-                label: '数据字典管理',
-                onClick: () => navigate('/system/data-dictionaries'),
-              }}
-            />
-          </ProForm.Item>
-        </Col>
-        <Col span={6}>
-          <ProForm.Item name="payment_terms" label="付款条件">
-            <UniDropdown
-              placeholder="请选择付款条件"
-              showSearch
-              allowClear
-              loading={paymentTermsLoading}
-              style={{ width: '100%' }}
-              options={paymentTermsOptions}
-              quickCreate={{
-                label: '数据字典管理',
-                onClick: () => navigate('/system/data-dictionaries'),
-              }}
-            />
-          </ProForm.Item>
+          <DictionarySelect
+            dictionaryCode="CURRENCY"
+            name="currency_code"
+            label="币种"
+            placeholder="请选择币种"
+            formRef={formRef}
+            initialValue="CNY"
+          />
         </Col>
       </Row>
       <ProFormText name="customer_name" hidden />
@@ -1392,18 +1378,14 @@ const QuotationsPage: React.FC = () => {
         title="从数据集同步报价单"
       />
 
-      {importModalVisible && (
-        <Suspense fallback={null}>
-          <LazyUniImport
-            visible={importModalVisible}
-            onCancel={() => setImportModalVisible(false)}
-            onConfirm={handleItemImport}
-            title="导入报价明细"
-            headers={['物料编码', '规格', '单位', '数量', '单价', '交货日期']}
-            exampleRow={['MAT001', 'Spec X', 'PCS', '100', '1.5', '2026-03-01']}
-          />
-        </Suspense>
-      )}
+      <UniImport
+        visible={importModalVisible}
+        onCancel={() => setImportModalVisible(false)}
+        onConfirm={handleItemImport}
+        title="导入报价明细"
+        headers={['物料编码', '规格', '单位', '数量', '单价', '交货日期']}
+        exampleRow={['MAT001', 'Spec X', 'PCS', '100', '1.5', '2026-03-01']}
+      />
     </>
   );
 };

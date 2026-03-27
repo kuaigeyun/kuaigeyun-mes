@@ -103,6 +103,7 @@ class UserListItem(BaseModel):
 
     **注意**: 遵循自增ID+UUID混合方案，只对外暴露UUID。
     """
+    id: int = Field(..., description="用户 ID（自增主键，内部关联使用）")
     uuid: str = Field(..., description="用户UUID（对外暴露，业务标识）")
     username: str = Field(..., description="用户名")
     email: Optional[str] = Field(None, description="用户邮箱")

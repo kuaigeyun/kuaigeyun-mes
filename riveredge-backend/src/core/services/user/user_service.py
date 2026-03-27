@@ -228,8 +228,8 @@ class UserService:
         total = await User.filter(query).count()
         
         # 限制分页大小，避免过大查询
-        if page_size > 100:
-            page_size = 100
+        if page_size > 1000:
+            page_size = 1000
         
         # 分页查询（预加载 roles、department、position，与详情接口一致，确保列表和编辑能正确带出）
         offset = (page - 1) * page_size
@@ -240,6 +240,7 @@ class UserService:
         for user in users:
             try:
                 user_dict = {
+                    "id": user.id,
                     "uuid": user.uuid,
                     "username": user.username,
                     "email": user.email,

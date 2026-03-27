@@ -11,12 +11,13 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form as AntForm, Select, InputNumber, Input, Row, Col } from 'antd';
+import { App, Button, Tag, Space, Modal, Table, Form as AntForm, Select, InputNumber, Input, Row, Col, Typography } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, ShoppingOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
+import { UniImport } from '../../../../../components/uni-import';
 import type { Material } from '../../../../master-data/types/material';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
@@ -74,13 +75,13 @@ const ShipmentNoticesPage: React.FC = () => {
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const formRef = useRef<any>(null);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const [customerList, setCustomerList] = useState<any[]>([]);
   const [salesOrderList, setSalesOrderList] = useState<any[]>([]);
   const [previewCode, setPreviewCode] = useState<string | null>(null);
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
+  const [importVisible, setImportVisible] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -89,7 +90,7 @@ const ShipmentNoticesPage: React.FC = () => {
           customerApi.list({ limit: 1000, isActive: true }),
           listSalesOrders({ limit: 500 }).catch(() => ({ data: [], total: 0, success: false })),
         ]);
-        setCustomerList(Array.isArray(cust) ? cust : cust?.items || []);
+        setCustomerList(Array.isArray(cust) ? cust : (cust as any)?.data || (cust as any)?.items || []);
         setSalesOrderList(ordersRes?.data || []);
       } catch (e) {
         console.error('加载客户/销售订单失败', e);
@@ -108,13 +109,34 @@ const ShipmentNoticesPage: React.FC = () => {
         material_spec: m.specification ?? '',
         material_unit: m.baseUnit ?? '件',
         notice_quantity: 1,
-        unit_price: 0,
+        unit_price: (m as any).defaults?.defaultSalePrice ?? (m as any).defaults?.default_sale_price ?? 0,
       }));
-      formRef.current?.setFieldsValue({ items: [...current, ...newRows] });
+      // 如果当前只有一行且未选择物料，则替换该行
+      if (current.length === 1 && !current[0].material_id && !current[0].material_code) {
+        formRef.current?.setFieldsValue({ items: newRows });
+      } else {
+        formRef.current?.setFieldsValue({ items: [...current, ...newRows] });
+      }
       messageApi.success(t('app.kuaizhizao.common.materialBatchAdded', { count: selected.length }));
     },
     [messageApi, t]
   );
+
+  /**
+   * 发货通知单明细汇总组件
+   */
+  const ShipmentNoticeFormSummary: React.FC = () => {
+    const items = AntForm.useWatch('items');
+    const totalQuantity = items?.reduce((sum: number, it: any) => sum + (Number(it?.notice_quantity) || 0), 0) || 0;
+    const totalAmount = items?.reduce((sum: number, it: any) => sum + (Number(it?.notice_quantity) * Number(it?.unit_price || 0) || 0), 0) || 0;
+
+    return (
+      <div style={{ marginTop: 12, padding: '12px', background: '#fafafa', borderRadius: '4px', display: 'flex', justifyContent: 'flex-end', gap: 24 }}>
+        <span>{t('app.kuaizhizao.shipmentNotice.totalQuantity') || '总通知数量'}: <Typography.Text strong>{totalQuantity}</Typography.Text></span>
+        <span>{t('app.kuaizhizao.shipmentNotice.totalAmount') || '总预计金额'}: <Typography.Text strong>¥{totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Typography.Text></span>
+      </div>
+    );
+  };
 
   const columns: ProColumns<ShipmentNotice>[] = [
     { title: '通知单号', dataIndex: 'notice_code', width: 140, ellipsis: true, fixed: 'left' },
@@ -126,7 +148,7 @@ const ShipmentNoticesPage: React.FC = () => {
       dataIndex: 'lifecycle',
       width: 100,
       render: (_, record) => {
-        const lifecycle = getShipmentNoticeLifecycle(record);
+        const lifecycle = getShipmentNoticeLifecycle(record as any);
         const stageName = lifecycle.stageName ?? record.status ?? '待发货';
         const c = STATUS_MAP[stageName] || { text: stageName || '-', color: 'default' };
         return <Tag color={c.color}>{c.text}</Tag>;
@@ -145,8 +167,8 @@ const ShipmentNoticesPage: React.FC = () => {
           {record.status === '待发货' && (
             <>
               <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
-              <Button type="link" size="small" icon={<SendOutlined />} onClick={() => handleNotify(record)} style={{ color: '#1890ff' }}>通知仓库</Button>
-              <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>删除</Button>
+              <Button type="link" size="small" icon={<SendOutlined />} onClick={() => handleNotify(record as any)} style={{ color: '#1890ff' }}>通知仓库</Button>
+              <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record as any)}>删除</Button>
             </>
           )}
         </Space>
@@ -240,7 +262,6 @@ const ShipmentNoticesPage: React.FC = () => {
             await shipmentNoticeApi.delete(String(k));
           }
           messageApi.success(`已删除 ${keys.length} 条发货通知单`);
-          setSelectedRowKeys([]);
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error?.message || '批量删除失败');
@@ -304,16 +325,17 @@ const ShipmentNoticesPage: React.FC = () => {
       customer_name: custName,
       customer_contact: order.customer_contact || cust?.contactPerson || (cust as any)?.contact,
       customer_phone: order.customer_phone || cust?.phone,
+      shipping_address: order.shipping_address || cust?.address,
     });
     if (order.items && order.items.length > 0) {
-      const items = order.items.map((it: any) => ({
+      const items = order.items.map((it: any, index: number) => ({
         material_id: it.material_id ?? it.materialId,
         material_code: it.material_code || it.materialCode || '',
         material_name: it.material_name || it.materialName || '',
         material_spec: it.material_spec || '',
         material_unit: it.material_unit || it.materialUnit || '件',
         notice_quantity: Number(it.required_quantity ?? it.quantity ?? it.order_quantity) || 0,
-        unit_price: Number(it.unit_price ?? it.unitPrice) || 0,
+        unit_price: Number((it.unit_price ?? it.unitPrice) || (order.items && order.items[index]?.unit_price)) || 0,
       }));
       formRef.current?.setFieldsValue({ items });
     }
@@ -423,6 +445,32 @@ const ShipmentNoticesPage: React.FC = () => {
     { title: '备注', dataIndex: 'notes', span: 2 },
   ];
 
+  const handleExcelImport = (data: any[][]) => {
+    if (data.length <= 1) return;
+    // 假设第一行是表头，从第二行开始取数据
+    // 简单映射：A列编码, B列数量, C列单价 (业务具体根据 headers 调整)
+    const items = data.slice(1).filter(row => row[0]).map(row => ({
+      material_code: String(row[0] || ''),
+      notice_quantity: Number(row[1]) || 1,
+      unit_price: Number(row[2]) || 0,
+      material_name: String(row[3] || ''),
+      material_spec: String(row[4] || ''),
+      material_unit: String(row[5] || '件'),
+    }));
+
+    if (items.length === 0) {
+      messageApi.warning('未发现有效数据');
+      return;
+    }
+
+    const currentItems = formRef.current?.getFieldValue('items') || [];
+    const filteredCurrent = currentItems.filter((it: any) => it.material_id || it.material_code);
+    formRef.current?.setFieldsValue({
+      items: [...filteredCurrent, ...items]
+    });
+    messageApi.success(`成功导入 ${items.length} 条数据`);
+  };
+
   const renderCreateForm = () => (
     <>
       <Row gutter={16}>
@@ -470,6 +518,7 @@ const ShipmentNoticesPage: React.FC = () => {
                   customer_name: cust.name || cust.customer_name,
                   customer_contact: cust.contactPerson ?? (cust as any)?.contact,
                   customer_phone: cust.phone,
+                  shipping_address: cust.address,
                 });
               }}
             />
@@ -488,7 +537,7 @@ const ShipmentNoticesPage: React.FC = () => {
             name="warehouse_id"
             label="出库仓库"
             placeholder="请选择出库仓库"
-            onChange={(val, wh) => formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
+            onChange={(_, wh) => formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
           />
         </Col>
       </Row>
@@ -500,7 +549,16 @@ const ShipmentNoticesPage: React.FC = () => {
         <Col span={12} />
       </Row>
       <ProFormTextArea name="shipping_address" label="收货地址" placeholder="收货地址" fieldProps={{ rows: 2 }} />
-      <ProFormItem label="通知明细" required style={{ width: '100%' }}>
+      <ProFormItem 
+        label={
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+            <span>通知明细</span>
+            <Button type="link" size="small" onClick={() => setImportVisible(true)}>Excel 导入</Button>
+          </div>
+        } 
+        required 
+        style={{ width: '100%' }}
+      >
         <ProForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: '请至少添加一条通知明细' }]}>
           <AntForm.List name="items">
             {(fields, { add, remove }) => {
@@ -531,6 +589,7 @@ const ShipmentNoticesPage: React.FC = () => {
                               material_name: 'name',
                               material_spec: 'specification',
                               material_unit: 'baseUnit',
+                              unit_price: 'defaults.defaultSalePrice' as any,
                             }}
                             fallbackOption={fallback}
                             formItemProps={{ style: { margin: 0 } }}
@@ -601,14 +660,13 @@ const ShipmentNoticesPage: React.FC = () => {
                     pagination={false}
                     columns={cols}
                     footer={() => (
-                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
-                        <Button type="dashed" icon={<PlusOutlined />} style={{ flex: 1, minWidth: 120 }} onClick={() => add(defaultNoticeItem)}>
-                          添加明细
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                        <Button type="dashed" icon={<PlusOutlined />} onClick={() => add(defaultNoticeItem)}>
+                          新增明细
                         </Button>
                         <Button
-                          type="default"
+                          type="link"
                           icon={<ShoppingOutlined />}
-                          style={{ flex: 1, minWidth: 120 }}
                           onClick={() => setMaterialPickerOpen(true)}
                         >
                           {t('app.kuaizhizao.common.materialBatchSelect')}
@@ -621,6 +679,7 @@ const ShipmentNoticesPage: React.FC = () => {
             }}
           </AntForm.List>
         </ProForm.Item>
+        <ShipmentNoticeFormSummary />
       </ProFormItem>
       <ProFormTextArea name="notes" label="备注" placeholder="备注" fieldProps={{ rows: 2 }} colProps={{ span: 24 }} />
     </>
@@ -666,7 +725,7 @@ const ShipmentNoticesPage: React.FC = () => {
             name="warehouse_id"
             label="出库仓库"
             placeholder="请选择出库仓库"
-            onChange={(val, wh) => formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
+            onChange={(_, wh) => formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
           />
         </Col>
       </Row>
@@ -700,6 +759,7 @@ const ShipmentNoticesPage: React.FC = () => {
             );
           }}
         </AntForm.Item>
+        <ShipmentNoticeFormSummary />
       </ProFormItem>
       <ProFormTextArea name="notes" label="备注" placeholder="备注" fieldProps={{ rows: 2 }} colProps={{ span: 24 }} />
     </>
@@ -718,7 +778,6 @@ const ShipmentNoticesPage: React.FC = () => {
           createButtonText="新建发货通知单"
           onCreate={handleCreate}
           enableRowSelection
-          onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
           onDelete={handleBatchDelete}
           request={async (params) => {
@@ -739,6 +798,13 @@ const ShipmentNoticesPage: React.FC = () => {
             }
           }}
           scroll={{ x: 1200 }}
+          footer={() => (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+              <Button type="dashed" icon={<PlusOutlined />} onClick={() => setImportVisible(true)}>
+                导入
+              </Button>
+            </div>
+          )}
         />
       </ListPageTemplate>
 
@@ -753,7 +819,7 @@ const ShipmentNoticesPage: React.FC = () => {
         {noticeDetail?.items && noticeDetail.items.length > 0 && (
           <Table
             size="small"
-            rowKey={(_, idx) => (noticeDetail?.items?.[idx] as any)?.id ?? idx}
+            rowKey={(record: any) => record.id || record.material_code}
             columns={[
               { title: '物料编码', dataIndex: 'material_code', width: 120 },
               { title: '物料名称', dataIndex: 'material_name', width: 150 },
@@ -796,7 +862,19 @@ const ShipmentNoticesPage: React.FC = () => {
       <MaterialBatchPickerModal
         open={materialPickerOpen}
         onCancel={() => setMaterialPickerOpen(false)}
-        onConfirm={appendShipmentNoticeItemsFromMaterials}
+        onConfirm={(selected) => {
+          appendShipmentNoticeItemsFromMaterials(selected);
+          setMaterialPickerOpen(false);
+        }}
+      />
+
+      <UniImport
+        visible={importVisible}
+        onCancel={() => setImportVisible(false)}
+        onConfirm={handleExcelImport}
+        title="导入通知明细"
+        headers={['物料编码', '数量', '单价', '物料名称', '规格', '单位']}
+        exampleRow={['MT001', '10', '15.5', '示例物料', '规格X', '件']}
       />
     </>
   );

@@ -6,7 +6,7 @@
  * 与 Form.Item 配合使用：<Form.Item name="customer_id"><UniDropdown options={...} quickCreate={...} advancedSearch={...} /></Form.Item>
  */
 
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, forwardRef } from 'react';
 import { Select, theme } from 'antd';
 import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
 import type { SelectProps } from 'antd';
@@ -20,7 +20,7 @@ export interface UniDropdownProps extends Omit<SelectProps, 'dropdownRender' | '
   advancedSearch?: AdvancedSearchConfig;
 }
 
-export const UniDropdown: React.FC<UniDropdownProps> = ({
+export const UniDropdown = forwardRef<any, UniDropdownProps>(({
   quickCreate,
   advancedSearch,
   onChange,
@@ -28,7 +28,7 @@ export const UniDropdown: React.FC<UniDropdownProps> = ({
   optionFilterProp,
   style,
   ...selectProps
-}) => {
+}, ref) => {
   const { token } = theme.useToken();
   const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);
   const pinyinMatchRef = useRef<((text: string, pattern: string) => any) | null>(null);
@@ -150,6 +150,7 @@ export const UniDropdown: React.FC<UniDropdownProps> = ({
         optionFilterProp={effectiveOptionFilterProp}
         onChange={onChange}
         popupRender={popupRender}
+        ref={ref}
       />
       {advancedSearch && (
         <AdvancedSearchModal
@@ -163,7 +164,7 @@ export const UniDropdown: React.FC<UniDropdownProps> = ({
       )}
     </>
   );
-};
+});
 
 export type { QuickCreateConfig, AdvancedSearchConfig, AdvancedSearchField } from './types';
 export { AdvancedSearchModal } from './AdvancedSearchModal';

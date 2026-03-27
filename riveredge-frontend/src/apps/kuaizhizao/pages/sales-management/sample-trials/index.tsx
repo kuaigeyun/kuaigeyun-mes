@@ -11,14 +11,11 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, DatePicker, Row, Col, Select } from 'antd';
+import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Row, Col, Select, Typography } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, ExportOutlined, PrinterOutlined, ShoppingOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { UniTable } from '../../../../../components/uni-table';
-import { UniDropdown } from '../../../../../components/uni-dropdown';
-import { UniMaterialSelect } from '../../../../../components/uni-material-select';
-import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
-import type { Material } from '../../../../master-data/types/material';
+import { UniImport } from '../../../../../components/uni-import';
+import { DictionarySelect } from '../../../../../components/dictionary-select';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate } from '../../../../../components/layout-templates';
 import { sampleTrialApi } from '../../../services/sample-trial';
@@ -28,6 +25,7 @@ import { warehouseApi } from '../../../../master-data/services/warehouse';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { batchImport } from '../../../../../utils/batchOperations';
+import { CustomerFormModal } from '../../../../master-data/components/CustomerFormModal';
 import { useTranslation } from 'react-i18next';
 
 interface SampleTrial {
@@ -64,6 +62,22 @@ const STATUS_MAP: Record<string, { text: string; color: string }> = {
   已关闭: { text: '已关闭', color: 'default' },
 };
 
+/**
+ * 试用单明细汇总组件
+ */
+const SampleTrialFormSummary: React.FC = () => {
+  const items = Form.useWatch('items');
+  const totalQuantity = items?.reduce((sum: number, it: any) => sum + (Number(it?.trial_quantity) || 0), 0) || 0;
+  const totalAmount = items?.reduce((sum: number, it: any) => sum + ((Number(it?.trial_quantity) || 0) * (Number(it?.unit_price) || 0)), 0) || 0;
+
+  return (
+    <div style={{ marginTop: 12, padding: '12px', background: '#fafafa', borderRadius: '4px', display: 'flex', justifyContent: 'flex-end', gap: 24 }}>
+      <span>总数量: <Typography.Text strong>{totalQuantity}</Typography.Text></span>
+      <span>总金额: <Typography.Text strong type="danger">¥{totalAmount.toFixed(2)}</Typography.Text></span>
+    </div>
+  );
+};
+
 const SampleTrialsPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -82,7 +96,10 @@ const SampleTrialsPage: React.FC = () => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [syncModalVisible, setSyncModalVisible] = useState(false);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
+  const [importModalVisible, setImportModalVisible] = useState(false);
+  const [form] = Form.useForm();
   const formRef = useRef<any>(null);
+  const [customerModalVisible, setCustomerModalVisible] = useState(false);
   const outboundFormRef = useRef<any>(null);
   const [customerList, setCustomerList] = useState<any[]>([]);
   const [customersLoading, setCustomersLoading] = useState(false);
@@ -260,7 +277,6 @@ const SampleTrialsPage: React.FC = () => {
     const headers = (data[0] || []).map((h: any) => String(h || '').trim());
     const headerMap: Record<string, number> = {};
     headers.forEach((h, i) => {
-      const k = h.replace(/^\*/, '').toLowerCase();
       if (h.includes('试用单号') || h.includes('trial_code')) headerMap['trial_code'] = i;
       else if (h.includes('客户') || h.includes('customer')) headerMap['customer_name'] = i;
       else if (h.includes('试用目的') || h.includes('trial_purpose')) headerMap['trial_purpose'] = i;
@@ -459,6 +475,7 @@ const SampleTrialsPage: React.FC = () => {
         material_name: m.name ?? '',
         material_spec: m.specification ?? '',
         material_unit: m.baseUnit ?? '件',
+        unit_price: (m as any).defaults?.defaultSalePrice ?? (m as any).default_sale_price ?? 0,
       }));
       formRef.current?.setFieldsValue({ items: [...current, ...newRows] });
       messageApi.success(t('app.kuaizhizao.common.materialBatchAdded', { count: selected.length }));
@@ -471,6 +488,7 @@ const SampleTrialsPage: React.FC = () => {
    * 参考销售订单：先打开弹窗，再请求 testGenerateCode 预填编码（不占用序号）
    */
   const handleCreate = async () => {
+    form.resetFields();
     formRef.current?.resetFields();
     setEditingId(null);
     setPreviewCode(null);
@@ -643,7 +661,7 @@ const SampleTrialsPage: React.FC = () => {
         <Col span={12}>
           <ProFormText
             name="trial_code"
-            label="试用单号"
+            label={t('app.kuaizhizao.sampleTrial.fieldTrialCode') || '试用单号'}
             placeholder={isAutoGenerateEnabled('kuaizhizao-sample-trial') ? '编码将根据编码规则自动生成，可修改' : '请输入试用单号'}
             fieldProps={{ disabled: !!editingId }}
           />
@@ -651,12 +669,7 @@ const SampleTrialsPage: React.FC = () => {
         <Col span={12}>
           <ProForm.Item
             name="customer_id"
-            label={
-              <span>
-                客户
-                <a href="/apps/master-data/supply-chain/customers" onClick={(e) => { e.preventDefault(); navigate('/apps/master-data/supply-chain/customers'); }} style={{ marginLeft: 8, fontSize: 12 }}>客户信息管理</a>
-              </span>
-            }
+            label={<span>{t('app.kuaizhizao.sampleTrial.fieldCustomer') || '客户'}</span>}
             rules={[{ required: true, message: '请选择客户' }]}
           >
             <UniDropdown
@@ -664,28 +677,15 @@ const SampleTrialsPage: React.FC = () => {
               showSearch
               allowClear
               loading={customersLoading}
-              style={{ width: '100%' }}
               options={customerList.map((c: any) => ({
                 value: c.id ?? c.customer_id,
                 label: `${c.code ?? c.customer_code ?? ''} - ${c.name ?? c.customer_name ?? ''}`.trim() || String(c.id ?? c.customer_id),
               }))}
               onChange={(v) => {
                 const cust = customerList.find((x: any) => (x.id ?? x.customer_id) === v);
-                if (cust) formRef.current?.setFieldsValue({ customer_contact: cust.contactPerson ?? cust.contact ?? cust.customer_contact, customer_phone: cust.phone ?? cust.customer_phone });
+                if (cust) form.setFieldsValue({ customer_contact: cust.contactPerson ?? cust.contact ?? cust.customer_contact, customer_phone: cust.phone ?? cust.customer_phone });
               }}
-              quickCreate={{ label: '客户信息管理', onClick: () => navigate('/apps/master-data/supply-chain/customers') }}
-              advancedSearch={{
-                label: '高级搜索',
-                fields: [{ name: 'code', label: '客户编码' }, { name: 'name', label: '客户名称' }],
-                onSearch: async (vals) => {
-                  const res = await customerApi.list({ limit: 200, skip: 0 });
-                  const list = Array.isArray(res) ? res : (res as any)?.data ?? (res as any)?.items ?? [];
-                  let f = list;
-                  if (vals.code?.trim()) f = f.filter((c: any) => (c.code ?? '').toLowerCase().includes(vals.code.trim().toLowerCase()));
-                  if (vals.name?.trim()) f = f.filter((c: any) => (c.name ?? '').toLowerCase().includes(vals.name.trim().toLowerCase()));
-                  return f.map((c: any) => ({ value: c.id ?? c.uuid, label: `${c.code ?? ''} - ${c.name ?? ''}`.trim() || String(c.id ?? c.uuid) }));
-                },
-              }}
+              quickCreate={{ label: '快速新增客户', onClick: () => setCustomerModalVisible(true) }}
             />
           </ProForm.Item>
         </Col>
@@ -699,10 +699,10 @@ const SampleTrialsPage: React.FC = () => {
           <ProFormText name="trial_purpose" label="试用目的" placeholder="试用目的" />
         </Col>
         <Col span={6}>
-          <ProFormDatePicker name="trial_period_start" label="试用开始日期" fieldProps={{ style: { width: '100%' } }} />
+          <ProFormDatePicker name="trial_period_start" label={t('app.kuaizhizao.sampleTrial.fieldStartDate') || '试用开始日期'} fieldProps={{ style: { width: '100%' } }} />
         </Col>
         <Col span={6}>
-          <ProFormDatePicker name="trial_period_end" label="试用结束日期" fieldProps={{ style: { width: '100%' } }} />
+          <ProFormDatePicker name="trial_period_end" label={t('app.kuaizhizao.sampleTrial.fieldEndDate') || '试用结束日期'} fieldProps={{ style: { width: '100%' } }} />
         </Col>
       </Row>
 
@@ -710,8 +710,11 @@ const SampleTrialsPage: React.FC = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <span style={{ fontWeight: 600, color: 'rgba(0, 0, 0, 0.88)' }}>
             <span style={{ color: '#ff4d4f', marginRight: 4, fontFamily: 'SimSun, sans-serif' }}>*</span>
-            明细
+            {t('app.kuaizhizao.sampleTrial.detailItems') || '明细'}
           </span>
+          <Space>
+            <Button size="small" type="primary" ghost icon={<ShoppingOutlined />} onClick={() => setMaterialPickerOpen(true)}>批量添加物料</Button>
+          </Space>
         </div>
         <ProForm.Item name="items" noStyle rules={[{ type: 'array' as const, min: 1, message: '请至少添加一条明细' }]}>
           <Form.List name="items">
@@ -743,6 +746,7 @@ const SampleTrialsPage: React.FC = () => {
                             material_name: 'name',
                             material_spec: 'specification',
                             material_unit: 'baseUnit',
+                            unit_price: 'defaults.defaultSalePrice' as any,
                           }}
                           fallbackOption={fallback}
                           formItemProps={{ style: { margin: 0 } }}
@@ -809,19 +813,17 @@ const SampleTrialsPage: React.FC = () => {
                     scroll={fields.length > 0 ? { x: totalWidth } : undefined}
                     style={{ width: '100%', margin: 0 }}
                     footer={() => (
-                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', padding: '0 8px' }}>
                         <Button
                           type="dashed"
                           icon={<PlusOutlined />}
-                          style={{ flex: 1, minWidth: 120 }}
                           onClick={() => add({ ...defaultTrialItem })}
                         >
-                          添加明细
+                          新增明细
                         </Button>
                         <Button
-                          type="default"
+                          type="link"
                           icon={<ShoppingOutlined />}
-                          style={{ flex: 1, minWidth: 120 }}
                           onClick={() => setMaterialPickerOpen(true)}
                         >
                           {t('app.kuaizhizao.common.materialBatchSelect')}
@@ -833,10 +835,11 @@ const SampleTrialsPage: React.FC = () => {
               </div>
             );
           }}
-        </Form.List>
+          </Form.List>
         </ProForm.Item>
+        <SampleTrialFormSummary />
       </div>
-      <ProFormTextArea name="notes" label="备注" fieldProps={{ rows: 2 }} />
+      <ProFormTextArea name="notes" label={t('app.kuaizhizao.common.fieldNotes') || '备注'} fieldProps={{ rows: 2 }} />
     </>
   );
 
@@ -853,12 +856,12 @@ const SampleTrialsPage: React.FC = () => {
           createButtonText="新建样品试用"
           onCreate={handleCreate}
           enableRowSelection
+          selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
           onDelete={handleBatchDelete}
           showImportButton
-          onImport={handleListImport}
-          importHeaders={['试用单号', '*客户名称', '试用目的', '试用开始', '试用结束', '状态', '*物料编码', '*数量', '单价', '备注']}
+          onImport={() => setImportModalVisible(true)}
           showExportButton
           onExport={async (type, keys, pageData) => {
             try {
@@ -919,7 +922,7 @@ const SampleTrialsPage: React.FC = () => {
         {trialDetail?.items && trialDetail.items.length > 0 && (
           <Table
             size="small"
-            rowKey={(_, idx) => (trialDetail?.items?.[idx] as any)?.id ?? idx}
+            rowKey={(_, idx) => String(idx)}
             columns={[
               { title: '物料编码', dataIndex: 'material_code', width: 120 },
               { title: '物料名称', dataIndex: 'material_name', width: 150 },
@@ -977,7 +980,26 @@ const SampleTrialsPage: React.FC = () => {
         open={syncModalVisible}
         onClose={() => setSyncModalVisible(false)}
         onConfirm={handleSyncConfirm}
-        title="从数据集同步样品试用"
+        title="同步样品申请"
+      />
+
+      <CustomerFormModal
+        open={customerModalVisible}
+        editUuid={null}
+        onClose={() => setCustomerModalVisible(false)}
+        onSuccess={(newCust) => {
+          setCustomerList(prev => [...prev, newCust]);
+          form.setFieldValue('customer_id', newCust.id);
+          setCustomerModalVisible(false);
+        }}
+      />
+      <UniImport
+        visible={importModalVisible}
+        onCancel={() => setImportModalVisible(false)}
+        onConfirm={handleListImport}
+        title="导入样品试用明细"
+        headers={['物料编码', '数量', '单价', '备注']}
+        exampleRow={['MAT001', '10', '1.5', '试用备注']}
       />
     </>
   );

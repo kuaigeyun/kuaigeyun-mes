@@ -8,8 +8,8 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback } from 'react'
-import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions, ProFormInstance, ProFormSelect } from '@ant-design/pro-components'
-import { App, Button, Tag, Space, Drawer, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker } from 'antd'
+import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions, ProFormInstance } from '@ant-design/pro-components'
+import { App, Button, Tag, Space, Drawer, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Typography } from 'antd'
 import { PlusOutlined, DeleteOutlined, EyeOutlined, EditOutlined, ArrowDownOutlined, ShoppingOutlined } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -22,6 +22,8 @@ import { getBusinessConfig } from '../../../../../services/businessConfig'
 import { UniTable } from '../../../../../components/uni-table'
 import { UniMaterialSelect } from '../../../../../components/uni-material-select'
 import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal'
+import { DictionarySelect } from '../../../../../components/dictionary-select'
+import { UniImport } from '../../../../../components/uni-import'
 import type { Material } from '../../../../master-data/types/material'
 import {
   listSalesForecasts,
@@ -98,6 +100,7 @@ export default function SalesForecastsPage() {
   const [effectiveAutoGen, setEffectiveAutoGen] = useState<boolean | null>(null)
   const [drawerVisible, setDrawerVisible] = useState(false)
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false)
+  const [importModalVisible, setImportModalVisible] = useState(false)
   const [auditEnabled, setAuditEnabled] = useState(true)
 
   useEffect(() => {
@@ -171,11 +174,30 @@ export default function SalesForecastsPage() {
         material_spec: m.specification ?? '',
         material_unit: m.baseUnit ?? '件',
       }))
-      formRef.current?.setFieldsValue({ items: [...current, ...newRows] })
+      // 如果当前只有一行且未选择物料，则替换该行
+      if (current.length === 1 && !current[0].material_id && !current[0].material_code) {
+        formRef.current?.setFieldsValue({ items: newRows })
+      } else {
+        formRef.current?.setFieldsValue({ items: [...current, ...newRows] })
+      }
       messageApi.success(t('app.kuaizhizao.common.materialBatchAdded', { count: selected.length }))
     },
     [messageApi, t]
   )
+
+  /**
+   * 销售预测明细汇总组件
+   */
+  const SalesForecastFormSummary: React.FC = () => {
+    const items = AntForm.useWatch('items');
+    const totalQuantity = items?.reduce((sum: number, it: any) => sum + (Number(it?.forecast_quantity) || 0), 0) || 0;
+
+    return (
+      <div style={{ marginTop: 12, padding: '12px', background: '#fafafa', borderRadius: '4px', display: 'flex', justifyContent: 'flex-end' }}>
+        <span>{t('app.kuaizhizao.salesForecast.totalQuantity') || '总预测数量'}: <Typography.Text strong>{totalQuantity}</Typography.Text></span>
+      </div>
+    );
+  };
 
   const handleCreate = async () => {
     setIsEdit(false);
@@ -909,7 +931,7 @@ export default function SalesForecastsPage() {
           deleteButtonText={t('common.batchDelete')}
           onDelete={handleDelete}
           showImportButton={true}
-          onImport={handleImport}
+          onImport={() => setImportModalVisible(true)}
           showExportButton={true}
           onExport={handleExport}
         />
@@ -965,17 +987,13 @@ export default function SalesForecastsPage() {
         </Row>
         <Row gutter={16}>
           <Col span={8}>
-            <ProFormSelect
+            <DictionarySelect
               name="forecast_period"
               label={t('app.kuaizhizao.salesForecast.forecastPeriod')}
               placeholder={t('app.kuaizhizao.salesForecast.forecastPeriodPlaceholder')}
               required
-              options={[
-                { label: t('app.kuaizhizao.salesForecast.period.weekly'), value: 'WEEKLY' },
-                { label: t('app.kuaizhizao.salesForecast.period.monthly'), value: 'MONTHLY' },
-                { label: t('app.kuaizhizao.salesForecast.period.quarterly'), value: 'QUARTERLY' },
-              ]}
-              fieldProps={{ style: { width: '100%' } }}
+              dictionaryCode="FORECAST_PERIOD"
+              rules={[{ required: true, message: t('app.kuaizhizao.salesForecast.forecastPeriodPlaceholder') }]}
             />
           </Col>
           <Col span={8}>
@@ -997,10 +1015,20 @@ export default function SalesForecastsPage() {
         </Row>
 
         <div style={{ marginBottom: 24 }}>
-          <span style={{ fontWeight: 600, color: 'rgba(0, 0, 0, 0.88)', display: 'block', marginBottom: 12 }}>
-            <span style={{ color: '#ff4d4f', marginRight: 4, fontFamily: 'SimSun, sans-serif' }}>*</span>
-            {t('app.kuaizhizao.salesForecast.forecastItems')}
-          </span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <span style={{ fontWeight: 600, color: 'rgba(0, 0, 0, 0.88)' }}>
+              <span style={{ color: '#ff4d4f', marginRight: 4, fontFamily: 'SimSun, sans-serif' }}>*</span>
+              {t('app.kuaizhizao.salesForecast.forecastItems')}
+            </span>
+            <Button
+              type="link"
+              size="small"
+              icon={<ShoppingOutlined />}
+              onClick={() => setImportModalVisible(true)}
+            >
+              EXCEL导入明细
+            </Button>
+          </div>
           <ProForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: t('app.kuaizhizao.salesForecast.itemsRequired') }]}>
             <AntForm.List name="items">
               {(fields, { add, remove }) => {
@@ -1111,19 +1139,17 @@ export default function SalesForecastsPage() {
                       pagination={false}
                       columns={forecastItemColumns}
                       footer={() => (
-                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', padding: '0 8px' }}>
                           <Button
                             type="dashed"
                             icon={<PlusOutlined />}
-                            style={{ flex: 1, minWidth: 120 }}
                             onClick={() => add(defaultForecastItem)}
                           >
-                            {t('common.addDetail')}
+                            新增明细
                           </Button>
                           <Button
-                            type="default"
+                            type="link"
                             icon={<ShoppingOutlined />}
-                            style={{ flex: 1, minWidth: 120 }}
                             onClick={() => setMaterialPickerOpen(true)}
                           >
                             {t('app.kuaizhizao.common.materialBatchSelect')}
@@ -1136,6 +1162,7 @@ export default function SalesForecastsPage() {
               }}
             </AntForm.List>
           </ProForm.Item>
+          <SalesForecastFormSummary />
         </div>
         <ProFormTextArea name="notes" label={t('app.kuaizhizao.salesForecast.notes')} placeholder="-" />
       </FormModalTemplate>
@@ -1271,6 +1298,14 @@ export default function SalesForecastsPage() {
           </Space>
         )}
       </Drawer>
+    <UniImport
+      visible={importModalVisible}
+      onCancel={() => setImportModalVisible(false)}
+      onConfirm={handleImport}
+      title={t('app.kuaizhizao.salesForecast.importTitle') || '导入销售预测明细'}
+      headers={['物料编码', '预测数量', '预测日期', '备注']}
+      exampleRow={['MAT001', '100', '2026-03-01', '备注说明']}
+    />
     </>
   )
 }

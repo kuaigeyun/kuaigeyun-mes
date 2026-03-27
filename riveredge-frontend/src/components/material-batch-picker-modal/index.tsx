@@ -8,6 +8,9 @@ import type { ColumnsType } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
 import { materialApi, materialGroupApi } from '../../apps/master-data/services/material';
 import type { Material } from '../../apps/master-data/types/material';
+import { SecureImage } from '../secure-image';
+import { getDataDictionaryByCode, getDictionaryItemList } from '../../services/dataDictionary';
+import { Select } from 'antd';
 
 function getMaterialField(m: Record<string, unknown>, field: string): unknown {
   let v = m[field];
@@ -54,13 +57,29 @@ export const MaterialBatchPickerModal: React.FC<MaterialBatchPickerModalProps> =
   const { message } = App.useApp();
   const [searchText, setSearchText] = useState('');
   const [groupId, setGroupId] = useState<number | undefined>(undefined);
+  const [sourceType, setSourceType] = useState<string | undefined>(undefined);
   const [groupTree, setGroupTree] = useState<TreeNode[]>([]);
+  const [unitsMap, setUnitsMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [list, setList] = useState<Material[]>([]);
   const [page, setPage] = useState(1);
   const [totalHint, setTotalHint] = useState(0);
   /** 跨页选中缓存 */
   const [selectedMap, setSelectedMap] = useState<Map<number, Material>>(() => new Map());
+
+  const loadUnits = useCallback(async () => {
+    try {
+      const dict = await getDataDictionaryByCode('MATERIAL_UNIT');
+      const items = await getDictionaryItemList(dict.uuid, true);
+      const map: Record<string, string> = {};
+      items.forEach(item => {
+        map[item.value] = item.label;
+      });
+      setUnitsMap(map);
+    } catch (error) {
+      console.error('Failed to load material units dictionary:', error);
+    }
+  }, []);
 
   const loadTree = useCallback(async () => {
     try {
@@ -73,13 +92,14 @@ export const MaterialBatchPickerModal: React.FC<MaterialBatchPickerModalProps> =
   }, [message, t]);
 
   const fetchList = useCallback(
-    async (kw: string, gid: number | undefined, p: number) => {
+    async (kw: string, gid: number | undefined, st: string | undefined, p: number) => {
       setLoading(true);
       try {
         const skip = (p - 1) * PAGE_SIZE;
         const response: unknown = await materialApi.list({
           keyword: kw.trim() || undefined,
           groupId: gid,
+          sourceType: st,
           isActive: true,
           skip,
           limit: PAGE_SIZE,
@@ -110,16 +130,18 @@ export const MaterialBatchPickerModal: React.FC<MaterialBatchPickerModalProps> =
   useEffect(() => {
     if (!open) return;
     void loadTree();
-  }, [open, loadTree]);
+    void loadUnits();
+  }, [open, loadTree, loadUnits]);
 
   useEffect(() => {
     if (!open) return;
     setSearchText((s) => (s ? '' : s));
     setGroupId(undefined);
+    setSourceType(undefined);
     setPage(1);
     setSelectedMap(new Map());
     skipNextFilterFetchRef.current = true;
-    void fetchList('', undefined, 1);
+    void fetchList('', undefined, undefined, 1);
   }, [open, fetchList]);
 
   useEffect(() => {
@@ -130,10 +152,10 @@ export const MaterialBatchPickerModal: React.FC<MaterialBatchPickerModalProps> =
     }
     const t = window.setTimeout(() => {
       if (!openRef.current) return;
-      void fetchList(searchText, groupId, page);
+      void fetchList(searchText, groupId, sourceType, page);
     }, 300);
     return () => window.clearTimeout(t);
-  }, [searchText, groupId, page, fetchList]);
+  }, [searchText, groupId, sourceType, page, fetchList]);
 
   const selectedCount = selectedMap.size;
 
@@ -160,6 +182,21 @@ export const MaterialBatchPickerModal: React.FC<MaterialBatchPickerModalProps> =
   const columns: ColumnsType<Material> = useMemo(
     () => [
       {
+        title: t('app.master-data.materials.productImage'),
+        width: 80,
+        render: (_, record) => {
+          const images = (record as any).images || [];
+          if (images.length > 0) {
+            const firstImage = images[0];
+            const fileUuid = firstImage.uid ?? firstImage.uuid ?? (typeof firstImage === 'string' ? firstImage : null);
+            if (fileUuid) {
+              return <SecureImage fileUuid={fileUuid} width={40} height={40} />;
+            }
+          }
+          return '-';
+        },
+      },
+      {
         title: t('app.kuaizhizao.salesOrder.materialCode'),
         width: 120,
         ellipsis: true,
@@ -180,21 +217,29 @@ export const MaterialBatchPickerModal: React.FC<MaterialBatchPickerModalProps> =
       {
         title: t('app.kuaizhizao.salesOrder.unit'),
         width: 72,
-        render: (_, r) => String(getMaterialField(r as any, 'baseUnit') ?? ''),
+        render: (_, r) => {
+          const val = String(getMaterialField(r as any, 'baseUnit') ?? '');
+          return unitsMap[val] || val || '-';
+        },
       },
       {
         title: t('app.kuaizhizao.salesOrder.materialPickerSourceType'),
         width: 100,
         ellipsis: true,
-        render: (_, r) =>
-          String(
-            getMaterialField(r as any, 'sourceType') ??
-              (r as any).source_type ??
-              ''
-          ),
+        render: (_, r) => {
+          const val = (getMaterialField(r as any, 'sourceType') ?? (r as any).source_type) as string;
+          const sourceLabels: Record<string, string> = {
+            Make: t('app.master-data.materialForm.sourceMake'),
+            Buy: t('app.master-data.materialForm.sourceBuy'),
+            Outsource: t('app.master-data.materialForm.sourceOutsource'),
+            Phantom: t('app.master-data.materialForm.sourcePhantom'),
+            Service: t('app.master-data.materialForm.sourceService'),
+          };
+          return sourceLabels[val] || val || '-';
+        },
       },
     ],
-    [t]
+    [t, unitsMap]
   );
 
   const handleOk = () => {
@@ -249,6 +294,23 @@ export const MaterialBatchPickerModal: React.FC<MaterialBatchPickerModalProps> =
               setPage(1);
             }}
             treeNodeFilterProp="title"
+          />
+          <Select
+            allowClear
+            placeholder={t('app.master-data.materials.sourceType')}
+            style={{ width: 140 }}
+            value={sourceType}
+            onChange={(v) => {
+              setSourceType(v);
+              setPage(1);
+            }}
+            options={[
+              { label: t('app.master-data.materialForm.sourceMake'), value: 'Make' },
+              { label: t('app.master-data.materialForm.sourceBuy'), value: 'Buy' },
+              { label: t('app.master-data.materialForm.sourceOutsource'), value: 'Outsource' },
+              { label: t('app.master-data.materialForm.sourcePhantom'), value: 'Phantom' },
+              { label: t('app.master-data.materialForm.sourceService'), value: 'Service' },
+            ]}
           />
         </Space>
         <div style={{ color: 'var(--ant-color-text-secondary)', fontSize: 13 }}>

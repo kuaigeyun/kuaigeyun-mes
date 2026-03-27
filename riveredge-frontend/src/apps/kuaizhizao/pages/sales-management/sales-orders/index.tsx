@@ -9,7 +9,7 @@
  */
 
 import { getBusinessConfig } from '../../../../../services/businessConfig';
-import React, { useRef, useState, useEffect, Suspense, lazy } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions, ProFormUploadButton } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Drawer, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Progress, Tooltip, Dropdown, Select, theme as AntdTheme } from 'antd';
 import { EyeOutlined, EditOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, ImportOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, ApartmentOutlined, ShoppingOutlined } from '@ant-design/icons';
@@ -17,7 +17,8 @@ import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
-const LazyUniImport = lazy(() => import('../../../../../components/uni-import').then(m => ({ default: m.UniImport })));
+import { UniImport } from '../../../../../components/uni-import';
+import { DictionarySelect } from '../../../../../components/dictionary-select';
 import FeeDetailsTable from '../../../../../components/FeeDetailsTable';
 import { CustomerFormModal } from '../../../../master-data/components/CustomerFormModal';
 import { MaterialInventoryIndicator } from '../../../components/MaterialInventoryIndicator';
@@ -101,6 +102,151 @@ type SalesOrderItemRow = SalesOrderItem & {
   _lifecycleStage?: string;
 };
 
+function formatMoneyYuan(n: number): string {
+  return `¥${(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/** 与销售明细表格中价税逻辑一致，用于表单内实时汇总 */
+function computeSalesOrderFormTotals(
+  items: any[] | undefined,
+  feeDetails: any[] | undefined,
+  priceType: string | undefined,
+) {
+  const pt = priceType ?? 'tax_exclusive';
+  const rows = Array.isArray(items) ? items : [];
+  let goodsExcl = 0;
+  let taxAmount = 0;
+  let goodsIncl = 0;
+
+  for (const row of rows) {
+    const qty = Number(row?.required_quantity) || 0;
+    const price = Number(row?.unit_price) || 0;
+    const taxRate = Number(row?.tax_rate) || 0;
+    
+    if (pt === 'tax_inclusive' && price > 0) {
+      const exclAmt = (qty * price) / (1 + taxRate / 100);
+      const taxAmt = exclAmt * (taxRate / 100);
+      goodsExcl += exclAmt;
+      taxAmount += taxAmt;
+      goodsIncl += exclAmt + taxAmt;
+    } else {
+      const exclAmt = qty * price;
+      const taxAmt = exclAmt * (taxRate / 100);
+      goodsExcl += exclAmt;
+      taxAmount += taxAmt;
+      goodsIncl += exclAmt + taxAmt;
+    }
+  }
+
+  let customerFees = 0; // other_side
+  let ourFees = 0;      // our_side
+  for (const fee of feeDetails || []) {
+    const amt = Number(fee?.amount) || 0;
+    if (fee?.bearer === 'other_side') customerFees += amt;
+    else ourFees += amt;
+  }
+
+  // 预计应收 = 含税货值 + 我方垫付 (假设我方垫付的费用最终由客户结算)
+  // 如果业务逻辑是我方承担则不计入应收，则此处需调整。参考采购订单逻辑：应付 = 货值 + 对方(供应商)费用
+  // 对应到销售：应收 = 货值 + 我方(销售方)垫付费用
+  const estimatedReceivable = goodsIncl + ourFees;
+  const estimatedNetIncome = goodsIncl; // 纯货值部分（含税）
+
+  return {
+    goodsExcl,
+    taxAmount,
+    goodsIncl,
+    customerFees,
+    ourFees,
+    estimatedReceivable,
+    estimatedNetIncome,
+  };
+}
+
+/** 费用明细下方：货值 / 税额 / 含税货值 / 客户直付 / 我方垫付 / 预计应收 */
+const SalesOrderFeeTotalsSummary: React.FC<{
+  getFieldValue: (name: string) => any;
+}> = ({ getFieldValue }) => {
+  const { token } = AntdTheme.useToken();
+  const sums = computeSalesOrderFormTotals(
+    getFieldValue('items'),
+    getFieldValue('fee_details'),
+    getFieldValue('price_type'),
+  );
+
+  const cells: { label: string; hint?: string; value: number; tone?: 'neutral' | 'our' | 'other' }[] = [
+    { label: '货值', hint: '不含税货款合计', value: sums.goodsExcl, tone: 'neutral' },
+    { label: '税额', value: sums.taxAmount, tone: 'neutral' },
+    { label: '含税货值', value: sums.goodsIncl, tone: 'neutral' },
+    { label: '客户直付', hint: '客户直接支付给第三方的费用', value: sums.customerFees, tone: 'other' },
+    { label: '我方垫付', hint: '我方支付并需与客户结算的费用', value: sums.ourFees, tone: 'our' },
+    { label: '预计应收', hint: '含税货值 + 我方垫付', value: sums.estimatedReceivable, tone: 'our' },
+  ];
+
+  return (
+    <div
+      style={{
+        marginBottom: 24,
+        padding: '12px 16px',
+        background: token.colorFillAlter,
+        borderRadius: token.borderRadiusLG,
+        border: `1px solid ${token.colorBorderSecondary}`,
+      }}
+    >
+      <div style={{ color: token.colorTextSecondary, fontSize: 12, display: 'block', marginBottom: 10 }}>
+        金额汇总
+      </div>
+      <div style={{ overflowX: 'auto', overflowY: 'hidden' }}>
+        <div style={{ display: 'flex', flexWrap: 'nowrap', gap: 8, alignItems: 'stretch', minWidth: 'max-content' }}>
+        {cells.map((c) => (
+          <div
+            key={c.label}
+            style={{
+              minWidth: 104,
+              flex: '0 0 auto',
+              padding: '6px 8px',
+              background:
+                c.tone === 'our'
+                  ? token.colorSuccessBg
+                  : c.tone === 'other'
+                    ? token.colorWarningBg
+                    : token.colorBgContainer,
+              borderRadius: token.borderRadius,
+              border:
+                c.tone === 'our'
+                  ? `1px solid ${token.colorSuccessBorder}`
+                  : c.tone === 'other'
+                    ? `1px solid ${token.colorWarningBorder}`
+                    : `1px solid ${token.colorBorderSecondary}`,
+            }}
+            title={c.hint}
+          >
+            <div style={{ color: token.colorTextSecondary, fontSize: 12, display: 'block', lineHeight: 1.3 }}>
+              {c.label}
+            </div>
+            <div
+              style={{
+                fontSize: 14,
+                fontWeight: 600,
+                marginTop: 3,
+                color:
+                  c.tone === 'our'
+                    ? token.colorSuccessText
+                    : c.tone === 'other'
+                      ? token.colorWarningText
+                      : token.colorText,
+              }}
+            >
+              {formatMoneyYuan(c.value)}
+            </div>
+          </div>
+        ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const SalesOrdersPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi, modal: modalApi } = App.useApp();
@@ -132,7 +278,6 @@ const SalesOrdersPage: React.FC = () => {
 
   const { token } = AntdTheme.useToken();
   const [feeTypeOptions, setFeeTypeOptions] = useState<any[]>([]);
-
   useEffect(() => {
     getDataDictionaryByCode('FEE_TYPE')
       .then((dict) => getDictionaryItemList(dict.uuid))
@@ -198,7 +343,6 @@ const SalesOrdersPage: React.FC = () => {
 
   // 物料列表（用于物料选择器）
   const [materials, setMaterials] = useState<Material[]>([]);
-  const [materialsLoading, setMaterialsLoading] = useState(false);
   // 客户列表（对接技术数据管理-供应链-客户）
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customersLoading, setCustomersLoading] = useState(false);
@@ -211,8 +355,6 @@ const SalesOrdersPage: React.FC = () => {
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
   const [syncModalVisible, setSyncModalVisible] = useState(false);
   const [customerCreateVisible, setCustomerCreateVisible] = useState(false);
-  /** 编辑时若销售员姓名不在用户列表中，用于下拉展示 */
-  const [legacySalesmanName, setLegacySalesmanName] = useState<string | null>(null);
   /** 发货方式字典选项（数据字典 SHIPPING_METHOD） */
   const [shippingMethodOptions, setShippingMethodOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [shippingMethodLoading, setShippingMethodLoading] = useState(false);
@@ -231,13 +373,10 @@ const SalesOrdersPage: React.FC = () => {
   React.useEffect(() => {
     const loadMaterials = async () => {
       try {
-        setMaterialsLoading(true);
         const result = await materialApi.list({ limit: 1000, isActive: true });
         setMaterials(Array.isArray(result) ? result : (result as any)?.data ?? (result as any)?.items ?? []);
       } catch {
         setMaterials([]);
-      } finally {
-        setMaterialsLoading(false);
       }
     };
     loadMaterials();
@@ -286,7 +425,6 @@ const SalesOrdersPage: React.FC = () => {
   React.useEffect(() => {
     const loadShippingMethod = async () => {
       try {
-        setShippingMethodLoading(true);
         const dict = await getDataDictionaryByCode('SHIPPING_METHOD');
         const items = await getDictionaryItemList(dict.uuid, true);
         setShippingMethodOptions(
@@ -295,13 +433,10 @@ const SalesOrdersPage: React.FC = () => {
       } catch (e: any) {
         console.warn('发货方式字典未配置或加载失败:', e?.message || e);
         setShippingMethodOptions([]);
-      } finally {
-        setShippingMethodLoading(false);
       }
     };
     const loadPaymentTerms = async () => {
       try {
-        setPaymentTermsLoading(true);
         const dict = await getDataDictionaryByCode('PAYMENT_TERMS');
         const items = await getDictionaryItemList(dict.uuid, true);
         setPaymentTermsOptions(
@@ -310,8 +445,6 @@ const SalesOrdersPage: React.FC = () => {
       } catch (e: any) {
         console.warn('付款条件字典未配置或加载失败:', e?.message || e);
         setPaymentTermsOptions([]);
-      } finally {
-        setPaymentTermsLoading(false);
       }
     };
     loadShippingMethod();
@@ -339,7 +472,6 @@ const SalesOrdersPage: React.FC = () => {
   const handleCreate = async () => {
     setIsEdit(false);
     setCurrentId(null);
-    setLegacySalesmanName(null);
     setModalVisible(true);
     formRef.current?.resetFields();
     setTimeout(() => {
@@ -580,22 +712,13 @@ const SalesOrdersPage: React.FC = () => {
       const p = (it: SalesOrderItem) => Number((it as any).unit_price) || 0;
       const taxR = (it: SalesOrderItem) => Number((it as any).tax_rate) || 0;
 
-      // 计算明细合计（价税合计）、总金额
-      const subtotal = items.reduce((sum: number, it: SalesOrderItem) => {
-        const excl = q(it) * p(it);
-        const incl = excl * (1 + taxR(it) / 100);
-        return sum + incl;
-      }, 0);
-      values.total_amount = subtotal;
+      // 计算金额汇总（对齐采购订单逻辑）
       values.price_type = values.price_type || 'tax_exclusive';
       values.discount_amount = 0;
-
-      // 计算费用总额
       const feeDetails = values.fee_details ?? [];
-      const totalFeeAmount = feeDetails.reduce((sum: number, fee: any) => {
-        return sum + (Number(fee.amount) || 0);
-      }, 0);
-      values.total_fee_amount = totalFeeAmount;
+      const sums = computeSalesOrderFormTotals(items, feeDetails, values.price_type);
+      values.total_amount = sums.estimatedReceivable;
+      values.total_fee_amount = sums.ourFees + sums.customerFees;
 
       // 格式化主表日期字段，避免后端报错
       if (values.order_date) {
@@ -1177,13 +1300,18 @@ const SalesOrdersPage: React.FC = () => {
           material_unit: m.baseUnit ?? '',
           required_quantity: 1,
           delivery_date: defaultDelivery,
-          unit_price: 0,
+          unit_price: (m as any).defaults?.defaultSalePrice ?? (m as any).defaults?.default_sale_price ?? (m as any).defaultSalePrice ?? (m as any).default_sale_price ?? 0,
           tax_rate: 0,
           variant_attributes: '',
           _sourceType: st,
         };
       });
-      formRef.current?.setFieldsValue({ items: [...current, ...newRows] });
+      // 如果当前只有一行且未选择物料，则替换该行
+      if (current.length === 1 && !current[0].material_id && !current[0].material_code) {
+        formRef.current?.setFieldsValue({ items: newRows });
+      } else {
+        formRef.current?.setFieldsValue({ items: [...current, ...newRows] });
+      }
       messageApi.success(t('app.kuaizhizao.salesOrder.materialPickerAdded', { count: selected.length }));
     },
     [messageApi, t]
@@ -2048,6 +2176,7 @@ const SalesOrdersPage: React.FC = () => {
                       customer_phone: c?.phone ?? undefined,
                       salesman_id: c?.salesmanId,
                       salesman_name: c?.salesmanName,
+                      shipping_address: c?.address,
                     });
                   }}
                   quickCreate={{
@@ -2132,40 +2261,25 @@ const SalesOrdersPage: React.FC = () => {
               />
             </Col>
             <Col span={6}>
-              <ProForm.Item name="shipping_method" label="发货方式">
-                <UniDropdown
-                  placeholder="请选择发货方式"
-                  showSearch
-                  allowClear
-                  loading={shippingMethodLoading}
-                  style={{ width: '100%' }}
-                  options={shippingMethodOptions}
-                  quickCreate={{
-                    label: '数据字典管理',
-                    onClick: () => navigate('/system/data-dictionaries'),
-                  }}
-                />
-              </ProForm.Item>
+              <DictionarySelect
+                dictionaryCode="SHIPPING_METHOD"
+                name="shipping_method"
+                label="发货方式"
+                placeholder="请选择发货方式"
+                formRef={formRef}
+              />
             </Col>
             <Col span={6}>
-              <ProForm.Item name="payment_terms" label="付款条件">
-                <UniDropdown
-                  placeholder="请选择付款条件"
-                  showSearch
-                  allowClear
-                  loading={paymentTermsLoading}
-                  style={{ width: '100%' }}
-                  options={paymentTermsOptions}
-                  quickCreate={{
-                    label: '数据字典管理',
-                    onClick: () => navigate('/system/data-dictionaries'),
-                  }}
-                />
-              </ProForm.Item>
+              <DictionarySelect
+                dictionaryCode="PAYMENT_TERM"
+                name="payment_terms"
+                label="付款条件"
+                placeholder="请选择付款条件"
+                formRef={formRef}
+              />
             </Col>
           </Row>
 
-          <FeeDetailsTable name="fee_details" label="费用明细（物流/包装等）" />
 
           {/* 订单明细：标题 + 价格类型开关 + 导入按钮 */}
           <div style={{ marginBottom: 24 }}>
@@ -2191,6 +2305,7 @@ const SalesOrdersPage: React.FC = () => {
               </Space>
               <Button 
                 size="small" 
+                type="link"
                 icon={<ImportOutlined />} 
                 onClick={() => setImportModalVisible(true)}
               >
@@ -2238,13 +2353,16 @@ const SalesOrdersPage: React.FC = () => {
                                       material_name: 'name',
                                       material_spec: 'specification',
                                       material_unit: 'baseUnit',
+                                      unit_price: 'defaults.defaultSalePrice' as any,
                                     }}
                                     fallbackOption={fallback}
                                     formItemProps={{ style: { margin: 0 } }}
                                     showQuickCreate
                                     showAdvancedSearch
                                     onChange={(_val, material) => {
-                                      formRef.current?.setFieldValue(['items', index, '_sourceType'], material?.sourceType || (material as any)?.source_type);
+                                      if (material) {
+                                        formRef.current?.setFieldValue(['items', index, '_sourceType'], (material as any)?.sourceType || (material as any)?.source_type);
+                                      }
                                     }}
                                   />
                                 </div>
@@ -2597,22 +2715,20 @@ const SalesOrdersPage: React.FC = () => {
                           )}
                         />
                       </div>
-                      <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
-                        {({ getFieldValue }: any) => {
-                          const items = getFieldValue('items') ?? [];
-                          const subtotal = items.reduce((sum: number, it: any) => {
-                            const excl = (Number(it?.required_quantity) || 0) * (Number(it?.unit_price) || 0);
-                            const taxRate = Number(it?.tax_rate) || 0;
-                            const incl = excl * (1 + taxRate / 100);
-                            return sum + incl;
-                          }, 0);
-                          return (
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 24, padding: '12px 0', marginTop: 8, borderTop: '1px solid var(--ant-color-border)', fontSize: 14 }}>
-                              <span>{t('app.kuaizhizao.salesOrder.subtotal')}：<AmountDisplay resource="sales_order" value={subtotal} /></span>
-                              <span style={{ fontWeight: 600 }}>{t('app.kuaizhizao.salesOrder.totalAmount')}：<AmountDisplay resource="sales_order" value={subtotal} /></span>
-                            </div>
-                          );
-                        }}
+                      <AntForm.Item
+                        noStyle
+                        shouldUpdate={(prev: any, curr: any) =>
+                          prev?.items !== curr?.items ||
+                          prev?.fee_details !== curr?.fee_details ||
+                          prev?.price_type !== curr?.price_type
+                        }
+                      >
+                        {({ getFieldValue }: { getFieldValue: (n: string) => any }) => (
+                          <>
+                            <FeeDetailsTable name="fee_details" label="费用明细（物流/包装等）" />
+                            <SalesOrderFeeTotalsSummary getFieldValue={getFieldValue} />
+                          </>
+                        )}
                       </AntForm.Item>
                     </div>
                   );
@@ -2653,20 +2769,19 @@ const SalesOrdersPage: React.FC = () => {
         <MaterialBatchPickerModal
           open={materialPickerOpen}
           onCancel={() => setMaterialPickerOpen(false)}
-          onConfirm={appendOrderItemsFromMaterials}
+          onConfirm={(selected) => {
+            appendOrderItemsFromMaterials(selected);
+            setMaterialPickerOpen(false);
+          }}
         />
-        {importModalVisible && (
-          <Suspense fallback={null}>
-            <LazyUniImport
-              visible={importModalVisible}
-              onCancel={() => setImportModalVisible(false)}
-              onConfirm={handleItemImport}
-              title={t('app.kuaizhizao.salesOrder.importItemsTitle')}
-              headers={[t('app.kuaizhizao.salesOrder.materialCode'), t('app.kuaizhizao.salesOrder.spec'), t('app.kuaizhizao.salesOrder.unit'), t('app.kuaizhizao.salesOrder.quantity'), t('app.kuaizhizao.salesOrder.unitPrice'), t('app.kuaizhizao.salesOrder.deliveryDate')]}
-              exampleRow={['MAT001', 'Spec X', 'PCS', '100', '1.5', '2026-03-01']}
-            />
-          </Suspense>
-        )}
+        <UniImport
+          visible={importModalVisible}
+          onCancel={() => setImportModalVisible(false)}
+          onConfirm={handleItemImport}
+          title={t('app.kuaizhizao.salesOrder.importItemsTitle')}
+          headers={[t('app.kuaizhizao.salesOrder.materialCode'), t('app.kuaizhizao.salesOrder.spec'), t('app.kuaizhizao.salesOrder.unit'), t('app.kuaizhizao.salesOrder.quantity'), t('app.kuaizhizao.salesOrder.unitPrice'), t('app.kuaizhizao.salesOrder.deliveryDate')]}
+          exampleRow={['MAT001', 'Spec X', 'PCS', '100', '1.5', '2026-03-01']}
+        />
       </FormModalTemplate>
 
       <CustomerFormModal
@@ -2727,7 +2842,6 @@ const SalesOrdersPage: React.FC = () => {
               {(() => {
                 const lifecycle = getSalesOrderLifecycle(currentSalesOrder);
                 const canEdit = ['草稿', '待审核', '已驳回'].includes(lifecycle.stageName ?? '');
-                const isDraft = (lifecycle.stageName ?? currentSalesOrder.status) === '草稿' || currentSalesOrder.status === SalesOrderStatus.DRAFT;
                 const canDelete = ['草稿', '待审核'].includes(lifecycle.stageName ?? '') || currentSalesOrder.status === SalesOrderStatus.DRAFT || currentSalesOrder.status === 'PENDING_REVIEW';
                 return (
                   <>
@@ -3271,7 +3385,7 @@ const SalesOrdersPage: React.FC = () => {
                     ? [{ title: t('app.kuaizhizao.salesOrder.suggestion'), dataIndex: 'suggested_action', key: 'suggested_action', width: 70 }]
                     : []),
                 ]}
-                rowKey={(r, i) => `${r.material_code}-${i}`}
+                rowKey={(r: any, i) => `${r.material_code}-${i}`}
                 pagination={false}
                 style={{ marginBottom: 8 }}
               />
