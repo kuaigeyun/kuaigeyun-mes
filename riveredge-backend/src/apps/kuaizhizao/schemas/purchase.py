@@ -47,6 +47,10 @@ class PurchaseOrderBase(BaseSchema):
     notes: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
+    # 费用信息
+    fee_details: Optional[List[dict]] = Field(None, description="费用明细 (JSON)")
+    total_fee_amount: Decimal = Field(default=Decimal(0), ge=0, description="总费用金额")
+
 
 class PurchaseOrderCreate(PurchaseOrderBase):
     """采购订单创建Schema"""
@@ -59,6 +63,8 @@ class PurchaseOrderUpdate(PurchaseOrderBase):
     order_code: Optional[str] = Field(None, max_length=50, description="订单编码")
     items: Optional[List["PurchaseOrderItemUpdate"]] = Field(None, description="订单明细")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
+    fee_details: Optional[List[dict]] = Field(None, description="费用明细 (JSON)")
+    total_fee_amount: Optional[Decimal] = Field(None, ge=0, description="总费用金额")
     change_reason: Optional[str] = Field(None, description="变更原因（当已审核/确认后变更时必填）")
 
 

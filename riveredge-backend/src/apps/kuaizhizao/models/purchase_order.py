@@ -43,6 +43,10 @@ class PurchaseOrder(BaseModel):
     tax_amount = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="税额")
     net_amount = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="净金额")
 
+    # 费用信息
+    fee_details = fields.JSONField(null=True, description="费用明细 (JSON)")
+    total_fee_amount = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="总费用金额")
+
     # 币种和汇率
     currency = fields.CharField(max_length=10, default="CNY", description="币种")
     exchange_rate = fields.DecimalField(max_digits=8, decimal_places=4, default=1, description="汇率")

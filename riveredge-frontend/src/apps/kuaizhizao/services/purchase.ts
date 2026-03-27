@@ -47,6 +47,8 @@ export interface PurchaseOrder {
   items?: PurchaseOrderItem[];
   /** 变更原因 (V2 审计) */
   change_reason?: string;
+  fee_details?: any[];
+  total_fee_amount?: number;
 }
 
 export interface PurchaseOrderItem {

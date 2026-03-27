@@ -24,6 +24,7 @@ import { SimpleSparkline } from '../../../../../components';
 import CodeField from '../../../../../components/code-field';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import FeeDetailsTable from '../../../../../components/FeeDetailsTable';
 import dayjs from 'dayjs';
 import {
   listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, updatePurchaseOrder,
@@ -224,6 +225,13 @@ const PurchaseOrdersPage: React.FC = () => {
 
   // 下推入库 Modal
   const [pushToReceiptVisible, setPushToReceiptVisible] = useState(false);
+  const [feeTypeOptions, setFeeTypeOptions] = useState<any[]>([]);
+
+  useEffect(() => {
+    getDictionaryItemList('FEE_TYPE').then((res) => {
+      setFeeTypeOptions(res || []);
+    });
+  }, []);
   const [pushToReceiptOrder, setPushToReceiptOrder] = useState<PurchaseOrderDetail | null>(null);
   const [pushToReceiptQuantities, setPushToReceiptQuantities] = useState<Record<number, number>>({});
   const [pushToReceiptBatchNumbers, setPushToReceiptBatchNumbers] = useState<Record<number, string>>({});
@@ -390,7 +398,7 @@ const PurchaseOrdersPage: React.FC = () => {
   ];
 
   const [pushToNoticeLoading, setPushToNoticeLoading] = useState(false);
-  const [pushToInvoiceLoading, setPushToInvoiceLoading] = useState(false);
+  const [pushToNoticeLoading, setPushToNoticeLoading] = useState(false);
 
   // 处理详情查看
   const handleDetail = async (record: PurchaseOrder) => {
@@ -896,6 +904,7 @@ const PurchaseOrdersPage: React.FC = () => {
           buyer_name: detail.buyer_name,
           notes: detail.notes,
           attachments: (detail as any).attachments || [],
+          fee_details: (detail as any).fee_details || [],
           items: items.length > 0 ? items : [defaultOrderItem],
         });
       }, 100);
@@ -980,6 +989,14 @@ const PurchaseOrdersPage: React.FC = () => {
       data.tax_rate = priceType === 'tax_inclusive' ? (firstTaxRate > 1 ? firstTaxRate / 100 : firstTaxRate) : 0;
       data.tax_amount = totalAmount * data.tax_rate;
       data.net_amount = totalAmount + data.tax_amount;
+
+      // 计算费用总额
+      const feeDetails = values.fee_details ?? [];
+      const totalFeeAmount = feeDetails.reduce((sum: number, fee: any) => {
+        return sum + (Number(fee.amount) || 0);
+      }, 0);
+      data.total_fee_amount = totalFeeAmount;
+      data.fee_details = feeDetails;
 
       let orderId: number | undefined;
       if (isEdit && currentOrder?.id) {
@@ -1459,6 +1476,8 @@ const PurchaseOrdersPage: React.FC = () => {
           </Col>
           <Col span={12} />
         </Row>
+
+        <FeeDetailsTable name="fee_details" label="费用明细（物流/包装等）" />
         
         {/* V2 审计：非草稿订单变更需填写原因 */}
         <AntForm.Item noStyle shouldUpdate>
@@ -1969,6 +1988,33 @@ const PurchaseOrdersPage: React.FC = () => {
                   </Col>
                 </Row>
               </DetailDrawerSection>
+
+              {/* 辅助费用 */}
+              {orderDetail.fee_details && orderDetail.fee_details.length > 0 && (
+                <DetailDrawerSection title="费用明细">
+                  <Row gutter={16} style={{ marginBottom: 16 }}>
+                    <Col span={6}>
+                      <strong>总费用金额：</strong>¥{formatAmount(orderDetail.total_fee_amount)}
+                    </Col>
+                  </Row>
+                  <Table
+                    size="small"
+                    columns={[
+                      { title: '费用类型', dataIndex: 'type', width: 120, render: (val) => {
+                         const opt = feeTypeOptions.find((o: any) => o.value === val);
+                         return opt?.label || val;
+                      }},
+                      { title: '金额', dataIndex: 'amount', width: 120, align: 'right', render: (val) => `¥${formatAmount(val)}` },
+                      { title: '承担方', dataIndex: 'bearer', width: 100, render: (val) => val === 'our_side' ? '我方' : '对方' },
+                      { title: '备注', dataIndex: 'notes' },
+                    ]}
+                    dataSource={orderDetail.fee_details}
+                    rowKey={(_: any, i?: number) => i ?? 0}
+                    pagination={false}
+                    bordered
+                  />
+                </DetailDrawerSection>
+              )}
 
               {/* 生命周期 */}
               {(() => {

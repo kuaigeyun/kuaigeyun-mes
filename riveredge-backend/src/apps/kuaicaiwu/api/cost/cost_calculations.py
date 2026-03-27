@@ -16,6 +16,7 @@ from apps.kuaizhizao.schemas.cost import (
     CostComparisonResponse,
     CostAnalysisResponse,
     CostOptimizationResponse,
+    MonthlySettlementRequest,
 )
 from apps.kuaicaiwu.services.cost_service import CostCalculationService
 from apps.kuaicaiwu.models.cost_calculation import CostCalculation
@@ -169,3 +170,42 @@ async def get_cost_optimization(
         return CostOptimizationResponse.model_validate(cost_optimization)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.get("/period-summary")
+async def get_period_summary(
+    year: int = Query(...),
+    month: int = Query(...),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        summary = await CostCalculationService().get_period_summary(
+            tenant_id=tenant_id,
+            year=year,
+            month=month
+        )
+        return summary
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.post("/monthly-settlement", status_code=status.HTTP_201_CREATED)
+async def perform_monthly_settlement(
+    data: MonthlySettlementRequest,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        results = await CostCalculationService().perform_monthly_settlement(
+            tenant_id=tenant_id,
+            year=data.year,
+            month=data.month,
+            indirect_costs=data.indirect_costs,
+            created_by=current_user.id
+        )
+        return {"status": "success", "data": results}
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

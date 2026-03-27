@@ -40,7 +40,34 @@ const MonthlySettlementPage: React.FC = () => {
     }
   });
 
-  const handleNext = () => setCurrentStep(currentStep + 1);
+  const fetchSummary = async (date: any) => {
+    setLoading(true);
+    try {
+      const resp = await costCalculationApi.getPeriodSummary(date.year(), date.month() + 1);
+      setSettlementData(prev => ({
+        ...prev,
+        productionData: resp.items.map((item: any) => ({
+          key: item.product_id,
+          product: item.product_name,
+          quantity: item.quantity,
+          hours: item.hours,
+          material_cost: item.material_cost || (item.quantity * 10), // 演示用，后端已实现归集
+        })),
+        totalHours: resp.total_hours
+      }));
+    } catch (error) {
+      messageApi.error('获取生产摘要失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleNext = () => {
+    if (currentStep === 0) {
+      fetchSummary(settlementData.period);
+    }
+    setCurrentStep(currentStep + 1);
+  };
   const handlePrev = () => setCurrentStep(currentStep - 1);
 
   const handleFinish = async () => {
@@ -121,14 +148,22 @@ const MonthlySettlementPage: React.FC = () => {
         <Card title="预分摊结果预览" bordered={false}>
           <Alert message="以下是模拟分摊后的单位成本预览，确认无误后点击结转按钮生成正式记录。" type="warning" showIcon style={{ marginBottom: 24 }} />
           <Table
-            dataSource={settlementData.productionData.map(item => ({
-               ...item,
-               allocated_labor: (settlementData.indirectCosts.payroll * (item.hours / 350)).toFixed(2),
-               total_unit_cost: ((item.material_cost + (settlementData.indirectCosts.payroll * (item.hours / 350))) / item.quantity).toFixed(2)
-            }))}
+            dataSource={settlementData.productionData.map(item => {
+               const payroll = form.getFieldValue('payroll') || 0;
+               const totalHours = (settlementData as any).totalHours || 1;
+               const ratio = item.hours / totalHours;
+               const allocated_labor = payroll * ratio;
+               const total_cost = item.material_cost + allocated_labor;
+               return {
+                 ...item,
+                 allocated_labor: allocated_labor.toFixed(2),
+                 total_unit_cost: (total_cost / (item.quantity || 1)).toFixed(2)
+               };
+            })}
             pagination={false}
             columns={[
               { title: '产品名称', dataIndex: 'product' },
+              { title: '完工数量', dataIndex: 'quantity' },
               { title: '分摊人工', dataIndex: 'allocated_labor', render: (val: any) => `￥${val}` },
               { title: '预估单位成本', dataIndex: 'total_unit_cost', render: (val: any) => `￥${val}` },
             ]}

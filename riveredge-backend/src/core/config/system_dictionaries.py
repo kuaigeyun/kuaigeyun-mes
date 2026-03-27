@@ -314,4 +314,17 @@ SYSTEM_DICTIONARIES: List[Dict[str, Any]] = [
             {"label": "待评估", "value": "PENDING", "description": "待评估", "sort_order": 4},
         ],
     },
+    {
+        "code": "FEE_TYPE",
+        "name": "费用类型",
+        "description": "订单（销售/采购）涉及的附加费用类型",
+        "items": [
+            {"label": "物流费", "value": "LOGISTICS", "description": "运费、配送费", "sort_order": 1},
+            {"label": "包装费", "value": "PACKAGING", "description": "包装、加固费", "sort_order": 2},
+            {"label": "保险费", "value": "INSURANCE", "description": "运输保险费", "sort_order": 3},
+            {"label": "报关费", "value": "CUSTOMS", "description": "报关、清关费用", "sort_order": 4},
+            {"label": "手续费", "value": "HANDLING", "description": "装卸、手续费", "sort_order": 5},
+            {"label": "其他", "value": "OTHER", "description": "其他杂费", "sort_order": 99},
+        ],
+    },
 ]

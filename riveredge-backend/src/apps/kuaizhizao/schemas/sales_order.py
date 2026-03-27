@@ -122,6 +122,10 @@ class SalesOrderBase(BaseSchema):
     
     notes: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
+    
+    # 费用信息
+    fee_details: Optional[List[dict]] = Field(None, description="费用明细 (JSON)")
+    total_fee_amount: Decimal = Field(Decimal("0"), ge=0, description="总费用金额")
 
 
 class SalesOrderCreate(SalesOrderBase):
@@ -156,6 +160,8 @@ class SalesOrderUpdate(BaseSchema):
     payment_terms: Optional[str] = Field(None, max_length=100)
     notes: Optional[str] = None
     attachments: Optional[List[dict]] = None
+    fee_details: Optional[List[dict]] = None
+    total_fee_amount: Optional[Decimal] = Field(None, ge=0)
     items: Optional[List[SalesOrderItemCreate]] = None
 
 

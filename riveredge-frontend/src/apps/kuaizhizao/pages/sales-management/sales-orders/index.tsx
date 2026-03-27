@@ -12,11 +12,13 @@ import { getBusinessConfig } from '../../../../../services/businessConfig';
 import React, { useRef, useState, useEffect, Suspense, lazy } from 'react';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions, ProFormUploadButton } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Drawer, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Progress, Tooltip, Dropdown, Select, theme as AntdTheme } from 'antd';
-import { EyeOutlined, EditOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, ImportOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, ApartmentOutlined } from '@ant-design/icons';
+import { EyeOutlined, EditOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, ImportOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, ApartmentOutlined, ShoppingOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
 const LazyUniImport = lazy(() => import('../../../../../components/uni-import').then(m => ({ default: m.UniImport })));
+import FeeDetailsTable from '../../../../../components/FeeDetailsTable';
 import { CustomerFormModal } from '../../../../master-data/components/CustomerFormModal';
 import { MaterialInventoryIndicator } from '../../../components/MaterialInventoryIndicator';
 import { MaterialBomIndicator } from '../../../components/MaterialBomIndicator';
@@ -129,6 +131,13 @@ const SalesOrdersPage: React.FC = () => {
   });
 
   const { token } = AntdTheme.useToken();
+  const [feeTypeOptions, setFeeTypeOptions] = useState<any[]>([]);
+
+  useEffect(() => {
+    getDictionaryItemList('FEE_TYPE').then((res) => {
+      setFeeTypeOptions(res || []);
+    });
+  }, []);
 
   // 销售订单审核开关（从业务配置加载）
   const [auditEnabled, setAuditEnabled] = useState(true);
@@ -162,6 +171,7 @@ const SalesOrdersPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [currentId, setCurrentId] = useState<number | null>(null);
   const [importModalVisible, setImportModalVisible] = useState(false);
+  const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   /** 价税合计正在编辑的行：{ index, value }，失焦时反算单价 */
   const [editingIncl, setEditingIncl] = useState<{ index: number; value: number | null } | null>(null);
   const editingInclValueRef = useRef<number | null>(null);
@@ -574,6 +584,13 @@ const SalesOrdersPage: React.FC = () => {
       values.total_amount = subtotal;
       values.price_type = values.price_type || 'tax_exclusive';
       values.discount_amount = 0;
+
+      // 计算费用总额
+      const feeDetails = values.fee_details ?? [];
+      const totalFeeAmount = feeDetails.reduce((sum: number, fee: any) => {
+        return sum + (Number(fee.amount) || 0);
+      }, 0);
+      values.total_fee_amount = totalFeeAmount;
 
       // 格式化主表日期字段，避免后端报错
       if (values.order_date) {
@@ -1136,6 +1153,36 @@ const SalesOrdersPage: React.FC = () => {
     });
     messageApi.success(t('app.kuaizhizao.salesOrder.importSuccessItems', { count: newItems.length }));
   };
+
+  /** 从物料多选面板批量追加明细行（与「添加明细」默认字段一致，数量默认为 1） */
+  const appendOrderItemsFromMaterials = React.useCallback(
+    (selected: Material[]) => {
+      const mainDelivery = formRef.current?.getFieldValue('delivery_date');
+      const defaultDelivery =
+        mainDelivery != null ? (dayjs.isDayjs(mainDelivery) ? mainDelivery : dayjs(mainDelivery)) : dayjs();
+      const current = formRef.current?.getFieldValue('items') ?? [];
+      const newRows = selected.map((m) => {
+        const mainCode = m.mainCode ?? m.code ?? '';
+        const st = m.sourceType ?? (m as any).source_type;
+        return {
+          material_id: m.id,
+          material_code: mainCode,
+          material_name: m.name ?? '',
+          material_spec: m.specification ?? '',
+          material_unit: m.baseUnit ?? '',
+          required_quantity: 1,
+          delivery_date: defaultDelivery,
+          unit_price: 0,
+          tax_rate: 0,
+          variant_attributes: '',
+          _sourceType: st,
+        };
+      });
+      formRef.current?.setFieldsValue({ items: [...current, ...newRows] });
+      messageApi.success(t('app.kuaizhizao.salesOrder.materialPickerAdded', { count: selected.length }));
+    },
+    [messageApi, t]
+  );
 
   // 订单视图列（一行一单，可展开明细）
   const orderColumns: ProColumns<SalesOrder>[] = [
@@ -1704,11 +1751,11 @@ const SalesOrdersPage: React.FC = () => {
                 const items = order.items ?? [];
                 if (items.length === 0) {
                   const rowKey = `order-${order.id}-empty`;
-                  map.set(rowKey, order.id);
+                  map.set(rowKey, order.id ?? 0);
                   flatRows.push({
                     _rowKey: rowKey,
                     _lifecycleStage: stageName,
-                    sales_order_id: order.id,
+                    sales_order_id: order.id ?? 0,
                     order_code: order.order_code,
                     customer_name: order.customer_name,
                     order_date: order.order_date,
@@ -1727,12 +1774,12 @@ const SalesOrdersPage: React.FC = () => {
                 } else {
                   items.forEach((item: SalesOrderItem, idx: number) => {
                     const rowKey = item.id ? `order-${order.id}-item-${item.id}` : `order-${order.id}-idx-${idx}`;
-                    map.set(rowKey, order.id);
+                    map.set(rowKey, order.id ?? 0);
                     flatRows.push({
                       ...item,
                       _rowKey: rowKey,
                       _lifecycleStage: stageName,
-                      sales_order_id: order.id,
+                      sales_order_id: order.id ?? 0,
                       order_code: order.order_code,
                       customer_name: order.customer_name,
                       order_date: order.order_date,
@@ -2112,6 +2159,8 @@ const SalesOrdersPage: React.FC = () => {
               </ProForm.Item>
             </Col>
           </Row>
+
+          <FeeDetailsTable name="fee_details" label="费用明细（物流/包装等）" />
 
           {/* 订单明细：标题 + 价格类型开关 + 导入按钮 */}
           <div style={{ marginBottom: 24 }}>
@@ -2494,29 +2543,52 @@ const SalesOrdersPage: React.FC = () => {
                           scroll={fields.length > 0 ? { x: totalWidth } : undefined}
                           style={{ width: '100%', margin: 0 }}
                           footer={() => (
-                            <Button
-                              type="dashed"
-                              icon={<PlusOutlined />}
-                              onClick={() => {
-                                const mainDelivery = formRef.current?.getFieldValue('delivery_date');
-                                const defaultDelivery = mainDelivery != null ? (dayjs.isDayjs(mainDelivery) ? mainDelivery : dayjs(mainDelivery)) : dayjs();
-                                add({
-                                  material_id: undefined,
-                                  material_code: '',
-                                  material_name: '',
-                                  material_spec: '',
-                                  material_unit: '',
-                                  required_quantity: 0,
-                                  delivery_date: defaultDelivery,
-                                  unit_price: 0,
-                                  tax_rate: 0,
-                                  variant_attributes: '',
-                                });
+                            <div
+                              style={{
+                                display: 'flex',
+                                gap: 8,
+                                width: '100%',
+                                flexWrap: 'wrap',
+                                boxSizing: 'border-box',
                               }}
-                              block
                             >
+                              <Button
+                                type="dashed"
+                                icon={<PlusOutlined />}
+                                style={{ flex: 1, minWidth: 120 }}
+                                onClick={() => {
+                                  const mainDelivery = formRef.current?.getFieldValue('delivery_date');
+                                  const defaultDelivery =
+                                    mainDelivery != null
+                                      ? dayjs.isDayjs(mainDelivery)
+                                        ? mainDelivery
+                                        : dayjs(mainDelivery)
+                                      : dayjs();
+                                  add({
+                                    material_id: undefined,
+                                    material_code: '',
+                                    material_name: '',
+                                    material_spec: '',
+                                    material_unit: '',
+                                    required_quantity: 0,
+                                    delivery_date: defaultDelivery,
+                                    unit_price: 0,
+                                    tax_rate: 0,
+                                    variant_attributes: '',
+                                  });
+                                }}
+                              >
                                 {t('app.kuaizhizao.salesOrder.addItem')}
-                                </Button>
+                              </Button>
+                              <Button
+                                type="default"
+                                icon={<ShoppingOutlined />}
+                                style={{ flex: 1, minWidth: 120 }}
+                                onClick={() => setMaterialPickerOpen(true)}
+                              >
+                                {t('app.kuaizhizao.salesOrder.selectProducts')}
+                              </Button>
+                            </div>
                           )}
                         />
                       </div>
@@ -2573,6 +2645,11 @@ const SalesOrdersPage: React.FC = () => {
             label="备注"
             placeholder="请输入备注"
           />
+        <MaterialBatchPickerModal
+          open={materialPickerOpen}
+          onCancel={() => setMaterialPickerOpen(false)}
+          onConfirm={appendOrderItemsFromMaterials}
+        />
         {importModalVisible && (
           <Suspense fallback={null}>
             <LazyUniImport
@@ -2804,6 +2881,11 @@ const SalesOrdersPage: React.FC = () => {
                   render: (_, record) => <AmountDisplay resource="sales_order" value={record.total_amount ?? 0} />,
                 },
                 {
+                  title: '总费用金额',
+                  dataIndex: 'total_fee_amount',
+                  render: (_, record) => <AmountDisplay resource="sales_order" value={record.total_fee_amount ?? 0} />,
+                },
+                {
                   title: t('app.kuaizhizao.salesOrder.notes'),
                   dataIndex: 'notes',
                   span: 2,
@@ -2848,6 +2930,29 @@ const SalesOrdersPage: React.FC = () => {
                 </div>
               );
             })()}
+
+            {/* 费用明细 */}
+            {currentSalesOrder.fee_details && currentSalesOrder.fee_details.length > 0 && (
+              <div style={{ marginTop: 24 }}>
+                <h4 style={{ marginBottom: 12 }}>费用明细</h4>
+                <Table
+                  size="small"
+                  columns={[
+                    { title: '费用类型', dataIndex: 'type', width: 120, render: (val) => {
+                      const opt = feeTypeOptions.find(o => o.value === val);
+                      return opt?.label ?? val;
+                    }},
+                    { title: '金额', dataIndex: 'amount', width: 120, align: 'right', render: (val) => <AmountDisplay resource="sales_order" value={val} /> },
+                    { title: '承担方', dataIndex: 'bearer', width: 100, render: (val) => val === 'our_side' ? '我方' : '对方' },
+                    { title: '备注', dataIndex: 'notes' },
+                  ]}
+                  dataSource={currentSalesOrder.fee_details}
+                  rowKey={(_: any, i?: number) => i ?? 0}
+                  pagination={false}
+                  bordered
+                />
+              </div>
+            )}
 
             {/* 订单明细 */}
             {currentSalesOrder.items && currentSalesOrder.items.length > 0 && (

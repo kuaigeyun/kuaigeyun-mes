@@ -68,6 +68,8 @@ export interface SalesOrder {
   invoice_progress?: number | null;
   /** 本次操作是否已同步至关联需求（更新/审核接口返回） */
   demand_synced?: boolean;
+  fee_details?: any[];
+  total_fee_amount?: number;
 }
 
 /**

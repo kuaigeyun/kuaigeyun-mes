@@ -623,3 +623,14 @@ class CostReportResponse(BaseModel):
     trend_analysis: Optional[CostTrendAnalysisResponse] = Field(None, description="成本趋势分析（trend或comprehensive时提供）")
     structure_analysis: Optional[CostStructureAnalysisResponse] = Field(None, description="成本结构分析（structure或comprehensive时提供）")
 
+
+class MonthlySettlementRequest(BaseModel):
+    """
+    月度成本结转请求Schema
+    
+    用于执行月度成本结转的请求数据。
+    """
+    year: int = Field(..., description="核算年份")
+    month: int = Field(..., description="核算月份")
+    indirect_costs: Dict[str, float] = Field(..., description="当期待分摊费用（如薪资、水电等）")
+

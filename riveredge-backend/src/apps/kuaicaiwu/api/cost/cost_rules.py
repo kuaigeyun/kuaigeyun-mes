@@ -135,3 +135,18 @@ async def delete_cost_rule(
         )
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.post("/init-presets", status_code=status.HTTP_201_CREATED)
+async def init_preset_rules(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        await CostRuleService().init_preset_rules(
+            tenant_id=tenant_id,
+            created_by=current_user.id
+        )
+        return {"status": "success", "message": "已初始化推荐成本核算规则"}
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

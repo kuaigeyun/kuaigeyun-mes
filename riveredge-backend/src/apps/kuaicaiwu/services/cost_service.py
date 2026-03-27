@@ -147,37 +147,37 @@ class CostRuleService(AppBaseService[CostRule]):
             await cost_rule.save()
 
     async def init_preset_rules(self, tenant_id: int, created_by: int):
-        """初始化中小制造企业常用成本核算规则"""
+        """初始化中小制造企业常用成本核算规则（最佳实践）"""
         presets = [
             {
-                "code": "RULE_MAT_WAVG",
-                "name": "直接材料-加权平均法",
+                "code": "RULE_VARIETY_001",
+                "name": "标准品种法-材料/人工/全费用",
                 "rule_type": "材料成本",
-                "cost_type": "直接材料",
-                "calculation_method": "按数量",
-                "allocation_basis": "产量",
-                "source_module": "仓库",
-                "description": "根据当期实际领用数量和系统计算的加权平均单价核算"
+                "allocation_basis": "数量",
+                "wip_valuation_method": "约当产量法",
+                "source_module": "生产领料",
+                "is_active": True,
+                "description": "适用于产品品种较少，且每个品种大批量生产的企业"
             },
             {
-                "code": "RULE_LAB_HOUR",
-                "name": "直接人工-工时分摊法",
+                "code": "RULE_JOB_ORDER_002",
+                "name": "工单订单法-按单核算",
                 "rule_type": "人工成本",
-                "cost_type": "直接人工",
-                "calculation_method": "按工时",
                 "allocation_basis": "工时",
-                "source_module": "报工",
-                "description": "根据当期总人工费按报工工时比例分摊"
+                "wip_valuation_method": "不计算在产品",
+                "source_module": "生产报工",
+                "is_active": True,
+                "description": "适用于单件小批生产，如模具、特种设备制造"
             },
             {
-                "code": "RULE_OVH_QTY",
-                "name": "制造费用-产量分摊法",
+                "code": "RULE_OVERHEAD_003",
+                "name": "制造费用-机器工时分摊",
                 "rule_type": "制造费用",
-                "cost_type": "制造费用",
-                "calculation_method": "按数量",
-                "allocation_basis": "产量",
-                "source_module": "报工",
-                "description": "当期制造费用按各产品产量比例均匀分摊"
+                "allocation_basis": "机器工时",
+                "wip_valuation_method": "约当产量法",
+                "source_module": "设备监控",
+                "is_active": True,
+                "description": "适用于自动化程度高，机器成本占比较大的车间"
             }
         ]
         
@@ -421,13 +421,38 @@ class CostCalculationService(AppBaseService[CostCalculation]):
         return total_manufacturing_cost
 
     async def _get_material_cost_breakdown(self, tenant_id: int, work_order: WorkOrder) -> List[Dict[str, Any]]:
-        return []
+        pickings = await ProductionPicking.filter(tenant_id=tenant_id, work_order_id=work_order.id, status="已完成").all()
+        breakdown = []
+        for p in pickings:
+            items = await ProductionPickingItem.filter(picking_id=p.id).all()
+            for item in items:
+                unit_price = await self._get_standard_value(tenant_id, "material", item.material_id, "material_cost")
+                breakdown.append({
+                    "material_code": item.material_code,
+                    "material_name": item.material_name,
+                    "quantity": float(item.picked_quantity),
+                    "unit_price": float(unit_price),
+                    "total": float(item.picked_quantity * unit_price)
+                })
+        return breakdown
 
     async def _get_labor_cost_breakdown(self, tenant_id: int, work_order: WorkOrder) -> List[Dict[str, Any]]:
-        return []
+        records = await ReportingRecord.filter(tenant_id=tenant_id, work_order_id=work_order.id, status="approved").all()
+        breakdown = []
+        for r in records:
+            hourly_rate = await self._get_standard_value(tenant_id, "work_center", r.id, "labor_rate") # 简化处理
+            breakdown.append({
+                "operation_name": r.operation_name,
+                "worker_name": r.worker_name,
+                "hours": float(r.work_hours),
+                "hourly_rate": float(hourly_rate),
+                "total": float(r.work_hours * hourly_rate)
+            })
+        return breakdown
 
     async def _get_manufacturing_cost_breakdown(self, tenant_id: int, work_order: WorkOrder) -> List[Dict[str, Any]]:
-        return []
+        # 简化版制造费用明细
+        return [{"item": "工得分摊制造费用", "amount": float(await self._calculate_manufacturing_cost(tenant_id, work_order))}]
 
     async def _get_product_material_cost_breakdown(self, tenant_id: int, product: Material, quantity: Decimal) -> List[Dict[str, Any]]:
         return []
@@ -618,23 +643,193 @@ class CostCalculationService(AppBaseService[CostCalculation]):
             analysis_parts.append(f"制造费用节约 {abs(manufacturing_cost_difference)}，可能原因：设备利用率提高、制造费用率下降等")
         return "；".join(analysis_parts) if analysis_parts else "成本差异在合理范围内"
 
+    async def get_period_summary(self, tenant_id: int, year: int, month: int) -> Dict[str, Any]:
+        """获取指定期间的生产数据摘要（用于结算前核对）"""
+        from datetime import datetime
+        from decimal import Decimal
+        from apps.kuaizhizao.models.reporting_record import ReportingRecord
+        from apps.kuaizhizao.models.work_order import WorkOrder
+
+        start_date = datetime(year, month, 1)
+        if month == 12:
+            end_date = datetime(year + 1, 1, 1)
+        else:
+            end_date = datetime(year, month + 1, 1)
+
+        records = await ReportingRecord.filter(
+            tenant_id=tenant_id,
+            reported_at__gte=start_date,
+            reported_at__lt=end_date,
+            status="approved"
+        ).all()
+
+        work_order_ids = list(set(r.work_order_id for r in records))
+        wo_map = {wo.id: wo for wo in await WorkOrder.filter(id__in=work_order_ids).all()}
+
+        product_summary = {}
+        for r in records:
+            wo = wo_map.get(r.work_order_id)
+            if not wo: continue
+            pid = wo.product_id
+            if pid not in product_summary:
+                product_summary[pid] = {
+                    "product_name": wo.product_name,
+                    "quantity": Decimal("0.00"),
+                    "hours": Decimal("0.00")
+                }
+            product_summary[pid]["quantity"] += Decimal(str(r.qualified_quantity))
+            product_summary[pid]["hours"] += Decimal(str(r.work_hours))
+
+        return {
+            "period": f"{year}-{month}",
+            "items": [
+                {
+                    "product_id": pid,
+                    "product_name": data["product_name"],
+                    "quantity": float(data["quantity"]),
+                    "hours": float(data["hours"])
+                } for pid, data in product_summary.items()
+            ],
+            "total_hours": float(sum(d["hours"] for d in product_summary.values()))
+        }
+
     async def perform_monthly_settlement(
         self,
         tenant_id: int,
         year: int,
         month: int,
-        indirect_costs: Dict[str, Decimal],
+        indirect_costs: Dict[str, float],
         created_by: int
-    ) -> List[CostCalculationResponse]:
-        """执行月度成本结转（落地方案）"""
-        # 1. 识别当期所有涉及的成本对象（产品、工单）
-        # 2. 收集当期投入：原材料（Picking）、直接人工（Reporting）、制造费用（Input）
-        # 3. 根据租户配置的 CostRules 进行分摊
-        # 4. 计算 WIP 和 完工入库成本
-        # 5. 生成 CostCalculation 记录
-        
+    ) -> List[CostCalculation]:
+        """
+        执行月度成本结转逻辑（落地实现）
+        """
         logger.info(f"Starting monthly settlement for {tenant_id}, period {year}-{month}")
+
+        # 1. 计算时间范围
+        start_date = datetime(year, month, 1)
+        if month == 12:
+            end_date = datetime(year + 1, 1, 1)
+        else:
+            end_date = datetime(year, month + 1, 1)
+
+        # 2. 获取报工记录并按产品汇总产量/工时
+        reporting_records = await ReportingRecord.filter(
+            tenant_id=tenant_id,
+            reported_at__gte=start_date,
+            reported_at__lt=end_date,
+            status="approved"
+        ).all()
+
+        if not reporting_records:
+            logger.warning(f"No approved reporting records found for period {year}-{month}")
+            return []
+
+        # 获取工单映射
+        work_order_ids = list(set(r.work_order_id for r in reporting_records))
+        work_orders = await WorkOrder.filter(id__in=work_order_ids).all()
+        wo_map = {wo.id: wo for wo in work_orders}
+
+        product_summary = {}
+        total_period_hours = Decimal("0.00")
+
+        for r in reporting_records:
+            wo = wo_map.get(r.work_order_id)
+            if not wo: continue
+            
+            pid = wo.product_id
+            if pid not in product_summary:
+                product_summary[pid] = {
+                    "product_name": wo.product_name,
+                    "product_code": wo.product_code,
+                    "quantity": Decimal("0.00"),
+                    "hours": Decimal("0.00"),
+                    "material_cost": Decimal("0.00")
+                }
+            
+            product_summary[pid]["quantity"] += Decimal(str(r.qualified_quantity))
+            product_summary[pid]["hours"] += Decimal(str(r.work_hours))
+            total_period_hours += Decimal(str(r.work_hours))
+
+        # 3. 计算材料成本 (从对应期间的完工工单领料单汇总)
+        pickings = await ProductionPicking.filter(
+            tenant_id=tenant_id,
+            picking_time__gte=start_date,
+            picking_time__lt=end_date,
+            status="已完成"
+        ).all()
         
-        # 这是一个复杂的流程，此处先实现框架
-        # TODO: 详细实现分摊算法
-        return []
+        for p in pickings:
+             wo = wo_map.get(p.work_order_id) or await WorkOrder.filter(id=p.work_order_id).first()
+             if not wo: continue
+             
+             pid = wo.product_id
+             # 即使该产品本月没报工，只要本月有领料完成且有关联，也计入（取决于结转逻辑，这里包含在 product_summary 中）
+             if pid not in product_summary:
+                 product_summary[pid] = {
+                    "product_name": wo.product_name,
+                    "product_code": wo.product_code,
+                    "quantity": Decimal("0.00"),
+                    "hours": Decimal("0.00"),
+                    "material_cost": Decimal("0.00")
+                }
+                 
+             items = await ProductionPickingItem.filter(picking_id=p.id).all()
+             for item in items:
+                 # 获取标准或移动平均单价
+                 unit_price = await self._get_standard_value(tenant_id, "material", item.material_id, "material_cost")
+                 product_summary[pid]["material_cost"] += Decimal(str(item.picked_quantity)) * unit_price
+
+        # 4. 执行费用分摊 (基于总工时权重)
+        total_indirect = Decimal(str(sum(indirect_costs.values())))
+        payroll = Decimal(str(indirect_costs.get("payroll", 0)))
+        overhead_base = total_indirect - payroll
+        
+        user_info = await self.get_user_info(created_by)
+        results = []
+        today = datetime.now().strftime("%Y%m%d")
+
+        for pid, data in product_summary.items():
+            if total_period_hours > 0:
+                ratio = data["hours"] / total_period_hours
+            else:
+                ratio = Decimal(0)
+            
+            allocated_labor = payroll * ratio
+            allocated_overhead = overhead_base * ratio
+            
+            total_cost = data["material_cost"] + allocated_labor + allocated_overhead
+            unit_cost = total_cost / data["quantity"] if data["quantity"] > 0 else Decimal(0)
+            
+            calculation_no = await self.generate_code(
+                tenant_id=tenant_id,
+                code_type="COST_CALCULATION_CODE",
+                prefix=f"MS{today}"
+            )
+
+            calculation = await CostCalculation.create(
+                tenant_id=tenant_id,
+                uuid=str(uuid.uuid4()),
+                calculation_no=calculation_no,
+                calculation_type="月度结转",
+                product_id=pid,
+                product_code=data["product_code"],
+                product_name=data["product_name"],
+                quantity=data["quantity"],
+                material_cost=data["material_cost"],
+                labor_cost=allocated_labor,
+                manufacturing_cost=allocated_overhead,
+                total_cost=total_cost,
+                unit_cost=unit_cost,
+                calculation_date=date(year, month, 1), # 期间起始日
+                calculation_status="已核算",
+                created_by=created_by,
+                updated_by=created_by,
+                created_by_name=user_info["name"],
+                updated_by_name=user_info["name"],
+                remark=f"{year}年{month}月自动化月度结转（工时分摊）"
+            )
+            results.append(calculation)
+            
+        logger.info(f"Monthly settlement completed for {tenant_id}, generated {len(results)} records")
+        return results

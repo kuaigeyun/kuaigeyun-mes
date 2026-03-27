@@ -23,6 +23,7 @@ export const costCalculationApi = {
   compareCosts: async (productId: number) => apiRequest(`${COST_BASE}/cost/calculations/product/${productId}/compare`, { method: 'GET' }),
   analyzeCost: async (productId: number) => apiRequest(`${COST_BASE}/cost/calculations/product/${productId}/analyze`, { method: 'GET' }),
   getOptimization: async (productId: number) => apiRequest(`${COST_BASE}/cost/calculations/product/${productId}/optimization`, { method: 'GET' }),
+  getPeriodSummary: async (year: number, month: number) => apiRequest(`${COST_BASE}/cost/calculations/period-summary`, { method: 'GET', params: { year, month } }),
   performMonthlySettlement: async (data: any) => apiRequest(`${COST_BASE}/cost/calculations/monthly-settlement`, { method: 'POST', data }),
 };
 
