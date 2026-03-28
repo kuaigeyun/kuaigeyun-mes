@@ -9,7 +9,7 @@ Date: 2025-01-01
 
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 from decimal import Decimal
 
 from tortoise.queryset import Q
@@ -56,7 +56,7 @@ from apps.kuaizhizao.models.scrap_record import ScrapRecord
 from apps.kuaizhizao.services.document_timing_service import DocumentTimingService
 from apps.master_data.models.material import Material, MaterialGroup
 from apps.master_data.models.process import ProcessRoute, Operation, SOP
-from apps.master_data.services.process_service import _get_operation_defect_types_via_table
+from apps.master_data.services.process_service import batch_get_operation_defect_types_via_table
 from core.services.business.code_generation_service import CodeGenerationService
 from apps.kuaizhizao.utils.material_source_helper import (
     get_material_source_type,
@@ -942,6 +942,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         planned_end_to: Optional[str] = None,
         order_by: Optional[str] = None,
         include_operations: bool = False,
+        include_readiness: bool = True,
     ) -> Tuple[List[WorkOrderListResponse], int]:
         """
         获取工单列表
@@ -961,6 +962,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             planned_start_from/to: 计划开始日期范围
             planned_end_from/to: 计划结束日期范围
             order_by: 排序，如 code、-created_at
+            include_readiness: 为 False 时跳过 BOM 齐套与库存计算（列表页首屏可快一个数量级）
 
         Returns:
             Tuple[List[WorkOrderListResponse], int]: (工单列表, 总数)
@@ -1068,38 +1070,39 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                         "assigned_tool_name": op.assigned_tool_name,
                     })
 
-        # 批量预处理齐套分析数据（消除 N+1 瓶颈）
+        # 齐套率：每行 BOM 展开 + 库存汇总，列表页可关闭以换取首屏速度
         wo_requirements_map: dict[int, list] = {}
         all_comp_ids = set()
-        for wo in work_orders:
-            if wo.status in ['draft', 'released', 'in_progress']:
-                try:
-                    variant_attrs = getattr(wo, "variant_attributes", None)
-                    cfg_selections = getattr(wo, "configurable_selections", None)
-                    # 转换配置位字典
-                    if cfg_selections and isinstance(cfg_selections, dict):
-                        try:
-                            cfg_selections = {str(k): int(v) for k, v in cfg_selections.items() if v is not None}
-                        except (TypeError, ValueError):
-                            cfg_selections = None
-                    
-                    requirements = await calculate_material_requirements_from_bom(
-                        tenant_id=tenant_id,
-                        material_id=wo.product_id,
-                        required_quantity=float(wo.quantity),
-                        only_approved=True,
-                        variant_attributes=variant_attrs,
-                        configurable_selections=cfg_selections,
-                    )
-                    wo_requirements_map[wo.id] = requirements
-                    for r in requirements:
-                        all_comp_ids.add(r.component_id)
-                except Exception:
-                    continue
+        inventory_map: dict = {}
+        if include_readiness:
+            for wo in work_orders:
+                if wo.status in ['draft', 'released', 'in_progress']:
+                    try:
+                        variant_attrs = getattr(wo, "variant_attributes", None)
+                        cfg_selections = getattr(wo, "configurable_selections", None)
+                        # 转换配置位字典
+                        if cfg_selections and isinstance(cfg_selections, dict):
+                            try:
+                                cfg_selections = {str(k): int(v) for k, v in cfg_selections.items() if v is not None}
+                            except (TypeError, ValueError):
+                                cfg_selections = None
 
-        # 一次性获取所有相关的库存数据
-        from apps.kuaizhizao.utils.inventory_helper import batch_get_material_inventory
-        inventory_map = await batch_get_material_inventory(tenant_id, list(all_comp_ids))
+                        requirements = await calculate_material_requirements_from_bom(
+                            tenant_id=tenant_id,
+                            material_id=wo.product_id,
+                            required_quantity=float(wo.quantity),
+                            only_approved=True,
+                            variant_attributes=variant_attrs,
+                            configurable_selections=cfg_selections,
+                        )
+                        wo_requirements_map[wo.id] = requirements
+                        for r in requirements:
+                            all_comp_ids.add(r.component_id)
+                    except Exception:
+                        continue
+
+            from apps.kuaizhizao.utils.inventory_helper import batch_get_material_inventory
+            inventory_map = await batch_get_material_inventory(tenant_id, list(all_comp_ids))
 
         # 转换为响应格式
         result = []
@@ -1113,25 +1116,26 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     work_orders_to_update.append(wo)
 
                 item_dict = WorkOrderListResponse.model_validate(wo).model_dump()
-                
-                # 从预处理数据中计算齐套率
-                requirements = wo_requirements_map.get(wo.id)
-                if requirements is not None:
-                    total_vars = len(requirements)
-                    shortage_vars = 0
-                    for r in requirements:
-                        available = inventory_map.get(r.component_id, Decimal("0"))
-                        if available < Decimal(str(r.gross_requirement)):
-                            shortage_vars += 1
-                    
-                    ready_vars = total_vars - shortage_vars
-                    item_dict["readiness_rate"] = round((ready_vars / total_vars * 100), 2) if total_vars > 0 else 100.0
+
+                if include_readiness:
+                    requirements = wo_requirements_map.get(wo.id)
+                    if requirements is not None:
+                        total_vars = len(requirements)
+                        shortage_vars = 0
+                        for r in requirements:
+                            available = inventory_map.get(r.component_id, Decimal("0"))
+                            if available < Decimal(str(r.gross_requirement)):
+                                shortage_vars += 1
+
+                        ready_vars = total_vars - shortage_vars
+                        item_dict["readiness_rate"] = round((ready_vars / total_vars * 100), 2) if total_vars > 0 else 100.0
+                    else:
+                        if wo.status == 'completed':
+                            item_dict["readiness_rate"] = 100.0
+                        elif wo.status == 'cancelled':
+                            item_dict["readiness_rate"] = 0.0
                 else:
-                    # 如果不需要计算或计算失败，根据状态给个默认值
-                    if wo.status == 'completed':
-                        item_dict["readiness_rate"] = 100.0
-                    elif wo.status == 'cancelled':
-                        item_dict["readiness_rate"] = 0.0
+                    item_dict["readiness_rate"] = None
 
                 if include_operations:
                     item_dict["operations"] = operations_map.get(wo.id, [])
@@ -1965,20 +1969,36 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 total_count=len(split_work_orders),
             )
 
+    async def _resolve_manufacturing_mode(self, tenant_id: int, product_id: Optional[int]) -> str:
+        """与 get_work_order_by_id 一致：从产品物料 source_config 取制造模式。"""
+        if not product_id:
+            return "fabrication"
+        product = await Material.get_or_none(
+            id=product_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        if product and product.source_config and isinstance(product.source_config, dict):
+            return product.source_config.get("manufacturing_mode") or "fabrication"
+        return "fabrication"
+
     async def get_work_order_operations(
         self,
         tenant_id: int,
-        work_order_id: int
-    ) -> list[WorkOrderOperationResponse]:
+        work_order_id: int,
+        *,
+        include_meta: bool = False,
+    ) -> Union[List[WorkOrderOperationResponse], Dict[str, Any]]:
         """
         获取工单工序列表（含物料汇总，供工序卡片人机料法展示）
 
         Args:
             tenant_id: 组织ID
             work_order_id: 工单ID
+            include_meta: 为 True 时返回 {"manufacturing_mode", "operations"}，减少列表行展开时的二次 HTTP。
 
         Returns:
-            list[WorkOrderOperationResponse]: 工单工序列表
+            工序列表，或带 manufacturing_mode 的字典（include_meta=True 时）
         """
         work_order = await WorkOrder.get_or_none(
             tenant_id=tenant_id,
@@ -2028,6 +2048,9 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             deleted_at__isnull=True
         ).order_by('sequence').all()
 
+        master_op_ids = [op.operation_id for op in operations if op.operation_id is not None]
+        defect_by_master_op = await batch_get_operation_defect_types_via_table(master_op_ids)
+
         # 批量查询工序关联的 SOP（法）
         op_ids = [op.operation_id for op in operations]
         sops = await SOP.filter(
@@ -2041,7 +2064,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         prev_qualified = Decimal(str(plan_qty))
         result = []
         for idx, op in enumerate(operations):
-            defect_types_raw = await _get_operation_defect_types_via_table(op.operation_id)
+            defect_types_raw = defect_by_master_op.get(op.operation_id, [])
             defect_types = [DefectTypeMinimal(uuid=dt["uuid"], code=dt["code"], name=dt["name"]) for dt in defect_types_raw]
             op_data = {f: getattr(op, f, None) for f in WorkOrderOperationResponse.model_fields if hasattr(op, f)}
             op_data["defect_types"] = defect_types
@@ -2072,6 +2095,9 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
             prev_qualified = qualified
             result.append(WorkOrderOperationResponse.model_validate(op_data))
+        if include_meta:
+            mm = await self._resolve_manufacturing_mode(tenant_id, work_order.product_id)
+            return {"manufacturing_mode": mm, "operations": result}
         return result
 
     async def update_work_order_operations(

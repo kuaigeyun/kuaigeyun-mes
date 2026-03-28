@@ -136,7 +136,7 @@ const WorkOrdersKioskPage: React.FC = () => {
         setLoadError(null);
         try {
             const effectiveFilter = filterOverride ?? workOrderFilter;
-            const params: any = { skip: 0, limit: 200 };
+            const params: any = { skip: 0, limit: 200, include_readiness: false };
             // 仅在选择「只看本机台」时按工作中心筛选；「全部」时显示所有工单（含未设置工作中心的）
             if (effectiveFilter === 'station' && workCenterId) params.work_center_id = workCenterId;
             if (effectiveFilter === 'currentUser' && userInfo?.id) params.assigned_worker_id = userInfo.id;

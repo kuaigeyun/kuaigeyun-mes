@@ -7,7 +7,7 @@
  * @date 2026-02-19
  */
 
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, List, Typography } from 'antd';
@@ -15,7 +15,6 @@ import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, 
 import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
-import { UniImport } from '../../../../../components/uni-import';
 import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
@@ -23,7 +22,6 @@ import { MaterialBatchPickerModal } from '../../../../../components/material-bat
 import type { Material } from '../../../../master-data/types/material';
 import { CustomerFormModal } from '../../../../master-data/components/CustomerFormModal';
 import { customerApi } from '../../../../master-data/services/supply-chain';
-import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DRAWER_CONFIG, FormModalTemplate } from '../../../../../components/layout-templates';
 import { AmountDisplay } from '../../../../../components/permission';
 import { DictionaryLabel } from '../../../../../components/dictionary-label';
@@ -50,6 +48,11 @@ import { useTranslation } from 'react-i18next';
 import { CustomerFollowUpFormModal, type CustomerFollowUpPreset } from '../../../components/CustomerFollowUpFormModal';
 import { RE_STATUS_BADGE_DRAFT, resolveStatusTagDisplayProps } from '../../../../../constants/statusBadges';
 import '../../../../../components/uni-table-detail/index.less';
+
+const LazyUniImport = lazy(() =>
+  import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport }))
+);
+const LazySyncFromDatasetModal = lazy(() => import('../../../../../components/sync-from-dataset-modal'));
 
 /** 币种字典值：人民币（与 CURRENCY 字典项 value 一致，一般为 CNY） */
 const DEFAULT_QUOTATION_CURRENCY = 'CNY';
@@ -1545,21 +1548,23 @@ const QuotationsPage: React.FC = () => {
         }}
       />
 
-      <SyncFromDatasetModal
-        open={syncModalVisible}
-        onClose={() => setSyncModalVisible(false)}
-        onConfirm={handleSyncConfirm}
-        title="从数据集同步报价单"
-      />
+      <Suspense fallback={null}>
+        <LazySyncFromDatasetModal
+          open={syncModalVisible}
+          onClose={() => setSyncModalVisible(false)}
+          onConfirm={handleSyncConfirm}
+          title="从数据集同步报价单"
+        />
 
-      <UniImport
-        visible={importModalVisible}
-        onCancel={() => setImportModalVisible(false)}
-        onConfirm={handleItemImport}
-        title="导入报价明细"
-        headers={['物料编号', '规格', '单位', '数量', '单价', '交货日期']}
-        exampleRow={['MAT001', 'Spec X', 'PCS', '100', '1.5', '2026-03-01']}
-      />
+        <LazyUniImport
+          visible={importModalVisible}
+          onCancel={() => setImportModalVisible(false)}
+          onConfirm={handleItemImport}
+          title="导入报价明细"
+          headers={['物料编号', '规格', '单位', '数量', '单价', '交货日期']}
+          exampleRow={['MAT001', 'Spec X', 'PCS', '100', '1.5', '2026-03-01']}
+        />
+      </Suspense>
 
       <CustomerFollowUpFormModal
         open={followUpModalOpen}

@@ -318,6 +318,10 @@ async def list_work_orders(
     planned_end_to: Optional[str] = Query(None, description="计划结束日期止（YYYY-MM-DD）"),
     order_by: Optional[str] = Query(None, description="排序字段，如 code、-created_at（前缀-表示降序）"),
     include_operations: bool = Query(False, description="是否包含工序（用于甘特图展示设备/模具/工装）"),
+    include_readiness: bool = Query(
+        True,
+        description="是否计算齐套率（BOM+库存）；工单列表页建议 false 以大幅提升首屏速度，齐套率列可为空",
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -355,6 +359,7 @@ async def list_work_orders(
             planned_end_to=planned_end_to,
             order_by=safe_order_by,
             include_operations=include_operations,
+            include_readiness=include_readiness,
         )
         return {
             "data": result,
@@ -409,20 +414,26 @@ async def get_work_order_demand_chain(
         )
 
 
-@router.get("/work-orders/{work_order_id}/operations", response_model=List[WorkOrderOperationResponse], summary="获取工单工序列表")
+@router.get("/work-orders/{work_order_id}/operations", summary="获取工单工序列表")
 async def get_work_order_operations(
     work_order_id: int,
+    include_meta: bool = Query(
+        False,
+        description="为 true 时返回对象 { manufacturing_mode, operations }，列表行展开时单次请求即可；默认仍为工序数组",
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> List[WorkOrderOperationResponse]:
+):
     """
     获取工单工序列表
 
     - **work_order_id**: 工单ID
+    - **include_meta**: 为 true 时返回带制造模式的 JSON 对象，兼容默认数组格式
     """
     return await WorkOrderService().get_work_order_operations(
         tenant_id=tenant_id,
-        work_order_id=work_order_id
+        work_order_id=work_order_id,
+        include_meta=include_meta,
     )
 
 

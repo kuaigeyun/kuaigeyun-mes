@@ -1792,7 +1792,36 @@ const SalesOrdersPage: React.FC = () => {
           backgroundChart: renderTrendChart(statistics.trend_annual ?? [], token.colorPrimary),
         },
       ]
-    : [];
+    : [
+        {
+          title: t('app.kuaizhizao.salesOrder.statOverdue', '逾期未交'),
+          value: 0,
+          valueStyle: { color: '#ff4d4f' },
+        },
+        {
+          title: t('app.kuaizhizao.salesOrder.statTodayNew', '今日新签'),
+          value: 0,
+          suffix: t('app.kuaizhizao.salesOrder.unitOrders', { defaultValue: '单' }),
+          valueStyle: { color: token.colorPrimary },
+        },
+        {
+          title: t('app.kuaizhizao.salesOrder.lifecyclePendingReview', '待审核'),
+          value: 0,
+          valueStyle: { color: '#faad14' },
+        },
+        {
+          title: t('app.kuaizhizao.salesOrder.statUnfulfilled', '未履约'),
+          value: 0,
+          valueStyle: { color: '#2f54eb' },
+        },
+        {
+          title: t('app.kuaizhizao.salesOrder.statAnnualTotal', '本年累计'),
+          value: 0,
+          prefix: '¥',
+          precision: 2,
+          valueStyle: { color: token.colorPrimary },
+        },
+      ];
 
   return (
     <>

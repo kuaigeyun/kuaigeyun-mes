@@ -41,7 +41,8 @@ export function usePageMetrics(pagePath?: string): UsePageMetricsResult {
   const { data, isLoading, error } = useQuery({
     queryKey: ['pageMetrics', path],
     queryFn: () => getPageMetrics(path),
-    staleTime: 30_000,
+    /** 与全局 5min 策略一致：返回列表页时多用缓存，减少首屏二次等待 */
+    staleTime: 5 * 60 * 1000,
   });
 
   const hasConfig = !!(data?.dataset_code || (data?.stat_cards && data.stat_cards.length > 0));

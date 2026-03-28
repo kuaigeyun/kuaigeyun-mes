@@ -82,7 +82,11 @@ export const workOrderApi = {
   revoke: async (id: string) => apiRequest(`/apps/kuaizhizao/work-orders/${id}/revoke`, { method: 'POST' }),
   complete: async (id: string) => apiRequest(`/apps/kuaizhizao/work-orders/${id}/complete`, { method: 'POST' }),
   split: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/work-orders/${id}/split`, { method: 'POST', data }),
-  getOperations: async (id: string) => apiRequest(`/apps/kuaizhizao/work-orders/${id}/operations`, { method: 'GET' }),
+  getOperations: async (id: string, options?: { includeMeta?: boolean }) =>
+    apiRequest(`/apps/kuaizhizao/work-orders/${id}/operations`, {
+      method: 'GET',
+      params: options?.includeMeta ? { include_meta: true } : undefined,
+    }),
   updateOperations: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/work-orders/${id}/operations`, { method: 'PUT', data }),
   startOperation: async (workOrderId: string, operationId: number) =>
     apiRequest(`/apps/kuaizhizao/work-orders/${workOrderId}/operations/${operationId}/start`, { method: 'POST' }),

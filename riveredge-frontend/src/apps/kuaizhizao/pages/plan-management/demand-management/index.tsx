@@ -624,7 +624,18 @@ const DemandManagementPage: React.FC = () => {
           precision: 2,
         },
       ]
-    : [];
+    : [
+        { title: '活动需求', value: 0 },
+        { title: '待审核', value: 0 },
+        { title: '已审核', value: 0 },
+        { title: '已下推计算', value: 0 },
+        {
+          title: '总金额',
+          value: 0,
+          prefix: '¥',
+          precision: 2,
+        },
+      ];
 
   return (
     <>

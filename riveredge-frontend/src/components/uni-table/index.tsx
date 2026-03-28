@@ -5,7 +5,8 @@
  * 后续完善时，只需修改此组件，所有表格都会同步更新。
  */
 
-import React, { useRef, ReactNode, useState, useEffect, Suspense, lazy } from 'react'
+import React, { useRef, ReactNode, useState, useEffect, useCallback, useMemo, Suspense, lazy } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import {
   ProTable,
@@ -64,6 +65,7 @@ import { formatDateBySiteSetting, formatDateTimeBySiteSetting } from '../../util
 import { useNewShortcut } from '../../hooks/useNewShortcut'
 import { NEW_SHORTCUT_HINT } from '../../utils/globalNewShortcut'
 import { DictionaryLabel } from '../dictionary-label'
+import { stableJsonForQueryKey } from '../../utils/tableQueryKey'
 
 /** 列展示重置按钮：同时恢复列显示和列宽到系统默认（需在 ProTable 内部渲染以访问 TableContext） */
 function TableColumnResetButton({
@@ -579,10 +581,37 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   showLoading?: boolean
   /**
+   * 是否启用 antd Table 虚拟滚动（适合单行高大致固定、单页行数较多的列表）
+   * 为 true 时若未通过 scroll 传入 y，将使用 virtualTableBodyMaxHeight
+   */
+  virtualized?: boolean
+  /**
+   * 与 virtualized 配合：未传入 scroll.y 时的表体纵向滚动高度（px）
+   */
+  virtualTableBodyMaxHeight?: number
+  /**
    * 工具栏按钮尺寸（新建、删除、导入、导出、同步等）
    * middle 为 Ant Design 默认尺寸
    */
   toolBarButtonSize?: 'large' | 'middle' | 'small'
+  /**
+   * 用 TanStack Query 缓存列表：相同分页+筛选在 staleTime 内即显缓存；工具栏刷新会先 invalidate 再拉数。
+   * 不改变 ProTable 外观，仅替换底层请求去重/缓存（与 patch 后 debounceTime=0 配合）。
+   */
+  tanstackQuery?: {
+    queryKeyPrefix: readonly unknown[]
+    staleTime?: number
+    gcTime?: number
+    /**
+     * 当前页数据返回后，在后台预取「下一页」同一筛选/排序条件的数据；
+     * 用户翻页时优先命中 TanStack 缓存。启用拼音首字母前端过滤时不预取（避免缓存与展示不一致）。
+     */
+    prefetchNextPage?: boolean
+    /**
+     * 缓存已存在但已过期时：先同步返回旧数据（即点即显），后台 fetch 完成后 reload 刷新为新数据。
+     */
+    staleWhileRevalidate?: boolean
+  }
 }
 
 /**
@@ -644,13 +673,17 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   toolBarButtonSize,
   loadingDelay: loadingDelayProp,
   showLoading = false,
+  virtualized = false,
+  virtualTableBodyMaxHeight = 520,
   actionRef: externalActionRef,
   formRef: externalFormRef,
+  tanstackQuery,
   ...restProps
 }: UniTableProps<T>) {
   const { t } = useTranslation()
   const { message } = App.useApp()
   const { token } = theme.useToken()
+  const queryClient = useQueryClient()
   const getConfig = useConfigStore((s) => s.getConfig);
   const getPreference = useUserPreferenceStore((s) => s.getPreference);
   const updatePreferences = useUserPreferenceStore((s) => s.updatePreferences);
@@ -667,6 +700,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const defaultSize = getPreference('ui.default_table_density', 'large') as 'large' | 'middle' | 'small'
 
   const loadingDelay = loadingDelayProp ?? getConfig('ui.table_loading_delay', 800)
+
+  /** 已 patch @ant-design/pro-table：`debounceTime != null ? debounceTime : 30`，0 为同步触发 */
+  const tableRequestDebounce = restProps.debounceTime ?? 0
 
   // 视图类型状态（支持内置类型及 customViews 的 key）
   const [currentViewType, setCurrentViewType] = useState<string>(defaultViewType)
@@ -692,6 +728,13 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     ProFormInstance | undefined
   >
 
+  /** 父组件常写内联 request，避免其引用每帧变化触发 ProTable 重复拉数 */
+  const requestRef = useRef(request)
+  requestRef.current = request
+
+  const tanstackQueryRef = useRef(tanstackQuery)
+  tanstackQueryRef.current = tanstackQuery
+
   // 存储选中的行键（支持外部受控与内部自持两种模式）
   const [internalSelectedRowKeys, setInternalSelectedRowKeys] = useState<React.Key[]>([])
   const selectedRowKeys = selectedRowKeysProp !== undefined ? selectedRowKeysProp : internalSelectedRowKeys
@@ -704,15 +747,27 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const loadingDelayTimerRef = useRef<NodeJS.Timeout | null>(null)
   const isLoadingRef = useRef(false)
   const columnsSyncDebounceRef = useRef<NodeJS.Timeout | null>(null)
+  /** 避免每个列表页挂载都抢跑 pinyin-pro；聚焦模糊搜索框时再预加载 */
+  const pinyinWarmupRef = useRef(false)
 
-  // 预加载拼音库（组件挂载时）
-  useEffect(() => {
+  const warmupPinyinIfNeeded = useCallback(() => {
+    if (pinyinWarmupRef.current) return
+    pinyinWarmupRef.current = true
     import('../../utils/pinyin').then(({ preloadPinyinLib }) => {
       preloadPinyinLib().catch((err: any) => {
         console.warn('预加载拼音库失败:', err)
       })
     })
   }, [])
+
+  // 拼音首字母过滤时遍历的列：排除 hideInSearch，减少大表列定义下的 CPU 开销
+  const columnsForPinyinSearch = useMemo(() => {
+    return columns.filter((col: ProColumns<T>) => {
+      if (!col.dataIndex) return false
+      if (col.hideInSearch === true) return false
+      return true
+    })
+  }, [columns])
 
   // 预加载 UniImport（UniverSheet ~2MB）：空闲时后台加载，用户点击导入时 chunk 已缓存
   useEffect(() => {
@@ -1020,8 +1075,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
   /**
    * 处理排序参数转换和搜索参数获取
+   * useCallback 稳定引用，降低 ProTable 因父组件重渲染而重复触发请求的概率
    */
-  const handleRequest = async (
+  const handleRequest = useCallback(async (
     params: any,
     sort: Record<string, 'ascend' | 'descend' | null>,
     filter: Record<string, React.ReactText[] | null>
@@ -1048,19 +1104,103 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     const searchFormValues =
       searchParamsRef.current !== undefined ? searchParamsRef.current : formValues
 
+    const keywordForPrefetch = searchFormValues?.keyword
+    const skipPrefetchForPinyin = !!(keywordForPrefetch && isPinyinKeyword(keywordForPrefetch))
+
     try {
-      // 调用用户提供的 request 函数，传递搜索表单值
-      const result = await request(params, sort, filter, searchFormValues)
+      const runRequest = () => requestRef.current(params, sort, filter, searchFormValues)
+      const tq = tanstackQueryRef.current
+      let result: Awaited<ReturnType<typeof runRequest>>
+      if (tq?.queryKeyPrefix && tq.queryKeyPrefix.length > 0) {
+        const pageSize = params.pageSize ?? defaultPageSize
+        const current = params.current ?? 1
+        const staleTimeMs = tq.staleTime ?? 60_000
+        const fullQueryKey = [
+          'uniTable',
+          ...tq.queryKeyPrefix,
+          current,
+          pageSize,
+          stableJsonForQueryKey(sort),
+          stableJsonForQueryKey(filter),
+          stableJsonForQueryKey(searchFormValues ?? {}),
+        ] as const
+
+        if (tq.staleWhileRevalidate) {
+          const cached = queryClient.getQueryData(fullQueryKey) as
+            | Awaited<ReturnType<typeof runRequest>>
+            | undefined
+          const state = queryClient.getQueryState(fullQueryKey)
+          const updatedAt = state?.dataUpdatedAt ?? 0
+          const cacheStale = !cached || Date.now() - updatedAt > staleTimeMs
+          if (cached != null && cacheStale) {
+            void queryClient
+              .fetchQuery({
+                queryKey: [...fullQueryKey],
+                queryFn: runRequest,
+                staleTime: staleTimeMs,
+                gcTime: tq.gcTime,
+              })
+              .then(() => {
+                actionRef.current?.reload?.()
+              })
+            result = cached
+          } else {
+            result = await queryClient.fetchQuery({
+              queryKey: [...fullQueryKey],
+              queryFn: runRequest,
+              staleTime: staleTimeMs,
+              gcTime: tq.gcTime,
+            })
+          }
+        } else {
+          result = await queryClient.fetchQuery({
+            queryKey: [...fullQueryKey],
+            queryFn: runRequest,
+            staleTime: staleTimeMs,
+            gcTime: tq.gcTime,
+          })
+        }
+        if (
+          tq.prefetchNextPage &&
+          !skipPrefetchForPinyin &&
+          result &&
+          typeof result.total === 'number' &&
+          Number.isFinite(result.total) &&
+          current * pageSize < result.total
+        ) {
+          const nextCurrent = current + 1
+          const nextParams = { ...params, current: nextCurrent, pageSize }
+          const nextKey = [
+            'uniTable',
+            ...tq.queryKeyPrefix,
+            nextCurrent,
+            pageSize,
+            stableJsonForQueryKey(sort),
+            stableJsonForQueryKey(filter),
+            stableJsonForQueryKey(searchFormValues ?? {}),
+          ] as const
+          void queryClient.prefetchQuery({
+            queryKey: [...nextKey],
+            queryFn: () => requestRef.current(nextParams, sort, filter, searchFormValues),
+            staleTime: staleTimeMs,
+            gcTime: tq.gcTime,
+          })
+        }
+      } else {
+        result = await runRequest()
+      }
 
     // 支持拼音搜索：如果关键词是拼音格式，在前端对返回的数据进行二次过滤
     const keyword = searchFormValues?.keyword
     if (keyword && isPinyinKeyword(keyword) && result.data && Array.isArray(result.data)) {
+      // 避免改写 TanStack Query 缓存中的对象引用
+      result = { ...result, data: [...result.data] }
       const keywordUpper = keyword.toUpperCase()
 
       // 使用 Promise.all 进行异步拼音匹配
       const filteredDataPromises = result.data.map(async (record: any) => {
         // 遍历所有列，检查是否有匹配的字段
-        for (const column of columns) {
+        for (const column of columnsForPinyinSearch) {
           if (!column.dataIndex) continue
 
           // 获取字段值（支持嵌套字段，如 'user.name'）
@@ -1120,7 +1260,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         setShowDelayedLoading(false)
       }
     }
-  }
+  }, [showLoading, loadingDelay, columnsForPinyinSearch, queryClient, defaultPageSize])
+
+  const mergedToolbarOptions = (restProps.options || (restProps.toolbar as any)?.options || {}) as any
 
   /**
    * 处理视图类型切换
@@ -1625,6 +1767,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                   placeholder={t('components.uniTable.fuzzySearch')}
                   allowClear
                   value={fuzzySearchKeyword}
+                  onFocus={warmupPinyinIfNeeded}
                   onChange={e => handleFuzzySearch(e.target.value)}
                   onPressEnter={e => handleFuzzySearch((e.target as HTMLInputElement).value)}
                   style={{
@@ -1670,7 +1813,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               formRef={formRef}
               columns={effectiveTableColumns}
               request={handleRequest}
-              debounceTime={300}
+              debounceTime={tableRequestDebounce}
               rowKey={rowKey}
               search={false}
               className="uni-table-pro-table"
@@ -1704,10 +1847,20 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                   checkedReset: false,
                   extra: <TableColumnResetButton onResetResizable={handleColumnReset} />,
                 },
-                reload: () => actionRef.current?.reload(),
                 // 设为 false 避免 ProTable 内部 ConfigProvider 覆盖 getPopupContainer，使列设置等弹出层挂到 body 不被截断
                 fullScreen: false,
-                ...((restProps.options || (restProps.toolbar as any)?.options || {}) as any),
+                ...mergedToolbarOptions,
+                reload: () => {
+                  const tq = tanstackQueryRef.current
+                  if (tq?.queryKeyPrefix && tq.queryKeyPrefix.length > 0) {
+                    void queryClient.invalidateQueries({
+                      queryKey: ['uniTable', ...tq.queryKeyPrefix],
+                      exact: false,
+                    })
+                  }
+                  mergedToolbarOptions.reload?.()
+                  actionRef.current?.reload()
+                },
               }}
               toolbar={{
                 // 合并自定义 actions 和用户传入的 actions
@@ -1771,7 +1924,15 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               {...(() => {
                 // 过滤 toolBarRender/search，合并 components/scroll 以遵守原生 ProTable 设定
                 // （固定列、scroll.y 等由 rc-table 处理，仅注入列宽拖拽的 header.cell 与 scroll.x）
-                const { toolBarRender, search, scroll: userScroll, components: userComponents, ...otherProps } = restProps
+                const {
+                  toolBarRender,
+                  search,
+                  scroll: userScroll,
+                  components: userComponents,
+                  virtual: userVirtual,
+                  debounceTime: _omitDebounce,
+                  ...otherProps
+                } = restProps
                 const mergedComponents =
                   resizableColumns.length > 0
                     ? {
@@ -1783,16 +1944,25 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                       }
                     : userComponents
                 const ourScrollX = effectiveTableWidth
-                const mergedScroll =
+                let mergedScroll =
                   ourScrollX != null
                     ? { ...(userScroll || {}), x: ourScrollX }
                     : userScroll
+                const useVirtual = virtualized || userVirtual === true
+                if (useVirtual) {
+                  mergedScroll = {
+                    ...(mergedScroll || {}),
+                    y: mergedScroll?.y ?? virtualTableBodyMaxHeight,
+                  }
+                }
                 return {
                   ...otherProps,
+                  ...(useVirtual ? { virtual: true } : userVirtual !== undefined ? { virtual: userVirtual } : {}),
                   components: mergedComponents,
                   ...(mergedScroll != null ? { scroll: mergedScroll } : {}),
                 }
               })()}
+              revalidateOnFocus={false}
               />
             </div>
           </ConfigProvider>

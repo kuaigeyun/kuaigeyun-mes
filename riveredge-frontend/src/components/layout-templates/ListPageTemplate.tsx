@@ -195,7 +195,7 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
         </div>
       )}
 
-      {/* 工具栏扩展区（导入、导出等，由 UniImport、UniExport 管理） */}
+      {/* 工具栏扩展区（导入、导出等，由 UniImport、UniExport 在页面层管理） */}
       {toolbarExtra && (
         <div style={{ marginBottom: 16 }}>{toolbarExtra}</div>
       )}
@@ -207,4 +207,3 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
 };
 
 export default ListPageTemplate;
-

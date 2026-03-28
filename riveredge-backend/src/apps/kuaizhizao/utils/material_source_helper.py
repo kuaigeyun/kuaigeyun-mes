@@ -507,9 +507,10 @@ async def expand_bom_with_source_control(
                 child_bom_query = child_bom_query.filter(child_eff_filter)
             if only_approved:
                 child_bom_query = child_bom_query.filter(approval_status="approved")
-            child_bom_count = await child_bom_query.count()
+            # EXISTS 比 COUNT(*) 轻量，避免大表全量计数
+            has_child_bom = await child_bom_query.exists()
 
-            if child_bom_count > 0:
+            if has_child_bom:
                 child_requirements = await expand_bom_with_source_control(
                     tenant_id=tenant_id,
                     material_id=component.id,

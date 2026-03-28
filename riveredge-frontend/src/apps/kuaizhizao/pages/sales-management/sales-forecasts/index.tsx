@@ -892,9 +892,7 @@ export default function SalesForecastsPage() {
 
   return (
     <>
-      <ListPageTemplate
-        statCards={statCards}
-      >
+      <ListPageTemplate statCards={statCards}>
         <UniTable<any>
           actionRef={tableRef}
           formRef={tableSearchFormRef}

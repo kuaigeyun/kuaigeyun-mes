@@ -8,12 +8,16 @@
  */
 
 import React from 'react';
-import { Skeleton } from 'antd';
+import { Skeleton, Spin } from 'antd';
 import { PAGE_SPACING } from '../layout-templates/constants';
 
 export interface PageSkeletonProps {
-  /** 工作台/分析页等使用 DashboardTemplate 的页面需传入 'dashboard'，与模板边距一致 */
-  variant?: 'default' | 'dashboard' | 'rolesPermissions';
+  /**
+   * - default：完整表格骨架（较慢网络）
+   * - minimal：轻量居中 Spin，路由懒加载时优先即显、减少主线程与布局计算
+   * - dashboard / rolesPermissions：与对应模板边距一致
+   */
+  variant?: 'default' | 'minimal' | 'dashboard' | 'rolesPermissions';
 }
 
 const P = PAGE_SPACING.PADDING;
@@ -31,6 +35,25 @@ const PageSkeleton: React.FC<PageSkeletonProps> = ({ variant = 'default' }) => {
     variant === 'dashboard' || variant === 'rolesPermissions'
       ? `0 ${P}px ${P}px ${P}px`
       : 0;
+
+  if (variant === 'minimal') {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: 200,
+          padding: `${P}px`,
+          boxSizing: 'border-box',
+        }}
+        aria-busy="true"
+        aria-label="Loading"
+      >
+        <Spin />
+      </div>
+    );
+  }
 
   if (variant === 'rolesPermissions') {
     return (

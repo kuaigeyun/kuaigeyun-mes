@@ -863,7 +863,18 @@ const DemandComputationPage: React.FC = () => {
           prefix: <WarningOutlined />,
         },
       ]
-    : []
+    : [
+        { title: '总计算数', value: 0 },
+        { title: '按库存(MTS)', value: 0 },
+        { title: '按订单(MTO)', value: 0 },
+        { title: '进行中', value: 0 },
+        { title: '已完成', value: 0 },
+        {
+          title: '物料/交期风险',
+          value: 0,
+          prefix: <WarningOutlined />,
+        },
+      ]
 
   const [activeTabKey, setActiveTabKey] = useState<string>('list')
 

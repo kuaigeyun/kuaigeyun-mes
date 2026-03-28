@@ -1451,7 +1451,35 @@ const ReportingPage: React.FC = () => {
           ),
         },
       ]
-    : [];
+    : [
+        {
+          title: t('app.kuaizhizao.reporting.statCumulativeHours'),
+          value: 0,
+          suffix: 'h',
+          valueStyle: { color: token.colorPrimary },
+        },
+        {
+          title: t('app.kuaizhizao.reporting.statEstimatedWages'),
+          value: 0,
+          prefix: '¥',
+          precision: 2,
+          valueStyle: { color: token.colorPrimary },
+        },
+        {
+          title: t('app.kuaizhizao.reporting.statDowntimeRecords'),
+          value: 0,
+        },
+        {
+          title: t('app.kuaizhizao.reporting.statExceptionReports'),
+          value: 0,
+        },
+        {
+          title: t('app.kuaizhizao.reporting.statEfficiency'),
+          value: 0,
+          suffix: '%',
+          valueStyle: { color: '#fa8c16' },
+        },
+      ];
 
   return (
     <>

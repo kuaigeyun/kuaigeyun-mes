@@ -9,7 +9,7 @@
  * Date: 2026-01-05
  */
 
-import React, { useRef, useState, useEffect, useMemo, lazy, Suspense } from 'react'
+import React, { useRef, useState, useEffect, useLayoutEffect, useMemo, useCallback, lazy, Suspense, type ComponentProps } from 'react'
 import { DatePicker } from 'antd'
 const { RangePicker } = DatePicker
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -62,7 +62,6 @@ import {
   PlusOutlined,
   EditOutlined,
   EyeOutlined,
-  HolderOutlined,
   RightOutlined,
   PlayCircleOutlined,
   QrcodeOutlined,
@@ -76,24 +75,15 @@ import {
   CloseCircleOutlined,
   InboxOutlined,
 } from '@ant-design/icons'
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-} from '@dnd-kit/core'
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
 import { UniTable } from '../../../../../components/uni-table'
+import { useUserPreferenceStore } from '../../../../../stores/userPreferenceStore'
+import { useConfigStore } from '../../../../../stores/configStore'
+import {
+  fetchWorkOrderListForTable,
+  prefetchDefaultWorkOrderList,
+  hydrateDefaultWorkOrderListPageFromSession,
+  WORK_ORDER_LIST_STALE_MS,
+} from './workOrderListTable'
 import { ThemedSegmented } from '../../../../../components/themed-segmented'
 const SyncFromDatasetModal = lazy(() => import('../../../../../components/sync-from-dataset-modal'))
 import {
@@ -104,13 +94,9 @@ import {
   TOUCH_SCREEN_CONFIG,
   type StatCard,
 } from '../../../../../components/layout-templates'
-import { SimpleSparkline } from '../../../../../components';
-import { Area } from '@ant-design/charts';
-import { QRCodeGenerator } from '../../../../../components/qrcode'
 import { qrcodeApi } from '../../../../../services/qrcode'
 import { workOrderApi, reworkOrderApi, outsourceOrderApi, getWorkOrderStatistics, productionControlApi } from '../../../services/production'
 import { UniDropdown } from '../../../../../components/uni-dropdown'
-import { UniMaterialSelect } from '../../../../../components/uni-material-select'
 import { stateTransitionApi, AvailableTransition } from '../../../services/state-transition'
 import { listSalesOrders } from '../../../services/sales'
 import { getSalesOrder } from '../../../services/sales-order'
@@ -128,15 +114,32 @@ import { materialApi } from '../../../../master-data/services/material'
 import { useNavigate, useLocation } from 'react-router-dom'
 import dayjs from 'dayjs'
 import CodeField from '../../../../../components/code-field'
-import SmartSuggestionFloatPanel from '../../../../../components/smart-suggestion-float-panel'
 import { getUserList } from '../../../../../services/user'
 import { getEquipmentList } from '../../../../../services/equipment'
 import { getMoldList } from '../../../../../services/mold'
 import { toolApi } from '../../../services/equipment'
 const WorkOrderPrintModal = lazy(() => import('./components/WorkOrderPrintModal'))
-import DocumentTrackingPanel from '../../../../../components/document-tracking-panel'
-import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle'
+/** 指标卡趋势图：首屏不拉 @ant-design/charts，减少工单页 JS 解析与主线程占用 */
+const LazyStatTrendArea = lazy(() =>
+  import('@ant-design/charts').then(m => ({ default: m.Area }))
+)
+const LazySmartSuggestionFloatPanel = lazy(() => import('../../../../../components/smart-suggestion-float-panel'))
+const LazyCreateWorkOrderOperationsList = lazy(() => import('./components/WorkOrderCreateDndList'))
+const LazyWorkOrderOperationsList = lazy(() => import('./components/WorkOrderDetailDndOperations'))
+const LazyWorkOrderKittingPanel = lazy(() => import('./components/WorkOrderKittingPanel'))
+const LazyQRCodeGenerator = lazy(() =>
+  import('../../../../../components/qrcode/QRCodeGenerator').then(m => ({ default: m.QRCodeGenerator }))
+)
+const LazyDocumentTrackingPanel = lazy(() => import('../../../../../components/document-tracking-panel'))
+const LazyUniLifecycleStepper = lazy(() =>
+  import('../../../../../components/uni-lifecycle').then(m => ({ default: m.UniLifecycleStepper }))
+)
+const LazyUniMaterialSelect = lazy(() => import('../../../../../components/uni-material-select'))
 import { getWorkOrderLifecycle } from '../../../utils/workOrderLifecycle'
+
+/** 列表行展开工序：TanStack 缓存键前缀（与派工/开工后 invalidate 一致） */
+const WORK_ORDER_ROW_EXPAND_QK = 'workOrderRowExpand' as const
+const WORK_ORDER_ROW_EXPAND_STALE_MS = 60_000
 import { getFileDownloadUrl, uploadMultipleFiles } from '../../../../../services/file'
 import { batchImport } from '../../../../../utils/batchOperations'
 import { usePageMetrics } from '../../../../../hooks/usePageMetrics'
@@ -190,6 +193,12 @@ const WorkOrdersPage: React.FC = () => {
   const { message: messageApi } = App.useApp()
   const { token } = theme.useToken()
   const queryClient = useQueryClient()
+  const getPreference = useUserPreferenceStore((s) => s.getPreference)
+  const getConfig = useConfigStore((s) => s.getConfig)
+  const workOrderListDefaultPageSize = getPreference(
+    'ui.default_page_size',
+    getConfig('ui.default_page_size', 20)
+  )
   const location = useLocation()
   const actionRef = useRef<ActionType>(null)
   const tableSearchFormRef = useRef<any>(null)
@@ -199,6 +208,10 @@ const WorkOrdersPage: React.FC = () => {
   const invalidateStatistics = () => {
     queryClient.invalidateQueries({ queryKey: ['workOrderStatistics'] })
     queryClient.invalidateQueries({ queryKey: ['pageMetrics', location.pathname] })
+    queryClient.invalidateQueries({
+      queryKey: ['uniTable', 'kuaizhizao', 'work-orders', 'list'],
+      exact: false,
+    })
   }
   const { data: statistics } = useQuery({
     queryKey: ['workOrderStatistics'],
@@ -211,6 +224,40 @@ const WorkOrdersPage: React.FC = () => {
     queryFn: () => workOrderApi.getExecutionConfig(),
     staleTime: 60_000,
   })
+
+  useEffect(() => {
+    prefetchDefaultWorkOrderList(queryClient, workOrderListDefaultPageSize)
+  }, [queryClient, workOrderListDefaultPageSize])
+
+  useLayoutEffect(() => {
+    hydrateDefaultWorkOrderListPageFromSession(
+      queryClient,
+      workOrderListDefaultPageSize,
+      WORK_ORDER_LIST_STALE_MS
+    )
+  }, [queryClient, workOrderListDefaultPageSize])
+
+  const handleWorkOrderTableRequest = useCallback(
+    async (params: any, sort: any, _filter: any, searchFormValues: any) => {
+      try {
+        return await fetchWorkOrderListForTable(
+          { current: params.current!, pageSize: params.pageSize! },
+          sort,
+          _filter,
+          searchFormValues
+        )
+      } catch (error) {
+        console.error('获取工单列表失败:', error)
+        messageApi.error('获取工单列表失败')
+        return {
+          data: [],
+          success: false,
+          total: 0,
+        }
+      }
+    },
+    [messageApi]
+  )
 
   // 产品列表状态
   const [productList, setProductList] = useState<any[]>([])
@@ -765,16 +812,41 @@ const WorkOrdersPage: React.FC = () => {
    */
   const handleExpand = async (expanded: boolean, record: WorkOrder) => {
     if (expanded && record.id) {
-      // 展开时加载工序数据及工单详情（含制造模式）
+      // 展开：优先单次 GET operations?include_meta（含 manufacturing_mode），后端并对不良类型批量查询；TanStack 去重
       if (!expandedOperationsMap[record.id]) {
         setLoadingOperationsMap(prev => ({ ...prev, [record.id!]: true }))
         try {
-          const [detail, operations] = await Promise.all([
-            workOrderApi.get(record.id!.toString()),
-            workOrderApi.getOperations(record.id!.toString()),
-          ])
-          setExpandedWorkOrderDetailMap(prev => ({ ...prev, [record.id!]: detail as WorkOrder }))
-          setExpandedOperationsMap(prev => ({ ...prev, [record.id!]: operations || [] }))
+          const wid = record.id!.toString()
+          const bundle = await queryClient.fetchQuery({
+            queryKey: [WORK_ORDER_ROW_EXPAND_QK, record.id],
+            staleTime: WORK_ORDER_ROW_EXPAND_STALE_MS,
+            queryFn: async () => {
+              const res = await workOrderApi.getOperations(wid, { includeMeta: true })
+              if (
+                res &&
+                typeof res === 'object' &&
+                !Array.isArray(res) &&
+                Array.isArray((res as { operations?: unknown }).operations)
+              ) {
+                const r = res as { manufacturing_mode?: string; operations: any[] }
+                return {
+                  manufacturing_mode: r.manufacturing_mode || 'fabrication',
+                  operations: r.operations || [],
+                }
+              }
+              const ops = Array.isArray(res) ? res : []
+              const detail = await workOrderApi.get(wid)
+              return {
+                manufacturing_mode: (detail as WorkOrder)?.manufacturing_mode || 'fabrication',
+                operations: ops,
+              }
+            },
+          })
+          setExpandedWorkOrderDetailMap(prev => ({
+            ...prev,
+            [record.id!]: { manufacturing_mode: bundle.manufacturing_mode } as WorkOrder,
+          }))
+          setExpandedOperationsMap(prev => ({ ...prev, [record.id!]: bundle.operations || [] }))
         } catch (error) {
           console.error('获取工单工序列表失败:', error)
           setExpandedOperationsMap(prev => ({ ...prev, [record.id!]: [] }))
@@ -847,6 +919,9 @@ const WorkOrdersPage: React.FC = () => {
         ...prev,
         [currentWorkOrderForDispatch.id!]: operations || [],
       }))
+      queryClient.invalidateQueries({
+        queryKey: [WORK_ORDER_ROW_EXPAND_QK, currentWorkOrderForDispatch.id],
+      })
     } catch (error: any) {
       messageApi.error(error.message || '派工失败')
     }
@@ -1156,6 +1231,7 @@ const WorkOrdersPage: React.FC = () => {
                           ...prev,
                           [workOrder.id!]: operations || [],
                         }))
+                        queryClient.invalidateQueries({ queryKey: [WORK_ORDER_ROW_EXPAND_QK, workOrder.id] })
                         invalidateStatistics(); actionRef.current?.reload()
                       } catch (error: any) {
                         messageApi.error(error.message || '开始工序失败')
@@ -3029,15 +3105,23 @@ const WorkOrdersPage: React.FC = () => {
       dataIndex: 'readiness_rate',
       width: 120,
       valueType: 'digit',
-      render: (text, record) => {
-        const rate = record.readiness_rate ?? 0;
+      render: (_text, record) => {
+        const rate = record.readiness_rate
+        if (rate == null || Number.isNaN(Number(rate))) {
+          return (
+            <Typography.Text type="secondary" title="列表为加快加载未实时计算，可在工单详情或齐套分析中查看">
+              —
+            </Typography.Text>
+          )
+        }
+        const p = Number(rate)
         return (
           <Space direction="vertical" style={{ width: '100%' }}>
             <Progress
-              percent={rate}
+              percent={p}
               size="small"
-              status={rate === 100 ? 'success' : rate > 0 ? 'active' : 'normal'}
-              strokeColor={rate === 100 ? '#52c41a' : rate >= 80 ? '#faad14' : '#ff4d4f'}
+              status={p === 100 ? 'success' : p > 0 ? 'active' : 'normal'}
+              strokeColor={p === 100 ? '#52c41a' : p >= 80 ? '#faad14' : '#ff4d4f'}
             />
           </Space>
         );
@@ -3232,26 +3316,29 @@ const WorkOrdersPage: React.FC = () => {
 
   /** 折线图渲染（参考操作日志样式：Area 面积图 + 渐变填充） */
   const renderTrendChart = (data: { date: string; value: number }[] = [], color: string) => {
-    if (!data || data.length === 0) return null;
+    if (!data || data.length === 0) return null
+    const areaProps = {
+      data,
+      xField: 'date' as const,
+      yField: 'value' as const,
+      padding: 0,
+      axis: false,
+      colorField: () => color,
+      shapeField: 'smooth' as const,
+      style: {
+        fill: `linear-gradient(-90deg, transparent 0%, ${color} 100%)`,
+        fillOpacity: 0.2,
+        stroke: color,
+        lineWidth: 2,
+      },
+      autoFit: true,
+    } satisfies ComponentProps<typeof LazyStatTrendArea>
     return (
-      <Area
-        data={data}
-        xField="date"
-        yField="value"
-        padding={0}
-        axis={false}
-        colorField={() => color}
-        shapeField="smooth"
-        style={{
-          fill: `linear-gradient(-90deg, transparent 0%, ${color} 100%)`,
-          fillOpacity: 0.2,
-          stroke: color,
-          lineWidth: 2,
-        }}
-        autoFit
-      />
-    );
-  };
+      <Suspense fallback={null}>
+        <LazyStatTrendArea {...areaProps} />
+      </Suspense>
+    )
+  }
 
   const statCards: StatCard[] = hasPageMetricConfig
     ? pageMetricCards
@@ -3355,7 +3442,33 @@ const WorkOrdersPage: React.FC = () => {
               : undefined,
         },
       ]
-    : []
+    : [
+        {
+          title: t('app.kuaizhizao.workOrder.statOverdue'),
+          value: 0,
+          valueStyle: { color: '#ff4d4f' },
+        },
+        {
+          title: t('app.kuaizhizao.workOrder.statCompletedToday'),
+          value: 0,
+          valueStyle: { color: token.colorPrimary },
+        },
+        {
+          title: t('app.kuaizhizao.workOrder.statTotalWip'),
+          value: 0,
+          valueStyle: { color: '#2f54eb' },
+        },
+        {
+          title: t('app.kuaizhizao.workOrder.statQualifiedOutputToday'),
+          value: 0,
+          valueStyle: { color: '#52c41a' },
+        },
+        {
+          title: t('app.kuaizhizao.workOrder.statPendingRelease'),
+          value: 0,
+          valueStyle: { color: '#fa8c16' },
+        },
+      ]
 
   return (
     <>
@@ -3367,72 +3480,14 @@ const WorkOrdersPage: React.FC = () => {
           rowKey="id"
           columns={columns}
           showAdvancedSearch={true}
-          request={async (params: any, sort: any, _filter: any, searchFormValues: any) => {
-            try {
-              const apiParams: any = {
-                skip: (params.current! - 1) * params.pageSize!,
-                limit: params.pageSize,
-              }
-              // 搜索参数
-              if (searchFormValues?.code) apiParams.code = searchFormValues.code
-              if (searchFormValues?.name) apiParams.name = searchFormValues.name
-              if (searchFormValues?.product_name) apiParams.product_name = searchFormValues.product_name
-              if (searchFormValues?.production_mode) apiParams.production_mode = searchFormValues.production_mode
-              if (searchFormValues?.status) apiParams.status = searchFormValues.status
-              if (searchFormValues?.keyword) apiParams.keyword = searchFormValues.keyword
-              // 计划日期范围
-              if (searchFormValues?.planned_start_date && Array.isArray(searchFormValues.planned_start_date) && searchFormValues.planned_start_date.length === 2) {
-                const [start, end] = searchFormValues.planned_start_date
-                if (start) apiParams.planned_start_from = dayjs(start).format('YYYY-MM-DD')
-                if (end) apiParams.planned_start_to = dayjs(end).format('YYYY-MM-DD')
-              }
-              if (searchFormValues?.planned_end_date && Array.isArray(searchFormValues.planned_end_date) && searchFormValues.planned_end_date.length === 2) {
-                const [start, end] = searchFormValues.planned_end_date
-                if (start) apiParams.planned_end_from = dayjs(start).format('YYYY-MM-DD')
-                if (end) apiParams.planned_end_to = dayjs(end).format('YYYY-MM-DD')
-              }
-              // 排序
-              if (sort && Object.keys(sort).length > 0) {
-                const key = Object.keys(sort)[0]
-                const order = sort[key]
-                if (order) {
-                  apiParams.order_by = order === 'ascend' ? key : `-${key}`
-                }
-              }
-              const response = await workOrderApi.list(apiParams)
-
-              // 后端返回的是数组或分页格式，需要统一处理
-              if (Array.isArray(response)) {
-                // 后端直接返回数组
-                return {
-                  data: response,
-                  success: true,
-                  total: response.length,
-                }
-              } else if (response && typeof response === 'object') {
-                // 后端返回分页格式 { data: [], success: true, total: 0 }
-                return {
-                  data: response.data || response.items || [],
-                  success: response.success !== false,
-                  total: response.total || (response.data || response.items || []).length,
-                }
-              }
-
-              return {
-                data: [],
-                success: false,
-                total: 0,
-              }
-            } catch (error) {
-              console.error('获取工单列表失败:', error)
-              messageApi.error('获取工单列表失败')
-              return {
-                data: [],
-                success: false,
-                total: 0,
-              }
-            }
+          tanstackQuery={{
+            queryKeyPrefix: ['kuaizhizao', 'work-orders', 'list'],
+            staleTime: WORK_ORDER_LIST_STALE_MS,
+            gcTime: 15 * 60 * 1000,
+            prefetchNextPage: true,
+            staleWhileRevalidate: true,
           }}
+          request={handleWorkOrderTableRequest}
           showCreateButton
           createButtonText="新建工单"
           onCreate={handleCreate}
@@ -3458,7 +3513,7 @@ const WorkOrdersPage: React.FC = () => {
           showExportButton
           onExport={async (type, keys, pageData) => {
             try {
-              const response = await workOrderApi.list({ skip: 0, limit: 10000 })
+              const response = await workOrderApi.list({ skip: 0, limit: 10000, include_readiness: true })
               let items = Array.isArray(response) ? response : (response as any)?.data || (response as any)?.items || []
               if (type === 'currentPage' && pageData?.length) {
                 items = pageData
@@ -3594,38 +3649,38 @@ const WorkOrdersPage: React.FC = () => {
         </Suspense>
       )}
 
-      {/* 创建/编辑工单 Modal */}
-      <SmartSuggestionFloatPanel
-        visible={modalVisible && !!selectedMaterialSourceInfo}
-        suggestion={null}
-        messages={
-          selectedMaterialSourceInfo
-            ? (() => {
-                const msgs: Array<{ text: string; title?: string }> = []
+      {/* 创建/编辑工单 Modal — 智能建议面板懒加载，避免拖慢列表首屏 */}
+      {modalVisible && !!selectedMaterialSourceInfo && (
+        <Suspense fallback={null}>
+          <LazySmartSuggestionFloatPanel
+            visible
+            suggestion={null}
+            messages={(() => {
+              const msgs: Array<{ text: string; title?: string }> = []
+              msgs.push({
+                title: '物料来源',
+                text: selectedMaterialSourceInfo!.sourceTypeName || '未配置',
+              })
+              if (selectedMaterialSourceInfo!.validationErrors?.length) {
                 msgs.push({
-                  title: '物料来源',
-                  text: selectedMaterialSourceInfo.sourceTypeName || '未配置',
+                  title: '配置建议',
+                  text: selectedMaterialSourceInfo!.validationErrors
+                    .map((e, i) => `${i + 1}. ${e}`)
+                    .join('\n'),
                 })
-                if (selectedMaterialSourceInfo.validationErrors?.length) {
-                  msgs.push({
-                    title: '配置建议',
-                    text: selectedMaterialSourceInfo.validationErrors
-                      .map((e, i) => `${i + 1}. ${e}`)
-                      .join('\n'),
-                  })
-                }
-                if (selectedMaterialSourceInfo.canCreateWorkOrder === false) {
-                  msgs.push({
-                    title: '提醒',
-                    text: '该物料不允许创建生产工单，请选择其他物料',
-                  })
-                }
-                return msgs
-              })()
-            : []
-        }
-        anchorSelector="[data-smart-suggestion-anchor='work-order-form']"
-      />
+              }
+              if (selectedMaterialSourceInfo!.canCreateWorkOrder === false) {
+                msgs.push({
+                  title: '提醒',
+                  text: '该物料不允许创建生产工单，请选择其他物料',
+                })
+              }
+              return msgs
+            })()}
+            anchorSelector="[data-smart-suggestion-anchor='work-order-form']"
+          />
+        </Suspense>
+      )}
       <FormModalTemplate
         title={isEdit ? '编辑工单' : '新建工单'}
         open={modalVisible}
@@ -3666,62 +3721,64 @@ const WorkOrdersPage: React.FC = () => {
 
         {/* 产品与数量 */}
         <Col span={10}>
-          <UniMaterialSelect
-            name="product_id"
-            label="产品"
-            placeholder="请选择产品"
-            required
-            disabled={isEdit}
-            fallbackOption={
-              isEdit && currentWorkOrder?.product_id
-                ? {
-                    value: currentWorkOrder.product_id,
-                    label:
-                      `${currentWorkOrder.product_code || ''} - ${currentWorkOrder.product_name || ''}`.trim() ||
-                      String(currentWorkOrder.product_id),
-                  }
-                : undefined
-            }
-            onChange={async (value, material) => {
-              if (value) {
-                if (material) {
-                  try {
-                    const materialDetail = await materialApi.get(material.uuid)
-                    const sourceType = materialDetail.sourceType || materialDetail.source_type
-                    const sourceTypeNames: Record<string, string> = {
-                      Make: '自制件',
-                      Buy: '采购件',
-                      Phantom: '虚拟件',
-                      Outsource: '委外件',
-                      Configure: '配置件',
+          <Suspense fallback={<Spin style={{ margin: '12px 0' }} />}>
+            <LazyUniMaterialSelect
+              name="product_id"
+              label="产品"
+              placeholder="请选择产品"
+              required
+              disabled={isEdit}
+              fallbackOption={
+                isEdit && currentWorkOrder?.product_id
+                  ? {
+                      value: currentWorkOrder.product_id,
+                      label:
+                        `${currentWorkOrder.product_code || ''} - ${currentWorkOrder.product_name || ''}`.trim() ||
+                        String(currentWorkOrder.product_id),
                     }
-                    let canCreateWorkOrder = true
-                    const validationErrors: string[] = []
-                    if (sourceType === 'Buy') {
-                      canCreateWorkOrder = false
-                      validationErrors.push('采购件不应创建生产工单，请使用采购订单功能')
-                    } else if (sourceType === 'Phantom') {
-                      canCreateWorkOrder = false
-                      validationErrors.push('虚拟件不应创建工单')
-                    } else if (sourceType === 'Make') validationErrors.push('自制件需配置BOM和工艺路线')
-                    else if (sourceType === 'Outsource')
-                      validationErrors.push('委外件需配置委外供应商和工序')
-                    else if (sourceType === 'Configure') validationErrors.push('配置件需填写属性')
-                    setSelectedMaterialSourceInfo({
-                      sourceType,
-                      sourceTypeName: sourceType ? sourceTypeNames[sourceType] || sourceType : undefined,
-                      validationErrors: validationErrors.length > 0 ? validationErrors : undefined,
-                      canCreateWorkOrder,
-                    })
-                    loadProcessRouteForMaterial(material.uuid)
-                  } catch (error) {
-                    console.error('获取物料详情失败:', error)
-                    setSelectedMaterialSourceInfo(null)
-                  }
+                  : undefined
+              }
+              onChange={async (value, material) => {
+                if (value) {
+                  if (material) {
+                    try {
+                      const materialDetail = await materialApi.get(material.uuid)
+                      const sourceType = materialDetail.sourceType || materialDetail.source_type
+                      const sourceTypeNames: Record<string, string> = {
+                        Make: '自制件',
+                        Buy: '采购件',
+                        Phantom: '虚拟件',
+                        Outsource: '委外件',
+                        Configure: '配置件',
+                      }
+                      let canCreateWorkOrder = true
+                      const validationErrors: string[] = []
+                      if (sourceType === 'Buy') {
+                        canCreateWorkOrder = false
+                        validationErrors.push('采购件不应创建生产工单，请使用采购订单功能')
+                      } else if (sourceType === 'Phantom') {
+                        canCreateWorkOrder = false
+                        validationErrors.push('虚拟件不应创建工单')
+                      } else if (sourceType === 'Make') validationErrors.push('自制件需配置BOM和工艺路线')
+                      else if (sourceType === 'Outsource')
+                        validationErrors.push('委外件需配置委外供应商和工序')
+                      else if (sourceType === 'Configure') validationErrors.push('配置件需填写属性')
+                      setSelectedMaterialSourceInfo({
+                        sourceType,
+                        sourceTypeName: sourceType ? sourceTypeNames[sourceType] || sourceType : undefined,
+                        validationErrors: validationErrors.length > 0 ? validationErrors : undefined,
+                        canCreateWorkOrder,
+                      })
+                      loadProcessRouteForMaterial(material.uuid)
+                    } catch (error) {
+                      console.error('获取物料详情失败:', error)
+                      setSelectedMaterialSourceInfo(null)
+                    }
+                  } else setSelectedMaterialSourceInfo(null)
                 } else setSelectedMaterialSourceInfo(null)
-              } else setSelectedMaterialSourceInfo(null)
-            }}
-          />
+              }}
+            />
+          </Suspense>
         </Col>
         {selectedMaterialSourceInfo?.sourceType === 'Configure' && !isEdit && (
           <ProFormText
@@ -3930,16 +3987,23 @@ const WorkOrdersPage: React.FC = () => {
           }}
         >
           <div style={{ width: '100%', minWidth: 0, overflow: 'hidden', boxSizing: 'border-box' }}>
-            <CreateWorkOrderOperationsList
-            selectedOperations={selectedOperations}
-            setSelectedOperations={setSelectedOperations}
-            operationList={operationList}
-            formRef={formRef}
-            disabled={
-              isEdit &&
-              ['completed', 'cancelled'].includes(String(currentWorkOrder?.status || ''))
-            }
-          />
+            <Suspense
+              fallback={
+                <div style={{ padding: 24, textAlign: 'center' }}>
+                  <Spin />
+                </div>
+              }
+            >
+              <LazyCreateWorkOrderOperationsList
+                selectedOperations={selectedOperations}
+                setSelectedOperations={setSelectedOperations}
+                operationList={operationList}
+                formRef={formRef}
+                disabled={
+                  isEdit && ['completed', 'cancelled'].includes(String(currentWorkOrder?.status || ''))
+                }
+              />
+            </Suspense>
           </div>
         </Form.Item>
 
@@ -4234,95 +4298,124 @@ const WorkOrdersPage: React.FC = () => {
           )
         }
         customContent={
-          <>
-            {/* 1. 单据详情（含二维码） */}
-            {workOrderDetail && (
-              <div style={{ padding: '16px 0', borderBottom: `1px solid ${token.colorBorder}`, marginBottom: '16px' }}>
-                <h4 style={{ marginBottom: 12 }}>单据详情</h4>
-                <Row gutter={16}>
-                  <Col span={16}>
-                    <ProDescriptions
-                      dataSource={workOrderDetail}
-                      column={2}
-                      columns={detailColumns}
-                    />
-                  </Col>
-                  <Col span={8}>
-                    <QRCodeGenerator
-                      qrcodeType="WO"
-                      data={{
-                        work_order_uuid: workOrderDetail.id?.toString() || '',
-                        work_order_code: workOrderDetail.code || '',
-                        work_order_name: workOrderDetail.name || '',
-                      }}
-                      autoGenerate={true}
-                      size={6}
-                    />
-                  </Col>
-                </Row>
-              </div>
-            )}
-
-            {/* 2. 生命周期 */}
-            {workOrderDetail && (() => {
-              const lifecycle = getWorkOrderLifecycle(workOrderDetail)
-              const mainStages = lifecycle.mainStages ?? []
-              if (mainStages.length === 0) return null
-              return (
-                <div style={{ padding: '16px 0', borderBottom: `1px solid ${token.colorBorder}`, marginBottom: '16px' }}>
-                  <h4 style={{ marginBottom: 12 }}>生命周期</h4>
-                  <UniLifecycleStepper
-                    steps={mainStages}
-                    status={lifecycle.status}
-                    showLabels
-                    nextStepSuggestions={lifecycle.nextStepSuggestions}
-                  />
+          drawerVisible && workOrderDetail ? (
+            <Suspense fallback={<Spin style={{ margin: 48 }} />}>
+              <>
+                {/* 1. 单据详情（含二维码） */}
+                <div
+                  style={{
+                    padding: '16px 0',
+                    borderBottom: `1px solid ${token.colorBorder}`,
+                    marginBottom: '16px',
+                  }}
+                >
+                  <h4 style={{ marginBottom: 12 }}>单据详情</h4>
+                  <Row gutter={16}>
+                    <Col span={16}>
+                      <ProDescriptions
+                        dataSource={workOrderDetail}
+                        column={2}
+                        columns={detailColumns}
+                      />
+                    </Col>
+                    <Col span={8}>
+                      <LazyQRCodeGenerator
+                        qrcodeType="WO"
+                        data={{
+                          work_order_uuid: workOrderDetail.id?.toString() || '',
+                          work_order_code: workOrderDetail.code || '',
+                          work_order_name: workOrderDetail.name || '',
+                        }}
+                        autoGenerate={true}
+                        size={6}
+                      />
+                    </Col>
+                  </Row>
                 </div>
-              )
-            })()}
 
-            {/* 3. 单据明细（工单工序） */}
-            <div style={{ padding: '16px 0', borderBottom: `1px solid ${token.colorBorder}`, marginBottom: '16px' }}>
-              <Card title="工单工序">
-                <WorkOrderOperationsList
-                  workOrderId={workOrderDetail?.id}
-                  operations={workOrderOperations}
-                  workOrderStatus={workOrderDetail?.status}
-                  onUpdate={async () => {
-                    if (workOrderDetail?.id) {
-                      const operations = await workOrderApi.getOperations(
-                        workOrderDetail.id.toString()
-                      )
-                      setWorkOrderOperations(operations)
-                    }
+                {/* 2. 生命周期 */}
+                {(() => {
+                  const lifecycle = getWorkOrderLifecycle(workOrderDetail)
+                  const mainStages = lifecycle.mainStages ?? []
+                  if (mainStages.length === 0) return null
+                  return (
+                    <div
+                      style={{
+                        padding: '16px 0',
+                        borderBottom: `1px solid ${token.colorBorder}`,
+                        marginBottom: '16px',
+                      }}
+                    >
+                      <h4 style={{ marginBottom: 12 }}>生命周期</h4>
+                      <LazyUniLifecycleStepper
+                        steps={mainStages}
+                        status={lifecycle.status}
+                        showLabels
+                        nextStepSuggestions={lifecycle.nextStepSuggestions}
+                      />
+                    </div>
+                  )
+                })()}
+
+                {/* 3. 单据明细（工单工序） */}
+                <div
+                  style={{
+                    padding: '16px 0',
+                    borderBottom: `1px solid ${token.colorBorder}`,
+                    marginBottom: '16px',
                   }}
-                  onEdit={operation => {
-                    setCurrentOperation(operation)
-                    setOperationsModalVisible(true)
-                    operationFormRef.current?.setFieldsValue(operation)
+                >
+                  <Card title="工单工序">
+                    <LazyWorkOrderOperationsList
+                      workOrderId={workOrderDetail?.id}
+                      operations={workOrderOperations}
+                      workOrderStatus={workOrderDetail?.status}
+                      onUpdate={async () => {
+                        if (workOrderDetail?.id) {
+                          const ops = await workOrderApi.getOperations(workOrderDetail.id.toString())
+                          setWorkOrderOperations(ops)
+                        }
+                      }}
+                      onEdit={operation => {
+                        setCurrentOperation(operation)
+                        setOperationsModalVisible(true)
+                        operationFormRef.current?.setFieldsValue(operation)
+                      }}
+                    />
+                  </Card>
+                </div>
+
+                {/* 4. 齐套性分析 */}
+                <div
+                  style={{
+                    padding: '16px 0',
+                    borderBottom: `1px solid ${token.colorBorder}`,
+                    marginBottom: '16px',
                   }}
-                />
-              </Card>
-            </div>
+                >
+                  <LazyWorkOrderKittingPanel workOrderId={workOrderDetail?.id} />
+                </div>
 
-            {/* 4. 齐套性分析 (Proactive) */}
-            <div style={{ padding: '16px 0', borderBottom: `1px solid ${token.colorBorder}`, marginBottom: '16px' }}>
-              <WorkOrderKittingPanel workOrderId={workOrderDetail?.id} />
-            </div>
-
-            {/* 5. 操作记录 */}
-            {workOrderDetail?.id && (
-              <div style={{ padding: '16px 0', borderBottom: `1px solid ${token.colorBorder}`, marginBottom: '16px' }}>
-                <h4 style={{ marginBottom: 12 }}>操作记录</h4>
-                <DocumentTrackingPanel
-                  documentType="work_order"
-                  documentId={workOrderDetail.id}
-                  onDocumentClick={(type, id) => messageApi.info(`跳转到${type}#${id}`)}
-                />
-              </div>
-            )}
-
-          </>
+                {/* 5. 操作记录 */}
+                {workOrderDetail?.id ? (
+                  <div
+                    style={{
+                      padding: '16px 0',
+                      borderBottom: `1px solid ${token.colorBorder}`,
+                      marginBottom: '16px',
+                    }}
+                  >
+                    <h4 style={{ marginBottom: 12 }}>操作记录</h4>
+                    <LazyDocumentTrackingPanel
+                      documentType="work_order"
+                      documentId={workOrderDetail.id}
+                      onDocumentClick={(type, id) => messageApi.info(`跳转到${type}#${id}`)}
+                    />
+                  </div>
+                ) : null}
+              </>
+            </Suspense>
+          ) : null
         }
       />
 
@@ -5352,528 +5445,5 @@ const WorkOrdersPage: React.FC = () => {
   )
 }
 
-/**
- * 创建工单时的工序列表组件
- */
-interface CreateWorkOrderOperationsListProps {
-  selectedOperations: any[]
-  setSelectedOperations: React.Dispatch<React.SetStateAction<any[]>>
-  operationList: any[]
-  formRef: React.RefObject<any>
-  disabled?: boolean
-}
-
-const CreateWorkOrderOperationsList: React.FC<CreateWorkOrderOperationsListProps> = ({
-  selectedOperations,
-  setSelectedOperations,
-  operationList,
-  formRef,
-  disabled,
-}) => {
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  )
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event
-    if (over && active.id !== over.id) {
-      const oldIndex = selectedOperations.findIndex(op => op.operation_id === active.id)
-      const newIndex = selectedOperations.findIndex(op => op.operation_id === over.id)
-      
-      const newOps = arrayMove(selectedOperations, oldIndex, newIndex).map((op, idx) => ({
-        ...op,
-        sequence: idx + 1,
-      }))
-      
-      setSelectedOperations(newOps)
-      // 同步到表单
-      formRef.current?.setFieldsValue({
-        operations: newOps.map((op: any) => op.operation_id)
-      })
-    }
-  }
-
-  const handleDelete = (operationId: number) => {
-    const newOps = selectedOperations
-      .filter(op => op.operation_id !== operationId)
-      .map((op, idx) => ({
-        ...op,
-        sequence: idx + 1,
-      }))
-    setSelectedOperations(newOps)
-    formRef.current?.setFieldsValue({
-      operations: newOps.map((op: any) => op.operation_id)
-    })
-  }
-
-  if (selectedOperations.length === 0) {
-    return (
-      <div style={{ padding: '24px', textAlign: 'center', color: '#999', border: '1px dashed var(--river-border-color)', borderRadius: 4 }}>
-        请选择工艺路线或手动添加工序
-      </div>
-    )
-  }
-
-  return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-      <SortableContext
-        items={selectedOperations.map(op => op.operation_id)}
-        strategy={verticalListSortingStrategy}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {selectedOperations.map((op, idx) => (
-            <SortableCreateOperationItem 
-              key={op.operation_id} 
-              operation={op} 
-              index={idx}
-              disabled={disabled}
-              onDelete={() => handleDelete(op.operation_id)}
-            />
-          ))}
-        </div>
-      </SortableContext>
-    </DndContext>
-  )
-}
-
-/**
- * 创建工单时的可拖拽工序项
- */
-const SortableCreateOperationItem: React.FC<{ 
-  operation: any, 
-  index: number, 
-  disabled?: boolean,
-  onDelete: () => void 
-}> = ({ operation, index, disabled, onDelete }) => {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: operation.operation_id,
-  })
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-    padding: '8px 12px',
-    background: '#fff',
-    border: '1px solid var(--river-border-color)',
-    borderRadius: 4,
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-  }
-
-  return (
-    <div ref={setNodeRef} style={style}>
-      {!disabled && (
-        <div {...attributes} {...listeners} style={{ cursor: 'grab', display: 'flex' }}>
-          <HolderOutlined style={{ color: '#999' }} />
-        </div>
-      )}
-      <div style={{ flex: 1 }}>
-        <Space>
-          <span style={{ fontWeight: 'bold' }}>{index + 1}. {operation.operation_name}</span>
-          <span style={{ color: '#999', fontSize: 12 }}>({operation.operation_code})</span>
-        </Space>
-      </div>
-      {!disabled && (
-        <Button 
-          type="link" 
-          size="small" 
-          danger 
-          icon={<DeleteOutlined />} 
-          onClick={onDelete}
-        />
-      )}
-    </div>
-  )
-}
-
-/**
- * 工单齐套性分析面板
- */
-const WorkOrderKittingPanel: React.FC<{ workOrderId?: number }> = ({ workOrderId }) => {
-  const { message: messageApi } = App.useApp()
-  const { data: kittingData, isLoading, refetch } = useQuery({
-    queryKey: ['workOrderKittingAnalysis', workOrderId],
-    queryFn: () => workOrderApi.getKittingAnalysis(workOrderId!.toString()),
-    enabled: !!workOrderId,
-    staleTime: 10_000,
-  })
-
-  // 叫料状态
-  const [calling, setCalling] = useState<Record<number, boolean>>({})
-
-  const handleCreateCall = async (record: any) => {
-    try {
-      setCalling(prev => ({ ...prev, [record.material_id]: true }))
-      const shortage = record.required_quantity - record.picked_quantity
-      await warehouseApi.materialCall.create({
-        work_order_id: workOrderId,
-        material_id: record.material_id,
-        quantity: shortage > 0 ? shortage : 0,
-        priority: 'normal',
-        remarks: '生产现场通过齐套分析发起叫料',
-      })
-      messageApi.success(`已为物料 ${record.material_name} 发起叫料请求`)
-    } catch (error: any) {
-      messageApi.error(error.message || '发起叫料失败')
-    } finally {
-      setCalling(prev => ({ ...prev, [record.material_id]: false }))
-    }
-  }
-
-  if (isLoading) return <div style={{ padding: '40px 0', textAlign: 'center' }}><Spin tip="计算齐套性中..." /></div>
-  if (!kittingData) return <Empty description="暂无齐套数据" />
-
-  const columns = [
-    {
-      title: '物料信息',
-      key: 'material',
-      render: (_: any, record: any) => (
-        <div>
-          <div style={{ fontWeight: 'bold' }}>{record.material_name}</div>
-          <div style={{ fontSize: '11px', color: '#999' }}>{record.material_code}</div>
-        </div>
-      ),
-    },
-    {
-      title: '需求/已领',
-      key: 'qty',
-      render: (_: any, record: any) => (
-        <span>{record.required_quantity} / {record.picked_quantity}</span>
-      ),
-    },
-    {
-      title: '主仓可用',
-      dataIndex: 'warehouse_available',
-      key: 'warehouse_available',
-      render: (val: number, record: any) => {
-        const shortage = record.required_quantity - record.picked_quantity
-        const isNotEnough = val < shortage
-        return (
-          <span style={{ color: isNotEnough ? '#ff4d4f' : '#52c41a', fontWeight: isNotEnough ? 'bold' : 'normal' }}>
-            {val}
-          </span>
-        )
-      },
-    },
-    {
-      title: '线边/状态',
-      key: 'side_status',
-      render: (_: any, record: any) => {
-        const shortage = record.required_quantity - record.picked_quantity
-        const totalAvailable = (record.warehouse_available || 0) + (record.line_side_inventory || 0)
-        const isReady = totalAvailable >= shortage
-        return (
-          <Space>
-            <span style={{ color: '#888' }}>{record.line_side_inventory}</span>
-            <Tag color={isReady ? 'success' : 'error'}>{isReady ? '已齐套' : '欠料'}</Tag>
-          </Space>
-        )
-      },
-    },
-    {
-      title: '快速叫料',
-      key: 'action',
-      width: 100,
-      render: (_: any, record: any) => {
-        const shortage = record.required_quantity - record.picked_quantity
-        if (shortage <= 0) return <Tag color="default">无需领料</Tag>
-        return (
-          <Button
-            type="primary"
-            size="small"
-            ghost
-            loading={calling[record.material_id]}
-            onClick={() => handleCreateCall(record)}
-          >
-            叫料
-          </Button>
-        )
-      },
-    },
-  ]
-
-  return (
-    <Card
-      size="small"
-      title={
-        <Space>
-          <ShoppingOutlined />
-          <span>齐套分析</span>
-          <Progress
-            type="circle"
-            percent={Math.round((kittingData.kitting_rate || 0) * 100)}
-            size={24}
-            strokeColor={kittingData.kitting_rate === 1 ? '#52c41a' : '#faad14'}
-          />
-        </Space>
-      }
-      extra={<Button type="link" size="small" onClick={() => refetch()}>重新分析</Button>}
-      styles={{ body: { padding: 0 } }}
-    >
-      <Table
-        dataSource={kittingData.items}
-        columns={columns as any}
-        pagination={false}
-        size="small"
-        rowKey="material_id"
-        style={{ margin: 0 }}
-      />
-    </Card>
-  )
-}
-
-/**
- * 工单工序列表组件
- */
-interface WorkOrderOperationsListProps {
-  workOrderId?: number
-  operations: any[]
-  workOrderStatus?: string
-  onUpdate: () => Promise<void>
-  onEdit: (operation: any) => void
-}
-
-const WorkOrderOperationsList: React.FC<WorkOrderOperationsListProps> = ({
-  workOrderId,
-  operations,
-  workOrderStatus,
-  onUpdate,
-  onEdit,
-}) => {
-  const { message: messageApi } = App.useApp()
-  const [localOperations, setLocalOperations] = useState<any[]>(operations)
-  const [saving, setSaving] = useState(false)
-
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  )
-
-  useEffect(() => {
-    setLocalOperations(operations)
-  }, [operations])
-
-  /**
-   * 处理拖拽结束
-   */
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event
-
-    if (over && active.id !== over.id) {
-      const oldIndex = localOperations.findIndex(op => op.id === active.id)
-      const newIndex = localOperations.findIndex(op => op.id === over.id)
-
-      if (oldIndex === -1 || newIndex === -1) return
-
-      // 检查是否有已报工的工序
-      const movedOperation = localOperations[oldIndex]
-      if (movedOperation.status !== 'pending' && movedOperation.status !== 'in_progress') {
-        messageApi.warning('已报工的工序不允许调整顺序')
-        return
-      }
-
-      const newOperations = arrayMove(localOperations, oldIndex, newIndex)
-      // 重新计算sequence
-      const sortedOperations = newOperations.map((op, index) => ({
-        ...op,
-        sequence: index + 1,
-      }))
-
-      setLocalOperations(sortedOperations)
-
-      // 保存到后端
-      if (workOrderId) {
-        try {
-          setSaving(true)
-          await workOrderApi.updateOperations(workOrderId.toString(), {
-            operations: sortedOperations,
-          })
-          messageApi.success('工序顺序已更新')
-          await onUpdate()
-        } catch (error: any) {
-          messageApi.error(error.message || '更新失败')
-          // 恢复原顺序
-          setLocalOperations(operations)
-        } finally {
-          setSaving(false)
-        }
-      }
-    }
-  }
-
-  /**
-   * 删除工序
-   */
-  const handleDelete = async (operation: any) => {
-    if (operation.status !== 'pending' && operation.status !== 'in_progress') {
-      messageApi.warning('已报工的工序不允许删除')
-      return
-    }
-
-    Modal.confirm({
-      title: '确认删除',
-      content: `确定要删除工序"${operation.operation_name}"吗？`,
-      onOk: async () => {
-        try {
-          if (!workOrderId) return
-
-          const updatedOperations = localOperations
-            .filter(op => op.id !== operation.id)
-            .map((op, index) => ({
-              ...op,
-              sequence: index + 1,
-            }))
-
-          await workOrderApi.updateOperations(workOrderId.toString(), {
-            operations: updatedOperations,
-          })
-
-          messageApi.success('工序删除成功')
-          await onUpdate()
-        } catch (error: any) {
-          messageApi.error(error.message || '删除失败')
-        }
-      },
-    })
-  }
-
-  const canEdit = workOrderStatus && ['draft', 'released'].includes(workOrderStatus)
-
-  if (localOperations.length === 0) {
-    return <div style={{ padding: '48px 24px', textAlign: 'center', color: '#999' }}>暂无工序</div>
-  }
-
-  return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-      <SortableContext
-        items={localOperations.map(op => op.id)}
-        strategy={verticalListSortingStrategy}
-      >
-        <div>
-          {localOperations.map(operation => {
-            const isReported = operation.status !== 'pending' && operation.status !== 'in_progress'
-            return (
-              <SortableOperationItem
-                key={operation.id}
-                operation={operation}
-                canEdit={!!(canEdit && !isReported)}
-                isReported={isReported}
-                onEdit={() => onEdit(operation)}
-                onDelete={() => handleDelete(operation)}
-              />
-            )
-          })}
-        </div>
-      </SortableContext>
-    </DndContext>
-  )
-}
-
-/**
- * 可拖拽的工序项组件
- */
-interface SortableOperationItemProps {
-  operation: any
-  canEdit: boolean
-  isReported: boolean
-  onEdit: () => void
-  onDelete: () => void
-}
-
-const SortableOperationItem: React.FC<SortableOperationItemProps> = ({
-  operation,
-  canEdit,
-  isReported,
-  onEdit,
-  onDelete,
-}) => {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: operation.id,
-  })
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-    backgroundColor: isReported ? '#f5f5f5' : '#fff',
-    border: '1px solid var(--river-border-color)',
-    borderRadius: '4px',
-    padding: '12px',
-    marginBottom: '8px',
-    cursor: canEdit && !isReported ? 'grab' : 'not-allowed',
-  }
-
-  const statusMap: Record<string, { text: string; color: string }> = {
-    pending: { text: '待开始', color: 'default' },
-    in_progress: { text: '进行中', color: 'processing' },
-    completed: { text: '已完成', color: 'success' },
-    cancelled: { text: '已取消', color: 'error' },
-  }
-
-  const statusConfig = statusMap[operation.status] || { text: operation.status, color: 'default' }
-
-  return (
-    <div ref={setNodeRef} style={style}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        {canEdit && (
-          <div
-            {...attributes}
-            {...listeners}
-            style={{
-              cursor: 'grab',
-              padding: '4px',
-              display: 'flex',
-              alignItems: 'center',
-            }}
-          >
-            <HolderOutlined style={{ color: '#999' }} />
-          </div>
-        )}
-        <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-            <span style={{ fontWeight: 'bold', color: isReported ? '#999' : '#000' }}>
-              {operation.sequence}. {operation.operation_name || operation.name}
-            </span>
-            <Tag color={statusConfig.color}>{statusConfig.text}</Tag>
-            {isReported && <Tag color="warning">已报工</Tag>}
-          </div>
-          <div style={{ fontSize: '12px', color: '#999' }}>
-            <Space separator={<span>|</span>}>
-              <span>编号: {operation.operation_code || operation.code}</span>
-              {operation.workshop_name && <span>车间: {operation.workshop_name}</span>}
-              {operation.standard_time > 0 && <span>标准工时: {operation.standard_time}h</span>}
-              {operation.planned_start_date && (
-                <span>计划: {dayjs(operation.planned_start_date).format('YYYY-MM-DD HH:mm')}</span>
-              )}
-            </Space>
-          </div>
-        </div>
-        {canEdit && (
-          <Space>
-            <Button type="link" size="small" onClick={onEdit}>
-              编辑
-            </Button>
-            <Popconfirm
-              title="确认删除"
-              description={`确定要删除工序"${operation.operation_name || operation.name}"吗？`}
-              onConfirm={onDelete}
-            >
-              <Button type="link" size="small" danger>
-                删除
-              </Button>
-            </Popconfirm>
-          </Space>
-        )}
-      </div>
-    </div>
-  )
-}
 
 export default WorkOrdersPage

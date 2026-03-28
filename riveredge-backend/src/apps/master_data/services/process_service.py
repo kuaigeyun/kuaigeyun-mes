@@ -75,32 +75,61 @@ def _defect_type_to_response_data(dt: DefectType) -> Dict[str, Any]:
 
 async def _get_operation_defect_types_via_table(operation_id: int) -> List[Dict[str, Any]]:
     """通过关联表原始 SQL 获取工序绑定的不良品列表，避免依赖 Tortoise 的 through 模型解析。"""
+    batch = await batch_get_operation_defect_types_via_table([operation_id])
+    return batch.get(operation_id, [])
+
+
+async def batch_get_operation_defect_types_via_table(
+    operation_ids: List[int],
+) -> Dict[int, List[Dict[str, Any]]]:
+    """
+    批量获取多个主数据工序 ID 绑定的不良品类型（工单工序列表展开时避免 N+1）。
+    """
+    empty: Dict[int, List[Dict[str, Any]]] = {}
+    if not operation_ids:
+        return empty
+    ids = sorted({int(i) for i in operation_ids if i is not None})
+    if not ids:
+        return empty
+    for oid in ids:
+        empty[oid] = []
     try:
         from tortoise import Tortoise
         conn = Tortoise.get_connection("default")
-        # 使用表名直接查询，不依赖 models.OperationDefectType
         if hasattr(conn, "execute_query_dict"):
             rows = await conn.execute_query_dict(
-                "SELECT defect_type_id FROM apps_master_data_operation_defect_types WHERE operation_id = $1",
-                [operation_id],
+                "SELECT operation_id, defect_type_id FROM apps_master_data_operation_defect_types "
+                "WHERE operation_id = ANY($1::int[])",
+                [ids],
             )
-            ids = [r.get("defect_type_id") for r in rows if r.get("defect_type_id") is not None]
         else:
             result = await conn.execute_query(
-                "SELECT defect_type_id FROM apps_master_data_operation_defect_types WHERE operation_id = $1",
-                [operation_id],
+                "SELECT operation_id, defect_type_id FROM apps_master_data_operation_defect_types "
+                "WHERE operation_id = ANY($1::int[])",
+                [ids],
             )
-            # Tortoise execute_query 可能返回 list 或 (raw, list)
             raw = result[1] if isinstance(result, tuple) and len(result) > 1 else result
-            if not raw:
-                return []
-            ids = [row[0] for row in raw if row and row[0] is not None]
-        if not ids:
-            return []
-        dts = await DefectType.filter(id__in=ids, deleted_at__isnull=True).all()
-        return [{"uuid": str(dt.uuid), "code": dt.code, "name": dt.name} for dt in dts]
+            rows = [{"operation_id": row[0], "defect_type_id": row[1]} for row in (raw or [])]
+        op_to_dt: Dict[int, List[int]] = {}
+        all_dt: set = set()
+        for r in rows or []:
+            oid = r.get("operation_id")
+            dtid = r.get("defect_type_id")
+            if oid is None or dtid is None:
+                continue
+            oi, di = int(oid), int(dtid)
+            op_to_dt.setdefault(oi, []).append(di)
+            all_dt.add(di)
+        if not all_dt:
+            return empty
+        dts = await DefectType.filter(id__in=list(all_dt), deleted_at__isnull=True).all()
+        dt_map = {dt.id: {"uuid": str(dt.uuid), "code": dt.code, "name": dt.name} for dt in dts}
+        out: Dict[int, List[Dict[str, Any]]] = {oid: [] for oid in ids}
+        for oid, dt_list in op_to_dt.items():
+            out[oid] = [dt_map[i] for i in dt_list if i in dt_map]
+        return out
     except Exception:
-        return []
+        return empty
 
 
 async def _operation_to_response_data(op: Operation) -> Dict[str, Any]:

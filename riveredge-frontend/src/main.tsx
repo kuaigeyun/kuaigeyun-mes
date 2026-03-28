@@ -87,7 +87,7 @@ const queryClient = new QueryClient({
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000), // 减少最大延迟时间
       refetchOnWindowFocus: false, // ⚠️ 关键修复：禁用窗口聚焦时自动刷新，避免频繁请求
       refetchOnReconnect: false, // ⚠️ 关键修复：禁用网络重连时自动刷新
-      refetchOnMount: true, // 组件挂载时刷新
+      refetchOnMount: true, // 仅在数据已 stale 时重拉；与 staleTime 配合避免频繁请求
       staleTime: 5 * 60 * 1000, // 5分钟
       // ⚠️ 全局错误处理（静默处理，避免重复提示和崩溃）
       throwOnError: false,

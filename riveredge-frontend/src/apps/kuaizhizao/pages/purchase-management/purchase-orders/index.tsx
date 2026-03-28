@@ -1404,7 +1404,35 @@ const PurchaseOrdersPage: React.FC = () => {
           ),
         },
       ]
-    : [];
+    : [
+        {
+          title: t('app.kuaizhizao.purchase.statArrivalRate'),
+          value: 0,
+          suffix: '%',
+          valueStyle: { color: token.colorPrimary },
+        },
+        {
+          title: t('app.kuaizhizao.purchase.statPendingReview'),
+          value: 0,
+        },
+        {
+          title: t('app.kuaizhizao.purchase.statAnnualTotal'),
+          value: 0,
+          prefix: '¥',
+          precision: 2,
+          valueStyle: { color: '#2f54eb' },
+        },
+        {
+          title: t('app.kuaizhizao.purchase.statSupplierOnTime'),
+          value: 0,
+          suffix: '%',
+          valueStyle: { color: '#52c41a' },
+        },
+        {
+          title: t('app.kuaizhizao.purchase.statOverdue'),
+          value: 0,
+        },
+      ];
 
   return (
     <>

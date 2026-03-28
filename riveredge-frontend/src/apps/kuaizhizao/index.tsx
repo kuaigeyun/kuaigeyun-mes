@@ -16,7 +16,9 @@ import PlaceholderPage from './components/PlaceholderPage';
 
 /** 页面懒加载包装：Suspense + PageSkeleton fallback */
 const withPageSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
-  <Suspense fallback={<PageSkeleton />}><LazyComponent /></Suspense>
+  <Suspense fallback={<PageSkeleton variant="minimal" />}>
+    <LazyComponent />
+  </Suspense>
 );
 
 // 计划管理页面

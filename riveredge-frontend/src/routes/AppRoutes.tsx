@@ -28,13 +28,14 @@ const INSTALLED_APPS_QUERY_KEY = ['installedApplications', { is_active: true }] 
  * 延迟显示的 Fallback 组件
  * 初始 delayMs 内渲染 null，超时后才显示骨架屏，避免快速加载时的闪烁
  */
-const DelayedFallback: React.FC<{ delayMs?: number }> = ({ delayMs = 200 }) => {
-  const [show, setShow] = useState(false);
+const DelayedFallback: React.FC<{ delayMs?: number }> = ({ delayMs = 0 }) => {
+  const [show, setShow] = useState(delayMs === 0);
   useEffect(() => {
+    if (delayMs === 0) return;
     const t = setTimeout(() => setShow(true), delayMs);
     return () => clearTimeout(t);
   }, [delayMs]);
-  return show ? <PageSkeleton /> : null;
+  return show ? <PageSkeleton variant="minimal" /> : null;
 };
 
 /** 为单个应用创建按需加载的懒组件（仅在该路由被访问时才加载 chunk） */

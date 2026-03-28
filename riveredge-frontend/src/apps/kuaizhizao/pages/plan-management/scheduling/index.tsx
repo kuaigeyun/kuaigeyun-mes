@@ -7,19 +7,17 @@
  * 注意：MRP/LRP 运算结果请前往「需求计算」页面查看和操作。
  */
 
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, lazy, Suspense } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Card, Modal, Drawer, Switch } from 'antd';
+import { App, Button, Tag, Space, Card, Modal, Drawer, Switch, Spin } from 'antd';
 import { ScheduleOutlined, ReloadOutlined, SettingOutlined } from '@ant-design/icons';
 import { useRequest } from 'ahooks';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { workOrderApi, advancedSchedulingApi, schedulingConfigApi } from '../../../services/production';
-import GanttSchedulingChart, {
-  type ViewMode,
-  type WorkOrderForGantt,
-  type GanttTaskLevel,
-} from '../../../components/GanttSchedulingChart';
+import type { ViewMode, WorkOrderForGantt, GanttTaskLevel } from '../../../components/GanttSchedulingChart/types';
+
+const GanttSchedulingChart = lazy(() => import('../../../components/GanttSchedulingChart'));
 
 /** 默认排程约束（含 4M 人机料法开关） */
 const DEFAULT_SCHEDULING_CONSTRAINTS = {
@@ -326,16 +324,24 @@ const SchedulingPage: React.FC = () => {
           </Space>
         }
       >
-        <GanttSchedulingChart
-          workOrders={ganttWorkOrders}
-          loading={ganttLoading}
-          viewMode={ganttViewMode}
-          taskLevel={ganttTaskLevel}
-          onViewModeChange={setGanttViewMode}
-          onBatchUpdate={handleGanttBatchUpdate}
-          onBatchUpdateOperations={handleGanttBatchUpdateOperations}
-          onRefresh={refreshGantt}
-        />
+        <Suspense
+          fallback={
+            <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
+              <Spin tip="加载甘特图…" />
+            </div>
+          }
+        >
+          <GanttSchedulingChart
+            workOrders={ganttWorkOrders}
+            loading={ganttLoading}
+            viewMode={ganttViewMode}
+            taskLevel={ganttTaskLevel}
+            onViewModeChange={setGanttViewMode}
+            onBatchUpdate={handleGanttBatchUpdate}
+            onBatchUpdateOperations={handleGanttBatchUpdateOperations}
+            onRefresh={refreshGantt}
+          />
+        </Suspense>
       </Card>
 
       {/* 排程配置 Drawer - 4M 人机料法可配置 */}

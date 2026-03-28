@@ -30,6 +30,7 @@ import { useTranslation } from 'react-i18next';
 import { RightOutlined } from '@ant-design/icons';
 import { translateMenuName, translatePathTitle, translateAppMenuItemName, extractAppCodeFromPath, findMenuTitleWithTranslation, getAppDisplayName } from '../utils/menuTranslation';
 import { prefetchPlugin } from '../utils/pluginLoader';
+import { prefetchKuaizhizaoRoute } from '../apps/kuaizhizao/routePrefetch';
 import dayjs from 'dayjs';
 import { getUserMessageStats, getUserMessages, markMessagesRead, type UserMessage } from '../services/userMessage';
 
@@ -4439,6 +4440,17 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                   if (path.startsWith('/apps/')) {
                     const appCode = extractAppCodeFromPath(path);
                     if (appCode) prefetchPlugin(appCode);
+                    if (path.startsWith('/apps/kuaizhizao')) prefetchKuaizhizaoRoute(path);
+                    const menuPath = path.split('?')[0];
+                    if (
+                      menuPath.includes('/apps/kuaizhizao/') &&
+                      menuPath.includes('production-execution/work-orders') &&
+                      !menuPath.includes('/kiosk')
+                    ) {
+                      void import('../apps/kuaizhizao/pages/production-execution/work-orders/workOrderListTable').then(
+                        (m) => m.prefetchDefaultWorkOrderList(queryClient, 20)
+                      );
+                    }
                   }
                 }}
                 style={{ display: 'block', width: '100%' }}

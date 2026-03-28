@@ -1,0 +1,26 @@
+diff --git a/node_modules/@ant-design/pro-table/es/useFetchData.js b/node_modules/@ant-design/pro-table/es/useFetchData.js
+index f3b5574..3211de9 100644
+--- a/node_modules/@ant-design/pro-table/es/useFetchData.js
++++ b/node_modules/@ant-design/pro-table/es/useFetchData.js
+@@ -332,7 +332,7 @@ var useFetchData = function useFetchData(getData, defaultData, options) {
+     return function (_x2) {
+       return _ref6.apply(this, arguments);
+     };
+-  }(), debounceTime || 30);
++  }(), debounceTime != null ? debounceTime : 30);
+ 
+   /**
+    * 取消请求
+diff --git a/node_modules/@ant-design/pro-table/lib/useFetchData.js b/node_modules/@ant-design/pro-table/lib/useFetchData.js
+index 491a76b..692def6 100644
+--- a/node_modules/@ant-design/pro-table/lib/useFetchData.js
++++ b/node_modules/@ant-design/pro-table/lib/useFetchData.js
+@@ -338,7 +338,7 @@ var useFetchData = function useFetchData(getData, defaultData, options) {
+     return function (_x2) {
+       return _ref6.apply(this, arguments);
+     };
+-  }(), debounceTime || 30);
++  }(), debounceTime != null ? debounceTime : 30);
+ 
+   /**
+    * 取消请求
