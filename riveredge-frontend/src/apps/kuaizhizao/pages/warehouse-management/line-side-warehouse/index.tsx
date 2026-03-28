@@ -59,7 +59,7 @@ const LineSideWarehousePage: React.FC = () => {
       render: (_, record) => record.warehouse_name || '-',
     },
     {
-      title: '物料编码',
+      title: '物料编号',
       dataIndex: 'material_code',
       width: 120,
     },

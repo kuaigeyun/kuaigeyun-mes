@@ -4,7 +4,7 @@
  */
 
 /** 提交按钮上的快捷键提示文案，可拼在按钮文字后 */
-export const SUBMIT_SHORTCUT_HINT = ' (Ctrl+Enter)';
+export const SUBMIT_SHORTCUT_HINT = ' (Ctrl+S)';
 
 let currentHandler: (() => void) | null = null;
 

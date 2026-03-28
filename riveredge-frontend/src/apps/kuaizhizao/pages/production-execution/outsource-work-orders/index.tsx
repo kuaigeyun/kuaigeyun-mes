@@ -223,7 +223,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
     }
   };
 
-  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码 */
+  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号 */
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentWorkOrder(null);
@@ -498,7 +498,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
   // 定义表格列
   const columns: ProColumns<OutsourceWorkOrder>[] = [
     {
-      title: '工单委外编码',
+      title: '工单委外编号',
       dataIndex: 'code',
       width: 150,
       fixed: 'left',
@@ -510,7 +510,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       ellipsis: true,
     },
     {
-      title: '产品编码',
+      title: '产品编号',
       dataIndex: ['productCode', 'product_code'],
       width: 120,
       render: (_, record) => record.productCode || record.product_code,
@@ -679,7 +679,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
   // 定义详情列
   const detailColumns: ProDescriptionsItemType<OutsourceWorkOrder>[] = [
     {
-      title: '工单委外编码',
+      title: '工单委外编号',
       dataIndex: 'code',
     },
     {
@@ -687,7 +687,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       dataIndex: 'name',
     },
     {
-      title: '产品编码',
+      title: '产品编号',
       dataIndex: ['productCode', 'product_code'],
       render: (_, record) => record.productCode || record.product_code,
     },
@@ -903,7 +903,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           <CodeField
             pageCode="kuaizhizao-production-outsource-work-order"
             name="code"
-            label="工单委外编码"
+            label="工单委外编号"
             autoGenerateOnCreate={true}
             context={{}}
             colProps={{ span: 12 }}
@@ -1131,7 +1131,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           <>
             <Divider>工单委外信息</Divider>
             <div style={{ marginBottom: 16, padding: 12, background: '#f5f5f5', borderRadius: 4 }}>
-              <div><strong>工单委外编码：</strong>{currentWorkOrderForIssue.code}</div>
+              <div><strong>工单委外编号：</strong>{currentWorkOrderForIssue.code}</div>
               <div><strong>产品名称：</strong>{currentWorkOrderForIssue.productName || currentWorkOrderForIssue.product_name}</div>
               <div><strong>委外数量：</strong>{currentWorkOrderForIssue.quantity != null ? Number(currentWorkOrderForIssue.quantity).toFixed(2) : '-'}</div>
               <div><strong>已发料数量：</strong>{Number(currentWorkOrderForIssue.issuedQuantity ?? currentWorkOrderForIssue.issued_quantity ?? 0).toFixed(2)}</div>
@@ -1175,7 +1175,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
             />
             <ProFormText
               name="materialCode"
-              label="物料编码"
+              label="物料编号"
               disabled
               colProps={{ span: 12 }}
             />
@@ -1250,7 +1250,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           <>
             <Divider>工单委外信息</Divider>
             <div style={{ marginBottom: 16, padding: 12, background: '#f5f5f5', borderRadius: 4 }}>
-              <div><strong>工单委外编码：</strong>{currentWorkOrderForReceipt.code}</div>
+              <div><strong>工单委外编号：</strong>{currentWorkOrderForReceipt.code}</div>
               <div><strong>产品名称：</strong>{currentWorkOrderForReceipt.productName || currentWorkOrderForReceipt.product_name}</div>
               <div><strong>委外数量：</strong>{currentWorkOrderForReceipt.quantity != null ? Number(currentWorkOrderForReceipt.quantity).toFixed(2) : '-'}</div>
               <div><strong>已收货数量：</strong>{Number(currentWorkOrderForReceipt.receivedQuantity ?? currentWorkOrderForReceipt.received_quantity ?? 0).toFixed(2)}</div>

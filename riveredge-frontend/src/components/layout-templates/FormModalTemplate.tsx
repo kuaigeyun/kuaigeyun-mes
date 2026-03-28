@@ -2,7 +2,7 @@
  * 表单 Modal 布局模板
  *
  * 提供统一的表单 Modal 布局，遵循 Ant Design 设计规范
- * 使用 ProForm 实现标准化的表单布局
+ * 使用 ProForm 实现 standard 化的表单布局
  *
  * Author: Luigi Lu
  * Date: 2025-12-26
@@ -15,6 +15,8 @@ import { MODAL_CONFIG, FORM_LAYOUT } from './constants';
 import { useSubmitShortcut } from '../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../utils/globalSubmitShortcut';
 
+const { useToken } = theme;
+
 /** Modal body：固定底部操作区，仅内容区滚动并显示滚动条 */
 const MODAL_BODY_FLEX_STYLES = {
   body: {
@@ -25,9 +27,6 @@ const MODAL_BODY_FLEX_STYLES = {
     padding: 0,
   },
 };
-
-const { useToken } = theme;
-
 
 /**
  * 表单 Modal 模板属性
@@ -57,6 +56,8 @@ export interface FormModalTemplateProps {
   loading?: boolean;
   /** 表单引用（可选，用于外部访问表单实例） */
   formRef?: React.RefObject<ProFormInstance>;
+  /** 表单实例（可选，由 Form.useForm() 获取） */
+  form?: any;
   /** 表单值变化回调 */
   onValuesChange?: (changedValues: any, allValues: any) => void;
   /** 自定义样式类名 */
@@ -69,21 +70,6 @@ export interface FormModalTemplateProps {
 
 /**
  * 表单 Modal 布局模板
- *
- * @example
- * ```tsx
- * <FormModalTemplate
- *   title={isEdit ? '编辑客户' : '新建客户'}
- *   open={modalVisible}
- *   onClose={() => setModalVisible(false)}
- *   onFinish={handleSubmit}
- *   isEdit={isEdit}
- *   initialValues={formValues}
- * >
- *   <ProFormText name="code" label="编码" />
- *   <ProFormText name="name" label="名称" />
- * </FormModalTemplate>
- * ```
  */
 export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
   title,
@@ -98,6 +84,7 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
   grid = false,
   loading = false,
   formRef: externalFormRef,
+  form,
   onValuesChange,
   className,
   modalRender,
@@ -120,7 +107,7 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
     const timer = setTimeout(() => {
       const el = scrollRef.current;
       if (!el) return;
-      const update = () => setHasScrollbar(el.scrollHeight > el.clientHeight);
+      const update = () => setHasScrollbar(el.scrollHeight > el.clientHeight + 1);
       update();
       ro = new ResizeObserver(update);
       ro.observe(el);
@@ -158,6 +145,7 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
           <div className="form-modal-content-inner" style={{ padding: 0 }}>
             <ProForm
               formRef={formRef}
+              form={form}
               loading={loading}
               onFinish={onFinish}
               onValuesChange={onValuesChange}
@@ -197,4 +185,3 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
 };
 
 export default FormModalTemplate;
-

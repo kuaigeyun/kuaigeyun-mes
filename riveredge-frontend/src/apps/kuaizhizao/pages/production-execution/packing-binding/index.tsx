@@ -194,7 +194,7 @@ const PackingBindingPage: React.FC = () => {
       fixed: 'left',
     },
     {
-      title: '产品编码',
+      title: '产品编号',
       dataIndex: 'product_code',
       width: 120,
       ellipsis: true,
@@ -386,11 +386,11 @@ const PackingBindingPage: React.FC = () => {
                       column={2}
                       columns={[
                         { title: '箱号', dataIndex: 'box_no' },
-                        { title: '产品编码', dataIndex: 'product_code' },
+                        { title: '产品编号', dataIndex: 'product_code' },
                         { title: '产品名称', dataIndex: 'product_name' },
                         { title: '产品序列号', dataIndex: 'product_serial_no' },
                         { title: '装箱数量', dataIndex: 'packing_quantity' },
-                        { title: '包装物料编码', dataIndex: 'packing_material_code' },
+                        { title: '包装物料编号', dataIndex: 'packing_material_code' },
                         { title: '包装物料名称', dataIndex: 'packing_material_name' },
                         {
                           title: '绑定方式',

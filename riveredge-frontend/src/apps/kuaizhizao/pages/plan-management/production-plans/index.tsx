@@ -378,7 +378,7 @@ const ProductionPlansPage: React.FC = () => {
       return;
     }
     if (headerMap['material_code'] === undefined || headerMap['quantity'] === undefined) {
-      messageApi.error('导入表头需包含物料编码和数量');
+      messageApi.error('导入表头需包含物料编号和数量');
       return;
     }
     const getVal = (row: any[], key: string) => {
@@ -488,7 +488,7 @@ const ProductionPlansPage: React.FC = () => {
           onDelete={handleBatchDelete}
           showImportButton
           onImport={handleListImport}
-          importHeaders={['计划编号', '*计划名称', '计划类型', '开始日期', '结束日期', '*物料编码', '*数量', '单位']}
+          importHeaders={['计划编号', '*计划名称', '计划类型', '开始日期', '结束日期', '*物料编号', '*数量', '单位']}
           showExportButton
           onExport={async (type, keys, pageData) => {
             try {
@@ -585,7 +585,7 @@ const ProductionPlansPage: React.FC = () => {
           }}
         >
           <ProFormGroup>
-            <ProFormText name="material_code" label="物料编码" width="sm" rules={[{ required: true }]} />
+            <ProFormText name="material_code" label="物料编号" width="sm" rules={[{ required: true }]} />
             <ProFormText name="material_name" label="物料名称" width="sm" rules={[{ required: true }]} />
             <ProFormDigit name="planned_quantity" label="计划数量" width="xs" rules={[{ required: true }]} />
             <ProFormDatePicker name="planned_date" label="计划日期" width="xs" rules={[{ required: true }]} />
@@ -725,7 +725,7 @@ const ProductionPlansPage: React.FC = () => {
                   <Table
                     size="small"
                     columns={[
-                      { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                      { title: '物料编号', dataIndex: 'material_code', width: 120 },
                       { title: '物料名称', dataIndex: 'material_name', width: 150 },
                       { title: '计划数量', dataIndex: 'planned_quantity', width: 100, align: 'right' },
                       { title: '单位', dataIndex: 'unit', width: 60 },

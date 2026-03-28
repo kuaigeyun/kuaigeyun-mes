@@ -218,13 +218,13 @@ const CostCalculationPage: React.FC = () => {
       },
     },
     {
-      title: '工单编码',
+      title: '工单编号',
       dataIndex: 'work_order_code',
       key: 'work_order_code',
       width: 150,
     },
     {
-      title: '产品编码',
+      title: '产品编号',
       dataIndex: 'product_code',
       key: 'product_code',
       width: 150,
@@ -330,11 +330,11 @@ const CostCalculationPage: React.FC = () => {
       dataIndex: 'calculation_type',
     },
     {
-      title: '工单编码',
+      title: '工单编号',
       dataIndex: 'work_order_code',
     },
     {
-      title: '产品编码',
+      title: '产品编号',
       dataIndex: 'product_code',
     },
     {

@@ -173,7 +173,7 @@ const DefectTypesPage: React.FC = () => {
     }
 
     const headerMap: Record<string, string> = {
-      '不良品编码': 'code', '*不良品编码': 'code', '编码': 'code', '*编码': 'code', code: 'code',
+      '不良品编号': 'code', '*不良品编号': 'code', '编号': 'code', '*编号': 'code', code: 'code',
       '不良品名称': 'name', '*不良品名称': 'name', '名称': 'name', '*名称': 'name', name: 'name',
       '分类': 'category', category: 'category',
       '描述': 'description', description: 'description',
@@ -221,7 +221,7 @@ const DefectTypesPage: React.FC = () => {
       }
 
       importData.push({
-        code: codeValue ? codeValue.toUpperCase() : '', // 为空且启用自动编码时，导入时再生成
+        code: codeValue ? codeValue.toUpperCase() : '', // 为空且启用自动编号时，导入时再生成
         name: nameValue,
         category: category != null && String(category).trim() !== '' ? String(category).trim() : undefined,
         description: description != null && String(description).trim() !== '' ? String(description).trim() : undefined,
@@ -342,7 +342,7 @@ const DefectTypesPage: React.FC = () => {
    */
   const columns: ProColumns<DefectType>[] = [
     {
-      title: '不良品编码',
+      title: '不良品编号',
       dataIndex: 'code',
       width: 150,
       fixed: 'left',
@@ -526,10 +526,10 @@ const DefectTypesPage: React.FC = () => {
         }}
         showImportButton={true}
         onImport={handleImport}
-        importHeaders={['*不良品编码', '*不良品名称', '分类', '描述']}
+        importHeaders={['*不良品编号', '*不良品名称', '分类', '描述']}
         importExampleRow={['BL001', '尺寸不良', '外观类', '产品尺寸超差导致不合格']}
         importFieldMap={{
-          '不良品编码': 'code', '*不良品编码': 'code', '编码': 'code', 'code': 'code',
+          '不良品编号': 'code', '*不良品编号': 'code', '编号': 'code', 'code': 'code',
           '不良品名称': 'name', '*不良品名称': 'name', '名称': 'name', 'name': 'name',
           '分类': 'category', 'category': 'category',
           '描述': 'description', 'description': 'description',
@@ -546,7 +546,7 @@ const DefectTypesPage: React.FC = () => {
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
         columns={[
-          { title: '不良品编码', dataIndex: 'code' },
+          { title: '不良品编号', dataIndex: 'code' },
           { title: '不良品名称', dataIndex: 'name' },
           { title: '分类', dataIndex: 'category' },
           { title: '描述', dataIndex: 'description', span: 2 },
@@ -618,7 +618,7 @@ const DefectTypesPage: React.FC = () => {
             onChange: (keys) => setSelectedPresetCodes(keys as string[]),
           }}
           columns={[
-            { title: '不良品编码', dataIndex: 'code', width: 120 },
+            { title: '不良品编号', dataIndex: 'code', width: 120 },
             { title: '不良品名称', dataIndex: 'name', width: 140 },
             { title: '分类', dataIndex: 'category', ellipsis: true },
           ]}

@@ -86,7 +86,7 @@ const DashboardList: React.FC = () => {
             ellipsis: true,
         },
         {
-            title: '编码',
+            title: '编号',
             dataIndex: 'code',
             width: 150,
         },

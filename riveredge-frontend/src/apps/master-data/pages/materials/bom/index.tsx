@@ -37,7 +37,7 @@ const UnitDisplayCell: React.FC<{
   <span>{value && unitValueToLabel[value] ? unitValueToLabel[value] : (value || '-')}</span>
 );
 
-/** 同一 BOM 编码（bomCode + materialId + version）分组后的行，用于树形表格展示 */
+/** 同一 BOM 编号（bomCode + materialId + version）分组后的行，用于树形表格展示 */
 interface BOMGroupRow {
   groupKey: string;
   bomCode: string;
@@ -184,7 +184,7 @@ const BOMPage: React.FC = () => {
   }, []);
 
   /**
-   * 重新生成BOM编码（根据当前表单值）
+   * 重新生成BOM编号（根据当前表单值）
    */
   const regenerateBOMCode = async () => {
     if (isEdit) {
@@ -196,7 +196,7 @@ const BOMPage: React.FC = () => {
       const config = await getCodeRulePageConfig('master-data-engineering-bom');
       
       if (!config?.autoGenerate || !config?.ruleCode) {
-        console.warn('BOM编码自动生成未启用或规则代码不存在:', config);
+        console.warn('BOM编号自动生成未启用或规则代码不存在:', config);
         return;
       }
 
@@ -207,7 +207,7 @@ const BOMPage: React.FC = () => {
       const materialId = formValues?.materialId;
       const version = formValues?.version || '1.0';
       
-      // 构建编码规则的上下文
+      // 构建编号规则的上下文
       const context: Record<string, any> = {
         version,
       };
@@ -228,14 +228,14 @@ const BOMPage: React.FC = () => {
         entity_type: 'bom',
       });
       
-      // 如果返回的编码不为空，更新表单字段（总是更新预览）
+      // 如果返回的编号不为空，更新表单字段（总是更新预览）
       if (codeResponse.code) {
         formRef.current?.setFieldsValue({
           bomCode: codeResponse.code,
         });
       }
     } catch (error: any) {
-      console.error('获取编码规则配置或生成编码失败:', error?.message || error);
+      console.error('获取编号规则配置或生成编号失败:', error?.message || error);
     }
   };
 
@@ -254,12 +254,12 @@ const BOMPage: React.FC = () => {
       priority: 0,
     });
 
-    // 如果启用了自动编码，获取预览编码
+    // 如果启用了自动编号，获取预览编号
     // 直接从后端API获取配置，确保配置是最新的
     try {
       const config = await getCodeRulePageConfig('master-data-engineering-bom');
       
-      console.log('BOM编码自动生成检查 - 后端配置:', config);
+      console.log('BOM编号自动生成检查 - 后端配置:', config);
       
       if (config?.autoGenerate && config?.ruleCode) {
         const ruleCode = config.ruleCode;
@@ -281,25 +281,25 @@ const BOMPage: React.FC = () => {
           
           console.log('testGenerateCode响应:', codeResponse);
           
-          // 如果返回的编码为空，说明规则不存在或未启用，静默处理
+          // 如果返回的编号为空，说明规则不存在或未启用，静默处理
           if (codeResponse.code) {
             formRef.current?.setFieldsValue({
               bomCode: codeResponse.code,
             });
           } else {
-            console.warn(`编码规则 ${ruleCode} 不存在或未启用，跳过自动生成。响应:`, codeResponse);
+            console.warn(`编号规则 ${ruleCode} 不存在或未启用，跳过自动生成。响应:`, codeResponse);
             messageApi.warning(t('app.master-data.bom.codeRuleNotFound', { ruleCode }));
           }
         } catch (error: any) {
           // 处理其他错误（网络错误等）
-          console.error('自动生成编码失败:', error?.message || error, error);
+          console.error('自动生成编号失败:', error?.message || error, error);
           messageApi.error(`${t('app.master-data.bom.autoCodeFailed')}: ${error?.message || error}`);
         }
       } else {
-        console.warn('BOM编码自动生成未启用或规则代码不存在:', config);
+        console.warn('BOM编号自动生成未启用或规则代码不存在:', config);
       }
     } catch (error: any) {
-      console.error('获取编码规则配置失败:', error);
+      console.error('获取编号规则配置失败:', error);
     }
   };
 
@@ -329,7 +329,7 @@ const BOMPage: React.FC = () => {
         version: first.version ?? '1.0',
         uuidsToReplace: list.map((b) => b.uuid),
       });
-      // 确保 BOM 编码正确设置：优先使用第一个记录的 bomCode，如果不存在则尝试从其他记录中获取
+      // 确保 BOM 编号正确设置：优先使用第一个记录的 bomCode，如果不存在则尝试从其他记录中获取
       const bomCodeValue = first.bomCode ?? list.find(b => b.bomCode)?.bomCode ?? '';
       const itemsData = list.map((b) => ({
         componentId: b.componentId,
@@ -692,7 +692,7 @@ const BOMPage: React.FC = () => {
         return;
       }
       
-      // 使用第一条记录作为基本信息（包含BOM编码、版本等）
+      // 使用第一条记录作为基本信息（包含BOM编号、版本等）
       const firstItem = allBomItems[0]!;
       setBomDetail(firstItem);
       setBomItems(allBomItems);
@@ -945,7 +945,7 @@ const BOMPage: React.FC = () => {
    * 按物料分组：一物料一行，版本下拉切换，默认显示默认版本或最新版本
    * @param groupRows 当前视图过滤后的分组行（成品或半成品）
    * @param selectedMap 物料选中的版本
-   * @param allGroupRows 全部 BOM 分组行（用于构建半成品 componentId 的版本/编码/审核状态）
+   * @param allGroupRows 全部 BOM 分组行（用于构建半成品 componentId 的版本/编号/审核状态）
    */
   const groupBomsByMaterial = (
     groupRows: BOMGroupRow[],
@@ -958,7 +958,7 @@ const BOMPage: React.FC = () => {
       list.push(row);
       byMaterial.set(row.materialId, list);
     }
-    // 半成品（componentId）的 BOM 信息，用于子行显示版本、BOM 编码、审核状态；需从全部 BOM 构建
+    // 半成品（componentId）的 BOM 信息，用于子行显示版本、BOM 编号、审核状态；需从全部 BOM 构建
     const rowsForBomInfo = allGroupRows ?? groupRows;
     const materialIdToBomInfo = new Map<number, { version: string; bomCode: string; approvalStatus: BOM['approvalStatus'] }>();
     const byMaterialAll = new Map<number, BOMGroupRow[]>();
@@ -978,7 +978,7 @@ const BOMPage: React.FC = () => {
       }
     });
 
-    /** 按物料编码排序子件；同编码时按 path / priority / id 稳定排序，避免乱序 */
+    /** 按物料编号排序子件；同编号时按 path / priority / id 稳定排序，避免乱序 */
     const getComponentCode = (componentId: number) =>
       materials.find((m) => m.id === componentId)?.mainCode ||
       materials.find((m) => m.id === componentId)?.code ||
@@ -1089,7 +1089,7 @@ const BOMPage: React.FC = () => {
       const rows = data.slice(1);
 
       // 验证表头
-      const expectedHeaders = ['父件编码', '子件编码', '子件数量', '子件单位', '损耗率', '是否必选', '备注'];
+      const expectedHeaders = ['父件编号', '子件编号', '子件数量', '子件单位', '损耗率', '是否必选', '备注'];
       const headerIndexes: Record<string, number> = {};
       expectedHeaders.forEach((header, index) => {
         const foundIndex = headers.findIndex(h => h === header || h?.toString().trim() === header);
@@ -1099,7 +1099,7 @@ const BOMPage: React.FC = () => {
       });
 
       // 必填字段验证
-      if (headerIndexes['父件编码'] === undefined || headerIndexes['子件编码'] === undefined || headerIndexes['子件数量'] === undefined) {
+      if (headerIndexes['父件编号'] === undefined || headerIndexes['子件编号'] === undefined || headerIndexes['子件数量'] === undefined) {
         messageApi.error(t('app.master-data.bom.importHeadersRequired'));
         return;
       }
@@ -1110,12 +1110,12 @@ const BOMPage: React.FC = () => {
 
       rows.forEach((row, rowIndex) => {
         // 跳过空行
-        if (!row || row.length === 0 || !row[headerIndexes['父件编码']]) {
+        if (!row || row.length === 0 || !row[headerIndexes['父件编号']]) {
           return;
         }
 
-        const parentCode = row[headerIndexes['父件编码']]?.toString().trim();
-        const componentCode = row[headerIndexes['子件编码']]?.toString().trim();
+        const parentCode = row[headerIndexes['父件编号']]?.toString().trim();
+        const componentCode = row[headerIndexes['子件编号']]?.toString().trim();
         const quantityStr = row[headerIndexes['子件数量']]?.toString().trim();
         const unit = headerIndexes['子件单位'] !== undefined ? row[headerIndexes['子件单位']]?.toString().trim() : undefined;
         const wasteRateStr = headerIndexes['损耗率'] !== undefined ? row[headerIndexes['损耗率']]?.toString().trim() : undefined;
@@ -1124,11 +1124,11 @@ const BOMPage: React.FC = () => {
 
         // 验证必填字段
         if (!parentCode) {
-          errors.push(`第 ${rowIndex + 2} 行：父件编码不能为空`);
+          errors.push(`第 ${rowIndex + 2} 行：父件编号不能为空`);
           return;
         }
         if (!componentCode) {
-          errors.push(`第 ${rowIndex + 2} 行：子件编码不能为空`);
+          errors.push(`第 ${rowIndex + 2} 行：子件编号不能为空`);
           return;
         }
         if (!quantityStr) {
@@ -1442,7 +1442,7 @@ const BOMPage: React.FC = () => {
   };
 
   /**
-   * 分组行表格列（同一 BOM 编码折叠为一行）
+   * 分组行表格列（同一 BOM 编号折叠为一行）
    */
   const isRootRow = (r: any) => 'versions' in r && Array.isArray(r.versions);
   const isBomItemRow = (r: any) => !isRootRow(r);
@@ -1513,7 +1513,7 @@ const BOMPage: React.FC = () => {
       }
     },
     { 
-      title: 'BOM编码', 
+      title: 'BOM编号', 
       dataIndex: 'bomCode', 
       width: 150, 
       hideInSearch: true, 
@@ -2150,11 +2150,11 @@ const BOMPage: React.FC = () => {
         }
         showImportButton={true}
         onImport={handleBatchImportConfirm}
-        importHeaders={['父件编码', '子件编码', '子件数量', '子件单位', '损耗率', '是否必选', '备注']}
+        importHeaders={['父件编号', '子件编号', '子件数量', '子件单位', '损耗率', '是否必选', '备注']}
         importExampleRow={['SALE-A001', 'PROD-A001', '2', '个', '0%', '是', '']}
         importFieldMap={{
-          '父件编码': 'parentCode',
-          '子件编码': 'componentCode',
+          '父件编号': 'parentCode',
+          '子件编号': 'componentCode',
           '子件数量': 'quantity',
           '子件单位': 'unit',
           '损耗率': 'wasteRate',
@@ -2938,7 +2938,7 @@ const BOMPage: React.FC = () => {
                   key={bom.uuid}
                   style={{
                     padding: '12px',
-                    border: '1px solid #d9d9d9',
+                    border: '1px solid var(--river-border-color)',
                     borderRadius: '4px',
                     backgroundColor: index === 0 ? '#f0f9ff' : '#fff',
                   }}
@@ -3223,7 +3223,7 @@ const BOMPage: React.FC = () => {
                           key={index}
                           style={{
                             padding: '12px',
-                            border: '1px solid #d9d9d9',
+                            border: '1px solid var(--river-border-color)',
                             borderRadius: '4px',
                             backgroundColor: component.level === 0 ? '#f0f9ff' : '#fff',
                           }}

@@ -36,7 +36,7 @@ const InventoryPage: React.FC = () => {
 
   const columns: ProColumns<InventoryItem>[] = [
     {
-      title: '物料编码',
+      title: '物料编号',
       dataIndex: 'material_code',
       width: 120,
       fixed: 'left',

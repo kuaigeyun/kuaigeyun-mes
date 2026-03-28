@@ -212,7 +212,7 @@ const CustomersPage: React.FC = () => {
       [t('field.customer.email')]: 'email',
       [t('field.customer.address')]: 'address',
       [t('field.customer.category')]: 'category',
-      '编码': 'code', '*编码': 'code', 'code': 'code', '*code': 'code',
+      '编号': 'code', '*编号': 'code', 'code': 'code', '*code': 'code',
       '名称': 'name', '*名称': 'name', 'name': 'name', '*name': 'name',
       '简称': 'shortName', '联系人': 'contactPerson', '电话': 'phone',
       '邮箱': 'email', '地址': 'address', '分类': 'category',

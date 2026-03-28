@@ -78,7 +78,7 @@ const DocumentTimingPage: React.FC = () => {
       },
     },
     {
-      title: '单据编码',
+      title: '单据编号',
       dataIndex: 'document_code',
       width: 150,
       fixed: 'left',
@@ -203,7 +203,7 @@ const DocumentTimingPage: React.FC = () => {
                   }}
                   columns={[
                     { title: '单据类型', dataIndex: 'document_type' },
-                    { title: '单据编码', dataIndex: 'document_code' },
+                    { title: '单据编号', dataIndex: 'document_code' },
                     { title: '总耗时（小时）', dataIndex: 'total_duration_hours' },
                     { title: '总耗时（秒）', dataIndex: 'total_duration_seconds' },
                   ]}

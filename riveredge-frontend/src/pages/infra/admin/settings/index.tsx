@@ -406,7 +406,7 @@ export default function PlatformSettingsPage() {
                       maxWidth: '200px',
                       maxHeight: '100px',
                       objectFit: 'contain',
-                      border: '1px solid #d9d9d9',
+                      border: '1px solid var(--river-border-color)',
                       borderRadius: '4px',
                       padding: '8px',
                     }}
@@ -459,7 +459,7 @@ export default function PlatformSettingsPage() {
                       width: 32,
                       height: 32,
                       objectFit: 'contain',
-                      border: '1px solid #d9d9d9',
+                      border: '1px solid var(--river-border-color)',
                       borderRadius: '4px',
                       padding: '4px',
                     }}

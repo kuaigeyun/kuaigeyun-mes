@@ -1,8 +1,8 @@
 /**
- * 编码规则功能页面工具函数
+ * 编号规则功能页面工具函数
  *
  * 提供获取功能页面配置的工具函数，支持从 localStorage 读取配置。
- * 按租户隔离，编码规则为租户级数据。
+ * 按租户隔离，编号规则为租户级数据。
  */
 
 import { getTenantId } from '../utils/auth';
@@ -34,7 +34,7 @@ export function getPageConfig(pageCode: string): CodeRulePageConfig | undefined 
       const savedConfig = parsed.find(p => p.pageCode === pageCode);
       if (savedConfig) {
         const merged = { ...defaultConfig, ...savedConfig };
-        // 若默认配置已支持自动编码（有 ruleCode）而保存的配置没有 ruleCode，保留默认的 ruleCode 与 autoGenerate，避免旧保存覆盖新对接的页面（如供应商）
+        // 若默认配置已支持自动编号（有 ruleCode）而保存的配置没有 ruleCode，保留默认的 ruleCode 与 autoGenerate，避免旧保存覆盖新对接的页面（如供应商）
         if (defaultConfig.ruleCode && savedConfig.ruleCode === undefined) {
           merged.ruleCode = defaultConfig.ruleCode;
           merged.autoGenerate = defaultConfig.autoGenerate ?? merged.autoGenerate;
@@ -53,10 +53,10 @@ export function getPageConfig(pageCode: string): CodeRulePageConfig | undefined 
 export { getCodeRulePageConfigsKey };
 
 /**
- * 检查功能页面是否启用自动编码
+ * 检查功能页面是否启用自动编号
  * 
  * @param pageCode - 页面代码
- * @returns 是否启用自动编码
+ * @returns 是否启用自动编号
  */
 export function isAutoGenerateEnabled(pageCode: string): boolean {
   const config = getPageConfig(pageCode);
@@ -64,10 +64,10 @@ export function isAutoGenerateEnabled(pageCode: string): boolean {
 }
 
 /**
- * 获取功能页面的编码规则代码
+ * 获取功能页面的编号规则代码
  * 
  * @param pageCode - 页面代码
- * @returns 编码规则代码或 undefined
+ * @returns 编号规则代码或 undefined
  */
 export function getPageRuleCode(pageCode: string): string | undefined {
   const config = getPageConfig(pageCode);

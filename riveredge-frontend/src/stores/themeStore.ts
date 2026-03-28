@@ -44,6 +44,8 @@ export interface ResolvedTheme {
     colorPrimary?: string;
     borderRadius?: number;
     fontSize?: number;
+    colorBorder?: string;
+    colorSplit?: string;
   };
   isDark: boolean;
   siderBgColor: string;
@@ -80,6 +82,8 @@ function computeResolved(themeMode: ThemeMode, config: ThemeConfig): ResolvedThe
       colorPrimary: config.colorPrimary || DEFAULT_CONFIG.colorPrimary,
       borderRadius: config.borderRadius ?? DEFAULT_CONFIG.borderRadius,
       fontSize: config.fontSize ?? DEFAULT_CONFIG.fontSize,
+      colorBorder: isDark ? '#424242' : '#bcbcbc',
+      colorSplit: isDark ? '#303030' : '#d9d9d9',
     },
     isDark,
     siderBgColor: isDark ? '' : (config.siderBgColor || '').trim(),

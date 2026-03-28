@@ -37,7 +37,7 @@ const PurchaseInvoiceList: React.FC = () => {
 
     const columns: ProColumns<PurchaseInvoice>[] = [
         {
-            title: '发票编码',
+            title: '发票编号',
             dataIndex: 'invoice_code',
             width: 150,
             fixed: 'left',

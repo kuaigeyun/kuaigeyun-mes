@@ -56,13 +56,13 @@ const BackflushRecordsPage: React.FC = () => {
 
   const columns: ProColumns<BackflushRecordItem>[] = [
     {
-      title: '工单编码',
+      title: '工单编号',
       dataIndex: 'work_order_code',
       width: 130,
       fixed: 'left',
     },
     {
-      title: '物料编码',
+      title: '物料编号',
       dataIndex: 'material_code',
       width: 120,
     },

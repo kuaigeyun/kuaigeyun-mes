@@ -25,6 +25,7 @@ import CodeField from '../../../../../components/code-field';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
+import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
 import type { Material } from '../../../../master-data/types/material';
 import FeeDetailsTable from '../../../../../components/FeeDetailsTable';
 import dayjs from 'dayjs';
@@ -931,7 +932,7 @@ const PurchaseOrdersPage: React.FC = () => {
       code: col('订单编号') >= 0 ? col('订单编号') : col('编号'),
       supplier: col('供应商名称') >= 0 ? col('供应商名称') : col('供应商'),
       date: col('订单日期') >= 0 ? col('订单日期') : col('日期'),
-      material: col('物料编码') >= 0 ? col('物料编码') : col('物料'),
+      material: col('物料编号') >= 0 ? col('物料编号') : col('物料'),
       qty: col('数量') >= 0 ? col('数量') : -1,
       price: col('单价') >= 0 ? col('单价') : -1,
       delivery: col('交货日期') >= 0 ? col('交货日期') : -1,
@@ -939,7 +940,7 @@ const PurchaseOrdersPage: React.FC = () => {
     };
 
     if (idx.supplier < 0 || idx.date < 0 || idx.material < 0 || idx.qty < 0) {
-      messageApi.error('缺少必需列：供应商名称、订单日期、物料编码、数量');
+      messageApi.error('缺少必需列：供应商名称、订单日期、物料编号、数量');
       return;
     }
 
@@ -968,7 +969,7 @@ const PurchaseOrdersPage: React.FC = () => {
         return;
       }
       if (!materialCode) {
-        errors.push({ row: rowNum, message: '物料编码不能为空' });
+        errors.push({ row: rowNum, message: '物料编号不能为空' });
         return;
       }
       if (isNaN(qty) || qty <= 0) {
@@ -1116,7 +1117,7 @@ const PurchaseOrdersPage: React.FC = () => {
     }
   };
 
-  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码 */
+  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号 */
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentOrder(null);
@@ -1423,13 +1424,13 @@ const PurchaseOrdersPage: React.FC = () => {
           onDelete={handleBatchDelete}
           showImportButton={true}
           onImport={handleListImport}
-          importHeaders={['订单编号', '供应商名称', '订单日期', '物料编码', '数量', '单价', '交货日期', '备注']}
+          importHeaders={['订单编号', '供应商名称', '订单日期', '物料编号', '数量', '单价', '交货日期', '备注']}
           importExampleRow={['PO001', '供应商A', '2025-03-08', 'MAT001', '10', '100', '2025-04-01', '']}
           importFieldMap={{
             '订单编号': 'order_code',
             '供应商名称': 'supplier_name',
             '订单日期': 'order_date',
-            '物料编码': 'material_code',
+            '物料编号': 'material_code',
             '数量': 'ordered_quantity',
             '单价': 'unit_price',
             '交货日期': 'delivery_date',
@@ -1539,7 +1540,7 @@ const PurchaseOrdersPage: React.FC = () => {
             <CodeField
               pageCode="kuaizhizao-purchase-order"
               name="order_code"
-              label="采购订单编码"
+              label="采购订单编号"
               required={true}
               autoGenerateOnCreate={!isEdit}
               showGenerateButton={false}
@@ -1607,7 +1608,7 @@ const PurchaseOrdersPage: React.FC = () => {
                 advancedSearch={{
                   label: '高级搜索',
                   fields: [
-                    { name: 'code', label: '供应商编码' },
+                    { name: 'code', label: '供应商编号' },
                     { name: 'name', label: '供应商名称' },
                     { name: 'contact_person', label: '联系人' },
                   ],
@@ -1724,15 +1725,14 @@ const PurchaseOrdersPage: React.FC = () => {
               const priceType = getFormValue('price_type') ?? 'tax_exclusive';
               const showTaxColumns = priceType === 'tax_inclusive';
               return (
-        <ProFormItem required style={{ width: '100%' }}>
-          <ProForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: '请至少添加一条采购明细' }]}>
-            <AntForm.List name="items">
-              {(fields, { add, remove }) => {
-                const orderDetailColumns = [
-                  {
-                    title: '物料',
-                    dataIndex: 'material_id',
-                    width: 220,
+        <AntForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: '请至少添加一条采购明细' }]}>
+          <AntForm.List name="items">
+            {(fields, { add, remove }) => {
+              const orderDetailColumns = [
+                {
+                  title: '物料',
+                  dataIndex: 'material_id',
+                  width: 250,
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index] !== curr?.items?.[index]}>
                         {({ getFieldValue }: any) => {
@@ -1779,10 +1779,21 @@ const PurchaseOrdersPage: React.FC = () => {
                   {
                     title: '单位',
                     dataIndex: 'unit',
-                    width: 80,
+                    width: 100,
                     render: (_: any, __: any, index: number) => (
-                      <AntForm.Item name={[index, 'unit']} style={{ margin: 0 }}>
-                        <Input placeholder="单位" size="small" />
+                      <AntForm.Item noStyle shouldUpdate={(prev, curr) => prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id}>
+                        {({ getFieldValue }) => {
+                          const materialId = getFieldValue(['items', index, 'material_id']);
+                          return (
+                            <AntForm.Item name={[index, 'unit']} style={{ margin: 0 }}>
+                              <MaterialUnitSelect 
+                                materialId={materialId} 
+                                size="small" 
+                                noStyle 
+                              />
+                            </AntForm.Item>
+                          );
+                        }}
                       </AntForm.Item>
                     ),
                   },
@@ -2002,10 +2013,9 @@ const PurchaseOrdersPage: React.FC = () => {
                     />
                   </div>
                 );
-              }}
-            </AntForm.List>
-          </ProForm.Item>
-        </ProFormItem>
+            }}
+          </AntForm.List>
+        </AntForm.Item>
               );
             }}
           </AntForm.Item>
@@ -2015,7 +2025,7 @@ const PurchaseOrdersPage: React.FC = () => {
 
         <AntForm.Item
           noStyle
-          shouldUpdate={(prev, curr) =>
+          shouldUpdate={(prev: any, curr: any) =>
             prev?.items !== curr?.items ||
             prev?.fee_details !== curr?.fee_details ||
             prev?.price_type !== curr?.price_type
@@ -2322,7 +2332,7 @@ const PurchaseOrdersPage: React.FC = () => {
                   <Table
                     size="small"
                     columns={[
-                      { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                      { title: '物料编号', dataIndex: 'material_code', width: 120 },
                       { title: '物料名称', dataIndex: 'material_name', width: 150 },
                       { title: '采购数量', dataIndex: 'ordered_quantity', width: 100, align: 'right' },
                       { title: '单位', dataIndex: 'unit', width: 60 },
@@ -2476,7 +2486,7 @@ const PurchaseOrdersPage: React.FC = () => {
               pagination={false}
               scroll={{ x: 700 }}
               columns={[
-                { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                { title: '物料编号', dataIndex: 'material_code', width: 120 },
                 { title: '物料名称', dataIndex: 'material_name', width: 150 },
                 { title: '采购数量', dataIndex: 'ordered_quantity', width: 100, align: 'right' },
                 { title: '已到货', dataIndex: 'received_quantity', width: 90, align: 'right' },
@@ -2541,7 +2551,7 @@ const PurchaseOrdersPage: React.FC = () => {
               pagination={false}
               scroll={{ x: 700 }}
               columns={[
-                { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                { title: '物料编号', dataIndex: 'material_code', width: 120 },
                 { title: '物料名称', dataIndex: 'material_name', width: 150 },
                 { title: '采购数量', dataIndex: 'ordered_quantity', width: 100, align: 'right' },
                 { title: '已到货', dataIndex: 'received_quantity', width: 90, align: 'right' },
@@ -2617,7 +2627,7 @@ const PurchaseOrdersPage: React.FC = () => {
               pagination={false}
               scroll={{ x: 700 }}
               columns={[
-                { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                { title: '物料编号', dataIndex: 'material_code', width: 120 },
                 { title: '物料名称', dataIndex: 'material_name', width: 150 },
                 { title: '采购数量', dataIndex: 'ordered_quantity', width: 100, align: 'right' },
                 { title: '已到货', dataIndex: 'received_quantity', width: 90, align: 'right' },

@@ -328,7 +328,7 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
               line-height: 1.4 !important;
               gap: 8px !important;
               background: ${HMI_DESIGN_TOKENS.HEADER_FLOATING_BG} !important;
-              border: 1px solid rgba(255,255,255,0.15) !important;
+              border: 1px solid var(--river-border-color) !important;
               color: ${HMI_DESIGN_TOKENS.TEXT_PRIMARY} !important;
             }
             #premium-terminal-layout .header-extra-container .ant-btn:hover {

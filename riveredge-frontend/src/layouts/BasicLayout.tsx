@@ -384,7 +384,7 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/system/business-config': ManufacturingIcons.systemConfig, // 兼容旧书签，重定向到 config-center
       '/system/system-parameters': ManufacturingIcons.mdConfiguration, // 兼容旧书签，重定向到 config-center
       '/system/data-dictionaries': ManufacturingIcons.bookOpen, // 数据字典 - 使用打开的书本图标
-      '/system/code-rules': ManufacturingIcons.code, // 编码规则 - 使用代码图标
+      '/system/code-rules': ManufacturingIcons.code, // 编号规则 - 使用代码图标
       '/system/integration-configs': ManufacturingIcons.network, // 数据连接 - 使用网络图标
       '/system/languages': ManufacturingIcons.languages, // 语言管理 - 使用语言图标
       '/system/custom-fields': ManufacturingIcons.toolbox, // 自定义字段 - 使用工具箱图标
@@ -505,7 +505,7 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
 };
 
 /**
- * 平台级 + 系统级菜单配置（原有写法，硬编码）
+ * 平台级 + 系统级菜单配置（原有写法，硬编号）
  * 仅应用级 APP 使用数据库统一源（manifest 同步 → core_menus）
  */
 type PermissionMenuDataItem = MenuDataItem & {
@@ -2375,7 +2375,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           font-weight: normal !important;
           padding: 12px 16px 12px 0 !important;
           margin: 0 0 8px 0 !important;
-          border-bottom: 1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'} !important;
+          border-bottom: 1px solid var(--river-divider-color) !important;
           background: transparent !important;
           cursor: default !important;
           user-select: none !important;
@@ -2397,7 +2397,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         body .ant-menu-popup .ant-menu-item-group-title:active,
         body .ant-menu-popup .ant-menu-item-group-title:focus {
           color: rgba(0, 0, 0, 0.45) !important;
-          border-bottom: 1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'} !important;
+          border-bottom: 1px solid var(--river-divider-color) !important;
         }
         ` : ''}
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-group-title:hover,
@@ -2689,9 +2689,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         /* 覆盖 collapsedButtonRender 返回的 div */
         .ant-pro-layout .ant-pro-sider-footer > div,
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div {
-          border-top: 1px solid ${siderTextColor === '#ffffff'
-          ? 'rgba(255, 255, 255, 0.15)'
-          : (isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.12)')} !important;
+          border-top: 1px solid var(--river-divider-color) !important;
         }
         /* 侧边栏底部收起按钮样式 - 根据菜单栏背景色自动适配 */
         .ant-pro-layout .ant-pro-sider-footer .ant-btn,
@@ -3370,7 +3368,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .riveredge-sidebar-search-wrapper .topbar-search-shortcut-key {
           color: ${isDarkMode ? 'rgba(255,255,255,0.28)' : (siderTextColor === '#ffffff' ? 'rgba(255,255,255,0.28)' : (token?.colorBorder ?? '#d9d9d9'))} !important;
           background: ${isDarkMode ? 'rgba(255,255,255,0.10)' : (siderTextColor === '#ffffff' ? 'rgba(255,255,255,0.10)' : (token?.colorFillQuaternary ?? '#f5f5f5'))} !important;
-          border: ${isDarkMode ? '1px solid rgba(255,255,255,0.28)' : (siderTextColor === '#ffffff' ? '1px solid rgba(255,255,255,0.28)' : ('1px solid ' + (token?.colorBorder ?? '#d9d9d9')))} !important;
+          border: 1px solid var(--river-border-color) !important;
           box-shadow: 0 1px 0 ${isDarkMode ? 'rgba(255,255,255,0.28)' : (siderTextColor === '#ffffff' ? 'rgba(255,255,255,0.28)' : (token?.colorBorder ?? '#d9d9d9'))} !important;
           font-family: "JetBrains Mono", "Cascadia Code", Consolas, monospace !important;
           font-size: 12px !important;
@@ -3781,7 +3779,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               alignItems: 'center',
               margin: '-13px 0 0 0',
               padding: '2px 0 4px 0',
-              borderBottom: `1px solid ${siderTextColor === '#ffffff' ? 'rgba(255,255,255,0.12)' : (isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)')}`,
+              borderBottom: '1px solid var(--river-divider-color)',
             }}
           >
             <TopBarSearch
@@ -4490,7 +4488,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             { keys: '/', desc: t('common.shortcutSearch') },
             { keys: 'Ctrl + K', desc: t('common.shortcutSearch') },
             { keys: 'Alt + N', desc: t('common.shortcutNew') },
-            { keys: 'Ctrl + Enter', desc: t('common.shortcutSubmit') },
             { keys: 'Ctrl + S', desc: t('common.shortcutSubmit') },
             { keys: '?', desc: t('common.shortcutHelp') },
           ]}
@@ -4502,8 +4499,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               justifyContent: 'center',
               padding: '5px 10px',
               borderRadius: 6,
-              background: isDarkMode ? 'rgba(255,255,255,0.12)' : '#f0f0f0',
-              border: isDarkMode ? '1px solid rgba(255,255,255,0.15)' : '1px solid #e0e0e0',
+              background: 'var(--river-divider-color)',
+              border: '1px solid var(--river-border-color)',
               boxShadow: isDarkMode ? '0 2px 4px rgba(0,0,0,0.3)' : '0 2px 4px rgba(0,0,0,0.08)',
               fontSize: 12,
               fontFamily: CODE_FONT_FAMILY,

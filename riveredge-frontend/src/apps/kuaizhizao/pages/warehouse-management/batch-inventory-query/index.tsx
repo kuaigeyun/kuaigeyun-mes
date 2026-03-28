@@ -28,7 +28,7 @@ const BatchInventoryQuery: React.FC = () => {
 
     const columns: ProColumns<BatchInventoryItem>[] = [
         {
-            title: '物料编码',
+            title: '物料编号',
             dataIndex: 'material_code',
             width: 120,
             fixed: 'left',

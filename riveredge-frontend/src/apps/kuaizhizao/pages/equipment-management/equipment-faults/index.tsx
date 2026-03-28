@@ -212,7 +212,7 @@ const EquipmentFaultsPage: React.FC = () => {
       dataIndex: 'fault_no',
     },
     {
-      title: '设备编码',
+      title: '设备编号',
       dataIndex: 'equipment_code',
     },
     {
@@ -292,7 +292,7 @@ const EquipmentFaultsPage: React.FC = () => {
       fixed: 'left',
     },
     {
-      title: '设备编码',
+      title: '设备编号',
       dataIndex: 'equipment_code',
       width: 140,
     },

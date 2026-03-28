@@ -1,5 +1,5 @@
 /**
- * 编码规则组件构建器
+ * 编号规则组件构建器
  * 
  * 参考简道云流水号规则设计，提供拖拽式规则配置界面
  */
@@ -155,7 +155,7 @@ const SortableComponentItem: React.FC<SortableComponentItemProps> = ({
 };
 
 /**
- * 编码规则组件构建器
+ * 编号规则组件构建器
  */
 const CodeRuleComponentBuilder: React.FC<CodeRuleComponentBuilderProps> = ({
   value = [],
@@ -378,7 +378,7 @@ const CodeRuleComponentBuilder: React.FC<CodeRuleComponentBuilderProps> = ({
           />
         </div>
         
-        {/* 编码预览 */}
+        {/* 编号预览 */}
         {components.length > 0 && (
           <Card
             size="small"
@@ -391,7 +391,7 @@ const CodeRuleComponentBuilder: React.FC<CodeRuleComponentBuilderProps> = ({
             <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <EyeOutlined style={{ color: token.colorPrimary }} />
               <Text strong style={{ fontSize: '14px', color: token.colorPrimary }}>
-                编码预览
+                编号预览
               </Text>
             </div>
             <div style={{
@@ -418,7 +418,7 @@ const CodeRuleComponentBuilder: React.FC<CodeRuleComponentBuilderProps> = ({
               gap: '4px',
             }}>
               <Text type="secondary">
-                💡 这是根据当前配置生成的编码预览，实际生成时会使用真实的序号和日期
+                💡 这是根据当前配置生成的编号预览，实际生成时会使用真实的序号和日期
               </Text>
             </div>
           </Card>

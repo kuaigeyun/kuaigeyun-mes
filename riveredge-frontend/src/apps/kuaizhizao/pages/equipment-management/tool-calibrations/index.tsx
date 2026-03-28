@@ -70,7 +70,7 @@ const ToolCalibrationsPage: React.FC = () => {
   };
 
   const columns: ProColumns<ToolCalibration>[] = [
-    { title: '工装编码', dataIndex: 'tool_code', width: 120 },
+    { title: '工装编号', dataIndex: 'tool_code', width: 120 },
     { title: '工装名称', dataIndex: 'tool_name', width: 180, ellipsis: true },
     { title: '校准日期', dataIndex: 'calibration_date', valueType: 'date', width: 120 },
     {

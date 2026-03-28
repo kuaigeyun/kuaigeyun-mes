@@ -351,7 +351,7 @@ const ProcessInspectionPage: React.FC = () => {
       fixed: 'left',
     },
     {
-      title: '工单编码',
+      title: '工单编号',
       dataIndex: 'work_order_code',
       width: 140,
       ellipsis: true,
@@ -363,7 +363,7 @@ const ProcessInspectionPage: React.FC = () => {
       ellipsis: true,
     },
     {
-      title: '物料编码',
+      title: '物料编号',
       dataIndex: 'material_code',
       width: 120,
     },
@@ -564,7 +564,7 @@ const ProcessInspectionPage: React.FC = () => {
         enableRowSelection={true}
         showImportButton={true}
         onImport={handleImport}
-        importHeaders={['工单编码', '工序编码', '检验数量', '合格数量', '不合格数量', '备注']}
+        importHeaders={['工单编号', '工序编号', '检验数量', '合格数量', '不合格数量', '备注']}
         importExampleRow={['WO20250115001', 'OP001', '100', '98', '2', '']}
         showExportButton={true}
         onExport={handleExport}
@@ -608,7 +608,7 @@ const ProcessInspectionPage: React.FC = () => {
           <Card title="检验信息" size="small" style={{ marginBottom: 16 }}>
             <Row gutter={16}>
               <Col span={12}>
-                <strong>工单编码：</strong>{currentInspection.work_order_code}
+                <strong>工单编号：</strong>{currentInspection.work_order_code}
               </Col>
               <Col span={12}>
                 <strong>工序名称：</strong>{currentInspection.operation_name}
@@ -616,7 +616,7 @@ const ProcessInspectionPage: React.FC = () => {
             </Row>
             <Row gutter={16} style={{ marginTop: 8 }}>
               <Col span={12}>
-                <strong>物料编码：</strong>{currentInspection.material_code}
+                <strong>物料编号：</strong>{currentInspection.material_code}
               </Col>
               <Col span={12}>
                 <strong>物料名称：</strong>{currentInspection.material_name}
@@ -703,7 +703,7 @@ const ProcessInspectionPage: React.FC = () => {
             advancedSearch={{
               label: '高级搜索工单',
               fields: [
-                { name: 'code', label: '工单编码', type: 'text' },
+                { name: 'code', label: '工单编号', type: 'text' },
                 { name: 'name', label: '工单名称', type: 'text' },
               ],
               onSearch: async (params) => {
@@ -816,7 +816,7 @@ const ProcessInspectionPage: React.FC = () => {
                     <strong>检验单号：</strong>{inspectionDetail.inspection_code}
                   </Col>
                   <Col span={12}>
-                    <strong>工单编码：</strong>{inspectionDetail.work_order_code}
+                    <strong>工单编号：</strong>{inspectionDetail.work_order_code}
                   </Col>
                 </Row>
                 <Row gutter={16} style={{ marginTop: 8 }}>
@@ -824,7 +824,7 @@ const ProcessInspectionPage: React.FC = () => {
                     <strong>工序名称：</strong>{inspectionDetail.operation_name}
                   </Col>
                   <Col span={12}>
-                    <strong>物料编码：</strong>{inspectionDetail.material_code}
+                    <strong>物料编号：</strong>{inspectionDetail.material_code}
                   </Col>
                 </Row>
                 <Row gutter={16} style={{ marginTop: 8 }}>
@@ -996,7 +996,7 @@ const ProcessInspectionPage: React.FC = () => {
             width: 120,
             height: 120,
             margin: '0 auto 24px auto',
-            border: '1px dashed #d9d9d9',
+            border: '1px dashed var(--river-border-color)',
             borderRadius: '8px',
             display: 'flex',
             alignItems: 'center',

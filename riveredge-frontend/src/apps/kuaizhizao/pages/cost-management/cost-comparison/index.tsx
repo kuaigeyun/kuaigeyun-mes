@@ -163,7 +163,7 @@ const CostComparisonPage: React.FC = () => {
               quantity: result.quantity,
             }}
             columns={[
-              { title: '物料编码', dataIndex: 'material_code' },
+              { title: '物料编号', dataIndex: 'material_code' },
               { title: '物料名称', dataIndex: 'material_name' },
               { title: '物料来源类型', dataIndex: 'source_type' },
               { title: '数量', dataIndex: 'quantity' },

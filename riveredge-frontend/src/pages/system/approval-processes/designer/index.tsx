@@ -247,7 +247,7 @@ const ApprovalNode: React.FC<NodeProps> = ({ data }) => {
       }}
     >
       <Handle type="target" position={isHorizontal ? Position.Left : Position.Top} style={{ background: border }} />
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, borderBottom: `1px solid ${token?.colorBorder ?? '#d9d9d9'}`, paddingBottom: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, borderBottom: `1px solid var(--river-divider-color)`, paddingBottom: 6 }}>
         <span style={{ fontWeight: '600', fontSize: 14, color: text }}>{data?.label || t('pages.approval.designer.label')}</span>
         <Tag color={approvalType === 'AND' ? 'orange' : 'blue'} style={{ marginRight: 0, fontSize: '10px', zoom: 0.85 }}>
           {approvalType === 'AND' ? t('pages.approval.designer.andSign') : t('pages.approval.designer.orSign')}
@@ -300,7 +300,7 @@ const CCNode: React.FC<NodeProps> = ({ data }) => {
       }}
     >
       <Handle type="target" position={isHorizontal ? Position.Left : Position.Top} style={{ background: purple }} />
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, borderBottom: `1px solid ${token?.colorBorder ?? '#d9d9d9'}`, paddingBottom: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, borderBottom: `1px solid var(--river-divider-color)`, paddingBottom: 6 }}>
         <span style={{ fontWeight: '600', fontSize: 14, color: purple }}>
           <SendOutlined style={{ marginRight: 6 }} />
           {data?.label || t('pages.approval.designer.ccNode')}

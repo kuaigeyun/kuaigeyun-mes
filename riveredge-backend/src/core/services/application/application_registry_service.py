@@ -213,9 +213,9 @@ class ApplicationRegistryService:
                                 hasattr(attr._meta, 'db_table') and
                                 hasattr(attr, '__bases__') and
                                 hasattr(attr, 'Meta')):
-                                # 强制设置数据库连接
-                                attr._meta.db = 'default'
-                                logger.info(f"✅ 设置模型 {attr.__name__} 的数据库连接为 'default'")
+                                # ⚠️ 关键修复：不再手动设置 _meta.db (read-only property)，由 Tortoise 自动处理
+                                # 在 Tortoise ORM 中，通过 Meta 类或 default_connection 指定连接
+                                logger.info(f"✅ 验证模型 {attr.__name__} 结构正常")
 
                         # 尝试注册模型到 Tortoise（如果可能的话）
                         # 注意：Tortoise.init 后可能无法动态添加模型，但我们可以尝试

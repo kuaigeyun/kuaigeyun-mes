@@ -584,8 +584,8 @@ const StocktakingPage: React.FC = () => {
         />
         <ProFormText
           name="location_code"
-          label="库位编码（可选）"
-          placeholder="请输入库位编码"
+          label="库位编号（可选）"
+          placeholder="请输入库位编号"
         />
         <ProFormText
           name="batch_no"
@@ -702,7 +702,7 @@ const StocktakingPage: React.FC = () => {
                 className="warehouse-detail-table"
                 columns={[
                   {
-                    title: '物料编码',
+                    title: '物料编号',
                     dataIndex: 'material_code',
                     width: 120,
                   },

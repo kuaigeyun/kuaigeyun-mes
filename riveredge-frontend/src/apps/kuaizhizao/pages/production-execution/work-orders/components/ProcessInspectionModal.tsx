@@ -90,12 +90,12 @@ const ProcessInspectionModal: React.FC<ProcessInspectionModalProps> = ({
       <style>{`
         .kiosk-modal-terminal-bg .ant-modal-content {
           background: #141414 !important;
-          border: 1px solid rgba(255, 255, 255, 0.1);
+          border: 1px solid var(--river-border-color);
           border-radius: 12px;
         }
         .kiosk-modal-terminal-bg .ant-modal-header {
           background: transparent !important;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+          border-bottom: 1px solid var(--river-divider-color);
           padding-bottom: 16px;
         }
         .kiosk-modal-terminal-bg .ant-form-item-label label { color: rgba(255, 255, 255, 0.65) !important; font-size: 16px; }

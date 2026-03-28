@@ -28,7 +28,7 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
       { key: 'work_order_qrcode', label: '工单二维码', type: 'string' },
       { key: 'signature', label: '签名', type: 'string' },
       { key: 'name', label: '工单名称', type: 'string' },
-      { key: 'product_code', label: '产品编码', type: 'string' },
+      { key: 'product_code', label: '产品编号', type: 'string' },
       { key: 'product_name', label: '产品名称', type: 'string' },
       { key: 'quantity', label: '生产数量', type: 'number' },
       { key: 'status', label: '状态', type: 'string' },
@@ -46,7 +46,7 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
         label: '工序列表',
         type: 'array',
         children: [
-          { key: 'operations.0.operation_code', label: '工序编码（第1项）', type: 'string' },
+          { key: 'operations.0.operation_code', label: '工序编号（第1项）', type: 'string' },
           { key: 'operations.0.operation_name', label: '工序名称（第1项）', type: 'string' },
           { key: 'operations.0.sequence', label: '工序顺序（第1项）', type: 'number' },
           { key: 'operations.0.status', label: '工序状态（第1项）', type: 'string' },
@@ -61,7 +61,7 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
     type: 'material',
     name: '物料',
     fields: [
-      { key: 'code', label: '物料编码', type: 'string' },
+      { key: 'code', label: '物料编号', type: 'string' },
       { key: 'name', label: '物料名称', type: 'string' },
       { key: 'spec', label: '规格型号', type: 'string' },
       { key: 'unit', label: '单位', type: 'string' },
@@ -116,7 +116,7 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
         label: '明细列表',
         type: 'array',
         children: [
-          { key: 'items.0.material_code', label: '物料编码（第1项）', type: 'string' },
+          { key: 'items.0.material_code', label: '物料编号（第1项）', type: 'string' },
           { key: 'items.0.material_name', label: '物料名称（第1项）', type: 'string' },
           { key: 'items.0.inbound_quantity', label: '入库数量（第1项）', type: 'number' },
           { key: 'items.0.unit_price', label: '单价（第1项）', type: 'number' },
@@ -150,7 +150,7 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
         label: '明细列表',
         type: 'array',
         children: [
-          { key: 'items.0.material_code', label: '物料编码（第1项）', type: 'string' },
+          { key: 'items.0.material_code', label: '物料编号（第1项）', type: 'string' },
           { key: 'items.0.material_name', label: '物料名称（第1项）', type: 'string' },
           { key: 'items.0.quote_quantity', label: '报价数量（第1项）', type: 'number' },
           { key: 'items.0.unit_price', label: '单价（第1项）', type: 'number' },
@@ -178,7 +178,7 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
         label: '明细列表',
         type: 'array',
         children: [
-          { key: 'items.0.material_code', label: '物料编码（第1项）', type: 'string' },
+          { key: 'items.0.material_code', label: '物料编号（第1项）', type: 'string' },
           { key: 'items.0.material_name', label: '物料名称（第1项）', type: 'string' },
           { key: 'items.0.borrow_quantity', label: '借出数量（第1项）', type: 'number' },
           { key: 'items.0.returned_quantity', label: '已归还数量（第1项）', type: 'number' },
@@ -204,7 +204,7 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
         label: '明细列表',
         type: 'array',
         children: [
-          { key: 'items.0.material_code', label: '物料编码（第1项）', type: 'string' },
+          { key: 'items.0.material_code', label: '物料编号（第1项）', type: 'string' },
           { key: 'items.0.material_name', label: '物料名称（第1项）', type: 'string' },
           { key: 'items.0.return_quantity', label: '归还数量（第1项）', type: 'number' },
         ],
@@ -231,7 +231,7 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
         label: '明细列表',
         type: 'array',
         children: [
-          { key: 'items.0.material_code', label: '物料编码（第1项）', type: 'string' },
+          { key: 'items.0.material_code', label: '物料编号（第1项）', type: 'string' },
           { key: 'items.0.material_name', label: '物料名称（第1项）', type: 'string' },
           { key: 'items.0.outbound_quantity', label: '出库数量（第1项）', type: 'number' },
           { key: 'items.0.unit_price', label: '单价（第1项）', type: 'number' },
@@ -325,7 +325,7 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
         label: '明细列表',
         type: 'array',
         children: [
-          { key: 'items.0.material_code', label: '物料编码（第1项）', type: 'string' },
+          { key: 'items.0.material_code', label: '物料编号（第1项）', type: 'string' },
           { key: 'items.0.material_name', label: '物料名称（第1项）', type: 'string' },
           { key: 'items.0.notice_quantity', label: '通知数量（第1项）', type: 'number' },
           { key: 'items.0.unit_price', label: '单价（第1项）', type: 'number' },
@@ -356,7 +356,7 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
         label: '明细列表',
         type: 'array',
         children: [
-          { key: 'items.0.material_code', label: '物料编码（第1项）', type: 'string' },
+          { key: 'items.0.material_code', label: '物料编号（第1项）', type: 'string' },
           { key: 'items.0.material_name', label: '物料名称（第1项）', type: 'string' },
           { key: 'items.0.trial_quantity', label: '试用数量（第1项）', type: 'number' },
           { key: 'items.0.unit_price', label: '单价（第1项）', type: 'number' },
@@ -507,7 +507,7 @@ const ARRAY_TABLE_TEMPLATES: Record<string, ArrayTableTemplateConfig[]> = {
       maxRows: 10,
       columns: [
         { key: 'sequence', label: '序号' },
-        { key: 'operation_code', label: '工序编码' },
+        { key: 'operation_code', label: '工序编号' },
         { key: 'operation_name', label: '工序名称' },
         { key: 'status', label: '工序状态' },
         { key: 'work_center_name', label: '工作中心' },

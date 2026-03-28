@@ -127,13 +127,13 @@ const MaterialShortageExceptionsPage: React.FC = () => {
    */
   const columns: ProColumns<MaterialShortageException>[] = [
     {
-      title: '工单编码',
+      title: '工单编号',
       dataIndex: 'work_order_code',
       width: 140,
       fixed: 'left',
     },
     {
-      title: '物料编码',
+      title: '物料编号',
       dataIndex: 'material_code',
       width: 120,
     },
@@ -308,8 +308,8 @@ const MaterialShortageExceptionsPage: React.FC = () => {
         customContent={
           currentRecord ? (
             <div style={{ padding: '16px 0' }}>
-              <p><strong>工单编码：</strong>{currentRecord.work_order_code}</p>
-              <p><strong>物料编码：</strong>{currentRecord.material_code}</p>
+              <p><strong>工单编号：</strong>{currentRecord.work_order_code}</p>
+              <p><strong>物料编号：</strong>{currentRecord.material_code}</p>
               <p><strong>物料名称：</strong>{currentRecord.material_name}</p>
               <p><strong>需求数量：</strong>{currentRecord.required_quantity}</p>
               <p><strong>可用数量：</strong>{currentRecord.available_quantity}</p>
@@ -378,7 +378,7 @@ const MaterialShortageExceptionsPage: React.FC = () => {
         {currentRecord && (
           <>
             <div style={{ marginBottom: 16, padding: 12, background: '#f5f5f5', borderRadius: 4 }}>
-              <p><strong>工单编码：</strong>{currentRecord.work_order_code}</p>
+              <p><strong>工单编号：</strong>{currentRecord.work_order_code}</p>
               <p><strong>物料名称：</strong>{currentRecord.material_name}</p>
               <p><strong>缺料数量：</strong>
                 <span style={{ color: '#ff4d4f', fontWeight: 'bold' }}>

@@ -20,7 +20,7 @@ const StepBasicInfo: React.FC<{ form: any }> = ({ form }) => (
                 </Form.Item>
             </Col>
             <Col span={12}>
-                <Form.Item name="code" label="报表编码" rules={[{ required: true, message: '请输入报表编码' }]}>
+                <Form.Item name="code" label="报表编号" rules={[{ required: true, message: '请输入报表编号' }]}>
                     <Input placeholder="例：monthly_sales" />
                 </Form.Item>
             </Col>

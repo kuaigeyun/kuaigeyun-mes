@@ -12,12 +12,13 @@ import { getBusinessConfig } from '../../../../../services/businessConfig';
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions, ProFormUploadButton } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Drawer, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Progress, Tooltip, Dropdown, Select, theme as AntdTheme } from 'antd';
-import { EyeOutlined, EditOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, ImportOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, ApartmentOutlined, ShoppingOutlined } from '@ant-design/icons';
+import { EyeOutlined, EditOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, ImportOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, ApartmentOutlined, AppstoreAddOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
 import { UniImport } from '../../../../../components/uni-import';
+import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
 import FeeDetailsTable from '../../../../../components/FeeDetailsTable';
 import { CustomerFormModal } from '../../../../master-data/components/CustomerFormModal';
@@ -349,9 +350,9 @@ const SalesOrdersPage: React.FC = () => {
   // 用户列表（系统管理-用户管理-帐户管理，用于销售员选择）
   const [users, setUsers] = useState<User[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
-  // 新建时预览的订单编码（用于提交时判断是否需正式占号）
+  // 新建时预览的订单编号（用于提交时判断是否需正式占号）
   const [previewCode, setPreviewCode] = useState<string | null>(null);
-  /** 从 API 获取的编码规则代码（新建时使用，避免本地配置与后端不一致） */
+  /** 从 API 获取的编号规则代码（新建时使用，避免本地配置与后端不一致） */
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
   const [syncModalVisible, setSyncModalVisible] = useState(false);
   const [customerCreateVisible, setCustomerCreateVisible] = useState(false);
@@ -463,7 +464,7 @@ const SalesOrdersPage: React.FC = () => {
 
   /**
    * 处理新建销售订单
-   * 若启用编码规则，用 testGenerateCode 预填订单编码（不占用序号）
+   * 若启用编号规则，用 testGenerateCode 预填订单编号（不占用序号）
    */
   const defaultOrderItem = { material_id: undefined, material_code: '', material_name: '', material_spec: '', material_unit: '', required_quantity: 1, delivery_date: dayjs(), unit_price: 0, tax_rate: 0, variant_attributes: '' };
 
@@ -492,7 +493,7 @@ const SalesOrdersPage: React.FC = () => {
         setPreviewCode(preview ?? null);
         formRef.current?.setFieldsValue({ order_code: preview ?? '' });
       } catch (error: any) {
-        console.warn('销售订单编码预生成失败:', error);
+        console.warn('销售订单编号预生成失败:', error);
         setPreviewCode(null);
       }
     } else {
@@ -512,7 +513,7 @@ const SalesOrdersPage: React.FC = () => {
       setModalVisible(true);
       try {
         const data = await getSalesOrder(id, true);  // includeItems=true
-        // 明细中若缺少 material_id，用物料列表按编码/名称匹配后填入，再一起写入表单
+        // 明细中若缺少 material_id，用物料列表按编号/名称匹配后填入，再一起写入表单
         const items = (data.items || []).map((item: SalesOrderItem) => {
           const mid = item.material_id != null ? Number(item.material_id) : undefined;
           const matchedById = mid ? materials.find((m: any) => m.id === mid) : null;
@@ -682,7 +683,7 @@ const SalesOrdersPage: React.FC = () => {
 
   /**
    * 处理提交表单
-   * 新建且启用编码规则时：若订单编码未改或为空，则正式生成编码再创建
+   * 新建且启用编号规则时：若订单编号未改或为空，则正式生成编号再创建
    */
   /**
    * 通用保存逻辑（内部使用）
@@ -767,7 +768,7 @@ const SalesOrdersPage: React.FC = () => {
         return { uid: f.uid, name: f.name, status: 'done', url: f.url };
       });
 
-      // 如果是直接提交，先生成正式编码（如果配置了规则）
+      // 如果是直接提交，先生成正式编号（如果配置了规则）
       const ruleCodeToUse = effectiveRuleCode || getPageRuleCode('kuaizhizao-sales-order');
       if (
         !isDraft &&
@@ -780,7 +781,7 @@ const SalesOrdersPage: React.FC = () => {
           const codeResponse = await generateCode({ rule_code: ruleCodeToUse });
           values.order_code = codeResponse.code;
         } catch (error: any) {
-          console.warn('正式生成订单编码失败，使用预览编码:', error);
+          console.warn('正式生成订单编号失败，使用预览编号:', error);
         }
       }
 
@@ -2093,7 +2094,7 @@ const SalesOrdersPage: React.FC = () => {
                 name="order_code"
                 label={
                   <span>
-                    订单编码
+                    订单编号
                     <a
                       href="/system/code-rules"
                       onClick={(e) => {
@@ -2102,12 +2103,12 @@ const SalesOrdersPage: React.FC = () => {
                       }}
                       style={{ marginLeft: 8, fontSize: 12 }}
                     >
-                      编码规则设置
+                      编号规则设置
                     </a>
                   </span>
                 }
-                placeholder={isAutoGenerateEnabled('kuaizhizao-sales-order') ? '编码将根据编码规则自动生成，可修改' : '请输入订单编码'}
-                rules={[{ required: true, message: '请输入订单编码' }]}
+                placeholder={isAutoGenerateEnabled('kuaizhizao-sales-order') ? '编号将根据编号规则自动生成，可修改' : '请输入订单编号'}
+                rules={[{ required: true, message: '请输入订单编号' }]}
                 fieldProps={{ disabled: isEdit }}
               />
             </Col>
@@ -2168,14 +2169,28 @@ const SalesOrdersPage: React.FC = () => {
                   }))}
                   onChange={(id: number | undefined) => {
                     const c = id ? customers.find((x) => x.id === id) : null;
-                    formRef.current?.setFieldsValue({
-                      customer_name: c?.name ?? undefined,
-                      customer_contact: c?.contactPerson ?? (c as any)?.contact ?? undefined,
-                      customer_phone: c?.phone ?? undefined,
-                      salesman_id: c?.salesmanId,
-                      salesman_name: c?.salesmanName,
-                      shipping_address: c?.address,
-                    });
+                    if (c) {
+                      const sId = (c as any).salesmanId ?? (c as any).salesman_id;
+                      const salesman = users.find((u) => u.id === sId);
+                      const sName = (c as any).salesmanName ?? (c as any).salesman_name ?? (salesman ? (salesman.full_name || salesman.username) : '');
+                      formRef.current?.setFieldsValue({
+                        customer_name: c.name ?? (c as any).customer_name,
+                        customer_contact: (c as any).contactPerson ?? (c as any).contact_person ?? (c as any).contact,
+                        customer_phone: (c as any).phone ?? (c as any).customer_phone,
+                        salesman_id: sId,
+                        salesman_name: sName,
+                        shipping_address: (c as any).address ?? (c as any).shipping_address,
+                      });
+                    } else {
+                      formRef.current?.setFieldsValue({
+                        customer_name: undefined,
+                        customer_contact: undefined,
+                        customer_phone: undefined,
+                        salesman_id: undefined,
+                        salesman_name: undefined,
+                        shipping_address: undefined,
+                      });
+                    }
                   }}
                   quickCreate={{
                     label: '快速新建',
@@ -2184,7 +2199,7 @@ const SalesOrdersPage: React.FC = () => {
                   advancedSearch={{
                     label: '高级搜索',
                     fields: [
-                      { name: 'code', label: '客户编码' },
+                      { name: 'code', label: '客户编号' },
                       { name: 'name', label: '客户名称' },
                       { name: 'contactPerson', label: '联系人' },
                     ],
@@ -2315,7 +2330,7 @@ const SalesOrdersPage: React.FC = () => {
                 const priceType = getFormValue('price_type') ?? 'tax_exclusive';
                 const showTaxColumns = priceType === 'tax_inclusive';
                 return (
-            <ProForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: t('app.kuaizhizao.salesOrder.itemsRequired') }]}>
+            <AntForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: t('app.kuaizhizao.salesOrder.itemsRequired') }]}>
               <AntForm.List name="items">
                 {(fields, { add, remove }) => {
                   const orderDetailColumns = [
@@ -2408,10 +2423,21 @@ const SalesOrdersPage: React.FC = () => {
                     {
                       title: t('app.kuaizhizao.salesOrder.unit'),
                       dataIndex: 'material_unit',
-                      width: 80,
+                      width: 100,
                       render: (_: any, __: any, index: number) => (
-                        <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
-                          <Input placeholder="单位" size="small" />
+                        <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id}>
+                          {({ getFieldValue }) => {
+                            const materialId = getFieldValue(['items', index, 'material_id']);
+                            return (
+                              <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
+                                <MaterialUnitSelect 
+                                  materialId={materialId} 
+                                  size="small" 
+                                  noStyle 
+                                />
+                              </AntForm.Item>
+                            );
+                          }}
                         </AntForm.Item>
                       ),
                     },
@@ -2703,7 +2729,7 @@ const SalesOrdersPage: React.FC = () => {
                               </Button>
                               <Button
                                 type="default"
-                                icon={<ShoppingOutlined />}
+                                icon={<AppstoreAddOutlined />}
                                 style={{ flex: 1, minWidth: 120 }}
                                 onClick={() => setMaterialPickerOpen(true)}
                               >
@@ -2732,7 +2758,7 @@ const SalesOrdersPage: React.FC = () => {
                   );
                 }}
               </AntForm.List>
-            </ProForm.Item>
+            </AntForm.Item>
                 );
               }}
             </AntForm.Item>
@@ -2788,11 +2814,16 @@ const SalesOrdersPage: React.FC = () => {
         editUuid={null}
         onSuccess={(customer) => {
           setCustomers((prev) => [...prev, customer]);
+          const sId = customer.salesmanId ?? (customer as any).salesman_id;
+          const salesman = users.find((u) => u.id === sId);
+          const sName = customer.salesmanName ?? (customer as any).salesman_name ?? (salesman ? (salesman.full_name || salesman.username) : '');
           formRef.current?.setFieldsValue({
             customer_id: customer.id,
             customer_name: customer.name,
-            customer_contact: customer.contactPerson,
-            customer_phone: customer.phone,
+            customer_contact: customer.contactPerson ?? (customer as any).contact_person,
+            customer_phone: customer.phone ?? (customer as any).customer_phone,
+            salesman_id: sId,
+            salesman_name: sName,
           });
           setCustomerCreateVisible(false);
         }}
@@ -3231,28 +3262,28 @@ const SalesOrdersPage: React.FC = () => {
               <div style={{ marginBottom: 12 }}>
                 <div style={{ fontWeight: 500, marginBottom: 4 }}>受影响的需求</div>
                 <Table size="small" dataSource={changeImpactData.affected_demands} rowKey="id" pagination={false}
-                  columns={[{ title: '编码', dataIndex: 'code', key: 'code' }, { title: '名称', dataIndex: 'name', key: 'name' }, { title: '状态', dataIndex: 'status', key: 'status' }]} />
+                  columns={[{ title: '编号', dataIndex: 'code', key: 'code' }, { title: '名称', dataIndex: 'name', key: 'name' }, { title: '状态', dataIndex: 'status', key: 'status' }]} />
               </div>
             )}
             {(changeImpactData.affected_computations?.length ?? 0) > 0 && (
               <div style={{ marginBottom: 12 }}>
                 <div style={{ fontWeight: 500, marginBottom: 4 }}>受影响的需求计算</div>
                 <Table size="small" dataSource={changeImpactData.affected_computations} rowKey="id" pagination={false}
-                  columns={[{ title: '编码', dataIndex: 'code', key: 'code' }, { title: '状态', dataIndex: 'status', key: 'status' }]} />
+                  columns={[{ title: '编号', dataIndex: 'code', key: 'code' }, { title: '状态', dataIndex: 'status', key: 'status' }]} />
               </div>
             )}
             {(changeImpactData.affected_plans?.length ?? 0) > 0 && (
               <div style={{ marginBottom: 12 }}>
                 <div style={{ fontWeight: 500, marginBottom: 4 }}>受影响的生产计划</div>
                 <Table size="small" dataSource={changeImpactData.affected_plans} rowKey="id" pagination={false}
-                  columns={[{ title: '编码', dataIndex: 'code', key: 'code' }, { title: '名称', dataIndex: 'name', key: 'name' }, { title: '状态', dataIndex: 'status', key: 'status' }]} />
+                  columns={[{ title: '编号', dataIndex: 'code', key: 'code' }, { title: '名称', dataIndex: 'name', key: 'name' }, { title: '状态', dataIndex: 'status', key: 'status' }]} />
               </div>
             )}
             {(changeImpactData.affected_work_orders?.length ?? 0) > 0 && (
               <div style={{ marginBottom: 12 }}>
                 <div style={{ fontWeight: 500, marginBottom: 4 }}>受影响的工单</div>
                 <Table size="small" dataSource={changeImpactData.affected_work_orders} rowKey="id" pagination={false}
-                  columns={[{ title: '编码', dataIndex: 'code', key: 'code' }, { title: '名称', dataIndex: 'name', key: 'name' }, { title: '状态', dataIndex: 'status', key: 'status' }]} />
+                  columns={[{ title: '编号', dataIndex: 'code', key: 'code' }, { title: '名称', dataIndex: 'name', key: 'name' }, { title: '状态', dataIndex: 'status', key: 'status' }]} />
               </div>
             )}
             {(changeImpactData.recommended_actions?.length ?? 0) > 0 && (
@@ -3318,7 +3349,7 @@ const SalesOrdersPage: React.FC = () => {
               pagination={false}
               dataSource={(pushToReturnOrder.items || []).filter((it) => Number(it.delivered_quantity || 0) > 0)}
               columns={[
-                { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                { title: '物料编号', dataIndex: 'material_code', width: 120 },
                 { title: '物料名称', dataIndex: 'material_name', width: 150 },
                 { title: '订单数量', dataIndex: 'required_quantity', width: 100, align: 'right' },
                 { title: '已交货', dataIndex: 'delivered_quantity', width: 100, align: 'right' },

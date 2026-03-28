@@ -376,7 +376,7 @@ const DemandManagementPage: React.FC = () => {
           const result = await pushDemandToComputation(id);
           messageApi.success(result.message || '需求下推成功');
           if (result.computation_code) {
-            messageApi.info(`计算编码：${result.computation_code}`);
+            messageApi.info(`计算编号：${result.computation_code}`);
           }
           invalidateStatistics();
           actionRef.current?.reload();
@@ -408,7 +408,7 @@ const DemandManagementPage: React.FC = () => {
    */
   const columns: ProColumns<Demand>[] = [
     {
-      title: '需求编码',
+      title: '需求编号',
       dataIndex: 'demand_code',
       width: 140,
       ellipsis: true,
@@ -1294,7 +1294,7 @@ const DemandManagementPage: React.FC = () => {
                         title="基本信息"
                         dataSource={currentDemand}
                       >
-                        <ProDescriptions.Item label="需求编码" dataIndex="demand_code" />
+                        <ProDescriptions.Item label="需求编号" dataIndex="demand_code" />
                         <ProDescriptions.Item label="需求类型" dataIndex="demand_type">
                           <Tag color={currentDemand.demand_type === 'sales_forecast' ? 'processing' : currentDemand.demand_type === 'sales_order' ? 'success' : 'default'}>
                             {currentDemand.demand_type === 'sales_forecast' ? '销售预测' : currentDemand.demand_type === 'sales_order' ? '销售订单' : '需求计划'}
@@ -1449,7 +1449,7 @@ const DemandManagementPage: React.FC = () => {
                           <Table<DemandItem>
                             size="small"
                             columns={[
-                              { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                              { title: '物料编号', dataIndex: 'material_code', width: 120 },
                               { title: '物料名称', dataIndex: 'material_name', width: 150 },
                               { title: '物料规格', dataIndex: 'material_spec', width: 120 },
                               {
@@ -1621,21 +1621,21 @@ const DemandManagementPage: React.FC = () => {
               <div style={{ marginBottom: 12 }}>
                 <div style={{ fontWeight: 500, marginBottom: 4 }}>受影响的需求计算</div>
                 <Table size="small" dataSource={changeImpactData.affected_computations} rowKey="id" pagination={false}
-                  columns={[{ title: '编码', dataIndex: 'code', key: 'code' }, { title: '状态', dataIndex: 'status', key: 'status' }]} />
+                  columns={[{ title: '编号', dataIndex: 'code', key: 'code' }, { title: '状态', dataIndex: 'status', key: 'status' }]} />
               </div>
             )}
             {(changeImpactData.affected_plans?.length ?? 0) > 0 && (
               <div style={{ marginBottom: 12 }}>
                 <div style={{ fontWeight: 500, marginBottom: 4 }}>受影响的生产计划</div>
                 <Table size="small" dataSource={changeImpactData.affected_plans} rowKey="id" pagination={false}
-                  columns={[{ title: '编码', dataIndex: 'code', key: 'code' }, { title: '名称', dataIndex: 'name', key: 'name' }, { title: '状态', dataIndex: 'status', key: 'status' }]} />
+                  columns={[{ title: '编号', dataIndex: 'code', key: 'code' }, { title: '名称', dataIndex: 'name', key: 'name' }, { title: '状态', dataIndex: 'status', key: 'status' }]} />
               </div>
             )}
             {(changeImpactData.affected_work_orders?.length ?? 0) > 0 && (
               <div style={{ marginBottom: 12 }}>
                 <div style={{ fontWeight: 500, marginBottom: 4 }}>受影响的工单</div>
                 <Table size="small" dataSource={changeImpactData.affected_work_orders} rowKey="id" pagination={false}
-                  columns={[{ title: '编码', dataIndex: 'code', key: 'code' }, { title: '名称', dataIndex: 'name', key: 'name' }, { title: '状态', dataIndex: 'status', key: 'status' }]} />
+                  columns={[{ title: '编号', dataIndex: 'code', key: 'code' }, { title: '名称', dataIndex: 'name', key: 'name' }, { title: '状态', dataIndex: 'status', key: 'status' }]} />
               </div>
             )}
             {(changeImpactData.recommended_actions?.length ?? 0) > 0 && (

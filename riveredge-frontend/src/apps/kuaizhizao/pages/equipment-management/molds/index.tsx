@@ -99,7 +99,7 @@ const MoldsPage: React.FC = () => {
   const [calibModalVisible, setCalibModalVisible] = useState(false);
   const [calibForm] = Form.useForm();
 
-  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码 */
+  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号 */
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentMold(null);
@@ -329,7 +329,7 @@ const MoldsPage: React.FC = () => {
    */
   const detailColumns: ProDescriptionsItemType<Mold>[] = [
     {
-      title: '模具编码',
+      title: '模具编号',
       dataIndex: 'code',
     },
     {
@@ -458,7 +458,7 @@ const MoldsPage: React.FC = () => {
    */
   const columns: ProColumns<Mold>[] = [
     {
-      title: '模具编码',
+      title: '模具编号',
       dataIndex: 'code',
       width: 140,
       ellipsis: true,
@@ -650,7 +650,7 @@ const MoldsPage: React.FC = () => {
               if (!row || row.length === 0) continue;
               const name = String(row[nameIdx] ?? '').trim();
               if (!name) continue;
-              const codeIdx = getIdx('编码', 'code');
+              const codeIdx = getIdx('编号', 'code');
               const typeIdx = getIdx('类型', 'type');
               const catIdx = getIdx('分类', 'category');
               const brandIdx = getIdx('品牌', 'brand');
@@ -682,7 +682,7 @@ const MoldsPage: React.FC = () => {
               messageApi.warning(`部分失败 ${result.failureCount} 条`);
             }
           }}
-          importHeaders={['模具编码', '*模具名称', '模具类型', '模具分类', '品牌', '型号']}
+          importHeaders={['模具编号', '*模具名称', '模具类型', '模具分类', '品牌', '型号']}
           showExportButton
           onExport={async (type, keys, pageData) => {
             try {
@@ -732,7 +732,7 @@ const MoldsPage: React.FC = () => {
             <CodeField
               pageCode="kuaizhizao-equipment-management-mold"
               name="code"
-              label="模具编码"
+              label="模具编号"
               required={false}
               autoGenerateOnCreate={!isEdit}
               showGenerateButton={false}

@@ -179,6 +179,32 @@ SYSTEM_DICTIONARIES: List[Dict[str, Any]] = [
             {"label": "账期60天", "value": "CREDIT_60", "description": "账期60天", "sort_order": 7},
         ],
     },
+    {
+        "code": "RETURN_REASON",
+        "name": "退货原因",
+        "description": "销售退货、采购退货等业务的退货原因",
+        "items": [
+            {"label": "质量问题", "value": "QUALITY_ISSUE", "description": "产品存在质量问题", "sort_order": 1},
+            {"label": "规格不符", "value": "SPEC_MISMATCH", "description": "规格型号不匹配", "sort_order": 2},
+            {"label": "数量错误", "value": "QTY_ERROR", "description": "收发数量不一致", "sort_order": 3},
+            {"label": "包装破损", "value": "PACKAGE_DAMAGE", "description": "包装或运输破损", "sort_order": 4},
+            {"label": "错发漏发", "value": "WRONG_OR_MISSING", "description": "错发或漏发", "sort_order": 5},
+            {"label": "客户取消", "value": "CUSTOMER_CANCEL", "description": "客户取消订单导致退货", "sort_order": 6},
+            {"label": "其他", "value": "OTHER", "description": "其他原因", "sort_order": 99},
+        ],
+    },
+    {
+        "code": "RETURN_TYPE",
+        "name": "退货类型",
+        "description": "销售退货、采购退货等业务的退货类型",
+        "items": [
+            {"label": "换货", "value": "EXCHANGE", "description": "退货后重新发货", "sort_order": 1},
+            {"label": "退款", "value": "REFUND", "description": "退货后退款", "sort_order": 2},
+            {"label": "返修", "value": "REWORK", "description": "退货返修后回传", "sort_order": 3},
+            {"label": "报废退货", "value": "SCRAP_RETURN", "description": "无法修复或复用，做报废处理", "sort_order": 4},
+            {"label": "其他", "value": "OTHER", "description": "其他类型", "sort_order": 99},
+        ],
+    },
     # 设备/模具/工装 - 类型与状态
     {
         "code": "EQUIPMENT_TYPE",

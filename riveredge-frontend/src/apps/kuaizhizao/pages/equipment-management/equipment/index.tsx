@@ -75,7 +75,7 @@ const EquipmentPage: React.FC = () => {
   const [calibModalVisible, setCalibModalVisible] = useState(false);
   const [calibForm] = Form.useForm();
 
-  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码 */
+  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号 */
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentEquipment(null);
@@ -241,7 +241,7 @@ const EquipmentPage: React.FC = () => {
    */
   const detailColumns: ProDescriptionsItemType<Equipment>[] = [
     {
-      title: '设备编码',
+      title: '设备编号',
       dataIndex: 'code',
     },
     {
@@ -342,7 +342,7 @@ const EquipmentPage: React.FC = () => {
    */
   const columns: ProColumns<Equipment>[] = [
     {
-      title: '设备编码',
+      title: '设备编号',
       dataIndex: 'code',
       width: 140,
       ellipsis: true,
@@ -517,7 +517,7 @@ const EquipmentPage: React.FC = () => {
               }
               return -1;
             };
-            const codeIdx = getIdx('编码', 'code');
+            const codeIdx = getIdx('编号', 'code');
             const nameIdx = getIdx('名称', 'name');
             if (nameIdx < 0) {
               messageApi.error('导入表头需包含设备名称');
@@ -561,7 +561,7 @@ const EquipmentPage: React.FC = () => {
               messageApi.warning(`部分失败 ${result.failureCount} 条`);
             }
           }}
-          importHeaders={['设备编码', '*设备名称', '设备类型', '设备分类', '品牌', '型号']}
+          importHeaders={['设备编号', '*设备名称', '设备类型', '设备分类', '品牌', '型号']}
           showExportButton
           onExport={async (type, keys, pageData) => {
             try {
@@ -611,7 +611,7 @@ const EquipmentPage: React.FC = () => {
             <CodeField
               pageCode="kuaizhizao-equipment-management-equipment"
               name="code"
-              label="设备编码"
+              label="设备编号"
               required={false}
               autoGenerateOnCreate={!isEdit}
               showGenerateButton={false}

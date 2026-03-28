@@ -158,20 +158,20 @@ const OperationsPage: React.FC = () => {
     const headers = (data[0] || []).map((h: any) => String(h || '').trim());
     const idx = (key: string) => {
       const k = key.toLowerCase();
-      const i = headers.findIndex((h: string) => h.replace(/^\*/, '').toLowerCase().includes(k) || (k === 'code' && (h.includes('编码') || h.includes('code'))) || (k === 'name' && (h.includes('名称') || h.includes('name'))));
+      const i = headers.findIndex((h: string) => h.replace(/^\*/, '').toLowerCase().includes(k) || (k === 'code' && (h.includes('编号') || h.includes('code'))) || (k === 'name' && (h.includes('名称') || h.includes('name'))));
       return i >= 0 ? i : -1;
     };
-    const codeIdx = idx('code') >= 0 ? idx('code') : headers.findIndex((h: string) => h.includes('工序编码'));
+    const codeIdx = idx('code') >= 0 ? idx('code') : headers.findIndex((h: string) => h.includes('工序编号'));
     const nameIdx = idx('name') >= 0 ? idx('name') : headers.findIndex((h: string) => h.includes('工序名称'));
     if (codeIdx < 0 || nameIdx < 0) {
-      messageApi.error(t('app.master-data.importMissingField', { field: '工序编码、工序名称', headers: headers.join(', ') }));
+      messageApi.error(t('app.master-data.importMissingField', { field: '工序编号、工序名称', headers: headers.join(', ') }));
       return;
     }
     const descIdx = headers.findIndex((h: string) => h.includes('描述') || h.toLowerCase().includes('desc'));
     const activeIdx = headers.findIndex((h: string) => h.includes('启用') || h.toLowerCase().includes('active'));
     const defectIdx = headers.findIndex((h: string) => h.includes('不良品') || h.toLowerCase().includes('defect'));
 
-    // 1. 收集所有不良品项（编码或名称，逗号/分号分隔）
+    // 1. 收集所有不良品项（编号或名称，逗号/分号分隔）
     const allDefectInputs = new Set<string>();
     for (let i = 1; i < data.length; i++) {
       const row = data[i];
@@ -263,7 +263,7 @@ const OperationsPage: React.FC = () => {
         return;
       }
       const csv = [
-        ['工序编码', '工序名称', '描述', '启用状态', '不良品项'].join(','),
+        ['工序编号', '工序名称', '描述', '启用状态', '不良品项'].join(','),
         ...list.map((r) => {
           const dts = r.defectTypes ?? r.defect_types ?? [];
           const defectStr = Array.isArray(dts) ? dts.map((d: DefectTypeMinimal) => d.name ?? d.code).filter(Boolean).join(',') : '';
@@ -343,7 +343,7 @@ const OperationsPage: React.FC = () => {
    */
   const columns: ProColumns<Operation>[] = [
     {
-      title: '工序编码',
+      title: '工序编号',
       dataIndex: 'code',
       width: 150,
       fixed: 'left',
@@ -590,7 +590,7 @@ const OperationsPage: React.FC = () => {
         }}
         showImportButton
         onImport={handleImport}
-        importHeaders={['*工序编码', '*工序名称', '描述', '启用状态', '不良品项']}
+        importHeaders={['*工序编号', '*工序名称', '描述', '启用状态', '不良品项']}
         importExampleRow={['OP001', '装配工序', '工序描述', '启用', '尺寸不良,外观不良']}
         showExportButton
         onExport={handleExport}
@@ -609,7 +609,7 @@ const OperationsPage: React.FC = () => {
               dataSource={operationDetail || undefined}
               column={2}
               columns={[
-                { title: '工序编码', dataIndex: 'code' },
+                { title: '工序编号', dataIndex: 'code' },
                 { title: '工序名称', dataIndex: 'name' },
                 { title: '描述', dataIndex: 'description', span: 2 },
                 {
@@ -747,7 +747,7 @@ const OperationsPage: React.FC = () => {
             onChange: (keys) => setSelectedPresetCodes(keys as string[]),
           }}
           columns={[
-            { title: '工序编码', dataIndex: 'code', width: 120 },
+            { title: '工序编号', dataIndex: 'code', width: 120 },
             { title: '工序名称', dataIndex: 'name', width: 140 },
             { title: '排序', dataIndex: 'sort_order', width: 80 },
           ]}

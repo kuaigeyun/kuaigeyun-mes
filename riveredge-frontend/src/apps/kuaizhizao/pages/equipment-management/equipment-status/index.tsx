@@ -326,7 +326,7 @@ const EquipmentStatusPage: React.FC = () => {
           </Col>
           <Col xs={24} sm={8} md={12}>
             <Search
-              placeholder="搜索设备编码或名称"
+              placeholder="搜索设备编号或名称"
               value={searchKeyword}
               onChange={(e) => setSearchKeyword(e.target.value)}
               style={{ maxWidth: 300 }}
@@ -443,7 +443,7 @@ const EquipmentStatusPage: React.FC = () => {
                 monitored_at: currentEquipment.monitored_at ? dayjs(currentEquipment.monitored_at).format('YYYY-MM-DD HH:mm:ss') : undefined,
               }}
               columns={[
-                { title: '设备编码', dataIndex: 'code' },
+                { title: '设备编号', dataIndex: 'code' },
                 { title: '设备名称', dataIndex: 'name' },
                 { title: '设备类型', dataIndex: 'type' },
                 { title: '设备分类', dataIndex: 'category' },

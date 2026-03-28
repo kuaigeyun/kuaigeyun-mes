@@ -8,6 +8,19 @@ import type { QuickCreateConfig } from '../uni-dropdown/types';
 import { NamePath } from 'antd/es/form/interface';
 import { MaterialFormModal } from '../../apps/master-data/components/MaterialFormModal';
 
+/** 与 Form.Item 的 getValueFromEvent 对齐：将 Select 值规范为数字 ID */
+export function uniMaterialSelectValueFromEvent(val: unknown): number | undefined {
+  if (val == null || val === '') return undefined;
+  const n = Number(val);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+export function uniMaterialSelectGetValueProps(v: unknown): { value: number | undefined } {
+  if (v == null || v === '') return { value: undefined };
+  const n = Number(v);
+  return { value: Number.isFinite(n) ? n : undefined };
+}
+
 function getMaterialField(m: Record<string, any>, field: string): any {
   if (field.includes('.')) {
     return field.split('.').reduce((obj, key) => (obj && typeof obj === 'object' ? obj[key] : undefined), m);
@@ -58,14 +71,14 @@ interface UniMaterialSelectProps {
  * 统一物料选择组件
  * 
  * @description
- * 1. 自动防抖搜索物料 (名称/编码/规格/拼音)
- * 2. 选中物料后，根据 fillMapping 自动向当前的 Form 实例回填物料详情（如名、编码、图号等）
+ * 1. 自动防抖搜索物料 (名称/编号/规格/拼音)
+ * 2. 选中物料后，根据 fillMapping 自动向当前的 Form 实例回填物料详情（如名、编号、图号等）
  * 3. 完美兼容 ProForm 和标准 Antd Form 以及 Form.List 动态增减行上下文
  */
 export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
   name,
   label = '物料名称',
-  placeholder = '请选择物料（支持名称/编码搜索）',
+  placeholder = '请选择物料（支持名称/编号搜索）',
   required = false,
   disabled = false,
   readonly = false,
@@ -132,7 +145,10 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
   onChangeRef.current = onChange;
 
   const handleChange = (val: number | undefined, _option: any) => {
-    const selectedMaterial = val ? data.find((m) => m.id === val) : undefined;
+    const selectedMaterial =
+      val != null && val !== ''
+        ? data.find((m) => Number((m as any).id) === Number(val))
+        : undefined;
 
     if (onChangeRef.current) {
       onChangeRef.current(val, selectedMaterial);
@@ -161,7 +177,11 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
   // Form.Item 会合并子组件的 onChange（先 trigger 再 child.onChange），因此 mergedOnChange 会被调用
   // 不再在此处 setFieldValue，由 Form.Item 的 trigger 负责更新表单；getValueFromEvent 负责规范化存储为 number
   const mergedOnChange = (val: number | undefined, opt: any) => {
-    const numVal = (val as any) != null && (val as any) !== '' ? Number(val) : undefined;
+    let numVal: number | undefined;
+    if ((val as any) != null && (val as any) !== '') {
+      const n = Number(val);
+      numVal = Number.isFinite(n) ? n : undefined;
+    }
     handleChange(numVal, opt);
   };
 
@@ -169,9 +189,11 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
     const opts = data.map((item) => {
       const code = getMaterialField(item as any, 'mainCode') || getMaterialField(item as any, 'code') || '';
       const nameVal = getMaterialField(item as any, 'name') || '';
+      const rawId = (item as any).id;
+      const numId = Number(rawId);
       return {
-        label: `${code} - ${nameVal}`.trim() || String(item.id),
-        value: item.id,
+        label: `${code} - ${nameVal}`.trim() || String(rawId),
+        value: Number.isFinite(numId) ? numId : rawId,
       };
     });
     if (fallbackOption && !opts.some((o) => Number(o.value) === Number(fallbackOption.value))) {
@@ -180,79 +202,93 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
     return opts;
   }, [data, fallbackOption]);
 
-  return (
-    <Form.Item
-      name={name}
-      label={label || undefined}
-      rules={required ? [{ required: true, message: `请选择${label || '物料'}` }] : undefined}
-      validateTrigger={['onChange', 'onBlur']}
-      getValueFromEvent={(val: any) => (val != null && val !== '' ? Number(val) : undefined)}
-      getValueProps={(v: any) => ({ value: v != null && v !== '' ? Number(v) : undefined })}
-      style={{ margin: 0, ...formItemProps?.style }}
-      {...formItemProps}
-    >
-      <UniDropdown
-        placeholder={placeholder}
-        allowClear
-        showSearch
-        loading={loading}
-        disabled={disabled}
-        size={size}
-        style={{ width: '100%' }}
-        options={options}
-        filterOption={false}
-        onSearch={debounceFetch}
-        onChange={mergedOnChange}
-        quickCreate={effectiveQuickCreate}
-        advancedSearch={
-          showAdvancedSearch
-            ? {
-                label: '高级搜索',
-                fields: [
-                  { name: 'mainCode', label: '物料编码' },
-                  { name: 'name', label: '物料名称' },
-                  { name: 'specification', label: '规格' },
-                ],
-                onSearch: async (values) => {
-                  const kw = [values.mainCode, values.name, values.specification].filter(Boolean).join(' ').trim();
-                  const list = await materialApi.list({
-                    limit: 200,
-                    isActive: activeOnly ? true : undefined,
-                    ...(kw && { keyword: kw }),
-                  });
-                  const items = list || [];
-                  return items.map((m) => {
-                    const code = getMaterialField(m as any, 'mainCode') || getMaterialField(m as any, 'code') || '';
-                    const nameVal = getMaterialField(m as any, 'name') || '';
-                    return {
-                      value: m.id,
-                      label: `${code} - ${nameVal}`.trim() || String(m.id),
-                    };
-                  });
-                },
-              }
-            : undefined
+  /**
+   * rc-field-form：Form.Item 经 toChildrenArray 展开 Fragment 后若出现多个子节点，不会对任一子节点注入 value/onChange，
+   * 导致 Select 仅本地展示、store 无 material_id。故 Form.Item 只包裹 UniDropdown，MaterialFormModal 放在外层兄弟节点。
+   */
+  const dropdown = (
+    <UniDropdown
+      placeholder={placeholder}
+      allowClear
+      showSearch
+      loading={loading}
+      disabled={disabled}
+      size={size}
+      style={{ width: '100%' }}
+      options={options}
+      filterOption={false}
+      onSearch={debounceFetch}
+      onChange={mergedOnChange}
+      quickCreate={effectiveQuickCreate}
+      advancedSearch={
+        showAdvancedSearch
+          ? {
+              label: '高级搜索',
+              fields: [
+                { name: 'mainCode', label: '物料编号' },
+                { name: 'name', label: '物料名称' },
+                { name: 'specification', label: '规格' },
+              ],
+              onSearch: async (values) => {
+                const kw = [values.mainCode, values.name, values.specification].filter(Boolean).join(' ').trim();
+                const list = await materialApi.list({
+                  limit: 200,
+                  isActive: activeOnly ? true : undefined,
+                  ...(kw && { keyword: kw }),
+                });
+                const items = list || [];
+                return items.map((m) => {
+                  const code = getMaterialField(m as any, 'mainCode') || getMaterialField(m as any, 'code') || '';
+                  const nameVal = getMaterialField(m as any, 'name') || '';
+                  const rawId = (m as any).id;
+                  const numId = Number(rawId);
+                  return {
+                    value: Number.isFinite(numId) ? numId : rawId,
+                    label: `${code} - ${nameVal}`.trim() || String(rawId),
+                  };
+                });
+              },
+            }
+          : undefined
+      }
+      {...restProps}
+    />
+  );
+
+  const modal = (
+    <MaterialFormModal
+      open={materialModalVisible}
+      onClose={() => setMaterialModalVisible(false)}
+      onSuccess={(newMaterial) => {
+        setData((prev) => [newMaterial, ...prev.filter((m) => m.id !== newMaterial.id)]);
+        if (form) {
+          form.setFieldValue(name, newMaterial.id);
+          handleChange(newMaterial.id, {
+            label: `${newMaterial.mainCode || newMaterial.code} - ${newMaterial.name}`,
+            value: newMaterial.id,
+          });
         }
-        {...restProps}
-      />
-      <MaterialFormModal
-        open={materialModalVisible}
-        onClose={() => setMaterialModalVisible(false)}
-        onSuccess={(newMaterial) => {
-          // 1. 将新物料加入当前下拉列表（避免立即触发再次 fetch）
-          setData((prev) => [newMaterial, ...prev.filter((m) => m.id !== newMaterial.id)]);
-          
-          // 2. 自动选中该物料
-          if (form) {
-            form.setFieldValue(name, newMaterial.id);
-            // 触发 handleChange 以执行 fillMapping
-            handleChange(newMaterial.id, { label: `${newMaterial.mainCode || newMaterial.code} - ${newMaterial.name}`, value: newMaterial.id });
-          }
-          
-          setMaterialModalVisible(false);
-        }}
-      />
-    </Form.Item>
+        setMaterialModalVisible(false);
+      }}
+    />
+  );
+
+  return (
+    <>
+      <Form.Item
+        name={name}
+        label={label || undefined}
+        rules={required ? [{ required: true, message: `请选择${label || '物料'}` }] : undefined}
+        validateTrigger={['onChange', 'onBlur']}
+        getValueFromEvent={(val: unknown) => uniMaterialSelectValueFromEvent(val)}
+        getValueProps={(v: any) => uniMaterialSelectGetValueProps(v)}
+        style={{ margin: 0, ...formItemProps?.style }}
+        {...formItemProps}
+      >
+        {dropdown}
+      </Form.Item>
+      {modal}
+    </>
   );
 };
 

@@ -124,7 +124,7 @@ const MaterialBindingModal: React.FC<MaterialBindingModalProps> = ({
   };
 
   const columns = [
-    { title: '物料编码/条码', dataIndex: 'material_code', key: 'material_code', render: (text: string, record: any) => text || record.barcode },
+    { title: '物料编号/条码', dataIndex: 'material_code', key: 'material_code', render: (text: string, record: any) => text || record.barcode },
     { title: '批次', dataIndex: 'batch_number', key: 'batch_number' },
     { title: '数量', dataIndex: 'quantity', key: 'quantity' },
     { title: '类型', dataIndex: 'binding_type', key: 'binding_type', render: (type: string) => <Text style={{ color: '#fff' }}>{type === 'feeding' ? '上料' : '下料'}</Text> },
@@ -159,12 +159,12 @@ const MaterialBindingModal: React.FC<MaterialBindingModalProps> = ({
       <style>{`
         .kiosk-modal-terminal-bg .ant-modal-content {
           background: #141414 !important;
-          border: 1px solid rgba(255, 255, 255, 0.1);
+          border: 1px solid var(--river-border-color);
           border-radius: 12px;
         }
         .kiosk-modal-terminal-bg .ant-modal-header {
           background: transparent !important;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+          border-bottom: 1px solid var(--river-divider-color);
           padding-bottom: 16px;
         }
         .kiosk-modal-terminal-bg .ant-tabs-tab { color: rgba(255, 255, 255, 0.6) !important; font-size: 18px !important; }
@@ -174,10 +174,10 @@ const MaterialBindingModal: React.FC<MaterialBindingModalProps> = ({
         .kiosk-modal-terminal-bg .ant-table-thead > tr > th { 
           background: rgba(255, 255, 255, 0.05) !important; 
           color: rgba(255, 255, 255, 0.8) !important;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+          border-bottom: 1px solid var(--river-divider-color) !important;
         }
         .kiosk-modal-terminal-bg .ant-table-tbody > tr > td {
-          border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+          border-bottom: 1px solid var(--river-divider-color) !important;
         }
         .kiosk-modal-terminal-bg .ant-table-cell { font-size: 16px !important; }
       `}</style>

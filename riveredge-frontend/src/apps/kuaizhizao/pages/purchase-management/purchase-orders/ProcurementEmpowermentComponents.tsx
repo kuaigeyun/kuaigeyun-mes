@@ -159,7 +159,7 @@ export const PriceHistoryInsight: React.FC<{ materialId: number; currentPrice?: 
         <Empty description="暂无历史采购记录" />
       ) : (
         <>
-          <Space split={<div style={{ width: 1, height: 14, background: '#f0f0f0' }} />} style={{ marginBottom: 12, width: '100%', justifyContent: 'space-around' }}>
+          <Space split={<div style={{ width: 1, height: 14, background: 'var(--river-divider-color)' }} />} style={{ marginBottom: 12, width: '100%', justifyContent: 'space-around' }}>
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>平均成交价</div>
               <Text strong style={{ color: '#1890ff' }}>¥{avgPrice.toFixed(2)}</Text>

@@ -1,8 +1,8 @@
 /**
- * 编码规则管理页面
+ * 编号规则管理页面
  * 
- * 用于系统管理员为功能页面配置编码规则。
- * 支持为每个功能页面直接配置编码规则，实现自动编码功能。
+ * 用于系统管理员为功能页面配置编号规则。
+ * 支持为每个功能页面直接配置编号规则，实现自动编号功能。
  */
 
 import React, { useRef, useState, useEffect } from 'react';
@@ -40,7 +40,7 @@ import { getCodeRulePageConfigsKey } from '../../../../utils/codeRulePage';
 const { Text, Paragraph } = Typography;
 
 /**
- * 编码规则管理列表页面组件
+ * 编号规则管理列表页面组件
  */
 const CodeRuleListPage: React.FC = () => {
   const { t } = useTranslation();
@@ -65,7 +65,7 @@ const CodeRuleListPage: React.FC = () => {
   const [ruleComponents, setRuleComponents] = useState<CodeRuleComponent[]>([]);
 
   /**
-   * 获取所有编码规则（包括禁用的）
+   * 获取所有编号规则（包括禁用的）
    */
   const getAllCodeRules = async (): Promise<CodeRule[]> => {
     try {
@@ -82,7 +82,7 @@ const CodeRuleListPage: React.FC = () => {
       // 后端直接返回数组
       return Array.isArray(response) ? response : [];
     } catch (error: any) {
-      console.error('获取编码规则列表失败:', error);
+      console.error('获取编号规则列表失败:', error);
       return [];
     }
   };
@@ -190,7 +190,7 @@ const CodeRuleListPage: React.FC = () => {
   };
 
   /**
-   * 加载编码规则列表（用于功能页面配置，只加载激活的规则用于显示）
+   * 加载编号规则列表（用于功能页面配置，只加载激活的规则用于显示）
    */
   const loadCodeRules = async (reloadPage?: boolean) => {
     try {
@@ -206,11 +206,11 @@ const CodeRuleListPage: React.FC = () => {
         }, 100);
       }
     } catch (error: any) {
-      console.error('加载编码规则列表失败:', error);
+      console.error('加载编号规则列表失败:', error);
     }
   };
 
-  // 初始化加载页面配置和编码规则
+  // 初始化加载页面配置和编号规则
   useEffect(() => {
     loadPageConfigs();
     loadCodeRules();
@@ -224,7 +224,7 @@ const CodeRuleListPage: React.FC = () => {
 
     // 延迟加载规则，确保规则列表已加载
     setTimeout(async () => {
-      // 加载该页面对应的编码规则
+      // 加载该页面对应的编号规则
       const pageConfig = pageConfigs.find(p => p.pageCode === pageCode);
       // 如果没有指定 ruleCode，使用 pageCode 生成（与后端逻辑一致）
       const ruleCode = pageConfig?.ruleCode || pageCode.toUpperCase().replace(/-/g, '_');
@@ -541,7 +541,7 @@ const CodeRuleListPage: React.FC = () => {
           overflow: 'hidden',
         }}
       >
-        {/* 功能页面编码规则配置 - 左右结构 */}
+        {/* 功能页面编号规则配置 - 左右结构 */}
         <div
           style={{
             display: 'flex',

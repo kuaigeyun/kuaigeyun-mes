@@ -26,7 +26,7 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
 
   const columns: ProColumns<ToolMaintenanceReminder>[] = [
-    { title: '工装编码', dataIndex: 'tool_code', width: 120 },
+    { title: '工装编号', dataIndex: 'tool_code', width: 120 },
     { title: '工装名称', dataIndex: 'tool_name', width: 180, ellipsis: true },
     {
       title: '类型',

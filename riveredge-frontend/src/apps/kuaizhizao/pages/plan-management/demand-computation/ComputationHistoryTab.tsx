@@ -74,8 +74,8 @@ const ComputationHistoryTab: React.FC = () => {
   };
 
   const columns: ProColumns<DemandComputation>[] = [
-    { title: '计算编码', dataIndex: 'computation_code', width: 150, fixed: 'left' },
-    { title: '需求编码', dataIndex: 'demand_code', width: 150 },
+    { title: '计算编号', dataIndex: 'computation_code', width: 150, fixed: 'left' },
+    { title: '需求编号', dataIndex: 'demand_code', width: 150 },
     {
       title: '业务模式',
       dataIndex: 'business_mode',
@@ -114,7 +114,7 @@ const ComputationHistoryTab: React.FC = () => {
   ];
 
   const compareColumns = [
-    { title: '物料编码', dataIndex: 'material_code', key: 'material_code', width: 120 },
+    { title: '物料编号', dataIndex: 'material_code', key: 'material_code', width: 120 },
     { title: '物料名称', dataIndex: 'material_name', key: 'material_name', width: 200 },
     {
       title: '需求数量',

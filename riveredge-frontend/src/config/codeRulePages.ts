@@ -1,7 +1,7 @@
 /**
- * 编码规则功能页面配置
+ * 编号规则功能页面配置
  * 
- * 定义系统中所有有编码字段的功能页面，用于在编码规则页面展示和配置。
+ * 定义系统中所有有编号字段的功能页面，用于在编号规则页面展示和配置。
  */
 
 /**
@@ -9,7 +9,7 @@
  */
 export interface CodeRulePageConfig {
   /**
-   * 页面唯一标识（用于关联编码规则）
+   * 页面唯一标识（用于关联编号规则）
    */
   pageCode: string;
   /**
@@ -21,11 +21,11 @@ export interface CodeRulePageConfig {
    */
   pagePath: string;
   /**
-   * 编码字段名称（前端字段名）
+   * 编号字段名称（前端字段名）
    */
   codeField: string;
   /**
-   * 编码字段显示名称
+   * 编号字段显示名称
    */
   codeFieldLabel: string;
   /**
@@ -37,7 +37,7 @@ export interface CodeRulePageConfig {
    */
   moduleIcon?: string;
   /**
-   * 是否启用自动编码（默认：false）
+   * 是否启用自动编号（默认：false）
    */
   autoGenerate?: boolean;
   /**
@@ -45,7 +45,7 @@ export interface CodeRulePageConfig {
    */
   allowManualEdit?: boolean;
   /**
-   * 可用字段（用于编码规则变量）
+   * 可用字段（用于编号规则变量）
    */
   availableFields?: {
     fieldName: string;
@@ -54,7 +54,7 @@ export interface CodeRulePageConfig {
     description?: string;
   }[];
   /**
-   * 关联的编码规则代码（可选）
+   * 关联的编号规则代码（可选）
    */
   ruleCode?: string;
   /**
@@ -75,7 +75,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '厂区管理',
     pagePath: '/apps/master-data/factory/plants',
     codeField: 'code',
-    codeFieldLabel: '厂区编码',
+    codeFieldLabel: '厂区编号',
     module: '主数据管理',
     moduleIcon: 'database',
     autoGenerate: true,
@@ -87,7 +87,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '车间管理',
     pagePath: '/apps/master-data/factory/workshops',
     codeField: 'code',
-    codeFieldLabel: '车间编码',
+    codeFieldLabel: '车间编号',
     module: '主数据管理',
     moduleIcon: 'database',
     autoGenerate: true,
@@ -99,7 +99,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '产线管理',
     pagePath: '/apps/master-data/factory/production-lines',
     codeField: 'code',
-    codeFieldLabel: '产线编码',
+    codeFieldLabel: '产线编号',
     module: '主数据管理',
     moduleIcon: 'database',
     autoGenerate: true,
@@ -111,7 +111,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '工位管理',
     pagePath: '/apps/master-data/factory/workstations',
     codeField: 'code',
-    codeFieldLabel: '工位编码',
+    codeFieldLabel: '工位编号',
     module: '主数据管理',
     moduleIcon: 'database',
     autoGenerate: true,
@@ -123,7 +123,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '工作中心',
     pagePath: '/apps/master-data/factory/work-centers',
     codeField: 'code',
-    codeFieldLabel: '工作中心编码',
+    codeFieldLabel: '工作中心编号',
     module: '主数据管理',
     moduleIcon: 'database',
     autoGenerate: true,
@@ -136,7 +136,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '工作小组',
     pagePath: '/apps/master-data/factory/work-groups',
     codeField: 'code',
-    codeFieldLabel: '工作小组编码',
+    codeFieldLabel: '工作小组编号',
     module: '主数据管理',
     moduleIcon: 'database',
     autoGenerate: true,
@@ -150,7 +150,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '仓库管理',
     pagePath: '/apps/master-data/warehouse/warehouses',
     codeField: 'code',
-    codeFieldLabel: '仓库编码',
+    codeFieldLabel: '仓库编号',
     module: '主数据管理',
     moduleIcon: 'database',
     autoGenerate: true,
@@ -162,7 +162,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '库区管理',
     pagePath: '/apps/master-data/warehouse/storage-areas',
     codeField: 'code',
-    codeFieldLabel: '库区编码',
+    codeFieldLabel: '库区编号',
     module: '主数据管理',
     moduleIcon: 'database',
     autoGenerate: true,
@@ -174,7 +174,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '库位管理',
     pagePath: '/apps/master-data/warehouse/storage-locations',
     codeField: 'code',
-    codeFieldLabel: '库位编码',
+    codeFieldLabel: '库位编号',
     module: '主数据管理',
     moduleIcon: 'database',
     autoGenerate: true,
@@ -187,7 +187,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '物料分组',
     pagePath: '/apps/master-data/materials',
     codeField: 'code',
-    codeFieldLabel: '分组编码',
+    codeFieldLabel: '分组编号',
     module: '主数据管理',
     moduleIcon: 'database',
     autoGenerate: true,
@@ -199,7 +199,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '物料管理',
     pagePath: '/apps/master-data/materials',
     codeField: 'mainCode',
-    codeFieldLabel: '物料主编码',
+    codeFieldLabel: '物料主编号',
     module: '主数据管理',
     moduleIcon: 'database',
     autoGenerate: true,
@@ -208,9 +208,9 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     availableFields: [
       {
         fieldName: 'group_code',
-        fieldLabel: '物料分组编码',
+        fieldLabel: '物料分组编号',
         fieldType: 'string',
-        description: '物料所属分组的编码',
+        description: '物料所属分组的编号',
       },
       {
         fieldName: 'group_name',
@@ -238,7 +238,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '工序管理',
     pagePath: '/apps/master-data/process/operations',
     codeField: 'code',
-    codeFieldLabel: '工序编码',
+    codeFieldLabel: '工序编号',
     module: '主数据管理',
     moduleIcon: 'database',
     autoGenerate: true,
@@ -250,7 +250,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '工艺路线',
     pagePath: '/apps/master-data/process/routes',
     codeField: 'code',
-    codeFieldLabel: '工艺路线编码',
+    codeFieldLabel: '工艺路线编号',
     module: '主数据管理',
     moduleIcon: 'database',
     autoGenerate: true,
@@ -270,7 +270,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '物料清单BOM',
     pagePath: '/apps/master-data/process/engineering-bom',
     codeField: 'bomCode',
-    codeFieldLabel: 'BOM编码',
+    codeFieldLabel: 'BOM编号',
     module: '主数据管理',
     moduleIcon: 'database',
     autoGenerate: true,
@@ -279,9 +279,9 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     availableFields: [
       {
         fieldName: 'material_code',
-        fieldLabel: '主物料编码',
+        fieldLabel: '主物料编号',
         fieldType: 'string',
-        description: 'BOM主物料的编码',
+        description: 'BOM主物料的编号',
       },
       {
         fieldName: 'material_name',
@@ -302,7 +302,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '不良品项',
     pagePath: '/apps/master-data/process/defect-types',
     codeField: 'code',
-    codeFieldLabel: '不良品编码',
+    codeFieldLabel: '不良品编号',
     module: '主数据管理',
     moduleIcon: 'database',
     autoGenerate: true,
@@ -315,7 +315,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '客户管理',
     pagePath: '/apps/master-data/supply-chain/customers',
     codeField: 'code',
-    codeFieldLabel: '客户编码',
+    codeFieldLabel: '客户编号',
     module: '主数据管理',
     moduleIcon: 'database',
     autoGenerate: true,
@@ -327,7 +327,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '供应商管理',
     pagePath: '/apps/master-data/supply-chain/suppliers',
     codeField: 'code',
-    codeFieldLabel: '供应商编码',
+    codeFieldLabel: '供应商编号',
     module: '主数据管理',
     moduleIcon: 'database',
     autoGenerate: true,
@@ -340,7 +340,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '技能管理',
     pagePath: '/apps/kuaizhizao/performance/skills',
     codeField: 'code',
-    codeFieldLabel: '技能编码',
+    codeFieldLabel: '技能编号',
     module: '快格轻制造',
     moduleIcon: 'production',
     autoGenerate: false,
@@ -353,7 +353,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '工单管理',
     pagePath: '/apps/kuaizhizao/production-execution/work-orders',
     codeField: 'code',
-    codeFieldLabel: '工单编码',
+    codeFieldLabel: '工单编号',
     module: '快格轻制造',
     moduleIcon: 'tool',
     autoGenerate: true,
@@ -365,7 +365,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '返工工单',
     pagePath: '/apps/kuaizhizao/production-execution/rework-orders',
     codeField: 'code',
-    codeFieldLabel: '返工工单编码',
+    codeFieldLabel: '返工工单编号',
     module: '快格轻制造',
     moduleIcon: 'tool',
     autoGenerate: true,
@@ -377,7 +377,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '委外单',
     pagePath: '/apps/kuaizhizao/production-execution/outsource-orders',
     codeField: 'code',
-    codeFieldLabel: '委外单编码',
+    codeFieldLabel: '委外单编号',
     module: '快格轻制造',
     moduleIcon: 'tool',
     autoGenerate: true,
@@ -391,7 +391,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '采购订单',
     pagePath: '/apps/kuaizhizao/purchase-management/purchase-orders',
     codeField: 'order_code',
-    codeFieldLabel: '采购订单编码',
+    codeFieldLabel: '采购订单编号',
     module: '快格轻制造',
     moduleIcon: 'tool',
     autoGenerate: true,
@@ -415,7 +415,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '采购入库',
     pagePath: '/apps/kuaizhizao/warehouse-management/inbound',
     codeField: 'receipt_code',
-    codeFieldLabel: '采购入库单编码',
+    codeFieldLabel: '采购入库单编号',
     module: '快格轻制造',
     moduleIcon: 'tool',
     autoGenerate: true,
@@ -429,7 +429,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '销售订单',
     pagePath: '/apps/kuaizhizao/sales-management/sales-orders',
     codeField: 'order_code',
-    codeFieldLabel: '销售订单编码',
+    codeFieldLabel: '销售订单编号',
     module: '快格轻制造',
     moduleIcon: 'tool',
     autoGenerate: true,
@@ -441,7 +441,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '报价单',
     pagePath: '/apps/kuaizhizao/sales-management/quotations',
     codeField: 'quotation_code',
-    codeFieldLabel: '报价单编码',
+    codeFieldLabel: '报价单编号',
     module: '快格轻制造',
     moduleIcon: 'tool',
     autoGenerate: true,
@@ -453,7 +453,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '样品试用',
     pagePath: '/apps/kuaizhizao/sales-management/sample-trials',
     codeField: 'trial_code',
-    codeFieldLabel: '样品试用单编码',
+    codeFieldLabel: '样品试用单编号',
     module: '快格轻制造',
     moduleIcon: 'tool',
     autoGenerate: true,
@@ -465,7 +465,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '销售发货',
     pagePath: '/apps/kuaizhizao/warehouse-management/outbound',
     codeField: 'delivery_code',
-    codeFieldLabel: '销售发货单编码',
+    codeFieldLabel: '销售发货单编号',
     module: '快格轻制造',
     moduleIcon: 'tool',
     autoGenerate: true,
@@ -477,7 +477,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '销售预测',
     pagePath: '/apps/kuaizhizao/sales-management/sales-forecasts',
     codeField: 'forecast_code',
-    codeFieldLabel: '销售预测编码',
+    codeFieldLabel: '销售预测编号',
     module: '快格轻制造',
     moduleIcon: 'tool',
     autoGenerate: true,
@@ -489,7 +489,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '发货通知单',
     pagePath: '/apps/kuaizhizao/sales-management/shipment-notices',
     codeField: 'notice_code',
-    codeFieldLabel: '发货通知单编码',
+    codeFieldLabel: '发货通知单编号',
     module: '快格轻制造',
     moduleIcon: 'tool',
     autoGenerate: true,
@@ -501,7 +501,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '收货通知单',
     pagePath: '/apps/kuaizhizao/purchase-management/receipt-notices',
     codeField: 'notice_code',
-    codeFieldLabel: '收货通知单编码',
+    codeFieldLabel: '收货通知单编号',
     module: '快格轻制造',
     moduleIcon: 'tool',
     autoGenerate: true,
@@ -515,7 +515,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '生产领料',
     pagePath: '/apps/kuaizhizao/warehouse-management/inbound',
     codeField: 'code',
-    codeFieldLabel: '领料单编码',
+    codeFieldLabel: '领料单编号',
     module: '快格轻制造',
     moduleIcon: 'tool',
     autoGenerate: true,
@@ -527,7 +527,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '生产退料',
     pagePath: '/apps/kuaizhizao/warehouse-management/inbound',
     codeField: 'return_code',
-    codeFieldLabel: '退料单编码',
+    codeFieldLabel: '退料单编号',
     module: '快格轻制造',
     moduleIcon: 'tool',
     autoGenerate: true,
@@ -539,7 +539,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '其他入库',
     pagePath: '/apps/kuaizhizao/warehouse-management/other-inbound',
     codeField: 'inbound_code',
-    codeFieldLabel: '入库单编码',
+    codeFieldLabel: '入库单编号',
     module: '快格轻制造',
     moduleIcon: 'tool',
     autoGenerate: true,
@@ -551,7 +551,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '其他出库',
     pagePath: '/apps/kuaizhizao/warehouse-management/other-outbound',
     codeField: 'outbound_code',
-    codeFieldLabel: '出库单编码',
+    codeFieldLabel: '出库单编号',
     module: '快格轻制造',
     moduleIcon: 'tool',
     autoGenerate: true,
@@ -563,7 +563,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '成品入库',
     pagePath: '/apps/kuaizhizao/warehouse-management/inbound',
     codeField: 'code',
-    codeFieldLabel: '成品入库单编码',
+    codeFieldLabel: '成品入库单编号',
     module: '快格轻制造',
     moduleIcon: 'tool',
     autoGenerate: true,
@@ -575,7 +575,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '配料单',
     pagePath: '/apps/kuaizhizao/warehouse-management/batching-center',
     codeField: 'code',
-    codeFieldLabel: '配料单编码',
+    codeFieldLabel: '配料单编号',
     module: '快格轻制造',
     moduleIcon: 'tool',
     autoGenerate: true,
@@ -589,7 +589,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '来料检验',
     pagePath: '/apps/kuaizhizao/quality-management/incoming-inspection',
     codeField: 'code',
-    codeFieldLabel: '来料检验单编码',
+    codeFieldLabel: '来料检验单编号',
     module: '快格轻制造',
     moduleIcon: 'tool',
     autoGenerate: true,
@@ -601,7 +601,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '过程检验',
     pagePath: '/apps/kuaizhizao/quality-management/process-inspection',
     codeField: 'code',
-    codeFieldLabel: '过程检验单编码',
+    codeFieldLabel: '过程检验单编号',
     module: '快格轻制造',
     moduleIcon: 'tool',
     autoGenerate: true,
@@ -613,7 +613,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '成品检验',
     pagePath: '/apps/kuaizhizao/quality-management/finished-goods-inspection',
     codeField: 'code',
-    codeFieldLabel: '成品检验单编码',
+    codeFieldLabel: '成品检验单编号',
     module: '快格轻制造',
     moduleIcon: 'tool',
     autoGenerate: true,
@@ -625,7 +625,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '质检方案',
     pagePath: '/apps/kuaizhizao/quality-management/inspection-plans',
     codeField: 'plan_code',
-    codeFieldLabel: '质检方案编码',
+    codeFieldLabel: '质检方案编号',
     module: '快格轻制造',
     moduleIcon: 'tool',
     autoGenerate: true,
@@ -639,7 +639,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '生产计划',
     pagePath: '/apps/kuaizhizao/plan-management/production-plans',
     codeField: 'code',
-    codeFieldLabel: '生产计划编码',
+    codeFieldLabel: '生产计划编号',
     module: '快格轻制造',
     moduleIcon: 'tool',
     autoGenerate: true,
@@ -653,7 +653,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '采购退货',
     pagePath: '/apps/kuaizhizao/purchase-management/purchase-returns',
     codeField: 'return_code',
-    codeFieldLabel: '采购退货单编码',
+    codeFieldLabel: '采购退货单编号',
     module: '快格轻制造',
     moduleIcon: 'tool',
     autoGenerate: false,
@@ -666,7 +666,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '销售退货',
     pagePath: '/apps/kuaizhizao/sales-management/sales-returns',
     codeField: 'return_code',
-    codeFieldLabel: '销售退货单编码',
+    codeFieldLabel: '销售退货单编号',
     module: '快格轻制造',
     moduleIcon: 'tool',
     autoGenerate: false,
@@ -679,7 +679,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '设备管理',
     pagePath: '/apps/kuaizhizao/equipment-management/equipment',
     codeField: 'code',
-    codeFieldLabel: '设备编码',
+    codeFieldLabel: '设备编号',
     module: '快格轻制造',
     moduleIcon: 'tool',
     autoGenerate: true,
@@ -693,7 +693,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '模具管理',
     pagePath: '/apps/kuaizhizao/equipment-management/molds',
     codeField: 'code',
-    codeFieldLabel: '模具编码',
+    codeFieldLabel: '模具编号',
     module: '快格轻制造',
     moduleIcon: 'tool',
     autoGenerate: true,
@@ -707,7 +707,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '工装台账',
     pagePath: '/apps/kuaizhizao/equipment-management/tool-ledger',
     codeField: 'code',
-    codeFieldLabel: '工装编码',
+    codeFieldLabel: '工装编号',
     module: '快格轻制造',
     moduleIcon: 'tool',
     autoGenerate: true,
@@ -721,7 +721,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '借料单',
     pagePath: '/apps/kuaizhizao/warehouse-management/material-borrows',
     codeField: 'borrow_code',
-    codeFieldLabel: '借料单编码',
+    codeFieldLabel: '借料单编号',
     module: '快格轻制造',
     moduleIcon: 'tool',
     autoGenerate: true,
@@ -733,7 +733,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '还料单',
     pagePath: '/apps/kuaizhizao/warehouse-management/material-returns',
     codeField: 'return_code',
-    codeFieldLabel: '还料单编码',
+    codeFieldLabel: '还料单编号',
     module: '快格轻制造',
     moduleIcon: 'tool',
     autoGenerate: true,
@@ -745,7 +745,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '委外工单',
     pagePath: '/apps/kuaizhizao/production-execution/outsource-work-orders',
     codeField: 'code',
-    codeFieldLabel: '委外工单编码',
+    codeFieldLabel: '委外工单编号',
     module: '快格轻制造',
     moduleIcon: 'tool',
     autoGenerate: true,

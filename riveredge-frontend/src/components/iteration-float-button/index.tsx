@@ -112,7 +112,7 @@ export default function IterationFloatButton() {
             </Text>
           </div>
 
-          <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 16 }}>
+          <div style={{ borderTop: '1px solid var(--river-divider-color)', paddingTop: 16 }}>
             <Paragraph strong style={{ marginBottom: 12 }}>
               {t('components.iterationFloatButton.feedbackTitle')}
             </Paragraph>

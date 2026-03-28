@@ -87,9 +87,9 @@ export async function downloadExportFile(taskId: number): Promise<Blob> {
   });
 }
 
-// 注意：系统参数和编码规则API已在系统级（core）实现
+// 注意：系统参数和编号规则API已在系统级（core）实现
 // 系统参数：/api/v1/core/system-parameters
-// 编码规则：/api/v1/core/code-rules
+// 编号规则：/api/v1/core/code-rules
 // 请在系统级菜单中使用这些API，不要在应用级重复实现
 
 /**

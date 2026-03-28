@@ -670,7 +670,7 @@ const DeliveryNotesPage: React.FC = () => {
               size="small"
               rowKey={(_, idx) => (noticeDetail?.items?.[idx] as any)?.id ?? idx}
               columns={[
-                { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                { title: '物料编号', dataIndex: 'material_code', width: 120 },
                 { title: '物料名称', dataIndex: 'material_name', width: 150 },
                 { title: '单位', dataIndex: 'material_unit', width: 60 },
                 { title: '数量', dataIndex: 'notice_quantity', width: 90, align: 'right' },

@@ -2,7 +2,7 @@
  * 发货通知单管理页面
  *
  * 销售通知仓库发货，不直接动库存。来源为销售订单。
- * 参考销售订单排版布局，支持单据编码自动生成。
+ * 参考销售订单排版布局，支持单据编号自动生成。
  *
  * @author RiverEdge Team
  * @date 2026-02-22
@@ -12,7 +12,7 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form as AntForm, Select, InputNumber, Input, Row, Col, Typography } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, ShoppingOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, ShoppingOutlined, ImportOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
@@ -298,7 +298,7 @@ const ShipmentNoticesPage: React.FC = () => {
           }, 100);
         })
         .catch((e) => {
-          console.warn('发货通知单编码预生成失败:', e);
+          console.warn('发货通知单编号预生成失败:', e);
           setPreviewCode(null);
         });
     } else {
@@ -363,7 +363,7 @@ const ShipmentNoticesPage: React.FC = () => {
         const res = await generateCode({ rule_code: ruleCodeToUse });
         noticeCode = res.code;
       } catch (e) {
-        console.warn('发货通知单编码正式生成失败，使用当前值:', e);
+        console.warn('发货通知单编号正式生成失败，使用当前值:', e);
       }
     }
     try {
@@ -448,7 +448,7 @@ const ShipmentNoticesPage: React.FC = () => {
   const handleExcelImport = (data: any[][]) => {
     if (data.length <= 1) return;
     // 假设第一行是表头，从第二行开始取数据
-    // 简单映射：A列编码, B列数量, C列单价 (业务具体根据 headers 调整)
+    // 简单映射：A列编号, B列数量, C列单价 (业务具体根据 headers 调整)
     const items = data.slice(1).filter(row => row[0]).map(row => ({
       material_code: String(row[0] || ''),
       notice_quantity: Number(row[1]) || 1,
@@ -480,10 +480,10 @@ const ShipmentNoticesPage: React.FC = () => {
             label={
               <span>
                 通知单号
-                <a href="/system/code-rules" onClick={(e) => { e.preventDefault(); navigate('/system/code-rules'); }} style={{ marginLeft: 8, fontSize: 12 }}>编码规则设置</a>
+                <a href="/system/code-rules" onClick={(e) => { e.preventDefault(); navigate('/system/code-rules'); }} style={{ marginLeft: 8, fontSize: 12 }}>编号规则设置</a>
               </span>
             }
-            placeholder={isAutoGenerateEnabled('kuaizhizao-shipment-notice') ? '编码将根据编码规则自动生成，可修改' : '请输入通知单号'}
+            placeholder={isAutoGenerateEnabled('kuaizhizao-shipment-notice') ? '编号将根据编号规则自动生成，可修改' : '请输入通知单号'}
             rules={[{ required: true, message: '请输入通知单号' }]}
           />
         </Col>
@@ -553,7 +553,7 @@ const ShipmentNoticesPage: React.FC = () => {
         label={
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
             <span>通知明细</span>
-            <Button type="link" size="small" onClick={() => setImportVisible(true)}>Excel 导入</Button>
+            <Button size="small" icon={<ImportOutlined />} onClick={() => setImportVisible(true)}>导入明细</Button>
           </div>
         } 
         required 
@@ -660,13 +660,14 @@ const ShipmentNoticesPage: React.FC = () => {
                     pagination={false}
                     columns={cols}
                     footer={() => (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                        <Button type="dashed" icon={<PlusOutlined />} onClick={() => add(defaultNoticeItem)}>
-                          新增明细
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
+                        <Button type="dashed" icon={<PlusOutlined />} style={{ flex: 1, minWidth: 120 }} onClick={() => add(defaultNoticeItem)}>
+                          添加明细
                         </Button>
                         <Button
-                          type="link"
+                          type="default"
                           icon={<ShoppingOutlined />}
+                          style={{ flex: 1, minWidth: 120 }}
                           onClick={() => setMaterialPickerOpen(true)}
                         >
                           {t('app.kuaizhizao.common.materialBatchSelect')}
@@ -749,7 +750,7 @@ const ShipmentNoticesPage: React.FC = () => {
                 rowKey="key"
                 pagination={false}
                 columns={[
-                  { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                  { title: '物料编号', dataIndex: 'material_code', width: 120 },
                   { title: '物料名称', dataIndex: 'material_name', width: 150 },
                   { title: '单位', dataIndex: 'material_unit', width: 60 },
                   { title: '数量', dataIndex: 'notice_quantity', width: 90, align: 'right' },
@@ -821,7 +822,7 @@ const ShipmentNoticesPage: React.FC = () => {
             size="small"
             rowKey={(record: any) => record.id || record.material_code}
             columns={[
-              { title: '物料编码', dataIndex: 'material_code', width: 120 },
+              { title: '物料编号', dataIndex: 'material_code', width: 120 },
               { title: '物料名称', dataIndex: 'material_name', width: 150 },
               { title: '单位', dataIndex: 'material_unit', width: 60 },
               { title: '数量', dataIndex: 'notice_quantity', width: 90, align: 'right' },
@@ -873,7 +874,7 @@ const ShipmentNoticesPage: React.FC = () => {
         onCancel={() => setImportVisible(false)}
         onConfirm={handleExcelImport}
         title="导入通知明细"
-        headers={['物料编码', '数量', '单价', '物料名称', '规格', '单位']}
+        headers={['物料编号', '数量', '单价', '物料名称', '规格', '单位']}
         exampleRow={['MT001', '10', '15.5', '示例物料', '规格X', '件']}
       />
     </>

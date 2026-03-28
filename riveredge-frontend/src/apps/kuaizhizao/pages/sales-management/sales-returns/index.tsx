@@ -11,7 +11,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Card, Table, Row, Col, Form as AntForm, InputNumber, Input } from 'antd';
-import { EyeOutlined, CheckCircleOutlined, PlusOutlined, ShoppingOutlined, ImportOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { EyeOutlined, CheckCircleOutlined, PlusOutlined, AppstoreAddOutlined, ImportOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate } from '../../../../../components/layout-templates';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
@@ -313,7 +313,7 @@ const SalesReturnsPage: React.FC = () => {
   const handleImport = (data: any[]) => {
     const currentItems = formRef.current?.getFieldValue('items') || [];
     const newItems = data.map(row => ({
-      material_code: row['物料编码'],
+      material_code: row['物料编号'],
       return_quantity: Number(row['退货数量'] || 1),
       unit_price: Number(row['单价'] || 0),
       batch_number: row['批次号'],
@@ -503,7 +503,7 @@ const SalesReturnsPage: React.FC = () => {
         <Row gutter={16}>
           <Col span={8}>
             <DictionarySelect
-              dictionaryCode="SALES_RETURN_REASON"
+              dictionaryCode="RETURN_REASON"
               name="return_reason"
               label="退货原因"
               placeholder="请选择退货原因"
@@ -512,7 +512,7 @@ const SalesReturnsPage: React.FC = () => {
           </Col>
           <Col span={8}>
             <DictionarySelect
-              dictionaryCode="SALES_RETURN_TYPE"
+              dictionaryCode="RETURN_TYPE"
               name="return_type"
               label="退货类型"
               placeholder="请选择退货类型"
@@ -536,12 +536,11 @@ const SalesReturnsPage: React.FC = () => {
               退货明细
             </span>
             <Button
-              type="link"
               size="small"
               icon={<ImportOutlined />}
               onClick={() => setImportModalVisible(true)}
             >
-              EXCEL导入明细
+              导入明细
             </Button>
           </div>
           <ProForm.Item name="items" noStyle rules={[{ required: true, message: '请添加至少一项明细' }]}>
@@ -605,20 +604,22 @@ const SalesReturnsPage: React.FC = () => {
                     },
                   ]}
                   footer={() => (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 8px' }}>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
                       <Button
                         type="dashed"
                         icon={<PlusOutlined />}
+                        style={{ flex: 1, minWidth: 120 }}
                         onClick={() => add({ return_quantity: 1, unit_price: 0 })}
                       >
-                        新增明细
+                        添加明细
                       </Button>
                       <Button
-                        type="link"
-                        icon={<ShoppingOutlined />}
+                        type="default"
+                        icon={<AppstoreAddOutlined />}
+                        style={{ flex: 1, minWidth: 120 }}
                         onClick={() => setMaterialPickerOpen(true)}
                       >
-                        批量选择物料
+                        {t('app.kuaizhizao.common.materialBatchSelect')}
                       </Button>
                     </div>
                   )}
@@ -640,7 +641,7 @@ const SalesReturnsPage: React.FC = () => {
         onCancel={() => setImportModalVisible(false)}
         onConfirm={handleImport}
         title="导入销售退货明细"
-        headers={['物料编码', '退货数量', '单价', '批次号', '备注']}
+        headers={['物料编号', '退货数量', '单价', '批次号', '备注']}
         exampleRow={['MAT001', '10', '99.5', 'B20260117001', '备注说明']}
       />
 
@@ -665,7 +666,7 @@ const SalesReturnsPage: React.FC = () => {
                   <Table
                     size="small"
                     columns={[
-                      { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                      { title: '物料编号', dataIndex: 'material_code', width: 120 },
                       { title: '物料名称', dataIndex: 'material_name', width: 150 },
                       { title: '退货数量', dataIndex: 'return_quantity', width: 100, align: 'right' },
                       { title: '单价', dataIndex: 'unit_price', width: 100, align: 'right', render: (text) => `¥${text || 0}` },

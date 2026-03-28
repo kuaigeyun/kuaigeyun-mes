@@ -249,7 +249,7 @@ const QualityReportPage: React.FC = () => {
       ellipsis: true,
     },
     {
-      title: '产品编码',
+      title: '产品编号',
       dataIndex: 'productCode',
       width: 120,
     },

@@ -231,7 +231,7 @@ const InspectionCenter: React.FC = () => {
                       key={item.id} 
                       style={{ 
                         padding: '12px', 
-                        borderBottom: '1px solid #f0f0f0', 
+                        borderBottom: '1px solid var(--river-divider-color)', 
                         display: 'flex', 
                         alignItems: 'center',
                         justifyContent: 'space-between'

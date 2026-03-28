@@ -187,7 +187,7 @@ const CostRulePage: React.FC = () => {
    */
   const columns: ProColumns<CostRule>[] = [
     {
-      title: '规则编码',
+      title: '规则编号',
       dataIndex: 'code',
       key: 'code',
       width: 150,
@@ -297,7 +297,7 @@ const CostRulePage: React.FC = () => {
    */
   const detailItems: any[] = [
     {
-      title: '规则编码',
+      title: '规则编号',
       dataIndex: 'code',
     },
     {
@@ -424,7 +424,7 @@ const CostRulePage: React.FC = () => {
       >
         <ProFormText
           name="code"
-          label="规则编码"
+          label="规则编号"
           placeholder="留空则自动生成"
           disabled={isEdit}
         />

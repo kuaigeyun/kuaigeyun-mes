@@ -267,7 +267,7 @@ const InventoryAlertPage: React.FC = () => {
       },
     },
     {
-      title: '物料编码',
+      title: '物料编号',
       dataIndex: 'material_code',
       width: 120,
       ellipsis: true,
@@ -357,7 +357,7 @@ const InventoryAlertPage: React.FC = () => {
    */
   const ruleColumns: ProColumns<InventoryAlertRule>[] = [
     {
-      title: '规则编码',
+      title: '规则编号',
       dataIndex: 'code',
       width: 150,
       ellipsis: true,
@@ -593,8 +593,8 @@ const InventoryAlertPage: React.FC = () => {
         />
         <ProFormText
           name="material_code"
-          label="物料编码"
-          placeholder="请输入物料编码（可选）"
+          label="物料编号"
+          placeholder="请输入物料编号（可选）"
         />
         <ProFormText
           name="material_name"
@@ -693,7 +693,7 @@ const InventoryAlertPage: React.FC = () => {
             },
           },
           {
-            title: '物料编码',
+            title: '物料编号',
             dataIndex: 'material_code',
           },
           {

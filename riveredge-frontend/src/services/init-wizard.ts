@@ -51,7 +51,7 @@ export interface Step2DefaultSettings {
 }
 
 /**
- * 步骤2.5：编码规则配置
+ * 步骤2.5：编号规则配置
  */
 export interface Step2_5CodeRules {
   use_default_rules: boolean;

@@ -16,6 +16,8 @@ import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, Thunder
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
+import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
+import { DictionaryLabel } from '../../../../../components/dictionary-label';
 import type { Material } from '../../../../master-data/types/material';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
@@ -53,6 +55,7 @@ interface OtherInbound {
   total_amount?: number;
   notes?: string;
   created_at?: string;
+  [key: string]: any;
 }
 
 interface OtherInboundDetail extends OtherInbound {
@@ -244,7 +247,7 @@ const OtherInboundPage: React.FC = () => {
     [messageApi, t]
   );
 
-  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码 */
+  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号 */
   const handleCreate = () => {
     setCreateModalVisible(true);
     setTimeout(() => {
@@ -452,9 +455,9 @@ const OtherInboundPage: React.FC = () => {
               size="small"
               rowKey="id"
               columns={[
-              { title: '物料编码', dataIndex: 'material_code', width: 120 },
+              { title: '物料编号', dataIndex: 'material_code', width: 120 },
               { title: '物料名称', dataIndex: 'material_name', width: 150 },
-              { title: '单位', dataIndex: 'material_unit', width: 60 },
+              { title: '单位', dataIndex: 'material_unit', width: 60, render: (val) => <DictionaryLabel dictionaryCode="unit" value={val} /> },
               { title: '入库数量', dataIndex: 'inbound_quantity', width: 100, align: 'right' },
               { title: '单价', dataIndex: 'unit_price', width: 100, align: 'right' },
               { title: '金额', dataIndex: 'total_amount', width: 100, align: 'right' },
@@ -483,7 +486,7 @@ const OtherInboundPage: React.FC = () => {
             <CodeField
               pageCode="kuaizhizao-warehouse-other-inbound"
               name="inbound_code"
-              label="入库单编码"
+              label="入库单编号"
               autoGenerateOnCreate={true}
               showGenerateButton={false}
               context={{}}
@@ -495,7 +498,7 @@ const OtherInboundPage: React.FC = () => {
               label="仓库"
               placeholder="请选择仓库"
               required
-              onChange={(val, wh) => formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
+              onChange={(_val, wh) => formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
             />
           </Col>
         </Row>
@@ -521,8 +524,7 @@ const OtherInboundPage: React.FC = () => {
           </Col>
         </Row>
         <ProFormItem label="明细" required style={{ width: '100%' }}>
-          <AntForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: '请至少添加一条有效明细' }]}>
-            <AntForm.List name="items">
+          <AntForm.List name="items">
               {(fields, { add, remove }) => {
                 const cols = [
                   {
@@ -567,10 +569,21 @@ const OtherInboundPage: React.FC = () => {
                   {
                     title: '单位',
                     dataIndex: 'material_unit',
-                    width: 80,
+                    width: 100,
                     render: (_: any, __: any, index: number) => (
-                      <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
-                        <Input placeholder="单位" size="small" />
+                      <AntForm.Item noStyle shouldUpdate={(prev, curr) => prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id}>
+                        {({ getFieldValue }) => {
+                          const materialId = getFieldValue(['items', index, 'material_id']);
+                          return (
+                            <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
+                              <MaterialUnitSelect 
+                                materialId={materialId} 
+                                size="small" 
+                                noStyle 
+                              />
+                            </AntForm.Item>
+                          );
+                        }}
                       </AntForm.Item>
                     ),
                   },
@@ -605,7 +618,7 @@ const OtherInboundPage: React.FC = () => {
                   },
                 ];
                 const totalWidth = cols.reduce((s, c) => s + (c.width as number || 0), 0);
-                const expandedRowRender = (record: any, index: number) => {
+                const expandedRowRender = (_record: any, index: number) => {
                   const row = formRef.current?.getFieldValue('items')?.[index];
                   const batchManaged = row?.batch_managed;
                   const serialManaged = row?.serial_managed;
@@ -681,9 +694,9 @@ const OtherInboundPage: React.FC = () => {
                         scroll={fields.length > 0 ? { x: totalWidth } : undefined}
                         style={{ width: '100%', margin: 0 }}
                         expandable={{
-                          expandedRowRender: (record, idx) => expandedRowRender(record, idx),
-                          rowExpandable: (record, idx) => {
-                            const row = formRef.current?.getFieldValue('items')?.[idx];
+                          expandedRowRender: (record) => expandedRowRender(record, record.key),
+                          rowExpandable: (record) => {
+                            const row = formRef.current?.getFieldValue('items')?.[record.key];
                             return !!(row?.batch_managed || row?.serial_managed);
                           },
                         }}
@@ -708,7 +721,6 @@ const OtherInboundPage: React.FC = () => {
                 );
               }}
             </AntForm.List>
-          </AntForm.Item>
         </ProFormItem>
         <ProFormTextArea name="notes" label="备注" placeholder="可选" fieldProps={{ rows: 2 }} />
       </FormModalTemplate>

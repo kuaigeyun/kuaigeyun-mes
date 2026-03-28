@@ -11,11 +11,12 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, Dropdown, List, Typography } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, MoreOutlined, ShoppingOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, MoreOutlined, AppstoreAddOutlined } from '@ant-design/icons';
 import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniImport } from '../../../../../components/uni-import';
+import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
@@ -25,6 +26,7 @@ import { customerApi } from '../../../../master-data/services/supply-chain';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DRAWER_CONFIG, FormModalTemplate } from '../../../../../components/layout-templates';
 import { AmountDisplay } from '../../../../../components/permission';
+import { DictionaryLabel } from '../../../../../components/dictionary-label';
 import {
   listQuotations,
   getQuotation,
@@ -51,6 +53,58 @@ const STATUS_MAP: Record<string, { text: string; color: string }> = {
   已接受: { text: '已接受', color: 'success' },
   已拒绝: { text: '已拒绝', color: 'error' },
   已转订单: { text: '已转订单', color: 'success' },
+};
+
+/** 与销售订单明细表同一套 Table + Form.List 用法；物料列样式见 .quotation-detail-table */
+const QuotationMaterialSelectCell: React.FC<{ index: number }> = ({ index }) => {
+  const row = Form.useWatch(['items', index]);
+  const mid =
+    row?.material_id != null && row?.material_id !== ''
+      ? Number(row.material_id)
+      : null;
+  const fallback =
+    mid != null &&
+    Number.isFinite(mid) &&
+    (row?.material_code || row?.material_name)
+      ? {
+          value: mid,
+          label: `${row.material_code || ''} - ${row.material_name || ''}`.trim() || String(mid),
+        }
+      : undefined;
+  return (
+    <div
+      className="quotation-material-cell"
+      style={{ display: 'flex', alignItems: 'center', width: '100%', minWidth: 0 }}
+    >
+      <div style={{ flex: 1, minWidth: 200 }}>
+        <UniMaterialSelect
+          name={[index, 'material_id']}
+          label=""
+          placeholder="请选择物料（支持名称/编号搜索）"
+          required
+          size="small"
+          listFieldKey={index}
+          listFieldName="items"
+          fillMapping={{
+            material_code: 'mainCode',
+            material_name: 'name',
+            material_spec: 'specification',
+            material_unit: 'baseUnit',
+          }}
+          fallbackOption={fallback}
+          formItemProps={{ style: { margin: 0 } }}
+          showQuickCreate
+          showAdvancedSearch
+        />
+      </div>
+    </div>
+  );
+};
+
+const QuotationAmountCell: React.FC<{ index: number }> = ({ index }) => {
+  const row = Form.useWatch(['items', index]);
+  const amt = (Number(row?.quote_quantity) || 0) * (Number(row?.unit_price) || 0);
+  return <AmountDisplay resource="sales_order" value={amt} />;
 };
 
 const QuotationsPage: React.FC = () => {
@@ -217,7 +271,10 @@ const QuotationsPage: React.FC = () => {
     try {
       const detail = await getQuotation(record.id!, true);
       setQuotationDetail(detail);
-      formRef.current?.setFieldsValue({
+      setEditingId(record.id!);
+      setModalVisible(true);
+      // Modal 使用 destroyOnHidden：挂载前 setFieldsValue 会丢。弹窗打开后再写入。
+      const editValues = {
         quotation_code: detail.quotation_code,
         quotation_date: detail.quotation_date ? dayjs(detail.quotation_date) : undefined,
         valid_until: detail.valid_until ? dayjs(detail.valid_until) : undefined,
@@ -243,9 +300,10 @@ const QuotationsPage: React.FC = () => {
           delivery_date: it.delivery_date ? dayjs(it.delivery_date) : undefined,
           notes: it.notes,
         })),
-      });
-      setEditingId(record.id!);
-      setModalVisible(true);
+      };
+      setTimeout(() => {
+        formRef.current?.setFieldsValue(editValues);
+      }, 50);
     } catch {
       messageApi.error('获取报价单详情失败');
     }
@@ -296,7 +354,7 @@ const QuotationsPage: React.FC = () => {
       .filter((it): it is NonNullable<typeof it> => it !== null && (it.material_id !== undefined || it.material_code !== ''));
 
     if (newItems.length === 0) {
-      messageApi.warning('未检测到有效数据（请确保物料编码不为空）');
+      messageApi.warning('未检测到有效数据（请确保物料编号不为空）');
       return;
     }
 
@@ -350,7 +408,7 @@ const QuotationsPage: React.FC = () => {
 
   /**
    * 处理列表页批量导入报价单
-   * 导入格式：报价单编号, 客户名称, 报价日期, 物料编码, 数量, 单价, 交货日期, 备注
+   * 导入格式：报价单编号, 客户名称, 报价日期, 物料编号, 数量, 单价, 交货日期, 备注
    * 同一报价单编号的多行会合并为一条报价单的多个明细
    */
   const handleListImport = async (data: any[][]) => {
@@ -371,7 +429,7 @@ const QuotationsPage: React.FC = () => {
       code: col('报价单编号') >= 0 ? col('报价单编号') : col('编号'),
       customer: col('客户名称') >= 0 ? col('客户名称') : col('客户'),
       date: col('报价日期') >= 0 ? col('报价日期') : col('日期'),
-      material: col('物料编码') >= 0 ? col('物料编码') : col('物料'),
+      material: col('物料编号') >= 0 ? col('物料编号') : col('物料'),
       qty: col('数量') >= 0 ? col('数量') : -1,
       price: col('单价') >= 0 ? col('单价') : -1,
       delivery: col('交货日期') >= 0 ? col('交货日期') : -1,
@@ -379,7 +437,7 @@ const QuotationsPage: React.FC = () => {
     };
 
     if (idx.customer < 0 || idx.date < 0 || idx.material < 0 || idx.qty < 0) {
-      messageApi.error('缺少必需列：客户名称、报价日期、物料编码、数量');
+      messageApi.error('缺少必需列：客户名称、报价日期、物料编号、数量');
       return;
     }
 
@@ -402,7 +460,7 @@ const QuotationsPage: React.FC = () => {
         return;
       }
       if (!materialCode) {
-        errors.push({ row: rowNum, message: '物料编码不能为空' });
+        errors.push({ row: rowNum, message: '物料编号不能为空' });
         return;
       }
       if (isNaN(qty) || qty <= 0) {
@@ -561,7 +619,7 @@ const QuotationsPage: React.FC = () => {
 
   /**
    * 处理新建报价单
-   * 参考销售订单：先打开弹窗，再请求 testGenerateCode 预填编码（不占用序号）
+   * 参考销售订单：先打开弹窗，再请求 testGenerateCode 预填编号（不占用序号）
    */
   const defaultQuoteItem = { material_id: undefined, material_code: '', material_name: '', material_spec: '', material_unit: '件', quote_quantity: 1, unit_price: 0, delivery_date: undefined, notes: '' };
 
@@ -588,7 +646,7 @@ const QuotationsPage: React.FC = () => {
           setPreviewCode(preview ?? null);
           formRef.current?.setFieldsValue({ quotation_code: preview ?? '' });
         } catch (e) {
-          console.warn('报价单编码预生成失败:', e);
+          console.warn('报价单编号预生成失败:', e);
           setPreviewCode(null);
         }
       } else {
@@ -605,7 +663,7 @@ const QuotationsPage: React.FC = () => {
           setPreviewCode(preview ?? null);
           formRef.current?.setFieldsValue({ quotation_code: preview ?? '' });
         } catch (e) {
-          console.warn('报价单编码预生成失败:', e);
+          console.warn('报价单编号预生成失败:', e);
           setPreviewCode(null);
         }
       } else {
@@ -628,7 +686,7 @@ const QuotationsPage: React.FC = () => {
         const codeResponse = await generateCode({ rule_code: submitRuleCode });
         quotationCode = codeResponse.code;
       } catch (e) {
-        console.warn('报价单编码正式生成失败，使用当前值:', e);
+        console.warn('报价单编号正式生成失败，使用当前值:', e);
       }
     }
     const cust = customerList.find((c: any) => (c.id ?? c.customer_id) === values.customer_id);
@@ -785,8 +843,9 @@ const QuotationsPage: React.FC = () => {
           <ProFormText
             name="quotation_code"
             label="报价单编号"
-            placeholder={isAutoGenerateEnabled('kuaizhizao-quotation') ? '编码将根据编码规则自动生成，可修改' : '请输入报价单编号'}
+            placeholder={isAutoGenerateEnabled('kuaizhizao-quotation') ? '编号将根据编号规则自动生成，可修改' : '请输入报价单编号'}
             fieldProps={{ disabled: !!editingId }}
+            rules={[{ required: true, whitespace: true, message: '请输入报价单编号' }]}
           />
         </Col>
         <Col span={12}>
@@ -822,12 +881,15 @@ const QuotationsPage: React.FC = () => {
               onChange={(value, _option: any) => {
                 const c = customerList.find((x: any) => (x.id ?? x.customer_id) === value);
                 if (c) {
+                  const sId = c.salesmanId ?? c.salesman_id;
+                  const salesman = userList.find((u) => u.id === sId);
+                  const sName = c.salesmanName ?? c.salesman_name ?? (salesman ? (salesman.full_name || salesman.username) : '');
                   formRef.current?.setFieldsValue({
                     customer_name: c.name ?? c.customer_name,
-                    customer_contact: c.contact_person ?? c.contact ?? c.customer_contact,
+                    customer_contact: c.contactPerson ?? c.contact_person ?? c.contact ?? c.customer_contact,
                     customer_phone: c.phone ?? c.customer_phone,
-                    salesman_id: c.salesman_id,
-                    salesman_name: c.salesman_name,
+                    salesman_id: sId,
+                    salesman_name: sName,
                   });
                 }
               }}
@@ -838,7 +900,7 @@ const QuotationsPage: React.FC = () => {
               advancedSearch={{
                 label: '高级搜索',
                 fields: [
-                  { name: 'code', label: '客户编码' },
+                  { name: 'code', label: '客户编号' },
                   { name: 'name', label: '客户名称' },
                   { name: 'contactPerson', label: '联系人' },
                 ],
@@ -872,38 +934,13 @@ const QuotationsPage: React.FC = () => {
             />
           </ProForm.Item>
         </Col>
-        <Col span={6}>
-          <ProFormDatePicker
-            name="quotation_date"
-            label="报价日期"
-            rules={[{ required: true }]}
-            fieldProps={{ style: { width: '100%' } }}
-          />
-        </Col>
-        <Col span={6}>
-          <ProFormDatePicker
-            name="valid_until"
-            label="有效期至"
-            fieldProps={{ style: { width: '100%' } }}
-          />
-        </Col>
-        <Col span={6}>
-          <ProFormDatePicker
-            name="delivery_date"
-            label="预计交货日期"
-            fieldProps={{ style: { width: '100%' } }}
-          />
-        </Col>
-        <Col span={6}>
-          <ProFormText name="customer_contact" label="联系人" />
-        </Col>
-        <Col span={6}>
-          <ProFormText name="customer_phone" label="电话" />
-        </Col>
-        <Col span={6}>
-          <ProForm.Item name="salesman_id" label="销售员">
+      </Row>
+      {/* 归属业务员 + 日期 + 发货方式：五列等分（各约 20%） */}
+      <Row gutter={16}>
+        <Col flex={1} style={{ minWidth: 0 }}>
+          <ProForm.Item name="salesman_id" label="归属业务员">
             <UniDropdown
-              placeholder="请选择销售员"
+              placeholder="请选择归属业务员"
               showSearch
               allowClear
               loading={usersLoading}
@@ -917,9 +954,33 @@ const QuotationsPage: React.FC = () => {
               }}
             />
           </ProForm.Item>
-          <Form.Item name="salesman_name" hidden><Input /></Form.Item>
+          <Form.Item name="salesman_name" hidden>
+            <Input />
+          </Form.Item>
         </Col>
-        <Col span={6}>
+        <Col flex={1} style={{ minWidth: 0 }}>
+          <ProFormDatePicker
+            name="quotation_date"
+            label="报价日期"
+            rules={[{ required: true }]}
+            fieldProps={{ style: { width: '100%' } }}
+          />
+        </Col>
+        <Col flex={1} style={{ minWidth: 0 }}>
+          <ProFormDatePicker
+            name="valid_until"
+            label="有效期至"
+            fieldProps={{ style: { width: '100%' } }}
+          />
+        </Col>
+        <Col flex={1} style={{ minWidth: 0 }}>
+          <ProFormDatePicker
+            name="delivery_date"
+            label="预计交货日期"
+            fieldProps={{ style: { width: '100%' } }}
+          />
+        </Col>
+        <Col flex={1} style={{ minWidth: 0 }}>
           <DictionarySelect
             dictionaryCode="SHIPPING_METHOD"
             name="shipping_method"
@@ -928,7 +989,19 @@ const QuotationsPage: React.FC = () => {
             formRef={formRef}
           />
         </Col>
-        <Col span={6}>
+      </Row>
+      {/* 联系人 1/6 · 电话 1/6 · 地址 1/3 · 付款条件 1/6 · 币种 1/6 */}
+      <Row gutter={16}>
+        <Col span={4}>
+          <ProFormText name="customer_contact" label="联系人" />
+        </Col>
+        <Col span={4}>
+          <ProFormText name="customer_phone" label="联系人电话" />
+        </Col>
+        <Col span={8}>
+          <ProFormText name="shipping_address" label="收货地址" placeholder="请输入收货地址" />
+        </Col>
+        <Col span={4}>
           <DictionarySelect
             dictionaryCode="PAYMENT_TERMS"
             name="payment_terms"
@@ -937,10 +1010,7 @@ const QuotationsPage: React.FC = () => {
             formRef={formRef}
           />
         </Col>
-        <Col span={12}>
-          <ProFormText name="shipping_address" label="收货地址" placeholder="请输入收货地址" />
-        </Col>
-        <Col span={6}>
+        <Col span={4}>
           <DictionarySelect
             dictionaryCode="CURRENCY"
             name="currency_code"
@@ -954,212 +1024,234 @@ const QuotationsPage: React.FC = () => {
       <ProFormText name="customer_name" hidden />
 
       <div style={{ marginBottom: 24 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 8,
+            flexWrap: 'wrap',
+            gap: 12,
+          }}
+        >
           <span style={{ fontWeight: 600, color: 'rgba(0, 0, 0, 0.88)' }}>
             <span style={{ color: '#ff4d4f', marginRight: 4, fontFamily: 'SimSun, sans-serif' }}>*</span>
             物料明细
           </span>
-          <Button 
-            size="small" 
-            icon={<ImportOutlined />} 
-            onClick={() => setImportModalVisible(true)}
-          >
+          <Button size="small" type="link" icon={<ImportOutlined />} onClick={() => setImportModalVisible(true)}>
             导入明细
           </Button>
         </div>
-        <ProForm.Item name="items" noStyle rules={[{ required: true, message: '请至少添加一条明细' }]}>
+        {/* 与销售订单一致：Form.Item(noStyle) + Form.List + Table；勿再套一层 ProForm.Item 同名 items */}
+        <Form.Item
+          name="items"
+          noStyle
+          rules={[{ type: 'array' as const, min: 1, message: '请至少添加一条明细' }]}
+        >
           <Form.List name="items">
-          {(fields, { add, remove }) => {
-            const orderDetailColumns = [
-              {
-                title: '物料',
-                dataIndex: 'material_id',
-                width: 200,
-                render: (_: any, __: any, index: number) => (
-                  <Form.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index] !== curr?.items?.[index]}>
-                    {({ getFieldValue }: any) => {
-                      const row = getFieldValue('items')?.[index];
-                      const mid = row?.material_id ? Number(row.material_id) : null;
-                      const fallback = mid && (row?.material_code || row?.material_name)
-                        ? { value: mid, label: `${row.material_code || ''} - ${row.material_name || ''}`.trim() || String(mid) }
-                        : undefined;
-                      return (
-                        <UniMaterialSelect
-                          name={[index, 'material_id']}
-                          label=""
-                          placeholder="请选择物料（支持名称/编码搜索）"
-                          required
-                          size="small"
-                          listFieldKey={index}
-                          listFieldName="items"
-                          fillMapping={{
-                            material_code: 'mainCode',
-                            material_name: 'name',
-                            material_spec: 'specification',
-                            material_unit: 'baseUnit',
-                          }}
-                          fallbackOption={fallback}
-                          formItemProps={{ style: { margin: 0 } }}
-                          showQuickCreate
-                          showAdvancedSearch
-                        />
-                      );
-                    }}
-                  </Form.Item>
-                ),
-              },
-              {
-                title: '规格',
-                dataIndex: 'material_spec',
-                width: 120,
-                render: (_: any, __: any, index: number) => (
-                  <Form.Item name={[index, 'material_spec']} style={{ margin: 0 }}>
-                    <Input placeholder="规格" size="small" />
-                  </Form.Item>
-                ),
-              },
-              {
-                title: '单位',
-                dataIndex: 'material_unit',
-                width: 80,
-                render: (_: any, __: any, index: number) => (
-                  <Form.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
-                    <Input placeholder="单位" size="small" />
-                  </Form.Item>
-                ),
-              },
-              {
-                title: '数量',
-                dataIndex: 'quote_quantity',
-                width: 100,
-                align: 'right' as const,
-                render: (_: any, __: any, index: number) => (
-                  <Form.Item name={[index, 'quote_quantity']} rules={[{ required: true, message: '必填' }]} style={{ margin: 0 }}>
-                    <InputNumber placeholder="数量" min={0.01} precision={2} style={{ width: '100%' }} size="small" />
-                  </Form.Item>
-                ),
-              },
-              {
-                title: '单价',
-                dataIndex: 'unit_price',
-                width: 100,
-                align: 'right' as const,
-                render: (_: any, __: any, index: number) => (
-                  <Form.Item name={[index, 'unit_price']} style={{ margin: 0 }}>
-                    <InputNumber placeholder="单价" min={0} precision={2} prefix="¥" style={{ width: '100%' }} size="small" />
-                  </Form.Item>
-                ),
-              },
-              {
-                title: '金额',
-                width: 110,
-                align: 'right' as const,
-                render: (_: any, __: any, index: number) => (
-                  <Form.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
-                    {({ getFieldValue }: any) => {
-                      const items = getFieldValue('items') ?? [];
-                      const row = items[index];
-                      const amt = (Number(row?.quote_quantity) || 0) * (Number(row?.unit_price) || 0);
-                      return <AmountDisplay resource="sales_order" value={amt} />;
-                    }}
-                  </Form.Item>
-                ),
-              },
-              {
-                title: '交货日期',
-                dataIndex: 'delivery_date',
-                width: 120,
-                render: (_: any, __: any, index: number) => (
-                  <Form.Item name={[index, 'delivery_date']} style={{ margin: 0 }}>
-                    <DatePicker size="small" style={{ width: '100%' }} format="YYYY-MM-DD" />
-                  </Form.Item>
-                ),
-              },
-              {
-                title: '备注',
-                dataIndex: 'notes',
-                width: 120,
-                render: (_: any, __: any, index: number) => (
-                  <Form.Item name={[index, 'notes']} style={{ margin: 0 }}>
-                    <Input placeholder="备注" size="small" />
-                  </Form.Item>
-                ),
-              },
-              {
-                title: '操作',
-                width: 70,
-                fixed: 'right' as const,
-                render: (_: any, __: any, index: number) => (
-                  <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)}>
-                    删除
-                  </Button>
-                ),
-              },
-            ];
-            const totalWidth = orderDetailColumns.reduce((s, c) => s + (c.width as number || 0), 0);
-            return (
-              <div style={{ width: '100%', minWidth: 0, overflow: 'hidden', boxSizing: 'border-box' }}>
-                <style>{`
-                  .quotation-detail-table .ant-table-thead > tr > th {
-                    background-color: var(--ant-color-fill-alter) !important;
-                    font-weight: 600;
-                  }
-                  .quotation-detail-table .ant-table {
-                    border-top: 1px solid var(--ant-color-border);
-                  }
-                  .quotation-detail-table .ant-table-tbody > tr > td {
-                    border-bottom: 1px solid var(--ant-color-border);
-                  }
-                `}</style>
-                <div style={{ width: '100%', overflowX: 'auto' }}>
-                  <Table
-                    className="quotation-detail-table"
-                    size="small"
-                    dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
-                    rowKey="key"
-                    pagination={false}
-                    columns={orderDetailColumns}
-                    scroll={fields.length > 0 ? { x: totalWidth } : undefined}
-                    style={{ width: '100%', margin: 0 }}
-                    footer={() => (
-                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
-                        <Button
-                          type="dashed"
-                          icon={<PlusOutlined />}
-                          style={{ flex: 1, minWidth: 120 }}
-                          onClick={() => {
-                            add({
-                              material_id: undefined,
-                              material_code: '',
-                              material_name: '',
-                              material_spec: '',
-                              material_unit: '',
-                              quote_quantity: 0,
-                              unit_price: 0,
-                              delivery_date: undefined,
-                              notes: '',
-                            });
+            {(fields, { add, remove }) => {
+              const quotationDetailColumns = [
+                {
+                  title: '物料',
+                  dataIndex: 'material_id',
+                  width: 260,
+                  render: (_: unknown, __: unknown, index: number) => (
+                    <QuotationMaterialSelectCell index={index} />
+                  ),
+                },
+                {
+                  title: '规格',
+                  dataIndex: 'material_spec',
+                  width: 120,
+                  render: (_: unknown, __: unknown, index: number) => (
+                    <Form.Item name={[index, 'material_spec']} style={{ margin: 0 }}>
+                      <Input placeholder="规格" size="small" />
+                    </Form.Item>
+                  ),
+                },
+                {
+                  title: '单位',
+                  dataIndex: 'material_unit',
+                  width: 100,
+                  render: (_: unknown, __: unknown, index: number) => (
+                    <Form.Item
+                      noStyle
+                      shouldUpdate={(prev: unknown, curr: unknown) =>
+                        (prev as { items?: unknown[] })?.items?.[index]?.material_id !==
+                        (curr as { items?: unknown[] })?.items?.[index]?.material_id
+                      }
+                    >
+                      {({ getFieldValue }) => {
+                        const materialId = getFieldValue(['items', index, 'material_id']);
+                        return (
+                          <Form.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
+                            <MaterialUnitSelect materialId={materialId} size="small" noStyle />
+                          </Form.Item>
+                        );
+                      }}
+                    </Form.Item>
+                  ),
+                },
+                {
+                  title: '数量',
+                  dataIndex: 'quote_quantity',
+                  width: 100,
+                  align: 'right' as const,
+                  render: (_: unknown, __: unknown, index: number) => (
+                    <Form.Item
+                      name={[index, 'quote_quantity']}
+                      rules={[{ required: true, message: '必填' }]}
+                      style={{ margin: 0 }}
+                    >
+                      <InputNumber placeholder="数量" min={0.01} precision={2} style={{ width: '100%' }} size="small" />
+                    </Form.Item>
+                  ),
+                },
+                {
+                  title: '单价',
+                  dataIndex: 'unit_price',
+                  width: 100,
+                  align: 'right' as const,
+                  render: (_: unknown, __: unknown, index: number) => (
+                    <Form.Item name={[index, 'unit_price']} style={{ margin: 0 }}>
+                      <InputNumber placeholder="单价" min={0} precision={2} prefix="¥" style={{ width: '100%' }} size="small" />
+                    </Form.Item>
+                  ),
+                },
+                {
+                  title: '金额',
+                  width: 120,
+                  align: 'right' as const,
+                  render: (_: unknown, __: unknown, index: number) => <QuotationAmountCell index={index} />,
+                },
+                {
+                  title: '交货日期',
+                  dataIndex: 'delivery_date',
+                  width: 120,
+                  render: (_: unknown, __: unknown, index: number) => (
+                    <Form.Item name={[index, 'delivery_date']} style={{ margin: 0 }}>
+                      <DatePicker size="small" style={{ width: '100%' }} format="YYYY-MM-DD" />
+                    </Form.Item>
+                  ),
+                },
+                {
+                  title: '备注',
+                  dataIndex: 'notes',
+                  width: 120,
+                  render: (_: unknown, __: unknown, index: number) => (
+                    <Form.Item name={[index, 'notes']} style={{ margin: 0 }}>
+                      <Input placeholder="备注" size="small" />
+                    </Form.Item>
+                  ),
+                },
+                {
+                  title: '操作',
+                  width: 70,
+                  fixed: 'right' as const,
+                  onHeaderCell: () => ({ className: 'quotation-fixed-op-header' }),
+                  render: (_: unknown, __: unknown, index: number) => (
+                    <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)}>
+                      删除
+                    </Button>
+                  ),
+                },
+              ];
+              const totalWidth = quotationDetailColumns.reduce((s, c) => s + (Number(c.width) || 0), 0);
+              return (
+                <div style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
+                  <style>{`
+                    .quotation-detail-table .ant-table-thead > tr > th {
+                      background-color: var(--ant-color-fill-alter) !important;
+                      font-weight: 600;
+                    }
+                    .quotation-detail-table .ant-table-thead > tr > th.quotation-fixed-op-header {
+                      background: var(--ant-color-fill-alter) !important;
+                    }
+                    .quotation-detail-table .ant-table-cell-fix-right {
+                      background: var(--ant-color-bg-container) !important;
+                    }
+                    .quotation-detail-table .ant-table {
+                      border-top: 1px solid var(--ant-color-border);
+                    }
+                    .quotation-detail-table .ant-table-tbody > tr > td {
+                      border-bottom: 1px solid var(--ant-color-border);
+                      overflow: visible !important;
+                    }
+                    .quotation-detail-table .quotation-material-cell .ant-form-item,
+                    .quotation-detail-table .quotation-material-cell .ant-form-item-control,
+                    .quotation-detail-table .quotation-material-cell .ant-form-item-control-input,
+                    .quotation-detail-table .quotation-material-cell .ant-select {
+                      width: 100% !important;
+                      min-width: 0;
+                    }
+                    .quotation-detail-table .ant-form-item-explain,
+                    .quotation-detail-table .ant-form-item-explain-error {
+                      display: none !important;
+                    }
+                    .quotation-detail-table .ant-input-number-input::selection,
+                    .quotation-detail-table .ant-input::selection {
+                      background-color: var(--ant-color-primary);
+                      color: #fff;
+                      border-radius: 0;
+                    }
+                  `}</style>
+                  <div style={{ width: '100%', overflowX: 'auto' }}>
+                    <Table
+                      className="quotation-detail-table"
+                      size="small"
+                      dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
+                      rowKey="key"
+                      pagination={false}
+                      columns={quotationDetailColumns}
+                      scroll={fields.length > 0 ? { x: totalWidth } : undefined}
+                      style={{ width: '100%', margin: 0 }}
+                      footer={() => (
+                        <div
+                          style={{
+                            display: 'flex',
+                            gap: 8,
+                            width: '100%',
+                            flexWrap: 'wrap',
+                            boxSizing: 'border-box',
                           }}
                         >
-                          添加明细
-                        </Button>
-                        <Button
-                          type="default"
-                          icon={<ShoppingOutlined />}
-                          style={{ flex: 1, minWidth: 120 }}
-                          onClick={() => setMaterialPickerOpen(true)}
-                        >
-                          {t('app.kuaizhizao.common.materialBatchSelect')}
-                        </Button>
-                      </div>
-                    )}
-                  />
+                          <Button
+                            type="dashed"
+                            icon={<PlusOutlined />}
+                            style={{ flex: 1, minWidth: 120 }}
+                            onClick={() => {
+                              add({
+                                material_id: undefined,
+                                material_code: '',
+                                material_name: '',
+                                material_spec: '',
+                                material_unit: '',
+                                quote_quantity: 1,
+                                unit_price: 0,
+                                delivery_date: undefined,
+                                notes: '',
+                              });
+                            }}
+                          >
+                            添加明细
+                          </Button>
+                          <Button
+                            type="default"
+                            icon={<AppstoreAddOutlined />}
+                            style={{ flex: 1, minWidth: 120 }}
+                            onClick={() => setMaterialPickerOpen(true)}
+                          >
+                            {t('app.kuaizhizao.common.materialBatchSelect')}
+                          </Button>
+                        </div>
+                      )}
+                    />
+                  </div>
                 </div>
-              </div>
-            );
-          }}
-        </Form.List>
-        </ProForm.Item>
+              );
+            }}
+          </Form.List>
+        </Form.Item>
       </div>
       <ProFormTextArea name="notes" label="备注" fieldProps={{ rows: 2 }} />
       <MaterialBatchPickerModal
@@ -1187,13 +1279,13 @@ const QuotationsPage: React.FC = () => {
           onDelete={handleBatchDelete}
           showImportButton={true}
           onImport={handleListImport}
-          importHeaders={['报价单编号', '客户名称', '报价日期', '物料编码', '数量', '单价', '交货日期', '备注']}
+          importHeaders={['报价单编号', '客户名称', '报价日期', '物料编号', '数量', '单价', '交货日期', '备注']}
           importExampleRow={['QT001', '客户A', '2025-03-08', 'MAT001', '10', '100', '2025-04-01', '']}
           importFieldMap={{
             '报价单编号': 'quotation_code',
             '客户名称': 'customer_name',
             '报价日期': 'quotation_date',
-            '物料编码': 'material_code',
+            '物料编号': 'material_code',
             '数量': 'quote_quantity',
             '单价': 'unit_price',
             '交货日期': 'delivery_date',
@@ -1304,10 +1396,10 @@ const QuotationsPage: React.FC = () => {
             size="small"
             rowKey="id"
             columns={[
-              { title: '物料编码', dataIndex: 'material_code', width: 120 },
+              { title: '物料编号', dataIndex: 'material_code', width: 120 },
               { title: '物料名称', dataIndex: 'material_name', width: 150 },
               { title: '规格', dataIndex: 'material_spec', width: 100 },
-              { title: '单位', dataIndex: 'material_unit', width: 60 },
+              { title: '单位', dataIndex: 'material_unit', width: 60, render: (v: string) => <DictionaryLabel dictionaryCode="MATERIAL_UNIT" value={v} /> },
               { title: '报价数量', dataIndex: 'quote_quantity', width: 100, align: 'right' },
               { title: '单价', dataIndex: 'unit_price', width: 100, align: 'right', render: (v: number) => <AmountDisplay resource="sales_order" value={v} /> },
               { title: '金额', dataIndex: 'total_amount', width: 100, align: 'right', render: (v: number) => <AmountDisplay resource="sales_order" value={v} /> },
@@ -1343,10 +1435,15 @@ const QuotationsPage: React.FC = () => {
           if ('customer_id' in changed && changed.customer_id != null) {
             const c = customerList.find((x: any) => (x.id ?? x.customer_id) === changed.customer_id);
             if (c) {
+              const sId = c.salesmanId ?? c.salesman_id;
+              const salesman = userList.find((u) => u.id === sId);
+              const sName = c.salesmanName ?? c.salesman_name ?? (salesman ? (salesman.full_name || salesman.username) : '');
               formRef.current?.setFieldsValue({
                 customer_name: c.name ?? c.customer_name,
-                customer_contact: c.contact_person ?? c.contact ?? c.customer_contact,
+                customer_contact: c.contactPerson ?? c.contact_person ?? c.contact ?? c.customer_contact,
                 customer_phone: c.phone ?? c.customer_phone,
+                salesman_id: sId,
+                salesman_name: sName,
               });
             }
           }
@@ -1361,11 +1458,16 @@ const QuotationsPage: React.FC = () => {
         editUuid={null}
         onSuccess={(customer) => {
           setCustomerList((prev) => [...prev, customer]);
+          const sId = customer.salesmanId ?? (customer as any).salesman_id;
+          const salesman = userList.find((u) => u.id === sId);
+          const sName = customer.salesmanName ?? (customer as any).salesman_name ?? (salesman ? (salesman.full_name || salesman.username) : '');
           formRef.current?.setFieldsValue({
             customer_id: customer.id,
             customer_name: customer.name,
-            customer_contact: customer.contactPerson,
-            customer_phone: customer.phone,
+            customer_contact: customer.contactPerson ?? (customer as any).contact_person,
+            customer_phone: customer.phone ?? (customer as any).customer_phone,
+            salesman_id: sId,
+            salesman_name: sName,
           });
           setCustomerCreateVisible(false);
         }}
@@ -1383,7 +1485,7 @@ const QuotationsPage: React.FC = () => {
         onCancel={() => setImportModalVisible(false)}
         onConfirm={handleItemImport}
         title="导入报价明细"
-        headers={['物料编码', '规格', '单位', '数量', '单价', '交货日期']}
+        headers={['物料编号', '规格', '单位', '数量', '单价', '交货日期']}
         exampleRow={['MAT001', 'Spec X', 'PCS', '100', '1.5', '2026-03-01']}
       />
     </>

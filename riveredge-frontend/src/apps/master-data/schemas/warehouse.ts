@@ -17,7 +17,7 @@ export const WAREHOUSE_TYPE_OPTIONS = [
   { labelKey: 'warehouse.type.quarantine', value: 'quarantine' },
 ];
 
-/** 基础字段：编码、名称、仓库类型（线边仓关联字段之前） */
+/** 基础字段：编号、名称、仓库类型（线边仓关联字段之前） */
 export const warehouseFormSchemaBasic: FieldConfig[] = [
   {
     name: 'code',

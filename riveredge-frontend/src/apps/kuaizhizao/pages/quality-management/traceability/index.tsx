@@ -159,7 +159,7 @@ const TraceabilityPage: React.FC = () => {
                             </Descriptions.Item>
                         )}
                         {selectedNode.data?.material_code && (
-                            <Descriptions.Item label={t('pages.traceability.materialCode', { defaultValue: '物料编码' })}>
+                            <Descriptions.Item label={t('pages.traceability.materialCode', { defaultValue: '物料编号' })}>
                                 {selectedNode.data.material_code}
                             </Descriptions.Item>
                         )}

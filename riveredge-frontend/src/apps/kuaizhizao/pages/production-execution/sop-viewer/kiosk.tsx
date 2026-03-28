@@ -249,7 +249,7 @@ const SOPViewerKioskPage: React.FC = () => {
             <Card size="small" style={{ marginBottom: 24, backgroundColor: '#f5f5f5' }}>
               <Space direction="vertical" size="small" style={{ width: '100%' }}>
                 <div>
-                  <strong>SOP编码：</strong>
+                  <strong>SOP编号：</strong>
                   <span>{sop.code}</span>
                 </div>
                 <div>

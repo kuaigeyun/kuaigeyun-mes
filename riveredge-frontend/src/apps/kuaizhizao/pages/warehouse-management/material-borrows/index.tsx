@@ -243,7 +243,7 @@ const MaterialBorrowsPage: React.FC = () => {
     [messageApi, t]
   );
 
-  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码 */
+  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号 */
   const handleCreate = () => {
     setCreateModalVisible(true);
     setTimeout(() => formRef.current?.resetFields(), 0);
@@ -390,7 +390,7 @@ const MaterialBorrowsPage: React.FC = () => {
               size="small"
               rowKey="id"
             columns={[
-              { title: '物料编码', dataIndex: 'material_code', width: 120 },
+              { title: '物料编号', dataIndex: 'material_code', width: 120 },
               { title: '物料名称', dataIndex: 'material_name', width: 150 },
               { title: '单位', dataIndex: 'material_unit', width: 60 },
               { title: '借出数量', dataIndex: 'borrow_quantity', width: 100, align: 'right' },
@@ -418,7 +418,7 @@ const MaterialBorrowsPage: React.FC = () => {
             <CodeField
               pageCode="kuaizhizao-warehouse-material-borrow"
               name="borrow_code"
-              label="借料单编码"
+              label="借料单编号"
               autoGenerateOnCreate={true}
               showGenerateButton={false}
               context={{}}

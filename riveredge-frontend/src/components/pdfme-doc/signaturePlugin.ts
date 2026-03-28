@@ -38,7 +38,7 @@ export const signaturePlugin: Plugin<Schema> = {
       signaturePad.on();
       const clearButton = document.createElement('button');
       clearButton.style.cssText =
-        'position:absolute;top:0;right:0;z-index:1;padding:2px 8px;font-size:12px;cursor:pointer;background:#f2f2f2;border:1px solid #ccc;border-radius:4px;';
+        'position:absolute;top:0;right:0;z-index:1;padding:2px 8px;font-size:12px;cursor:pointer;background:#f2f2f2;border:1px solid var(--river-border-color);border-radius:4px;';
       clearButton.textContent = '清除';
       clearButton.addEventListener('click', () => {
         signaturePad.clear();

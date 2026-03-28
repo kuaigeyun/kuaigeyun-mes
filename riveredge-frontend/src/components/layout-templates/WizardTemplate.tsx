@@ -79,7 +79,7 @@ export interface WizardTemplateProps {
  *   steps={[
  *     { title: '选择模板', content: <TemplateSelection /> },
  *     { title: '基础信息', content: <BasicInfo /> },
- *     { title: '编码规则', content: <CodeRules /> },
+ *     { title: '编号规则', content: <CodeRules /> },
  *     { title: '完成', content: <Completion /> },
  *   ]}
  *   current={currentStep}

@@ -138,7 +138,7 @@ export const AgileQuotingDrawer: React.FC<AgileQuotingDrawerProps> = ({
         <div style={{ padding: '0 10px' }}>
           <Card size="small" style={{ marginBottom: 20, background: '#fafafa', border: '1px solid #f0f0f0' }}>
             <Title level={4} style={{ marginBottom: 4 }}>{data.material_name}</Title>
-            <Text type="secondary">编码: {data.material_code} {data.material_spec ? ` | 规格: ${data.material_spec}` : ''}</Text>
+            <Text type="secondary">编号: {data.material_code} {data.material_spec ? ` | 规格: ${data.material_spec}` : ''}</Text>
           </Card>
 
           <Title level={5} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

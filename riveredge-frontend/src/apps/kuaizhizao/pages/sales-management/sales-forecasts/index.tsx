@@ -8,9 +8,9 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback } from 'react'
-import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions, ProFormInstance } from '@ant-design/pro-components'
+import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions, ProFormInstance, ProFormSelect } from '@ant-design/pro-components'
 import { App, Button, Tag, Space, Drawer, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Typography } from 'antd'
-import { PlusOutlined, DeleteOutlined, EyeOutlined, EditOutlined, ArrowDownOutlined, ShoppingOutlined } from '@ant-design/icons'
+import { PlusOutlined, DeleteOutlined, EyeOutlined, EditOutlined, ArrowDownOutlined, ShoppingOutlined, ImportOutlined } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -22,7 +22,6 @@ import { getBusinessConfig } from '../../../../../services/businessConfig'
 import { UniTable } from '../../../../../components/uni-table'
 import { UniMaterialSelect } from '../../../../../components/uni-material-select'
 import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal'
-import { DictionarySelect } from '../../../../../components/dictionary-select'
 import { UniImport } from '../../../../../components/uni-import'
 import type { Material } from '../../../../master-data/types/material'
 import {
@@ -149,7 +148,7 @@ export default function SalesForecastsPage() {
 
   /**
    * 处理新建销售预测
-   * 参考销售订单：先打开弹窗，再请求 testGenerateCode 预填编码（不占用序号）
+   * 参考销售订单：先打开弹窗，再请求 testGenerateCode 预填编号（不占用序号）
    */
   const defaultForecastItem = {
     material_id: undefined,
@@ -215,7 +214,7 @@ export default function SalesForecastsPage() {
       });
     }, 100);
 
-    // 自动编码逻辑：与销售订单看齐
+    // 自动编号逻辑：与销售订单看齐
     let ruleCode = getPageRuleCode('kuaizhizao-sales-forecast');
     let autoGenerate = isAutoGenerateEnabled('kuaizhizao-sales-forecast');
     try {
@@ -235,7 +234,7 @@ export default function SalesForecastsPage() {
         setPreviewCode(preview ?? null);
         formRef.current?.setFieldsValue({ forecast_code: preview ?? '' });
       } catch (error: any) {
-        console.warn('销售预测编码预生成失败:', error);
+        console.warn('销售预测编号预生成失败:', error);
         setPreviewCode(null);
       }
     } else {
@@ -410,7 +409,7 @@ export default function SalesForecastsPage() {
         messageApi.warning(t('app.kuaizhizao.salesForecast.incompleteItems'))
         return
       }
-      // 自动编码逻辑：与销售订单看齐
+      // 自动编号逻辑：与销售订单看齐
       let forecastCode = values.forecast_code;
       if (!isEdit) {
         const ruleCodeToUse = effectiveRuleCode || getPageRuleCode('kuaizhizao-sales-forecast');
@@ -420,7 +419,7 @@ export default function SalesForecastsPage() {
             const codeResponse = await generateCode({ rule_code: ruleCodeToUse });
             forecastCode = codeResponse.code;
           } catch (e) {
-            console.warn('销售预测编码正式生成失败，使用预览值:', e);
+            console.warn('销售预测编号正式生成失败，使用预览值:', e);
           }
         }
       }
@@ -987,12 +986,16 @@ export default function SalesForecastsPage() {
         </Row>
         <Row gutter={16}>
           <Col span={8}>
-            <DictionarySelect
+            <ProFormSelect
               name="forecast_period"
               label={t('app.kuaizhizao.salesForecast.forecastPeriod')}
               placeholder={t('app.kuaizhizao.salesForecast.forecastPeriodPlaceholder')}
               required
-              dictionaryCode="FORECAST_PERIOD"
+              options={[
+                { label: t('app.kuaizhizao.salesForecast.period.weekly'), value: 'WEEKLY' },
+                { label: t('app.kuaizhizao.salesForecast.period.monthly'), value: 'MONTHLY' },
+                { label: t('app.kuaizhizao.salesForecast.period.quarterly'), value: 'QUARTERLY' },
+              ]}
               rules={[{ required: true, message: t('app.kuaizhizao.salesForecast.forecastPeriodPlaceholder') }]}
             />
           </Col>
@@ -1021,12 +1024,11 @@ export default function SalesForecastsPage() {
               {t('app.kuaizhizao.salesForecast.forecastItems')}
             </span>
             <Button
-              type="link"
               size="small"
-              icon={<ShoppingOutlined />}
+              icon={<ImportOutlined />}
               onClick={() => setImportModalVisible(true)}
             >
-              EXCEL导入明细
+              导入明细
             </Button>
           </div>
           <ProForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: t('app.kuaizhizao.salesForecast.itemsRequired') }]}>
@@ -1139,17 +1141,19 @@ export default function SalesForecastsPage() {
                       pagination={false}
                       columns={forecastItemColumns}
                       footer={() => (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', padding: '0 8px' }}>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
                           <Button
                             type="dashed"
                             icon={<PlusOutlined />}
+                            style={{ flex: 1, minWidth: 120 }}
                             onClick={() => add(defaultForecastItem)}
                           >
-                            新增明细
+                            添加明细
                           </Button>
                           <Button
-                            type="link"
+                            type="default"
                             icon={<ShoppingOutlined />}
+                            style={{ flex: 1, minWidth: 120 }}
                             onClick={() => setMaterialPickerOpen(true)}
                           >
                             {t('app.kuaizhizao.common.materialBatchSelect')}
@@ -1303,7 +1307,7 @@ export default function SalesForecastsPage() {
       onCancel={() => setImportModalVisible(false)}
       onConfirm={handleImport}
       title={t('app.kuaizhizao.salesForecast.importTitle') || '导入销售预测明细'}
-      headers={['物料编码', '预测数量', '预测日期', '备注']}
+      headers={['物料编号', '预测数量', '预测日期', '备注']}
       exampleRow={['MAT001', '100', '2026-03-01', '备注说明']}
     />
     </>

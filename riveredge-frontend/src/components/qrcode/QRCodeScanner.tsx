@@ -176,7 +176,7 @@ export const QRCodeScanner: React.FC<QRCodeScannerProps> = ({
             <img
               src={uploadedImage}
               alt={t('components.qrcode.uploadedImageAlt')}
-              style={{ maxWidth: '100%', maxHeight: 300, border: '1px solid #d9d9d9', borderRadius: 4 }}
+              style={{ maxWidth: '100%', maxHeight: 300, border: '1px solid var(--river-border-color)', borderRadius: 4 }}
             />
           </div>
         )}

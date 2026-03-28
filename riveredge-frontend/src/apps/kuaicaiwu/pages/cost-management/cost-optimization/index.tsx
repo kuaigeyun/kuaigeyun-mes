@@ -178,7 +178,7 @@ const CostOptimizationPage: React.FC = () => {
                 current_cost: `¥${result.current_cost?.total_cost?.toFixed(2)}`,
               }}
               columns={[
-                { title: '物料编码', dataIndex: 'material_code' },
+                { title: '物料编号', dataIndex: 'material_code' },
                 { title: '物料名称', dataIndex: 'material_name' },
                 { title: '当前来源类型', dataIndex: 'current_source_type' },
                 { title: '当前成本', dataIndex: 'current_cost' },

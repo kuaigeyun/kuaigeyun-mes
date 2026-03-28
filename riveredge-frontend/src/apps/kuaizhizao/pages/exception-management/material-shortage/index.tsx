@@ -111,14 +111,14 @@ const MaterialShortageExceptionPage: React.FC = () => {
    */
   const columns: ProColumns<MaterialShortageException>[] = [
     {
-      title: '工单编码',
+      title: '工单编号',
       dataIndex: 'work_order_code',
       width: 150,
       fixed: 'left',
       ellipsis: true,
     },
     {
-      title: '物料编码',
+      title: '物料编号',
       dataIndex: 'material_code',
       width: 120,
       ellipsis: true,
@@ -322,11 +322,11 @@ const MaterialShortageExceptionPage: React.FC = () => {
         dataSource={currentException || {}}
         columns={[
           {
-            title: '工单编码',
+            title: '工单编号',
             dataIndex: 'work_order_code',
           },
           {
-            title: '物料编码',
+            title: '物料编号',
             dataIndex: 'material_code',
           },
           {

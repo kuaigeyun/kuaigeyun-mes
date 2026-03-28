@@ -217,7 +217,7 @@ const MaintenanceRemindersPage: React.FC = () => {
    */
   const columns: ProColumns<MaintenanceReminder>[] = [
     {
-      title: '设备编码',
+      title: '设备编号',
       dataIndex: 'equipment_code',
       width: 120,
       fixed: 'left',
@@ -414,7 +414,7 @@ const MaintenanceRemindersPage: React.FC = () => {
             <div style={{ marginBottom: 16 }}>
               <strong>设备信息：</strong>
               <div style={{ marginTop: 8 }}>
-                <p>设备编码：{currentReminder.equipment_code}</p>
+                <p>设备编号：{currentReminder.equipment_code}</p>
                 <p>设备名称：{currentReminder.equipment_name}</p>
               </div>
             </div>

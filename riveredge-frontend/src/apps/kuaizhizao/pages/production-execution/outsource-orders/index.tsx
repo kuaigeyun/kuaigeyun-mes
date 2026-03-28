@@ -100,11 +100,11 @@ export const OutsourceOrdersTable: React.FC = () => {
    */
   const detailColumns: ProDescriptionsItemType<OutsourceOrder>[] = [
     {
-      title: '工序委外单编码',
+      title: '工序委外单编号',
       dataIndex: 'code',
     },
     {
-      title: '工单编码',
+      title: '工单编号',
       dataIndex: 'work_order_code',
     },
     {
@@ -178,7 +178,7 @@ export const OutsourceOrdersTable: React.FC = () => {
       render: (text) => text || '-',
     },
     {
-      title: '采购入库单编码',
+      title: '采购入库单编号',
       dataIndex: 'purchase_receipt_code',
       render: (text) => text || '-',
     },
@@ -195,14 +195,14 @@ export const OutsourceOrdersTable: React.FC = () => {
    */
   const columns: ProColumns<OutsourceOrder>[] = [
     {
-      title: '工序委外单编码',
+      title: '工序委外单编号',
       dataIndex: 'code',
       width: 180,
       fixed: 'left',
       ellipsis: true,
     },
     {
-      title: '工单编码',
+      title: '工单编号',
       dataIndex: 'work_order_code',
       width: 150,
       ellipsis: true,
@@ -408,7 +408,7 @@ export const OutsourceOrdersTable: React.FC = () => {
     });
   };
 
-  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码 */
+  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号 */
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentOutsourceOrder(null);
@@ -496,7 +496,7 @@ export const OutsourceOrdersTable: React.FC = () => {
           <CodeField
             pageCode="kuaizhizao-production-outsource-order"
             name="code"
-            label="工序委外单编码"
+            label="工序委外单编号"
             required={true}
             autoGenerateOnCreate={!isEdit}
             context={{}}

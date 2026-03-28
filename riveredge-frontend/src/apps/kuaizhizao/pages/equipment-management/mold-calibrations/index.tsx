@@ -69,7 +69,7 @@ const MoldCalibrationsPage: React.FC = () => {
   };
 
   const columns: ProColumns<MoldCalibration>[] = [
-    { title: '模具编码', dataIndex: 'mold_code', width: 120 },
+    { title: '模具编号', dataIndex: 'mold_code', width: 120 },
     { title: '模具名称', dataIndex: 'mold_name', width: 180, ellipsis: true },
     { title: '校准日期', dataIndex: 'calibration_date', valueType: 'date', width: 120 },
     {

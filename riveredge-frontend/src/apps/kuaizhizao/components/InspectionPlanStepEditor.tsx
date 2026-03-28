@@ -188,7 +188,7 @@ export const InspectionPlanStepEditor: React.FC<InspectionPlanStepEditorProps> =
             padding: 24,
             background: '#fafafa',
             borderRadius: 4,
-            border: '1px dashed #d9d9d9',
+            border: '1px dashed var(--river-border-color)',
             textAlign: 'center',
             color: '#999',
           }}

@@ -119,8 +119,8 @@ const StorageLocationsPage: React.FC = () => {
    * 数据格式：第一行为表头，第二行为示例数据，从第三行开始为实际数据
    * 
    * 所属库区字段说明：
-   * - 可以填写库区编码（如：SA001）或库区名称（如：A区）
-   * - 系统会根据编码或名称自动匹配对应的库区
+   * - 可以填写库区编号（如：SA001）或库区名称（如：A区）
+   * - 系统会根据编号或名称自动匹配对应的库区
    * - 如果库区不存在，导入会失败并提示错误
    */
   const handleImport = async (data: any[][]) => {
@@ -158,10 +158,10 @@ const StorageLocationsPage: React.FC = () => {
 
     // 表头字段映射（不包含 isActive 和 createdAt，这些字段使用默认值）
     const headerMap: Record<string, string> = {
-      '库位编码': 'code',
-      '*库位编码': 'code',
-      '编码': 'code',
-      '*编码': 'code',
+      '库位编号': 'code',
+      '*库位编号': 'code',
+      '编号': 'code',
+      '*编号': 'code',
       'code': 'code',
       '*code': 'code',
       '库位名称': 'name',
@@ -172,7 +172,7 @@ const StorageLocationsPage: React.FC = () => {
       '*name': 'name',
       '所属库区': 'storageAreaCode',
       '库区': 'storageAreaCode',
-      '库区编码': 'storageAreaCode',
+      '库区编号': 'storageAreaCode',
       '库区名称': 'storageAreaName',
       'storageAreaCode': 'storageAreaCode',
       'storage_area_code': 'storageAreaCode',
@@ -264,13 +264,13 @@ const StorageLocationsPage: React.FC = () => {
           return;
         }
 
-        // 处理所属库区（根据库区编码或名称查找 storageAreaId）
+        // 处理所属库区（根据库区编号或名称查找 storageAreaId）
         let storageAreaId: number | undefined = undefined;
         if (storageAreaCode || storageAreaName) {
           const storageAreaCodeValue = storageAreaCode ? String(storageAreaCode).trim().toUpperCase() : '';
           const storageAreaNameValue = storageAreaName ? String(storageAreaName).trim() : '';
           
-          // 优先通过编码查找
+          // 优先通过编号查找
           if (storageAreaCodeValue) {
             const foundStorageArea = storageAreas.find(s => s.code.toUpperCase() === storageAreaCodeValue);
             if (foundStorageArea) {
@@ -283,7 +283,7 @@ const StorageLocationsPage: React.FC = () => {
               return;
             }
           } 
-          // 如果编码未找到，尝试通过名称查找
+          // 如果编号未找到，尝试通过名称查找
           else if (storageAreaNameValue) {
             const foundStorageArea = storageAreas.find(s => s.name === storageAreaNameValue);
             if (foundStorageArea) {
@@ -708,7 +708,7 @@ const StorageLocationsPage: React.FC = () => {
         defaultViewType="table"
         showImportButton={true}
         onImport={handleImport}
-        importHeaders={['*库位编码', '*库位名称', '*所属库区', '描述']}
+        importHeaders={['*库位编号', '*库位名称', '*所属库区', '描述']}
         importExampleRow={[
           'SL001', 
           'A-01-01', 
@@ -716,10 +716,10 @@ const StorageLocationsPage: React.FC = () => {
           'A区第1排第1列'
         ]}
         importFieldMap={{
-          '库位编码': 'code',
-          '*库位编码': 'code',
-          '编码': 'code',
-          '*编码': 'code',
+          '库位编号': 'code',
+          '*库位编号': 'code',
+          '编号': 'code',
+          '*编号': 'code',
           'code': 'code',
           '*code': 'code',
           '库位名称': 'name',
@@ -730,7 +730,7 @@ const StorageLocationsPage: React.FC = () => {
           '*name': 'name',
           '所属库区': 'storageAreaCode',
           '库区': 'storageAreaCode',
-          '库区编码': 'storageAreaCode',
+          '库区编号': 'storageAreaCode',
           '库区名称': 'storageAreaName',
           'storageAreaCode': 'storageAreaCode',
           'storage_area_code': 'storageAreaCode',

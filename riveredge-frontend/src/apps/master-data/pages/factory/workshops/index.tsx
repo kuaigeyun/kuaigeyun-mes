@@ -168,8 +168,8 @@ const WorkshopsPage: React.FC = () => {
    * 数据格式：第一行为表头，第二行为示例数据，从第三行开始为实际数据
    * 
    * 所属厂区字段说明：
-   * - 可以填写厂区编码（如：PLANT001）或厂区名称（如：无锡生产基地）
-   * - 系统会根据编码或名称自动匹配对应的厂区
+   * - 可以填写厂区编号（如：PLANT001）或厂区名称（如：无锡生产基地）
+   * - 系统会根据编号或名称自动匹配对应的厂区
    * - 如果厂区不存在，导入会失败并提示错误
    */
   const handleImport = async (data: any[][]) => {
@@ -212,10 +212,10 @@ const WorkshopsPage: React.FC = () => {
     // 表头字段映射（支持中英文，支持带*号的必填项标识）
     // 注意：不包含 isActive 和 createdAt，这些字段使用默认值
     const headerMap: Record<string, string> = {
-      '车间编码': 'code',
-      '*车间编码': 'code',
-      '编码': 'code',
-      '*编码': 'code',
+      '车间编号': 'code',
+      '*车间编号': 'code',
+      '编号': 'code',
+      '*编号': 'code',
       'code': 'code',
       '*code': 'code',
       '车间名称': 'name',
@@ -226,7 +226,7 @@ const WorkshopsPage: React.FC = () => {
       '*name': 'name',
       '所属厂区': 'plantCode',
       '厂区': 'plantCode',
-      '厂区编码': 'plantCode',
+      '厂区编号': 'plantCode',
       '厂区名称': 'plantName',
       'plantCode': 'plantCode',
       'plant_code': 'plantCode',
@@ -328,13 +328,13 @@ const WorkshopsPage: React.FC = () => {
           return;
         }
 
-        // 处理所属厂区（根据厂区编码或名称查找 plantId）
+        // 处理所属厂区（根据厂区编号或名称查找 plantId）
         let plantId: number | undefined = undefined;
         if (plantCode || plantName) {
           const plantCodeValue = plantCode ? String(plantCode).trim().toUpperCase() : '';
           const plantNameValue = plantName ? String(plantName).trim() : '';
           
-          // 优先通过编码查找
+          // 优先通过编号查找
           if (plantCodeValue) {
             const foundPlant = plants.find(p => p.code.toUpperCase() === plantCodeValue);
             if (foundPlant) {
@@ -347,7 +347,7 @@ const WorkshopsPage: React.FC = () => {
               return;
             }
           } 
-          // 如果编码未找到，尝试通过名称查找
+          // 如果编号未找到，尝试通过名称查找
           else if (plantNameValue) {
             const foundPlant = plants.find(p => p.name === plantNameValue);
             if (foundPlant) {
@@ -740,7 +740,7 @@ const WorkshopsPage: React.FC = () => {
         viewTypes={['table', 'help']}
         defaultViewType="table"
         onImport={handleImport}
-        importHeaders={['*车间编码', '*车间名称', '所属厂区', '描述']}
+        importHeaders={['*车间编号', '*车间名称', '所属厂区', '描述']}
         importExampleRow={[
           'WS001', 
           '装配车间', 
@@ -748,10 +748,10 @@ const WorkshopsPage: React.FC = () => {
           '主要负责产品装配作业'
         ]}
         importFieldMap={{
-          '车间编码': 'code',
-          '*车间编码': 'code',
-          '编码': 'code',
-          '*编码': 'code',
+          '车间编号': 'code',
+          '*车间编号': 'code',
+          '编号': 'code',
+          '*编号': 'code',
           'code': 'code',
           '*code': 'code',
           '车间名称': 'name',
@@ -762,7 +762,7 @@ const WorkshopsPage: React.FC = () => {
           '*name': 'name',
           '所属厂区': 'plantCode',
           '厂区': 'plantCode',
-          '厂区编码': 'plantCode',
+          '厂区编号': 'plantCode',
           '厂区名称': 'plantName',
           'plantCode': 'plantCode',
           'plant_code': 'plantCode',

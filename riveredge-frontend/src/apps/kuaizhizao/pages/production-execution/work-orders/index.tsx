@@ -671,7 +671,7 @@ const WorkOrdersPage: React.FC = () => {
     }
   }
 
-  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码 */
+  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号 */
   const handleCreate = () => {
     setIsEdit(false)
     setCurrentWorkOrder(null)
@@ -1380,13 +1380,13 @@ const WorkOrdersPage: React.FC = () => {
     const col = (name: string) => headers.findIndex((h: string) => (h || '').replace(/\*+/, '').trim() === name || (h || '').trim() === name)
     const idx = {
       code: col('工单编号') >= 0 ? col('工单编号') : col('编号'),
-      product: col('产品编码') >= 0 ? col('产品编码') : col('物料编码'),
+      product: col('产品编号') >= 0 ? col('产品编号') : col('物料编号'),
       qty: col('计划数量') >= 0 ? col('计划数量') : col('数量'),
-      workshop: col('车间编码') >= 0 ? col('车间编码') : col('车间'),
+      workshop: col('车间编号') >= 0 ? col('车间编号') : col('车间'),
     }
 
     if (idx.product < 0 || idx.qty < 0) {
-      messageApi.error('缺少必需列：产品编码、计划数量')
+      messageApi.error('缺少必需列：产品编号、计划数量')
       return
     }
 
@@ -1403,7 +1403,7 @@ const WorkOrdersPage: React.FC = () => {
       const productCode = (row[idx.product] ?? '').toString().trim()
       const qtyVal = Number(row[idx.qty])
       if (!productCode) {
-        errors.push({ row: rowNum, message: '产品编码不能为空' })
+        errors.push({ row: rowNum, message: '产品编号不能为空' })
         return
       }
       if (isNaN(qtyVal) || qtyVal <= 0) {
@@ -1536,7 +1536,7 @@ const WorkOrdersPage: React.FC = () => {
         }
       }
 
-      // 工单编码由CodeField组件自动处理，无需额外逻辑
+      // 工单编号由CodeField组件自动处理，无需额外逻辑
 
       // 确保生产模式：如果选择了销售订单，自动设置为MTO，否则为MTS
       if (values.sales_order_id) {
@@ -1599,7 +1599,7 @@ const WorkOrdersPage: React.FC = () => {
         delete values.operations
       }
 
-      // 如果选择了产品，需要转换为产品编码和名称
+      // 如果选择了产品，需要转换为产品编号和名称
       if (values.product_id && !isEdit) {
         const selectedProduct = productList.find(product => product.id === values.product_id)
         if (selectedProduct) {
@@ -1687,7 +1687,7 @@ const WorkOrdersPage: React.FC = () => {
       dataIndex: 'name',
     },
     {
-      title: '产品编码',
+      title: '产品编号',
       dataIndex: 'product_code',
     },
     {
@@ -2428,7 +2428,7 @@ const WorkOrdersPage: React.FC = () => {
         work_order_ids: selectedRowKeys.map(key => Number(key)),
         remarks: values.remarks,
       })
-      messageApi.success(`工单合并成功，新工单编码：${result.merged_work_order.code}`)
+      messageApi.success(`工单合并成功，新工单编号：${result.merged_work_order.code}`)
       setMergeModalVisible(false)
       setSelectedRowKeys([])
       invalidateStatistics(); actionRef.current?.reload()
@@ -3441,15 +3441,15 @@ const WorkOrdersPage: React.FC = () => {
           showDeleteButton
           showImportButton={true}
           onImport={handleListImport}
-          importHeaders={['工单编号', '*产品编码', '*计划数量', '车间编码']}
+          importHeaders={['工单编号', '*产品编号', '*计划数量', '车间编号']}
           importExampleRow={['WO001', 'PROD-A001', '100', 'WS001']}
           importFieldMap={{
             '工单编号': 'code',
-            '产品编码': 'product_code',
-            '*产品编码': 'product_code',
+            '产品编号': 'product_code',
+            '*产品编号': 'product_code',
             '计划数量': 'quantity',
             '*计划数量': 'quantity',
-            '车间编码': 'workshop_code',
+            '车间编号': 'workshop_code',
           }}
           importFieldRules={{
             product_code: { required: true },
@@ -3648,7 +3648,7 @@ const WorkOrdersPage: React.FC = () => {
         <CodeField
           pageCode="kuaizhizao-production-work-order"
           name="code"
-          label="工单编码"
+          label="工单编号"
           required={true}
           autoGenerateOnCreate={!isEdit}
           showGenerateButton={false}
@@ -3859,7 +3859,7 @@ const WorkOrdersPage: React.FC = () => {
             advancedSearch={{
               label: '高级搜索',
               fields: [
-                { name: 'code', label: '工艺路线编码' },
+                { name: 'code', label: '工艺路线编号' },
                 { name: 'name', label: '工艺路线名称' },
               ],
               onSearch: async (values) => {
@@ -4074,7 +4074,7 @@ const WorkOrdersPage: React.FC = () => {
           columns={[
             ...(productSourceModalType === 'sales_order'
               ? [
-                  { title: '订单编码', dataIndex: '_order_code', key: '_order_code', width: 140 },
+                  { title: '订单编号', dataIndex: '_order_code', key: '_order_code', width: 140 },
                   { title: '客户', dataIndex: '_customer_name', key: '_customer_name', width: 160 },
                   { title: '产品名称', dataIndex: 'material_name', key: 'material_name' },
                   { title: '型号', dataIndex: 'material_spec', key: 'material_spec', width: 140 },
@@ -4088,7 +4088,7 @@ const WorkOrdersPage: React.FC = () => {
               : productSourceModalType === 'sales_forecast'
                 ? [
                     {
-                      title: '预测编码',
+                      title: '预测编号',
                       dataIndex: '_forecast_code',
                       key: '_forecast_code',
                       width: 120,
@@ -4111,7 +4111,7 @@ const WorkOrdersPage: React.FC = () => {
                 : productSourceModalType === 'demand'
                   ? [
                       {
-                        title: '需求编码',
+                        title: '需求编号',
                         dataIndex: '_demand_code',
                         key: '_demand_code',
                         width: 120,
@@ -4348,7 +4348,7 @@ const WorkOrdersPage: React.FC = () => {
         {...MODAL_CONFIG}
       >
         <ProFormText name="original_work_order_id" label="原工单ID" disabled />
-        <ProFormText name="product_code" label="产品编码" disabled />
+        <ProFormText name="product_code" label="产品编号" disabled />
         <ProFormText name="product_name" label="产品名称" disabled />
         <ProFormDigit
           name="quantity"
@@ -4415,7 +4415,7 @@ const WorkOrdersPage: React.FC = () => {
               <Row gutter={16}>
                 <Col span={12}>
                   <div>
-                    <strong>工单编码：</strong>
+                    <strong>工单编号：</strong>
                     {currentWorkOrderForOutsource.code}
                   </div>
                 </Col>
@@ -4513,7 +4513,7 @@ const WorkOrdersPage: React.FC = () => {
               <Row gutter={16}>
                 <Col span={12}>
                   <div style={{ marginBottom: 4 }}>
-                    <strong>工单编码：</strong>
+                    <strong>工单编号：</strong>
                     {currentWorkOrderForDispatch.code}
                   </div>
                   <div>
@@ -4626,7 +4626,7 @@ const WorkOrdersPage: React.FC = () => {
           <div>
             <div style={{ marginBottom: 16 }}>
               <div>
-                <strong>原工单编码：</strong>
+                <strong>原工单编号：</strong>
                 {currentWorkOrderForSplit.code}
               </div>
               <div>
@@ -4843,7 +4843,7 @@ const WorkOrdersPage: React.FC = () => {
             },
           }}
         />
-        <ProFormText name="operation_code" label="工序编码" disabled />
+        <ProFormText name="operation_code" label="工序编号" disabled />
         <ProFormText name="operation_name" label="工序名称" disabled />
         <ProFormSelect
           name="workshop_id"
@@ -4988,7 +4988,7 @@ const WorkOrdersPage: React.FC = () => {
                     <Row gutter={16}>
                       <Col span={6}>
                         <div>
-                          <strong>工单编码：</strong>
+                          <strong>工单编号：</strong>
                           {result.workOrder.code}
                         </div>
                       </Col>
@@ -5419,7 +5419,7 @@ const CreateWorkOrderOperationsList: React.FC<CreateWorkOrderOperationsListProps
 
   if (selectedOperations.length === 0) {
     return (
-      <div style={{ padding: '24px', textAlign: 'center', color: '#999', border: '1px dashed #d9d9d9', borderRadius: 4 }}>
+      <div style={{ padding: '24px', textAlign: 'center', color: '#999', border: '1px dashed var(--river-border-color)', borderRadius: 4 }}>
         请选择工艺路线或手动添加工序
       </div>
     )
@@ -5466,7 +5466,7 @@ const SortableCreateOperationItem: React.FC<{
     opacity: isDragging ? 0.5 : 1,
     padding: '8px 12px',
     background: '#fff',
-    border: '1px solid #d9d9d9',
+    border: '1px solid var(--river-border-color)',
     borderRadius: 4,
     display: 'flex',
     alignItems: 'center',
@@ -5811,7 +5811,7 @@ const SortableOperationItem: React.FC<SortableOperationItemProps> = ({
     transition,
     opacity: isDragging ? 0.5 : 1,
     backgroundColor: isReported ? '#f5f5f5' : '#fff',
-    border: '1px solid #d9d9d9',
+    border: '1px solid var(--river-border-color)',
     borderRadius: '4px',
     padding: '12px',
     marginBottom: '8px',
@@ -5854,7 +5854,7 @@ const SortableOperationItem: React.FC<SortableOperationItemProps> = ({
           </div>
           <div style={{ fontSize: '12px', color: '#999' }}>
             <Space separator={<span>|</span>}>
-              <span>编码: {operation.operation_code || operation.code}</span>
+              <span>编号: {operation.operation_code || operation.code}</span>
               {operation.workshop_name && <span>车间: {operation.workshop_name}</span>}
               {operation.standard_time > 0 && <span>标准工时: {operation.standard_time}h</span>}
               {operation.planned_start_date && (

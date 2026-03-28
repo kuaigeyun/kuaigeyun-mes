@@ -83,7 +83,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
   );
 
   const columns: ProColumns<PurchaseRequisition>[] = [
-    { title: '申请编码', dataIndex: 'requisition_code', width: 150, fixed: 'left' },
+    { title: '申请编号', dataIndex: 'requisition_code', width: 150, fixed: 'left' },
     { title: '申请名称', dataIndex: 'requisition_name', width: 180 },
     {
       title: '生命周期',
@@ -182,7 +182,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
     },
   ];
 
-  /** 参考销售订单：先打开弹窗，再请求 getCodeRulePageConfig + testGenerateCode 预填编码 */
+  /** 参考销售订单：先打开弹窗，再请求 getCodeRulePageConfig + testGenerateCode 预填编号 */
   const handleCreate = async () => {
     setPreviewCode(null);
     setEffectiveRuleCode(null);
@@ -206,7 +206,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
             });
           }, 100);
         } catch (e) {
-          console.warn('采购申请编码预生成失败:', e);
+          console.warn('采购申请编号预生成失败:', e);
           setPreviewCode(null);
         }
       } else {
@@ -229,7 +229,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
             }, 100);
           })
           .catch((e) => {
-            console.warn('采购申请编码预生成失败:', e);
+            console.warn('采购申请编号预生成失败:', e);
             setPreviewCode(null);
           });
       } else {
@@ -253,7 +253,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         const res = await generateCode({ rule_code: ruleCode });
         requisitionCode = res.code;
       } catch (e) {
-        console.warn('采购申请编码正式生成失败，使用当前值:', e);
+        console.warn('采购申请编号正式生成失败，使用当前值:', e);
       }
     }
     try {
@@ -462,7 +462,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
   };
 
   const detailColumns: ProDescriptionsItemProps<PurchaseRequisition>[] = [
-    { title: '申请编码', dataIndex: 'requisition_code' },
+    { title: '申请编号', dataIndex: 'requisition_code' },
     { title: '申请名称', dataIndex: 'requisition_name' },
     { title: '状态', dataIndex: 'status', render: (v: any) => <Tag>{v}</Tag> },
     { title: '来源', dataIndex: 'source_code' },
@@ -555,7 +555,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
             <ProFormText
               name="requisition_code"
               label="采购申请编号"
-              placeholder={isAutoGenerateEnabled('kuaizhizao-purchase-requisition') ? '编码将根据编码规则自动生成，可修改' : '请输入采购申请编号'}
+              placeholder={isAutoGenerateEnabled('kuaizhizao-purchase-requisition') ? '编号将根据编号规则自动生成，可修改' : '请输入采购申请编号'}
               rules={[{ required: true, message: '请输入采购申请编号' }]}
             />
           </Col>
@@ -802,7 +802,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
             <>
               <DetailDrawerSection title="基本信息">
                 <Row gutter={16}>
-                  <Col span={8}><strong>申请编码：</strong>{currentReq.requisition_code}</Col>
+                  <Col span={8}><strong>申请编号：</strong>{currentReq.requisition_code}</Col>
                   <Col span={8}><strong>申请名称：</strong>{currentReq.requisition_name}</Col>
                   <Col span={8}><strong>状态：</strong><Tag>{currentReq.status}</Tag></Col>
                 </Row>
@@ -845,7 +845,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
               <Table
                 size="small"
                 columns={[
-                  { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                  { title: '物料编号', dataIndex: 'material_code', width: 120 },
                   { title: '物料名称', dataIndex: 'material_name', width: 150 },
                   { title: '数量', dataIndex: 'quantity', width: 90, align: 'right' },
                    { title: '单位', dataIndex: 'unit', width: 60 },
@@ -995,7 +995,7 @@ const ConvertForm: React.FC<{
           }),
         }}
         columns={[
-          { title: '物料编码', dataIndex: 'material_code', width: 110 },
+          { title: '物料编号', dataIndex: 'material_code', width: 110 },
           { title: '物料名称', dataIndex: 'material_name', width: 160 },
           {
             title: '供应商',

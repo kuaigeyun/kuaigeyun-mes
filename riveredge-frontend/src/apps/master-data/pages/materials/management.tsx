@@ -454,7 +454,7 @@ const MaterialsManagementPage: React.FC = () => {
     setMaterialIsEdit(false)
     setCurrentMaterial(null)
     setMaterialModalVisible(true)
-    // 注意：编码生成逻辑已移至 MaterialForm 组件内部
+    // 注意：编号生成逻辑已移至 MaterialForm 组件内部
   }, [])
 
   // Alt+N 绑定到新建物料（与新建分组区分，仅新建物料响应快捷键）
@@ -613,12 +613,12 @@ const MaterialsManagementPage: React.FC = () => {
 
     const col = (n: string) => headers.findIndex((h: string) => (h || '').replace(/\*+/, '').trim() === n || (h || '').trim() === n)
     const idx = {
-      code: col('物料编码') >= 0 ? col('物料编码') : col('编码'),
+      code: col('物料编号') >= 0 ? col('物料编号') : col('编号'),
       name: col('物料名称') >= 0 ? col('物料名称') : col('名称'),
       unit: col('基础单位') >= 0 ? col('基础单位') : col('单位'),
       spec: col('规格') >= 0 ? col('规格') : -1,
       type: col('物料类型') >= 0 ? col('物料类型') : -1,
-      group: col('分组编码') >= 0 ? col('分组编码') : col('分组') >= 0 ? col('分组') : col(t('app.master-data.materials.materialGroup')) >= 0 ? col(t('app.master-data.materials.materialGroup')) : -1,
+      group: col('分组编号') >= 0 ? col('分组编号') : col('分组') >= 0 ? col('分组') : col(t('app.master-data.materials.materialGroup')) >= 0 ? col(t('app.master-data.materials.materialGroup')) : -1,
     }
 
     if (idx.name < 0 || idx.unit < 0) {
@@ -779,7 +779,7 @@ const MaterialsManagementPage: React.FC = () => {
         await materialApi.update(currentMaterial.uuid, values as MaterialUpdate)
         messageApi.success(t('app.master-data.materials.updateSuccessNotify'))
       } else {
-        // 新建物料时，如果启用了自动编码，不传递编码，让后端自动生成
+        // 新建物料时，如果启用了自动编号，不传递编号，让后端自动生成
         // 这样序号只在真正创建成功时才更新（表单可能传 mainCode 或 main_code）
         const submitValues = { ...values }
         if (isAutoGenerateEnabled('master-data-material')) {

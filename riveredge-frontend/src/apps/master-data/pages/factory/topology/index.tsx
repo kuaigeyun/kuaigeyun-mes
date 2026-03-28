@@ -25,7 +25,7 @@ const LEVEL_COLORS: Record<number, { fill: string; stroke: string }> = {
   4: { fill: '#FFF1F0', stroke: '#F5222D' },
 };
 
-/** 双色块节点：上白底黑字（编码），下彩色底白字（名称），圆角+描边 */
+/** 双色块节点：上白底黑字（编号），下彩色底白字（名称），圆角+描边 */
 const TopologyNode: React.FC<{
   code?: string;
   name?: string;
@@ -370,7 +370,7 @@ const FactoryTopologyPage: React.FC = () => {
                   {selectedNode.label}
                 </Descriptions.Item>
                 {selectedNode.data?.code && (
-                  <Descriptions.Item label={t('pages.factoryTopology.code', { defaultValue: '编码' })}>
+                  <Descriptions.Item label={t('pages.factoryTopology.code', { defaultValue: '编号' })}>
                     {selectedNode.data.code}
                   </Descriptions.Item>
                 )}

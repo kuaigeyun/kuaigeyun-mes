@@ -860,7 +860,7 @@ const ESOPDesignerPage: React.FC = () => {
               <Form.Item label="SOP名称">
                 <Input value={sopData?.name} readOnly bordered={false} style={{ color: token.colorText }} />
               </Form.Item>
-              <Form.Item label="SOP编码">
+              <Form.Item label="SOP编号">
                 <Input value={sopData?.code} readOnly bordered={false} style={{ color: token.colorText }} />
               </Form.Item>
               <Form.Item>

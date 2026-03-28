@@ -138,11 +138,11 @@ const ProcessRoutesPage: React.FC = () => {
       return;
     }
     const col = (n: string) => headers.findIndex((h: string) => (h || '').replace(/\*+/, '').trim() === n);
-    const idxCode = col('工艺路线编码') >= 0 ? col('工艺路线编码') : col('编码');
+    const idxCode = col('工艺路线编号') >= 0 ? col('工艺路线编号') : col('编号');
     const idxName = col('工艺路线名称') >= 0 ? col('工艺路线名称') : col('名称');
     const idxDesc = col('描述') >= 0 ? col('描述') : -1;
     if (idxCode < 0 || idxName < 0) {
-      messageApi.error(t('app.master-data.importMissingField', { field: '工艺路线编码/名称', headers: headers.join(', ') }));
+      messageApi.error(t('app.master-data.importMissingField', { field: '工艺路线编号/名称', headers: headers.join(', ') }));
       return;
     }
     const items: { code: string; name: string; description?: string }[] = [];
@@ -223,7 +223,7 @@ const ProcessRoutesPage: React.FC = () => {
         messageApi.warning(t('app.master-data.noExportData'));
         return;
       }
-      const headers = ['工艺路线编码', '工艺路线名称', '描述', '启用状态', '创建时间'];
+      const headers = ['工艺路线编号', '工艺路线名称', '描述', '启用状态', '创建时间'];
       const csvRows = [headers.join(',')];
       toExport.forEach((r) => {
         const isActive = r?.is_active ?? (r as any)?.isActive;
@@ -372,7 +372,7 @@ const ProcessRoutesPage: React.FC = () => {
    */
   const columns: ProColumns<ProcessRoute>[] = [
     {
-      title: '工艺路线编码',
+      title: '工艺路线编号',
       dataIndex: 'code',
       width: 150,
       fixed: 'left',
@@ -527,11 +527,11 @@ const ProcessRoutesPage: React.FC = () => {
         }}
         showImportButton={true}
         onImport={handleImport}
-        importHeaders={['*工艺路线编码', '*工艺路线名称', '描述']}
+        importHeaders={['*工艺路线编号', '*工艺路线名称', '描述']}
         importExampleRow={['ROUTE001', '装配工艺', '产品装配工艺路线']}
         importFieldMap={{
-          '工艺路线编码': 'code',
-          '*工艺路线编码': 'code',
+          '工艺路线编号': 'code',
+          '*工艺路线编号': 'code',
           '工艺路线名称': 'name',
           '*工艺路线名称': 'name',
           '描述': 'description',
@@ -549,7 +549,7 @@ const ProcessRoutesPage: React.FC = () => {
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
         columns={[
-          { title: '工艺路线编码', dataIndex: 'code' },
+          { title: '工艺路线编号', dataIndex: 'code' },
           { title: '工艺路线名称', dataIndex: 'name' },
           { title: '描述', dataIndex: 'description', span: 2 },
           {

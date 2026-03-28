@@ -91,7 +91,7 @@ const ToolUsagesPage: React.FC = () => {
 
   const columns: ProColumns<ToolUsage>[] = [
     { title: '领用单号', dataIndex: 'usage_no', width: 150, fixed: 'left', ellipsis: true },
-    { title: '工装编码', dataIndex: 'tool_code', width: 120 },
+    { title: '工装编号', dataIndex: 'tool_code', width: 120 },
     { title: '工装名称', dataIndex: 'tool_name', width: 180, ellipsis: true },
     { title: '领用时间', dataIndex: 'checkout_date', valueType: 'dateTime', width: 170 },
     { title: '归还时间', dataIndex: 'checkin_date', valueType: 'dateTime', width: 170 },

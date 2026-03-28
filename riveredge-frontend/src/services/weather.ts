@@ -70,7 +70,7 @@ export async function getLocationByIP(): Promise<LocationData | null> {
 }
 
 /**
- * 通过 Open-Meteo 地理编码 API 将城市名解析为经纬度
+ * 通过 Open-Meteo 地理编号 API 将城市名解析为经纬度
  */
 async function geocodeCity(cityName: string): Promise<{ lat: number; lon: number } | null> {
   try {
@@ -119,7 +119,7 @@ async function getWeatherByCoords(lat: number, lon: number, cityLabel?: string):
 
 /**
  * 获取天气信息
- * 优先使用 Open-Meteo（国内可访问）；城市名时先地理编码再取天气，避免依赖 wttr.in
+ * 优先使用 Open-Meteo（国内可访问）；城市名时先地理编号再取天气，避免依赖 wttr.in
  *
  * @param city 城市名称或经纬度（格式：lat,lon）
  */
@@ -136,7 +136,7 @@ export async function getWeather(city: string): Promise<WeatherData | null> {
       }
     }
 
-    // 2. 城市名：通过 Open-Meteo 地理编码获取经纬度，再取天气
+    // 2. 城市名：通过 Open-Meteo 地理编号获取经纬度，再取天气
     const coords = await geocodeCity(city);
     if (coords) {
       const result = await getWeatherByCoords(coords.lat, coords.lon, city);

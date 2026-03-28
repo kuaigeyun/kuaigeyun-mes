@@ -15,10 +15,12 @@ import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, Shoppin
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
+import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
 import type { Material } from '../../../../master-data/types/material';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import CodeField from '../../../../../components/code-field';
+import { DictionaryLabel } from '../../../../../components/dictionary-label';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
@@ -49,6 +51,7 @@ interface OtherOutbound {
   total_amount?: number;
   notes?: string;
   created_at?: string;
+  [key: string]: any;
 }
 
 interface OtherOutboundDetail extends OtherOutbound {
@@ -214,7 +217,7 @@ const OtherOutboundPage: React.FC = () => {
     [messageApi, t]
   );
 
-  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码 */
+  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号 */
   const handleCreate = () => {
     setCreateModalVisible(true);
     setTimeout(() => formRef.current?.resetFields(), 0);
@@ -345,9 +348,9 @@ const OtherOutboundPage: React.FC = () => {
               size="small"
               rowKey="id"
             columns={[
-              { title: '物料编码', dataIndex: 'material_code', width: 120 },
+              { title: '物料编号', dataIndex: 'material_code', width: 120 },
               { title: '物料名称', dataIndex: 'material_name', width: 150 },
-              { title: '单位', dataIndex: 'material_unit', width: 60 },
+              { title: '单位', dataIndex: 'material_unit', width: 60, render: (val) => <DictionaryLabel dictionaryCode="unit" value={val} /> },
               { title: '出库数量', dataIndex: 'outbound_quantity', width: 100, align: 'right' },
               { title: '单价', dataIndex: 'unit_price', width: 100, align: 'right' },
               { title: '金额', dataIndex: 'total_amount', width: 100, align: 'right' },
@@ -376,7 +379,7 @@ const OtherOutboundPage: React.FC = () => {
             <CodeField
               pageCode="kuaizhizao-warehouse-other-outbound"
               name="outbound_code"
-              label="出库单编码"
+              label="出库单编号"
               autoGenerateOnCreate={true}
               showGenerateButton={false}
               context={{}}
@@ -388,7 +391,7 @@ const OtherOutboundPage: React.FC = () => {
               label="仓库"
               placeholder="请选择仓库"
               required
-              onChange={(val, wh) => formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
+              onChange={(_val, wh) => formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
             />
           </Col>
         </Row>
@@ -414,8 +417,7 @@ const OtherOutboundPage: React.FC = () => {
           </Col>
         </Row>
         <ProFormItem label="明细" required style={{ width: '100%' }}>
-          <AntForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: '请至少添加一条有效明细' }]}>
-            <AntForm.List name="items">
+          <AntForm.List name="items">
               {(fields, { add, remove }) => {
                 const cols = [
                   {
@@ -459,10 +461,21 @@ const OtherOutboundPage: React.FC = () => {
                   {
                     title: '单位',
                     dataIndex: 'material_unit',
-                    width: 80,
+                    width: 100,
                     render: (_: any, __: any, index: number) => (
-                      <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
-                        <Input placeholder="单位" size="small" />
+                      <AntForm.Item noStyle shouldUpdate={(prev, curr) => prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id}>
+                        {({ getFieldValue }) => {
+                          const materialId = getFieldValue(['items', index, 'material_id']);
+                          return (
+                            <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
+                              <MaterialUnitSelect 
+                                materialId={materialId} 
+                                size="small" 
+                                noStyle 
+                              />
+                            </AntForm.Item>
+                          );
+                        }}
                       </AntForm.Item>
                     ),
                   },
@@ -531,7 +544,6 @@ const OtherOutboundPage: React.FC = () => {
                 );
               }}
             </AntForm.List>
-          </AntForm.Item>
         </ProFormItem>
         <ProFormTextArea name="notes" label="备注" placeholder="可选" fieldProps={{ rows: 2 }} />
       </FormModalTemplate>

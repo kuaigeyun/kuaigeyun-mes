@@ -1,13 +1,13 @@
 /**
  * 工作小组表单 Schema 配置
  *
- * 拆分为 basic（编码、名称）和 rest（备注、启用状态），
+ * 拆分为 basic（编号、名称）和 rest（备注、启用状态），
  * 中间插入成员列表区块，顺序为：basic -> 成员 -> rest
  */
 
 import type { FieldConfig } from './form-schemas';
 
-/** 基础字段：编码、名称（成员列表之前） */
+/** 基础字段：编号、名称（成员列表之前） */
 export const workGroupFormSchemaBasic: FieldConfig[] = [
   {
     name: 'code',

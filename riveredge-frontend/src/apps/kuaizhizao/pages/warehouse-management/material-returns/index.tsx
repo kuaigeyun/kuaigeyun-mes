@@ -232,7 +232,7 @@ const MaterialReturnsPage: React.FC = () => {
     }
   };
 
-  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码 */
+  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号 */
   const handleCreate = () => {
     setCreateModalVisible(true);
     setSelectedBorrowDetail(null);
@@ -371,7 +371,7 @@ const MaterialReturnsPage: React.FC = () => {
               size="small"
               rowKey="id"
             columns={[
-              { title: '物料编码', dataIndex: 'material_code', width: 120 },
+              { title: '物料编号', dataIndex: 'material_code', width: 120 },
               { title: '物料名称', dataIndex: 'material_name', width: 150 },
               { title: '单位', dataIndex: 'material_unit', width: 60 },
               { title: '归还数量', dataIndex: 'return_quantity', width: 100, align: 'right' },
@@ -398,7 +398,7 @@ const MaterialReturnsPage: React.FC = () => {
             <CodeField
               pageCode="kuaizhizao-warehouse-material-return"
               name="return_code"
-              label="还料单编码"
+              label="还料单编号"
               autoGenerateOnCreate={true}
               showGenerateButton={false}
               context={{}}
@@ -432,7 +432,7 @@ const MaterialReturnsPage: React.FC = () => {
                   rowKey="id"
                   pagination={false}
                 columns={[
-                  { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                  { title: '物料编号', dataIndex: 'material_code', width: 120 },
                   { title: '物料名称', dataIndex: 'material_name', width: 150 },
                   { title: '单位', dataIndex: 'material_unit', width: 60 },
                   { title: '借出数量', dataIndex: 'borrow_quantity', width: 90, align: 'right' },

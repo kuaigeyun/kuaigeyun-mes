@@ -105,7 +105,7 @@ const DeliveryDelayExceptionPage: React.FC = () => {
    */
   const columns: ProColumns<DeliveryDelayException>[] = [
     {
-      title: '工单编码',
+      title: '工单编号',
       dataIndex: 'work_order_code',
       width: 150,
       fixed: 'left',
@@ -296,7 +296,7 @@ const DeliveryDelayExceptionPage: React.FC = () => {
         dataSource={currentException || {}}
         columns={[
           {
-            title: '工单编码',
+            title: '工单编号',
             dataIndex: 'work_order_code',
           },
           {

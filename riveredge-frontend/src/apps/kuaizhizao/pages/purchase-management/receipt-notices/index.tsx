@@ -2,7 +2,7 @@
  * 收货通知单管理页面
  *
  * 采购通知仓库收货，不直接动库存。来源为采购订单。
- * 行为与发货通知单对齐：ProForm、Row/Col、Form.List、编码规则、UniWarehouseSelect、UniMaterialSelect。
+ * 行为与发货通知单对齐：ProForm、Row/Col、Form.List、编号规则、UniWarehouseSelect、UniMaterialSelect。
  *
  * @author RiverEdge Team
  * @date 2026-02-22
@@ -271,7 +271,7 @@ const ReceiptNoticesPage: React.FC = () => {
           }, 100);
         })
         .catch((e) => {
-          console.warn('收货通知单编码预生成失败:', e);
+          console.warn('收货通知单编号预生成失败:', e);
           setPreviewCode(null);
         });
     } else {
@@ -331,7 +331,7 @@ const ReceiptNoticesPage: React.FC = () => {
         const res = await generateCode({ rule_code: ruleCodeToUse });
         noticeCode = res.code;
       } catch (e) {
-        console.warn('收货通知单编码正式生成失败，使用当前值:', e);
+        console.warn('收货通知单编号正式生成失败，使用当前值:', e);
       }
     }
     try {
@@ -415,10 +415,10 @@ const ReceiptNoticesPage: React.FC = () => {
             label={
               <span>
                 通知单号
-                <a href="/system/code-rules" onClick={(e) => { e.preventDefault(); navigate('/system/code-rules'); }} style={{ marginLeft: 8, fontSize: 12 }}>编码规则设置</a>
+                <a href="/system/code-rules" onClick={(e) => { e.preventDefault(); navigate('/system/code-rules'); }} style={{ marginLeft: 8, fontSize: 12 }}>编号规则设置</a>
               </span>
             }
-            placeholder={isAutoGenerateEnabled('kuaizhizao-receipt-notice') ? '编码将根据编码规则自动生成，可修改' : '请输入通知单号'}
+            placeholder={isAutoGenerateEnabled('kuaizhizao-receipt-notice') ? '编号将根据编号规则自动生成，可修改' : '请输入通知单号'}
             rules={[{ required: true, message: '请输入通知单号' }]}
           />
         </Col>
@@ -629,7 +629,7 @@ const ReceiptNoticesPage: React.FC = () => {
                 rowKey="key"
                 pagination={false}
                 columns={[
-                  { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                  { title: '物料编号', dataIndex: 'material_code', width: 120 },
                   { title: '物料名称', dataIndex: 'material_name', width: 150 },
                   { title: '单位', dataIndex: 'material_unit', width: 60 },
                   { title: '数量', dataIndex: 'notice_quantity', width: 90, align: 'right' },
@@ -694,7 +694,7 @@ const ReceiptNoticesPage: React.FC = () => {
             size="small"
             rowKey={(_, idx) => (noticeDetail?.items?.[idx] as any)?.id ?? idx}
             columns={[
-              { title: '物料编码', dataIndex: 'material_code', width: 120 },
+              { title: '物料编号', dataIndex: 'material_code', width: 120 },
               { title: '物料名称', dataIndex: 'material_name', width: 150 },
               { title: '单位', dataIndex: 'material_unit', width: 60 },
               { title: '数量', dataIndex: 'notice_quantity', width: 90, align: 'right' },

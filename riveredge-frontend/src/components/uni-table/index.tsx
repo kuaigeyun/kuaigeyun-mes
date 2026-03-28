@@ -63,6 +63,7 @@ import { TableContext } from '@ant-design/pro-table/es/Store/Provide'
 import { formatDateBySiteSetting, formatDateTimeBySiteSetting } from '../../utils/format'
 import { useNewShortcut } from '../../hooks/useNewShortcut'
 import { NEW_SHORTCUT_HINT } from '../../utils/globalNewShortcut'
+import { DictionaryLabel } from '../dictionary-label'
 
 /** 列展示重置按钮：同时恢复列显示和列宽到系统默认（需在 ProTable 内部渲染以访问 TableContext） */
 function TableColumnResetButton({
@@ -764,6 +765,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   // 操作列：自适应宽度、不换行（whiteSpace: nowrap，移除固定 width）
   const processedColumns = React.useMemo(() => {
     return effectiveColumns.map((col: any) => {
+      // 自动处理日期和时间列的展示
       if ((col.valueType === 'date' || col.valueType === 'dateTime') && !col.render && !col.valueFormatter) {
         const dataIndex = col.dataIndex
         return {
@@ -778,6 +780,15 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               ? formatDateTimeBySiteSetting(val, '-')
               : formatDateBySiteSetting(val, '-')
           },
+        }
+      }
+      
+      // 自动处理“单位”列的展示（全局优化：始终显示数据字典标签值）
+      const unitFields = ['material_unit', 'unit', 'baseUnit', 'base_unit'];
+      if (typeof col.dataIndex === 'string' && unitFields.includes(col.dataIndex) && !col.render) {
+        return {
+          ...col,
+          render: (val: any) => <DictionaryLabel dictionaryCode="unit" value={val} />,
         }
       }
       if (isOperationColumn(col)) {
@@ -1799,10 +1810,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                     color: '#999',
                     background: '#fafafa',
                     borderRadius: '4px',
-                    border: '1px dashed #d9d9d9',
+                    border: '1px dashed var(--river-border-color)',
                   }}
                 >
-                  <ProjectOutlined style={{ fontSize: '48px', marginBottom: '16px', color: '#d9d9d9' }} />
+                  <ProjectOutlined style={{ fontSize: '48px', marginBottom: '16px', color: 'var(--river-border-color)' }} />
                   <div style={{ fontSize: '16px', marginBottom: '8px' }}>{t('components.uniTable.ganttViewHint')}</div>
                 </div>
               )}
@@ -1870,11 +1881,11 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                     color: '#999',
                     background: '#fafafa',
                     borderRadius: '4px',
-                    border: '1px dashed #d9d9d9',
+                    border: '1px dashed var(--river-border-color)',
                   }}
                 >
                   <AppstoreOutlined
-                    style={{ fontSize: '48px', marginBottom: '16px', color: '#d9d9d9' }}
+                    style={{ fontSize: '48px', marginBottom: '16px', color: 'var(--river-border-color)' }}
                   />
                   <div style={{ fontSize: '16px', marginBottom: '8px' }}>{t('components.uniTable.cardViewTitle')}</div>
                   <div style={{ fontSize: '14px', color: '#999' }}>
@@ -1944,11 +1955,11 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                     color: '#999',
                     background: '#fafafa',
                     borderRadius: '4px',
-                    border: '1px dashed #d9d9d9',
+                    border: '1px dashed var(--river-border-color)',
                   }}
                 >
                   <BarsOutlined
-                    style={{ fontSize: '48px', marginBottom: '16px', color: '#d9d9d9' }}
+                    style={{ fontSize: '48px', marginBottom: '16px', color: 'var(--river-border-color)' }}
                   />
                   <div style={{ fontSize: '16px', marginBottom: '8px' }}>{t('components.uniTable.kanbanViewTitle')}</div>
                   <div style={{ fontSize: '14px', color: '#999' }}>
@@ -2019,11 +2030,11 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                     color: '#999',
                     background: '#fafafa',
                     borderRadius: '4px',
-                    border: '1px dashed #d9d9d9',
+                    border: '1px dashed var(--river-border-color)',
                   }}
                 >
                   <BarChartOutlined
-                    style={{ fontSize: '48px', marginBottom: '16px', color: '#d9d9d9' }}
+                    style={{ fontSize: '48px', marginBottom: '16px', color: 'var(--river-border-color)' }}
                   />
                   <div style={{ fontSize: '16px', marginBottom: '8px' }}>{t('components.uniTable.statsViewTitle')}</div>
                   <div style={{ fontSize: '14px', color: '#999' }}>
@@ -2042,7 +2053,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                 minHeight: '400px',
                 background: '#fafafa',
                 borderRadius: '8px',
-                border: `1px solid ${token.colorBorder}`,
+                border: `1px solid var(--river-border-color)`,
               }}
             >
               {helpViewConfig?.content ?? (

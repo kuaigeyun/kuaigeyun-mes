@@ -1,0 +1,90 @@
+.uni-table-detail {
+  margin-bottom: 24px;
+  width: 100%;
+
+  .uni-table-detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+    gap: 12px;
+
+    .detail-title {
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--ant-color-text);
+      display: flex;
+      align-items: center;
+    }
+
+    .required-mark {
+      color: var(--ant-color-error);
+      margin-right: 4px;
+      font-family: SimSun, sans-serif;
+    }
+  }
+
+  .detail-table-wrapper {
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    box-sizing: border-box;
+
+    .uni-detail-table {
+      width: 100%;
+      margin: 0;
+
+      /* 与 git 中报价单 .quotation-detail-table 内联样式一致（develop@f5b7cc6 及同结构） */
+      .ant-table-thead > tr > th {
+        background-color: var(--ant-color-fill-alter) !important;
+        font-weight: 600;
+      }
+
+      .ant-table {
+        border-top: 1px solid var(--ant-color-border);
+      }
+
+      .ant-table-tbody > tr > td {
+        border-bottom: 1px solid var(--ant-color-border);
+      }
+
+      .ant-table-footer {
+        background: transparent;
+        padding: 8px 0;
+        border: none;
+      }
+
+      // 优化紧凑模式下的表单项间距
+      .ant-form-item {
+        margin-bottom: 0 !important;
+      }
+    }
+  }
+
+  .detail-table-footer {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    width: 100%;
+
+    .ant-btn-dashed {
+      border-color: var(--ant-color-border);
+      &:hover {
+        border-color: var(--ant-color-primary);
+        color: var(--ant-color-primary);
+      }
+    }
+  }
+}
+
+// 适配深色模式
+[data-theme='dark'] {
+  .uni-table-detail {
+    .uni-detail-table {
+      .ant-table-thead > tr > th {
+        background-color: rgba(255, 255, 255, 0.05) !important;
+      }
+    }
+  }
+}

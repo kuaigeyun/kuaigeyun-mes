@@ -655,7 +655,7 @@ const CardView: React.FC = () => {
                 />
               </div>
             ) : (
-              <div style={{ border: '1px solid #d9d9d9', borderRadius: '4px', padding: '16px', backgroundColor: '#fff' }}>
+              <div style={{ border: '1px solid var(--river-border-color)', borderRadius: '4px', padding: '16px', backgroundColor: '#fff' }}>
                 <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordWrap: 'break-word', fontSize: 14, lineHeight: 1.6 }}>
                   {previewContent}
                 </pre>

@@ -57,7 +57,7 @@ const KpiDefinitionsPage: React.FC = () => {
   };
 
   const columns: ProColumns<KPIDefinition>[] = [
-    { title: '编码', dataIndex: 'code', width: 120, fixed: 'left' },
+    { title: '编号', dataIndex: 'code', width: 120, fixed: 'left' },
     { title: '名称', dataIndex: 'name', width: 150, ellipsis: true },
     { title: '权重', dataIndex: 'weight', width: 80, align: 'right' },
     { title: '计算类型', dataIndex: 'calc_type', width: 100, render: (_, r) => CALC_TYPE_OPTIONS.find((o) => o.value === r.calc_type)?.label || r.calc_type },
@@ -143,7 +143,7 @@ const KpiDefinitionsPage: React.FC = () => {
         isEdit={!!editId}
         width={MODAL_CONFIG.STANDARD_WIDTH}
       >
-        <ProFormText name="code" label="编码" rules={[{ required: true }]} colProps={{ span: 12 }} disabled={!!editId} />
+        <ProFormText name="code" label="编号" rules={[{ required: true }]} colProps={{ span: 12 }} disabled={!!editId} />
         <ProFormText name="name" label="名称" rules={[{ required: true }]} colProps={{ span: 12 }} />
         <ProFormDigit name="weight" label="权重" min={0} fieldProps={{ precision: 2 }} colProps={{ span: 12 }} />
         <ProFormSelect name="calc_type" label="计算类型" rules={[{ required: true }]} options={CALC_TYPE_OPTIONS} colProps={{ span: 12 }} />

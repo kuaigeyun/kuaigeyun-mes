@@ -193,7 +193,7 @@ const InventoryParamsForm: React.FC<{
                   rowKey="material_id"
                   pagination={false}
                   columns={[
-                    { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                    { title: '物料编号', dataIndex: 'material_code', width: 120 },
                     { title: '物料名称', dataIndex: 'material_name', width: 150 },
                     {
                       title: 'BOM 版本',
@@ -696,14 +696,14 @@ const DemandComputationPage: React.FC = () => {
    */
   const columns: ProColumns<DemandComputation>[] = [
     {
-      title: '计算编码',
+      title: '计算编号',
       dataIndex: 'computation_code',
       width: 150,
       fixed: 'left',
       hideInSearch: false,
     },
     {
-      title: '需求编码',
+      title: '需求编号',
       dataIndex: 'demand_code',
       width: 150,
       hideInSearch: false,
@@ -1162,8 +1162,8 @@ const DemandComputationPage: React.FC = () => {
                 size="small"
                 dataSource={executeRecord}
                 columns={[
-                  { title: '计算编码', dataIndex: 'computation_code' },
-                  { title: '需求编码', dataIndex: 'demand_code' },
+                  { title: '计算编号', dataIndex: 'computation_code' },
+                  { title: '需求编号', dataIndex: 'demand_code' },
                   {
                     title: '计算类型',
                     dataIndex: 'computation_type',
@@ -1215,7 +1215,7 @@ const DemandComputationPage: React.FC = () => {
               rowKey={(r, i) => `${r.material_code}-${i}`}
               pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (t) => `共 ${t} 条` }}
               columns={[
-                { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                { title: '物料编号', dataIndex: 'material_code', width: 120 },
                 { title: '物料名称', dataIndex: 'material_name', width: 150 },
                 { title: '单位', dataIndex: 'material_unit', width: 60 },
                 {
@@ -1329,8 +1329,8 @@ const DemandComputationPage: React.FC = () => {
                     <ProDescriptions<DemandComputation>
                       dataSource={currentComputation}
                       columns={[
-                        { title: '计算编码', dataIndex: 'computation_code' },
-                        { title: '需求编码', dataIndex: 'demand_code' },
+                        { title: '计算编号', dataIndex: 'computation_code' },
+                        { title: '需求编号', dataIndex: 'demand_code' },
                         {
                           title: '计算类型',
                           dataIndex: 'computation_type',
@@ -1414,7 +1414,7 @@ const DemandComputationPage: React.FC = () => {
                           dataSource={currentComputation.items}
                           rowKey="id"
                           columns={[
-                            { title: '物料编码', dataIndex: 'material_code', width: 120, fixed: 'left' },
+                            { title: '物料编号', dataIndex: 'material_code', width: 120, fixed: 'left' },
                             { title: '物料名称', dataIndex: 'material_name', width: 150, ellipsis: true },
                             {
                               title: '就绪状态',
@@ -1580,7 +1580,7 @@ const DemandComputationPage: React.FC = () => {
                           return map[t] || t || '-'
                         },
                       },
-                      { title: '单据编码', dataIndex: 'target_code', width: 140 },
+                      { title: '单据编号', dataIndex: 'target_code', width: 140 },
                       { title: '单据名称', dataIndex: 'target_name', ellipsis: true },
                       {
                         title: '下推时间',

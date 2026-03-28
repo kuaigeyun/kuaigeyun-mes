@@ -12,9 +12,13 @@ import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Row, Col, Select, Typography } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, ExportOutlined, PrinterOutlined, ShoppingOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, ExportOutlined, PrinterOutlined, ShoppingOutlined, ImportOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniImport } from '../../../../../components/uni-import';
+import { UniDropdown } from '../../../../../components/uni-dropdown';
+import { UniTable } from '../../../../../components/uni-table';
+import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate } from '../../../../../components/layout-templates';
@@ -293,7 +297,7 @@ const SampleTrialsPage: React.FC = () => {
       return;
     }
     if (headerMap['material_code'] === undefined || headerMap['quantity'] === undefined) {
-      messageApi.error('导入表头需包含物料编码和数量');
+      messageApi.error('导入表头需包含物料编号和数量');
       return;
     }
     const getVal = (row: any[], key: string) => {
@@ -485,7 +489,7 @@ const SampleTrialsPage: React.FC = () => {
 
   /**
    * 处理新建样品试用单
-   * 参考销售订单：先打开弹窗，再请求 testGenerateCode 预填编码（不占用序号）
+   * 参考销售订单：先打开弹窗，再请求 testGenerateCode 预填编号（不占用序号）
    */
   const handleCreate = async () => {
     form.resetFields();
@@ -511,7 +515,7 @@ const SampleTrialsPage: React.FC = () => {
           setPreviewCode(preview ?? null);
           formRef.current?.setFieldsValue({ trial_code: preview ?? '' });
         } catch (e) {
-          console.warn('样品试用单编码预生成失败:', e);
+          console.warn('样品试用单编号预生成失败:', e);
           setPreviewCode(null);
         }
       } else {
@@ -528,7 +532,7 @@ const SampleTrialsPage: React.FC = () => {
           setPreviewCode(preview ?? null);
           formRef.current?.setFieldsValue({ trial_code: preview ?? '' });
         } catch (e) {
-          console.warn('样品试用单编码预生成失败:', e);
+          console.warn('样品试用单编号预生成失败:', e);
           setPreviewCode(null);
         }
       } else {
@@ -559,7 +563,7 @@ const SampleTrialsPage: React.FC = () => {
         const codeResponse = await generateCode({ rule_code: ruleCode });
         trialCode = codeResponse.code;
       } catch (e) {
-        console.warn('样品试用单编码正式生成失败，使用当前值:', e);
+        console.warn('样品试用单编号正式生成失败，使用当前值:', e);
       }
     }
     try {
@@ -662,7 +666,7 @@ const SampleTrialsPage: React.FC = () => {
           <ProFormText
             name="trial_code"
             label={t('app.kuaizhizao.sampleTrial.fieldTrialCode') || '试用单号'}
-            placeholder={isAutoGenerateEnabled('kuaizhizao-sample-trial') ? '编码将根据编码规则自动生成，可修改' : '请输入试用单号'}
+            placeholder={isAutoGenerateEnabled('kuaizhizao-sample-trial') ? '编号将根据编号规则自动生成，可修改' : '请输入试用单号'}
             fieldProps={{ disabled: !!editingId }}
           />
         </Col>
@@ -712,9 +716,13 @@ const SampleTrialsPage: React.FC = () => {
             <span style={{ color: '#ff4d4f', marginRight: 4, fontFamily: 'SimSun, sans-serif' }}>*</span>
             {t('app.kuaizhizao.sampleTrial.detailItems') || '明细'}
           </span>
-          <Space>
-            <Button size="small" type="primary" ghost icon={<ShoppingOutlined />} onClick={() => setMaterialPickerOpen(true)}>批量添加物料</Button>
-          </Space>
+          <Button
+            size="small"
+            icon={<ImportOutlined />}
+            onClick={() => setImportModalVisible(true)}
+          >
+            导入明细
+          </Button>
         </div>
         <ProForm.Item name="items" noStyle rules={[{ type: 'array' as const, min: 1, message: '请至少添加一条明细' }]}>
           <Form.List name="items">
@@ -736,7 +744,7 @@ const SampleTrialsPage: React.FC = () => {
                         <UniMaterialSelect
                           name={[index, 'material_id']}
                           label=""
-                          placeholder="请选择物料（支持名称/编码搜索）"
+                          placeholder="请选择物料（支持名称/编号搜索）"
                           required
                           size="small"
                           listFieldKey={index}
@@ -813,17 +821,19 @@ const SampleTrialsPage: React.FC = () => {
                     scroll={fields.length > 0 ? { x: totalWidth } : undefined}
                     style={{ width: '100%', margin: 0 }}
                     footer={() => (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', padding: '0 8px' }}>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
                         <Button
                           type="dashed"
                           icon={<PlusOutlined />}
+                          style={{ flex: 1, minWidth: 120 }}
                           onClick={() => add({ ...defaultTrialItem })}
                         >
-                          新增明细
+                          添加明细
                         </Button>
                         <Button
-                          type="link"
+                          type="default"
                           icon={<ShoppingOutlined />}
+                          style={{ flex: 1, minWidth: 120 }}
                           onClick={() => setMaterialPickerOpen(true)}
                         >
                           {t('app.kuaizhizao.common.materialBatchSelect')}
@@ -924,7 +934,7 @@ const SampleTrialsPage: React.FC = () => {
             size="small"
             rowKey={(_, idx) => String(idx)}
             columns={[
-              { title: '物料编码', dataIndex: 'material_code', width: 120 },
+              { title: '物料编号', dataIndex: 'material_code', width: 120 },
               { title: '物料名称', dataIndex: 'material_name', width: 150 },
               { title: '单位', dataIndex: 'material_unit', width: 60 },
               { title: '数量', dataIndex: 'trial_quantity', width: 90, align: 'right' },
@@ -998,7 +1008,7 @@ const SampleTrialsPage: React.FC = () => {
         onCancel={() => setImportModalVisible(false)}
         onConfirm={handleListImport}
         title="导入样品试用明细"
-        headers={['物料编码', '数量', '单价', '备注']}
+        headers={['物料编号', '数量', '单价', '备注']}
         exampleRow={['MAT001', '10', '1.5', '试用备注']}
       />
     </>

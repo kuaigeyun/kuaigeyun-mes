@@ -30,7 +30,7 @@ const ReportList: React.FC = () => {
 
     const columns = [
         { title: '名称', dataIndex: 'name', key: 'name' },
-        { title: '编码', dataIndex: 'code', key: 'code' },
+        { title: '编号', dataIndex: 'code', key: 'code' },
         {
             title: '引擎类型', dataIndex: 'report_type', key: 'report_type', render: (type: string) => {
                 const config = {

@@ -110,7 +110,7 @@ const InventoryReportPage: React.FC = () => {
   // 表格列定义
   const columns: ProColumns<InventoryReportItem>[] = [
     {
-      title: '物料编码',
+      title: '物料编号',
       dataIndex: 'material_code',
       width: 120,
       ellipsis: true,
@@ -580,7 +580,7 @@ const InventoryReportPage: React.FC = () => {
                 <Table
                   size="small"
                   columns={[
-                    { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                    { title: '物料编号', dataIndex: 'material_code', width: 120 },
                     { title: '物料名称', dataIndex: 'material_name', width: 150 },
                     {
                       title: '库存数量',

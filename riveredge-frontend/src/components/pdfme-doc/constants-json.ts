@@ -31,7 +31,7 @@ export const DEFAULT_WORK_ORDER_PDFME_TEMPLATE_JSON = JSON.stringify({
         width: 180,
         height: 60,
         showHead: true,
-        head: ['序号', '工序编码', '工序名称', '工序状态', '工作中心'],
+        head: ['序号', '工序编号', '工序名称', '工序状态', '工作中心'],
         headWidthPercentages: [12, 18, 28, 20, 22],
         content: JSON.stringify([
           ['1', 'OP01', '下料', '待开始', '下料中心'],

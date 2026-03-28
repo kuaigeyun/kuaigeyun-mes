@@ -66,7 +66,7 @@ const ReceivableList: React.FC = () => {
 
     const columns: ProColumns<Receivable>[] = [
         {
-            title: t('app.kuaicaiwu.common.code', { defaultValue: '编码' }),
+            title: t('app.kuaicaiwu.common.code', { defaultValue: '编号' }),
             dataIndex: 'receivable_code',
             width: 150,
             fixed: 'left',

@@ -6,7 +6,7 @@
 
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Card, Col, DatePicker, Form, Input, Modal, Row, Space, Switch, Typography } from 'antd';
+import { App, Button, Col, DatePicker, Form, Input, Modal, Row, Space, Switch } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
@@ -17,7 +17,7 @@ import { DictionarySelect } from '../../../../../components/dictionary-select';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
-import { SUBMIT_SHORTCUT_HINT } from '../../../../../utils/globalSubmitShortcut';
+
 
 import { customerFollowUpApi, type CustomerFollowUp } from '../../../services/customer-follow-up';
 import { listQuotations, type Quotation } from '../../../services/quotation';
@@ -25,18 +25,10 @@ import { listSalesOrders, type SalesOrder } from '../../../services/sales-order'
 import { customerApi, getDictionaryOptions } from '../../../../master-data/services/supply-chain';
 import { CustomerFormModal } from '../../../../master-data/components/CustomerFormModal';
 import type { Customer } from '../../../../master-data/types/supply-chain';
-import { apiRequest } from '../../../../../services/api';
 
 const DICT_CODE = 'SALES_FOLLOW_UP_TYPE';
 
-const extractArrayFromResponse = (raw: any): any[] => {
-  if (Array.isArray(raw)) return raw;
-  if (Array.isArray(raw?.items)) return raw.items;
-  if (Array.isArray(raw?.data)) return raw.data;
-  if (Array.isArray(raw?.data?.items)) return raw.data.items;
-  if (Array.isArray(raw?.data?.data)) return raw.data.data;
-  return [];
-};
+
 
 const getCustomerId = (c: any): number | null => {
   const id = Number(c?.id ?? c?.customer_id);
@@ -158,20 +150,24 @@ const CustomerFollowUpsPage: React.FC = () => {
   }, [salesOrderOptions, editing]);
 
   const loadDictAndCustomers = async () => {
-    const [custRes, custRes2, dictRes] = await Promise.allSettled([
-      apiRequest<unknown>('/apps/master-data/supply-chain/customers', {
-        params: { limit: 2000, is_active: true },
-      }),
-      customerApi.list({ limit: 2000, isActive: true } as any),
+    const [custRes, dictRes] = await Promise.allSettled([
+      customerApi.list({ limit: 1000, isActive: true } as any),
       getDictionaryOptions(DICT_CODE),
     ]);
 
-    const primaryList = custRes.status === 'fulfilled' ? extractArrayFromResponse(custRes.value as any) : [];
-    const fallbackList =
-      custRes2.status === 'fulfilled' ? extractArrayFromResponse(custRes2.value as any) : [];
-    const merged = [...primaryList, ...fallbackList];
+    let custData: any[] = [];
+    if (custRes.status === 'fulfilled') {
+      const val = custRes.value;
+      // 兼容多种响应格式
+      if (Array.isArray(val)) {
+        custData = val;
+      } else if (val && typeof val === 'object') {
+        custData = (val as any).items || (val as any).data || [];
+      }
+    }
+
     const uniq = new Map<number, any>();
-    for (const c of merged) {
+    for (const c of custData) {
       const id = getCustomerId(c);
       if (id == null) continue;
       if (!uniq.has(id)) uniq.set(id, c);
@@ -448,142 +444,130 @@ const CustomerFollowUpsPage: React.FC = () => {
       <FormModalTemplate
         title={editing ? t('app.kuaizhizao.customerFollowUp.editTitle') : t('app.kuaizhizao.customerFollowUp.createTitle')}
         open={modalOpen}
-        onCancel={() => setModalOpen(false)}
+        onClose={() => setModalOpen(false)}
         onFinish={submit}
-        formRef={form as any}
+        form={form}
         width={960}
       >
-        <Space direction="vertical" size={12} style={{ width: '100%' }}>
-          <Card size="small" title={<Typography.Text strong>{t('pages.personal.profile.basicInfo')}</Typography.Text>}>
-            <Row gutter={[16, 0]}>
-              <Col xs={24} md={12}>
-                <Form.Item
-                  name="customer_id"
-                  label={t('app.kuaizhizao.customerFollowUp.fieldCustomer')}
-                  rules={[{ required: true, message: t('common.required') }]}
-                >
-                  <UniDropdown
-                    ref={customerDropdownRef}
-                    showSearch
-                    optionFilterProp="label"
-                    disabled={!!editing}
-                    autoFocus={!editing}
-                    quickCreate={{
-                      label: t('app.kuaizhizao.customerFollowUp.quickAddCustomer') || '快速新增客户',
-                      onClick: () => setCustomerModalVisible(true),
-                    }}
-                    options={customers
-                      .map((c: any) => {
-                        const id = getCustomerId(c);
-                        if (id == null) return null;
-                        return { label: getCustomerName(c) || String(id), value: id };
-                      })
-                      .filter(Boolean) as Array<{ label: string; value: number }>}
-                    onChange={(value) => {
-                      const customerId = value != null ? Number(value) : undefined;
-                      form.setFieldsValue({ customer_id: customerId });
-                      form.setFieldsValue({ quotation_id: undefined, sales_order_id: undefined });
-                    }}
-                  />
-                </Form.Item>
-              </Col>
-              <Col xs={24} md={12}>
-                <DictionarySelect
-                  dictionaryCode={DICT_CODE}
-                  name="activity_type_code"
-                  label={t('app.kuaizhizao.customerFollowUp.fieldActivityType')}
-                  placeholder={t('app.kuaizhizao.customerFollowUp.activityTypePlaceholder')}
-                  formRef={form as any}
-                  required
-                />
-              </Col>
-              <Col xs={24} md={12}>
-                <Form.Item
-                  name="occurred_at"
-                  label={t('app.kuaizhizao.customerFollowUp.fieldOccurredAt')}
-                  rules={[{ required: true, message: t('common.required') }]}
-                >
-                  <DatePicker showTime style={{ width: '100%' }} format="YYYY-MM-DD HH:mm" />
-                </Form.Item>
-              </Col>
-              <Col xs={24} md={12}>
-                <Form.Item name="next_follow_up_at" label={t('app.kuaizhizao.customerFollowUp.fieldNextFollowUp')}>
-                  <DatePicker 
-                    showTime 
-                    style={{ width: '100%' }} 
-                    format="YYYY-MM-DD HH:mm"
-                    renderExtraFooter={() => (
-                      <Space style={{ padding: '8px 12px' }}>
-                        <Button size="small" type="link" onClick={() => form.setFieldValue('next_follow_up_at', dayjs().add(1, 'day'))}>明天</Button>
-                        <Button size="small" type="link" onClick={() => form.setFieldValue('next_follow_up_at', dayjs().add(3, 'day'))}>3天后</Button>
-                        <Button size="small" type="link" onClick={() => form.setFieldValue('next_follow_up_at', dayjs().add(7, 'day'))}>1周后</Button>
-                      </Space>
-                    )}
-                  />
-                </Form.Item>
-              </Col>
-            </Row>
-          </Card>
-
-          <Card size="small" title={<Typography.Text strong>关联单据</Typography.Text>}>
-            <Row gutter={[16, 0]}>
-              <Col xs={24} md={12}>
-                <Form.Item name="quotation_id" label={t('app.kuaizhizao.customerFollowUp.fieldLinkedQuotation')}>
-                  <UniDropdown
-                    allowClear
-                    showSearch
-                    optionFilterProp="label"
-                    loading={docListsLoading}
-                    disabled={modalCustomerId == null}
-                    placeholder={
-                      modalCustomerId == null
-                        ? t('app.kuaizhizao.customerFollowUp.selectCustomerFirst')
-                        : t('app.kuaizhizao.customerFollowUp.optionalSelectDocument')
-                    }
-                    options={quotationSelectOptions}
-                  />
-                </Form.Item>
-              </Col>
-              <Col xs={24} md={12}>
-                <Form.Item
-                  name="sales_order_id"
-                  label={t('app.kuaizhizao.customerFollowUp.fieldLinkedSalesOrder')}
-                >
-                  <UniDropdown
-                    allowClear
-                    showSearch
-                    optionFilterProp="label"
-                    loading={docListsLoading}
-                    disabled={modalCustomerId == null}
-                    placeholder={
-                      modalCustomerId == null
-                        ? t('app.kuaizhizao.customerFollowUp.selectCustomerFirst')
-                        : t('app.kuaizhizao.customerFollowUp.optionalSelectDocument')
-                    }
-                    options={salesOrderSelectOptions}
-                  />
-                </Form.Item>
-              </Col>
-            </Row>
-          </Card>
-
-          <Card size="small" title={<Typography.Text strong>跟进记录</Typography.Text>}>
+        <Row gutter={[24, 0]}>
+          <Col xs={24} md={12}>
             <Form.Item
-              name="content"
+              name="customer_id"
+              label={t('app.kuaizhizao.customerFollowUp.fieldCustomer')}
               rules={[{ required: true, message: t('common.required') }]}
-              style={{ marginBottom: 0 }}
             >
-              <Input.TextArea
-                ref={contentInputRef}
-                rows={8}
-                showCount
-                maxLength={2000}
-                placeholder={t('app.kuaizhizao.customerFollowUp.fieldContent')}
-                style={{ resize: 'vertical' }}
+              <UniDropdown
+                ref={customerDropdownRef}
+                showSearch
+                optionFilterProp="label"
+                disabled={!!editing}
+                autoFocus={!editing}
+                quickCreate={{
+                  label: t('app.kuaizhizao.customerFollowUp.quickAddCustomer') || '快速新增客户',
+                  onClick: () => setCustomerModalVisible(true),
+                }}
+                options={customers
+                  .map((c: any) => {
+                    const id = getCustomerId(c);
+                    if (id == null) return null;
+                    return { label: getCustomerName(c) || String(id), value: id };
+                  })
+                  .filter(Boolean) as Array<{ label: string; value: number }>}
+                onChange={() => {
+                  form.setFieldsValue({ quotation_id: undefined, sales_order_id: undefined });
+                }}
               />
             </Form.Item>
-          </Card>
-        </Space>
+          </Col>
+          <Col xs={24} md={12}>
+            <DictionarySelect
+              dictionaryCode={DICT_CODE}
+              name="activity_type_code"
+              label={t('app.kuaizhizao.customerFollowUp.fieldActivityType')}
+              placeholder={t('app.kuaizhizao.customerFollowUp.activityTypePlaceholder')}
+              formRef={form as any}
+              required
+            />
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item
+              name="occurred_at"
+              label={t('app.kuaizhizao.customerFollowUp.fieldOccurredAt')}
+              rules={[{ required: true, message: t('common.required') }]}
+            >
+              <DatePicker showTime style={{ width: '100%' }} format="YYYY-MM-DD HH:mm" />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="next_follow_up_at" label={t('app.kuaizhizao.customerFollowUp.fieldNextFollowUp')}>
+              <DatePicker 
+                showTime 
+                style={{ width: '100%' }} 
+                format="YYYY-MM-DD HH:mm"
+                renderExtraFooter={() => (
+                  <Space style={{ padding: '8px 12px' }}>
+                    <Button size="small" type="link" onClick={() => form.setFieldValue('next_follow_up_at', dayjs().add(1, 'day'))}>明天</Button>
+                    <Button size="small" type="link" onClick={() => form.setFieldValue('next_follow_up_at', dayjs().add(3, 'day'))}>3天后</Button>
+                    <Button size="small" type="link" onClick={() => form.setFieldValue('next_follow_up_at', dayjs().add(7, 'day'))}>1周后</Button>
+                  </Space>
+                )}
+              />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="quotation_id" label={t('app.kuaizhizao.customerFollowUp.fieldLinkedQuotation')}>
+              <UniDropdown
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                loading={docListsLoading}
+                disabled={modalCustomerId == null}
+                placeholder={
+                  modalCustomerId == null
+                    ? t('app.kuaizhizao.customerFollowUp.selectCustomerFirst')
+                    : t('app.kuaizhizao.customerFollowUp.optionalSelectDocument')
+                }
+                options={quotationSelectOptions}
+              />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item
+              name="sales_order_id"
+              label={t('app.kuaizhizao.customerFollowUp.fieldLinkedSalesOrder')}
+            >
+              <UniDropdown
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                loading={docListsLoading}
+                disabled={modalCustomerId == null}
+                placeholder={
+                  modalCustomerId == null
+                    ? t('app.kuaizhizao.customerFollowUp.selectCustomerFirst')
+                    : t('app.kuaizhizao.customerFollowUp.optionalSelectDocument')
+                }
+                options={salesOrderSelectOptions}
+              />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Form.Item
+          name="content"
+          label={t('app.kuaizhizao.customerFollowUp.fieldContent')}
+          rules={[{ required: true, message: t('common.required') }]}
+          style={{ marginBottom: 0 }}
+        >
+          <Input.TextArea
+            ref={contentInputRef}
+            rows={8}
+            showCount
+            maxLength={2000}
+            placeholder="请输入跟进记录内容..."
+            style={{ resize: 'vertical' }}
+          />
+        </Form.Item>
       </FormModalTemplate>
 
       <CustomerFormModal

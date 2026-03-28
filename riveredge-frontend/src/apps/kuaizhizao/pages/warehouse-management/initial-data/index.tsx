@@ -163,9 +163,9 @@ const InitialDataImportPage: React.FC = () => {
               <p style={{ color: '#666', marginBottom: 16 }}>
                 点击下方按钮打开导入表格，填写期初库存数据。
                 <br />
-                <strong>必填字段：</strong>物料编码（支持部门编码，自动映射）、仓库编码、期初数量
+                <strong>必填字段：</strong>物料编号（支持部门编号，自动映射）、仓库编号、期初数量
                 <br />
-                <strong>可选字段：</strong>期初金额、批次号、库位编码
+                <strong>可选字段：</strong>期初金额、批次号、库位编号
               </p>
               <Button
                 type="primary"
@@ -191,9 +191,9 @@ const InitialDataImportPage: React.FC = () => {
               <p style={{ color: '#666', marginBottom: 16 }}>
                 点击下方按钮打开导入表格，填写期初在制品数据。
                 <br />
-                <strong>必填字段：</strong>产品编码（支持部门编码，自动映射）、当前工序、在制品数量
+                <strong>必填字段：</strong>产品编号（支持部门编号，自动映射）、当前工序、在制品数量
                 <br />
-                <strong>可选字段：</strong>工单号（不提供则自动生成）、已投入数量、预计完成时间、车间编码
+                <strong>可选字段：</strong>工单号（不提供则自动生成）、已投入数量、预计完成时间、车间编号
               </p>
               <Button
                 type="primary"
@@ -219,7 +219,7 @@ const InitialDataImportPage: React.FC = () => {
               <p style={{ color: '#666', marginBottom: 16 }}>
                 点击下方按钮打开导入表格，填写期初应收应付数据。
                 <br />
-                <strong>必填字段：</strong>类型（应收/应付）、客户编码（应收时）/供应商编码（应付时）、单据类型、单据号、单据日期、应收金额（应收时）/应付金额（应付时）
+                <strong>必填字段：</strong>类型（应收/应付）、客户编号（应收时）/供应商编号（应付时）、单据类型、单据号、单据日期、应收金额（应收时）/应付金额（应付时）
                 <br />
                 <strong>可选字段：</strong>已收金额、已付金额、到期日期、发票号
               </p>
@@ -286,7 +286,7 @@ const InitialDataImportPage: React.FC = () => {
               onCancel={() => setImportVisible(false)}
               onConfirm={handleImportInventory}
               title="导入期初库存"
-              headers={['物料编码', '仓库编码', '期初数量', '期初金额', '批次号', '库位编码']}
+              headers={['物料编号', '仓库编号', '期初数量', '期初金额', '批次号', '库位编号']}
               exampleRow={['MAT001', 'WH001', '100', '1000.00', 'BATCH001', 'LOC001']}
             />
           )}
@@ -296,7 +296,7 @@ const InitialDataImportPage: React.FC = () => {
               onCancel={() => setWipImportVisible(false)}
               onConfirm={handleImportWIP}
               title="导入期初在制品"
-              headers={['工单号', '产品编码', '当前工序', '在制品数量', '已投入数量', '预计完成时间', '车间编码']}
+              headers={['工单号', '产品编号', '当前工序', '在制品数量', '已投入数量', '预计完成时间', '车间编号']}
               exampleRow={['', 'PROD001', 'OP001', '50', '100', '2026-01-20 18:00:00', 'WS001']}
             />
           )}
@@ -306,7 +306,7 @@ const InitialDataImportPage: React.FC = () => {
               onCancel={() => setReceivablesPayablesImportVisible(false)}
               onConfirm={handleImportReceivablesPayables}
               title="导入期初应收应付"
-              headers={['类型', '客户编码', '供应商编码', '单据类型', '单据号', '单据日期', '应收金额', '应付金额', '已收金额', '已付金额', '到期日期', '发票号']}
+              headers={['类型', '客户编号', '供应商编号', '单据类型', '单据号', '单据日期', '应收金额', '应付金额', '已收金额', '已付金额', '到期日期', '发票号']}
               exampleRow={['应收', 'CUS001', '', '销售订单', 'SO001', '2026-01-10', '10000.00', '', '0', '', '2026-02-10', 'INV001']}
             />
           )}

@@ -179,7 +179,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
    */
   const columns: ProColumns<CustomerMaterialRegistration>[] = [
     {
-      title: '登记编码',
+      title: '登记编号',
       dataIndex: 'registration_code',
       width: 150,
       ellipsis: true,
@@ -198,7 +198,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       ellipsis: true,
     },
     {
-      title: '映射物料编码',
+      title: '映射物料编号',
       dataIndex: 'mapped_material_code',
       width: 150,
       ellipsis: true,
@@ -393,7 +393,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
           <Col span={12}>
             <ProFormText
               name="mapped_material_code"
-              label="映射物料编码"
+              label="映射物料编号"
               placeholder="条码解析后自动填充"
               disabled
             />
@@ -464,7 +464,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
         dataSource={currentRegistration || {}}
         columns={[
           {
-            title: '登记编码',
+            title: '登记编号',
             dataIndex: 'registration_code',
           },
           {
@@ -484,7 +484,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
             },
           },
           {
-            title: '映射物料编码',
+            title: '映射物料编号',
             dataIndex: 'mapped_material_code',
           },
           {

@@ -67,7 +67,7 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
   // 表格列定义
   const columns: ProColumns<ReplenishmentSuggestion>[] = [
     {
-      title: '物料编码',
+      title: '物料编号',
       dataIndex: 'material_code',
       width: 120,
       ellipsis: true,
@@ -244,7 +244,7 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
   // 详情列定义
   const detailColumns: ProDescriptionsItemType<ReplenishmentSuggestion>[] = [
     {
-      title: '物料编码',
+      title: '物料编号',
       dataIndex: 'material_code',
     },
     {

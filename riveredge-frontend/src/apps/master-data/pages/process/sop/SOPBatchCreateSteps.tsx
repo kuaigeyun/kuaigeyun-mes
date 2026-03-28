@@ -387,7 +387,7 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
                 pagination={false}
                 columns={[
                   { title: '序号', width: 60, render: (_: any, __: any, i: number) => i + 1 },
-                  { title: '工序编码', dataIndex: 'code', width: 120 },
+                  { title: '工序编号', dataIndex: 'code', width: 120 },
                   { title: '工序名称', dataIndex: 'name' },
                   {
                     title: '操作',
@@ -434,7 +434,7 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
               pagination={false}
               columns={[
                 { title: '序号', width: 60, render: (_: any, __: any, i: number) => i + 1 },
-                { title: '工序编码', dataIndex: 'code', width: 120 },
+                { title: '工序编号', dataIndex: 'code', width: 120 },
                 { title: '工序名称', dataIndex: 'name' },
               ]}
             />
@@ -457,7 +457,7 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
               rowKey="uuid"
               pagination={false}
               columns={[
-                { title: 'SOP编码', dataIndex: 'code', width: 160 },
+                { title: 'SOP编号', dataIndex: 'code', width: 160 },
                 { title: 'SOP名称', dataIndex: 'name' },
                 {
                   title: '操作',
@@ -509,8 +509,8 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
         ]}
       >
         <Form layout="vertical">
-          <Form.Item label="工艺路线编码" required>
-            <Input value={newRouteCode} onChange={(e) => setNewRouteCode(e.target.value)} placeholder="请输入编码" />
+          <Form.Item label="工艺路线编号" required>
+            <Input value={newRouteCode} onChange={(e) => setNewRouteCode(e.target.value)} placeholder="请输入编号" />
           </Form.Item>
           <Form.Item label="工艺路线名称" required>
             <Input value={newRouteName} onChange={(e) => setNewRouteName(e.target.value)} placeholder="请输入名称" />
@@ -528,7 +528,7 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
               pagination={false}
               columns={[
                 { title: '序号', width: 60, render: (_: any, __: any, i: number) => i + 1 },
-                { title: '工序编码', dataIndex: 'code', width: 120 },
+                { title: '工序编号', dataIndex: 'code', width: 120 },
                 { title: '工序名称', dataIndex: 'name' },
                 {
                   title: '操作',

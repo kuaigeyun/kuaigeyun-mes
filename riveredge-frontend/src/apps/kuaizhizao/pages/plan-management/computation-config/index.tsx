@@ -133,7 +133,7 @@ const ComputationConfigPage: React.FC = () => {
    */
   const columns: ProColumns<ComputationConfig>[] = [
     {
-      title: '配置编码',
+      title: '配置编号',
       dataIndex: 'config_code',
       width: 150,
       fixed: 'left',
@@ -284,8 +284,8 @@ const ComputationConfigPage: React.FC = () => {
         >
           <ProFormText
             name="config_code"
-            label="配置编码"
-            rules={[{ required: true, message: '请输入配置编码' }]}
+            label="配置编号"
+            rules={[{ required: true, message: '请输入配置编号' }]}
             disabled={isEdit}
           />
           <ProFormText
@@ -321,7 +321,7 @@ const ComputationConfigPage: React.FC = () => {
                     />
                     <ProFormText
                       name="material_code"
-                      label="物料编码"
+                      label="物料编号"
                     />
                     <ProFormText
                       name="material_name"
@@ -346,7 +346,7 @@ const ComputationConfigPage: React.FC = () => {
                     />
                     <ProFormText
                       name="warehouse_code"
-                      label="仓库编码"
+                      label="仓库编号"
                     />
                     <ProFormText
                       name="warehouse_name"

@@ -287,7 +287,7 @@ const IncomingInspectionPage: React.FC = () => {
       fixed: 'left',
     },
     {
-      title: '物料编码',
+      title: '物料编号',
       dataIndex: 'material_code',
       width: 120,
     },
@@ -504,7 +504,7 @@ const IncomingInspectionPage: React.FC = () => {
         enableRowSelection={true}
         showImportButton={true}
         onImport={handleImport}
-        importHeaders={['采购入库单号', '物料编码', '检验数量', '合格数量', '不合格数量', '备注']}
+        importHeaders={['采购入库单号', '物料编号', '检验数量', '合格数量', '不合格数量', '备注']}
         importExampleRow={['PR20250115001', 'MAT001', '100', '95', '5', '']}
         showExportButton={true}
         onExport={handleExport}
@@ -549,7 +549,7 @@ const IncomingInspectionPage: React.FC = () => {
           <Card title="检验信息" size="small" style={{ marginBottom: 16 }}>
             <Row gutter={16}>
               <Col span={12}>
-                <strong>物料编码：</strong>{currentInspection.material_code}
+                <strong>物料编号：</strong>{currentInspection.material_code}
               </Col>
               <Col span={12}>
                 <strong>物料名称：</strong>{currentInspection.material_name}
@@ -705,7 +705,7 @@ const IncomingInspectionPage: React.FC = () => {
                     <strong>检验单号：</strong>{inspectionDetail.inspection_code}
                   </Col>
                   <Col span={12}>
-                    <strong>物料编码：</strong>{inspectionDetail.material_code}
+                    <strong>物料编号：</strong>{inspectionDetail.material_code}
                   </Col>
                 </Row>
                 <Row gutter={16} style={{ marginTop: 8 }}>

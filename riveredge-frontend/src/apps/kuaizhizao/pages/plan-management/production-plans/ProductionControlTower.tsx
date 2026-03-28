@@ -146,7 +146,7 @@ const ProductionControlTower: React.FC = () => {
                   render: (val: string) => <Tag color={val === 'delayed' ? 'volcano' : 'warning'}>{val === 'delayed' ? '实际延期' : '预计风险'}</Tag>
                 },
                 { 
-                  title: '工单编码', 
+                  title: '工单编号', 
                   dataIndex: 'work_order_code', 
                   width: 140,
                   render: (text: string) => (

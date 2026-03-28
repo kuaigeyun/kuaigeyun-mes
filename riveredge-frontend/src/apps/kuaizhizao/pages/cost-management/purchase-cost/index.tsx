@@ -157,9 +157,9 @@ const PurchaseCostPage: React.FC = () => {
               calculation_date: result.calculation_date ? dayjs(result.calculation_date).format('YYYY-MM-DD') : '-',
             }}
             columns={[
-              { title: '物料编码', dataIndex: 'material_code' },
+              { title: '物料编号', dataIndex: 'material_code' },
               { title: '物料名称', dataIndex: 'material_name' },
-              { title: '采购订单编码', dataIndex: 'purchase_order_code', hide: !result.purchase_order_code },
+              { title: '采购订单编号', dataIndex: 'purchase_order_code', hide: !result.purchase_order_code },
               { title: '供应商', dataIndex: 'supplier_name', hide: !result.supplier_name },
               { title: '物料来源类型', dataIndex: 'source_type' },
               { title: '数量', dataIndex: 'quantity' },

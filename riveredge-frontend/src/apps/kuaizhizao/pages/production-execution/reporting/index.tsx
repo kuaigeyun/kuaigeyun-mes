@@ -460,7 +460,7 @@ const ReportingPage: React.FC = () => {
     setJumpRuleError('');
 
     try {
-      // 根据工单编码获取工单信息
+      // 根据工单编号获取工单信息
       const workOrders = await workOrderApi.list({ code: value.trim() });
       if (!workOrders || workOrders.length === 0) {
         messageApi.error('未找到该工单');
@@ -1554,7 +1554,7 @@ const ReportingPage: React.FC = () => {
               advancedSearch={{
                 label: '高级搜索工单',
                 fields: [
-                  { name: 'code', label: '工单编码', type: 'text' },
+                  { name: 'code', label: '工单编号', type: 'text' },
                   { name: 'name', label: '工单名称', type: 'text' },
                 ],
                 onSearch: async (params) => {
@@ -1656,7 +1656,7 @@ const ReportingPage: React.FC = () => {
             {/* 扫码输入 */}
             <div style={{ marginBottom: 20 }}>
               <Input
-                placeholder="扫描或输入工单编码"
+                placeholder="扫描或输入工单编号"
                 value={scanWorkOrderCode}
                 onChange={(e) => setScanWorkOrderCode(e.target.value)}
                 onPressEnter={() => handleScanInput(scanWorkOrderCode)}
@@ -1679,7 +1679,7 @@ const ReportingPage: React.FC = () => {
               <Card size="small" style={{ marginBottom: 16 }}>
                 <Row gutter={16}>
                   <Col span={12}>
-                    <div><strong>工单编码：</strong>{currentWorkOrder.code}</div>
+                    <div><strong>工单编号：</strong>{currentWorkOrder.code}</div>
                   </Col>
                   <Col span={12}>
                     <div><strong>产品：</strong>{currentWorkOrder.product_name}</div>
@@ -2223,7 +2223,7 @@ const ReportingPage: React.FC = () => {
             <Card size="small" style={{ marginBottom: 16 }}>
               <Row gutter={16}>
                 <Col span={12}>
-                  <div><strong>工单编码：</strong>{currentReportingRecord.work_order_code}</div>
+                  <div><strong>工单编号：</strong>{currentReportingRecord.work_order_code}</div>
                 </Col>
                 <Col span={12}>
                   <div><strong>工序：</strong>{currentReportingRecord.operation_name}</div>
@@ -2297,7 +2297,7 @@ const ReportingPage: React.FC = () => {
             <Card size="small" style={{ marginBottom: 16 }}>
               <Row gutter={16}>
                 <Col span={12}>
-                  <div><strong>工单编码：</strong>{currentReportingRecordForDefect.work_order_code}</div>
+                  <div><strong>工单编号：</strong>{currentReportingRecordForDefect.work_order_code}</div>
                 </Col>
                 <Col span={12}>
                   <div><strong>工序：</strong>{currentReportingRecordForDefect.operation_name}</div>
@@ -2383,7 +2383,7 @@ const ReportingPage: React.FC = () => {
             <Card size="small" style={{ marginBottom: 16 }}>
               <Row gutter={16}>
                 <Col span={12}>
-                  <div><strong>工单编码：</strong>{currentReportingRecordForCorrect.work_order_code}</div>
+                  <div><strong>工单编号：</strong>{currentReportingRecordForCorrect.work_order_code}</div>
                 </Col>
                 <Col span={12}>
                   <div><strong>工序：</strong>{currentReportingRecordForCorrect.operation_name}</div>
@@ -2487,7 +2487,7 @@ const ReportingPage: React.FC = () => {
         />
         <ProFormText
           name="material_code"
-          label="物料编码"
+          label="物料编号"
           disabled
         />
         <ProFormText

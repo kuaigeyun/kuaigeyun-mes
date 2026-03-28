@@ -76,7 +76,7 @@ const MoldUsagesPage: React.FC = () => {
 
   const columns: ProColumns<MoldUsage>[] = [
     { title: '使用单号', dataIndex: 'usage_no', width: 150, fixed: 'left', ellipsis: true },
-    { title: '模具编码', dataIndex: 'mold_code', width: 120 },
+    { title: '模具编号', dataIndex: 'mold_code', width: 120 },
     { title: '模具名称', dataIndex: 'mold_name', width: 180, ellipsis: true },
     { title: '使用日期', dataIndex: 'usage_date', valueType: 'dateTime', width: 170 },
     { title: '使用次数', dataIndex: 'usage_count', width: 100, align: 'right' },

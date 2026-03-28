@@ -291,13 +291,13 @@ const FinishedGoodsInspectionPage: React.FC = () => {
       fixed: 'left',
     },
     {
-      title: '工单编码',
+      title: '工单编号',
       dataIndex: 'work_order_code',
       width: 140,
       ellipsis: true,
     },
     {
-      title: '物料编码',
+      title: '物料编号',
       dataIndex: 'material_code',
       width: 120,
     },
@@ -514,7 +514,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
         enableRowSelection={true}
         showImportButton={true}
         onImport={handleImport}
-        importHeaders={['工单编码', '检验数量', '合格数量', '不合格数量', '备注']}
+        importHeaders={['工单编号', '检验数量', '合格数量', '不合格数量', '备注']}
         importExampleRow={['WO20250115001', '100', '98', '2', '']}
         showExportButton={true}
         onExport={handleExport}
@@ -560,10 +560,10 @@ const FinishedGoodsInspectionPage: React.FC = () => {
           <Card title="检验信息" size="small" style={{ marginBottom: 16 }}>
             <Row gutter={16}>
               <Col span={12}>
-                <strong>工单编码：</strong>{currentInspection.work_order_code}
+                <strong>工单编号：</strong>{currentInspection.work_order_code}
               </Col>
               <Col span={12}>
-                <strong>物料编码：</strong>{currentInspection.material_code}
+                <strong>物料编号：</strong>{currentInspection.material_code}
               </Col>
             </Row>
             <Row gutter={16} style={{ marginTop: 8 }}>
@@ -650,7 +650,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
             advancedSearch={{
               label: '高级搜索工单',
               fields: [
-                { name: 'code', label: '工单编码', type: 'text' },
+                { name: 'code', label: '工单编号', type: 'text' },
                 { name: 'name', label: '工单名称', type: 'text' },
               ],
               onSearch: async (params) => {
@@ -749,12 +749,12 @@ const FinishedGoodsInspectionPage: React.FC = () => {
                     <strong>检验单号：</strong>{inspectionDetail.inspection_code}
                   </Col>
                   <Col span={12}>
-                    <strong>工单编码：</strong>{inspectionDetail.work_order_code}
+                    <strong>工单编号：</strong>{inspectionDetail.work_order_code}
                   </Col>
                 </Row>
                 <Row gutter={16} style={{ marginTop: 8 }}>
                   <Col span={12}>
-                    <strong>物料编码：</strong>{inspectionDetail.material_code}
+                    <strong>物料编号：</strong>{inspectionDetail.material_code}
                   </Col>
                   <Col span={12}>
                     <strong>物料名称：</strong>{inspectionDetail.material_name}

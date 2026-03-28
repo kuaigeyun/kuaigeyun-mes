@@ -295,7 +295,7 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
           </div>
         )}
 
-        {/* 树形结构：与编码规则左栏一致的滚动条样式（scrollbar-like-modal） */}
+        {/* 树形结构：与编号规则左栏一致的滚动条样式（scrollbar-like-modal） */}
         <div
           className="left-panel-scroll-container scrollbar-like-modal"
           style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '8px' }}

@@ -70,7 +70,7 @@ const ToolMaintenancesPage: React.FC = () => {
   };
 
   const columns: ProColumns<ToolMaintenance>[] = [
-    { title: '工装编码', dataIndex: 'tool_code', width: 120 },
+    { title: '工装编号', dataIndex: 'tool_code', width: 120 },
     { title: '工装名称', dataIndex: 'tool_name', width: 180, ellipsis: true },
     { title: '维保类型', dataIndex: 'maintenance_type', width: 120 },
     { title: '维保日期', dataIndex: 'maintenance_date', valueType: 'date', width: 120 },

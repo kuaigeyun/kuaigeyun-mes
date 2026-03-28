@@ -37,7 +37,7 @@ const SparePartsPage: React.FC = () => {
           }
         }}
         columns={[
-          { title: '备件编码', dataIndex: 'part_no' },
+          { title: '备件编号', dataIndex: 'part_no' },
           { title: '备件名称', dataIndex: 'part_name' },
           { title: '当前库存', dataIndex: 'stock_quantity', valueType: 'digit' },
           { title: '库位', dataIndex: 'warehouse_location' },

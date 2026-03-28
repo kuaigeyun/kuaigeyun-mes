@@ -126,7 +126,7 @@ const BarcodeMappingRulesPage: React.FC = () => {
    */
   const columns: ProColumns<BarcodeMappingRule>[] = [
     {
-      title: '规则编码',
+      title: '规则编号',
       dataIndex: 'code',
       width: 120,
       fixed: 'left',
@@ -161,7 +161,7 @@ const BarcodeMappingRulesPage: React.FC = () => {
       ),
     },
     {
-      title: '映射物料编码',
+      title: '映射物料编号',
       dataIndex: 'material_code',
       width: 120,
       ellipsis: true,
@@ -429,7 +429,7 @@ const BarcodeMappingRulesPage: React.FC = () => {
         customContent={
           currentRecord ? (
             <div style={{ padding: '16px 0' }}>
-              <p><strong>规则编码：</strong>{currentRecord.code}</p>
+              <p><strong>规则编号：</strong>{currentRecord.code}</p>
               <p><strong>规则名称：</strong>{currentRecord.name}</p>
               <p><strong>客户：</strong>{currentRecord.customer_name || '全部客户'}</p>
               <p><strong>条码模式：</strong>{currentRecord.barcode_pattern}</p>
@@ -438,7 +438,7 @@ const BarcodeMappingRulesPage: React.FC = () => {
                   {currentRecord.barcode_type === '2d' ? '二维码' : '一维码'}
                 </Tag>
               </p>
-              <p><strong>映射物料编码：</strong>{currentRecord.material_code}</p>
+              <p><strong>映射物料编号：</strong>{currentRecord.material_code}</p>
               <p><strong>映射物料名称：</strong>{currentRecord.material_name}</p>
               <p><strong>启用状态：</strong>
                 <Tag color={currentRecord.is_enabled ? 'success' : 'default'}>

@@ -99,13 +99,13 @@ const ComputationHistoryPage: React.FC = () => {
    */
   const columns: ProColumns<DemandComputation>[] = [
     {
-      title: '计算编码',
+      title: '计算编号',
       dataIndex: 'computation_code',
       width: 150,
       fixed: 'left',
     },
     {
-      title: '需求编码',
+      title: '需求编号',
       dataIndex: 'demand_code',
       width: 150,
     },
@@ -196,7 +196,7 @@ const ComputationHistoryPage: React.FC = () => {
    */
   const compareColumns = [
     {
-      title: '物料编码',
+      title: '物料编号',
       dataIndex: 'material_code',
       key: 'material_code',
       width: 120,

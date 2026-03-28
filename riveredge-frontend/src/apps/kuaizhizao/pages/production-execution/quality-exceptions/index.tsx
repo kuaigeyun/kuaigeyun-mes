@@ -148,12 +148,12 @@ const QualityExceptionsPage: React.FC = () => {
       },
     },
     {
-      title: '工单编码',
+      title: '工单编号',
       dataIndex: 'work_order_code',
       width: 140,
     },
     {
-      title: '物料编码',
+      title: '物料编号',
       dataIndex: 'material_code',
       width: 120,
     },
@@ -321,8 +321,8 @@ const QualityExceptionsPage: React.FC = () => {
                   currentRecord.exception_type === 'process_deviation' ? '工艺偏差' :
                     currentRecord.exception_type === 'customer_complaint' ? '客户投诉' : currentRecord.exception_type}
               </p>
-              <p><strong>工单编码：</strong>{currentRecord.work_order_code || '-'}</p>
-              <p><strong>物料编码：</strong>{currentRecord.material_code || '-'}</p>
+              <p><strong>工单编号：</strong>{currentRecord.work_order_code || '-'}</p>
+              <p><strong>物料编号：</strong>{currentRecord.material_code || '-'}</p>
               <p><strong>物料名称：</strong>{currentRecord.material_name || '-'}</p>
               {currentRecord.batch_no && (
                 <p><strong>批次号：</strong>{currentRecord.batch_no}</p>
@@ -412,7 +412,7 @@ const QualityExceptionsPage: React.FC = () => {
                   currentRecord.exception_type === 'process_deviation' ? '工艺偏差' :
                     currentRecord.exception_type === 'customer_complaint' ? '客户投诉' : currentRecord.exception_type}
               </p>
-              <p><strong>工单编码：</strong>{currentRecord.work_order_code || '-'}</p>
+              <p><strong>工单编号：</strong>{currentRecord.work_order_code || '-'}</p>
               <p><strong>物料名称：</strong>{currentRecord.material_name || '-'}</p>
               <p><strong>问题描述：</strong>{currentRecord.problem_description}</p>
             </div>

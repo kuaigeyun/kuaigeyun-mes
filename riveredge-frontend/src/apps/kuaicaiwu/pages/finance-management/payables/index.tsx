@@ -66,7 +66,7 @@ const PayableList: React.FC = () => {
 
     const columns: ProColumns<Payable>[] = [
         {
-            title: t('app.kuaicaiwu.common.code', { defaultValue: '编码' }),
+            title: t('app.kuaicaiwu.common.code', { defaultValue: '编号' }),
             dataIndex: 'payable_code',
             width: 150,
             fixed: 'left',

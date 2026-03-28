@@ -24,8 +24,8 @@ import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 interface OutboundOrder {
   id?: number;
   tenant_id?: number;
-  delivery_code?: string; // 销售出库单编码
-  picking_code?: string; // 生产领料单编码
+  delivery_code?: string; // 销售出库单编号
+  picking_code?: string; // 生产领料单编号
   outbound_type?: 'production_picking' | 'sales_delivery'; // 出库类型
   status?: string;
   delivery_date?: string; // 出库日期
@@ -562,7 +562,7 @@ const OutboundPage: React.FC = () => {
               <CodeField
                 pageCode="kuaizhizao-warehouse-inbound"
                 name="picking_code"
-                label="生产领料单编码"
+                label="生产领料单编号"
                 required={true}
                 autoGenerateOnCreate={true}
                 context={{}}
@@ -572,7 +572,7 @@ const OutboundPage: React.FC = () => {
               <CodeField
                 pageCode="kuaizhizao-sales-delivery"
                 name="delivery_code"
-                label="销售出库单编码"
+                label="销售出库单编号"
                 required={true}
                 autoGenerateOnCreate={true}
                 context={{}}
@@ -798,7 +798,7 @@ const OutboundPage: React.FC = () => {
                     columns={
                       currentOrder.outbound_type === 'production_picking'
                         ? [
-                            { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                            { title: '物料编号', dataIndex: 'material_code', width: 120 },
                             { title: '物料名称', dataIndex: 'material_name', width: 150 },
                             { title: '需求数量', dataIndex: 'required_quantity', width: 100, align: 'right' as const },
                             { title: '已领数量', dataIndex: 'picked_quantity', width: 100, align: 'right' as const },
@@ -807,7 +807,7 @@ const OutboundPage: React.FC = () => {
                             { title: '批次号', dataIndex: 'batch_number', width: 100 },
                           ]
                         : [
-                            { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                            { title: '物料编号', dataIndex: 'material_code', width: 120 },
                             { title: '物料名称', dataIndex: 'material_name', width: 150 },
                             { title: '出库数量', dataIndex: 'delivery_quantity', width: 100, align: 'right' as const },
                             { title: '单位', dataIndex: 'material_unit', width: 60 },

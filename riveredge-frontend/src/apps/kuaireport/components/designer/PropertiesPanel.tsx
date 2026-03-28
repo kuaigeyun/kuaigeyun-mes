@@ -123,13 +123,13 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedWidget, onCha
             />
 
             <style>{`
-                .properties-container .dark-tabs .ant-tabs-nav::before { border-bottom: 1px solid #303030; }
+                .properties-container .dark-tabs .ant-tabs-nav::before { border-bottom: 1px solid var(--river-divider-color); }
                 .properties-container .ant-form-item-label > label { color: rgba(255,255,255,0.45) !important; font-size: 12px; }
-                .dark-input { background: #1f1f1f !important; color: #fff !important; border: 1px solid #303030 !important; }
-                .dark-input-number { width: 100%; background: #1f1f1f !important; color: #fff !important; border: 1px solid #303030 !important; }
+                .dark-input { background: #1f1f1f !important; color: #fff !important; border: 1px solid var(--river-border-color) !important; }
+                .dark-input-number { width: 100%; background: #1f1f1f !important; color: #fff !important; border: 1px solid var(--river-border-color) !important; }
                 .dark-input-number .ant-input-number-input { color: #fff !important; }
-                .dark-divider { border-color: #303030 !important; margin: 12px 0 !important; color: rgba(22, 119, 255, 0.8) !important; font-size: 12px !important; }
-                .dark-select .ant-select-selector { background: #1f1f1f !important; border-color: #303030 !important; color: #fff !important; }
+                .dark-divider { border-color: var(--river-divider-color) !important; margin: 12px 0 !important; color: rgba(22, 119, 255, 0.8) !important; font-size: 12px !important; }
+                .dark-select .ant-select-selector { background: #1f1f1f !important; border-color: var(--river-border-color) !important; color: #fff !important; }
             `}</style>
         </div>
     );

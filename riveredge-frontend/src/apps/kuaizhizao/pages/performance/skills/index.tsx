@@ -75,7 +75,7 @@ const SkillsPage: React.FC = () => {
   const handleCloseDetail = () => { setDrawerVisible(false); setSkillDetail(null); };
 
   const columns: ProColumns<Skill>[] = [
-    { title: '技能编码', dataIndex: 'code', width: 150, fixed: 'left' },
+    { title: '技能编号', dataIndex: 'code', width: 150, fixed: 'left' },
     { title: '技能名称', dataIndex: 'name', width: 200 },
     { title: '技能分类', dataIndex: 'category', width: 150, hideInSearch: true },
     { title: '描述', dataIndex: 'description', ellipsis: true, hideInSearch: true },
@@ -106,7 +106,7 @@ const SkillsPage: React.FC = () => {
   ];
 
   const detailColumns: ProDescriptionsItemType<Skill>[] = [
-    { title: '技能编码', dataIndex: 'code' },
+    { title: '技能编号', dataIndex: 'code' },
     { title: '技能名称', dataIndex: 'name' },
     { title: '技能分类', dataIndex: 'category' },
     { title: '描述', dataIndex: 'description', span: 2 },

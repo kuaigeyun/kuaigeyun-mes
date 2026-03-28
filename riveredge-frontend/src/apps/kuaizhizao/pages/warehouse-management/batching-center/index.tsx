@@ -89,7 +89,7 @@ const BatchingCenterPage: React.FC = () => {
     [messageApi, t]
   );
 
-  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码 */
+  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号 */
   const handleCreate = (workOrderId?: number) => {
     setCreateModalVisible(true);
     setTimeout(() => {
@@ -558,7 +558,7 @@ const BatchingCenterPage: React.FC = () => {
             <Table
               className="warehouse-detail-table"
               columns={[
-                { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                { title: '物料编号', dataIndex: 'material_code', width: 120 },
                 { title: '物料名称', dataIndex: 'material_name', width: 150 },
                 { title: '需求数量', dataIndex: 'required_quantity', width: 100, align: 'right' },
                 { title: '已拣数量', dataIndex: 'picked_quantity', width: 100, align: 'right' },

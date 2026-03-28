@@ -62,7 +62,7 @@ export interface DetailDrawerTemplateProps<T = any> {
  *   onClose={() => setDrawerVisible(false)}
  *   dataSource={customerDetail}
  *   columns={[
- *     { title: '客户编码', dataIndex: 'code' },
+ *     { title: '客户编号', dataIndex: 'code' },
  *     { title: '客户名称', dataIndex: 'name' },
  *   ]}
  * />

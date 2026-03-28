@@ -4,6 +4,16 @@
  * 只保留必要的全局样式，尽量使用 Ant Design 原生样式
  */
 
+:root {
+  --river-border-color: #bcbcbc;
+  --river-divider-color: #d9d9d9;
+}
+
+[data-theme='dark'] {
+  --river-border-color: #424242;
+  --river-divider-color: #303030;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -29,7 +39,7 @@
   }
 }
 
-/* ==================== 统一滚动条样式（全局、Modal、表格、编码规则等） ====================
+/* ==================== 统一滚动条样式（全局、Modal、表格、编号规则等） ====================
  * 尺寸：6px（水平与垂直一致）
  * 颜色：固定 rgba 保证页面与表格滚动条完全一致；更淡以符合素雅风格
  * 轨道：透明
@@ -658,7 +668,7 @@ code {
   box-shadow: none;
 }
 
-/* 与 Modal 内容区一致的滚动条样式（编码规则、自定义字段等左右栏滚动区） */
+/* 与 Modal 内容区一致的滚动条样式（编号规则、自定义字段等左右栏滚动区） */
 .scrollbar-like-modal {
   scrollbar-width: thin;
   scrollbar-color: @scrollbar-thumb transparent;

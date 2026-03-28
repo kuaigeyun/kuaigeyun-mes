@@ -396,7 +396,7 @@ const PurchaseReturnsPage: React.FC = () => {
                   <Table
                     size="small"
                     columns={[
-                      { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                      { title: '物料编号', dataIndex: 'material_code', width: 120 },
                       { title: '物料名称', dataIndex: 'material_name', width: 150 },
                       { title: '退货数量', dataIndex: 'return_quantity', width: 100, align: 'right' },
                       { title: '单价', dataIndex: 'unit_price', width: 100, align: 'right', render: (text) => `¥${text || 0}` },

@@ -124,7 +124,7 @@ const InspectionPlansPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [planDetail, setPlanDetail] = useState<InspectionPlan | null>(null);
 
-  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码。支持 URL 参数 materialId/operationId 预填 */
+  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号。支持 URL 参数 materialId/operationId 预填 */
   const handleCreate = async () => {
     setIsEdit(false);
     setCurrentPlan(null);
@@ -231,7 +231,7 @@ const InspectionPlansPage: React.FC = () => {
   };
 
   const columns: ProColumns<InspectionPlan>[] = [
-    { title: '方案编码', dataIndex: 'plan_code', width: 140, ellipsis: true },
+    { title: '方案编号', dataIndex: 'plan_code', width: 140, ellipsis: true },
     { title: '方案名称', dataIndex: 'plan_name', width: 180, ellipsis: true },
     {
       title: '方案类型',
@@ -278,7 +278,7 @@ const InspectionPlansPage: React.FC = () => {
   ];
 
   const detailColumns: ProDescriptionsItemType<InspectionPlan>[] = [
-    { title: '方案编码', dataIndex: 'plan_code' },
+    { title: '方案编号', dataIndex: 'plan_code' },
     { title: '方案名称', dataIndex: 'plan_name' },
     {
       title: '方案类型',
@@ -376,7 +376,7 @@ const InspectionPlansPage: React.FC = () => {
         </ProFormItem>
         <Row gutter={16}>
           <Col span={12}>
-            <ProFormText name="plan_code" label="方案编码" placeholder="留空则自动生成" />
+            <ProFormText name="plan_code" label="方案编号" placeholder="留空则自动生成" />
           </Col>
           <Col span={12}>
             <ProFormText name="plan_name" label="方案名称" rules={[{ required: true, message: '请输入方案名称' }]} placeholder="请输入" />
@@ -397,7 +397,7 @@ const InspectionPlansPage: React.FC = () => {
             </ProFormItem>
           </Col>
           <Col span={12}>
-            <ProFormText name="material_code" label="物料编码" placeholder="可选" />
+            <ProFormText name="material_code" label="物料编号" placeholder="可选" />
           </Col>
         </Row>
         <Row gutter={16}>

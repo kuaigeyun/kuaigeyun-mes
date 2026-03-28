@@ -5,12 +5,14 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProFormDigit, ProFormItem } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Table, Row, Col, Form, Form as AntForm, InputNumber, Input } from 'antd';
+import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProFormItem } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Card, Table, Row, Col, Form as AntForm, InputNumber, Input } from 'antd';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, InboxOutlined, ShoppingOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
+import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
+import { DictionaryLabel } from '../../../../../components/dictionary-label';
 import type { Material } from '../../../../master-data/types/material';
 import { useTranslation } from 'react-i18next';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -50,9 +52,12 @@ interface InboundOrder {
   total_items?: number;
   notes?: string;
   review_status?: string;
+  purchase_order_id?: number;
+  purchase_order_code?: string;
   created_at?: string;
   updated_at?: string;
   items?: InboundOrderItem[];
+  [key: string]: any;
 }
 
 interface InboundOrderItem {
@@ -861,7 +866,7 @@ const InboundPage: React.FC = () => {
               <CodeField
                 pageCode="kuaizhizao-purchase-receipt"
                 name="receipt_code"
-                label="采购入库单编码"
+                label="采购入库单编号"
                 required={true}
                 autoGenerateOnCreate={true}
                 showGenerateButton={false}
@@ -872,7 +877,7 @@ const InboundPage: React.FC = () => {
               <CodeField
                 pageCode="kuaizhizao-warehouse-finished-goods-inbound"
                 name="receipt_code"
-                label="成品入库单编码"
+                label="成品入库单编号"
                 required={true}
                 autoGenerateOnCreate={true}
                 showGenerateButton={false}
@@ -962,9 +967,8 @@ const InboundPage: React.FC = () => {
               </Col>
             </Row>
             <ProFormItem label="入库明细" required style={{ width: '100%' }}>
-              <AntForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: '请至少添加一条有效明细' }]}>
-                <AntForm.List name="items" initialValue={[defaultPurchaseItem]}>
-                  {(fields, { add, remove }) => (
+              <AntForm.List name="items" initialValue={[defaultPurchaseItem]}>
+                {(fields, { add, remove }) => (
                     <div>
                       <Table
                         size="small"
@@ -1012,10 +1016,21 @@ const InboundPage: React.FC = () => {
                           {
                             title: '单位',
                             dataIndex: 'material_unit',
-                            width: 70,
+                            width: 100,
                             render: (_: any, __: any, index: number) => (
-                              <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
-                                <Input placeholder="单位" size="small" />
+                              <AntForm.Item noStyle shouldUpdate={(prev, curr) => prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id}>
+                                {({ getFieldValue }) => {
+                                  const materialId = getFieldValue(['items', index, 'material_id']);
+                                  return (
+                                    <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
+                                      <MaterialUnitSelect 
+                                        materialId={materialId} 
+                                        size="small" 
+                                        noStyle 
+                                      />
+                                    </AntForm.Item>
+                                  );
+                                }}
                               </AntForm.Item>
                             ),
                           },
@@ -1064,8 +1079,7 @@ const InboundPage: React.FC = () => {
                     </div>
                   )}
                 </AntForm.List>
-              </AntForm.Item>
-            </ProFormItem>
+              </ProFormItem>
             <ProFormItem name="notes" label="备注">
               <Input.TextArea rows={2} placeholder="可选" />
             </ProFormItem>
@@ -1295,16 +1309,16 @@ const InboundPage: React.FC = () => {
                       pagination={false}
                       columns={currentOrder.receipt_type === 'production_return'
                         ? [
-                            { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                            { title: '物料编号', dataIndex: 'material_code', width: 120 },
                             { title: '物料名称', dataIndex: 'material_name', width: 150 },
-                            { title: '单位', dataIndex: 'material_unit', width: 60 },
+                            { title: '单位', dataIndex: 'material_unit', width: 60, render: (val) => <DictionaryLabel dictionaryCode="unit" value={val} /> },
                             { title: '退料数量', dataIndex: 'return_quantity', width: 100, align: 'right' as const },
                             { title: '仓库', dataIndex: 'warehouse_name', width: 120 },
                             { title: '批次号', dataIndex: 'batch_number', width: 100 },
                           ]
                         : currentOrder.receipt_type === 'purchase'
                           ? [
-                              { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                              { title: '物料编号', dataIndex: 'material_code', width: 120 },
                               { title: '物料名称', dataIndex: 'material_name', width: 150 },
                               {
                                 title: '实际数量',
@@ -1327,13 +1341,13 @@ const InboundPage: React.FC = () => {
                                   );
                                 },
                               },
-                              { title: '单位', dataIndex: 'material_unit', width: 60 },
+                              { title: '单位', dataIndex: 'material_unit', width: 60, render: (val: any) => <DictionaryLabel dictionaryCode="unit" value={val} /> },
                               { title: '单价', dataIndex: 'unit_price', width: 90, align: 'right' as const },
                               { title: '金额', dataIndex: 'total_amount', width: 100, align: 'right' as const },
                               { title: '批次号', dataIndex: 'batch_number', width: 100 },
                             ]
                           : [
-                              { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                              { title: '物料编号', dataIndex: 'material_code', width: 120 },
                               { title: '物料名称', dataIndex: 'material_name', width: 150 },
                               { title: '数量', dataIndex: 'receipt_quantity', width: 100, align: 'right' as const },
                               { title: '单位', dataIndex: 'material_unit', width: 60 },

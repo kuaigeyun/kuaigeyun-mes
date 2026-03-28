@@ -101,7 +101,7 @@ const ReworkOrdersPage: React.FC = () => {
    */
   const detailColumns: ProDescriptionsItemType<ReworkOrder>[] = [
     {
-      title: '返工单编码',
+      title: '返工单编号',
       dataIndex: 'code',
     },
     {
@@ -109,7 +109,7 @@ const ReworkOrdersPage: React.FC = () => {
       dataIndex: 'original_work_order_id',
     },
     {
-      title: '产品编码',
+      title: '产品编号',
       dataIndex: 'product_code',
     },
     {
@@ -207,7 +207,7 @@ const ReworkOrdersPage: React.FC = () => {
    */
   const columns: ProColumns<ReworkOrder>[] = [
     {
-      title: '返工单编码',
+      title: '返工单编号',
       dataIndex: 'code',
       width: 180,
       fixed: 'left',
@@ -399,7 +399,7 @@ const ReworkOrdersPage: React.FC = () => {
     });
   };
 
-  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码 */
+  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号 */
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentReworkOrder(null);
@@ -563,7 +563,7 @@ const ReworkOrdersPage: React.FC = () => {
             <CodeField
               pageCode="kuaizhizao-production-rework-order"
               name="code"
-              label="返工单编码"
+              label="返工单编号"
               required={true}
               autoGenerateOnCreate={!isEdit}
               showGenerateButton={false}

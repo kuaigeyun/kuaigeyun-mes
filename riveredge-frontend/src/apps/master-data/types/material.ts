@@ -81,7 +81,7 @@ export interface Material {
   uuid: string;
   tenantId: number;
   code?: string; // 已废弃，保留用于向后兼容
-  mainCode?: string; // 主编码（系统内部唯一标识）
+  mainCode?: string; // 主编号（系统内部唯一标识）
   name: string;
   groupId?: number;
   specification?: string;
@@ -99,7 +99,7 @@ export interface Material {
   texture?: string;
   isActive: boolean;
   defaults?: MaterialDefaults; // 默认值设置
-  codeAliases?: MaterialCodeAlias[]; // 编码别名列表
+  codeAliases?: MaterialCodeAlias[]; // 编号别名列表
   sourceType?: string; // 物料来源类型（Make/Buy/Phantom/Outsource）
   source_type?: string; // 物料来源类型（向后兼容）
   sourceConfig?: Record<string, any>; // 物料来源相关配置
@@ -124,10 +124,10 @@ export interface Material {
   deletedAt?: string;
 }
 
-// 编码映射类型定义
+// 编号映射类型定义
 export interface DepartmentCodeMapping {
-  code_type: string; // 编码类型（SALE/DES/PUR/WH/PROD等）
-  code: string; // 编码
+  code_type: string; // 编号类型（SALE/DES/PUR/WH/PROD等）
+  code: string; // 编号
   name?: string; // 名称
   department?: string; // 部门名称
   description?: string; // 描述
@@ -137,7 +137,7 @@ export interface CustomerCodeMapping {
   customerId: number; // 客户ID
   customerUuid?: string; // 客户UUID
   customerName?: string; // 客户名称（用于显示）
-  code: string; // 客户编码
+  code: string; // 客户编号
   name?: string; // 名称
   description?: string; // 描述
 }
@@ -146,7 +146,7 @@ export interface SupplierCodeMapping {
   supplierId: number; // 供应商ID
   supplierUuid?: string; // 供应商UUID
   supplierName?: string; // 供应商名称（用于显示）
-  code: string; // 供应商编码
+  code: string; // 供应商编号
   name?: string; // 名称
   description?: string; // 描述
 }
@@ -197,7 +197,7 @@ export interface MaterialDefaults {
 
 export interface MaterialCreate {
   code?: string; // 已废弃，保留用于向后兼容
-  mainCode?: string; // 主编码（如果未提供，系统会根据编码规则自动生成）
+  mainCode?: string; // 主编号（如果未提供，系统会根据编号规则自动生成）
   name: string;
   groupId?: number;
   specification?: string;
@@ -214,10 +214,10 @@ export interface MaterialCreate {
   model?: string;
   texture?: string;
   isActive?: boolean;
-  // 编码映射
-  departmentCodes?: DepartmentCodeMapping[]; // 部门编码列表
-  customerCodes?: CustomerCodeMapping[]; // 客户编码列表
-  supplierCodes?: SupplierCodeMapping[]; // 供应商编码列表
+  // 编号映射
+  departmentCodes?: DepartmentCodeMapping[]; // 部门编号列表
+  customerCodes?: CustomerCodeMapping[]; // 客户编号列表
+  supplierCodes?: SupplierCodeMapping[]; // 供应商编号列表
   // 默认值设置
   defaults?: MaterialDefaults;
   // 物料来源控制
@@ -243,10 +243,10 @@ export interface MaterialUpdate {
   model?: string;
   texture?: string;
   isActive?: boolean;
-  // 编码映射
-  departmentCodes?: DepartmentCodeMapping[]; // 部门编码列表
-  customerCodes?: CustomerCodeMapping[]; // 客户编码列表
-  supplierCodes?: SupplierCodeMapping[]; // 供应商编码列表
+  // 编号映射
+  departmentCodes?: DepartmentCodeMapping[]; // 部门编号列表
+  customerCodes?: CustomerCodeMapping[]; // 客户编号列表
+  supplierCodes?: SupplierCodeMapping[]; // 供应商编号列表
   // 默认值设置
   defaults?: MaterialDefaults;
   // 物料来源控制
@@ -409,11 +409,11 @@ export interface BOMBatchCreate {
  * BOM批量导入项类型定义
  * 
  * 根据《工艺路线和标准作业流程优化设计规范.md》设计。
- * 支持使用任意部门编码，系统自动映射到主编码。
+ * 支持使用任意部门编号，系统自动映射到主编号。
  */
 export interface BOMBatchImportItem {
-  parentCode: string; // 父件编码（支持任意部门编码：SALE-A001、DES-A001、主编码MAT-FIN-0001）
-  componentCode: string; // 子件编码（支持任意部门编码：PROD-A001、主编码MAT-SEMI-0001）
+  parentCode: string; // 父件编号（支持任意部门编号：SALE-A001、DES-A001、主编号MAT-FIN-0001）
+  componentCode: string; // 子件编号（支持任意部门编号：PROD-A001、主编号MAT-SEMI-0001）
   quantity: number; // 子件数量（必填，数字）
   unit?: string; // 子件单位（可选，如：个、kg、m等）
   wasteRate?: number; // 损耗率（可选，百分比，如：5%表示5.00）
@@ -431,12 +431,12 @@ export interface BOMBatchImportItem {
  * BOM批量导入类型定义
  * 
  * 根据《工艺路线和标准作业流程优化设计规范.md》设计。
- * 支持universheet批量导入，支持部门编码自动映射。
+ * 支持universheet批量导入，支持部门编号自动映射。
  */
 export interface BOMBatchImport {
   items: BOMBatchImportItem[]; // BOM导入项列表
   version?: string; // BOM版本号（可选，默认：1.0）
-  bomCode?: string; // BOM编码（可选）
+  bomCode?: string; // BOM编号（可选）
   effectiveDate?: string; // 生效日期（可选）
   description?: string; // 描述（可选）
   versionRemark?: string; // 版本变更备注（可选，写入本版本所有BOM行）
@@ -574,7 +574,7 @@ export interface BOMCycleDetectionResult {
 }
 
 
-// ==================== 物料编码映射类型定义 ====================
+// ==================== 物料编号映射类型定义 ====================
 
 export interface MaterialCodeMapping {
   id: number;

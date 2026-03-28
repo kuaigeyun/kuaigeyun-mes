@@ -133,10 +133,10 @@ const WarehousesPage: React.FC = () => {
 
     // 表头字段映射（不包含 isActive 和 createdAt，这些字段使用默认值）
     const headerMap: Record<string, string> = {
-      '仓库编码': 'code',
-      '*仓库编码': 'code',
-      '编码': 'code',
-      '*编码': 'code',
+      '仓库编号': 'code',
+      '*仓库编号': 'code',
+      '编号': 'code',
+      '*编号': 'code',
       'code': 'code',
       '*code': 'code',
       '仓库名称': 'name',
@@ -150,10 +150,10 @@ const WarehousesPage: React.FC = () => {
       '仓库类型': 'warehouseType',
       'warehouseType': 'warehouseType',
       '车间': 'workshopCode',
-      '车间编码': 'workshopCode',
+      '车间编号': 'workshopCode',
       'workshopCode': 'workshopCode',
       '工作中心': 'workCenterCode',
-      '工作中心编码': 'workCenterCode',
+      '工作中心编号': 'workCenterCode',
       'workCenterCode': 'workCenterCode',
     };
 
@@ -277,7 +277,7 @@ const WarehousesPage: React.FC = () => {
           if (found) {
             workshopId = found.id;
           } else {
-            errors.push({ row: actualRowIndex, message: `车间编码 "${workshopCodeVal}" 不存在` });
+            errors.push({ row: actualRowIndex, message: `车间编号 "${workshopCodeVal}" 不存在` });
             return;
           }
         }
@@ -729,13 +729,13 @@ const WarehousesPage: React.FC = () => {
         defaultViewType="table"
         showImportButton={true}
         onImport={handleImport}
-        importHeaders={['*仓库编码', '*仓库名称', '仓库类型', '车间', '工作中心', '描述']}
+        importHeaders={['*仓库编号', '*仓库名称', '仓库类型', '车间', '工作中心', '描述']}
         importExampleRow={['WH001', '成品仓库', '普通仓', '', '', '主要用于存储成品']}
         importFieldMap={{
-          '仓库编码': 'code',
-          '*仓库编码': 'code',
-          '编码': 'code',
-          '*编码': 'code',
+          '仓库编号': 'code',
+          '*仓库编号': 'code',
+          '编号': 'code',
+          '*编号': 'code',
           'code': 'code',
           '*code': 'code',
           '仓库名称': 'name',

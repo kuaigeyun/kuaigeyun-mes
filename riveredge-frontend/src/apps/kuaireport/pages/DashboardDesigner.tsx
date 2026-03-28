@@ -409,7 +409,7 @@ const DashboardDesigner: React.FC = () => {
             <style>{`
                 .widget-item-box {
                     background: #1f1f1f;
-                    border: 1px solid #303030;
+                    border: 1px solid var(--river-border-color);
                     border-radius: 4px;
                     padding: 8px;
                     text-align: center;
@@ -421,7 +421,7 @@ const DashboardDesigner: React.FC = () => {
                     background: #262626;
                 }
                 .layer-item {
-                    border-bottom: 1px solid #303030;
+                    border-bottom: 1px solid var(--river-border-color);
                     cursor: pointer;
                     transition: all 0.3s;
                 }
@@ -455,10 +455,10 @@ const DashboardDesigner: React.FC = () => {
                 .dashboard-table .ant-table-thead > tr > th {
                     background: rgba(255,255,255,0.05) !important;
                     color: rgba(255,255,255,0.85) !important;
-                    border-bottom: 1px solid #303030 !important;
+                    border-bottom: 1px solid var(--river-border-color) !important;
                 }
                 .dashboard-table .ant-table-tbody > tr > td {
-                    border-bottom: 1px solid #303030 !important;
+                    border-bottom: 1px solid var(--river-border-color) !important;
                     color: rgba(255,255,255,0.85) !important;
                 }
                 @keyframes marquee {

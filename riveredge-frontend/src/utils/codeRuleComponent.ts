@@ -1,5 +1,5 @@
 /**
- * 编码规则组件工具函数
+ * 编号规则组件工具函数
  * 
  * 提供规则组件与表达式之间的转换功能
  */
@@ -176,8 +176,8 @@ export class CodeRuleComponentService {
   }
 
   /**
-   * 根据规则组件生成预览编码（前端版本）
-   * 用于在配置时实时预览编码效果
+   * 根据规则组件生成预览编号（前端版本）
+   * 用于在配置时实时预览编号效果
    */
   static previewComponents(
     components: CodeRuleComponent[],

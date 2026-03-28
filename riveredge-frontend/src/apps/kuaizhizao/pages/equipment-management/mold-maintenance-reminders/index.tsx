@@ -26,7 +26,7 @@ const MoldMaintenanceRemindersPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
 
   const columns: ProColumns<MoldMaintenanceReminder>[] = [
-    { title: '模具编码', dataIndex: 'mold_code', width: 120 },
+    { title: '模具编号', dataIndex: 'mold_code', width: 120 },
     { title: '模具名称', dataIndex: 'mold_name', width: 180, ellipsis: true },
     { title: '当前使用次数', dataIndex: 'total_usage_count', width: 120, align: 'right' },
     { title: '保养间隔', dataIndex: 'maintenance_interval', width: 100, align: 'right' },

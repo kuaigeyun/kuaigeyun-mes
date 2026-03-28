@@ -137,10 +137,10 @@ const WorkCentersPage: React.FC = () => {
     }
 
     const headerMap: Record<string, string> = {
-      '工作中心编码': 'code',
-      '*工作中心编码': 'code',
-      '编码': 'code',
-      '*编码': 'code',
+      '工作中心编号': 'code',
+      '*工作中心编号': 'code',
+      '编号': 'code',
+      '*编号': 'code',
       'code': 'code',
       '*code': 'code',
       '工作中心名称': 'name',
@@ -580,13 +580,13 @@ const WorkCentersPage: React.FC = () => {
           }}
           showImportButton={true}
           onImport={handleImport}
-          importHeaders={['*工作中心编码', '*工作中心名称', '描述']}
+          importHeaders={['*工作中心编号', '*工作中心名称', '描述']}
           importExampleRow={['GZZX0001', '焊接工作中心', '负责焊接工序的产能单元']}
           importFieldMap={{
-            '工作中心编码': 'code',
-            '*工作中心编码': 'code',
-            '编码': 'code',
-            '*编码': 'code',
+            '工作中心编号': 'code',
+            '*工作中心编号': 'code',
+            '编号': 'code',
+            '*编号': 'code',
             'code': 'code',
             '*code': 'code',
             '工作中心名称': 'name',

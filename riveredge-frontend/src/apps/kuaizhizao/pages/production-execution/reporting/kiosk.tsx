@@ -108,14 +108,14 @@ const ReportingKioskPage: React.FC = () => {
   };
 
   /**
-   * 根据工单编码加载工单信息
+   * 根据工单编号加载工单信息
    */
   const loadWorkOrderByCode = async (workOrderCode: string) => {
     setLoading(true);
     setJumpRuleError('');
 
     try {
-      // 根据工单编码获取工单信息
+      // 根据工单编号获取工单信息
       const workOrders = await workOrderApi.list({ code: workOrderCode.trim() });
       if (!workOrders || workOrders.length === 0) {
         messageApi.error('未找到该工单');
@@ -277,14 +277,14 @@ const ReportingKioskPage: React.FC = () => {
   };
 
   /**
-   * 处理手动输入工单编码
+   * 处理手动输入工单编号
    */
   const handleManualInput = () => {
     const workOrderCode = form.getFieldValue('work_order_code');
     if (workOrderCode) {
       loadWorkOrderByCode(workOrderCode);
     } else {
-      messageApi.warning('请输入工单编码');
+      messageApi.warning('请输入工单编号');
     }
   };
 
@@ -326,19 +326,19 @@ const ReportingKioskPage: React.FC = () => {
           onFinish={handleSubmit}
           style={{ width: '100%' }}
         >
-          {/* 扫码/输入工单编码区域 */}
+          {/* 扫码/输入工单编号区域 */}
           <Card title="工单信息" style={{ marginBottom: 24 }}>
             <Space direction="vertical" size="large" style={{ width: '100%' }}>
               <Row gutter={[16, 16]}>
                 <Col span={24}>
                   <Form.Item
                     name="work_order_code"
-                    label="工单编码"
-                    rules={[{ required: true, message: '请输入工单编码或扫码' }]}
+                    label="工单编号"
+                    rules={[{ required: true, message: '请输入工单编号或扫码' }]}
                   >
                     <Input
                       size="large"
-                      placeholder="请输入工单编码或点击扫码"
+                      placeholder="请输入工单编号或点击扫码"
                       suffix={
                         <Button
                           type="link"
@@ -371,7 +371,7 @@ const ReportingKioskPage: React.FC = () => {
                 <Card size="small" style={{ backgroundColor: '#f5f5f5' }}>
                   <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                     <div>
-                      <strong>工单编码：</strong>
+                      <strong>工单编号：</strong>
                       <span>{currentWorkOrder.code}</span>
                     </div>
                     <div>
@@ -379,7 +379,7 @@ const ReportingKioskPage: React.FC = () => {
                       <span>{currentWorkOrder.name}</span>
                     </div>
                     <div>
-                      <strong>产品编码：</strong>
+                      <strong>产品编号：</strong>
                       <span>{currentWorkOrder.product_code}</span>
                     </div>
                     <div>
@@ -452,7 +452,7 @@ const ReportingKioskPage: React.FC = () => {
                 <Card size="small" style={{ backgroundColor: '#f5f5f5' }}>
                   <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                     <div>
-                      <strong>工序编码：</strong>
+                      <strong>工序编号：</strong>
                       <span>{currentOperation.operation_code}</span>
                     </div>
                     <div>

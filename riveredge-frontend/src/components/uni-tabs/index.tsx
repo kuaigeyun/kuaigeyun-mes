@@ -1186,7 +1186,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           overflow: hidden !important;
           isolation: isolate;
           contain: layout paint;
-          border: 1px solid rgba(255, 255, 255, 0.08);
+          border: 1px solid var(--river-border-color);
         }
         /* 内层直接子元素（HMI 根）适配圆角与宽度 */
         .uni-tabs-content-hmi-inner > * {

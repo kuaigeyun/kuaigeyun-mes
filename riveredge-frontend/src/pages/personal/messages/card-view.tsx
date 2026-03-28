@@ -341,7 +341,7 @@ const CardView: React.FC = () => {
                               hoverable
                               style={{ 
                                 height: '100%',
-                                border: unread ? '2px solid #1890ff' : '1px solid #d9d9d9',
+                                border: unread ? '2px solid #1890ff' : '1px solid var(--river-border-color)',
                               }}
                               actions={[
                                 <Tooltip title={t('pages.personal.messages.viewDetail')}>

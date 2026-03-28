@@ -1,7 +1,7 @@
 /**
  * 表单 Schema 类型定义（共享）
  *
- * 用于 schema 驱动表单，消除硬编码。
+ * 用于 schema 驱动表单，消除硬编号。
  * 供 master-data、system、infra 等模块复用。
  */
 

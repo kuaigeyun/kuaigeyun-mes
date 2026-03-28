@@ -1,7 +1,7 @@
 /**
  * 统一菜单数据 Hook
  *
- * 平台级/系统级：使用原有 getMenuConfig 硬编码
+ * 平台级/系统级：使用原有 getMenuConfig 硬编号
  * 应用级 APP：数据库 getMenuTree（manifest 同步）→ 业务配置过滤 → 输出
  *
  * 菜单显示层级（蓝图设置 → 菜单管理 → 权限管理）：
@@ -50,7 +50,7 @@ function filterMenuByPermission(items: MenuDataItem[], currentUser: any): MenuDa
 }
 
 export interface UseUnifiedMenuDataOptions {
-  /** 平台级/系统级菜单配置（原有硬编码，由 BasicLayout 传入 getMenuConfig） */
+  /** 平台级/系统级菜单配置（原有硬编号，由 BasicLayout 传入 getMenuConfig） */
   getSystemMenuConfig: () => MenuDataItem[];
   /** 数据库菜单转 MenuDataItem 的转换函数 */
   convertMenuTreeToMenuDataItem: (menu: MenuTree, isAppMenu?: boolean) => MenuDataItem;

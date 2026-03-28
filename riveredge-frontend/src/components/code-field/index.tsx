@@ -1,7 +1,7 @@
 /**
- * 编码字段组件
+ * 编号字段组件
  *
- * 支持自动生成编码和手动填写，根据编码规则配置自动处理。
+ * 支持自动生成编号和手动填写，根据编号规则配置自动处理。
  *
  * @author Auto (AI Assistant)
  * @date 2026-01-19
@@ -20,7 +20,7 @@ interface CodeFieldProps {
   pageCode: string;
   /** 字段名称（如：order_code） */
   name: string;
-  /** 字段标签（如：订单编码） */
+  /** 字段标签（如：订单编号） */
   label?: string;
   /** 是否必填 */
   required?: boolean;
@@ -30,7 +30,7 @@ interface CodeFieldProps {
   value?: string;
   /** 是否禁用 */
   disabled?: boolean;
-  /** 上下文变量（用于编码规则中的字段引用） */
+  /** 上下文变量（用于编号规则中的字段引用） */
   context?: Record<string, any>;
   /** 是否在新建时自动生成 */
   autoGenerateOnCreate?: boolean;
@@ -60,7 +60,7 @@ const CodeField: React.FC<CodeFieldProps> = ({
   const form = Form.useFormInstance();
   const [pageConfig, setPageConfig] = useState<CodeRulePageConfig | null>(null);
   const [loading, setLoading] = useState(false);
-  const hasGeneratedRef = useRef(false); // 防止重复生成编码
+  const hasGeneratedRef = useRef(false); // 防止重复生成编号
 
   const updateFormValue = React.useCallback((code: string) => {
     if (onChange) {
@@ -71,11 +71,11 @@ const CodeField: React.FC<CodeFieldProps> = ({
   }, [form, name, onChange]);
 
   /**
-   * 生成编码
+   * 生成编号
    */
   const handleGenerateCode = React.useCallback(async (config: CodeRulePageConfig, isTest = false) => {
     if (!config?.ruleCode) {
-      message.warning('未配置编码规则');
+      message.warning('未配置编号规则');
       return;
     }
 
@@ -112,14 +112,14 @@ const CodeField: React.FC<CodeFieldProps> = ({
         updateFormValue(response.code);
       }
     } catch (error: any) {
-      console.error('生成编码失败:', error);
-      message.error(error.message || '生成编码失败');
+      console.error('生成编号失败:', error);
+      message.error(error.message || '生成编号失败');
     } finally {
       setLoading(false);
     }
   }, [context, message, updateFormValue]);
 
-  // 生成编码的辅助函数
+  // 生成编号的辅助函数
   const generateCodeWithContext = React.useCallback(async (config: CodeRulePageConfig, currentContext: Record<string, any>) => {
     if (!config?.autoGenerate || !config?.ruleCode) {
       return;
@@ -153,12 +153,12 @@ const CodeField: React.FC<CodeFieldProps> = ({
         updateFormValue(response.code);
       } else {
         // 规则不存在或未启用，静默处理
-        console.info(`编码规则 ${config.ruleCode} 不存在或未启用，跳过自动生成`);
+        console.info(`编号规则 ${config.ruleCode} 不存在或未启用，跳过自动生成`);
       }
     } catch (error: any) {
       // 处理其他错误（网络错误等）
       const errorMessage = error?.response?.data?.detail || error?.message || error;
-      console.warn('自动生成编码失败:', errorMessage);
+      console.warn('自动生成编号失败:', errorMessage);
     }
   }, [pageCode, updateFormValue]);
 
@@ -172,7 +172,7 @@ const CodeField: React.FC<CodeFieldProps> = ({
         const config = await getCodeRulePageConfig(pageCode);
         setPageConfig(config);
         
-        // 如果是新建且启用自动生成，自动生成编码
+        // 如果是新建且启用自动生成，自动生成编号
         // 注意：只在配置存在、规则代码存在、且当前值为空时才生成
         if (autoGenerateOnCreate && config?.autoGenerate && config?.ruleCode && !hasGeneratedRef.current) {
           // 检查当前值，如果已有值则不自动生成（避免覆盖用户输入）
@@ -183,11 +183,11 @@ const CodeField: React.FC<CodeFieldProps> = ({
           // 标记已生成，防止重复调用
           hasGeneratedRef.current = true;
           
-          // 生成编码
+          // 生成编号
           await generateCodeWithContext(config, context);
         }
       } catch (error) {
-        console.error('加载编码规则配置失败:', error);
+        console.error('加载编号规则配置失败:', error);
       }
     };
     loadConfig();
@@ -195,7 +195,7 @@ const CodeField: React.FC<CodeFieldProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageCode, autoGenerateOnCreate]);
 
-  // 当context变化时，如果配置了自动生成且当前值为空，重新生成编码
+  // 当context变化时，如果配置了自动生成且当前值为空，重新生成编号
   // 注意：只在新建模式下，且context有实际内容时才重新生成
   useEffect(() => {
     if (!autoGenerateOnCreate || !pageConfig?.autoGenerate || !pageConfig?.ruleCode) {
@@ -220,14 +220,14 @@ const CodeField: React.FC<CodeFieldProps> = ({
     return () => clearTimeout(timer);
   }, [context, pageConfig, autoGenerateOnCreate, value, generateCodeWithContext]);
 
-  // 如果未配置编码规则，使用普通文本输入框
+  // 如果未配置编号规则，使用普通文本输入框
   if (!pageConfig || !pageConfig.autoGenerate) {
     return (
       <ProFormText
         name={name}
-        label={label || pageConfig?.codeFieldLabel || '编码'}
-        rules={required ? [{ required: true, message: `请输入${label || '编码'}` }] : []}
-        placeholder={`请输入${label || '编码'}`}
+        label={label || pageConfig?.codeFieldLabel || '编号'}
+        rules={required ? [{ required: true, message: `请输入${label || '编号'}` }] : []}
+        placeholder={`请输入${label || '编号'}`}
         disabled={disabled}
         colProps={colProps}
         fieldProps={{

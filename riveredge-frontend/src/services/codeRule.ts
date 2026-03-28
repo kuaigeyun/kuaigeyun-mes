@@ -1,19 +1,19 @@
 /**
- * 编码规则 API 服务
+ * 编号规则 API 服务
  * 
- * 提供编码规则管理相关的 API 接口
- * 注意：所有 API 自动过滤当前组织的编码规则
+ * 提供编号规则管理相关的 API 接口
+ * 注意：所有 API 自动过滤当前组织的编号规则
  */
 
 import { apiRequest } from './api';
 
 /**
- * 编码规则组件类型
+ * 编号规则组件类型
  */
 import { CodeRuleComponent } from '../types/codeRuleComponent';
 
 /**
- * 编码规则信息接口
+ * 编号规则信息接口
  */
 export interface CodeRule {
   uuid: string;
@@ -34,7 +34,7 @@ export interface CodeRule {
 }
 
 /**
- * 创建编码规则数据
+ * 创建编号规则数据
  */
 export interface CreateCodeRuleData {
   name: string;
@@ -50,7 +50,7 @@ export interface CreateCodeRuleData {
 }
 
 /**
- * 更新编码规则数据
+ * 更新编号规则数据
  */
 export interface UpdateCodeRuleData {
   name?: string;
@@ -65,7 +65,7 @@ export interface UpdateCodeRuleData {
 }
 
 /**
- * 编码规则列表查询参数
+ * 编号规则列表查询参数
  */
 export interface CodeRuleListParams {
   page?: number;
@@ -74,7 +74,7 @@ export interface CodeRuleListParams {
 }
 
 /**
- * 编码规则列表响应数据
+ * 编号规则列表响应数据
  */
 export interface CodeRuleListResponse {
   items: CodeRule[];
@@ -82,7 +82,7 @@ export interface CodeRuleListResponse {
 }
 
 /**
- * 创建编码规则数据
+ * 创建编号规则数据
  */
 export interface CreateCodeRuleData {
   name: string;
@@ -97,7 +97,7 @@ export interface CreateCodeRuleData {
 }
 
 /**
- * 更新编码规则数据
+ * 更新编号规则数据
  */
 export interface UpdateCodeRuleData {
   name?: string;
@@ -110,17 +110,17 @@ export interface UpdateCodeRuleData {
 }
 
 /**
- * 编码生成请求数据
+ * 编号生成请求数据
  */
 export interface CodeGenerationRequest {
   rule_code: string;
   context?: Record<string, any>;
-  check_duplicate?: boolean; // 是否检查重复（如果为True，会自动递增直到找到不重复的编码）
+  check_duplicate?: boolean; // 是否检查重复（如果为True，会自动递增直到找到不重复的编号）
   entity_type?: string; // 实体类型（如：'material'，用于检查重复）
 }
 
 /**
- * 编码生成响应数据
+ * 编号生成响应数据
  */
 export interface CodeGenerationResponse {
   code: string;
@@ -128,13 +128,13 @@ export interface CodeGenerationResponse {
 }
 
 /**
- * 获取编码规则列表
+ * 获取编号规则列表
  * 
- * 自动过滤当前组织的编码规则。
+ * 自动过滤当前组织的编号规则。
  * 注意：后端返回的是 List[CodeRuleResponse]（数组），需要转换为分页格式。
  * 
  * @param params - 查询参数
- * @returns 编码规则列表响应数据
+ * @returns 编号规则列表响应数据
  */
 export async function getCodeRuleList(params?: CodeRuleListParams): Promise<CodeRuleListResponse> {
   // 后端 API 使用 skip 和 limit 参数，而不是 page 和 page_size
@@ -173,24 +173,24 @@ export async function getCodeRuleList(params?: CodeRuleListParams): Promise<Code
 }
 
 /**
- * 获取编码规则详情
+ * 获取编号规则详情
  * 
- * 自动验证组织权限：只能获取当前组织的编码规则。
+ * 自动验证组织权限：只能获取当前组织的编号规则。
  * 
- * @param ruleUuid - 编码规则 UUID
- * @returns 编码规则信息
+ * @param ruleUuid - 编号规则 UUID
+ * @returns 编号规则信息
  */
 export async function getCodeRuleByUuid(ruleUuid: string): Promise<CodeRule> {
   return apiRequest<CodeRule>(`/core/code-rules/${ruleUuid}`);
 }
 
 /**
- * 创建编码规则
+ * 创建编号规则
  * 
  * 自动设置当前组织的 tenant_id。
  * 
- * @param data - 编码规则创建数据
- * @returns 创建的编码规则信息
+ * @param data - 编号规则创建数据
+ * @returns 创建的编号规则信息
  */
 export async function createCodeRule(data: CreateCodeRuleData): Promise<CodeRule> {
   return apiRequest<CodeRule>('/core/code-rules', {
@@ -200,13 +200,13 @@ export async function createCodeRule(data: CreateCodeRuleData): Promise<CodeRule
 }
 
 /**
- * 更新编码规则
+ * 更新编号规则
  * 
- * 自动验证组织权限：只能更新当前组织的编码规则。
+ * 自动验证组织权限：只能更新当前组织的编号规则。
  * 
- * @param ruleUuid - 编码规则 UUID
- * @param data - 编码规则更新数据
- * @returns 更新后的编码规则信息
+ * @param ruleUuid - 编号规则 UUID
+ * @param data - 编号规则更新数据
+ * @returns 更新后的编号规则信息
  */
 export async function updateCodeRule(ruleUuid: string, data: UpdateCodeRuleData): Promise<CodeRule> {
   return apiRequest<CodeRule>(`/core/code-rules/${ruleUuid}`, {
@@ -216,12 +216,12 @@ export async function updateCodeRule(ruleUuid: string, data: UpdateCodeRuleData)
 }
 
 /**
- * 删除编码规则
+ * 删除编号规则
  * 
- * 自动验证组织权限：只能删除当前组织的编码规则。
+ * 自动验证组织权限：只能删除当前组织的编号规则。
  * 系统规则不可删除。
  * 
- * @param ruleUuid - 编码规则 UUID
+ * @param ruleUuid - 编号规则 UUID
  */
 export async function deleteCodeRule(ruleUuid: string): Promise<void> {
   return apiRequest<void>(`/core/code-rules/${ruleUuid}`, {
@@ -230,10 +230,10 @@ export async function deleteCodeRule(ruleUuid: string): Promise<void> {
 }
 
 /**
- * 生成编码（会更新序号）
+ * 生成编号（会更新序号）
  * 
- * @param request - 编码生成请求数据
- * @returns 生成的编码
+ * @param request - 编号生成请求数据
+ * @returns 生成的编号
  */
 export async function generateCode(request: CodeGenerationRequest): Promise<CodeGenerationResponse> {
   return apiRequest<CodeGenerationResponse>('/core/code-rules/generate', {
@@ -243,10 +243,10 @@ export async function generateCode(request: CodeGenerationRequest): Promise<Code
 }
 
 /**
- * 测试生成编码（不更新序号）
+ * 测试生成编号（不更新序号）
  * 
- * @param request - 编码生成请求数据
- * @returns 生成的编码（测试用）
+ * @param request - 编号生成请求数据
+ * @returns 生成的编号（测试用）
  */
 export async function testGenerateCode(request: CodeGenerationRequest): Promise<CodeGenerationResponse> {
   return apiRequest<CodeGenerationResponse>('/core/code-rules/test-generate', {
@@ -256,7 +256,7 @@ export async function testGenerateCode(request: CodeGenerationRequest): Promise<
 }
 
 /**
- * 编码规则页面配置接口（后端返回格式，snake_case）
+ * 编号规则页面配置接口（后端返回格式，snake_case）
  */
 export interface CodeRulePageConfigResponse {
   page_code: string;
@@ -278,7 +278,7 @@ export interface CodeRulePageConfigResponse {
 }
 
 /**
- * 编码规则页面配置接口（前端使用格式，camelCase）
+ * 编号规则页面配置接口（前端使用格式，camelCase）
  */
 export interface CodeRulePageConfig {
   pageCode: string;
@@ -302,9 +302,9 @@ export interface CodeRulePageConfig {
 }
 
 /**
- * 获取编码规则功能页面配置列表
+ * 获取编号规则功能页面配置列表
  * 
- * 返回系统中所有有编码字段的功能页面配置。
+ * 返回系统中所有有编号字段的功能页面配置。
  * 
  * @returns 功能页面配置列表（已转换为camelCase格式）
  */
@@ -333,7 +333,7 @@ export async function getCodeRulePages(): Promise<CodeRulePageConfig[]> {
 }
 
 /**
- * 恢复预置编码规则
+ * 恢复预置编号规则
  *
  * @param scope - 'all' 全部页面 | 'page' 当前页面
  * @param pageCode - scope='page' 时必填
@@ -346,7 +346,7 @@ export async function restorePresetRules(scope: 'all' | 'page' = 'all', pageCode
 }
 
 /**
- * 批量启用所有编码规则
+ * 批量启用所有编号规则
  */
 export async function enableAllRules(): Promise<{ enabled: number; message: string }> {
   return apiRequest<{ enabled: number; message: string }>('/core/code-rules/enable-all', {
@@ -355,12 +355,12 @@ export async function enableAllRules(): Promise<{ enabled: number; message: stri
 }
 
 /**
- * 获取指定页面的编码规则配置
+ * 获取指定页面的编号规则配置
  * 
- * 根据页面代码获取编码规则配置，包括是否自动生成、是否允许手动填写等。
+ * 根据页面代码获取编号规则配置，包括是否自动生成、是否允许手动填写等。
  * 
  * @param pageCode - 页面代码（如：kuaizhizao-sales-order）
- * @returns 页面编码规则配置（已转换为camelCase格式）
+ * @returns 页面编号规则配置（已转换为camelCase格式）
  */
 export async function getCodeRulePageConfig(pageCode: string): Promise<CodeRulePageConfig | null> {
   try {
@@ -386,7 +386,7 @@ export async function getCodeRulePageConfig(pageCode: string): Promise<CodeRuleP
     })),
   };
 } catch (error) {
-  console.error('获取页面编码规则配置失败:', error);
+  console.error('获取页面编号规则配置失败:', error);
   return null;
 }
 }

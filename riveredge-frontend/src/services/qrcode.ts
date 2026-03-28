@@ -36,7 +36,7 @@ export interface QRCodeGenerateRequest {
 export interface QRCodeGenerateResponse {
   qrcode_type: QRCodeType;
   qrcode_text: string;
-  qrcode_image: string; // base64编码的data URI
+  qrcode_image: string; // base64编号的data URI
   size: number;
   border: number;
   error_correction: ErrorCorrectionLevel;
@@ -47,7 +47,7 @@ export interface QRCodeGenerateResponse {
  */
 export interface QRCodeParseRequest {
   qrcode_text?: string;
-  qrcode_image?: string; // base64编码
+  qrcode_image?: string; // base64编号
 }
 
 /**

@@ -119,8 +119,8 @@ const StorageAreasPage: React.FC = () => {
    * 数据格式：第一行为表头，第二行为示例数据，从第三行开始为实际数据
    * 
    * 所属仓库字段说明：
-   * - 可以填写仓库编码（如：WH001）或仓库名称（如：成品仓库）
-   * - 系统会根据编码或名称自动匹配对应的仓库
+   * - 可以填写仓库编号（如：WH001）或仓库名称（如：成品仓库）
+   * - 系统会根据编号或名称自动匹配对应的仓库
    * - 如果仓库不存在，导入会失败并提示错误
    */
   const handleImport = async (data: any[][]) => {
@@ -158,10 +158,10 @@ const StorageAreasPage: React.FC = () => {
 
     // 表头字段映射（不包含 isActive 和 createdAt，这些字段使用默认值）
     const headerMap: Record<string, string> = {
-      '库区编码': 'code',
-      '*库区编码': 'code',
-      '编码': 'code',
-      '*编码': 'code',
+      '库区编号': 'code',
+      '*库区编号': 'code',
+      '编号': 'code',
+      '*编号': 'code',
       'code': 'code',
       '*code': 'code',
       '库区名称': 'name',
@@ -172,7 +172,7 @@ const StorageAreasPage: React.FC = () => {
       '*name': 'name',
       '所属仓库': 'warehouseCode',
       '仓库': 'warehouseCode',
-      '仓库编码': 'warehouseCode',
+      '仓库编号': 'warehouseCode',
       '仓库名称': 'warehouseName',
       'warehouseCode': 'warehouseCode',
       'warehouse_code': 'warehouseCode',
@@ -264,13 +264,13 @@ const StorageAreasPage: React.FC = () => {
           return;
         }
 
-        // 处理所属仓库（根据仓库编码或名称查找 warehouseId）
+        // 处理所属仓库（根据仓库编号或名称查找 warehouseId）
         let warehouseId: number | undefined = undefined;
         if (warehouseCode || warehouseName) {
           const warehouseCodeValue = warehouseCode ? String(warehouseCode).trim().toUpperCase() : '';
           const warehouseNameValue = warehouseName ? String(warehouseName).trim() : '';
           
-          // 优先通过编码查找
+          // 优先通过编号查找
           if (warehouseCodeValue) {
             const foundWarehouse = warehouses.find(w => w.code.toUpperCase() === warehouseCodeValue);
             if (foundWarehouse) {
@@ -283,7 +283,7 @@ const StorageAreasPage: React.FC = () => {
               return;
             }
           } 
-          // 如果编码未找到，尝试通过名称查找
+          // 如果编号未找到，尝试通过名称查找
           else if (warehouseNameValue) {
             const foundWarehouse = warehouses.find(w => w.name === warehouseNameValue);
             if (foundWarehouse) {
@@ -709,7 +709,7 @@ const StorageAreasPage: React.FC = () => {
         defaultViewType="table"
         showImportButton={true}
         onImport={handleImport}
-        importHeaders={['*库区编码', '*库区名称', '*所属仓库', '描述']}
+        importHeaders={['*库区编号', '*库区名称', '*所属仓库', '描述']}
         importExampleRow={[
           'SA001', 
           'A区', 
@@ -717,10 +717,10 @@ const StorageAreasPage: React.FC = () => {
           '主要用于存储A类物料'
         ]}
         importFieldMap={{
-          '库区编码': 'code',
-          '*库区编码': 'code',
-          '编码': 'code',
-          '*编码': 'code',
+          '库区编号': 'code',
+          '*库区编号': 'code',
+          '编号': 'code',
+          '*编号': 'code',
           'code': 'code',
           '*code': 'code',
           '库区名称': 'name',
@@ -731,7 +731,7 @@ const StorageAreasPage: React.FC = () => {
           '*name': 'name',
           '所属仓库': 'warehouseCode',
           '仓库': 'warehouseCode',
-          '仓库编码': 'warehouseCode',
+          '仓库编号': 'warehouseCode',
           '仓库名称': 'warehouseName',
           'warehouseCode': 'warehouseCode',
           'warehouse_code': 'warehouseCode',

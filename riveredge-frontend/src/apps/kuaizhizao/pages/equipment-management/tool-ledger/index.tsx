@@ -131,7 +131,7 @@ const ToolLedgerPage: React.FC = () => {
     }
   };
 
-  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码 */
+  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号 */
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentTool(null);
@@ -306,7 +306,7 @@ const ToolLedgerPage: React.FC = () => {
   };
 
   const detailColumns: ProDescriptionsItemType<Tool>[] = [
-    { title: '工装编码', dataIndex: 'code' },
+    { title: '工装编号', dataIndex: 'code' },
     { title: '工装名称', dataIndex: 'name' },
     { title: '工装类型', dataIndex: 'type' },
     { title: '规格型号', dataIndex: 'spec' },
@@ -337,7 +337,7 @@ const ToolLedgerPage: React.FC = () => {
   ];
 
   const columns: ProColumns<Tool>[] = [
-    { title: '工装编码', dataIndex: 'code', width: 140, ellipsis: true, fixed: 'left' },
+    { title: '工装编号', dataIndex: 'code', width: 140, ellipsis: true, fixed: 'left' },
     { title: '工装名称', dataIndex: 'name', width: 200, ellipsis: true },
     { title: '工装类型', dataIndex: 'type', width: 100 },
     { title: '规格型号', dataIndex: 'spec', width: 120, ellipsis: true },
@@ -444,7 +444,7 @@ const ToolLedgerPage: React.FC = () => {
               if (!row || row.length === 0) continue;
               const name = String(row[nameIdx] ?? '').trim();
               if (!name) continue;
-              const codeIdx = getIdx('编码', 'code');
+              const codeIdx = getIdx('编号', 'code');
               const typeIdx = getIdx('类型', 'type');
               const specIdx = getIdx('规格', 'spec');
               items.push({
@@ -472,7 +472,7 @@ const ToolLedgerPage: React.FC = () => {
               messageApi.warning(`部分失败 ${result.failureCount} 条`);
             }
           }}
-          importHeaders={['工装编码', '*工装名称', '工装类型', '规格型号']}
+          importHeaders={['工装编号', '*工装名称', '工装类型', '规格型号']}
           showExportButton
           onExport={async (type, keys, pageData) => {
             try {
@@ -521,7 +521,7 @@ const ToolLedgerPage: React.FC = () => {
             <CodeField
               pageCode="kuaizhizao-equipment-management-tool"
               name="code"
-              label="工装编码"
+              label="工装编号"
               required={false}
               autoGenerateOnCreate={!isEdit}
               showGenerateButton={false}

@@ -62,7 +62,7 @@ const PurchaseInvoiceDetail: React.FC = () => {
                 <Col span={24}>
                     <ProCard title="基本信息" bordered headerBordered loading={loading}>
                         <ProDescriptions column={2} dataSource={data as Record<string, unknown>}>
-                            <ProDescriptions.Item label="发票编码">{data.invoice_code}</ProDescriptions.Item>
+                            <ProDescriptions.Item label="发票编号">{data.invoice_code}</ProDescriptions.Item>
                             <ProDescriptions.Item label="采购订单">{data.purchase_order_code}</ProDescriptions.Item>
                             <ProDescriptions.Item label="供应商">{data.supplier_name}</ProDescriptions.Item>
                             <ProDescriptions.Item label="发票号码">{data.invoice_number}</ProDescriptions.Item>

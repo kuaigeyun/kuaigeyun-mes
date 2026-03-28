@@ -119,8 +119,8 @@ const WorkstationsPage: React.FC = () => {
    * 数据格式：第一行为表头，第二行为示例数据，从第三行开始为实际数据
    * 
    * 所属产线字段说明：
-   * - 可以填写产线编码（如：PL001）或产线名称（如：产线1）
-   * - 系统会根据编码或名称自动匹配对应的产线
+   * - 可以填写产线编号（如：PL001）或产线名称（如：产线1）
+   * - 系统会根据编号或名称自动匹配对应的产线
    * - 如果产线不存在，导入会失败并提示错误
    */
   const handleImport = async (data: any[][]) => {
@@ -158,10 +158,10 @@ const WorkstationsPage: React.FC = () => {
 
     // 表头字段映射（不包含 isActive 和 createdAt，这些字段使用默认值）
     const headerMap: Record<string, string> = {
-      '工位编码': 'code',
-      '*工位编码': 'code',
-      '编码': 'code',
-      '*编码': 'code',
+      '工位编号': 'code',
+      '*工位编号': 'code',
+      '编号': 'code',
+      '*编号': 'code',
       'code': 'code',
       '*code': 'code',
       '工位名称': 'name',
@@ -172,7 +172,7 @@ const WorkstationsPage: React.FC = () => {
       '*name': 'name',
       '所属产线': 'productionLineCode',
       '产线': 'productionLineCode',
-      '产线编码': 'productionLineCode',
+      '产线编号': 'productionLineCode',
       '产线名称': 'productionLineName',
       'productionLineCode': 'productionLineCode',
       'production_line_code': 'productionLineCode',
@@ -256,7 +256,7 @@ const WorkstationsPage: React.FC = () => {
         const nameValue = name !== null && name !== undefined ? String(name).trim() : '';
         
         if (!codeValue) {
-          errors.push({ row: actualRowIndex, message: '工位编码不能为空' });
+          errors.push({ row: actualRowIndex, message: '工位编号不能为空' });
           return;
         }
         if (!nameValue) {
@@ -264,13 +264,13 @@ const WorkstationsPage: React.FC = () => {
           return;
         }
 
-        // 处理所属产线（根据产线编码或名称查找 productionLineId）
+        // 处理所属产线（根据产线编号或名称查找 productionLineId）
         let productionLineId: number | undefined = undefined;
         if (productionLineCode || productionLineName) {
           const productionLineCodeValue = productionLineCode ? String(productionLineCode).trim().toUpperCase() : '';
           const productionLineNameValue = productionLineName ? String(productionLineName).trim() : '';
           
-          // 优先通过编码查找
+          // 优先通过编号查找
           if (productionLineCodeValue) {
             const foundProductionLine = productionLines.find(p => p.code.toUpperCase() === productionLineCodeValue);
             if (foundProductionLine) {
@@ -278,12 +278,12 @@ const WorkstationsPage: React.FC = () => {
             } else {
               errors.push({ 
                 row: actualRowIndex, 
-                message: `产线编码 "${productionLineCodeValue}" 不存在，请检查产线编码是否正确` 
+                message: `产线编号 "${productionLineCodeValue}" 不存在，请检查产线编号是否正确` 
               });
               return;
             }
           } 
-          // 如果编码未找到，尝试通过名称查找
+          // 如果编号未找到，尝试通过名称查找
           else if (productionLineNameValue) {
             const foundProductionLine = productionLines.find(p => p.name === productionLineNameValue);
             if (foundProductionLine) {
@@ -359,7 +359,7 @@ const WorkstationsPage: React.FC = () => {
                   ))}
                 </ul>
                 <Typography.Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: '12px' }}>
-                  提示：所属产线列可以填写产线编码（如：{productionLines[0]?.code}）或产线名称（如：{productionLines[0]?.name}）
+                  提示：所属产线列可以填写产线编号（如：{productionLines[0]?.code}）或产线名称（如：{productionLines[0]?.name}）
                 </Typography.Text>
               </div>
             )}
@@ -709,7 +709,7 @@ const WorkstationsPage: React.FC = () => {
         defaultViewType="table"
         showImportButton={true}
         onImport={handleImport}
-        importHeaders={['*工位编码', '*工位名称', '*所属产线', '描述']}
+        importHeaders={['*工位编号', '*工位名称', '*所属产线', '描述']}
         importExampleRow={[
           'ST001', 
           '工位1', 
@@ -717,10 +717,10 @@ const WorkstationsPage: React.FC = () => {
           '主要负责产品加工'
         ]}
         importFieldMap={{
-          '工位编码': 'code',
-          '*工位编码': 'code',
-          '编码': 'code',
-          '*编码': 'code',
+          '工位编号': 'code',
+          '*工位编号': 'code',
+          '编号': 'code',
+          '*编号': 'code',
           'code': 'code',
           '*code': 'code',
           '工位名称': 'name',
@@ -731,7 +731,7 @@ const WorkstationsPage: React.FC = () => {
           '*name': 'name',
           '所属产线': 'productionLineCode',
           '产线': 'productionLineCode',
-          '产线编码': 'productionLineCode',
+          '产线编号': 'productionLineCode',
           '产线名称': 'productionLineName',
           'productionLineCode': 'productionLineCode',
           'production_line_code': 'productionLineCode',

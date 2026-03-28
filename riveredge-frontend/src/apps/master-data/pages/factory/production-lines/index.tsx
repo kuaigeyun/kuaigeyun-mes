@@ -119,8 +119,8 @@ const ProductionLinesPage: React.FC = () => {
    * 数据格式：第一行为表头，第二行为示例数据，从第三行开始为实际数据
    * 
    * 所属车间字段说明：
-   * - 可以填写车间编码（如：WS001）或车间名称（如：装配车间）
-   * - 系统会根据编码或名称自动匹配对应的车间
+   * - 可以填写车间编号（如：WS001）或车间名称（如：装配车间）
+   * - 系统会根据编号或名称自动匹配对应的车间
    * - 如果车间不存在，导入会失败并提示错误
    */
   const handleImport = async (data: any[][]) => {
@@ -158,10 +158,10 @@ const ProductionLinesPage: React.FC = () => {
 
     // 表头字段映射（不包含 isActive 和 createdAt，这些字段使用默认值）
     const headerMap: Record<string, string> = {
-      '产线编码': 'code',
-      '*产线编码': 'code',
-      '编码': 'code',
-      '*编码': 'code',
+      '产线编号': 'code',
+      '*产线编号': 'code',
+      '编号': 'code',
+      '*编号': 'code',
       'code': 'code',
       '*code': 'code',
       '产线名称': 'name',
@@ -172,7 +172,7 @@ const ProductionLinesPage: React.FC = () => {
       '*name': 'name',
       '所属车间': 'workshopCode',
       '车间': 'workshopCode',
-      '车间编码': 'workshopCode',
+      '车间编号': 'workshopCode',
       '车间名称': 'workshopName',
       'workshopCode': 'workshopCode',
       'workshop_code': 'workshopCode',
@@ -256,7 +256,7 @@ const ProductionLinesPage: React.FC = () => {
         const nameValue = name !== null && name !== undefined ? String(name).trim() : '';
         
         if (!codeValue) {
-          errors.push({ row: actualRowIndex, message: '产线编码不能为空' });
+          errors.push({ row: actualRowIndex, message: '产线编号不能为空' });
           return;
         }
         if (!nameValue) {
@@ -264,13 +264,13 @@ const ProductionLinesPage: React.FC = () => {
           return;
         }
 
-        // 处理所属车间（根据车间编码或名称查找 workshopId）
+        // 处理所属车间（根据车间编号或名称查找 workshopId）
         let workshopId: number | undefined = undefined;
         if (workshopCode || workshopName) {
           const workshopCodeValue = workshopCode ? String(workshopCode).trim().toUpperCase() : '';
           const workshopNameValue = workshopName ? String(workshopName).trim() : '';
           
-          // 优先通过编码查找
+          // 优先通过编号查找
           if (workshopCodeValue) {
             const foundWorkshop = workshops.find(w => w.code.toUpperCase() === workshopCodeValue);
             if (foundWorkshop) {
@@ -278,12 +278,12 @@ const ProductionLinesPage: React.FC = () => {
             } else {
               errors.push({ 
                 row: actualRowIndex, 
-                message: `车间编码 "${workshopCodeValue}" 不存在，请检查车间编码是否正确` 
+                message: `车间编号 "${workshopCodeValue}" 不存在，请检查车间编号是否正确` 
               });
               return;
             }
           } 
-          // 如果编码未找到，尝试通过名称查找
+          // 如果编号未找到，尝试通过名称查找
           else if (workshopNameValue) {
             const foundWorkshop = workshops.find(w => w.name === workshopNameValue);
             if (foundWorkshop) {
@@ -359,7 +359,7 @@ const ProductionLinesPage: React.FC = () => {
                   ))}
                 </ul>
                 <Typography.Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: '12px' }}>
-                  提示：所属车间列可以填写车间编码（如：{workshops[0]?.code}）或车间名称（如：{workshops[0]?.name}）
+                  提示：所属车间列可以填写车间编号（如：{workshops[0]?.code}）或车间名称（如：{workshops[0]?.name}）
                 </Typography.Text>
               </div>
             )}
@@ -712,7 +712,7 @@ const ProductionLinesPage: React.FC = () => {
         defaultViewType="table"
         showImportButton={true}
         onImport={handleImport}
-        importHeaders={['*产线编码', '*产线名称', '*所属车间', '描述']}
+        importHeaders={['*产线编号', '*产线名称', '*所属车间', '描述']}
         importExampleRow={[
           'PL001', 
           '产线1', 
@@ -720,10 +720,10 @@ const ProductionLinesPage: React.FC = () => {
           '主要负责产品生产'
         ]}
         importFieldMap={{
-          '产线编码': 'code',
-          '*产线编码': 'code',
-          '编码': 'code',
-          '*编码': 'code',
+          '产线编号': 'code',
+          '*产线编号': 'code',
+          '编号': 'code',
+          '*编号': 'code',
           'code': 'code',
           '*code': 'code',
           '产线名称': 'name',
@@ -734,7 +734,7 @@ const ProductionLinesPage: React.FC = () => {
           '*name': 'name',
           '所属车间': 'workshopCode',
           '车间': 'workshopCode',
-          '车间编码': 'workshopCode',
+          '车间编号': 'workshopCode',
           '车间名称': 'workshopName',
           'workshopCode': 'workshopCode',
           'workshop_code': 'workshopCode',

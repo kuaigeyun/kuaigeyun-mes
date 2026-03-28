@@ -104,7 +104,7 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
    */
   const columns: ProColumns<DeliveryDelayException>[] = [
     {
-      title: '工单编码',
+      title: '工单编号',
       dataIndex: 'work_order_code',
       width: 140,
       fixed: 'left',
@@ -282,7 +282,7 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
         customContent={
           currentRecord ? (
             <div style={{ padding: '16px 0' }}>
-              <p><strong>工单编码：</strong>{currentRecord.work_order_code}</p>
+              <p><strong>工单编号：</strong>{currentRecord.work_order_code}</p>
               <p><strong>计划结束日期：</strong>{currentRecord.planned_end_date}</p>
               {currentRecord.actual_end_date && (
                 <p><strong>实际结束日期：</strong>{currentRecord.actual_end_date}</p>
@@ -358,7 +358,7 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
         {currentRecord && (
           <>
             <div style={{ marginBottom: 16, padding: 12, background: '#f5f5f5', borderRadius: 4 }}>
-              <p><strong>工单编码：</strong>{currentRecord.work_order_code}</p>
+              <p><strong>工单编号：</strong>{currentRecord.work_order_code}</p>
               <p><strong>计划结束日期：</strong>{currentRecord.planned_end_date}</p>
               <p><strong>延期天数：</strong>
                 <span style={{ color: '#ff4d4f', fontWeight: 'bold' }}>

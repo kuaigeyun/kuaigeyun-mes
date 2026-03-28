@@ -224,7 +224,7 @@ const MaintenancePlansPage: React.FC = () => {
       dataIndex: 'plan_type',
     },
     {
-      title: '设备编码',
+      title: '设备编号',
       dataIndex: 'equipment_code',
     },
     {
@@ -299,7 +299,7 @@ const MaintenancePlansPage: React.FC = () => {
       width: 120,
     },
     {
-      title: '设备编码',
+      title: '设备编号',
       dataIndex: 'equipment_code',
       width: 140,
     },

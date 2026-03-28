@@ -26,10 +26,10 @@ const { TextArea } = Input;
 export interface DictionarySelectProps {
   /** 字典代码 */
   dictionaryCode: string;
-  /** 字段名称 */
-  name: string;
-  /** 标签 */
-  label: string;
+  /** 字段名称 (noStyle 为 false 时必填) */
+  name?: string | (string | number)[];
+  /** 标签 (用于错误提示和 Modal 标题) */
+  label?: string;
   /** 占位符 */
   placeholder?: string;
   /** 是否必填 */
@@ -39,13 +39,25 @@ export interface DictionarySelectProps {
   /** 加载状态 */
   loading?: boolean;
   /** 初始值 */
-  initialValue?: string;
+  initialValue?: any;
   /** 列属性（用于ProForm布局） */
   colProps?: { span: number };
   /** 验证规则 */
   rules?: any[];
   /** 表单实例引用（用于创建新项后更新表单值） */
   formRef?: React.RefObject<any>;
+  /** 是否不包裹 ProForm.Item */
+  noStyle?: boolean;
+  /** 组件尺寸 */
+  size?: 'large' | 'middle' | 'small';
+  /** 自定义样式 */
+  style?: React.CSSProperties;
+  /** 自定义类名 */
+  className?: string;
+  /** 值发生变化时的回调 */
+  onChange?: (value: any, option: any) => void;
+  /** 当前选中的值 */
+  value?: any;
 }
 
 /**
@@ -54,7 +66,7 @@ export interface DictionarySelectProps {
 export const DictionarySelect: React.FC<DictionarySelectProps> = ({
   dictionaryCode,
   name,
-  label,
+  label = '项',
   placeholder,
   required = false,
   disabled = false,
@@ -63,6 +75,12 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
   colProps,
   rules,
   formRef,
+  noStyle = false,
+  size,
+  style,
+  className,
+  onChange,
+  value,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -137,9 +155,16 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
       await loadDictionaryItems();
 
       const newValue = newItem.value;
-      if (formRef?.current) {
-        formRef.current.setFieldsValue({ [name]: newValue });
+      
+      // 如果提供了 name，则尝试通过 name 更新表单（针对 ProForm 或 antd Form）
+      if (name) {
+        if (formRef?.current) {
+          formRef.current.setFieldsValue({ [Array.isArray(name) ? name[name.length - 1] : name]: newValue });
+        }
       }
+      
+      // 触发 onChange 供外部同步
+      onChange?.(newValue, { value: newValue, label: newItem.label });
 
       return newValue;
     } catch (error: any) {
@@ -160,6 +185,87 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
 
   const effectiveColProps = colProps ?? { span: 12 };
 
+  const dropdown = (
+    <UniDropdown
+      style={{ width: '100%', ...style }}
+      className={className}
+      placeholder={placeholder || `请选择${label}`}
+      showSearch
+      allowClear
+      loading={loading || externalLoading}
+      disabled={disabled}
+      options={options}
+      size={size}
+      onChange={onChange}
+      value={value}
+      quickCreate={{
+        label: '创建新项',
+        onClick: () => {
+          setCreateLabel('');
+          setCreateValue('');
+          setCreateDescription('');
+          setCreateModalVisible(true);
+        },
+      }}
+    />
+  );
+
+  const modal = (
+    <Modal
+      title={`创建新的${label}项`}
+      open={createModalVisible}
+      onOk={handleCreateItem}
+      onCancel={() => {
+        setCreateModalVisible(false);
+        setCreateLabel('');
+        setCreateValue('');
+        setCreateDescription('');
+      }}
+      confirmLoading={creating}
+      okText="创建"
+      cancelText="取消"
+      zIndex={2000} // 确保在 Table 单元格等复杂场景下也能正确覆盖
+    >
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: 8, fontWeight: 500 }}>标签 *</div>
+        <Input
+          value={createLabel}
+          onChange={(e) => setCreateLabel(e.target.value)}
+          placeholder="请输入标签（显示名称）"
+          maxLength={100}
+        />
+      </div>
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: 8, fontWeight: 500 }}>值 *</div>
+        <Input
+          value={createValue}
+          onChange={(e) => setCreateValue(e.target.value)}
+          placeholder="请输入值（唯一标识）"
+          maxLength={100}
+        />
+      </div>
+      <div>
+        <div style={{ marginBottom: 8, fontWeight: 500 }}>描述</div>
+        <TextArea
+          value={createDescription}
+          onChange={(e) => setCreateDescription(e.target.value)}
+          placeholder="请输入描述（可选）"
+          rows={3}
+          maxLength={500}
+        />
+      </div>
+    </Modal>
+  );
+
+  if (noStyle) {
+    return (
+      <>
+        {dropdown}
+        {modal}
+      </>
+    );
+  }
+
   return (
     <>
       <ProForm.Item
@@ -170,71 +276,12 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
         colProps={effectiveColProps}
         className="dictionary-select-form-item"
       >
-        <UniDropdown
-          style={{ width: '100%' }}
-          placeholder={placeholder || `请选择${label}`}
-          showSearch
-          allowClear
-          loading={loading || externalLoading}
-          disabled={disabled}
-          options={options}
-          quickCreate={{
-            label: '创建新项',
-            onClick: () => {
-              setCreateLabel('');
-              setCreateValue('');
-              setCreateDescription('');
-              setCreateModalVisible(true);
-            },
-          }}
-        />
+        {dropdown}
       </ProForm.Item>
-
-      <Modal
-        title={`创建新的${label}项`}
-        open={createModalVisible}
-        onOk={handleCreateItem}
-        onCancel={() => {
-          setCreateModalVisible(false);
-          setCreateLabel('');
-          setCreateValue('');
-          setCreateDescription('');
-        }}
-        confirmLoading={creating}
-        okText="创建"
-        cancelText="取消"
-      >
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ marginBottom: 8, fontWeight: 500 }}>标签 *</div>
-          <Input
-            value={createLabel}
-            onChange={(e) => setCreateLabel(e.target.value)}
-            placeholder="请输入标签（显示名称）"
-            maxLength={100}
-          />
-        </div>
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ marginBottom: 8, fontWeight: 500 }}>值 *</div>
-          <Input
-            value={createValue}
-            onChange={(e) => setCreateValue(e.target.value)}
-            placeholder="请输入值（唯一标识）"
-            maxLength={100}
-          />
-        </div>
-        <div>
-          <div style={{ marginBottom: 8, fontWeight: 500 }}>描述</div>
-          <TextArea
-            value={createDescription}
-            onChange={(e) => setCreateDescription(e.target.value)}
-            placeholder="请输入描述（可选）"
-            rows={3}
-            maxLength={500}
-          />
-        </div>
-      </Modal>
+      {modal}
     </>
   );
 };
+
 
 export default DictionarySelect;

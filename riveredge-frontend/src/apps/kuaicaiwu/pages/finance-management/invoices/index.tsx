@@ -37,7 +37,7 @@ const InvoiceList: React.FC = () => {
 
   const columns: ProColumns<Invoice>[] = [
     {
-      title: t('common.code', { defaultValue: '编码' }),
+      title: t('common.code', { defaultValue: '编号' }),
       dataIndex: 'invoice_code',
       width: 150,
       fixed: 'left',

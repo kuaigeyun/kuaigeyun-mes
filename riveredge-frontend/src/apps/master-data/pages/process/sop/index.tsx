@@ -295,11 +295,11 @@ const SOPPage: React.FC = () => {
       return;
     }
     const col = (n: string) => headers.findIndex((h: string) => (h || '').replace(/\*+/, '').trim() === n);
-    const idxCode = col('SOP编码') >= 0 ? col('SOP编码') : col('编码');
+    const idxCode = col('SOP编号') >= 0 ? col('SOP编号') : col('编号');
     const idxName = col('SOP名称') >= 0 ? col('SOP名称') : col('名称');
     const idxVersion = col('版本') >= 0 ? col('版本') : -1;
     if (idxCode < 0 || idxName < 0) {
-      messageApi.error(t('app.master-data.importMissingField', { field: 'SOP编码/名称', headers: headers.join(', ') }));
+      messageApi.error(t('app.master-data.importMissingField', { field: 'SOP编号/名称', headers: headers.join(', ') }));
       return;
     }
     const items: SOPCreate[] = [];
@@ -309,7 +309,7 @@ const SOPPage: React.FC = () => {
       const name = (row[idxName] ?? '').toString().trim();
       const version = idxVersion >= 0 ? (row[idxVersion] ?? '').toString().trim() : undefined;
       if (!code) {
-        errors.push({ row: i + 3, message: 'SOP编码不能为空' });
+        errors.push({ row: i + 3, message: 'SOP编号不能为空' });
         return;
       }
       if (!name) {
@@ -380,7 +380,7 @@ const SOPPage: React.FC = () => {
         messageApi.warning(t('app.master-data.noExportData'));
         return;
       }
-      const headers = ['SOP编码', 'SOP名称', '版本', '启用状态', '创建时间'];
+      const headers = ['SOP编号', 'SOP名称', '版本', '启用状态', '创建时间'];
       const csvRows = [headers.join(',')];
       toExport.forEach((r) => {
         const isActive = r?.isActive ?? (r as any)?.is_active;
@@ -440,7 +440,7 @@ const SOPPage: React.FC = () => {
    */
   const columns: ProColumns<SOP>[] = [
     {
-      title: 'SOP编码',
+      title: 'SOP编号',
       dataIndex: 'code',
       width: 150,
       fixed: 'left',
@@ -667,11 +667,11 @@ const SOPPage: React.FC = () => {
         }}
         showImportButton={true}
         onImport={handleImport}
-        importHeaders={['*SOP编码', '*SOP名称', '版本']}
+        importHeaders={['*SOP编号', '*SOP名称', '版本']}
         importExampleRow={['SOP001', '装配作业指导', 'v1.0']}
         importFieldMap={{
-          'SOP编码': 'code',
-          '*SOP编码': 'code',
+          'SOP编号': 'code',
+          '*SOP编号': 'code',
           'SOP名称': 'name',
           '*SOP名称': 'name',
           '版本': 'version',
@@ -689,7 +689,7 @@ const SOPPage: React.FC = () => {
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
         columns={[
-          { title: 'SOP编码', dataIndex: 'code' },
+          { title: 'SOP编号', dataIndex: 'code' },
           { title: 'SOP名称', dataIndex: 'name' },
           { title: '关联工序', dataIndex: 'operationId', render: (_, record) => getOperationName(record?.operationId ?? (record as any)?.operation_id) },
           { title: '版本号', dataIndex: 'version' },
@@ -745,11 +745,11 @@ const SOPPage: React.FC = () => {
             <Col span={12} style={{ minWidth: 0 }}>
               <ProFormText
                 name="code"
-                label="SOP编码"
-                placeholder="请输入SOP编码"
+                label="SOP编号"
+                placeholder="请输入SOP编号"
                 rules={[
-                  { required: true, message: '请输入SOP编码' },
-                  { max: 50, message: 'SOP编码不能超过50个字符' },
+                  { required: true, message: '请输入SOP编号' },
+                  { max: 50, message: 'SOP编号不能超过50个字符' },
                 ]}
                 fieldProps={{ style: { textTransform: 'uppercase' } }}
               />

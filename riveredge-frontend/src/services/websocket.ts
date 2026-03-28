@@ -325,7 +325,7 @@ export class WebSocketClient {
  * @returns WebSocket客户端实例
  */
 export function createWebSocketClient(channels: string[] = []): WebSocketClient {
-  // 优先使用相对路径（当前页 origin），便于局域网访问，避免 127.0.0.1 硬编码
+  // 优先使用相对路径（当前页 origin），便于局域网访问，避免 127.0.0.1 硬编号
   const apiTarget = import.meta.env.VITE_API_TARGET;
   const wsUrl = import.meta.env.VITE_WS_URL || 
     (apiTarget 

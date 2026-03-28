@@ -237,8 +237,8 @@ export function sanitizeTemplate(template: Template): Template {
         if (!Array.isArray(s.head) || s.head.length === 0) {
           s.head = s.columns.map((c: any) => c.label ?? c.key ?? '');
         }
-        // 修复表头污染：当 head 与首行数据合并时（如 "3序号"、"OP03工序编码"），恢复为纯表头
-        const OPERATIONS_HEAD = ['序号', '工序编码', '工序名称', '工序状态', '工作中心'];
+        // 修复表头污染：当 head 与首行数据合并时（如 "3序号"、"OP03工序编号"），恢复为纯表头
+        const OPERATIONS_HEAD = ['序号', '工序编号', '工序名称', '工序状态', '工作中心'];
         const knownTableHeads: Record<string, string[]> = {
           operations: OPERATIONS_HEAD,
           工序列表: OPERATIONS_HEAD, // enhanceTemplateWithLabels 可能将 name 改为中文

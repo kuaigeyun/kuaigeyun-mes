@@ -12,9 +12,9 @@ import {
 } from '../../../types/codeRuleComponent';
 
 export const SERIAL_RULE_AVAILABLE_FIELDS = [
-  { field_name: 'material_code', field_label: '物料编码', field_type: 'string' },
-  { field_name: 'group_code', field_label: '物料分组编码', field_type: 'string' },
-  { field_name: 'product_code', field_label: '产品编码', field_type: 'string' },
+  { field_name: 'material_code', field_label: '物料编号', field_type: 'string' },
+  { field_name: 'group_code', field_label: '物料分组编号', field_type: 'string' },
+  { field_name: 'product_code', field_label: '产品编号', field_type: 'string' },
 ] as const;
 
 /** 新建序列号规则时的默认组件：固定字符(SN-) + 自动计数(8位) */

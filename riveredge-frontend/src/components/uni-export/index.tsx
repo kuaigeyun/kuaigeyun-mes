@@ -338,7 +338,7 @@ export const UniExport: React.FC<UniExportProps> = ({
         style={{
           width: '100%',
           height: height,
-          border: '1px solid #d9d9d9',
+          border: '1px solid var(--river-border-color)',
           borderRadius: '4px',
           overflow: 'hidden',
         }}

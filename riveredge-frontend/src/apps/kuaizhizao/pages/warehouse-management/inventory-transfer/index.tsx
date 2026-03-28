@@ -509,13 +509,13 @@ showCreateButton={true}
         />
         <ProFormText
           name="from_location_code"
-          label="调出库位编码（可选）"
-          placeholder="请输入调出库位编码"
+          label="调出库位编号（可选）"
+          placeholder="请输入调出库位编号"
         />
         <ProFormText
           name="to_location_code"
-          label="调入库位编码（可选）"
-          placeholder="请输入调入库位编码"
+          label="调入库位编号（可选）"
+          placeholder="请输入调入库位编号"
         />
         <ProFormText
           name="batch_no"
@@ -598,7 +598,7 @@ showCreateButton={true}
               className="warehouse-detail-table"
               columns={[
                 {
-                  title: '物料编码',
+                  title: '物料编号',
                   dataIndex: 'material_code',
                   width: 120,
                 },
