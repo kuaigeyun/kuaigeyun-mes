@@ -145,7 +145,6 @@ export const UniTableDetail: React.FC<UniTableDetailProps> = ({
                       {!disabledAdd && (
                         <Button
                           type="dashed"
-                          size="small"
                           icon={<PlusOutlined />}
                           onClick={() => add(initialValue)}
                           style={{ flex: 1, minWidth: 120 }}
@@ -156,7 +155,6 @@ export const UniTableDetail: React.FC<UniTableDetailProps> = ({
                       {onBatchSelect && (
                         <Button
                           type="default"
-                          size="small"
                           icon={<AppstoreAddOutlined />}
                           onClick={onBatchSelect}
                           style={{ flex: 1, minWidth: 120 }}

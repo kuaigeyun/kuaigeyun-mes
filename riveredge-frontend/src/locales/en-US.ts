@@ -1600,6 +1600,8 @@ export default {
   'app.kuaizhizao.menu.sales-management.quotations': 'Quotations',
   'app.kuaizhizao.menu.sales-management.sample-trials': 'Sample Trials',
   'app.kuaizhizao.menu.sales-management.customer-follow-ups': 'Customer Follow-up',
+  'app.kuaizhizao.customerFollowUp.addFollowUpFromDocument': 'Add follow-up',
+  'app.kuaizhizao.customerFollowUp.needCustomerForFollowUp': 'Link a customer before adding a follow-up.',
   'app.kuaizhizao.customerFollowUp.new': 'New follow-up',
   'app.kuaizhizao.customerFollowUp.loadFailed': 'Failed to load follow-up records',
   'app.kuaizhizao.customerFollowUp.customerRequired': 'Please select a valid customer',

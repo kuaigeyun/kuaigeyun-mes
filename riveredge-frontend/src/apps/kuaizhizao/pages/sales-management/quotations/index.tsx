@@ -10,8 +10,8 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, Dropdown, List, Typography } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, MoreOutlined, AppstoreAddOutlined, SendOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, List, Typography } from 'antd';
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, AppstoreAddOutlined, SendOutlined, CommentOutlined } from '@ant-design/icons';
 import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
@@ -47,6 +47,7 @@ import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { useTranslation } from 'react-i18next';
+import { CustomerFollowUpFormModal, type CustomerFollowUpPreset } from '../../../components/CustomerFollowUpFormModal';
 import { RE_STATUS_BADGE_DRAFT, resolveStatusTagDisplayProps } from '../../../../../constants/statusBadges';
 import '../../../../../components/uni-table-detail/index.less';
 
@@ -148,6 +149,8 @@ const QuotationsPage: React.FC = () => {
   const [shippingMethodOptions, setShippingMethodOptions] = useState<Array<{ label: string; value: string }>>([]);
   /** 付款条件字典选项（数据字典 PAYMENT_TERMS） */
   const [paymentTermsOptions, setPaymentTermsOptions] = useState<Array<{ label: string; value: string }>>([]);
+  const [followUpModalOpen, setFollowUpModalOpen] = useState(false);
+  const [followUpPreset, setFollowUpPreset] = useState<CustomerFollowUpPreset | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -242,31 +245,29 @@ const QuotationsPage: React.FC = () => {
     { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime', width: 160 },
     {
       title: '操作',
-      width: 260,
+      width: 420,
       fixed: 'right',
-      render: (_, record) => {
-        const moreItems = [
-          ...(record.status !== '已转订单' && record.status !== '已拒绝'
-            ? [{ key: 'convert', label: '转订单', icon: <SwapOutlined />, onClick: () => handleConvert(record) }]
-            : []),
-          { key: 'print', label: '打印', icon: <PrinterOutlined />, onClick: () => handlePrint(record) },
-        ]
-        return (
-          <Space>
-            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record.id!)}>详情</Button>
-            {record.status === '草稿' && (
-              <>
-                <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
-                <Button type="link" size="small" icon={<SendOutlined />} onClick={() => handleSubmit(record)}>提交</Button>
-                <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>删除</Button>
-              </>
-            )}
-            <Dropdown menu={{ items: moreItems }} trigger={['click']}>
-              <Button type="link" size="small" icon={<MoreOutlined />}>更多</Button>
-            </Dropdown>
-          </Space>
-        )
-      },
+      render: (_, record) => (
+        <Space size="small" wrap>
+          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record.id!)}>详情</Button>
+          {record.status === '草稿' && (
+            <>
+              <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
+              <Button type="link" size="small" icon={<SendOutlined />} onClick={() => handleSubmit(record)}>提交</Button>
+              <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>删除</Button>
+            </>
+          )}
+          {record.customer_id != null && Number.isFinite(Number(record.customer_id)) && (
+            <Button type="link" size="small" icon={<CommentOutlined />} onClick={() => openFollowUpFromQuotation(record)}>
+              {t('app.kuaizhizao.customerFollowUp.addFollowUpFromDocument')}
+            </Button>
+          )}
+          {record.status !== '已转订单' && record.status !== '已拒绝' && (
+            <Button type="link" size="small" icon={<SwapOutlined />} onClick={() => handleConvert(record)}>转订单</Button>
+          )}
+          <Button type="link" size="small" icon={<PrinterOutlined />} onClick={() => handlePrint(record)}>打印</Button>
+        </Space>
+      ),
     },
   ];
 
@@ -280,6 +281,20 @@ const QuotationsPage: React.FC = () => {
     } catch (e: any) {
       messageApi.error('获取报价单详情失败');
     }
+  };
+
+  const openFollowUpFromQuotation = (record: Quotation) => {
+    const cid = record.customer_id;
+    if (cid == null || !Number.isFinite(Number(cid))) {
+      messageApi.warning(t('app.kuaizhizao.customerFollowUp.needCustomerForFollowUp'));
+      return;
+    }
+    setFollowUpPreset({
+      customer_id: Number(cid),
+      quotation_id: record.id != null ? record.id : undefined,
+      quotation_code: record.quotation_code ?? undefined,
+    });
+    setFollowUpModalOpen(true);
   };
 
   const handleEdit = async (record: Quotation) => {
@@ -1267,7 +1282,6 @@ const QuotationsPage: React.FC = () => {
                         >
                           <Button
                             type="dashed"
-                            size="small"
                             icon={<PlusOutlined />}
                             style={{ flex: 1, minWidth: 120 }}
                             onClick={() => {
@@ -1288,7 +1302,6 @@ const QuotationsPage: React.FC = () => {
                           </Button>
                           <Button
                             type="default"
-                            size="small"
                             icon={<AppstoreAddOutlined />}
                             style={{ flex: 1, minWidth: 120 }}
                             onClick={() => setMaterialPickerOpen(true)}
@@ -1546,6 +1559,16 @@ const QuotationsPage: React.FC = () => {
         title="导入报价明细"
         headers={['物料编号', '规格', '单位', '数量', '单价', '交货日期']}
         exampleRow={['MAT001', 'Spec X', 'PCS', '100', '1.5', '2026-03-01']}
+      />
+
+      <CustomerFollowUpFormModal
+        open={followUpModalOpen}
+        editing={null}
+        preset={followUpPreset}
+        onClose={() => {
+          setFollowUpModalOpen(false);
+          setFollowUpPreset(null);
+        }}
       />
     </>
   );

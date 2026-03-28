@@ -145,7 +145,7 @@ export const customerFormSchema: FieldConfig[] = [
   },
   {
     name: 'isPublic',
-    type: 'radio',
+    type: 'segmented',
     labelKey: 'field.customer.visibility',
     colSpan: 12,
     required: true,
@@ -154,7 +154,6 @@ export const customerFormSchema: FieldConfig[] = [
       { labelKey: 'field.customer.visibilityPublic', value: true },
     ],
     rules: [{ required: true, messageKey: 'field.customer.visibilityRequired' }],
-    fieldProps: { optionType: 'button' },
   },
   {
     name: 'isActive',

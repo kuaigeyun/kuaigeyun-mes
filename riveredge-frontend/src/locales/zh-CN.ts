@@ -1606,6 +1606,8 @@ export default {
   'app.kuaizhizao.menu.sales-management.quotations': '报价单',
   'app.kuaizhizao.menu.sales-management.sample-trials': '样品试用单',
   'app.kuaizhizao.menu.sales-management.customer-follow-ups': '客户跟进',
+  'app.kuaizhizao.customerFollowUp.addFollowUpFromDocument': '添加跟进',
+  'app.kuaizhizao.customerFollowUp.needCustomerForFollowUp': '请先关联客户后再添加跟进',
   'app.kuaizhizao.customerFollowUp.new': '新建跟进',
   'app.kuaizhizao.customerFollowUp.loadFailed': '加载跟进记录失败',
   'app.kuaizhizao.customerFollowUp.customerRequired': '请选择有效客户',

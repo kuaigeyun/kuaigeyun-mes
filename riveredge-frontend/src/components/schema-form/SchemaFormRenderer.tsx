@@ -7,7 +7,7 @@
 
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Tooltip, Space } from 'antd';
+import { Tooltip, Space, Segmented } from 'antd';
 import { QuestionCircleOutlined } from '@ant-design/icons';
 import {
   ProFormText,
@@ -168,6 +168,42 @@ export const SchemaFormRenderer: React.FC<SchemaFormRendererProps> = ({
               fieldProps={{
                 optionType: field.fieldProps?.optionType || 'button',
                 ...field.fieldProps,
+              }}
+            />
+          );
+        }
+
+        if (field.type === 'segmented') {
+          const options =
+            optionsMap[field.name] ??
+            (field.options?.map((o) => ({ label: t(o.labelKey as string), value: o.value })) ?? []);
+          return (
+            <ProFormField
+              key={field.name}
+              name={field.name}
+              label={label}
+              colProps={{ span: colSpan }}
+              rules={rules}
+              extra={extraContent}
+              renderFormItem={(_schema, { value, onChange }: any) => {
+                const idx = options.findIndex((o) => Object.is(o.value, value));
+                const segValue = idx >= 0 ? String(idx) : options.length > 0 ? '0' : undefined;
+                return (
+                  <Segmented
+                    value={segValue}
+                    onChange={(v) => {
+                      const i = Number(v);
+                      if (i >= 0 && i < options.length) {
+                        onChange?.(options[i].value);
+                      }
+                    }}
+                    options={options.map((o, i) => ({
+                      label: o.label,
+                      value: String(i),
+                    }))}
+                    {...(field.fieldProps || {})}
+                  />
+                );
               }}
             />
           );

@@ -14,8 +14,9 @@ import { App, Button, Tag, Space, Modal, Card, Table, Row, Col, Form as AntForm,
 import { EyeOutlined, CheckCircleOutlined, PlusOutlined, AppstoreAddOutlined, ImportOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate } from '../../../../../components/layout-templates';
-import { DictionarySelect } from '../../../../../components/dictionary-select';
 import { UniImport } from '../../../../../components/uni-import';
+import { getDictionaryOptions } from '../../../../master-data/services/supply-chain';
+import { initializeSystemDictionaries } from '../../../../../services/dataDictionary';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
 import type { Material } from '../../../../master-data/types/material';
@@ -76,6 +77,34 @@ interface SalesReturnItem {
   notes?: string;
 }
 
+/** 与后端 `system_dictionaries.py` 一致，租户未同步字典时的下拉兜底 */
+const FALLBACK_RETURN_REASON: { label: string; value: string }[] = [
+  { label: '质量问题', value: 'QUALITY_ISSUE' },
+  { label: '规格不符', value: 'SPEC_MISMATCH' },
+  { label: '数量错误', value: 'QTY_ERROR' },
+  { label: '包装破损', value: 'PACKAGE_DAMAGE' },
+  { label: '错发漏发', value: 'WRONG_OR_MISSING' },
+  { label: '客户取消', value: 'CUSTOMER_CANCEL' },
+  { label: '其他', value: 'OTHER' },
+];
+
+const FALLBACK_RETURN_TYPE: { label: string; value: string }[] = [
+  { label: '换货', value: 'EXCHANGE' },
+  { label: '退款', value: 'REFUND' },
+  { label: '返修', value: 'REWORK' },
+  { label: '报废退货', value: 'SCRAP_RETURN' },
+  { label: '其他', value: 'OTHER' },
+];
+
+const FALLBACK_SHIPPING_METHOD: { label: string; value: string }[] = [
+  { label: '快递', value: 'EXPRESS' },
+  { label: '物流', value: 'LOGISTICS' },
+  { label: '自提', value: 'SELF_PICKUP' },
+  { label: '专车配送', value: 'DEDICATED' },
+  { label: '空运', value: 'AIR' },
+  { label: '海运', value: 'SEA' },
+];
+
 const SalesReturnsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -92,6 +121,48 @@ const SalesReturnsPage: React.FC = () => {
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const formRef = useRef<ProFormInstance>(null);
+  const [returnReasonOptions, setReturnReasonOptions] = useState(FALLBACK_RETURN_REASON);
+  const [returnTypeOptions, setReturnTypeOptions] = useState(FALLBACK_RETURN_TYPE);
+  const [shippingMethodOptions, setShippingMethodOptions] = useState(FALLBACK_SHIPPING_METHOD);
+  const [dictOptionsLoading, setDictOptionsLoading] = useState(false);
+
+  /** 打开表单时拉取字典；若租户未初始化则尝试同步系统字典（与 core 配置一致） */
+  useEffect(() => {
+    if (!modalVisible) return;
+    let cancelled = false;
+    (async () => {
+      setDictOptionsLoading(true);
+      const loadAll = async () => {
+        const [reason, rtype, ship] = await Promise.all([
+          getDictionaryOptions('RETURN_REASON'),
+          getDictionaryOptions('RETURN_TYPE'),
+          getDictionaryOptions('SHIPPING_METHOD'),
+        ]);
+        return { reason, rtype, ship };
+      };
+      try {
+        let { reason, rtype, ship } = await loadAll();
+        if (!cancelled && (reason.length === 0 || rtype.length === 0 || ship.length === 0)) {
+          try {
+            await initializeSystemDictionaries();
+            if (!cancelled) ({ reason, rtype, ship } = await loadAll());
+          } catch (e) {
+            console.warn('initializeSystemDictionaries failed:', e);
+          }
+        }
+        if (!cancelled) {
+          setReturnReasonOptions(reason.length ? reason : FALLBACK_RETURN_REASON);
+          setReturnTypeOptions(rtype.length ? rtype : FALLBACK_RETURN_TYPE);
+          setShippingMethodOptions(ship.length ? ship : FALLBACK_SHIPPING_METHOD);
+        }
+      } finally {
+        if (!cancelled) setDictOptionsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [modalVisible]);
 
   // 表格列定义
   const columns: ProColumns<SalesReturn>[] = [
@@ -502,33 +573,33 @@ const SalesReturnsPage: React.FC = () => {
         </Row>
         <Row gutter={16}>
           <Col span={8}>
-            <DictionarySelect
-              dictionaryCode="RETURN_REASON"
+            <ProFormSelect
               name="return_reason"
               label="退货原因"
               placeholder="请选择退货原因"
-              formRef={formRef}
+              options={returnReasonOptions}
+              fieldProps={{ showSearch: true, allowClear: true, loading: dictOptionsLoading }}
             />
           </Col>
           <Col span={8}>
-            <DictionarySelect
-              dictionaryCode="RETURN_TYPE"
+            <ProFormSelect
               name="return_type"
               label="退货类型"
               placeholder="请选择退货类型"
-              formRef={formRef}
+              options={returnTypeOptions}
+              fieldProps={{ showSearch: true, allowClear: true, loading: dictOptionsLoading }}
             />
           </Col>
           <Col span={8}>
-            <DictionarySelect
-              dictionaryCode="SHIPPING_METHOD"
+            <ProFormSelect
               name="shipping_method"
               label="发货方式"
-              formRef={formRef}
+              placeholder="请选择发货方式"
+              options={shippingMethodOptions}
+              fieldProps={{ showSearch: true, allowClear: true, loading: dictOptionsLoading }}
             />
           </Col>
         </Row>
-        <ProFormTextArea name="notes" label="备注" placeholder="请输入备注说明" />
 
         <div style={{ marginBottom: 24 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -628,6 +699,8 @@ const SalesReturnsPage: React.FC = () => {
             </AntForm.List>
           </ProForm.Item>
         </div>
+
+        <ProFormTextArea name="notes" label="备注" placeholder="请输入备注说明" fieldProps={{ rows: 3 }} />
       </FormModalTemplate>
 
       <MaterialBatchPickerModal

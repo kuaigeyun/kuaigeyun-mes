@@ -12,7 +12,7 @@ import { getBusinessConfig } from '../../../../../services/businessConfig';
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions, ProFormUploadButton } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Drawer, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Progress, Tooltip, Dropdown, Select, theme as AntdTheme } from 'antd';
-import { EyeOutlined, EditOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, ImportOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, ApartmentOutlined, AppstoreAddOutlined } from '@ant-design/icons';
+import { EyeOutlined, EditOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, ImportOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, ApartmentOutlined, AppstoreAddOutlined, CommentOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
@@ -83,6 +83,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePageMetrics } from '../../../../../hooks/usePageMetrics';
+import { CustomerFollowUpFormModal, type CustomerFollowUpPreset } from '../../../components/CustomerFollowUpFormModal';
 
 /** 销售明细行（订单 + 明细合并，用于平铺表格） */
 type SalesOrderItemRow = SalesOrderItem & {
@@ -355,6 +356,8 @@ const SalesOrdersPage: React.FC = () => {
   /** 从 API 获取的编号规则代码（新建时使用，避免本地配置与后端不一致） */
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
   const [syncModalVisible, setSyncModalVisible] = useState(false);
+  const [followUpModalOpen, setFollowUpModalOpen] = useState(false);
+  const [followUpPreset, setFollowUpPreset] = useState<CustomerFollowUpPreset | null>(null);
   const [customerCreateVisible, setCustomerCreateVisible] = useState(false);
   /** 发货方式字典选项（数据字典 SHIPPING_METHOD） */
   const [shippingMethodOptions, setShippingMethodOptions] = useState<Array<{ label: string; value: string }>>([]);
@@ -577,6 +580,20 @@ const SalesOrdersPage: React.FC = () => {
         messageApi.error(t('app.kuaizhizao.salesOrder.detailFailed'));
       }
     }
+  };
+
+  const openFollowUpFromSalesOrder = (record: SalesOrder) => {
+    const cid = record.customer_id;
+    if (cid == null || Number.isNaN(Number(cid))) {
+      messageApi.warning(t('app.kuaizhizao.customerFollowUp.needCustomerForFollowUp'));
+      return;
+    }
+    setFollowUpPreset({
+      customer_id: Number(cid),
+      sales_order_id: record.id,
+      sales_order_code: record.order_code,
+    });
+    setFollowUpModalOpen(true);
   };
 
   /**
@@ -1392,13 +1409,16 @@ const SalesOrdersPage: React.FC = () => {
     },
     {
       title: t('app.kuaizhizao.salesOrder.actions'),
-      width: 200,
+      width: 260,
       fixed: 'right' as const,
       valueType: 'option',
       render: (_: any, record: SalesOrder) => (
         <Space>
           <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail([record.id!])}>
             {t('app.kuaizhizao.salesOrder.viewDetail')}
+          </Button>
+          <Button type="link" size="small" icon={<CommentOutlined />} onClick={() => openFollowUpFromSalesOrder(record)}>
+            {t('app.kuaizhizao.customerFollowUp.addFollowUpFromDocument')}
           </Button>
           {(() => {
             const lifecycle = getSalesOrderLifecycle(record);
@@ -2749,21 +2769,6 @@ const SalesOrdersPage: React.FC = () => {
                           )}
                         />
                       </div>
-                      <AntForm.Item
-                        noStyle
-                        shouldUpdate={(prev: any, curr: any) =>
-                          prev?.items !== curr?.items ||
-                          prev?.fee_details !== curr?.fee_details ||
-                          prev?.price_type !== curr?.price_type
-                        }
-                      >
-                        {({ getFieldValue }: { getFieldValue: (n: string) => any }) => (
-                          <>
-                            <FeeDetailsTable name="fee_details" label="费用明细（物流/包装等）" />
-                            <SalesOrderFeeTotalsSummary getFieldValue={getFieldValue} />
-                          </>
-                        )}
-                      </AntForm.Item>
                     </div>
                   );
                 }}
@@ -2773,6 +2778,21 @@ const SalesOrdersPage: React.FC = () => {
               }}
             </AntForm.Item>
           </div>
+
+        <FeeDetailsTable name="fee_details" label="费用明细（物流/包装等）" />
+
+        <AntForm.Item
+          noStyle
+          shouldUpdate={(prev: any, curr: any) =>
+            prev?.items !== curr?.items ||
+            prev?.fee_details !== curr?.fee_details ||
+            prev?.price_type !== curr?.price_type
+          }
+        >
+          {({ getFieldValue }: { getFieldValue: (n: string) => any }) => (
+            <SalesOrderFeeTotalsSummary getFieldValue={getFieldValue} />
+          )}
+        </AntForm.Item>
 
           <ProFormUploadButton
             name="attachments"
@@ -3437,6 +3457,16 @@ const SalesOrdersPage: React.FC = () => {
           </div>
         ) : null}
       </Modal>
+
+      <CustomerFollowUpFormModal
+        open={followUpModalOpen}
+        editing={null}
+        preset={followUpPreset}
+        onClose={() => {
+          setFollowUpModalOpen(false);
+          setFollowUpPreset(null);
+        }}
+      />
     </>
   );
 };

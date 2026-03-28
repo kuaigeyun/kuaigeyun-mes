@@ -445,11 +445,13 @@ const ShipmentNoticesPage: React.FC = () => {
     { title: '备注', dataIndex: 'notes', span: 2 },
   ];
 
-  const handleExcelImport = (data: any[][]) => {
+  const NOTICE_ITEM_IMPORT_HEADERS = ['物料编号', '数量', '单价', '物料名称', '规格', '单位'] as const;
+  const NOTICE_ITEM_IMPORT_EXAMPLE = ['MT001', '10', '15.5', '示例物料', '规格X', '件'] as const;
+
+  /** 将 Excel 行写入当前表单「通知明细」（新建弹窗内导入或列表工具栏导入共用） */
+  const applyExcelRowsToNoticeForm = (data: any[][]) => {
     if (data.length <= 1) return;
-    // 假设第一行是表头，从第二行开始取数据
-    // 简单映射：A列编号, B列数量, C列单价 (业务具体根据 headers 调整)
-    const items = data.slice(1).filter(row => row[0]).map(row => ({
+    const items = data.slice(1).filter((row) => row[0]).map((row) => ({
       material_code: String(row[0] || ''),
       notice_quantity: Number(row[1]) || 1,
       unit_price: Number(row[2]) || 0,
@@ -466,9 +468,23 @@ const ShipmentNoticesPage: React.FC = () => {
     const currentItems = formRef.current?.getFieldValue('items') || [];
     const filteredCurrent = currentItems.filter((it: any) => it.material_id || it.material_code);
     formRef.current?.setFieldsValue({
-      items: [...filteredCurrent, ...items]
+      items: [...filteredCurrent, ...items],
     });
     messageApi.success(`成功导入 ${items.length} 条数据`);
+  };
+
+  const handleFormLineImport = (data: any[][]) => {
+    applyExcelRowsToNoticeForm(data);
+  };
+
+  /** 列表工具栏导入：打开新建弹窗并写入明细（与 UniTable 内置导入弹窗配合） */
+  const handleListToolbarImport = (data: any[][]) => {
+    if (editModalVisible) {
+      messageApi.warning('请先关闭编辑窗口，或在「新建发货通知单」弹窗内使用「导入明细」');
+      return;
+    }
+    setCreateModalVisible(true);
+    setTimeout(() => applyExcelRowsToNoticeForm(data), 150);
   };
 
   const renderCreateForm = () => (
@@ -781,6 +797,36 @@ const ShipmentNoticesPage: React.FC = () => {
           enableRowSelection
           showDeleteButton
           onDelete={handleBatchDelete}
+          importHeaders={[...NOTICE_ITEM_IMPORT_HEADERS]}
+          importExampleRow={[...NOTICE_ITEM_IMPORT_EXAMPLE]}
+          onImport={handleListToolbarImport}
+          showExportButton
+          onExport={async (type, keys, pageData) => {
+            try {
+              const response = await shipmentNoticeApi.list({ skip: 0, limit: 10000 });
+              const rawData = Array.isArray(response) ? response : response?.items || response?.data || [];
+              let items: ShipmentNotice[] = rawData;
+              if (type === 'currentPage' && pageData?.length) {
+                items = pageData as ShipmentNotice[];
+              } else if (type === 'selected' && keys?.length) {
+                items = rawData.filter((d: ShipmentNotice) => d.id != null && keys.includes(d.id));
+              }
+              if (items.length === 0) {
+                messageApi.warning('暂无数据可导出');
+                return;
+              }
+              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `shipment-notices-${new Date().toISOString().slice(0, 10)}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+              messageApi.success(`已导出 ${items.length} 条记录`);
+            } catch (error: any) {
+              messageApi.error(error?.message || '导出失败');
+            }
+          }}
           request={async (params) => {
             try {
               const response = await shipmentNoticeApi.list({
@@ -799,13 +845,6 @@ const ShipmentNoticesPage: React.FC = () => {
             }
           }}
           scroll={{ x: 1200 }}
-          footer={() => (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-              <Button type="dashed" icon={<PlusOutlined />} onClick={() => setImportVisible(true)}>
-                导入
-              </Button>
-            </div>
-          )}
         />
       </ListPageTemplate>
 
@@ -872,10 +911,10 @@ const ShipmentNoticesPage: React.FC = () => {
       <UniImport
         visible={importVisible}
         onCancel={() => setImportVisible(false)}
-        onConfirm={handleExcelImport}
+        onConfirm={handleFormLineImport}
         title="导入通知明细"
-        headers={['物料编号', '数量', '单价', '物料名称', '规格', '单位']}
-        exampleRow={['MT001', '10', '15.5', '示例物料', '规格X', '件']}
+        headers={[...NOTICE_ITEM_IMPORT_HEADERS]}
+        exampleRow={[...NOTICE_ITEM_IMPORT_EXAMPLE]}
       />
     </>
   );

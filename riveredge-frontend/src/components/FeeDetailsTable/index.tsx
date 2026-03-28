@@ -1,15 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ProFormList,
   ProFormGroup,
   ProFormSelect,
   ProFormDigit,
   ProFormText,
-  ProFormRadio,
+  ProFormItem,
 } from '@ant-design/pro-components';
 import { getDictionaryItemList, getDataDictionaryByCode } from '../../services/dataDictionary';
-import { Card, theme } from 'antd';
-import { useTranslation } from 'react-i18next';
+import { Card, ConfigProvider, Segmented, theme } from 'antd';
 
 interface FeeDetailsTableProps {
   name?: string;
@@ -20,10 +19,31 @@ const FeeDetailsTable: React.FC<FeeDetailsTableProps> = ({
   name = 'fee_details',
   label = '费用明细',
 }) => {
-  const { t } = useTranslation();
   const { token } = theme.useToken();
   const [feeTypeOptions, setFeeTypeOptions] = useState<{ label: string; value: string }[]>([]);
   const [loading, setLoading] = useState(false);
+
+  /** 用组件级 token 定制选中态，与 thumb 动画同源，避免手写 CSS 与切换后样式丢失 */
+  const bearerSegmentedTheme = useMemo(
+    () => ({
+      components: {
+        Segmented: {
+          trackBg: token.colorFillSecondary,
+          itemColor: token.colorTextSecondary,
+          itemHoverColor: token.colorText,
+          itemSelectedBg: token.colorPrimaryBg,
+          itemSelectedColor: token.colorPrimary,
+        },
+      },
+    }),
+    [
+      token.colorFillSecondary,
+      token.colorTextSecondary,
+      token.colorText,
+      token.colorPrimaryBg,
+      token.colorPrimary,
+    ]
+  );
 
   useEffect(() => {
     const loadDict = async () => {
@@ -162,16 +182,21 @@ const FeeDetailsTable: React.FC<FeeDetailsTableProps> = ({
             }}
             rules={[{ required: true }]}
           />
-          <ProFormRadio.Group
+          <ProFormItem
             name="bearer"
             label="承担方"
-            width="xs"
             initialValue="our_side"
-            options={[
-              { label: '我方', value: 'our_side' },
-              { label: '对方', value: 'other_side' },
-            ]}
-          />
+            style={{ marginBottom: 0 }}
+          >
+            <ConfigProvider theme={bearerSegmentedTheme}>
+              <Segmented
+                options={[
+                  { label: '我方', value: 'our_side' },
+                  { label: '对方', value: 'other_side' },
+                ]}
+              />
+            </ConfigProvider>
+          </ProFormItem>
           <ProFormText
             name="notes"
             label="备注"
