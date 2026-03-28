@@ -64,3 +64,6 @@ riveredge-backend/tests/
 htmlcov/
 .pytest_cache/
 .tox/
+
+# ===== 审计报告（已提交，后续忽略新文件） =====
+docs/optimize/
