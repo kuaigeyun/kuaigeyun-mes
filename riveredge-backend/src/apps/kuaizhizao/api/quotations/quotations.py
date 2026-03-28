@@ -132,6 +132,31 @@ async def update_quotation(
         )
 
 
+@router.post("/{quotation_id}/submit", response_model=QuotationResponse, summary="提交报价单")
+async def submit_quotation(
+    quotation_id: int = Path(..., description="报价单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """草稿提交为已发送；蓝图无需审核时自动审核通过，否则进入待审核。"""
+    try:
+        return await quotation_service.submit_quotation(
+            tenant_id=tenant_id,
+            quotation_id=quotation_id,
+            submitted_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error("提交报价单失败: %s", e)
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="提交报价单失败",
+        )
+
+
 @router.get("/{quotation_id}/print", summary="打印报价单")
 async def print_quotation(
     quotation_id: int = Path(..., description="报价单ID"),

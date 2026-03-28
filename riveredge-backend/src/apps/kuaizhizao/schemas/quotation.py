@@ -101,6 +101,7 @@ class QuotationBase(BaseSchema):
     shipping_address: Optional[str] = Field(None, description="收货地址")
     shipping_method: Optional[str] = Field(None, max_length=50, description="发货方式")
     payment_terms: Optional[str] = Field(None, max_length=100, description="付款条件")
+    currency_code: Optional[str] = Field("CNY", max_length=20, description="币种代码（默认 CNY 人民币）")
 
     notes: Optional[str] = Field(None, description="备注")
 
@@ -134,6 +135,7 @@ class QuotationUpdate(BaseSchema):
     shipping_address: Optional[str] = None
     shipping_method: Optional[str] = Field(None, max_length=50)
     payment_terms: Optional[str] = Field(None, max_length=100)
+    currency_code: Optional[str] = Field(None, max_length=20)
     notes: Optional[str] = None
     items: Optional[List[QuotationItemCreate]] = None
 

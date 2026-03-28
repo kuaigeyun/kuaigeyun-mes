@@ -13,6 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import dayjs from 'dayjs';
+import { RE_STATUS_BADGE_DRAFT, resolveStatusTagDisplayProps } from '../../../../../constants/statusBadges';
 
 interface ReceiptVoucher {
   id: number;
@@ -31,7 +32,7 @@ interface ReceiptVoucher {
 }
 
 const STATUS_MAP: Record<string, { text: string; color: string }> = {
-  Draft: { text: '草稿', color: 'default' },
+  Draft: { text: '草稿', color: RE_STATUS_BADGE_DRAFT },
   Confirmed: { text: '已确认', color: 'success' },
   Cancelled: { text: '已作废', color: 'error' },
 };
@@ -170,7 +171,7 @@ const ReceiptsPage: React.FC = () => {
       width: 90,
       render: (_, record) => {
         const s = STATUS_MAP[record.status] || { text: record.status, color: 'default' };
-        return <Tag color={s.color}>{s.text}</Tag>;
+        return <Tag {...resolveStatusTagDisplayProps(s)}>{s.text}</Tag>;
       },
     },
     {

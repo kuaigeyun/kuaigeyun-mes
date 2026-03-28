@@ -77,13 +77,10 @@ export const UniTableDetail: React.FC<UniTableDetailProps> = ({
             {required && <span className="required-mark">*</span>}
             {title}
           </span>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div className="uni-table-detail-header-actions">
             {headerExtra}
             {onImport && (
-              <Button 
-                icon={<ImportOutlined />} 
-                onClick={onImport}
-              >
+              <Button type="default" size="small" icon={<ImportOutlined />} onClick={onImport}>
                 {t('common.import') ?? '导入明细'}
               </Button>
             )}
@@ -148,6 +145,7 @@ export const UniTableDetail: React.FC<UniTableDetailProps> = ({
                       {!disabledAdd && (
                         <Button
                           type="dashed"
+                          size="small"
                           icon={<PlusOutlined />}
                           onClick={() => add(initialValue)}
                           style={{ flex: 1, minWidth: 120 }}
@@ -158,6 +156,7 @@ export const UniTableDetail: React.FC<UniTableDetailProps> = ({
                       {onBatchSelect && (
                         <Button
                           type="default"
+                          size="small"
                           icon={<AppstoreAddOutlined />}
                           onClick={onBatchSelect}
                           style={{ flex: 1, minWidth: 120 }}

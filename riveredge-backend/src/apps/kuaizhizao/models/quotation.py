@@ -53,6 +53,7 @@ class Quotation(BaseModel):
     shipping_address = fields.TextField(null=True, description="收货地址")
     shipping_method = fields.CharField(max_length=50, null=True, description="发货方式")
     payment_terms = fields.CharField(max_length=100, null=True, description="付款条件")
+    currency_code = fields.CharField(max_length=20, null=True, default="CNY", description="币种（如 CNY 人民币）")
 
     # 转订单后关联
     sales_order_id = fields.IntField(null=True, description="关联销售订单ID（转订单后）")

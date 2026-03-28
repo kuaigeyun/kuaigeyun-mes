@@ -3364,12 +3364,24 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .riveredge-sidebar-search-wrapper .ant-input::placeholder {
           color: ${isDarkMode ? 'rgba(255, 255, 255, 0.45)' : (siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.58)' : 'rgba(0, 0, 0, 0.25)')} !important;
         }
-        /* 侧栏搜索框快捷键颜色：适配“明亮模式 + 深色背景” */
+        /* 侧栏搜索框快捷键（拟物按键）：框线/底影与搜索条底边一致，不用浅色主题的 --river-border-color */
         .riveredge-sidebar-search-wrapper .topbar-search-shortcut-key {
           color: ${isDarkMode ? 'rgba(255,255,255,0.28)' : (siderTextColor === '#ffffff' ? 'rgba(255,255,255,0.28)' : (token?.colorBorder ?? '#d9d9d9'))} !important;
           background: ${isDarkMode ? 'rgba(255,255,255,0.10)' : (siderTextColor === '#ffffff' ? 'rgba(255,255,255,0.10)' : (token?.colorFillQuaternary ?? '#f5f5f5'))} !important;
-          border: 1px solid var(--river-border-color) !important;
-          box-shadow: 0 1px 0 ${isDarkMode ? 'rgba(255,255,255,0.28)' : (siderTextColor === '#ffffff' ? 'rgba(255,255,255,0.28)' : (token?.colorBorder ?? '#d9d9d9'))} !important;
+          border: 1px solid ${
+            siderTextColor === '#ffffff'
+              ? 'rgba(255, 255, 255, 0.15)'
+              : isDarkMode
+                ? 'rgba(255, 255, 255, 0.12)'
+                : (token?.colorBorder ?? 'rgba(0, 0, 0, 0.15)')
+          } !important;
+          box-shadow: 0 1px 0 ${
+            siderTextColor === '#ffffff'
+              ? 'rgba(255, 255, 255, 0.12)'
+              : isDarkMode
+                ? 'rgba(255, 255, 255, 0.10)'
+                : (token?.colorBorder ?? '#d9d9d9')
+          } !important;
           font-family: "JetBrains Mono", "Cascadia Code", Consolas, monospace !important;
           font-size: 12px !important;
         }
@@ -3769,7 +3781,15 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         // 全屏时：不渲染菜单，确保折叠的侧边栏也不占据空间
         menuRender={isFullscreen ? () => null : undefined}
         // 侧栏顶部固定搜索框：总高 38px，输入框 34px、上下各 2px，胶囊圆角 50%，简短文案，拟物按键提示
-        menuExtraRender={isFullscreen || collapsed ? undefined : () => (
+        menuExtraRender={isFullscreen || collapsed ? undefined : () => {
+          // 与 collapsedButtonRender 分割线一致：浅色全局主题 + 深色侧栏时不用 --river-divider-color（#d9d9d9 在深色底上过亮）
+          const sidebarSearchBottomBorder =
+            siderTextColor === '#ffffff'
+              ? 'rgba(255, 255, 255, 0.15)'
+              : isDarkMode
+                ? 'rgba(255, 255, 255, 0.08)'
+                : 'rgba(0, 0, 0, 0.12)';
+          return (
           <div
             className="riveredge-sidebar-search-wrapper"
             style={{
@@ -3779,7 +3799,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               alignItems: 'center',
               margin: '-13px 0 0 0',
               padding: '2px 0 4px 0',
-              borderBottom: '1px solid var(--river-divider-color)',
+              borderBottom: `1px solid ${sidebarSearchBottomBorder}`,
             }}
           >
             <TopBarSearch
@@ -3794,7 +3814,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               transparentBg
             />
           </div>
-        )}
+          );
+        }}
         // 退出全屏时，强制 ProLayout 重新计算布局
         // 使用 location 作为 key 的一部分，确保路由变化时重新渲染
         // 但这里不使用 key，因为会导致标签丢失

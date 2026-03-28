@@ -1287,8 +1287,7 @@ const SalesOrdersPage: React.FC = () => {
       const mainDelivery = formRef.current?.getFieldValue('delivery_date');
       const defaultDelivery =
         mainDelivery != null ? (dayjs.isDayjs(mainDelivery) ? mainDelivery : dayjs(mainDelivery)) : dayjs();
-      const current = formRef.current?.getFieldValue('items') ?? [];
-      const newRows = selected.map((m) => {
+      const rowFromMaterial = (m: Material) => {
         const mainCode = m.mainCode ?? m.code ?? '';
         const st = m.sourceType ?? (m as any).source_type;
         return {
@@ -1304,13 +1303,24 @@ const SalesOrdersPage: React.FC = () => {
           variant_attributes: '',
           _sourceType: st,
         };
-      });
-      // 如果当前只有一行且未选择物料，则替换该行
-      if (current.length === 1 && !current[0].material_id && !current[0].material_code) {
-        formRef.current?.setFieldsValue({ items: newRows });
-      } else {
-        formRef.current?.setFieldsValue({ items: [...current, ...newRows] });
+      };
+      const isEmptyItemRow = (row: any) => {
+        if (row == null) return true;
+        if (row.material_id != null && row.material_id !== '') return false;
+        const code = row.material_code;
+        return code == null || String(code).trim() === '';
+      };
+      const queue = selected.map(rowFromMaterial);
+      const items = [...(formRef.current?.getFieldValue('items') ?? [])].map((row: any) => ({ ...row }));
+      for (let i = 0; i < items.length && queue.length > 0; i++) {
+        if (isEmptyItemRow(items[i])) {
+          items[i] = queue.shift()!;
+        }
       }
+      while (queue.length > 0) {
+        items.push(queue.shift()!);
+      }
+      formRef.current?.setFieldsValue({ items });
       messageApi.success(t('app.kuaizhizao.salesOrder.materialPickerAdded', { count: selected.length }));
     },
     [messageApi, t]
@@ -2616,7 +2626,7 @@ const SalesOrdersPage: React.FC = () => {
                     {
                       title: t('app.kuaizhizao.salesOrder.deliveryDate'),
                       dataIndex: 'delivery_date',
-                      width: 120,
+                      width: 130,
                       render: (_: any, __: any, index: number) => (
                         <AntForm.Item name={[index, 'delivery_date']} rules={[{ required: true, message: '必填' }]} style={{ margin: 0 }}>
                           <DatePicker size="small" style={{ width: '100%' }} format="YYYY-MM-DD" />

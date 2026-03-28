@@ -9,7 +9,7 @@
  */
 
 import React, { ReactNode, useRef, useState, useEffect } from 'react';
-import { Modal, Button, theme } from 'antd';
+import { Modal, Button, theme, App } from 'antd';
 import { ProForm, ProFormInstance } from '@ant-design/pro-components';
 import { MODAL_CONFIG, FORM_LAYOUT } from './constants';
 import { useSubmitShortcut } from '../../hooks/useSubmitShortcut';
@@ -91,6 +91,7 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
   extraFooter,
 }) => {
   const { token } = useToken();
+  const { message: messageApi } = App.useApp();
   const internalFormRef = useRef<ProFormInstance>();
   const formRef = externalFormRef || internalFormRef;
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -148,6 +149,12 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
               form={form}
               loading={loading}
               onFinish={onFinish}
+              onFinishFailed={({ errorFields }) => {
+                const first = errorFields?.[0];
+                const text = first?.errors?.filter(Boolean)[0];
+                messageApi.error(text || '请检查表单填写是否完整');
+              }}
+              scrollToFirstError
               onValuesChange={onValuesChange}
               initialValues={initialValues}
               layout={layout}

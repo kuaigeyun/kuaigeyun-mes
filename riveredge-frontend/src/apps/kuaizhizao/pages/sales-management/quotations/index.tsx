@@ -11,7 +11,7 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, Dropdown, List, Typography } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, MoreOutlined, AppstoreAddOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, MoreOutlined, AppstoreAddOutlined, SendOutlined } from '@ant-design/icons';
 import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
@@ -34,6 +34,7 @@ import {
   updateQuotation,
   deleteQuotation,
   convertQuotationToOrder,
+  submitQuotation,
   Quotation,
 } from '../../../services/quotation';
 import { getQuotationLifecycle } from '../../../utils/quotationLifecycle';
@@ -46,14 +47,27 @@ import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { useTranslation } from 'react-i18next';
+import { RE_STATUS_BADGE_DRAFT, resolveStatusTagDisplayProps } from '../../../../../constants/statusBadges';
+import '../../../../../components/uni-table-detail/index.less';
+
+/** 币种字典值：人民币（与 CURRENCY 字典项 value 一致，一般为 CNY） */
+const DEFAULT_QUOTATION_CURRENCY = 'CNY';
 
 const STATUS_MAP: Record<string, { text: string; color: string }> = {
-  草稿: { text: '草稿', color: 'default' },
+  草稿: { text: '草稿', color: RE_STATUS_BADGE_DRAFT },
   已发送: { text: '已发送', color: 'processing' },
   已接受: { text: '已接受', color: 'success' },
   已拒绝: { text: '已拒绝', color: 'error' },
   已转订单: { text: '已转订单', color: 'success' },
 };
+
+/** ProForm 提交时日期可能是 dayjs、字符串或 Date，避免直接调用 .format 报错 */
+function toApiDateString(v: unknown): string | undefined {
+  if (v == null || v === '') return undefined;
+  if (dayjs.isDayjs(v)) return v.isValid() ? v.format('YYYY-MM-DD') : undefined;
+  const d = dayjs(v as string | Date | number);
+  return d.isValid() ? d.format('YYYY-MM-DD') : undefined;
+}
 
 /** 与销售订单明细表同一套 Table + Form.List 用法；物料列样式见 .quotation-detail-table */
 const QuotationMaterialSelectCell: React.FC<{ index: number }> = ({ index }) => {
@@ -221,14 +235,14 @@ const QuotationsPage: React.FC = () => {
         const lifecycle = getQuotationLifecycle(record);
         const stageName = lifecycle.stageName ?? record.status ?? '草稿';
         const c = STATUS_MAP[stageName] || { text: stageName || '-', color: 'default' };
-        return <Tag color={c.color}>{c.text}</Tag>;
+        return <Tag {...resolveStatusTagDisplayProps(c)}>{c.text}</Tag>;
       },
     },
     { title: '销售员', dataIndex: 'salesman_name', width: 100 },
     { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime', width: 160 },
     {
       title: '操作',
-      width: 200,
+      width: 260,
       fixed: 'right',
       render: (_, record) => {
         const moreItems = [
@@ -243,6 +257,7 @@ const QuotationsPage: React.FC = () => {
             {record.status === '草稿' && (
               <>
                 <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
+                <Button type="link" size="small" icon={<SendOutlined />} onClick={() => handleSubmit(record)}>提交</Button>
                 <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>删除</Button>
               </>
             )}
@@ -288,6 +303,7 @@ const QuotationsPage: React.FC = () => {
         shipping_address: detail.shipping_address,
         shipping_method: detail.shipping_method,
         payment_terms: detail.payment_terms,
+        currency_code: detail.currency_code ?? DEFAULT_QUOTATION_CURRENCY,
         notes: detail.notes,
         items: (detail.items || []).map((it) => ({
           material_id: it.material_id!,
@@ -593,6 +609,23 @@ const QuotationsPage: React.FC = () => {
     });
   };
 
+  const handleSubmit = (record: Quotation) => {
+    Modal.confirm({
+      title: '提交报价单',
+      content: `确定提交报价单「${record.quotation_code || record.id}」？提交后状态将变为「已发送」；若业务蓝图要求审核，将进入待审核。`,
+      onOk: async () => {
+        try {
+          const updated = await submitQuotation(record.id!);
+          messageApi.success('提交成功');
+          actionRef.current?.reload();
+          setQuotationDetail((prev) => (prev?.id === record.id ? updated : prev));
+        } catch (error: any) {
+          messageApi.error(error?.message || error?.detail || '提交失败');
+        }
+      },
+    });
+  };
+
   const handlePrint = async (record: Quotation) => {
     try {
       const result = await apiRequest<{ content?: string }>(`/apps/kuaizhizao/quotations/${record.id}/print`, {
@@ -631,7 +664,7 @@ const QuotationsPage: React.FC = () => {
     setEffectiveAutoGen(null);
     setModalVisible(true);
     setTimeout(() => {
-      formRef.current?.setFieldsValue({ items: [defaultQuoteItem] });
+      formRef.current?.setFieldsValue({ items: [defaultQuoteItem], currency_code: DEFAULT_QUOTATION_CURRENCY });
     }, 100);
     try {
       const config = await getCodeRulePageConfig('kuaizhizao-quotation');
@@ -693,9 +726,9 @@ const QuotationsPage: React.FC = () => {
     const customerName = cust?.name ?? cust?.customer_name ?? values.customer_name ?? '';
     await createQuotation({
       quotation_code: quotationCode || undefined,
-      quotation_date: values.quotation_date?.format('YYYY-MM-DD'),
-      valid_until: values.valid_until?.format('YYYY-MM-DD'),
-      delivery_date: values.delivery_date?.format('YYYY-MM-DD'),
+      quotation_date: toApiDateString(values.quotation_date),
+      valid_until: toApiDateString(values.valid_until),
+      delivery_date: toApiDateString(values.delivery_date),
       customer_id: values.customer_id,
       customer_name: customerName,
       customer_contact: values.customer_contact,
@@ -705,6 +738,7 @@ const QuotationsPage: React.FC = () => {
       shipping_address: values.shipping_address,
       shipping_method: values.shipping_method,
       payment_terms: values.payment_terms,
+      currency_code: values.currency_code ?? DEFAULT_QUOTATION_CURRENCY,
       notes: values.notes,
       items: validItems.map((it: any) => ({
         material_id: it.material_id,
@@ -714,7 +748,7 @@ const QuotationsPage: React.FC = () => {
         material_unit: it.material_unit,
         quote_quantity: it.quote_quantity,
         unit_price: it.unit_price,
-        delivery_date: it.delivery_date ? (dayjs.isDayjs(it.delivery_date) ? it.delivery_date.format('YYYY-MM-DD') : it.delivery_date) : undefined,
+        delivery_date: toApiDateString(it.delivery_date),
         notes: it.notes,
       })),
     });
@@ -735,9 +769,9 @@ const QuotationsPage: React.FC = () => {
     const cust = customerList.find((c: any) => (c.id ?? c.customer_id) === values.customer_id);
     const customerName = cust?.name ?? cust?.customer_name ?? values.customer_name ?? '';
     await updateQuotation(editingId, {
-      quotation_date: values.quotation_date?.format('YYYY-MM-DD'),
-      valid_until: values.valid_until?.format('YYYY-MM-DD'),
-      delivery_date: values.delivery_date?.format('YYYY-MM-DD'),
+      quotation_date: toApiDateString(values.quotation_date),
+      valid_until: toApiDateString(values.valid_until),
+      delivery_date: toApiDateString(values.delivery_date),
       customer_id: values.customer_id,
       customer_name: customerName,
       customer_contact: values.customer_contact,
@@ -747,6 +781,7 @@ const QuotationsPage: React.FC = () => {
       shipping_address: values.shipping_address,
       shipping_method: values.shipping_method,
       payment_terms: values.payment_terms,
+      currency_code: values.currency_code ?? DEFAULT_QUOTATION_CURRENCY,
       notes: values.notes,
       items: validItems.map((it: any) => ({
         material_id: it.material_id,
@@ -756,7 +791,7 @@ const QuotationsPage: React.FC = () => {
         material_unit: it.material_unit,
         quote_quantity: it.quote_quantity,
         unit_price: it.unit_price,
-        delivery_date: it.delivery_date ? (dayjs.isDayjs(it.delivery_date) ? it.delivery_date.format('YYYY-MM-DD') : it.delivery_date) : undefined,
+        delivery_date: toApiDateString(it.delivery_date),
         notes: it.notes,
       })),
     });
@@ -786,7 +821,7 @@ const QuotationsPage: React.FC = () => {
       dataIndex: 'status',
       render: (s) => {
         const c = STATUS_MAP[(s as string) || ''] || { text: (s as string) || '-', color: 'default' };
-        return <Tag color={c.color}>{c.text}</Tag>;
+        return <Tag {...resolveStatusTagDisplayProps(c)}>{c.text}</Tag>;
       },
     },
     { title: '销售员', dataIndex: 'salesman_name' },
@@ -809,6 +844,13 @@ const QuotationsPage: React.FC = () => {
         return opt?.label ?? val ?? '-';
       },
     },
+    {
+      title: '币种',
+      dataIndex: 'currency_code',
+      render: (_: unknown, record: Quotation) => (
+        <DictionaryLabel dictionaryCode="CURRENCY" value={record.currency_code || DEFAULT_QUOTATION_CURRENCY} />
+      ),
+    },
     { title: '关联销售订单', dataIndex: 'sales_order_code' },
     { title: '备注', dataIndex: 'notes', span: 2 },
   ];
@@ -818,8 +860,7 @@ const QuotationsPage: React.FC = () => {
       const mainDelivery = formRef.current?.getFieldValue('delivery_date');
       const defaultDelivery =
         mainDelivery != null ? (dayjs.isDayjs(mainDelivery) ? mainDelivery : dayjs(mainDelivery)) : dayjs();
-      const current = formRef.current?.getFieldValue('items') ?? [];
-      const newRows = selected.map((m) => ({
+      const rowFromMaterial = (m: Material) => ({
         material_id: m.id,
         material_code: m.mainCode ?? m.code ?? '',
         material_name: m.name ?? '',
@@ -829,8 +870,24 @@ const QuotationsPage: React.FC = () => {
         unit_price: 0,
         delivery_date: defaultDelivery,
         notes: '',
-      }));
-      formRef.current?.setFieldsValue({ items: [...current, ...newRows] });
+      });
+      const isEmptyItemRow = (row: any) => {
+        if (row == null) return true;
+        if (row.material_id != null && row.material_id !== '') return false;
+        const code = row.material_code;
+        return code == null || String(code).trim() === '';
+      };
+      const queue = selected.map(rowFromMaterial);
+      const items = [...(formRef.current?.getFieldValue('items') ?? [])].map((row: any) => ({ ...row }));
+      for (let i = 0; i < items.length && queue.length > 0; i++) {
+        if (isEmptyItemRow(items[i])) {
+          items[i] = queue.shift()!;
+        }
+      }
+      while (queue.length > 0) {
+        items.push(queue.shift()!);
+      }
+      formRef.current?.setFieldsValue({ items });
       messageApi.success(t('app.kuaizhizao.common.materialBatchAdded', { count: selected.length }));
     },
     [messageApi, t]
@@ -1017,30 +1074,23 @@ const QuotationsPage: React.FC = () => {
             label="币种"
             placeholder="请选择币种"
             formRef={formRef}
-            initialValue="CNY"
+            initialValue={DEFAULT_QUOTATION_CURRENCY}
           />
         </Col>
       </Row>
       <ProFormText name="customer_name" hidden />
 
-      <div style={{ marginBottom: 24 }}>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: 8,
-            flexWrap: 'wrap',
-            gap: 12,
-          }}
-        >
-          <span style={{ fontWeight: 600, color: 'rgba(0, 0, 0, 0.88)' }}>
-            <span style={{ color: '#ff4d4f', marginRight: 4, fontFamily: 'SimSun, sans-serif' }}>*</span>
+      <div className="uni-table-detail">
+        <div className="uni-table-detail-header">
+          <span className="detail-title">
+            <span className="required-mark">*</span>
             物料明细
           </span>
-          <Button size="small" type="link" icon={<ImportOutlined />} onClick={() => setImportModalVisible(true)}>
-            导入明细
-          </Button>
+          <div className="uni-table-detail-header-actions">
+            <Button type="default" size="small" icon={<ImportOutlined />} onClick={() => setImportModalVisible(true)}>
+              导入明细
+            </Button>
+          </div>
         </div>
         {/* 与销售订单一致：Form.Item(noStyle) + Form.List + Table；勿再套一层 ProForm.Item 同名 items */}
         <Form.Item
@@ -1127,7 +1177,7 @@ const QuotationsPage: React.FC = () => {
                 {
                   title: '交货日期',
                   dataIndex: 'delivery_date',
-                  width: 120,
+                  width: 130,
                   render: (_: unknown, __: unknown, index: number) => (
                     <Form.Item name={[index, 'delivery_date']} style={{ margin: 0 }}>
                       <DatePicker size="small" style={{ width: '100%' }} format="YYYY-MM-DD" />
@@ -1217,6 +1267,7 @@ const QuotationsPage: React.FC = () => {
                         >
                           <Button
                             type="dashed"
+                            size="small"
                             icon={<PlusOutlined />}
                             style={{ flex: 1, minWidth: 120 }}
                             onClick={() => {
@@ -1237,6 +1288,7 @@ const QuotationsPage: React.FC = () => {
                           </Button>
                           <Button
                             type="default"
+                            size="small"
                             icon={<AppstoreAddOutlined />}
                             style={{ flex: 1, minWidth: 120 }}
                             onClick={() => setMaterialPickerOpen(true)}
@@ -1357,8 +1409,15 @@ const QuotationsPage: React.FC = () => {
         columns={detailColumns}
         dataSource={quotationDetail || {}}
         extra={
-          quotationDetail?.status !== '已转订单' && quotationDetail?.status !== '已拒绝' && (
-            <Button type="primary" icon={<SwapOutlined />} onClick={() => quotationDetail && handleConvert(quotationDetail)}>转为销售订单</Button>
+          quotationDetail && (
+            <Space>
+              {quotationDetail.status === '草稿' && (
+                <Button icon={<SendOutlined />} onClick={() => handleSubmit(quotationDetail)}>提交</Button>
+              )}
+              {quotationDetail.status !== '已转订单' && quotationDetail.status !== '已拒绝' && (
+                <Button type="primary" icon={<SwapOutlined />} onClick={() => handleConvert(quotationDetail)}>转为销售订单</Button>
+              )}
+            </Space>
           )
         }
       >
@@ -1430,7 +1489,7 @@ const QuotationsPage: React.FC = () => {
         formRef={formRef}
         width={1200}
         layout="vertical"
-        initialValues={editingId == null ? { quotation_date: dayjs() } : undefined}
+        initialValues={editingId == null ? { quotation_date: dayjs(), currency_code: DEFAULT_QUOTATION_CURRENCY } : undefined}
         onValuesChange={(changed, _all) => {
           if ('customer_id' in changed && changed.customer_id != null) {
             const c = customerList.find((x: any) => (x.id ?? x.customer_id) === changed.customer_id);

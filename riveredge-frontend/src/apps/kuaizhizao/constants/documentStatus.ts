@@ -7,6 +7,7 @@
  */
 
 import { getDocumentStatusCache } from '../../../services/enums';
+import { RE_STATUS_BADGE_DRAFT } from '../../../constants/statusBadges';
 
 /** 单据主状态枚举（fallback，与后端 constants.py 对齐） */
 export const DocumentStatus = {
@@ -54,7 +55,7 @@ const FALLBACK_REVIEW_ALIASES: Record<string, string> = {
 };
 
 const FALLBACK_STATUS_DISPLAY: Record<string, { text: string; color: string }> = {
-  [DocumentStatus.DRAFT]: { text: '草稿', color: 'default' },
+  [DocumentStatus.DRAFT]: { text: '草稿', color: RE_STATUS_BADGE_DRAFT },
   [DocumentStatus.PENDING_REVIEW]: { text: '待审核', color: 'processing' },
   [DocumentStatus.AUDITED]: { text: '已审核', color: 'processing' },
   [DocumentStatus.REJECTED]: { text: '已驳回', color: 'error' },

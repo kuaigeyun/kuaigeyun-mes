@@ -7,11 +7,34 @@
 :root {
   --river-border-color: #bcbcbc;
   --river-divider-color: #d9d9d9;
+  /**
+   * 全局「草稿」状态徽章（Ant Tag 使用类名 `re-status-badge-draft`）
+   * 由主题文字色与填充色混合，避免页面硬编码；暗色主题见下方覆盖
+   */
+  --re-badge-draft-bg: color-mix(
+    in srgb,
+    var(--ant-color-text, rgba(0, 0, 0, 0.88)) 68%,
+    var(--ant-color-fill-tertiary, #f5f5f5)
+  );
+  --re-badge-draft-color: var(--ant-color-text-light-solid, #ffffff);
+  --re-badge-draft-border: transparent;
 }
 
 [data-theme='dark'] {
   --river-border-color: #424242;
   --river-divider-color: #303030;
+  --re-badge-draft-bg: color-mix(
+    in srgb,
+    var(--ant-color-text, rgba(255, 255, 255, 0.85)) 52%,
+    var(--ant-color-fill-tertiary, #303030)
+  );
+}
+
+/* 与 src/constants/statusBadges.ts 中 RE_STATUS_BADGE_DRAFT_CLASS 配套 */
+.ant-tag.re-status-badge-draft {
+  background: var(--re-badge-draft-bg) !important;
+  color: var(--re-badge-draft-color) !important;
+  border-color: var(--re-badge-draft-border) !important;
 }
 
 * {

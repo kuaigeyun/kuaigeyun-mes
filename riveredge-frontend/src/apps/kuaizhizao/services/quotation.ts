@@ -53,6 +53,8 @@ export interface Quotation {
   shipping_address?: string;
   shipping_method?: string;
   payment_terms?: string;
+  /** 币种（数据字典 CURRENCY，默认 CNY 人民币） */
+  currency_code?: string;
   sales_order_id?: number;
   sales_order_code?: string;
   notes?: string;
@@ -104,6 +106,13 @@ export async function updateQuotation(id: number, data: Partial<Quotation>): Pro
   return apiRequest<Quotation>(`/apps/kuaizhizao/quotations/${id}`, {
     method: 'PUT',
     data,
+  });
+}
+
+/** 提交报价单（草稿 → 已发送；蓝图无需审核时自动通过） */
+export async function submitQuotation(id: number): Promise<Quotation> {
+  return apiRequest<Quotation>(`/apps/kuaizhizao/quotations/${id}/submit`, {
+    method: 'POST',
   });
 }
 

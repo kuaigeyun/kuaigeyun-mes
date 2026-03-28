@@ -52,6 +52,7 @@ import {
   isDraftStatus,
   isAuditedStatus,
 } from '../../../constants/documentStatus';
+import { resolveStatusTagDisplayProps } from '../../../../../constants/statusBadges';
 
 /** 与后端 DocumentStatus / ReviewStatus 及中文存量值对齐，供 UniWorkflowActions 识别 */
 const PO_WORKFLOW_DRAFT_STATUSES = ['草稿', 'draft', 'DRAFT', DocumentStatus.DRAFT];
@@ -1273,7 +1274,7 @@ const PurchaseOrdersPage: React.FC = () => {
       dataIndex: 'status',
       render: (status: any) => {
         const config = getStatusDisplay(status);
-        return <Tag color={config.color}>{config.text}</Tag> as any;
+        return <Tag {...resolveStatusTagDisplayProps(config)}>{config.text}</Tag> as any;
       },
     },
     {
@@ -2235,7 +2236,7 @@ const PurchaseOrdersPage: React.FC = () => {
                     <strong>状态：</strong>
                     {(() => {
                       const config = getStatusDisplay(orderDetail.status);
-                      return <Tag color={config.color}>{config.text}</Tag>;
+                      return <Tag {...resolveStatusTagDisplayProps(config)}>{config.text}</Tag>;
                     })()}
                   </Col>
                   <Col span={6}>

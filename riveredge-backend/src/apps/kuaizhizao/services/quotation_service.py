@@ -71,6 +71,7 @@ class QuotationService:
             "shipping_address": quotation.shipping_address,
             "shipping_method": quotation.shipping_method,
             "payment_terms": quotation.payment_terms,
+            "currency_code": quotation.currency_code or "CNY",
             "sales_order_id": quotation.sales_order_id,
             "sales_order_code": quotation.sales_order_code,
             "notes": quotation.notes,
@@ -160,6 +161,43 @@ class QuotationService:
             generated = f"QT-{today}-{uuid.uuid4().hex[:6].upper()}"
         return generated
 
+    async def _release_quotation_from_draft(
+        self,
+        tenant_id: int,
+        quotation_id: int,
+        operator_id: int,
+        *,
+        auto_approved: bool,
+    ) -> None:
+        """
+        将报价单从草稿提交为「已发送」。
+        auto_approved=True：蓝图无需人工审核，同步标记审核通过。
+        auto_approved=False：进入待人工审核（review_status=待审核）。
+        """
+        from apps.base_service import AppBaseService
+
+        now = datetime.now()
+        op_name = await AppBaseService().get_user_name(operator_id)
+        if auto_approved:
+            await Quotation.filter(id=quotation_id, tenant_id=tenant_id).update(
+                status="已发送",
+                review_status="已通过",
+                reviewer_id=operator_id,
+                reviewer_name=op_name,
+                review_time=now,
+                updated_by=operator_id,
+            )
+        else:
+            await Quotation.filter(id=quotation_id, tenant_id=tenant_id).update(
+                status="已发送",
+                review_status="待审核",
+                reviewer_id=None,
+                reviewer_name=None,
+                review_time=None,
+                review_remarks=None,
+                updated_by=operator_id,
+            )
+
     async def create_quotation(
         self,
         tenant_id: int,
@@ -217,10 +255,49 @@ class QuotationService:
                 total_amount=total_amt,
             )
             quotation = await Quotation.get(id=quotation.id)
+            # 蓝图 nodes.quotation.auditRequired=False 时视为自动审核：创建后直接「已发送」且审核通过
+            audit_required = await self.business_config_service.check_audit_required(
+                tenant_id, "quotation"
+            )
+            if not audit_required:
+                await self._release_quotation_from_draft(
+                    tenant_id, quotation.id, created_by, auto_approved=True
+                )
+                quotation = await Quotation.get(id=quotation.id)
             items = await QuotationItem.filter(
                 tenant_id=tenant_id, quotation_id=quotation.id
             ).order_by("id")
             return self._quotation_to_response(quotation, items=items)
+
+    async def submit_quotation(
+        self,
+        tenant_id: int,
+        quotation_id: int,
+        submitted_by: int,
+    ) -> QuotationResponse:
+        """提交报价单（草稿 → 已发送）；是否自动通过审核由业务蓝图 quotation.auditRequired 决定。"""
+        quotation = await Quotation.get_or_none(
+            tenant_id=tenant_id, id=quotation_id, deleted_at__isnull=True
+        )
+        if not quotation:
+            raise NotFoundError(f"报价单不存在: {quotation_id}")
+        if quotation.status != "草稿":
+            raise BusinessLogicError(
+                f"仅草稿状态可提交，当前状态: {quotation.status}"
+            )
+        audit_required = await self.business_config_service.check_audit_required(
+            tenant_id, "quotation"
+        )
+        async with in_transaction():
+            await self._release_quotation_from_draft(
+                tenant_id,
+                quotation_id,
+                submitted_by,
+                auto_approved=not audit_required,
+            )
+        return await self.get_quotation_by_id(
+            tenant_id, quotation_id, include_items=True
+        )
 
     async def get_quotation_by_id(
         self,

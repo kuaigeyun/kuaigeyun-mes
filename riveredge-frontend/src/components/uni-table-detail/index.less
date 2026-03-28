@@ -10,9 +10,11 @@
     flex-wrap: wrap;
     gap: 12px;
 
+    /* 与同级 Form.Item / ProForm 字段 label 同一档：用全局字号与行高，不单独加大一档 */
     .detail-title {
-      font-weight: 600;
-      font-size: 14px;
+      font-size: var(--ant-font-size, 14px);
+      line-height: var(--ant-line-height, 22px);
+      font-weight: var(--ant-font-weight-strong, 500);
       color: var(--ant-color-text);
       display: flex;
       align-items: center;
@@ -22,6 +24,19 @@
       color: var(--ant-color-error);
       margin-right: 4px;
       font-family: SimSun, sans-serif;
+    }
+
+    /* 与表尾「多选物料」等一致：默认实线按钮，不用 link，便于各业务页复用 */
+    .uni-table-detail-header-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+
+      /* 与 small 表格、表单项高度协调，避免默认中号按钮显得头重脚轻 */
+      .ant-btn {
+        font-size: var(--ant-font-size, 14px);
+      }
     }
   }
 
@@ -67,6 +82,10 @@
     gap: 8px;
     flex-wrap: wrap;
     width: 100%;
+
+    .ant-btn {
+      font-size: var(--ant-font-size, 14px);
+    }
 
     .ant-btn-dashed {
       border-color: var(--ant-color-border);

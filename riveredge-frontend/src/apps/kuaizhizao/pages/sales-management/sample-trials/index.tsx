@@ -31,6 +31,7 @@ import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/cod
 import { batchImport } from '../../../../../utils/batchOperations';
 import { CustomerFormModal } from '../../../../master-data/components/CustomerFormModal';
 import { useTranslation } from 'react-i18next';
+import { RE_STATUS_BADGE_DRAFT, resolveStatusTagDisplayProps } from '../../../../../constants/statusBadges';
 
 interface SampleTrial {
   id?: number;
@@ -58,7 +59,7 @@ interface SampleTrialDetail extends SampleTrial {
 }
 
 const STATUS_MAP: Record<string, { text: string; color: string }> = {
-  草稿: { text: '草稿', color: 'default' },
+  草稿: { text: '草稿', color: RE_STATUS_BADGE_DRAFT },
   已审批: { text: '已审批', color: 'processing' },
   试用中: { text: '试用中', color: 'processing' },
   已归还: { text: '已归还', color: 'success' },
@@ -143,7 +144,7 @@ const SampleTrialsPage: React.FC = () => {
       width: 100,
       render: (status: any) => {
         const c = STATUS_MAP[(status as string) || ''] || { text: (status as string) || '-', color: 'default' };
-        return <Tag color={c.color}>{c.text}</Tag>;
+        return <Tag {...resolveStatusTagDisplayProps(c)}>{c.text}</Tag>;
       },
     },
     { title: '试用开始', dataIndex: 'trial_period_start', valueType: 'date', width: 110 },
@@ -653,7 +654,7 @@ const SampleTrialsPage: React.FC = () => {
       dataIndex: 'status',
       render: (s) => {
         const c = STATUS_MAP[(s as string) || ''] || { text: (s as string) || '-', color: 'default' };
-        return <Tag color={c.color}>{c.text}</Tag>;
+        return <Tag {...resolveStatusTagDisplayProps(c)}>{c.text}</Tag>;
       },
     },
     { title: '备注', dataIndex: 'notes', span: 2 },
