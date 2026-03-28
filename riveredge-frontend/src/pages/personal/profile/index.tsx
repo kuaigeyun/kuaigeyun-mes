@@ -8,7 +8,8 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProForm, ProFormTextArea, ProFormText, ProFormInstance } from '@ant-design/pro-components';
-import { App, Card, message, Upload, Avatar, Space, Button, Row, Col, Divider, Typography, Segmented, theme, Form, Tabs, Descriptions } from 'antd';
+import { App, Card, message, Upload, Avatar, Space, Button, Row, Col, Divider, Typography, theme, Form, Tabs, Descriptions } from 'antd';
+import { ThemedSegmented } from '../../../components/themed-segmented';
 import { UserOutlined, UploadOutlined, DeleteOutlined } from '@ant-design/icons';
 import type { UploadFile, UploadProps } from 'antd';
 
@@ -573,36 +574,15 @@ const UserProfilePage: React.FC = () => {
                   {({ getFieldValue, setFieldValue }) => {
                     const genderValue = getFieldValue('gender');
                     return (
-                      <div className="gender-segmented-wrapper">
-                        <Segmented
-                          value={genderValue}
-                          onChange={(newValue) => setFieldValue('gender', newValue)}
-                          options={[
-                            { label: t('pages.personal.profile.male'), value: 'male' },
-                            { label: t('pages.personal.profile.female'), value: 'female' },
-                          ]}
-                          size="large"
-                        />
-                        <style>{`
-                          .gender-segmented-wrapper .ant-segmented {
-                            background-color: ${token.colorFillSecondary || '#f5f5f5'};
-                          }
-                          .gender-segmented-wrapper .ant-segmented-item {
-                            transition: all 0.3s;
-                          }
-                          .gender-segmented-wrapper .ant-segmented-item-selected {
-                            background-color: ${token.colorPrimary} !important;
-                            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-                          }
-                          .gender-segmented-wrapper .ant-segmented-item-selected .ant-segmented-item-label {
-                            color: #fff !important;
-                            font-weight: 600;
-                          }
-                          .gender-segmented-wrapper .ant-segmented-item:hover:not(.ant-segmented-item-selected) {
-                            background-color: ${token.colorFill || '#f0f0f0'};
-                          }
-                        `}</style>
-                      </div>
+                      <ThemedSegmented
+                        value={genderValue}
+                        onChange={(newValue) => setFieldValue('gender', newValue)}
+                        options={[
+                          { label: t('pages.personal.profile.male'), value: 'male' },
+                          { label: t('pages.personal.profile.female'), value: 'female' },
+                        ]}
+                        size="large"
+                      />
                     );
                   }}
                 </Form.Item>

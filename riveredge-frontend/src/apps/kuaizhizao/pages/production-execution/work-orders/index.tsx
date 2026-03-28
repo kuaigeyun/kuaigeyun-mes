@@ -50,7 +50,6 @@ import {
   Divider,
   Input,
   Form,
-  Segmented,
   theme,
   Typography,
   Empty,
@@ -95,6 +94,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { UniTable } from '../../../../../components/uni-table'
+import { ThemedSegmented } from '../../../../../components/themed-segmented'
 const SyncFromDatasetModal = lazy(() => import('../../../../../components/sync-from-dataset-modal'))
 import {
   ListPageTemplate,
@@ -3751,22 +3751,14 @@ const WorkOrdersPage: React.FC = () => {
         <ProFormGroup colProps={{ span: 14 }} style={{ marginBottom: 0 }}>
           <Form.Item label=" " colon={false} style={{ marginBottom: 0 }}>
             <Space size="middle" wrap={false} style={{ flexWrap: 'nowrap' }}>
-              <ConfigProvider
-                theme={{
-                  components: {
-                    Segmented: { trackBg: token.colorPrimaryBgHover},
-                  },
-                }}
-              >
-                <Segmented
-                  value={onlyShowMake ? 'make' : 'all'}
-                  onChange={v => setOnlyShowMake(v === 'make')}
-                  options={[
-                    { label: '全部', value: 'all' },
-                    { label: '自制件', value: 'make' },
-                  ]}
-                />
-              </ConfigProvider>
+              <ThemedSegmented
+                value={onlyShowMake ? 'make' : 'all'}
+                onChange={(v) => setOnlyShowMake(v === 'make')}
+                options={[
+                  { label: '全部', value: 'all' },
+                  { label: '自制件', value: 'make' },
+                ]}
+              />
               <Divider orientation="vertical" style={{ margin: 0, height: 20 }} />
               <Space size="small" wrap={false}>
                 <Button

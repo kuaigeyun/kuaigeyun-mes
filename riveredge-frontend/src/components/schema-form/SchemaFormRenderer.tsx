@@ -7,7 +7,7 @@
 
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Tooltip, Space, Segmented } from 'antd';
+import { Tooltip, Space } from 'antd';
 import { QuestionCircleOutlined } from '@ant-design/icons';
 import {
   ProFormText,
@@ -21,6 +21,7 @@ import {
   ProFormField,
 } from '@ant-design/pro-components';
 import { UniDropdown } from '../uni-dropdown';
+import { ThemedSegmented } from '../themed-segmented';
 import type { FieldConfig } from './form-schemas';
 
 export interface SchemaFormRendererProps {
@@ -189,7 +190,7 @@ export const SchemaFormRenderer: React.FC<SchemaFormRendererProps> = ({
                 const idx = options.findIndex((o) => Object.is(o.value, value));
                 const segValue = idx >= 0 ? String(idx) : options.length > 0 ? '0' : undefined;
                 return (
-                  <Segmented
+                  <ThemedSegmented
                     value={segValue}
                     onChange={(v) => {
                       const i = Number(v);
