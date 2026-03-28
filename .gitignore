@@ -65,5 +65,5 @@ htmlcov/
 .pytest_cache/
 .tox/
 
-# ===== 审计报告（已提交，后续忽略新文件） =====
+# ===== 审计报告（本地保留，Git 忽略） =====
 docs/optimize/
