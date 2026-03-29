@@ -61,6 +61,8 @@ riveredge-backend/tests/
 !riveredge-backend/tests/
 !riveredge-backend/tests/config_gates/
 !riveredge-backend/tests/config_gates/**
+riveredge-backend/tests/config_gates/__pycache__/
+riveredge-backend/tests/config_gates/**/*.pyc
 
 # ===== 测试 =====
 .coverage
