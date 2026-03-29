@@ -2219,14 +2219,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           left: 0 !important;
           right: 0 !important;
         }
-        /* 内容区域占据剩余空间 */
         html.riveredge-fullscreen-mode .uni-tabs-content,
         body.riveredge-fullscreen-mode .uni-tabs-content {
           flex: 1 !important;
+          min-height: 0 !important;
           overflow: auto !important;
-          height: calc(100vh - 40px) !important;
-          min-height: calc(100vh - 40px) !important;
-          max-height: calc(100vh - 40px) !important;
+          height: auto !important;
+          max-height: none !important;
           width: 100% !important;
           max-width: 100% !important;
           margin-left: 0 !important;

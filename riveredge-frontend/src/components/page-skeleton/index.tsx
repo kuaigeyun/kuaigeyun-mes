@@ -33,7 +33,7 @@ const P = PAGE_SPACING.PADDING;
 const PageSkeleton: React.FC<PageSkeletonProps> = ({ variant = 'default' }) => {
   const padding =
     variant === 'dashboard' || variant === 'rolesPermissions'
-      ? `0 ${P}px ${P}px ${P}px`
+      ? `${P}px`
       : 0;
 
   if (variant === 'minimal') {
