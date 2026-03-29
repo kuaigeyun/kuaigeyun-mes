@@ -349,12 +349,14 @@ class SavedSearchServiceInterface(InfraServiceInterface):
         pass
     
     @abstractmethod
-    async def create_saved_search(self, data: Any) -> Any:
+    async def create_saved_search(self, data: Any, user_id: int, tenant_id: Optional[int] = None) -> Any:
         """
         创建保存的搜索条件
         
         Args:
             data: 搜索条件数据
+            user_id: 用户 ID
+            tenant_id: 组织 ID（可选）
             
         Returns:
             创建的搜索条件对象
@@ -362,12 +364,13 @@ class SavedSearchServiceInterface(InfraServiceInterface):
         pass
     
     @abstractmethod
-    async def get_saved_search_by_uuid(self, uuid: str) -> Optional[Any]:
+    async def get_saved_search_by_uuid(self, uuid: str, user_id: int) -> Optional[Any]:
         """
         根据UUID获取保存的搜索条件
         
         Args:
             uuid: 搜索条件UUID
+            user_id: 用户 ID
             
         Returns:
             搜索条件对象，如果不存在则返回None
@@ -378,7 +381,8 @@ class SavedSearchServiceInterface(InfraServiceInterface):
     async def update_saved_search(
         self,
         uuid: str,
-        data: Any
+        data: Any,
+        user_id: int
     ) -> Optional[Any]:
         """
         更新保存的搜索条件
@@ -386,6 +390,7 @@ class SavedSearchServiceInterface(InfraServiceInterface):
         Args:
             uuid: 搜索条件UUID
             data: 更新数据
+            user_id: 用户 ID
             
         Returns:
             更新后的搜索条件对象，如果不存在则返回None
@@ -393,12 +398,13 @@ class SavedSearchServiceInterface(InfraServiceInterface):
         pass
     
     @abstractmethod
-    async def delete_saved_search(self, uuid: str) -> bool:
+    async def delete_saved_search(self, uuid: str, user_id: int) -> bool:
         """
         删除保存的搜索条件
         
         Args:
             uuid: 搜索条件UUID
+            user_id: 用户 ID
             
         Returns:
             删除成功返回True，否则返回False

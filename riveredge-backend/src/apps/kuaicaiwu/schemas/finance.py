@@ -73,9 +73,9 @@ class PayableListResponse(BaseSchema):
 
 class PurchaseInvoiceBase(BaseSchema):
     """采购发票基础schema"""
-    invoice_code: str = Field(..., max_length=50, description="发票编码")
-    purchase_order_id: int = Field(..., description="采购订单ID")
-    purchase_order_code: str = Field(..., max_length=50, description="采购订单编码")
+    invoice_code: Optional[str] = Field(None, max_length=50, description="发票编码")
+    purchase_order_id: Optional[int] = Field(None, description="采购订单ID")
+    purchase_order_code: Optional[str] = Field(None, max_length=50, description="采购订单编码")
     supplier_id: int = Field(..., description="供应商ID")
     supplier_name: str = Field(..., max_length=200, description="供应商名称")
     invoice_number: str = Field(..., max_length=100, description="发票号码")

@@ -29,6 +29,10 @@ export const reportingApi = {
   get: async (id: string) => apiRequest(`/apps/kuaizhizao/reporting/${id}`, { method: 'GET' }),
   approve: async (id: string, data?: any, params?: { rejection_reason?: string }) =>
     apiRequest(`/apps/kuaizhizao/reporting/${id}/approve`, { method: 'POST', data: data || {}, params }),
+  revoke: async (id: string) =>
+    apiRequest(`/apps/kuaizhizao/reporting/${id}/revoke`, { method: 'POST' }),
+  batchRevoke: async (ids: string[]) =>
+    apiRequest('/apps/kuaizhizao/reporting/batch-revoke', { method: 'POST', data: { record_ids: ids.map(Number) } }),
   getStatistics: async (params?: any) => apiRequest<ReportingStatistics>('/apps/kuaizhizao/reporting/statistics', { method: 'GET', params }),
   recordScrap: async (recordId: string, data: any) =>
     apiRequest(`/apps/kuaizhizao/reporting/${recordId}/scrap`, { method: 'POST', data }),

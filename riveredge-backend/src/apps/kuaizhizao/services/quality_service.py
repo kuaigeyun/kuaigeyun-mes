@@ -1479,7 +1479,8 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         material_id: Optional[int] = None,
-        supplier_id: Optional[int] = None
+        supplier_id: Optional[int] = None,
+        limit: int = 100,
     ) -> List[dict]:
         """
         查询质量异常记录（不合格的检验单）
@@ -1491,6 +1492,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
             end_date: 结束日期（可选）
             material_id: 物料ID（可选）
             supplier_id: 供应商ID（可选，仅用于来料检验）
+            limit: 返回条数上限（全类型合并排序后截取）
 
         Returns:
             List[dict]: 质量异常记录列表
@@ -1602,7 +1604,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
 
         # 按检验时间降序排序
         anomalies.sort(key=lambda x: x.get("inspection_time") or "", reverse=True)
-        return anomalies
+        return anomalies[: max(1, min(limit, 500))]
 
     async def get_quality_statistics(
         self,
@@ -1793,4 +1795,70 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 type_stats["unqualified_quantity"] = float(type_stats["unqualified_quantity"])
 
         return stats
+
+    async def get_inspection_center_summary(self, tenant_id: int) -> dict:
+        """
+        质检中心看板：待检数量、今日综合合格率、近 7 日按检验数量加权的综合合格率曲线。
+        """
+        now = datetime.now()
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        pending_incoming = await IncomingInspection.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True, status="待检验"
+        ).count()
+        pending_process = await ProcessInspection.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True, status="待检验"
+        ).count()
+        pending_finished = await FinishedGoodsInspection.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True, status="待检验"
+        ).count()
+
+        async def sum_qualified_between(
+            start: datetime, end: datetime, *, end_inclusive: bool = False
+        ) -> tuple:
+            total_q = Decimal(0)
+            qual_q = Decimal(0)
+            for model in (IncomingInspection, ProcessInspection, FinishedGoodsInspection):
+                time_kw = (
+                    {"inspection_time__gte": start, "inspection_time__lte": end}
+                    if end_inclusive
+                    else {"inspection_time__gte": start, "inspection_time__lt": end}
+                )
+                rows = await model.filter(
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                    status="已检验",
+                    **time_kw,
+                ).all()
+                for row in rows:
+                    total_q += row.inspection_quantity or Decimal(0)
+                    qual_q += row.qualified_quantity or Decimal(0)
+            return total_q, qual_q
+
+        t_today, q_today = await sum_qualified_between(today_start, now, end_inclusive=True)
+        today_qualified_rate = float(q_today / t_today * 100) if t_today > 0 else 0.0
+
+        daily_trend = []
+        today_d = now.date()
+        for i in range(6, -1, -1):
+            d = today_d - timedelta(days=i)
+            ds = datetime(d.year, d.month, d.day)
+            if d == today_d:
+                tq, qq = await sum_qualified_between(ds, now, end_inclusive=True)
+            else:
+                de = ds + timedelta(days=1)
+                tq, qq = await sum_qualified_between(ds, de, end_inclusive=False)
+            rate = float(qq / tq * 100) if tq > 0 else 0.0
+            daily_trend.append({"date": d.isoformat(), "rate": round(rate, 2)})
+
+        sparkline_rates = [x["rate"] for x in daily_trend]
+
+        return {
+            "pending_incoming": pending_incoming,
+            "pending_process": pending_process,
+            "pending_finished": pending_finished,
+            "today_qualified_rate": round(today_qualified_rate, 2),
+            "daily_pass_rate_trend": daily_trend,
+            "sparkline_rates": sparkline_rates,
+        }
 

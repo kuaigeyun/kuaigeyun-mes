@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
-import { PageContainer, ProTable, ProCard } from '@ant-design/pro-components';
-import { Button, Modal, message, Space, Tag, InputNumber, Divider } from 'antd';
-import { AuditOutlined, SelectOutlined } from '@ant-design/icons';
+import { PageContainer, ProTable } from '@ant-design/pro-components';
+import { Modal, message, Space, InputNumber, Divider, Row, Col, Typography } from 'antd';
 import { settlementService } from '../../../services/finance/settlement';
+import { receivableService } from '../../../services/finance/receivable';
+import { receiptService } from '../../../services/finance/receipt';
 
 const SettlementPage: React.FC = () => {
   const [selectedReceivable, setSelectedReceivable] = useState<any>(null);
   const [selectedReceipt, setSelectedReceipt] = useState<any>(null);
   const [settleAmount, setSettleAmount] = useState<number>(0);
-  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const handleManualSettle = async () => {
     if (!selectedReceivable || !selectedReceipt || settleAmount <= 0) {
@@ -18,7 +18,8 @@ const SettlementPage: React.FC = () => {
     try {
       await settlementService.settleReceivable(selectedReceivable.id, selectedReceipt.id, settleAmount);
       message.success('核销成功');
-      setIsModalOpen(false);
+      setSelectedReceivable(null);
+      setSelectedReceipt(null);
       // 刷新表格逻辑可集成在 ProTable 的 actionRef 中
     } catch (error: any) {
       message.error('核销失败: ' + error.message);
@@ -26,7 +27,12 @@ const SettlementPage: React.FC = () => {
   };
 
   return (
-    <PageContainer title="往来核销中心" subTitle="管理资金收付与业务单据的匹配">
+    <PageContainer 
+      header={undefined}
+      pageHeaderRender={false}
+      childrenContentStyle={{ padding: 0 }}
+      style={{ padding: 0 }}
+    >
       <Row gutter={16}>
         <Col span={12}>
           <ProTable
@@ -34,8 +40,19 @@ const SettlementPage: React.FC = () => {
             rowKey="id"
             search={{ labelWidth: 'auto' }}
             request={async (params) => {
-               // 这里应根据实际 params 调用 service.listReceivables
-               return { data: [], success: true }; 
+              const { current, pageSize, ...rest } = params;
+              const res = await receivableService.listReceivables({
+                skip: ((current || 1) - 1) * (pageSize || 20),
+                limit: pageSize || 20,
+                // 只看未结清的
+                status: '未收款', 
+                ...rest,
+              });
+              return {
+                data: res?.items || [],
+                total: res?.total || 0,
+                success: true,
+              };
             }}
             columns={[
               { title: '编号', dataIndex: 'receivable_code' },
@@ -59,8 +76,21 @@ const SettlementPage: React.FC = () => {
             headerTitle="可用收款单 (Receipts)"
             rowKey="id"
             search={false}
-            request={async () => {
-               return { data: [], success: true };
+            request={async (params) => {
+              const { current, pageSize, ...rest } = params;
+              const res = await receiptService.listReceipts({
+                skip: ((current || 1) - 1) * (pageSize || 20),
+                limit: pageSize || 20,
+                status: 'Confirmed',
+                ...rest,
+              });
+              // 过滤掉已核销完的
+              const items = (res?.items || []).filter(i => i.unsettled_amount > 0);
+              return {
+                data: items,
+                total: res?.total || 0,
+                success: true,
+              };
             }}
             columns={[
               { title: '编号', dataIndex: 'receipt_code' },
@@ -89,7 +119,7 @@ const SettlementPage: React.FC = () => {
         <Space direction="vertical" style={{ width: '100%' }}>
           <p>将收款单 <b>{selectedReceipt?.receipt_code}</b> 的金额核销至应收单 <b>{selectedReceivable?.receivable_code}</b></p>
           <Divider />
-          <Text>核销金额：</Text>
+          <Typography.Text>核销金额：</Typography.Text>
           <InputNumber 
             style={{ width: '100%' }} 
             value={settleAmount} 

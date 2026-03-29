@@ -269,6 +269,15 @@ router.include_router(document_relations_legacy_router)
 # ============ 质量异常与质检标准 API ============
 # 注：来料检验、过程检验、成品检验 API 已迁移至 quality_execution.py
 
+@router.get("/quality/inspection-center-summary", summary="质检中心看板汇总（待检、今日合格率、近7日趋势）")
+async def get_inspection_center_summary(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> JSONResponse:
+    data = await FinishedGoodsInspectionService().get_inspection_center_summary(tenant_id=tenant_id)
+    return JSONResponse(content=data, status_code=http_status.HTTP_200_OK)
+
+
 @router.get("/quality/anomalies", summary="查询质量异常记录")
 async def get_quality_anomalies(
     inspection_type: Optional[str] = Query(None, description="检验类型（incoming/process/finished）"),
@@ -276,6 +285,7 @@ async def get_quality_anomalies(
     end_date: Optional[datetime] = Query(None, description="结束日期"),
     material_id: Optional[int] = Query(None, description="物料ID"),
     supplier_id: Optional[int] = Query(None, description="供应商ID（仅用于来料检验）"),
+    limit: int = Query(100, ge=1, le=500, description="返回条数上限"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> JSONResponse:
@@ -294,7 +304,8 @@ async def get_quality_anomalies(
         start_date=start_date,
         end_date=end_date,
         material_id=material_id,
-        supplier_id=supplier_id
+        supplier_id=supplier_id,
+        limit=limit,
     )
     return JSONResponse(
         content={

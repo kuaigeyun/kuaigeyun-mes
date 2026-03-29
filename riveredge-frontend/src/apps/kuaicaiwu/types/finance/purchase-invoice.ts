@@ -36,9 +36,9 @@ export interface PurchaseInvoiceListParams {
 }
 
 export interface PurchaseInvoiceCreateData {
-    invoice_code: string;
-    purchase_order_id: number;
-    purchase_order_code: string;
+    invoice_code?: string;
+    purchase_order_id?: number;
+    purchase_order_code?: string;
     supplier_id: number;
     supplier_name: string;
     invoice_number: string;

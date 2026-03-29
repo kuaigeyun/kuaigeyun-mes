@@ -98,9 +98,10 @@ export function translateMenuName(
     // 直接尝试路径翻译或返回原 key
   }
 
-  // 2. 仅当 name 非 i18n key 时，才用应用名兜底（如根菜单、空名称等）
+  // 2. 仅当 name 非 i18n key 且内容为空时，才用应用名兜底（如根菜单、空名称等）
+  // 注意：如果 name 已有内容（可能是已翻译后的文本），不应强行覆盖为应用名，否则会引发「二次翻译」Bug
   const isI18nKey = name.includes('.') && !name.startsWith('/');
-  if (!isI18nKey) {
+  if (!isI18nKey && (!name || name.trim() === '')) {
     const appCode = extractAppCodeFromPath(path);
     if (appCode) {
       const appNameKey = `app.${appCode}.name`;

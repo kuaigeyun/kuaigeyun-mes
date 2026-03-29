@@ -1,302 +1,410 @@
-import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, Statistic, Button, Space, Typography, Tag, Tooltip, Empty } from 'antd';
-import { 
-  ArrowRightOutlined, 
-  SafetyCertificateOutlined, 
-  ThunderboltOutlined, 
+import React, { useMemo, Suspense, lazy } from 'react';
+import { App, Card, Row, Col, Statistic, Button, Space, Typography, Tag, Spin, Empty, Skeleton } from 'antd';
+import {
+  ArrowRightOutlined,
+  ThunderboltOutlined,
   CheckCircleOutlined,
   AlertOutlined,
   BarChartOutlined,
   ClockCircleOutlined,
-  RightOutlined
+  RightOutlined,
 } from '@ant-design/icons';
-import { Line } from '@ant-design/charts';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { getMenuBadgeCounts } from '../../../../../services/dashboard';
-import { SimpleSparkline } from '../../../../../components/common/SimpleSparkline';
+import { useRequest } from 'ahooks';
+import dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime';
+import 'dayjs/locale/zh-cn';
+import { qualityApi, type QualityAnomalyItem } from '../../../services/quality-execution';
 
-const { Title, Text } = Typography;
+dayjs.extend(relativeTime);
+dayjs.locale('zh-cn');
+
+const PassRateLineChart = lazy(async () => {
+  const { Line } = await import('@ant-design/charts');
+  return {
+    default: (props: React.ComponentProps<typeof Line>) => <Line {...props} />,
+  };
+});
+
+const { Text } = Typography;
+
+const INSPECTION_TYPE_LABEL: Record<string, string> = {
+  incoming: '来料',
+  process: '过程',
+  finished: '成品',
+};
+
+const INSPECTION_LIST_PATH: Record<string, string> = {
+  incoming: '/apps/kuaizhizao/quality-management/incoming-inspection',
+  process: '/apps/kuaizhizao/quality-management/process-inspection',
+  finished: '/apps/kuaizhizao/quality-management/finished-goods-inspection',
+};
+
+function anomalySeverity(a: QualityAnomalyItem): 'high' | 'medium' | 'low' {
+  const iq = Number(a.inspection_quantity) || 0;
+  const uq = Number(a.unqualified_quantity) || 0;
+  if (iq <= 0) return 'low';
+  const ratio = uq / iq;
+  if (ratio >= 0.5) return 'high';
+  if (ratio >= 0.2) return 'medium';
+  return 'low';
+}
 
 const InspectionCenter: React.FC = () => {
   const navigate = useNavigate();
-  const [counts, setCounts] = useState<Record<string, number>>({});
-  const [loading, setLoading] = useState(true);
+  const { message } = App.useApp();
 
-  useEffect(() => {
-    const fetchCounts = async () => {
-      try {
-        const res = await getMenuBadgeCounts();
-        setCounts(res);
-      } finally {
-        setLoading(false);
-      }
+  const {
+    data: summary,
+    loading: summaryLoading,
+  } = useRequest(() => qualityApi.qualityStatistics.getInspectionCenterSummary(), {
+    onError: (e: any) => message.error(e?.message || '加载质检中心数据失败'),
+  });
+
+  const {
+    data: anomaliesResp,
+    loading: anomaliesLoading,
+  } = useRequest(() => qualityApi.qualityStatistics.getAnomalies({ limit: 12 }), {
+    onError: (e: any) => message.error(e?.message || '加载质量异常失败'),
+  });
+
+  const anomalies = anomaliesResp?.anomalies ?? [];
+
+  const chartData = useMemo(
+    () =>
+      (summary?.daily_pass_rate_trend || []).map((d) => ({
+        date: d.date.slice(5),
+        rate: d.rate,
+      })),
+    [summary]
+  );
+
+  const trendConfig = useMemo(() => {
+    const rows = chartData.length ? chartData : [{ date: '-', rate: 0 }];
+    const rates = chartData.map((d) => d.rate);
+    const hasRates = rates.length > 0;
+    const minR = hasRates ? Math.min(...rates) : 0;
+    const maxR = hasRates ? Math.max(...rates) : 100;
+    const pad = 5;
+    return {
+      data: rows,
+      xField: 'date',
+      yField: 'rate',
+      smooth: true,
+      animation: false,
+      padding: 'auto' as const,
+      color: '#1890ff',
+      point: { size: 4, shape: 'diamond' as const },
+      label: { style: { fill: '#aaa' } },
+      yAxis: hasRates
+        ? { min: Math.max(0, minR - pad), max: Math.min(100, maxR + pad) }
+        : { min: 0, max: 100 },
     };
-    fetchCounts();
-  }, []);
+  }, [chartData]);
 
-  // 模拟质量合格率数据
-  const qualityTrendData = [
-    { date: '2024-03-20', rate: 98.2 },
-    { date: '2024-03-21', rate: 97.5 },
-    { date: '2024-03-22', rate: 99.1 },
-    { date: '2024-03-23', rate: 98.8 },
-    { date: '2024-03-24', rate: 96.5 },
-    { date: '2024-03-25', rate: 98.2 },
-    { date: '2024-03-26', rate: 99.5 },
+  const toolCards = [
+    {
+      title: '追溯查询',
+      desc: '全生命周期追溯',
+      icon: <ArrowRightOutlined />,
+      color: '#1890ff',
+      path: '/apps/kuaizhizao/quality-management/traceability',
+    },
+    {
+      title: '质检方案',
+      desc: '标准与方法定义',
+      icon: <ArrowRightOutlined />,
+      color: '#722ed1',
+      path: '/apps/kuaizhizao/quality-management/inspection-plans',
+    },
+    {
+      title: '不合格品处理',
+      desc: 'MRB评审流程',
+      icon: <ArrowRightOutlined />,
+      color: '#faad14',
+      path: '/apps/kuaizhizao/production-execution/quality-exceptions',
+    },
+    {
+      title: '异常跟踪',
+      desc: '8D改进闭环',
+      icon: <ArrowRightOutlined />,
+      color: '#ff4d4f',
+      path: '/apps/kuaizhizao/production-execution/exception-process',
+    },
   ];
 
-  const trendConfig = {
-    data: qualityTrendData,
-    xField: 'date',
-    yField: 'rate',
-    smooth: true,
-    padding: 'auto',
-    color: '#1890ff',
-    point: {
-      size: 4,
-      shape: 'diamond',
-    },
-    label: {
-      style: {
-        fill: '#aaa',
-      },
-    },
-    yAxis: {
-      min: 90,
-      max: 100,
-    }
-  };
+  /** 与计划中心、仓储看板 KPI 统一的卡片体（略松排版） */
+  const kpiCardBodyStyle = { padding: '22px 24px' as const, minHeight: 184 };
 
-  const containerVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: {
-      opacity: 1,
-      y: 0,
-      transition: {
-        duration: 0.5,
-        staggerChildren: 0.1
-      }
-    }
-  };
-
-  const itemVariants = {
-    hidden: { opacity: 0, scale: 0.95 },
-    visible: { opacity: 1, scale: 1 }
-  };
+  const kpiSkeleton = (
+    <Card style={{ borderRadius: 12 }} styles={{ body: { ...kpiCardBodyStyle } }}>
+      <Skeleton active paragraph={{ rows: 2 }} />
+    </Card>
+  );
 
   return (
-    <div style={{ padding: '24px', background: '#f0f2f5', minHeight: '100%' }}>
-      <motion.div
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-      >
-        <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <Title level={2} style={{ margin: 0 }}>
-              <SafetyCertificateOutlined style={{ color: '#1890ff', marginRight: 12 }} />
-              质检中心
-            </Title>
-            <Text type="secondary">实时监控质量动态，协同仓库与生产流程</Text>
-          </div>
-          <Space>
-            <Button icon={<BarChartOutlined />}>质量报表</Button>
-            <Button type="primary" icon={<ThunderboltOutlined />}>发起质检</Button>
-          </Space>
-        </div>
-
-        {/* 核心指标统计 */}
-        <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-          <Col span={6}>
-            <motion.div variants={itemVariants}>
-              <Card 
-                hoverable 
+    <div style={{ minHeight: '100%', padding: '16px 0', overflow: 'visible' }}>
+      <div>
+        <Row gutter={[18, 18]} style={{ marginBottom: 16 }}>
+          <Col xs={24} lg={8}>
+            {summaryLoading && !summary ? (
+              kpiSkeleton
+            ) : (
+              <Card
+                hoverable
                 onClick={() => navigate('/apps/kuaizhizao/quality-management/incoming-inspection')}
-                style={{ borderRadius: 12, border: 'none', background: 'linear-gradient(135deg, #1890ff 0%, #36cfc9 100%)' }}
-                bodyStyle={{ padding: '20px', color: '#fff' }}
+                style={{
+                  borderRadius: 12,
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #1890ff 0%, #36cfc9 100%)',
+                }}
+                styles={{ body: { ...kpiCardBodyStyle, color: '#fff' } }}
               >
-                <Statistic 
-                  title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>来料待检</span>}
-                  value={counts.incoming_inspection || 0}
-                  valueStyle={{ color: '#fff', fontSize: 32, fontWeight: 'bold' }}
-                  prefix={<ClockCircleOutlined />}
-                  suffix={<span style={{ fontSize: 14, color: 'rgba(255,255,255,0.7)', marginLeft: 8 }}>张单据</span>}
+                <Statistic
+                  styles={{ title: { marginBottom: 10 } }}
+                  title={<span style={{ fontSize: 14, color: 'rgba(255,255,255,0.82)' }}>来料待检</span>}
+                  value={summary?.pending_incoming ?? 0}
+                  valueStyle={{ color: '#fff', fontSize: 34, fontWeight: 700, lineHeight: 1.2 }}
+                  prefix={<ClockCircleOutlined style={{ fontSize: 20, opacity: 0.95 }} />}
+                  suffix={
+                    <span style={{ fontSize: 15, color: 'rgba(255,255,255,0.72)', marginLeft: 10 }}>张单据</span>
+                  }
                 />
-                <div style={{ marginTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={{ color: 'rgba(255,255,255,0.8)' }}>关联仓库收货通知</Text>
+                <div
+                  style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                >
+                  <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.78)' }}>关联仓库收货通知</Text>
                   <ArrowRightOutlined />
                 </div>
               </Card>
-            </motion.div>
+            )}
           </Col>
-          <Col span={6}>
-            <motion.div variants={itemVariants}>
-              <Card 
-                hoverable 
+          <Col xs={24} lg={8}>
+            {summaryLoading && !summary ? (
+              kpiSkeleton
+            ) : (
+              <Card
+                hoverable
                 onClick={() => navigate('/apps/kuaizhizao/quality-management/process-inspection')}
-                style={{ borderRadius: 12, border: 'none', background: 'linear-gradient(135deg, #722ed1 0%, #b37feb 100%)' }}
-                bodyStyle={{ padding: '20px', color: '#fff' }}
+                style={{
+                  borderRadius: 12,
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #722ed1 0%, #b37feb 100%)',
+                }}
+                styles={{ body: { ...kpiCardBodyStyle, color: '#fff' } }}
               >
-                <Statistic 
-                  title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>过程待检</span>}
-                  value={counts.process_inspection || 0}
-                  valueStyle={{ color: '#fff', fontSize: 32, fontWeight: 'bold' }}
-                  prefix={<ThunderboltOutlined />}
-                  suffix={<span style={{ fontSize: 14, color: 'rgba(255,255,255,0.7)', marginLeft: 8 }}>道工序</span>}
+                <Statistic
+                  styles={{ title: { marginBottom: 10 } }}
+                  title={<span style={{ fontSize: 14, color: 'rgba(255,255,255,0.82)' }}>过程待检</span>}
+                  value={summary?.pending_process ?? 0}
+                  valueStyle={{ color: '#fff', fontSize: 34, fontWeight: 700, lineHeight: 1.2 }}
+                  prefix={<ThunderboltOutlined style={{ fontSize: 20, opacity: 0.95 }} />}
+                  suffix={
+                    <span style={{ fontSize: 15, color: 'rgba(255,255,255,0.72)', marginLeft: 10 }}>道工序</span>
+                  }
                 />
-                <div style={{ marginTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={{ color: 'rgba(255,255,255,0.8)' }}>现场首检/巡检</Text>
+                <div
+                  style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                >
+                  <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.78)' }}>现场首检/巡检</Text>
                   <ArrowRightOutlined />
                 </div>
               </Card>
-            </motion.div>
+            )}
           </Col>
-          <Col span={6}>
-            <motion.div variants={itemVariants}>
-              <Card 
-                hoverable 
+          <Col xs={24} lg={8}>
+            {summaryLoading && !summary ? (
+              kpiSkeleton
+            ) : (
+              <Card
+                hoverable
                 onClick={() => navigate('/apps/kuaizhizao/quality-management/finished-goods-inspection')}
-                style={{ borderRadius: 12, border: 'none', background: 'linear-gradient(135deg, #52c41a 0%, #95de64 100%)' }}
-                bodyStyle={{ padding: '20px', color: '#fff' }}
+                style={{
+                  borderRadius: 12,
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #52c41a 0%, #95de64 100%)',
+                }}
+                styles={{ body: { ...kpiCardBodyStyle, color: '#fff' } }}
               >
-                <Statistic 
-                  title={<span style={{ color: 'rgba(255,255,255,0.8)' }}>成品待检</span>}
-                  value={counts.finished_goods_inspection || 0}
-                  valueStyle={{ color: '#fff', fontSize: 32, fontWeight: 'bold' }}
-                  prefix={<CheckCircleOutlined />}
-                  suffix={<span style={{ fontSize: 14, color: 'rgba(255,255,255,0.7)', marginLeft: 8 }}>批次</span>}
+                <Statistic
+                  styles={{ title: { marginBottom: 10 } }}
+                  title={<span style={{ fontSize: 14, color: 'rgba(255,255,255,0.82)' }}>成品待检</span>}
+                  value={summary?.pending_finished ?? 0}
+                  valueStyle={{ color: '#fff', fontSize: 34, fontWeight: 700, lineHeight: 1.2 }}
+                  prefix={<CheckCircleOutlined style={{ fontSize: 20, opacity: 0.95 }} />}
+                  suffix={
+                    <span style={{ fontSize: 15, color: 'rgba(255,255,255,0.72)', marginLeft: 10 }}>批次</span>
+                  }
                 />
-                <div style={{ marginTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={{ color: 'rgba(255,255,255,0.8)' }}>入库前终检</Text>
+                <div
+                  style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                >
+                  <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.78)' }}>入库前终检</Text>
                   <ArrowRightOutlined />
                 </div>
               </Card>
-            </motion.div>
-          </Col>
-          <Col span={6}>
-            <motion.div variants={itemVariants}>
-              <Card 
-                style={{ borderRadius: 12, border: 'none', background: '#fff' }}
-                bodyStyle={{ padding: '20px' }}
-              >
-                <Statistic 
-                  title="今日综合合格率"
-                  value={99.5}
-                  precision={2}
-                  suffix="%"
-                  valueStyle={{ color: '#52c41a', fontWeight: 'bold' }}
-                />
-                <div style={{ height: 40, marginTop: 12 }}>
-                  <SimpleSparkline
-                    height={40}
-                    type="line"
-                    data={[98, 97, 99, 98, 96, 98, 100]}
-                    color="#52c41a"
-                  />
-                </div>
-              </Card>
-            </motion.div>
+            )}
           </Col>
         </Row>
 
-        <Row gutter={[16, 16]}>
+        <Row gutter={[16, 16]} align="stretch">
           <Col span={16}>
-            <motion.div variants={itemVariants}>
-              <Card 
-                title={<span><BarChartOutlined style={{ marginRight: 8 }} />质量合格率趋势</span>}
-                extra={<Button type="link">详细分析</Button>}
-                style={{ borderRadius: 12 }}
-              >
-                <div style={{ height: 350 }}>
-                   <Line {...trendConfig} height={350} />
-                </div>
-              </Card>
-            </motion.div>
+            <Card
+              title={
+                <span>
+                  <BarChartOutlined style={{ marginRight: 8 }} />
+                  质量合格率趋势
+                </span>
+              }
+              extra={
+                <Button type="link" onClick={() => navigate('/apps/kuaizhizao/quality-management/incoming-inspection')}>
+                  详细分析
+                </Button>
+              }
+              style={{ borderRadius: 12 }}
+            >
+              <div style={{ height: 350 }}>
+                {summaryLoading && !summary ? (
+                  <div style={{ height: 350, paddingTop: 8 }}>
+                    <Skeleton active paragraph={{ rows: 6 }} />
+                  </div>
+                ) : (
+                  <Suspense
+                    fallback={
+                      <div style={{ height: 350, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Spin />
+                      </div>
+                    }
+                  >
+                    <PassRateLineChart {...trendConfig} height={350} />
+                  </Suspense>
+                )}
+              </div>
+            </Card>
           </Col>
-          <Col span={8}>
-            <motion.div variants={itemVariants}>
-              <Card 
-                title={<span><AlertOutlined style={{ marginRight: 8, color: '#ff4d4f' }} />最近质量异常</span>}
-                bodyStyle={{ padding: 0 }}
-                style={{ borderRadius: 12, height: '100%' }}
-              >
-                <div style={{ maxHeight: 400, overflow: 'auto', padding: '12px' }}>
-                  {[
-                    { id: 1, type: '来料', msg: '铝合金外壳表面划痕', time: '10分钟前', level: 'high' },
-                    { id: 2, type: '过程', msg: '电机组装扭力超上限', time: '1小时前', level: 'medium' },
-                    { id: 3, type: '成品', msg: '包装盒标识错误', time: '3小时前', level: 'low' },
-                  ].map(item => (
-                    <div 
-                      key={item.id} 
-                      style={{ 
-                        padding: '12px', 
-                        borderBottom: '1px solid var(--river-divider-color)', 
-                        display: 'flex', 
+          <Col span={8} style={{ display: 'flex' }}>
+            <Card
+              title={
+                <span>
+                  <AlertOutlined style={{ marginRight: 8, color: '#ff4d4f' }} />
+                  最近质量异常
+                </span>
+              }
+              styles={{
+                body: {
+                  padding: 0,
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  minHeight: 0,
+                  overflow: 'hidden',
+                },
+              }}
+              style={{
+                borderRadius: 12,
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                minHeight: 0,
+              }}
+            >
+              <div style={{ flex: 1, overflow: 'auto', padding: '12px', minHeight: 350 }}>
+                {anomaliesLoading ? (
+                  <Skeleton active paragraph={{ rows: 8 }} />
+                ) : anomalies.length === 0 ? (
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无已记录的不合格检验" />
+                ) : (
+                  anomalies.map((item) => {
+                    const level = anomalySeverity(item);
+                    const typeLabel = INSPECTION_TYPE_LABEL[item.inspection_type] || item.inspection_type;
+                    const msg =
+                      item.nonconformance_reason ||
+                      item.material_name ||
+                      item.inspection_code ||
+                      '不合格记录';
+                    const timeStr = item.inspection_time ? dayjs(item.inspection_time).fromNow() : '';
+                    const path = INSPECTION_LIST_PATH[item.inspection_type] || INSPECTION_LIST_PATH.incoming;
+                    return (
+                      <div
+                        key={`${item.inspection_type}-${item.inspection_id}`}
+                        style={{
+                          padding: '12px',
+                          borderBottom: '1px solid var(--river-divider-color)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          cursor: 'pointer',
+                        }}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => navigate(path)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') navigate(path);
+                        }}
+                      >
+                        <div style={{ flex: 1 }}>
+                          <Space>
+                            <Tag color={level === 'high' ? 'red' : level === 'medium' ? 'orange' : 'blue'}>
+                              {typeLabel}
+                            </Tag>
+                            <Text strong ellipsis>
+                              {msg}
+                            </Text>
+                          </Space>
+                          <br />
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            {item.inspection_code}
+                            {timeStr ? ` · ${timeStr}` : ''}
+                          </Text>
+                        </div>
+                        <Button type="text" icon={<RightOutlined />} aria-label="进入列表" />
+                      </div>
+                    );
+                  })
+                )}
+                <div style={{ textAlign: 'center', padding: '16px' }}>
+                  <Button type="link" onClick={() => navigate('/apps/kuaizhizao/production-execution/quality-exceptions')}>
+                    查看所有异常
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          </Col>
+        </Row>
+
+        <div style={{ marginTop: 16, marginBottom: 16, overflow: 'visible' }}>
+          <Row gutter={[16, 16]}>
+            {toolCards.map((tool) => (
+              <Col span={6} key={tool.path}>
+                <Card hoverable style={{ borderRadius: 12 }} onClick={() => navigate(tool.path)}>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <div
+                      style={{
+                        width: 48,
+                        height: 48,
+                        borderRadius: 8,
+                        background: `${tool.color}15`,
+                        display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'space-between'
+                        justifyContent: 'center',
+                        marginRight: 16,
                       }}
                     >
-                      <div style={{ flex: 1 }}>
-                        <Space>
-                          <Tag color={item.level === 'high' ? 'red' : item.level === 'medium' ? 'orange' : 'blue'}>
-                            {item.type}
-                          </Tag>
-                          <Text strong>{item.msg}</Text>
-                        </Space>
-                        <br />
-                        <Text type="secondary" size="small">{item.time}</Text>
-                      </div>
-                      <Button type="text" icon={<RightOutlined />} />
+                      <div style={{ color: tool.color, fontSize: 24 }}>{tool.icon}</div>
                     </div>
-                  ))}
-                  <div style={{ textAlign: 'center', padding: '16px' }}>
-                    <Button type="link">查看所有异常</Button>
+                    <div>
+                      <div style={{ fontWeight: 'bold' }}>{tool.title}</div>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {tool.desc}
+                      </Text>
+                    </div>
                   </div>
-                </div>
-              </Card>
-            </motion.div>
-          </Col>
-        </Row>
-
-        {/* 快捷入口 - 制造业最佳实践 */}
-        <div style={{ marginTop: 24 }}>
-          <Title level={4}>质量协同工具</Title>
-          <Row gutter={[16, 16]}>
-            {[
-              { title: '追溯查询', desc: '全生命周期追溯', icon: <ArrowRightOutlined />, color: '#1890ff' },
-              { title: '质检方案', desc: '标准与方法定义', icon: <ArrowRightOutlined />, color: '#722ed1' },
-              { title: '不合格品处理', desc: 'MRB评审流程', icon: <ArrowRightOutlined />, color: '#faad14' },
-              { title: '异常跟踪', desc: '8D改进闭环', icon: <ArrowRightOutlined />, color: '#ff4d4f' },
-            ].map((tool, idx) => (
-              <Col span={6} key={idx}>
-                <motion.div variants={itemVariants}>
-                  <Card hoverable style={{ borderRadius: 12 }}>
-                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                      <div style={{ 
-                        width: 48, 
-                        height: 48, 
-                        borderRadius: 8, 
-                        background: `${tool.color}15`, 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center',
-                        marginRight: 16
-                      }}>
-                        <div style={{ color: tool.color, fontSize: 24 }}>{tool.icon}</div>
-                      </div>
-                      <div>
-                        <div style={{ fontWeight: 'bold' }}>{tool.title}</div>
-                        <Text type="secondary" style={{ fontSize: 12 }}>{tool.desc}</Text>
-                      </div>
-                    </div>
-                  </Card>
-                </motion.div>
+                </Card>
               </Col>
             ))}
           </Row>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 };

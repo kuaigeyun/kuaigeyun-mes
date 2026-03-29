@@ -522,6 +522,135 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
             return ReportingRecordResponse.model_validate(record)
 
+    async def revoke_reporting_approval(
+        self,
+        tenant_id: int,
+        record_id: int,
+        revoked_by: int
+    ) -> ReportingRecordResponse:
+        """
+        撤销报工审核
+
+        Args:
+            tenant_id: 组织ID
+            record_id: 报工记录ID
+            revoked_by: 撤销人ID
+
+        Returns:
+            ReportingRecordResponse: 更新后的报工记录信息
+
+        Raises:
+            NotFoundError: 报工记录不存在
+            ValidationError: 状态错误
+        """
+        async with in_transaction():
+            record = await ReportingRecord.get_or_none(
+                id=record_id,
+                tenant_id=tenant_id,
+            )
+
+            if not record:
+                raise NotFoundError(f"报工记录不存在: {record_id}")
+
+            if record.status != 'approved':
+                raise ValidationError("只有已审核通过的报工记录才可以撤回审核")
+
+            # 更新记录状态
+            record.status = 'pending'
+            record.approved_at = None
+            record.approved_by = None
+            record.approved_by_name = None
+            
+            # 记录在备注中
+            user_info = await self.get_user_info(revoked_by)
+            revocation_note = f"\n[撤回审核] {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} 由 {user_info['name']} 撤回审核"
+            if record.remarks:
+                record.remarks += revocation_note
+            else:
+                record.remarks = revocation_note
+
+            await record.save()
+
+            # 重新计算工单进度（因为 status 变为 pending，_update_work_order_progress 只统计 approved）
+            await self._update_work_order_progress(tenant_id, record.work_order_id)
+            
+            logger.info(f"撤回报工审核成功：报工记录ID {record_id}，操作人 {user_info['name']}")
+
+            return ReportingRecordResponse.model_validate(record)
+
+    async def batch_revoke_reporting_approval(
+        self,
+        tenant_id: int,
+        record_ids: list[int],
+        revoked_by: int
+    ) -> dict:
+        """
+        批量撤回报工操作（撤销审核）
+
+        Args:
+            tenant_id: 组织ID
+            record_ids: 报工记录ID列表
+            revoked_by: 撤回人ID
+
+        Returns:
+            dict: 操作结果统计
+        """
+        results = {
+            "total": len(record_ids),
+            "success": 0,
+            "failed": 0,
+            "details": []
+        }
+
+        # 获取用户信息
+        user_info = await self.get_user_info(revoked_by)
+        revoked_by_name = user_info['name']
+        now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        # 记录受影响的工单ID，用于最后刷新进度
+        affected_work_order_ids = set()
+
+        async with in_transaction():
+            for rid in record_ids:
+                try:
+                    record = await ReportingRecord.get_or_none(id=rid, tenant_id=tenant_id)
+                    if not record:
+                        results["failed"] += 1
+                        results["details"].append({"id": rid, "status": "failed", "reason": "记录不存在"})
+                        continue
+
+                    if record.status != 'approved':
+                        results["failed"] += 1
+                        results["details"].append({"id": rid, "status": "failed", "reason": f"当前状态为 {record.status}，无法撤回审核"})
+                        continue
+
+                    # 更新记录状态
+                    record.status = 'pending'
+                    record.approved_at = None
+                    record.approved_by = None
+                    record.approved_by_name = None
+                    
+                    revocation_note = f"\n[批量撤回审核] {now_str} 由 {revoked_by_name} 撤回审核"
+                    if record.remarks:
+                        record.remarks += revocation_note
+                    else:
+                        record.remarks = revocation_note
+
+                    await record.save()
+                    affected_work_order_ids.add(record.work_order_id)
+                    
+                    results["success"] += 1
+                    results["details"].append({"id": rid, "status": "success"})
+                except Exception as e:
+                    results["failed"] += 1
+                    results["details"].append({"id": rid, "status": "failed", "reason": str(e)})
+
+            # 批量刷新受影响工单的进度
+            for wo_id in affected_work_order_ids:
+                await self._update_work_order_progress(tenant_id, wo_id)
+
+        return results
+
     async def delete_reporting_record(
         self,
         tenant_id: int,
@@ -548,10 +677,47 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
         # 检查是否可以删除
         if record.status == 'approved':
-            raise ValidationError("已审核通过的报工记录不允许删除")
+            raise ValidationError("已审核通过的报工记录不允许直接删除，请先撤销审核")
 
-        # 硬删除（报工记录表暂无 deleted_at 字段，后续可改为软删除）
-        await record.delete()
+        async with in_transaction():
+            # 获取工单工序并扣减计数
+            work_order_op = await WorkOrderOperation.get_or_none(
+                tenant_id=tenant_id,
+                work_order_id=record.work_order_id,
+                operation_id=record.operation_id,
+                deleted_at__isnull=True,
+            )
+            if work_order_op:
+                work_order_op.completed_quantity = (work_order_op.completed_quantity or Decimal('0')) - record.reported_quantity
+                work_order_op.qualified_quantity = (work_order_op.qualified_quantity or Decimal('0')) - record.qualified_quantity
+                work_order_op.unqualified_quantity = (work_order_op.unqualified_quantity or Decimal('0')) - record.unqualified_quantity
+                
+                # 如果之前是已完成，变回进行中
+                if work_order_op.status == 'completed':
+                    work_order_op.status = 'in_progress'
+                
+                await work_order_op.save()
+
+            # 获取工单并扣减计数
+            work_order = await WorkOrder.get_or_none(id=record.work_order_id, tenant_id=tenant_id)
+            if work_order:
+                # 注意：WorkOrder 的计数通常由 _update_work_order_progress (只看 approved) 维护。
+                # 但如果在 pending 状态删除，也需要从 work_order.completed_quantity 扣减（如果它在 create 时加了）。
+                # 在 create_reporting_record 中确实加了。
+                work_order.completed_quantity = (work_order.completed_quantity or Decimal('0')) - record.reported_quantity
+                work_order.qualified_quantity = (work_order.qualified_quantity or Decimal('0')) - record.qualified_quantity
+                work_order.unqualified_quantity = (work_order.unqualified_quantity or Decimal('0')) - record.unqualified_quantity
+                
+                if work_order.status == 'completed':
+                    work_order.status = 'in_progress'
+                
+                await work_order.save()
+
+            # 硬删除（报工记录表暂无 deleted_at 字段，后续可改为软删除）
+            await record.delete()
+            
+            # 最后再次同步一次工单进度（确保稳健）
+            await self._update_work_order_progress(tenant_id, record.work_order_id)
 
     async def get_reporting_statistics(
         self,

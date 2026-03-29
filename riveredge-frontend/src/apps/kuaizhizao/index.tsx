@@ -96,6 +96,7 @@ const CostOptimizationPage = lazy(() => import('./pages/cost-management/cost-opt
 const CostReportPage = lazy(() => import('./pages/cost-management/cost-report'));
 
 // 仓储管理页面
+const WarehouseDashboard = lazy(() => import('./pages/warehouse-management/dashboard'));
 const InventoryPage = lazy(() => import('./pages/warehouse-management/inventory'));
 const InboundPage = lazy(() => import('./pages/warehouse-management/inbound'));
 const OtherInboundPage = lazy(() => import('./pages/warehouse-management/other-inbound'));
@@ -226,6 +227,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="performance/summaries" element={withPageSuspense(SummariesPage)} />
 
       {/* 仓储管理路由 */}
+      <Route path="warehouse-management/dashboard" element={withPageSuspense(WarehouseDashboard)} />
       <Route path="warehouse-management/inventory" element={withPageSuspense(InventoryPage)} />
       <Route path="warehouse-management/replenishment-suggestions" element={withPageSuspense(ReplenishmentSuggestionsPage)} />
       <Route path="warehouse-management/inbound" element={withPageSuspense(InboundPage)} />

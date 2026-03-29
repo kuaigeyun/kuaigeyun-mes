@@ -1442,15 +1442,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       label: t('ui.user.profile'),
     },
     {
-      type: 'divider',
-    },
-    {
       key: 'copyright',
       icon: <FileTextOutlined />,
       label: t('ui.copyright'),
-    },
-    {
-      type: 'divider',
     },
     {
       key: 'clear-menu-cache',
@@ -1458,16 +1452,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       label: t('ui.clearCache'),
     },
     {
-      type: 'divider',
-    },
-    {
       key: 'lock-screen',
       icon: <LockOutlined />,
       label: t('ui.lock.screen'),
       onClick: handleLockScreen,
-    },
-    {
-      type: 'divider',
     },
     {
       key: 'logout',

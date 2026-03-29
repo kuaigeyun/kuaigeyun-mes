@@ -37,6 +37,7 @@ from apps.kuaizhizao.services.customer_material_registration_service import (
 )
 from apps.kuaizhizao.services.replenishment_suggestion_service import ReplenishmentSuggestionService
 from apps.kuaizhizao.services.batching_order_service import BatchingOrderService
+from apps.kuaizhizao.services.warehouse_dashboard_service import WarehouseDashboardService
 
 # 初始化服务实例
 batching_order_service = BatchingOrderService()
@@ -137,6 +138,18 @@ from apps.kuaizhizao.schemas.batching_order import (
 )
 
 router = APIRouter(tags=["Kuaige Zhizao - Warehouse Execution"])
+
+
+# ============ 仓储看板 ============
+
+
+@router.get("/warehouse-dashboard/summary", summary="仓储看板汇总（库存、金额、待办、最近入出库）")
+async def warehouse_dashboard_summary(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    recent_limit: int = Query(8, ge=1, le=50, description="最近入/出库各返回条数上限"),
+) -> Dict[str, Any]:
+    return await WarehouseDashboardService.get_summary(tenant_id, recent_limit=recent_limit)
 
 
 # ============ 生产领料管理 API ============

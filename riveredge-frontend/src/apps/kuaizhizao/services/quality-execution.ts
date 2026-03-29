@@ -12,6 +12,38 @@ export interface InspectionStatistics {
   total_count: number;
 }
 
+/** 质检中心看板汇总 */
+export interface InspectionCenterSummary {
+  pending_incoming: number;
+  pending_process: number;
+  pending_finished: number;
+  today_qualified_rate: number;
+  daily_pass_rate_trend: { date: string; rate: number }[];
+  sparkline_rates: number[];
+}
+
+/** 质量异常单条（与后端 /quality/anomalies 一致） */
+export interface QualityAnomalyItem {
+  inspection_type: string;
+  inspection_id: number;
+  inspection_code: string;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  nonconformance_reason?: string | null;
+  inspection_time?: string | null;
+  inspection_quantity?: number;
+  unqualified_quantity?: number;
+  supplier_name?: string;
+  work_order_code?: string;
+  operation_name?: string;
+}
+
+export interface QualityAnomaliesResponse {
+  total: number;
+  anomalies: QualityAnomalyItem[];
+}
+
 export const qualityApi = {
   incomingInspection: {
     list: async (params?: any) => apiRequest('/apps/kuaizhizao/incoming-inspections', { method: 'GET', params }),
@@ -91,8 +123,11 @@ export const qualityApi = {
   },
   qualityStatistics: {
     getStatistics: async (params?: any) => apiRequest('/apps/kuaizhizao/quality/statistics', { method: 'GET', params }),
-    getAnomalies: async (params?: any) => apiRequest('/apps/kuaizhizao/quality/anomalies', { method: 'GET', params }),
+    getAnomalies: async (params?: { limit?: number; inspection_type?: string; start_date?: string; end_date?: string }) =>
+      apiRequest<QualityAnomaliesResponse>('/apps/kuaizhizao/quality/anomalies', { method: 'GET', params }),
     getReport: async (params?: any) => apiRequest('/apps/kuaizhizao/reports/quality', { method: 'GET', params }),
+    getInspectionCenterSummary: async () =>
+      apiRequest<InspectionCenterSummary>('/apps/kuaizhizao/quality/inspection-center-summary', { method: 'GET' }),
   },
 };
 

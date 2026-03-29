@@ -10,7 +10,7 @@ import { App, Button, Tag, Space, Modal, Card, Row, Col, Input, Alert, Spin, For
 import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from 'react-router-dom';
-import { QrcodeOutlined, ScanOutlined, ClockCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, DeleteOutlined, WarningOutlined, PlusOutlined, MinusOutlined } from '@ant-design/icons';
+import { QrcodeOutlined, ScanOutlined, ClockCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, DeleteOutlined, WarningOutlined, PlusOutlined, MinusOutlined, RollbackOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
@@ -1308,7 +1308,10 @@ const ReportingPage: React.FC = () => {
                   approve: (id) => reportingApi.approve(id.toString(), {}),
                   reject: (id, reason) => reportingApi.approve(id.toString(), {}, { rejection_reason: reason || undefined }),
                 }}
-                onSuccess={() => actionRef.current?.reload()}
+                onSuccess={() => {
+                  actionRef.current?.reload();
+                  invalidateStatistics();
+                }}
                 theme="link"
                 size="small"
               />
@@ -1319,10 +1322,55 @@ const ReportingPage: React.FC = () => {
               >
                 修正
               </Button>
+              <Button
+                type="link"
+                size="small"
+                danger
+                onClick={() => {
+                  Modal.confirm({
+                    title: '确认删除',
+                    content: '确定要删除这条待审核的报工记录吗？删除后将扣减工单/工序相应的完成数量。',
+                    onOk: async () => {
+                      try {
+                        await reportingApi.delete(record.id.toString());
+                        messageApi.success('删除成功');
+                        actionRef.current?.reload();
+                        invalidateStatistics();
+                      } catch (error: any) {
+                        messageApi.error(error.message || '删除失败');
+                      }
+                    },
+                  });
+                }}
+              >
+                删除
+              </Button>
             </>
           )}
           {record.status === 'approved' && (
             <>
+              <Button
+                type="link"
+                size="small"
+                onClick={async () => {
+                  Modal.confirm({
+                    title: '确认撤回审核',
+                    content: '撤回审核后，该报工记录将变为"待审核"状态，且不再计入工单已完成数量。确定要撤回吗？',
+                    onOk: async () => {
+                      try {
+                        await reportingApi.revoke(record.id.toString());
+                        messageApi.success('已撤回审核');
+                        actionRef.current?.reload();
+                        invalidateStatistics();
+                      } catch (error: any) {
+                        messageApi.error(error.message || '撤回失败');
+                      }
+                    },
+                  });
+                }}
+              >
+                撤回审核
+              </Button>
               {(record.unqualified_quantity || 0) > 0 && (
                 <>
                   <Button
@@ -1353,6 +1401,31 @@ const ReportingPage: React.FC = () => {
                 修正
               </Button>
             </>
+          )}
+          {record.status === 'rejected' && (
+            <Button
+              type="link"
+              size="small"
+              danger
+              onClick={() => {
+                Modal.confirm({
+                  title: '确认删除',
+                  content: '确定要删除这条被驳回的报工记录吗？',
+                  onOk: async () => {
+                    try {
+                      await reportingApi.delete(record.id.toString());
+                      messageApi.success('删除成功');
+                      actionRef.current?.reload();
+                      invalidateStatistics();
+                    } catch (error: any) {
+                      messageApi.error(error.message || '删除失败');
+                    }
+                  },
+                });
+              }}
+            >
+              删除
+            </Button>
           )}
         </Space>
       ),
@@ -1539,7 +1612,36 @@ const ReportingPage: React.FC = () => {
             },
           });
         }}
-        toolBarRender={() => [
+        toolBarRender={(_, { selectedRowKeys }) => [
+          selectedRowKeys && selectedRowKeys.length > 0 && (
+            <Button
+              key="batch-revoke"
+              icon={<RollbackOutlined />}
+              onClick={() => {
+                Modal.confirm({
+                  title: '确认批量撤回审核',
+                  content: `确定要撤回选中的 ${selectedRowKeys.length} 条报工记录的审核吗？只有"已审核"状态的记录会被执行。`,
+                  onOk: async () => {
+                    try {
+                      const res = await reportingApi.batchRevoke(selectedRowKeys.map(String));
+                      if (res.success > 0) {
+                        messageApi.success(`成功撤回 ${res.success} 条记录审核`);
+                      }
+                      if (res.failed > 0) {
+                        messageApi.warning(`${res.failed} 条记录操作失败`);
+                      }
+                      actionRef.current?.reload();
+                      invalidateStatistics();
+                    } catch (error: any) {
+                      messageApi.error(error.message || '批量撤回失败');
+                    }
+                  },
+                });
+              }}
+            >
+              批量撤回审核
+            </Button>
+          ),
           <Button
             key="scan"
             icon={<ScanOutlined />}

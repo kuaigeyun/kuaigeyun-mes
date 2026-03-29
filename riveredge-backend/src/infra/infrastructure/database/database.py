@@ -221,6 +221,11 @@ TORTOISE_ORM = {
                 "apps.kuaicaiwu.models.receivable",  # 应收账款模型
                 "apps.kuaicaiwu.models.purchase_invoice",  # 采购发票模型
                 "apps.kuaicaiwu.models.invoice",  # 销项/进项发票模型（从快制造迁移）
+                "apps.kuaicaiwu.models.receipt",  # 收款单
+                "apps.kuaicaiwu.models.payment",  # 付款单
+                "apps.kuaicaiwu.models.settlement",  # 核销单
+                "apps.kuaicaiwu.models.partner_statement",  # 往来对账单
+                "apps.kuaicaiwu.models.standard_cost",  # 标准成本
                 "apps.kuaizhizao.models.sales_forecast",  # 销售预测模型
                 "apps.kuaizhizao.models.sales_forecast_item",  # 销售预测明细模型
                 "apps.kuaizhizao.models.sales_order",  # 销售订单模型

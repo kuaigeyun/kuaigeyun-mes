@@ -20,7 +20,7 @@ class ReportService(AppBaseService[Report]):
         """获取系统预置报表列表"""
         qs = self.model.filter(
             tenant_id=tenant_id,
-            category=ReportCategory.SYSTEM,
+            category=ReportCategory.SYSTEM.value,
             is_system=True,
         )
         total = await qs.count()
@@ -33,7 +33,7 @@ class ReportService(AppBaseService[Report]):
         """获取当前用户的自制报表列表"""
         qs = self.model.filter(
             tenant_id=tenant_id,
-            category=ReportCategory.CUSTOM,
+            category=ReportCategory.CUSTOM.value,
             owner_id=user_id,
         )
         total = await qs.count()
@@ -59,7 +59,7 @@ class ReportService(AppBaseService[Report]):
         if payload.get("report_config"):
             payload["report_config"] = payload["report_config"]
         # 自制报表自动设置 owner
-        if payload.get("category") == ReportCategory.CUSTOM:
+        if payload.get("category") == ReportCategory.CUSTOM.value:
             payload["owner_id"] = created_by
         return await self.create_with_user(tenant_id, created_by, **payload)
 

@@ -66,58 +66,28 @@ class SavedSearchServiceImpl(SavedSearchServiceInterface):
             tenant_id=tenant_id
         )
     
-    async def create_saved_search(self, data: Any, user_id: int = None, tenant_id: Optional[int] = None) -> Any:
+    async def create_saved_search(self, data: Any, user_id: int, tenant_id: Optional[int] = None) -> Any:
         """创建保存的搜索条件"""
-        # SavedSearchService.create_saved_search需要user_id和tenant_id参数
-        # 如果方法参数中没有提供，尝试从data中获取
-        if user_id is None:
-            user_id = getattr(data, 'user_id', None)
-        if tenant_id is None:
-            tenant_id = getattr(data, 'tenant_id', None)
-        
-        if not user_id:
-            # 如果仍然没有user_id，抛出错误
-            raise ValueError("user_id is required")
-        
         return await self._saved_search_service.create_saved_search(
             data=data,
             user_id=user_id,
             tenant_id=tenant_id
         )
     
-    async def get_saved_search_by_uuid(self, uuid: str) -> Optional[Any]:
+    async def get_saved_search_by_uuid(self, uuid: str, user_id: int) -> Optional[Any]:
         """根据UUID获取保存的搜索条件"""
-        # SavedSearchService.get_saved_search_by_uuid需要user_id参数
-        # 这里需要从上下文获取user_id，实际使用时需要从依赖注入获取
-        user_id = None  # 需要从上下文获取
-        if user_id:
-            return await self._saved_search_service.get_saved_search_by_uuid(uuid, user_id)
-        return None
+        return await self._saved_search_service.get_saved_search_by_uuid(uuid, user_id)
     
     async def update_saved_search(
         self,
         uuid: str,
         data: Any,
-        user_id: int = None
+        user_id: int
     ) -> Optional[Any]:
         """更新保存的搜索条件"""
-        # SavedSearchService.update_saved_search需要user_id参数
-        # 如果方法参数中没有提供，尝试从data中获取
-        if user_id is None:
-            user_id = getattr(data, 'user_id', None)
-        
-        if not user_id:
-            # 如果仍然没有user_id，抛出错误
-            raise ValueError("user_id is required")
-        
         return await self._saved_search_service.update_saved_search(uuid, data, user_id)
     
-    async def delete_saved_search(self, uuid: str) -> bool:
+    async def delete_saved_search(self, uuid: str, user_id: int) -> bool:
         """删除保存的搜索条件"""
-        # SavedSearchService.delete_saved_search需要user_id参数
-        # 这里需要从上下文获取user_id，实际使用时需要从依赖注入获取
-        user_id = None  # 需要从上下文获取
-        if user_id:
-            return await self._saved_search_service.delete_saved_search(uuid, user_id)
-        return False
+        return await self._saved_search_service.delete_saved_search(uuid, user_id)
 

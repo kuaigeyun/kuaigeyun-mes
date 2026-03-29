@@ -255,6 +255,11 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.purchase_invoice",
                 f"apps.{module_code}.models.receivable",
                 f"apps.{module_code}.models.invoice",  # 销项/进项发票（从快制造迁移至快财务）
+                f"apps.{module_code}.models.receipt",  # 收款单
+                f"apps.{module_code}.models.payment",  # 付款单
+                f"apps.{module_code}.models.settlement",  # 核销单
+                f"apps.{module_code}.models.partner_statement",  # 往来对账单
+                f"apps.{module_code}.models.standard_cost",  # 标准成本
                 # 销售管理模块
                 f"apps.{module_code}.models.sales_forecast",
                 f"apps.{module_code}.models.sales_forecast_item",
@@ -449,6 +454,11 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.purchase_invoice",
                 f"apps.{module_code}.models.receivable",
                 f"apps.{module_code}.models.invoice",  # 销项/进项发票（从快制造迁移至快财务）
+                f"apps.{module_code}.models.receipt",  # 收款单
+                f"apps.{module_code}.models.payment",  # 付款单
+                f"apps.{module_code}.models.settlement",  # 核销单
+                f"apps.{module_code}.models.partner_statement",  # 往来对账单
+                f"apps.{module_code}.models.standard_cost",  # 标准成本
                 # 销售管理模块
                 f"apps.{module_code}.models.sales_forecast",
                 f"apps.{module_code}.models.sales_forecast_item",

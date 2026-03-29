@@ -2799,7 +2799,7 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
               gap: 0, 
               marginLeft: 8,
               borderRadius: token.borderRadius,
-              border: `1px solid ${token.colorBorderSecondary}`,
+              border: `1px solid ${token.colorBorder}`,
               overflow: 'hidden',
               backgroundColor: token.colorBgContainer,
               height: '32px', // 与高级搜索按钮高度一致

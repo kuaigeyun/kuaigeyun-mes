@@ -12,9 +12,12 @@ import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
+import { ModalForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
+import dayjs from 'dayjs';
 
 const PurchaseInvoiceList: React.FC = () => {
     const actionRef = useRef<ActionType>();
+    const [createModalVisible, setCreateModalVisible] = useState(false);
     const [supplierOptions, setSupplierOptions] = useState<{ label: string; value: number }[]>([]);
     const { message: messageApi } = App.useApp();
     const navigate = useNavigate();
@@ -34,6 +37,39 @@ const PurchaseInvoiceList: React.FC = () => {
         };
         load();
     }, []);
+ 
+    const handleRegister = async (values: any) => {
+        try {
+            const invoiceAmount = Number(values.invoice_amount) || 0;
+            const taxRate = Number(values.tax_rate) || 13;
+            const taxAmount = Number((invoiceAmount * taxRate / 100).toFixed(2));
+            const totalAmount = Number((invoiceAmount + taxAmount).toFixed(2));
+            
+            const data: any = {
+                supplier_id: values.supplier_id,
+                supplier_name: supplierOptions.find(o => o.value === values.supplier_id)?.label || '',
+                invoice_number: values.invoice_number,
+                invoice_date: values.invoice_date?.format ? values.invoice_date.format('YYYY-MM-DD') : (values.invoice_date || dayjs().format('YYYY-MM-DD')),
+                invoice_type: values.invoice_type || '增值税专用发票',
+                tax_rate: taxRate,
+                invoice_amount: invoiceAmount,
+                tax_amount: taxAmount,
+                total_amount: totalAmount,
+                notes: values.notes,
+                status: '未审核',
+                review_status: '待审核',
+            };
+
+            await purchaseInvoiceService.create(data);
+            messageApi.success('采购发票登记成功');
+            setCreateModalVisible(false);
+            actionRef.current?.reload();
+            return true;
+        } catch (error: any) {
+            messageApi.error(error?.message || '登记失败');
+            return false;
+        }
+    };
 
     const columns: ProColumns<PurchaseInvoice>[] = [
         {
@@ -147,7 +183,65 @@ const PurchaseInvoiceList: React.FC = () => {
                     }
                 }}
                 rowKey="id"
+                showCreateButton
+                createButtonText="登记发票"
+                onCreate={() => setCreateModalVisible(true)}
             />
+
+            <ModalForm
+                title="手动登记采购发票"
+                open={createModalVisible}
+                onOpenChange={setCreateModalVisible}
+                onFinish={handleRegister}
+                width={520}
+            >
+                <div style={{ marginBottom: 16 }}>
+                    <p style={{ color: '#8c8c8c', fontSize: '13px' }}>提示：如果是从采购订单转发票，请在采购订单页面点击“下推发票”。此操作用于直接登记收到的进项发票。</p>
+                </div>
+                <ProFormSelect
+                    name="supplier_id"
+                    label="供应商"
+                    options={supplierOptions}
+                    rules={[{ required: true, message: '请选择供应商' }]}
+                    placeholder="请选择供应商"
+                    showSearch
+                />
+                <ProFormText
+                    name="invoice_number"
+                    label="发票号码"
+                    rules={[{ required: true, message: '请输入发票号码' }]}
+                    placeholder="请输入票面号码"
+                />
+                <ProFormSelect
+                    name="invoice_type"
+                    label="发票类型"
+                    options={[
+                        { label: '增值税专用发票', value: '增值税专用发票' },
+                        { label: '增值税普通发票', value: '增值税普通发票' },
+                        { label: '其他', value: '其他' },
+                    ]}
+                    initialValue="增值税专用发票"
+                    rules={[{ required: true }]}
+                />
+                <ProFormDatePicker name="invoice_date" label="开票日期" rules={[{ required: true }]} initialValue={dayjs()} fieldProps={{ style: { width: '100%' } }} />
+                <ProFormDigit
+                    name="tax_rate"
+                    label="税率(%)"
+                    initialValue={13}
+                    min={0}
+                    max={100}
+                    rules={[{ required: true }]}
+                    fieldProps={{ style: { width: '100%' } }}
+                />
+                <ProFormDigit
+                    name="invoice_amount"
+                    label="不含税金额"
+                    min={0}
+                    rules={[{ required: true, message: '请输入不含税金额' }]}
+                    fieldProps={{ precision: 2, style: { width: '100%' } }}
+                />
+                <ProFormTextArea name="notes" label="备注" />
+            </ModalForm>
         </ListPageTemplate>
     );
 };

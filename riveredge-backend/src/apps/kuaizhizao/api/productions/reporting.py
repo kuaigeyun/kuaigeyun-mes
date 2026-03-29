@@ -6,7 +6,7 @@
 
 from datetime import datetime
 from typing import List, Optional
-from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTPException
+from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTPException, Body
 from fastapi.responses import JSONResponse
 
 from core.api.deps import get_current_user, get_current_tenant
@@ -259,6 +259,42 @@ async def approve_reporting_record(
         record_id=record_id,
         approved_by=current_user.id,
         rejection_reason=rejection_reason
+    )
+
+
+@router.post("/reporting/{record_id}/revoke", response_model=ReportingRecordResponse, summary="撤销审核报工记录")
+async def revoke_reporting_approval(
+    record_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ReportingRecordResponse:
+    """
+    撤销审核报工记录
+
+    - **record_id**: 报工记录ID
+    """
+    return await reporting_service.revoke_reporting_approval(
+        tenant_id=tenant_id,
+        record_id=record_id,
+        revoked_by=current_user.id
+    )
+
+
+@router.post("/reporting/batch-revoke", summary="批量撤回报工记录审核")
+async def batch_revoke_reporting_approval(
+    record_ids: list[int] = Body(..., embed=True),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> dict:
+    """
+    批量撤回报工记录审核
+
+    - **record_ids**: 报工记录ID列表
+    """
+    return await reporting_service.batch_revoke_reporting_approval(
+        tenant_id=tenant_id,
+        record_ids=record_ids,
+        revoked_by=current_user.id
     )
 
 

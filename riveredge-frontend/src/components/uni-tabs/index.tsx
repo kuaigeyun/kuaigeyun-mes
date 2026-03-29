@@ -635,6 +635,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       },
       {
         type: 'divider',
+        style: { height: 1, backgroundColor: 'rgba(0, 0, 0, 0.04)', margin: '4px 0' },
       },
       {
         key: 'pin',
@@ -643,6 +644,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       },
       {
         type: 'divider',
+        style: { height: 1, backgroundColor: 'rgba(0, 0, 0, 0.04)', margin: '4px 0' },
       },
       {
         key: 'close',
