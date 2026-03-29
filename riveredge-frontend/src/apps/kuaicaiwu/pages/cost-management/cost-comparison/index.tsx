@@ -15,6 +15,13 @@ import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../.
 import { costComparisonApi } from '../../../services/cost';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
+import {
+  loadWorkOrderSelectOptions,
+  loadOutsourceWorkOrderSelectOptions,
+  loadPurchaseOrderSelectOptions,
+  loadPurchaseOrderItemSelectOptions,
+  type CostSelectOption,
+} from '../costSelectData';
 
 interface CostComparisonResult {
   material_id: number;
@@ -52,6 +59,12 @@ const CostComparisonPage: React.FC = () => {
   const [result, setResult] = useState<CostComparisonResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [materials, setMaterials] = useState<any[]>([]);
+  const [costReferenceOptions, setCostReferenceOptions] = useState<{
+    workOrders: CostSelectOption[];
+    outsourceWorkOrders: CostSelectOption[];
+    purchaseOrders: CostSelectOption[];
+    purchaseOrderItems: CostSelectOption[];
+  }>({ workOrders: [], outsourceWorkOrders: [], purchaseOrders: [], purchaseOrderItems: [] });
 
   /**
    * 加载物料列表
@@ -66,6 +79,33 @@ const CostComparisonPage: React.FC = () => {
       }
     };
     loadMaterials();
+  }, []);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [wo, owo, po, poi] = await Promise.all([
+          loadWorkOrderSelectOptions(400),
+          loadOutsourceWorkOrderSelectOptions(400),
+          loadPurchaseOrderSelectOptions(200),
+          loadPurchaseOrderItemSelectOptions(32),
+        ]);
+        if (!cancelled) {
+          setCostReferenceOptions({
+            workOrders: wo,
+            outsourceWorkOrders: owo,
+            purchaseOrders: po,
+            purchaseOrderItems: poi,
+          });
+        }
+      } catch (e) {
+        console.error('加载工单/采购/委外下拉失败:', e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   /**
@@ -287,36 +327,56 @@ const CostComparisonPage: React.FC = () => {
             style: { width: '100%' },
           }}
         />
-        <ProFormDigit
+        <ProFormSelect
           name="work_order_id"
-          label="工单ID（自制件/配置件实际成本）"
-          placeholder="请输入工单ID（可选，用于计算实际成本）"
+          label="工单（自制件/配置件实际成本）"
+          placeholder="可选"
+          allowClear
+          options={costReferenceOptions.workOrders}
+          showSearch
           fieldProps={{
-            style: { width: '100%' },
+            optionFilterProp: 'label',
+            filterOption: (input: string, option: any) =>
+              String(option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
           }}
         />
-        <ProFormDigit
+        <ProFormSelect
           name="purchase_order_id"
-          label="采购订单ID（采购件实际成本-整单）"
-          placeholder="请输入采购订单ID（可选）"
+          label="采购订单（采购件实际成本-整单）"
+          placeholder="可选"
+          allowClear
+          options={costReferenceOptions.purchaseOrders}
+          showSearch
           fieldProps={{
-            style: { width: '100%' },
+            optionFilterProp: 'label',
+            filterOption: (input: string, option: any) =>
+              String(option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
           }}
         />
-        <ProFormDigit
+        <ProFormSelect
           name="purchase_order_item_id"
-          label="采购订单明细ID（采购件实际成本-明细）"
-          placeholder="请输入采购订单明细ID（可选）"
+          label="采购订单明细（采购件实际成本-明细）"
+          placeholder="可选"
+          allowClear
+          options={costReferenceOptions.purchaseOrderItems}
+          showSearch
           fieldProps={{
-            style: { width: '100%' },
+            optionFilterProp: 'label',
+            filterOption: (input: string, option: any) =>
+              String(option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
           }}
         />
-        <ProFormDigit
+        <ProFormSelect
           name="outsource_work_order_id"
-          label="委外工单ID（委外件实际成本）"
-          placeholder="请输入委外工单ID（可选）"
+          label="委外工单（委外件实际成本）"
+          placeholder="可选"
+          allowClear
+          options={costReferenceOptions.outsourceWorkOrders}
+          showSearch
           fieldProps={{
-            style: { width: '100%' },
+            optionFilterProp: 'label',
+            filterOption: (input: string, option: any) =>
+              String(option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
           }}
         />
         <ProFormDatePicker

@@ -14,6 +14,7 @@ from typing import List, Optional, Dict, Any
 from decimal import Decimal
 from tortoise.transactions import in_transaction
 from tortoise.queryset import Q
+from tortoise.exceptions import IntegrityError
 
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
@@ -148,53 +149,75 @@ class CostRuleService(AppBaseService[CostRule]):
 
     async def init_preset_rules(self, tenant_id: int, created_by: int):
         """初始化中小制造企业常用成本核算规则（最佳实践）"""
+        logger.debug("init_preset_rules tenant_id={} created_by={}", tenant_id, created_by)
         presets = [
             {
                 "code": "RULE_VARIETY_001",
                 "name": "标准品种法-材料/人工/全费用",
                 "rule_type": "材料成本",
-                "allocation_basis": "数量",
+                "cost_type": "直接材料",
+                "calculation_method": "按数量",
+                "allocation_basis": "产量",
                 "wip_valuation_method": "约当产量法",
-                "source_module": "生产领料",
+                "source_module": "仓库",
                 "is_active": True,
-                "description": "适用于产品品种较少，且每个品种大批量生产的企业"
+                "description": "适用于产品品种较少，且每个品种大批量生产的企业",
             },
             {
                 "code": "RULE_JOB_ORDER_002",
                 "name": "工单订单法-按单核算",
                 "rule_type": "人工成本",
+                "cost_type": "直接人工",
+                "calculation_method": "按工时",
                 "allocation_basis": "工时",
-                "wip_valuation_method": "不计算在产品",
-                "source_module": "生产报工",
+                "wip_valuation_method": "不计算",
+                "source_module": "报工",
                 "is_active": True,
-                "description": "适用于单件小批生产，如模具、特种设备制造"
+                "description": "适用于单件小批生产，如模具、特种设备制造",
             },
             {
                 "code": "RULE_OVERHEAD_003",
                 "name": "制造费用-机器工时分摊",
                 "rule_type": "制造费用",
+                "cost_type": "制造费用",
+                "calculation_method": "按工时",
                 "allocation_basis": "机器工时",
                 "wip_valuation_method": "约当产量法",
-                "source_module": "设备监控",
+                "source_module": "报工",
                 "is_active": True,
-                "description": "适用于自动化程度高，机器成本占比较大的车间"
-            }
+                "description": "适用于自动化程度高，机器成本占比较大的车间",
+            },
         ]
-        
-        user_info = await self.get_user_info(created_by)
+
         for p in presets:
-            await CostRule.get_or_create(
+            code = p["code"]
+            exists = await CostRule.filter(
                 tenant_id=tenant_id,
-                code=p["code"],
-                defaults={
-                    **p,
-                    "uuid": str(uuid.uuid4()),
-                    "created_by": created_by,
-                    "updated_by": created_by,
-                    "created_by_name": user_info["name"],
-                    "updated_by_name": user_info["name"]
-                }
-            )
+                code=code,
+                deleted_at__isnull=True,
+            ).first()
+            if exists:
+                continue
+            try:
+                await CostRule.create(
+                    tenant_id=tenant_id,
+                    uuid=str(uuid.uuid4()),
+                    code=code,
+                    name=p["name"],
+                    rule_type=p["rule_type"],
+                    cost_type=p["cost_type"],
+                    calculation_method=p["calculation_method"],
+                    allocation_basis=p.get("allocation_basis"),
+                    wip_valuation_method=p.get("wip_valuation_method"),
+                    source_module=p.get("source_module"),
+                    calculation_formula=None,
+                    rule_parameters=None,
+                    is_active=p.get("is_active", True),
+                    description=p.get("description"),
+                )
+            except IntegrityError:
+                # 并发插入或历史软删记录仍占唯一键时，视为已存在
+                pass
 
 
 class CostCalculationService(AppBaseService[CostCalculation]):

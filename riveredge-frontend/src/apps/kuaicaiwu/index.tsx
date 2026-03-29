@@ -8,7 +8,7 @@
  */
 
 import React, { Suspense, lazy } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import PageSkeleton from '../../components/page-skeleton';
 
 const withPageSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
@@ -35,7 +35,6 @@ const CostDetailsPage = lazy(() => import('./pages/cost-management/cost-details'
 const CostComparisonPage = lazy(() => import('./pages/cost-management/cost-comparison'));
 const CostOptimizationPage = lazy(() => import('./pages/cost-management/cost-optimization'));
 const CostReportPage = lazy(() => import('./pages/cost-management/cost-report'));
-const CostCalculationTabsPage = lazy(() => import('./pages/cost-management/cost-calculation-tabs'));
 const MonthlySettlementPage = lazy(() => import('./pages/cost-management/monthly-settlement'));
 
 // 管理报表
@@ -66,10 +65,22 @@ const KuaicaiwuApp: React.FC = () => {
       <Route path="cost-management/cost-comparison" element={withPageSuspense(CostComparisonPage)} />
       <Route path="cost-management/cost-optimization" element={withPageSuspense(CostOptimizationPage)} />
       <Route path="cost-management/cost-report" element={withPageSuspense(CostReportPage)} />
-      <Route path="cost-management/production-cost" element={withPageSuspense(CostCalculationTabsPage)} />
-      <Route path="cost-management/outsource-cost" element={withPageSuspense(CostCalculationTabsPage)} />
-      <Route path="cost-management/purchase-cost" element={withPageSuspense(CostCalculationTabsPage)} />
-      <Route path="cost-management/quality-cost" element={withPageSuspense(CostCalculationTabsPage)} />
+      <Route
+        path="cost-management/production-cost"
+        element={<Navigate to="/apps/kuaicaiwu/cost-management/cost-calculations?cat=trial&sub=production" replace />}
+      />
+      <Route
+        path="cost-management/outsource-cost"
+        element={<Navigate to="/apps/kuaicaiwu/cost-management/cost-calculations?tab=outsource" replace />}
+      />
+      <Route
+        path="cost-management/purchase-cost"
+        element={<Navigate to="/apps/kuaicaiwu/cost-management/cost-calculations?cat=trial&sub=purchase" replace />}
+      />
+      <Route
+        path="cost-management/quality-cost"
+        element={<Navigate to="/apps/kuaicaiwu/cost-management/cost-calculations?cat=trial&sub=quality" replace />}
+      />
       <Route path="cost-management/monthly-settlement" element={withPageSuspense(MonthlySettlementPage)} />
       <Route path="management-dashboard" element={withPageSuspense(ManagementDashboard)} />
 

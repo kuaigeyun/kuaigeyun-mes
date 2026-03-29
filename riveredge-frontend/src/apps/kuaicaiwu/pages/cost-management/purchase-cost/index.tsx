@@ -15,6 +15,11 @@ import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../.
 import { purchaseCostApi } from '../../../services/cost';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
+import {
+  loadPurchaseOrderSelectOptions,
+  loadPurchaseOrderItemSelectOptions,
+  type CostSelectOption,
+} from '../costSelectData';
 
 interface PurchaseCostResult {
   material_id: number;
@@ -36,7 +41,11 @@ interface PurchaseCostResult {
   supplier_name?: string;
 }
 
-const PurchaseCostPage: React.FC = () => {
+export interface PurchaseCostPageProps {
+  embedded?: boolean;
+}
+
+const PurchaseCostPage: React.FC<PurchaseCostPageProps> = ({ embedded = false }) => {
   const { message: messageApi } = App.useApp();
   const formRef = useRef<any>(null);
 
@@ -44,6 +53,8 @@ const PurchaseCostPage: React.FC = () => {
   const [result, setResult] = useState<PurchaseCostResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [materials, setMaterials] = useState<any[]>([]);
+  const [purchaseOrderOptions, setPurchaseOrderOptions] = useState<CostSelectOption[]>([]);
+  const [purchaseOrderItemOptions, setPurchaseOrderItemOptions] = useState<CostSelectOption[]>([]);
   const [calculationMode, setCalculationMode] = useState<'standard' | 'actual-item' | 'actual-order'>('standard');
 
   /**
@@ -59,6 +70,27 @@ const PurchaseCostPage: React.FC = () => {
       }
     };
     loadMaterials();
+  }, []);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [po, poi] = await Promise.all([
+          loadPurchaseOrderSelectOptions(200),
+          loadPurchaseOrderItemSelectOptions(32),
+        ]);
+        if (!cancelled) {
+          setPurchaseOrderOptions(po);
+          setPurchaseOrderItemOptions(poi);
+        }
+      } catch (e) {
+        console.error('加载采购订单下拉失败:', e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   /**
@@ -106,7 +138,8 @@ const PurchaseCostPage: React.FC = () => {
 
   return (
     <PageContainer
-      title="采购件成本核算"
+      ghost={embedded}
+      title={embedded ? false : '采购件成本核算'}
       extra={[
         <Button
           key="calculate-standard"
@@ -231,23 +264,31 @@ const PurchaseCostPage: React.FC = () => {
             />
           </>
         ) : calculationMode === 'actual-item' ? (
-          <ProFormDigit
+          <ProFormSelect
             name="purchase_order_item_id"
-            label="采购订单明细ID"
-            placeholder="请输入采购订单明细ID"
-            rules={[{ required: true, message: '请输入采购订单明细ID' }]}
+            label="采购订单明细"
+            placeholder="请选择采购订单明细"
+            rules={[{ required: true, message: '请选择采购订单明细' }]}
+            options={purchaseOrderItemOptions}
+            showSearch
             fieldProps={{
-              style: { width: '100%' },
+              optionFilterProp: 'label',
+              filterOption: (input: string, option: any) =>
+                String(option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
             }}
           />
         ) : (
-          <ProFormDigit
+          <ProFormSelect
             name="purchase_order_id"
-            label="采购订单ID"
-            placeholder="请输入采购订单ID"
-            rules={[{ required: true, message: '请输入采购订单ID' }]}
+            label="采购订单"
+            placeholder="请选择采购订单"
+            rules={[{ required: true, message: '请选择采购订单' }]}
+            options={purchaseOrderOptions}
+            showSearch
             fieldProps={{
-              style: { width: '100%' },
+              optionFilterProp: 'label',
+              filterOption: (input: string, option: any) =>
+                String(option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
             }}
           />
         )}

@@ -33,11 +33,8 @@
         "sort_order": 2,
         "children": [
           {"title": "app.kuaicaiwu.menu.cost-management.cost-calculations", "path": "/apps/kuaicaiwu/cost-management/cost-calculations", "sort_order": 1},
-          {"title": "app.kuaicaiwu.menu.cost-management.cost-comparison", "path": "/apps/kuaicaiwu/cost-management/cost-comparison", "sort_order": 2},
-          {"title": "app.kuaicaiwu.menu.cost-management.cost-rules", "path": "/apps/kuaicaiwu/cost-management/cost-rules", "sort_order": 3},
-          {"title": "app.kuaicaiwu.menu.cost-management.cost-details", "path": "/apps/kuaicaiwu/cost-management/cost-details", "sort_order": 4},
-          {"title": "app.kuaicaiwu.menu.cost-management.cost-optimization", "path": "/apps/kuaicaiwu/cost-management/cost-optimization", "sort_order": 5},
-          {"title": "app.kuaicaiwu.menu.cost-management.cost-report", "path": "/apps/kuaicaiwu/cost-management/cost-report", "sort_order": 6}
+          {"title": "app.kuaicaiwu.menu.cost-management.cost-rules", "path": "/apps/kuaicaiwu/cost-management/cost-rules", "sort_order": 2},
+          {"title": "app.kuaicaiwu.menu.cost-management.cost-report", "path": "/apps/kuaicaiwu/cost-management/cost-report", "sort_order": 3}
         ]
       }
     ]

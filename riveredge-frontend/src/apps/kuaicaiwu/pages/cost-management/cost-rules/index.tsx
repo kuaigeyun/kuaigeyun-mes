@@ -357,31 +357,22 @@ const CostRulePage: React.FC = () => {
     },
   ];
 
+  const ruleToolbarActions = (
+    <Space wrap size="middle">
+      <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+        新建规则
+      </Button>
+      <Button type="primary" ghost onClick={handleInitPresets}>
+        初始化推荐规则
+      </Button>
+    </Space>
+  );
+
   return (
-    <ListPageTemplate
-      toolbarExtra={
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: 16 }}>
-          <Space>
-            <Button 
-              type="primary" 
-              icon={<PlusOutlined />} 
-              onClick={handleCreate}
-            >
-              新建规则
-            </Button>
-            <Button 
-              type="primary" 
-              ghost 
-              onClick={handleInitPresets}
-            >
-              初始化推件规则
-            </Button>
-          </Space>
-        </div>
-      }
-    >
+    <ListPageTemplate>
       <UniTable<CostRule>
         actionRef={actionRef}
+        headerActions={ruleToolbarActions}
         request={async (params: any) => {
           // 将 ProTable 的分页参数转换为后端期望的格式
           const queryParams: any = {

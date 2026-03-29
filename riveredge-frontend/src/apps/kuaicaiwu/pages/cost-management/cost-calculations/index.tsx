@@ -1,21 +1,164 @@
 /**
- * 成本核算记录管理页面
+ * 成本核算页面
  *
- * 提供成本核算记录的查看、工单成本核算、产品成本核算、成本对比、成本分析等功能。
+ * 一级：核算台账 / 成本对比 / 成本分析 / 优化建议 / 分项试算；工单与产品核算从台账表格工具栏以弹窗执行。
+ * URL：?cat=ledger | compare | analyze | optimization | trial；兼容旧 ?cat=analysis（及 sub=compare|analyze）、?tab=compare|analyze；兼容 ?cat=exec&sub=work_order|product、?tab=work_order|product（打开对应弹窗）。
  *
  * Author: Luigi Lu
  * Date: 2026-01-05
  */
 
-import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDigit, ProFormDatePicker, ProFormTextArea, ProForm, ProFormInstance } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, message, Modal, Tabs, Card, Statistic, Row, Col } from 'antd';
+import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import {
+  ActionType,
+  ProColumns,
+  ProDescriptionsItemType,
+  ProFormSelect,
+  ProFormDigit,
+  ProFormDatePicker,
+  ProFormTextArea,
+  ProForm,
+} from '@ant-design/pro-components';
+import {
+  App,
+  Button,
+  Tag,
+  Space,
+  message,
+  Tabs,
+  Card,
+  Statistic,
+  Row,
+  Col,
+  Empty,
+  Modal,
+  Divider,
+  Alert,
+  Typography,
+} from 'antd';
 import { ProDescriptions } from '@ant-design/pro-components';
-import { EyeOutlined, CalculatorOutlined, BarChartOutlined, LineChartOutlined, BulbOutlined } from '@ant-design/icons';
+import {
+  EyeOutlined,
+  CalculatorOutlined,
+  BarChartOutlined,
+  LineChartOutlined,
+  ToolOutlined,
+  TeamOutlined,
+  ShoppingOutlined,
+  SafetyCertificateOutlined,
+  TableOutlined,
+  ExperimentOutlined,
+  BulbOutlined,
+} from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
-import { costCalculationApi } from '../../../services/cost';
+import {
+  ListPageTemplate,
+  DetailDrawerTemplate,
+  MultiTabListPageTemplate,
+  DRAWER_CONFIG,
+} from '../../../../../components/layout-templates';
+import { costCalculationApi, costComparisonApi } from '../../../services/cost';
+import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
+import {
+  loadWorkOrderSelectOptions,
+  loadOutsourceWorkOrderSelectOptions,
+  loadPurchaseOrderSelectOptions,
+  loadPurchaseOrderItemSelectOptions,
+  materialsToIdSelectOptions,
+  type CostSelectOption,
+} from '../costSelectData';
+import ProductionCostPage from '../production-cost';
+import OutsourceCostPage from '../outsource-cost';
+import PurchaseCostPage from '../purchase-cost';
+import QualityCostPage from '../quality-cost';
+import CostOptimizationPanel from '../CostOptimizationPanel';
+
+type TopCat = 'ledger' | 'compare' | 'analyze' | 'optimization' | 'trial';
+
+const TRIAL_SUBS = ['production', 'outsource', 'purchase', 'quality'] as const;
+
+type TrialSub = (typeof TRIAL_SUBS)[number];
+
+function parseLocation(sp: URLSearchParams): { cat: TopCat; sub: string } {
+  const cat = sp.get('cat');
+  const sub = sp.get('sub') || '';
+  const tab = sp.get('tab');
+
+  if (cat === 'trial' && TRIAL_SUBS.includes(sub as TrialSub)) {
+    return { cat: 'trial', sub };
+  }
+  if (tab === 'collection' && TRIAL_SUBS.includes(sub as TrialSub)) {
+    return { cat: 'trial', sub };
+  }
+  if (tab && TRIAL_SUBS.includes(tab as TrialSub)) {
+    return { cat: 'trial', sub: tab };
+  }
+
+  if (cat === 'compare') {
+    return { cat: 'compare', sub: '' };
+  }
+  if (cat === 'analyze') {
+    return { cat: 'analyze', sub: '' };
+  }
+  if (cat === 'optimization') {
+    return { cat: 'optimization', sub: '' };
+  }
+  if (tab === 'optimization') {
+    return { cat: 'optimization', sub: '' };
+  }
+  /* 兼容旧 URL：一级「差异与分析」及 sub */
+  if (cat === 'analysis') {
+    if (sub === 'analyze') return { cat: 'analyze', sub: '' };
+    return { cat: 'compare', sub: '' };
+  }
+  if (tab === 'compare') {
+    return { cat: 'compare', sub: '' };
+  }
+  if (tab === 'analyze') {
+    return { cat: 'analyze', sub: '' };
+  }
+
+  if (cat === 'ledger') {
+    return { cat: 'ledger', sub: '' };
+  }
+  if (tab === 'ledger') {
+    return { cat: 'ledger', sub: '' };
+  }
+
+  /* 原「核算执行」一级 Tab 已并入台账工具栏；URL 仍兼容，归一为台账 */
+  if (cat === 'exec') {
+    return { cat: 'ledger', sub: '' };
+  }
+  if (tab === 'work_order' || tab === 'product') {
+    return { cat: 'ledger', sub: '' };
+  }
+
+  return { cat: 'ledger', sub: '' };
+}
+
+/** 从 query 解析是否应打开工单/产品核算弹窗（与 parseLocation 分离，避免丢意图） */
+function parseExecModalIntent(sp: URLSearchParams): 'work_order' | 'product' | null {
+  const cat = sp.get('cat');
+  const sub = sp.get('sub') || '';
+  const tab = sp.get('tab');
+  if (cat === 'exec') {
+    if (sub === 'work_order') return 'work_order';
+    if (sub === 'product') return 'product';
+  }
+  if (tab === 'work_order') return 'work_order';
+  if (tab === 'product') return 'product';
+  return null;
+}
+
+function defaultSubForCat(cat: TopCat, currentSub: string): string {
+  if (cat === 'ledger' || cat === 'compare' || cat === 'analyze' || cat === 'optimization') return '';
+  if (cat === 'trial') {
+    return TRIAL_SUBS.includes(currentSub as TrialSub) ? currentSub : 'production';
+  }
+  return '';
+}
 
 interface CostCalculation {
   id?: number;
@@ -46,31 +189,166 @@ interface CostCalculation {
   updated_by_name?: string;
 }
 
+/** 与独立「成本对比」页 costComparisonApi.compare 返回结构一致 */
+interface MaterialCostComparisonResult {
+  material_id: number;
+  material_code: string;
+  material_name: string;
+  source_type: string;
+  quantity: number;
+  standard_cost: {
+    total_cost: number;
+    unit_cost: number;
+    cost_details: any;
+    calculation_type: string;
+  };
+  actual_cost: {
+    total_cost: number;
+    unit_cost: number;
+    cost_details: any;
+    calculation_type: string;
+  };
+  cost_variance: {
+    total_cost_variance: number;
+    total_cost_variance_rate: number;
+    unit_cost_variance: number;
+    unit_cost_variance_rate: number;
+    variance_type: string;
+  };
+  calculation_date: string;
+}
+
 const CostCalculationPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { cat: rawCat, sub: rawSub } = parseLocation(searchParams);
+  const cat = rawCat;
+  const sub = defaultSubForCat(cat, rawSub);
   const actionRef = useRef<ActionType>(null);
 
-  // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [costCalculationDetail, setCostCalculationDetail] = useState<CostCalculation | null>(null);
+  const [execModal, setExecModal] = useState<null | 'work_order' | 'product'>(null);
 
-  // Modal 相关状态（工单成本核算、产品成本核算、成本对比、成本分析）
-  const [workOrderModalVisible, setWorkOrderModalVisible] = useState(false);
-  const [productModalVisible, setProductModalVisible] = useState(false);
-  const [compareModalVisible, setCompareModalVisible] = useState(false);
-  const [analyzeModalVisible, setAnalyzeModalVisible] = useState(false);
-  const [optimizationModalVisible, setOptimizationModalVisible] = useState(false);
   const [compareData, setCompareData] = useState<any>(null);
+  const [materialCompareList, setMaterialCompareList] = useState<any[]>([]);
+  const [costReferenceOptions, setCostReferenceOptions] = useState<{
+    workOrders: CostSelectOption[];
+    outsourceWorkOrders: CostSelectOption[];
+    purchaseOrders: CostSelectOption[];
+    purchaseOrderItems: CostSelectOption[];
+  }>({ workOrders: [], outsourceWorkOrders: [], purchaseOrders: [], purchaseOrderItems: [] });
+  const [materialCompareResult, setMaterialCompareResult] = useState<MaterialCostComparisonResult | null>(null);
+  const [materialCompareLoading, setMaterialCompareLoading] = useState(false);
   const [analyzeData, setAnalyzeData] = useState<any>(null);
-  const [optimizationData, setOptimizationData] = useState<any>(null);
+  const [analyzeInnerTab, setAnalyzeInnerTab] = useState<string>('composition');
+
   const workOrderFormRef = useRef<any>(null);
   const productFormRef = useRef<any>(null);
   const compareFormRef = useRef<any>(null);
+  const materialCompareFormRef = useRef<any>(null);
   const analyzeFormRef = useRef<any>(null);
 
-  /**
-   * 处理查看详情
-   */
+  const setLedger = useCallback(() => {
+    setSearchParams({}, { replace: true });
+  }, [setSearchParams]);
+
+  const setCatWithSub = useCallback(
+    (nextCat: TopCat, nextSub?: string) => {
+      if (nextCat === 'ledger') {
+        setLedger();
+        return;
+      }
+      if (nextCat === 'compare' || nextCat === 'analyze' || nextCat === 'optimization') {
+        setSearchParams({ cat: nextCat }, { replace: true });
+        return;
+      }
+      const dSub = defaultSubForCat(nextCat, nextSub || '');
+      setSearchParams({ cat: nextCat, sub: dSub }, { replace: true });
+    },
+    [setSearchParams, setLedger]
+  );
+
+  const setInnerSubOnly = useCallback(
+    (nextSub: string) => {
+      setSearchParams({ cat, sub: nextSub }, { replace: true });
+    },
+    [setSearchParams, cat]
+  );
+
+  useEffect(() => {
+    const intent = parseExecModalIntent(searchParams);
+    if (!intent) return;
+    setExecModal(intent);
+    setLedger();
+  }, [searchParams, setLedger]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await materialApi.list({ limit: 1000, isActive: true });
+        if (!cancelled) setMaterialCompareList(list);
+      } catch (e) {
+        console.error('加载物料列表失败:', e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [wo, owo, po, poi] = await Promise.all([
+          loadWorkOrderSelectOptions(400),
+          loadOutsourceWorkOrderSelectOptions(400),
+          loadPurchaseOrderSelectOptions(200),
+          loadPurchaseOrderItemSelectOptions(32),
+        ]);
+        if (!cancelled) {
+          setCostReferenceOptions({
+            workOrders: wo,
+            outsourceWorkOrders: owo,
+            purchaseOrders: po,
+            purchaseOrderItems: poi,
+          });
+        }
+      } catch (e) {
+        console.error('加载工单/采购/委外下拉数据失败:', e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const productMaterialSelectOptions = useMemo(
+    () => materialsToIdSelectOptions(materialCompareList),
+    [materialCompareList]
+  );
+
+  useEffect(() => {
+    if (execModal !== 'work_order') return;
+    workOrderFormRef.current?.resetFields();
+    workOrderFormRef.current?.setFieldsValue({ calculation_date: dayjs() });
+  }, [execModal]);
+
+  useEffect(() => {
+    if (execModal !== 'product') return;
+    productFormRef.current?.resetFields();
+    productFormRef.current?.setFieldsValue({
+      calculation_date: dayjs(),
+      calculation_type: '标准成本',
+    });
+  }, [execModal]);
+
+  const handleTopTabChange = (key: string) => {
+    setCatWithSub(key as TopCat);
+  };
+
   const handleDetail = async (record: CostCalculation) => {
     try {
       if (!record.uuid) {
@@ -85,48 +363,6 @@ const CostCalculationPage: React.FC = () => {
     }
   };
 
-  /**
-   * 处理工单成本核算
-   */
-  const handleCalculateWorkOrder = () => {
-    setWorkOrderModalVisible(true);
-    workOrderFormRef.current?.resetFields();
-    workOrderFormRef.current?.setFieldsValue({
-      calculation_date: dayjs(),
-    });
-  };
-
-  /**
-   * 处理产品成本核算
-   */
-  const handleCalculateProduct = () => {
-    setProductModalVisible(true);
-    productFormRef.current?.resetFields();
-    productFormRef.current?.setFieldsValue({
-      calculation_date: dayjs(),
-      calculation_type: '标准成本',
-    });
-  };
-
-  /**
-   * 处理成本对比
-   */
-  const handleCompare = () => {
-    setCompareModalVisible(true);
-    compareFormRef.current?.resetFields();
-  };
-
-  /**
-   * 处理成本分析
-   */
-  const handleAnalyze = () => {
-    setAnalyzeModalVisible(true);
-    analyzeFormRef.current?.resetFields();
-  };
-
-  /**
-   * 处理保存工单成本核算
-   */
   const handleSaveWorkOrderCalculation = async (values: any) => {
     try {
       await costCalculationApi.calculateWorkOrderCost({
@@ -135,16 +371,14 @@ const CostCalculationPage: React.FC = () => {
         remark: values.remark,
       });
       messageApi.success('工单成本核算成功');
-      setWorkOrderModalVisible(false);
+      setExecModal(null);
+      setLedger();
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '工单成本核算失败');
     }
   };
 
-  /**
-   * 处理保存产品成本核算
-   */
   const handleSaveProductCalculation = async (values: any) => {
     try {
       await costCalculationApi.calculateProductCost({
@@ -155,16 +389,14 @@ const CostCalculationPage: React.FC = () => {
         remark: values.remark,
       });
       messageApi.success('产品成本核算成功');
-      setProductModalVisible(false);
+      setExecModal(null);
+      setLedger();
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '产品成本核算失败');
     }
   };
 
-  /**
-   * 处理成本对比查询
-   */
   const handleCompareQuery = async (values: any) => {
     try {
       const data = await costCalculationApi.compareCosts(values.product_id);
@@ -174,25 +406,50 @@ const CostCalculationPage: React.FC = () => {
     }
   };
 
-  /**
-   * 处理成本分析查询
-   */
+  const handleMaterialLevelCompare = async (values: any) => {
+    try {
+      setMaterialCompareLoading(true);
+      const data = {
+        material_id: values.material_id,
+        quantity: values.quantity,
+        work_order_id: values.work_order_id,
+        purchase_order_id: values.purchase_order_id,
+        purchase_order_item_id: values.purchase_order_item_id,
+        outsource_work_order_id: values.outsource_work_order_id,
+        calculation_date: values.calculation_date ? values.calculation_date.format('YYYY-MM-DD') : undefined,
+      };
+      const result = await costComparisonApi.compare(data);
+      setMaterialCompareResult(result);
+      messageApi.success('成本对比成功');
+    } catch (error: any) {
+      messageApi.error(error.message || '成本对比失败');
+    } finally {
+      setMaterialCompareLoading(false);
+    }
+  };
+
+  const getMaterialCompareSourceTag = (sourceType: string) => {
+    const typeMap: Record<string, { color: string; text: string }> = {
+      Make: { color: 'blue', text: '自制件' },
+      Buy: { color: 'green', text: '采购件' },
+      Outsource: { color: 'orange', text: '委外件' },
+      Phantom: { color: 'purple', text: '虚拟件' },
+      Configure: { color: 'cyan', text: '配置件' },
+    };
+    const t = typeMap[sourceType] || { color: 'default', text: sourceType };
+    return <Tag color={t.color}>{t.text}</Tag>;
+  };
+
   const handleAnalyzeQuery = async (values: any) => {
     try {
       const data = await costCalculationApi.analyzeCost(values.product_id);
       setAnalyzeData(data);
-      
-      // 获取成本优化建议
-      const optimization = await costCalculationApi.getOptimization(values.product_id);
-      setOptimizationData(optimization);
+      setAnalyzeInnerTab('composition');
     } catch (error: any) {
       messageApi.error(error.message || '成本分析查询失败');
     }
   };
 
-  /**
-   * 表格列定义
-   */
   const columns: ProColumns<CostCalculation>[] = [
     {
       title: '核算单号',
@@ -208,10 +465,10 @@ const CostCalculationPage: React.FC = () => {
       width: 120,
       render: (text: string) => {
         const typeMap: Record<string, { color: string; text: string }> = {
-          '工单成本': { color: 'blue', text: '工单成本' },
-          '产品成本': { color: 'green', text: '产品成本' },
-          '标准成本': { color: 'orange', text: '标准成本' },
-          '实际成本': { color: 'red', text: '实际成本' },
+          工单成本: { color: 'blue', text: '工单成本' },
+          产品成本: { color: 'green', text: '产品成本' },
+          标准成本: { color: 'orange', text: '标准成本' },
+          实际成本: { color: 'red', text: '实际成本' },
         };
         const type = typeMap[text] || { color: 'default', text: text };
         return <Tag color={type.color}>{type.text}</Tag>;
@@ -284,9 +541,9 @@ const CostCalculationPage: React.FC = () => {
       width: 100,
       render: (text: string) => {
         const statusMap: Record<string, { color: string; text: string }> = {
-          '草稿': { color: 'default', text: '草稿' },
-          '已核算': { color: 'processing', text: '已核算' },
-          '已审核': { color: 'success', text: '已审核' },
+          草稿: { color: 'default', text: '草稿' },
+          已核算: { color: 'processing', text: '已核算' },
+          已审核: { color: 'success', text: '已审核' },
         };
         const status = statusMap[text] || { color: 'default', text: text };
         return <Tag color={status.color}>{status.text}</Tag>;
@@ -297,7 +554,7 @@ const CostCalculationPage: React.FC = () => {
       dataIndex: 'calculation_date',
       key: 'calculation_date',
       width: 120,
-      render: (text: string) => text ? dayjs(text).format('YYYY-MM-DD') : '-',
+      render: (text: string) => (text ? dayjs(text).format('YYYY-MM-DD') : '-'),
     },
     {
       title: '操作',
@@ -305,42 +562,19 @@ const CostCalculationPage: React.FC = () => {
       width: 100,
       fixed: 'right',
       render: (_: any, record: CostCalculation) => (
-        <Button
-          type="link"
-          size="small"
-          icon={<EyeOutlined />}
-          onClick={() => handleDetail(record)}
-        >
+        <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
           详情
         </Button>
       ),
     },
   ];
 
-  /**
-   * 详情描述项
-   */
   const detailItems: ProDescriptionsItemType<CostCalculation>[] = [
-    {
-      title: '核算单号',
-      dataIndex: 'calculation_no',
-    },
-    {
-      title: '核算类型',
-      dataIndex: 'calculation_type',
-    },
-    {
-      title: '工单编号',
-      dataIndex: 'work_order_code',
-    },
-    {
-      title: '产品编号',
-      dataIndex: 'product_code',
-    },
-    {
-      title: '产品名称',
-      dataIndex: 'product_name',
-    },
+    { title: '核算单号', dataIndex: 'calculation_no' },
+    { title: '核算类型', dataIndex: 'calculation_type' },
+    { title: '工单编号', dataIndex: 'work_order_code' },
+    { title: '产品编号', dataIndex: 'product_code' },
+    { title: '产品名称', dataIndex: 'product_name' },
     {
       title: '数量',
       dataIndex: 'quantity',
@@ -374,69 +608,111 @@ const CostCalculationPage: React.FC = () => {
     {
       title: '成本明细',
       dataIndex: 'cost_details',
-      render: (text: any) => text ? JSON.stringify(text, null, 2) : '-',
+      render: (text: any) => (text ? JSON.stringify(text, null, 2) : '-'),
     },
-    {
-      title: '核算状态',
-      dataIndex: 'calculation_status',
-    },
+    { title: '核算状态', dataIndex: 'calculation_status' },
     {
       title: '核算日期',
       dataIndex: 'calculation_date',
-      render: (text: string) => text ? dayjs(text).format('YYYY-MM-DD') : '-',
+      render: (text: string) => (text ? dayjs(text).format('YYYY-MM-DD') : '-'),
     },
-    {
-      title: '备注',
-      dataIndex: 'remark',
-    },
-    {
-      title: '创建人',
-      dataIndex: 'created_by_name',
-    },
+    { title: '备注', dataIndex: 'remark' },
+    { title: '创建人', dataIndex: 'created_by_name' },
     {
       title: '创建时间',
       dataIndex: 'created_at',
-      render: (text: string) => text ? dayjs(text).format('YYYY-MM-DD HH:mm:ss') : '-',
+      render: (text: string) => (text ? dayjs(text).format('YYYY-MM-DD HH:mm:ss') : '-'),
     },
   ];
 
-  return (
-    <ListPageTemplate
-      title="成本核算记录管理"
-      extra={[
-        <Button
-          key="work-order"
-          type="primary"
-          icon={<CalculatorOutlined />}
-          onClick={handleCalculateWorkOrder}
-        >
-          工单成本核算
-        </Button>,
-        <Button
-          key="product"
-          type="primary"
-          icon={<CalculatorOutlined />}
-          onClick={handleCalculateProduct}
-        >
-          产品成本核算
-        </Button>,
-        <Button
-          key="compare"
-          icon={<BarChartOutlined />}
-          onClick={handleCompare}
-        >
-          成本对比
-        </Button>,
-        <Button
-          key="analyze"
-          icon={<LineChartOutlined />}
-          onClick={handleAnalyze}
-        >
-          成本分析
-        </Button>,
-      ]}
-      actionRef={actionRef}
-    >
+  const closeWorkOrderModal = () => {
+    setExecModal(null);
+    workOrderFormRef.current?.resetFields();
+  };
+
+  const closeProductModal = () => {
+    setExecModal(null);
+    productFormRef.current?.resetFields();
+  };
+
+  const workOrderPanel = (
+    <Card variant="borderless">
+      <ProForm
+        formRef={workOrderFormRef}
+        onFinish={handleSaveWorkOrderCalculation}
+        submitter={{
+          searchConfig: { submitText: '核算' },
+          resetButtonProps: { style: { display: 'none' } },
+        }}
+      >
+        <ProFormSelect
+          name="work_order_id"
+          label="工单"
+          placeholder="请选择工单"
+          rules={[{ required: true, message: '请选择工单' }]}
+          options={costReferenceOptions.workOrders}
+          showSearch
+          fieldProps={{
+            optionFilterProp: 'label',
+            filterOption: (input: string, option: any) =>
+              String(option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+          }}
+        />
+        <ProFormDatePicker name="calculation_date" label="核算日期" placeholder="请选择核算日期" />
+        <ProFormTextArea name="remark" label="备注" placeholder="请输入备注" fieldProps={{ rows: 3 }} />
+      </ProForm>
+    </Card>
+  );
+
+  const productPanel = (
+    <Card variant="borderless">
+      <ProForm
+        formRef={productFormRef}
+        onFinish={handleSaveProductCalculation}
+        submitter={{
+          searchConfig: { submitText: '核算' },
+          resetButtonProps: { style: { display: 'none' } },
+        }}
+      >
+        <ProFormSelect
+          name="product_id"
+          label="产品（物料）"
+          placeholder="请选择产品物料"
+          rules={[{ required: true, message: '请选择产品' }]}
+          options={productMaterialSelectOptions}
+          showSearch
+          fieldProps={{
+            optionFilterProp: 'label',
+            filterOption: (input: string, option: any) =>
+              String(option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+          }}
+        />
+        <ProFormDigit
+          name="quantity"
+          label="数量"
+          placeholder="请输入数量"
+          rules={[{ required: true, message: '请输入数量' }]}
+          min={0}
+          fieldProps={{ precision: 2 }}
+        />
+        <ProFormSelect
+          name="calculation_type"
+          label="核算类型"
+          placeholder="请选择核算类型"
+          options={[
+            { label: '标准成本', value: '标准成本' },
+            { label: '实际成本', value: '实际成本' },
+          ]}
+          rules={[{ required: true, message: '请选择核算类型' }]}
+        />
+        <ProFormDatePicker name="calculation_date" label="核算日期" placeholder="请选择核算日期" />
+        <ProFormTextArea name="remark" label="备注" placeholder="请输入备注" fieldProps={{ rows: 3 }} />
+      </ProForm>
+    </Card>
+  );
+
+  const ledgerPanel = (
+    <ListPageTemplate>
       <UniTable<CostCalculation>
         actionRef={actionRef}
         request={async (params) => {
@@ -449,16 +725,44 @@ const CostCalculationPage: React.FC = () => {
         }}
         columns={columns}
         rowKey="uuid"
-        search={{
-          labelWidth: 'auto',
-        }}
-        pagination={{
-          defaultPageSize: 20,
-          showSizeChanger: true,
-        }}
+        search={{ labelWidth: 'auto' }}
+        pagination={{ defaultPageSize: 20, showSizeChanger: true }}
+        toolBarActions={[
+          <Button
+            key="work-order-cost"
+            type="primary"
+            icon={<CalculatorOutlined />}
+            onClick={() => setExecModal('work_order')}
+          >
+            工单成本核算
+          </Button>,
+          <Button key="product-cost" icon={<CalculatorOutlined />} onClick={() => setExecModal('product')}>
+            产品成本核算
+          </Button>,
+        ]}
       />
-
-      {/* 详情 Drawer */}
+      <Modal
+        title="工单成本核算"
+        open={execModal === 'work_order'}
+        onCancel={closeWorkOrderModal}
+        footer={null}
+        destroyOnClose
+        width={520}
+        maskClosable={false}
+      >
+        {workOrderPanel}
+      </Modal>
+      <Modal
+        title="产品成本核算"
+        open={execModal === 'product'}
+        onCancel={closeProductModal}
+        footer={null}
+        destroyOnClose
+        width={520}
+        maskClosable={false}
+      >
+        {productPanel}
+      </Modal>
       <DetailDrawerTemplate
         title="成本核算记录详情"
         open={drawerVisible}
@@ -467,319 +771,562 @@ const CostCalculationPage: React.FC = () => {
         dataSource={costCalculationDetail}
         columns={detailItems}
       />
-
-      {/* 工单成本核算 Modal */}
-      <Modal
-        title="工单成本核算"
-        open={workOrderModalVisible}
-        onCancel={() => setWorkOrderModalVisible(false)}
-        footer={null}
-        width={MODAL_CONFIG.SMALL_WIDTH}
-      >
-        <ProForm
-          formRef={workOrderFormRef}
-          onFinish={handleSaveWorkOrderCalculation}
-          submitter={{
-            searchConfig: {
-              submitText: '核算',
-            },
-            resetButtonProps: {
-              style: { display: 'none' },
-            },
-          }}
-        >
-          <ProFormText
-            name="work_order_id"
-            label="工单ID"
-            placeholder="请输入工单ID"
-            rules={[{ required: true, message: '请输入工单ID' }]}
-          />
-          <ProFormDatePicker
-            name="calculation_date"
-            label="核算日期"
-            placeholder="请选择核算日期"
-          />
-          <ProFormTextArea
-            name="remark"
-            label="备注"
-            placeholder="请输入备注"
-            fieldProps={{
-              rows: 3,
-            }}
-          />
-        </ProForm>
-      </Modal>
-
-      {/* 产品成本核算 Modal */}
-      <Modal
-        title="产品成本核算"
-        open={productModalVisible}
-        onCancel={() => setProductModalVisible(false)}
-        footer={null}
-        width={MODAL_CONFIG.SMALL_WIDTH}
-      >
-        <ProForm
-          formRef={productFormRef}
-          onFinish={handleSaveProductCalculation}
-          submitter={{
-            searchConfig: {
-              submitText: '核算',
-            },
-            resetButtonProps: {
-              style: { display: 'none' },
-            },
-          }}
-        >
-          <ProFormText
-            name="product_id"
-            label="产品ID"
-            placeholder="请输入产品ID"
-            rules={[{ required: true, message: '请输入产品ID' }]}
-          />
-          <ProFormDigit
-            name="quantity"
-            label="数量"
-            placeholder="请输入数量"
-            rules={[{ required: true, message: '请输入数量' }]}
-            min={0}
-            fieldProps={{
-              precision: 2,
-            }}
-          />
-          <ProFormSelect
-            name="calculation_type"
-            label="核算类型"
-            placeholder="请选择核算类型"
-            options={[
-              { label: '标准成本', value: '标准成本' },
-              { label: '实际成本', value: '实际成本' },
-            ]}
-            rules={[{ required: true, message: '请选择核算类型' }]}
-          />
-          <ProFormDatePicker
-            name="calculation_date"
-            label="核算日期"
-            placeholder="请选择核算日期"
-          />
-          <ProFormTextArea
-            name="remark"
-            label="备注"
-            placeholder="请输入备注"
-            fieldProps={{
-              rows: 3,
-            }}
-          />
-        </ProForm>
-      </Modal>
-
-      {/* 成本对比 Modal */}
-      <Modal
-        title="成本对比"
-        open={compareModalVisible}
-        onCancel={() => {
-          setCompareModalVisible(false);
-          setCompareData(null);
-        }}
-        footer={null}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
-      >
-        <ProForm
-          formRef={compareFormRef}
-          onFinish={handleCompareQuery}
-          submitter={{
-            searchConfig: {
-              submitText: '查询',
-            },
-            resetButtonProps: {
-              style: { display: 'none' },
-            },
-          }}
-        >
-          <ProFormText
-            name="product_id"
-            label="产品ID"
-            placeholder="请输入产品ID"
-            rules={[{ required: true, message: '请输入产品ID' }]}
-          />
-        </ProForm>
-        {compareData && (
-          <Card title="成本对比结果" style={{ marginTop: 16 }}>
-            <Row gutter={16}>
-              <Col span={12}>
-                <Statistic
-                  title="标准成本"
-                  value={compareData.standard_cost}
-                  prefix="¥"
-                  precision={2}
-                />
-              </Col>
-              <Col span={12}>
-                <Statistic
-                  title="实际成本"
-                  value={compareData.actual_cost}
-                  prefix="¥"
-                  precision={2}
-                />
-              </Col>
-            </Row>
-            <Row gutter={16} style={{ marginTop: 16 }}>
-              <Col span={12}>
-                <Statistic
-                  title="成本差异"
-                  value={compareData.cost_difference}
-                  prefix="¥"
-                  precision={2}
-                  valueStyle={{ color: compareData.cost_difference > 0 ? '#cf1322' : '#3f8600' }}
-                />
-              </Col>
-              <Col span={12}>
-                <Statistic
-                  title="成本差异率"
-                  value={compareData.cost_difference_rate}
-                  suffix="%"
-                  precision={2}
-                  valueStyle={{ color: compareData.cost_difference_rate > 0 ? '#cf1322' : '#3f8600' }}
-                />
-              </Col>
-            </Row>
-            <ProDescriptions
-              title="成本明细差异"
-              bordered
-              style={{ marginTop: 16 }}
-              dataSource={{
-                material_cost_difference: `¥${compareData.material_cost_difference?.toFixed(2) || '0.00'}`,
-                labor_cost_difference: `¥${compareData.labor_cost_difference?.toFixed(2) || '0.00'}`,
-                manufacturing_cost_difference: `¥${compareData.manufacturing_cost_difference?.toFixed(2) || '0.00'}`,
-              }}
-              columns={[
-                { title: '材料成本差异', dataIndex: 'material_cost_difference' },
-                { title: '人工成本差异', dataIndex: 'labor_cost_difference' },
-                { title: '制造费用差异', dataIndex: 'manufacturing_cost_difference' },
-              ]}
-            />
-            {compareData.difference_analysis && (
-              <div style={{ marginTop: 16 }}>
-                <strong>差异原因分析：</strong>
-                <p>{compareData.difference_analysis}</p>
-              </div>
-            )}
-          </Card>
-        )}
-      </Modal>
-
-      {/* 成本分析 Modal */}
-      <Modal
-        title="成本分析"
-        open={analyzeModalVisible}
-        onCancel={() => {
-          setAnalyzeModalVisible(false);
-          setAnalyzeData(null);
-          setOptimizationData(null);
-        }}
-        footer={null}
-        width={MODAL_CONFIG.LARGE_WIDTH}
-      >
-        <ProForm
-          formRef={analyzeFormRef}
-          onFinish={handleAnalyzeQuery}
-          submitter={{
-            searchConfig: {
-              submitText: '查询',
-            },
-            resetButtonProps: {
-              style: { display: 'none' },
-            },
-          }}
-        >
-          <ProFormText
-            name="product_id"
-            label="产品ID"
-            placeholder="请输入产品ID"
-            rules={[{ required: true, message: '请输入产品ID' }]}
-          />
-        </ProForm>
-        {analyzeData && (
-          <Tabs defaultActiveKey="1" style={{ marginTop: 16 }}>
-            <Tabs.TabPane tab="成本构成" key="1">
-              <Row gutter={16}>
-                <Col span={8}>
-                  <Card>
-                    <Statistic
-                      title="材料成本"
-                      value={analyzeData.cost_composition?.材料成本 || 0}
-                      prefix="¥"
-                      precision={2}
-                    />
-                  </Card>
-                </Col>
-                <Col span={8}>
-                  <Card>
-                    <Statistic
-                      title="人工成本"
-                      value={analyzeData.cost_composition?.人工成本 || 0}
-                      prefix="¥"
-                      precision={2}
-                    />
-                  </Card>
-                </Col>
-                <Col span={8}>
-                  <Card>
-                    <Statistic
-                      title="制造费用"
-                      value={analyzeData.cost_composition?.制造费用 || 0}
-                      prefix="¥"
-                      precision={2}
-                    />
-                  </Card>
-                </Col>
-              </Row>
-            </Tabs.TabPane>
-            <Tabs.TabPane tab="成本趋势" key="2">
-              <Card>
-                <p>成本趋势图表（待实现）</p>
-                <pre>{JSON.stringify(analyzeData.cost_trend, null, 2)}</pre>
-              </Card>
-            </Tabs.TabPane>
-            <Tabs.TabPane tab="成本明细" key="3">
-              <Card>
-                <pre>{JSON.stringify(analyzeData.cost_breakdown, null, 2)}</pre>
-              </Card>
-            </Tabs.TabPane>
-            {optimizationData && (
-              <Tabs.TabPane tab="优化建议" key="4">
-                <Card>
-                  <Descriptions title="成本优化建议" bordered>
-                    <Descriptions.Item label="优先级">
-                      <Tag color={optimizationData.priority === '高' ? 'red' : optimizationData.priority === '中' ? 'orange' : 'green'}>
-                        {optimizationData.priority}
-                      </Tag>
-                    </Descriptions.Item>
-                    <Descriptions.Item label="潜在节省">
-                      ¥{optimizationData.potential_savings?.toFixed(2) || '0.00'}
-                    </Descriptions.Item>
-                  </Descriptions>
-                  <div style={{ marginTop: 16 }}>
-                    <strong>优化建议：</strong>
-                    <ul>
-                      {optimizationData.suggestions?.map((suggestion: any, index: number) => (
-                        <li key={index}>
-                          <Tag color={suggestion.priority === '高' ? 'red' : suggestion.priority === '中' ? 'orange' : 'green'}>
-                            {suggestion.type}
-                          </Tag>
-                          {suggestion.description}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </Card>
-              </Tabs.TabPane>
-            )}
-          </Tabs>
-        )}
-      </Modal>
     </ListPageTemplate>
+  );
+
+  const comparePanel = (
+    <div>
+      <Tabs
+        defaultActiveKey="by_product"
+        destroyInactiveTabPane={false}
+        items={[
+          {
+            key: 'by_product',
+            label: '按产品',
+            children: (
+              <div>
+                <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
+                  选择产品（物料）拉取该产品标准与实际成本汇总。
+                </Typography.Paragraph>
+                <ProForm
+                  formRef={compareFormRef}
+                  onFinish={handleCompareQuery}
+                  submitter={{
+                    searchConfig: { submitText: '查询' },
+                    resetButtonProps: { style: { display: 'none' } },
+                  }}
+                >
+                  <ProFormSelect
+                    name="product_id"
+                    label="产品（物料）"
+                    placeholder="请选择产品"
+                    rules={[{ required: true, message: '请选择产品' }]}
+                    options={productMaterialSelectOptions}
+                    showSearch
+                    fieldProps={{
+                      optionFilterProp: 'label',
+                      filterOption: (input: string, option: any) =>
+                        String(option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+                    }}
+                  />
+                </ProForm>
+                {compareData ? (
+                  <Card title="产品成本对比结果" style={{ marginTop: 16 }}>
+                    <Row gutter={16}>
+                      <Col span={12}>
+                        <Statistic title="标准成本" value={compareData.standard_cost} prefix="¥" precision={2} />
+                      </Col>
+                      <Col span={12}>
+                        <Statistic title="实际成本" value={compareData.actual_cost} prefix="¥" precision={2} />
+                      </Col>
+                    </Row>
+                    <Row gutter={16} style={{ marginTop: 16 }}>
+                      <Col span={12}>
+                        <Statistic
+                          title="成本差异"
+                          value={compareData.cost_difference}
+                          prefix="¥"
+                          precision={2}
+                          valueStyle={{ color: compareData.cost_difference > 0 ? '#cf1322' : '#3f8600' }}
+                        />
+                      </Col>
+                      <Col span={12}>
+                        <Statistic
+                          title="成本差异率"
+                          value={compareData.cost_difference_rate}
+                          suffix="%"
+                          precision={2}
+                          valueStyle={{ color: compareData.cost_difference_rate > 0 ? '#cf1322' : '#3f8600' }}
+                        />
+                      </Col>
+                    </Row>
+                    <ProDescriptions
+                      title="成本明细差异"
+                      bordered
+                      style={{ marginTop: 16 }}
+                      dataSource={{
+                        material_cost_difference: `¥${compareData.material_cost_difference?.toFixed(2) || '0.00'}`,
+                        labor_cost_difference: `¥${compareData.labor_cost_difference?.toFixed(2) || '0.00'}`,
+                        manufacturing_cost_difference: `¥${compareData.manufacturing_cost_difference?.toFixed(2) || '0.00'}`,
+                      }}
+                      columns={[
+                        { title: '材料成本差异', dataIndex: 'material_cost_difference' },
+                        { title: '人工成本差异', dataIndex: 'labor_cost_difference' },
+                        { title: '制造费用差异', dataIndex: 'manufacturing_cost_difference' },
+                      ]}
+                    />
+                    {compareData.difference_analysis && (
+                      <div style={{ marginTop: 16 }}>
+                        <strong>差异原因分析：</strong>
+                        <p>{compareData.difference_analysis}</p>
+                      </div>
+                    )}
+                  </Card>
+                ) : (
+                  <Empty
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    description="选择产品并查询后，将在此展示标准/实际成本与差异"
+                    style={{ margin: '32px 0' }}
+                  />
+                )}
+              </div>
+            ),
+          },
+          {
+            key: 'by_material',
+            label: '按物料 / 工单',
+            children: (
+              <div>
+                <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
+                  选择物料并填写数量；可按来源补充工单、采购订单或委外工单等条件，与独立「成本对比」页同一接口。
+                </Typography.Paragraph>
+                <ProForm
+                  formRef={materialCompareFormRef}
+                  onFinish={handleMaterialLevelCompare}
+                  submitter={{
+                    searchConfig: { submitText: '对比' },
+                    resetButtonProps: { style: { display: 'none' } },
+                    submitButtonProps: { loading: materialCompareLoading },
+                  }}
+                  initialValues={{
+                    calculation_date: dayjs(),
+                    quantity: 1,
+                  }}
+                >
+                  <ProFormSelect
+                    name="material_id"
+                    label="物料"
+                    placeholder="请选择物料"
+                    rules={[{ required: true, message: '请选择物料' }]}
+                    options={materialCompareList.map((m) => ({
+                      label: `${m.mainCode || m.code} - ${m.name} (${m.sourceType || m.source_type || 'Make'})`,
+                      value: m.id,
+                    }))}
+                    fieldProps={{
+                      showSearch: true,
+                      filterOption: (input: string, option: any) =>
+                        option?.label?.toLowerCase().includes(input.toLowerCase()),
+                    }}
+                  />
+                  <ProFormDigit
+                    name="quantity"
+                    label="数量"
+                    placeholder="请输入数量（用于计算标准成本）"
+                    rules={[
+                      { required: true, message: '请输入数量' },
+                      { type: 'number', min: 0.0001, message: '数量必须大于0' },
+                    ]}
+                    fieldProps={{
+                      precision: 4,
+                      style: { width: '100%' },
+                    }}
+                  />
+                  <ProFormSelect
+                    name="work_order_id"
+                    label="工单（自制件/配置件实际成本）"
+                    placeholder="可选"
+                    allowClear
+                    options={costReferenceOptions.workOrders}
+                    showSearch
+                    fieldProps={{
+                      optionFilterProp: 'label',
+                      filterOption: (input: string, option: any) =>
+                        String(option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+                    }}
+                  />
+                  <ProFormSelect
+                    name="purchase_order_id"
+                    label="采购订单（采购件实际成本-整单）"
+                    placeholder="可选"
+                    allowClear
+                    options={costReferenceOptions.purchaseOrders}
+                    showSearch
+                    fieldProps={{
+                      optionFilterProp: 'label',
+                      filterOption: (input: string, option: any) =>
+                        String(option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+                    }}
+                  />
+                  <ProFormSelect
+                    name="purchase_order_item_id"
+                    label="采购订单明细（采购件实际成本-明细）"
+                    placeholder="可选"
+                    allowClear
+                    options={costReferenceOptions.purchaseOrderItems}
+                    showSearch
+                    fieldProps={{
+                      optionFilterProp: 'label',
+                      filterOption: (input: string, option: any) =>
+                        String(option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+                    }}
+                  />
+                  <ProFormSelect
+                    name="outsource_work_order_id"
+                    label="委外工单（委外件实际成本）"
+                    placeholder="可选"
+                    allowClear
+                    options={costReferenceOptions.outsourceWorkOrders}
+                    showSearch
+                    fieldProps={{
+                      optionFilterProp: 'label',
+                      filterOption: (input: string, option: any) =>
+                        String(option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+                    }}
+                  />
+                  <ProFormDatePicker
+                    name="calculation_date"
+                    label="核算日期"
+                    placeholder="请选择核算日期"
+                    fieldProps={{ style: { width: '100%' } }}
+                  />
+                </ProForm>
+                {materialCompareResult ? (
+                  <Card title="物料标准与实际对比结果" style={{ marginTop: 16 }} styles={{ body: { padding: 16 } }}>
+                    <ProDescriptions
+                      bordered
+                      column={2}
+                      style={{ marginBottom: 24 }}
+                      dataSource={{
+                        material_code: materialCompareResult.material_code,
+                        material_name: materialCompareResult.material_name,
+                        source_type: getMaterialCompareSourceTag(materialCompareResult.source_type),
+                        quantity: materialCompareResult.quantity,
+                      }}
+                      columns={[
+                        { title: '物料编号', dataIndex: 'material_code' },
+                        { title: '物料名称', dataIndex: 'material_name' },
+                        { title: '物料来源类型', dataIndex: 'source_type' },
+                        { title: '数量', dataIndex: 'quantity' },
+                      ]}
+                    />
+
+                    <Row gutter={16} style={{ marginBottom: 24 }}>
+                      <Col span={12}>
+                        <Card title="标准成本" size="small">
+                          <Statistic
+                            title="总成本"
+                            value={materialCompareResult.standard_cost.total_cost}
+                            prefix="¥"
+                            precision={2}
+                          />
+                          <Divider style={{ margin: '12px 0' }} />
+                          <Statistic
+                            title="单位成本"
+                            value={materialCompareResult.standard_cost.unit_cost}
+                            prefix="¥"
+                            precision={2}
+                          />
+                          <div style={{ marginTop: 12, fontSize: '12px', color: '#666' }}>
+                            核算类型：{materialCompareResult.standard_cost.calculation_type}
+                          </div>
+                        </Card>
+                      </Col>
+                      <Col span={12}>
+                        <Card title="实际成本" size="small">
+                          <Statistic
+                            title="总成本"
+                            value={materialCompareResult.actual_cost.total_cost}
+                            prefix="¥"
+                            precision={2}
+                          />
+                          <Divider style={{ margin: '12px 0' }} />
+                          <Statistic
+                            title="单位成本"
+                            value={materialCompareResult.actual_cost.unit_cost}
+                            prefix="¥"
+                            precision={2}
+                          />
+                          <div style={{ marginTop: 12, fontSize: '12px', color: '#666' }}>
+                            核算类型：{materialCompareResult.actual_cost.calculation_type}
+                          </div>
+                        </Card>
+                      </Col>
+                    </Row>
+
+                    <Card title="成本差异" style={{ marginBottom: 16 }}>
+                      <Alert
+                        message={materialCompareResult.cost_variance.variance_type}
+                        description={
+                          <div>
+                            <p>总成本差异：¥{materialCompareResult.cost_variance.total_cost_variance.toFixed(2)}</p>
+                            <p>总成本差异率：{materialCompareResult.cost_variance.total_cost_variance_rate.toFixed(2)}%</p>
+                            <p>单位成本差异：¥{materialCompareResult.cost_variance.unit_cost_variance.toFixed(2)}</p>
+                            <p>单位成本差异率：{materialCompareResult.cost_variance.unit_cost_variance_rate.toFixed(2)}%</p>
+                          </div>
+                        }
+                        type={
+                          materialCompareResult.cost_variance.variance_type === '超支'
+                            ? 'error'
+                            : materialCompareResult.cost_variance.variance_type === '节约'
+                              ? 'success'
+                              : 'info'
+                        }
+                        showIcon
+                      />
+                    </Card>
+
+                    <Divider>成本明细</Divider>
+                    <Row gutter={16}>
+                      <Col span={12}>
+                        <Card title="标准成本明细" size="small">
+                          <pre
+                            style={{
+                              background: '#f5f5f5',
+                              padding: '12px',
+                              borderRadius: '4px',
+                              maxHeight: '300px',
+                              overflow: 'auto',
+                              fontSize: '12px',
+                            }}
+                          >
+                            {JSON.stringify(materialCompareResult.standard_cost.cost_details, null, 2)}
+                          </pre>
+                        </Card>
+                      </Col>
+                      <Col span={12}>
+                        <Card title="实际成本明细" size="small">
+                          <pre
+                            style={{
+                              background: '#f5f5f5',
+                              padding: '12px',
+                              borderRadius: '4px',
+                              maxHeight: '300px',
+                              overflow: 'auto',
+                              fontSize: '12px',
+                            }}
+                          >
+                            {JSON.stringify(materialCompareResult.actual_cost.cost_details, null, 2)}
+                          </pre>
+                        </Card>
+                      </Col>
+                    </Row>
+                  </Card>
+                ) : (
+                  <Empty
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    description="填写表单并点击对比后，将在此展示标准/实际成本与明细"
+                    style={{ margin: '32px 0' }}
+                  />
+                )}
+              </div>
+            ),
+          },
+        ]}
+      />
+    </div>
+  );
+
+  const hasAnalyzeResult = analyzeData != null;
+
+  const analyzePanel = (
+    <div>
+      <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
+        选择产品（物料）查询该产品成本构成、趋势与明细。物料来源维度的优化建议请使用「优化建议」页签。
+      </Typography.Paragraph>
+      <ProForm
+        formRef={analyzeFormRef}
+        onFinish={handleAnalyzeQuery}
+        submitter={{
+          searchConfig: { submitText: '查询' },
+          resetButtonProps: { style: { display: 'none' } },
+        }}
+      >
+        <ProFormSelect
+          name="product_id"
+          label="产品（物料）"
+          placeholder="请选择产品"
+          rules={[{ required: true, message: '请选择产品' }]}
+          options={productMaterialSelectOptions}
+          showSearch
+          fieldProps={{
+            optionFilterProp: 'label',
+            filterOption: (input: string, option: any) =>
+              String(option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+          }}
+        />
+      </ProForm>
+      {hasAnalyzeResult && (
+        <Tabs
+          activeKey={analyzeInnerTab}
+          onChange={setAnalyzeInnerTab}
+          destroyInactiveTabPane={false}
+          style={{ marginTop: 16 }}
+          items={[
+            {
+              key: 'composition',
+              label: '成本构成',
+              children: (
+                <Row gutter={16}>
+                  <Col span={8}>
+                    <Card>
+                      <Statistic
+                        title="材料成本"
+                        value={analyzeData!.cost_composition?.材料成本 || 0}
+                        prefix="¥"
+                        precision={2}
+                      />
+                    </Card>
+                  </Col>
+                  <Col span={8}>
+                    <Card>
+                      <Statistic
+                        title="人工成本"
+                        value={analyzeData!.cost_composition?.人工成本 || 0}
+                        prefix="¥"
+                        precision={2}
+                      />
+                    </Card>
+                  </Col>
+                  <Col span={8}>
+                    <Card>
+                      <Statistic
+                        title="制造费用"
+                        value={analyzeData!.cost_composition?.制造费用 || 0}
+                        prefix="¥"
+                        precision={2}
+                      />
+                    </Card>
+                  </Col>
+                </Row>
+              ),
+            },
+            {
+              key: 'trend',
+              label: '成本趋势',
+              children: (
+                <Card>
+                  <p>成本趋势图表（待实现）</p>
+                  <pre>{JSON.stringify(analyzeData!.cost_trend, null, 2)}</pre>
+                </Card>
+              ),
+            },
+            {
+              key: 'breakdown',
+              label: '成本明细',
+              children: (
+                <Card>
+                  <pre>{JSON.stringify(analyzeData!.cost_breakdown, null, 2)}</pre>
+                </Card>
+              ),
+            },
+          ]}
+        />
+      )}
+    </div>
+  );
+
+  const trialPanel = (
+    <Tabs
+      activeKey={cat === 'trial' ? sub : 'production'}
+      onChange={(k) => setInnerSubOnly(k)}
+      destroyInactiveTabPane={false}
+      items={[
+        {
+          key: 'production',
+          label: (
+            <Space>
+              <ToolOutlined />
+              生产成本
+            </Space>
+          ),
+          children: <ProductionCostPage embedded />,
+        },
+        {
+          key: 'outsource',
+          label: (
+            <Space>
+              <TeamOutlined />
+              委外成本
+            </Space>
+          ),
+          children: <OutsourceCostPage embedded />,
+        },
+        {
+          key: 'purchase',
+          label: (
+            <Space>
+              <ShoppingOutlined />
+              采购成本
+            </Space>
+          ),
+          children: <PurchaseCostPage embedded />,
+        },
+        {
+          key: 'quality',
+          label: (
+            <Space>
+              <SafetyCertificateOutlined />
+              质量成本
+            </Space>
+          ),
+          children: <QualityCostPage embedded />,
+        },
+      ]}
+    />
+  );
+
+  const topTabItems = [
+    {
+      key: 'ledger',
+      label: (
+        <Space>
+          <TableOutlined />
+          核算台账
+        </Space>
+      ),
+      children: ledgerPanel,
+    },
+    {
+      key: 'compare',
+      label: (
+        <Space>
+          <BarChartOutlined />
+          成本对比
+        </Space>
+      ),
+      children: comparePanel,
+    },
+    {
+      key: 'analyze',
+      label: (
+        <Space>
+          <LineChartOutlined />
+          成本分析
+        </Space>
+      ),
+      children: analyzePanel,
+    },
+    {
+      key: 'optimization',
+      label: (
+        <Space>
+          <BulbOutlined />
+          优化建议
+        </Space>
+      ),
+      children: <CostOptimizationPanel />,
+    },
+    {
+      key: 'trial',
+      label: (
+        <Space>
+          <ExperimentOutlined />
+          分项试算
+        </Space>
+      ),
+      children: trialPanel,
+    },
+  ];
+
+  return (
+    <MultiTabListPageTemplate
+      activeTabKey={cat}
+      onTabChange={handleTopTabChange}
+      tabs={topTabItems}
+      padding={16}
+      preserveMounted
+    />
   );
 };
 
 export default CostCalculationPage;
-

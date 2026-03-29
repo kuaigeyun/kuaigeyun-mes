@@ -1666,13 +1666,15 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           border-radius: ${token.borderRadius}px !important;
           height: 32px !important;
         }
-        /* 钉住的条件容器 - 与模糊搜索相同的阴影效果 */
+        /* 钉住的条件容器：外框与默认按钮、模糊搜索同为 colorBorder（勿用 colorBorderSecondary，否则框线过淡） */
         .pro-table-button-container .uni-query-pinned-conditions {
           box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02) !important;
-          border-color: ${token.colorBorderSecondary} !important;
+          border: 1px solid ${token.colorBorder} !important;
+          border-radius: ${token.borderRadius}px !important;
         }
         html[data-theme="dark"] body .pro-table-button-container .uni-query-pinned-conditions {
           box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.15), 0 1px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px 0 rgba(0, 0, 0, 0.1) !important;
+          border: 1px solid var(--ant-colorBorder) !important;
         }
         /* 视图切换按钮组 - 统一高度 32px */
         .pro-table-button-container .ant-radio-group {

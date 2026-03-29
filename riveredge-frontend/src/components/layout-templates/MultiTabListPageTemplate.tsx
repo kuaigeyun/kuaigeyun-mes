@@ -40,6 +40,11 @@ export interface MultiTabListPageTemplateProps {
     header?: ReactNode;
     /** 标签栏右侧附加内容（如操作按钮），显示在 Tab 标题栏右侧 */
     tabBarExtraContent?: ReactNode;
+    /**
+     * 为 true 时保留所有标签内容挂载（仅隐藏非当前项），避免切换时子树卸载导致列表状态丢失。
+     * 默认 false，保持仅渲染当前标签（兼容既有页面性能）。
+     */
+    preserveMounted?: boolean;
 }
 
 /**
@@ -55,8 +60,27 @@ export const MultiTabListPageTemplate: React.FC<MultiTabListPageTemplateProps> =
     padding = 16,
     header,
     tabBarExtraContent,
+    preserveMounted = false,
 }) => {
     const currentTab = tabs.find(tab => tab.key === activeTabKey);
+
+    const bodyInner = preserveMounted ? (
+        <>
+            {tabs.map((tab) => (
+                <div
+                    key={tab.key}
+                    style={{
+                        display: tab.key === activeTabKey ? 'block' : 'none',
+                        ...(typeof padding === 'number' ? { padding } : { padding }),
+                    }}
+                >
+                    {tab.children}
+                </div>
+            ))}
+        </>
+    ) : (
+        currentTab?.children
+    );
 
     return (
         <ListPageTemplate
@@ -70,9 +94,9 @@ export const MultiTabListPageTemplate: React.FC<MultiTabListPageTemplateProps> =
                 activeTabKey={activeTabKey}
                 onTabChange={onTabChange}
                 tabBarExtraContent={tabBarExtraContent}
-                styles={{ body: { padding } }}
+                styles={{ body: preserveMounted ? { padding: 0 } : { padding } }}
             >
-                {currentTab?.children}
+                {bodyInner}
             </Card>
         </ListPageTemplate>
     );

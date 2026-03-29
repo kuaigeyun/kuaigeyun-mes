@@ -15,6 +15,7 @@ import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../.
 import { outsourceCostApi } from '../../../services/cost';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
+import { loadOutsourceWorkOrderSelectOptions, type CostSelectOption } from '../costSelectData';
 
 interface OutsourceCostResult {
   material_id?: number;
@@ -36,7 +37,11 @@ interface OutsourceCostResult {
   supplier_name?: string;
 }
 
-const OutsourceCostPage: React.FC = () => {
+export interface OutsourceCostPageProps {
+  embedded?: boolean;
+}
+
+const OutsourceCostPage: React.FC<OutsourceCostPageProps> = ({ embedded = false }) => {
   const { message: messageApi } = App.useApp();
   const formRef = useRef<any>(null);
 
@@ -44,6 +49,7 @@ const OutsourceCostPage: React.FC = () => {
   const [result, setResult] = useState<OutsourceCostResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [materials, setMaterials] = useState<any[]>([]);
+  const [outsourceWorkOrderOptions, setOutsourceWorkOrderOptions] = useState<CostSelectOption[]>([]);
   const [calculationMode, setCalculationMode] = useState<'standard' | 'actual'>('standard');
 
   /**
@@ -59,6 +65,21 @@ const OutsourceCostPage: React.FC = () => {
       }
     };
     loadMaterials();
+  }, []);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const opts = await loadOutsourceWorkOrderSelectOptions(400);
+        if (!cancelled) setOutsourceWorkOrderOptions(opts);
+      } catch (e) {
+        console.error('加载委外工单下拉失败:', e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   /**
@@ -104,7 +125,8 @@ const OutsourceCostPage: React.FC = () => {
 
   return (
     <PageContainer
-      title="委外成本核算"
+      ghost={embedded}
+      title={embedded ? false : '委外成本核算'}
       extra={[
         <Button
           key="calculate-standard"
@@ -216,13 +238,17 @@ const OutsourceCostPage: React.FC = () => {
             />
           </>
         ) : (
-          <ProFormDigit
+          <ProFormSelect
             name="outsource_work_order_id"
-            label="委外工单ID"
-            placeholder="请输入委外工单ID"
-            rules={[{ required: true, message: '请输入委外工单ID' }]}
+            label="委外工单"
+            placeholder="请选择委外工单"
+            rules={[{ required: true, message: '请选择委外工单' }]}
+            options={outsourceWorkOrderOptions}
+            showSearch
             fieldProps={{
-              style: { width: '100%' },
+              optionFilterProp: 'label',
+              filterOption: (input: string, option: any) =>
+                String(option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
             }}
           />
         )}

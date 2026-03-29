@@ -8,6 +8,7 @@
  */
 
 import React, { useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDigit, ProFormDatePicker, ProFormTextArea, ProForm, ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, message, Modal, Tabs, Card, Statistic, Row, Col } from 'antd';
 import { ProDescriptions } from '@ant-design/pro-components';
@@ -48,6 +49,7 @@ interface CostCalculation {
 
 const CostCalculationPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
 
   // Drawer 相关状态（详情查看）
@@ -400,45 +402,28 @@ const CostCalculationPage: React.FC = () => {
     },
   ];
 
+  const costToolbarActions = (
+    <Space wrap size="middle">
+      <Button type="primary" icon={<CalculatorOutlined />} onClick={handleCalculateWorkOrder}>
+        工单成本核算
+      </Button>
+      <Button type="primary" icon={<CalculatorOutlined />} onClick={handleCalculateProduct}>
+        产品成本核算
+      </Button>
+      <Button icon={<BarChartOutlined />} onClick={handleCompare}>
+        成本对比
+      </Button>
+      <Button icon={<LineChartOutlined />} onClick={handleAnalyze}>
+        成本分析
+      </Button>
+    </Space>
+  );
+
   return (
-    <ListPageTemplate
-      title="成本核算记录管理"
-      extra={[
-        <Button
-          key="work-order"
-          type="primary"
-          icon={<CalculatorOutlined />}
-          onClick={handleCalculateWorkOrder}
-        >
-          工单成本核算
-        </Button>,
-        <Button
-          key="product"
-          type="primary"
-          icon={<CalculatorOutlined />}
-          onClick={handleCalculateProduct}
-        >
-          产品成本核算
-        </Button>,
-        <Button
-          key="compare"
-          icon={<BarChartOutlined />}
-          onClick={handleCompare}
-        >
-          成本对比
-        </Button>,
-        <Button
-          key="analyze"
-          icon={<LineChartOutlined />}
-          onClick={handleAnalyze}
-        >
-          成本分析
-        </Button>,
-      ]}
-      actionRef={actionRef}
-    >
+    <ListPageTemplate>
       <UniTable<CostCalculation>
         actionRef={actionRef}
+        headerActions={costToolbarActions}
         request={async (params) => {
           const response = await costCalculationApi.list(params);
           return {
@@ -602,6 +587,18 @@ const CostCalculationPage: React.FC = () => {
             rules={[{ required: true, message: '请输入产品ID' }]}
           />
         </ProForm>
+        <Button
+          type="link"
+          size="small"
+          style={{ paddingLeft: 0, marginTop: 4 }}
+          onClick={() => {
+            setCompareModalVisible(false);
+            setCompareData(null);
+            navigate('/apps/kuaizhizao/cost-management/cost-comparison');
+          }}
+        >
+          按物料、工单做标准与实际对比（完整页面）
+        </Button>
         {compareData && (
           <Card title="成本对比结果" style={{ marginTop: 16 }}>
             <Row gutter={16}>

@@ -8,13 +8,14 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProFormSelect, ProFormDigit, ProFormDatePicker, PageContainer, ProDescriptions } from '@ant-design/pro-components';
+import { ActionType, ProFormSelect, ProFormDatePicker, PageContainer, ProDescriptions } from '@ant-design/pro-components';
 import { App, Button, Card, Tag, message, Modal, Divider, Row, Col, Statistic } from 'antd';
 import { CalculatorOutlined } from '@ant-design/icons';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { qualityCostApi } from '../../../services/cost';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
+import { loadWorkOrderSelectOptions, type CostSelectOption } from '../costSelectData';
 
 interface QualityCostResult {
   prevention_cost: number;
@@ -31,7 +32,11 @@ interface QualityCostResult {
   work_order_id?: number;
 }
 
-const QualityCostPage: React.FC = () => {
+export interface QualityCostPageProps {
+  embedded?: boolean;
+}
+
+const QualityCostPage: React.FC<QualityCostPageProps> = ({ embedded = false }) => {
   const { message: messageApi } = App.useApp();
   const formRef = useRef<any>(null);
 
@@ -39,6 +44,7 @@ const QualityCostPage: React.FC = () => {
   const [result, setResult] = useState<QualityCostResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [materials, setMaterials] = useState<any[]>([]);
+  const [workOrderOptions, setWorkOrderOptions] = useState<CostSelectOption[]>([]);
 
   /**
    * 加载物料列表
@@ -53,6 +59,21 @@ const QualityCostPage: React.FC = () => {
       }
     };
     loadMaterials();
+  }, []);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const opts = await loadWorkOrderSelectOptions(400);
+        if (!cancelled) setWorkOrderOptions(opts);
+      } catch (e) {
+        console.error('加载工单下拉失败:', e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   /**
@@ -94,7 +115,8 @@ const QualityCostPage: React.FC = () => {
 
   return (
     <PageContainer
-      title="质量成本核算"
+      ghost={embedded}
+      title={embedded ? false : '质量成本核算'}
       extra={[
         <Button
           key="calculate"
@@ -229,12 +251,17 @@ const QualityCostPage: React.FC = () => {
               option?.label?.toLowerCase().includes(input.toLowerCase()),
           }}
         />
-        <ProFormDigit
+        <ProFormSelect
           name="work_order_id"
-          label="工单ID（可选）"
-          placeholder="请输入工单ID（可选，用于核算特定工单的质量成本）"
+          label="工单（可选）"
+          placeholder="可选，用于核算特定工单的质量成本"
+          allowClear
+          options={workOrderOptions}
+          showSearch
           fieldProps={{
-            style: { width: '100%' },
+            optionFilterProp: 'label',
+            filterOption: (input: string, option: any) =>
+              String(option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
           }}
         />
         <ProFormDatePicker

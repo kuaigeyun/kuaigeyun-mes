@@ -1531,7 +1531,7 @@ export default {
   'app.kuaicaiwu.menu.cost-management.cost-rules': 'Cost Rules',
   'app.kuaicaiwu.menu.cost-management.cost-details': 'Cost Details',
   'app.kuaicaiwu.menu.cost-management.cost-optimization': 'Cost Optimization',
-  'app.kuaicaiwu.menu.cost-management.cost-report': 'Cost Report',
+  'app.kuaicaiwu.menu.cost-management.cost-report': 'Cost Reports & Analysis',
   'app.master-data.name': 'Master-data',
   'app.kuaiai.name': 'KU-AI',
 

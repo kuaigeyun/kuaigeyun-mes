@@ -33,7 +33,12 @@ interface ProductionCostResult {
   calculation_date: string;
 }
 
-const ProductionCostPage: React.FC = () => {
+export interface ProductionCostPageProps {
+  /** 嵌入成本核算「分项试算」时隐藏页头标题，避免与外层重复 */
+  embedded?: boolean;
+}
+
+const ProductionCostPage: React.FC<ProductionCostPageProps> = ({ embedded = false }) => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<any>(null);
@@ -110,7 +115,8 @@ const ProductionCostPage: React.FC = () => {
 
   return (
     <PageContainer
-      title="生产成本核算"
+      ghost={embedded}
+      title={embedded ? false : '生产成本核算'}
       extra={[
         <Button
           key="calculate"
