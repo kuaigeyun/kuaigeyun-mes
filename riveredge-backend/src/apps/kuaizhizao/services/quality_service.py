@@ -32,6 +32,24 @@ from datetime import timedelta
 from decimal import Decimal
 
 
+async def _get_quality_policy_flags(tenant_id: int) -> tuple[bool, bool]:
+    """读取质量策略开关（来料检验、过程检验）。"""
+    from infra.services.business_config_service import BusinessConfigService
+
+    cfg = await BusinessConfigService().get_business_config(tenant_id)
+    quality = cfg.get("parameters", {}).get("quality", {})
+    return bool(quality.get("incoming_inspection", False)), bool(quality.get("process_inspection", False))
+
+
+async def _is_finished_inspection_enabled(tenant_id: int) -> bool:
+    """读取成品检验开关。"""
+    from infra.services.business_config_service import BusinessConfigService
+
+    cfg = await BusinessConfigService().get_business_config(tenant_id)
+    quality = cfg.get("parameters", {}).get("quality", {})
+    return bool(quality.get("finished_inspection", False))
+
+
 class IncomingInspectionService(AppBaseService[IncomingInspection]):
     """来料检验单服务"""
 
@@ -40,6 +58,9 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
 
     async def create_incoming_inspection(self, tenant_id: int, inspection_data: IncomingInspectionCreate, created_by: int) -> IncomingInspectionResponse:
         """创建来料检验单"""
+        incoming_enabled, _ = await _get_quality_policy_flags(tenant_id)
+        if not incoming_enabled:
+            raise BusinessLogicError("当前组织未开启来料检验，禁止创建来料检验单")
         async with in_transaction():
             user_info = await self.get_user_info(created_by)
             today = datetime.now().strftime("%Y%m%d")
@@ -271,6 +292,9 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         
         为采购入库单的每个明细项创建一个来料检验单
         """
+        incoming_enabled, _ = await _get_quality_policy_flags(tenant_id)
+        if not incoming_enabled:
+            raise BusinessLogicError("当前组织未开启来料检验，禁止从采购入库单下推来料检验")
         from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
         from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
         
@@ -569,6 +593,9 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
 
     async def create_process_inspection(self, tenant_id: int, inspection_data: ProcessInspectionCreate, created_by: int) -> ProcessInspectionResponse:
         """创建过程检验单"""
+        _, process_enabled = await _get_quality_policy_flags(tenant_id)
+        if not process_enabled:
+            raise BusinessLogicError("当前组织未开启过程检验，禁止创建过程检验单")
         async with in_transaction():
             user_info = await self.get_user_info(created_by)
             today = datetime.now().strftime("%Y%m%d")
@@ -743,6 +770,9 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
         Returns:
             ProcessInspectionResponse: 创建的过程检验单
         """
+        _, process_enabled = await _get_quality_policy_flags(tenant_id)
+        if not process_enabled:
+            raise BusinessLogicError("当前组织未开启过程检验，禁止从工单下推过程检验")
         from apps.kuaizhizao.models.work_order import WorkOrder
         from apps.master_data.models.routing import RoutingOperation
         
@@ -993,6 +1023,9 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
 
     async def create_finished_goods_inspection(self, tenant_id: int, inspection_data: FinishedGoodsInspectionCreate, created_by: int) -> FinishedGoodsInspectionResponse:
         """创建成品检验单"""
+        finished_enabled = await _is_finished_inspection_enabled(tenant_id)
+        if not finished_enabled:
+            raise BusinessLogicError("当前组织未开启成品检验，禁止创建成品检验单")
         async with in_transaction():
             user_info = await self.get_user_info(created_by)
             today = datetime.now().strftime("%Y%m%d")
@@ -1251,6 +1284,9 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
         Returns:
             FinishedGoodsInspectionResponse: 创建的成品检验单
         """
+        finished_enabled = await _is_finished_inspection_enabled(tenant_id)
+        if not finished_enabled:
+            raise BusinessLogicError("当前组织未开启成品检验，禁止从工单下推成品检验")
         from apps.kuaizhizao.models.work_order import WorkOrder
         
         async with in_transaction():

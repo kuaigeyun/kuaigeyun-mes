@@ -60,6 +60,17 @@ export const PROCESS_CATEGORIES: ConfigCategory[] = [
     params: [
       { key: 'procurement.require_purchase_requisition', nameKey: 'pages.system.configCenter.param.procurement_require_purchase_requisition', descriptionKey: 'pages.system.configCenter.param.procurement_require_purchase_requisition_desc', source: 'business_config', sourcePath: 'parameters.procurement.require_purchase_requisition', type: 'boolean' },
       { key: 'purchase.auto_approval', nameKey: 'pages.system.configCenter.param.purchase_auto_approval', descriptionKey: 'pages.system.configCenter.param.purchase_auto_approval_desc', source: 'business_config', sourcePath: 'parameters.purchase.auto_approval', type: 'boolean' },
+      { key: 'quality.require_incoming_inspection_for_receipt', nameKey: 'pages.system.configCenter.param.quality_require_incoming_inspection_for_receipt', descriptionKey: 'pages.system.configCenter.param.quality_require_incoming_inspection_for_receipt_desc', source: 'business_config', sourcePath: 'parameters.quality.require_incoming_inspection_for_receipt', type: 'boolean' },
+    ],
+  },
+  {
+    id: 'process_work_order',
+    nameKey: 'pages.system.configCenter.processCategory.work_order',
+    descriptionKey: 'pages.system.configCenter.processCategory.work_orderDesc',
+    params: [
+      { key: 'work_order.picking_confirm_warehouse_only', nameKey: 'pages.system.configCenter.param.work_order_picking_confirm_warehouse_only', descriptionKey: 'pages.system.configCenter.param.work_order_picking_confirm_warehouse_only_desc', source: 'business_config', sourcePath: 'parameters.work_order.picking_confirm_warehouse_only', type: 'boolean' },
+      { key: 'work_order.require_confirmed_picking_before_operation_start', nameKey: 'pages.system.configCenter.param.work_order_require_confirmed_picking_before_operation_start', descriptionKey: 'pages.system.configCenter.param.work_order_require_confirmed_picking_before_operation_start_desc', source: 'business_config', sourcePath: 'parameters.work_order.require_confirmed_picking_before_operation_start', type: 'boolean' },
+      { key: 'work_order.require_confirmed_picking_before_reporting', nameKey: 'pages.system.configCenter.param.work_order_require_confirmed_picking_before_reporting', descriptionKey: 'pages.system.configCenter.param.work_order_require_confirmed_picking_before_reporting_desc', source: 'business_config', sourcePath: 'parameters.work_order.require_confirmed_picking_before_reporting', type: 'boolean' },
     ],
   },
   {
@@ -86,7 +97,6 @@ export const PARAMETER_CATEGORIES: ConfigCategory[] = [
       { key: 'work_order.merge', nameKey: 'pages.system.configCenter.param.work_order_merge', descriptionKey: 'pages.system.configCenter.param.work_order_merge_desc', source: 'business_config', sourcePath: 'parameters.work_order.merge', type: 'boolean' },
       { key: 'reporting.quick_reporting', nameKey: 'pages.system.configCenter.param.reporting_quick_reporting', descriptionKey: 'pages.system.configCenter.param.reporting_quick_reporting_desc', source: 'business_config', sourcePath: 'parameters.reporting.quick_reporting', type: 'boolean' },
       { key: 'reporting.parameter_reporting', nameKey: 'pages.system.configCenter.param.reporting_parameter_reporting', descriptionKey: 'pages.system.configCenter.param.reporting_parameter_reporting_desc', source: 'business_config', sourcePath: 'parameters.reporting.parameter_reporting', type: 'boolean' },
-      { key: 'reporting.auto_fill', nameKey: 'pages.system.configCenter.param.reporting_auto_fill', descriptionKey: 'pages.system.configCenter.param.reporting_auto_fill_desc', source: 'business_config', sourcePath: 'parameters.reporting.auto_fill', type: 'boolean' },
       { key: 'reporting.data_correction', nameKey: 'pages.system.configCenter.param.reporting_data_correction', descriptionKey: 'pages.system.configCenter.param.reporting_data_correction_desc', source: 'business_config', sourcePath: 'parameters.reporting.data_correction', type: 'boolean' },
       { key: 'bom.bom_multi_version_allowed', nameKey: 'pages.system.configCenter.param.bom_bom_multi_version_allowed', descriptionKey: 'pages.system.configCenter.param.bom_bom_multi_version_allowed_desc', source: 'business_config', sourcePath: 'parameters.bom.bom_multi_version_allowed', type: 'boolean' },
     ],
@@ -98,7 +108,6 @@ export const PARAMETER_CATEGORIES: ConfigCategory[] = [
     params: [
       { key: 'warehouse.batch_management', nameKey: 'pages.system.configCenter.param.warehouse_batch_management', descriptionKey: 'pages.system.configCenter.param.warehouse_batch_management_desc', source: 'business_config', sourcePath: 'parameters.warehouse.batch_management', type: 'boolean' },
       { key: 'warehouse.serial_management', nameKey: 'pages.system.configCenter.param.warehouse_serial_management', descriptionKey: 'pages.system.configCenter.param.warehouse_serial_management_desc', source: 'business_config', sourcePath: 'parameters.warehouse.serial_management', type: 'boolean' },
-      { key: 'warehouse.multi_unit', nameKey: 'pages.system.configCenter.param.warehouse_multi_unit', descriptionKey: 'pages.system.configCenter.param.warehouse_multi_unit_desc', source: 'business_config', sourcePath: 'parameters.warehouse.multi_unit', type: 'boolean' },
       { key: 'warehouse.fifo', nameKey: 'pages.system.configCenter.param.warehouse_fifo', descriptionKey: 'pages.system.configCenter.param.warehouse_fifo_desc', source: 'business_config', sourcePath: 'parameters.warehouse.fifo', type: 'boolean' },
       { key: 'warehouse.lifo', nameKey: 'pages.system.configCenter.param.warehouse_lifo', descriptionKey: 'pages.system.configCenter.param.warehouse_lifo_desc', source: 'business_config', sourcePath: 'parameters.warehouse.lifo', type: 'boolean' },
       { key: 'warehouse.location_management', nameKey: 'pages.system.configCenter.param.warehouse_location_management', descriptionKey: 'pages.system.configCenter.param.warehouse_location_management_desc', source: 'business_config', sourcePath: 'parameters.warehouse.location_management', type: 'boolean' },

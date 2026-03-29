@@ -58,6 +58,9 @@ riveredge-panel/fix-and-start.sh
 # ===== 后端脚本与测试（不推送） =====
 riveredge-backend/scripts/
 riveredge-backend/tests/
+!riveredge-backend/tests/
+!riveredge-backend/tests/config_gates/
+!riveredge-backend/tests/config_gates/**
 
 # ===== 测试 =====
 .coverage

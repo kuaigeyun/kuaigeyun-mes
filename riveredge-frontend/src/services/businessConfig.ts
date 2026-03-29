@@ -69,7 +69,16 @@ export interface NodesUpdateRequest {
  * 业务配置 schema 响应
  */
 export interface BusinessConfigSchema {
+  processRegistry?: Record<string, string[]>;
+  processRegistryMeta?: Record<string, { labelKey?: string; descriptionKey?: string }>;
+  processRegistryParamMeta?: Record<string, Record<string, { labelKey?: string; descriptionKey?: string }>>;
+  processRegistryControlMeta?: Record<string, Record<string, { type?: 'boolean' | 'number' | 'string' | 'color'; min?: number; max?: number }>>;
+  parameterRegistry?: Record<string, string[]>;
+  parameterRegistryMeta?: Record<string, { labelKey?: string; descriptionKey?: string }>;
+  parameterRegistryParamMeta?: Record<string, Record<string, { labelKey?: string; descriptionKey?: string }>>;
+  parameterRegistryControlMeta?: Record<string, Record<string, { type?: 'boolean' | 'number' | 'string' | 'color'; min?: number; max?: number }>>;
   parameterKeys: Record<string, string[]>;
+  parameterImplementation?: Record<string, Record<string, boolean>>;
   allNodes: string[];
 }
 

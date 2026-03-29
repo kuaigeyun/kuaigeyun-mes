@@ -58,7 +58,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
         self,
         tenant_id: int,
         reporting_data: ReportingRecordCreate,
-        reported_by: int
+        reported_by: int,
+        entry_mode: str = "manual",
     ) -> ReportingRecordResponse:
         """
         创建报工记录
@@ -84,6 +85,28 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
             if not work_order:
                 raise NotFoundError(f"工单不存在: {reporting_data.work_order_id}")
+
+            block_level = await BusinessConfigService().get_material_shortage_block_level(tenant_id)
+            if block_level >= 3:
+                from apps.kuaizhizao.services.work_order_service import WorkOrderService
+                shortage_result = await WorkOrderService().check_material_shortage(
+                    tenant_id=tenant_id,
+                    work_order_id=reporting_data.work_order_id,
+                )
+                if shortage_result.get("has_shortage"):
+                    shortage_materials = ", ".join([
+                        f"{item['material_name']}(缺{item['shortage_quantity']}{item['unit']})"
+                        for item in shortage_result.get("shortage_items", [])[:3]
+                    ])
+                    raise BusinessLogicError(
+                        "工单存在缺料，无法报工。缺料物料："
+                        + shortage_materials
+                        + (
+                            f"等{shortage_result.get('total_shortage_count', 0)}种物料"
+                            if shortage_result.get("total_shortage_count", 0) > 3
+                            else ""
+                        )
+                    )
 
             policy = await BusinessConfigService().get_work_order_picking_policy(tenant_id)
             if policy.get("require_confirmed_picking_before_reporting", False):
@@ -201,6 +224,18 @@ class ReportingService(AppBaseService[ReportingRecord]):
             # 检查是否开启自动审核
             biz_config_svc = BusinessConfigService()
             biz_config = await biz_config_svc.get_business_config(tenant_id)
+            reporting_params = biz_config.get("parameters", {}).get("reporting", {})
+
+            # 参数报工开关强执行：关闭时不允许提交 sop_parameters
+            parameter_reporting_enabled = reporting_params.get("parameter_reporting", False)
+            if (reporting_data.sop_parameters or {}) and not parameter_reporting_enabled:
+                raise BusinessLogicError("当前组织未开启参数报工，禁止提交工艺参数报工数据")
+
+            # 快捷报工开关强执行：关闭时不允许走快捷报工入口
+            quick_reporting_enabled = reporting_params.get("quick_reporting", False)
+            if entry_mode == "quick" and not quick_reporting_enabled:
+                raise BusinessLogicError("当前组织未开启快捷报工，请在配置中心启用后再操作")
+
             auto_approve = biz_config.get("parameters", {}).get("reporting", {}).get("auto_approve", False)
 
             approved_at = None
@@ -1131,6 +1166,13 @@ class ReportingService(AppBaseService[ReportingRecord]):
             NotFoundError: 报工记录不存在
             ValidationError: 数据验证失败
         """
+        quality_params = (
+            (await BusinessConfigService().get_business_config(tenant_id))
+            .get("parameters", {})
+            .get("quality", {})
+        )
+        if not quality_params.get("defect_handling", False):
+            raise BusinessLogicError("当前组织未开启不良品处理，禁止创建不良品记录")
         async with in_transaction():
             # 获取报工记录
             reporting_record = await ReportingRecord.get_or_none(
@@ -1302,6 +1344,15 @@ class ReportingService(AppBaseService[ReportingRecord]):
             raise ValidationError("修正原因不能为空")
 
         async with in_transaction():
+            biz_config = await BusinessConfigService().get_business_config(tenant_id)
+            data_correction_enabled = (
+                biz_config.get("parameters", {})
+                .get("reporting", {})
+                .get("data_correction", False)
+            )
+            if not data_correction_enabled:
+                raise BusinessLogicError("当前组织未开启报工数据修正功能")
+
             # 获取报工记录
             reporting_record = await ReportingRecord.get_or_none(
                 id=record_id,
@@ -1386,6 +1437,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
         """从报工记录触发质量检验需求"""
         try:
             from apps.kuaizhizao.services.quality_service import ProcessInspectionService, FinishedGoodsInspectionService
+            from infra.services.business_config_service import BusinessConfigService
             
             # 判断是否为工单的最后一道工序（粗略判断：基于 sequence）
             # 在实际业务中，最后一道工序通常触发成品检验，中间工序触发过程检验
@@ -1401,6 +1453,14 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 
             if is_last_op:
                 # 触发成品检验
+                quality_params = (
+                    (await BusinessConfigService().get_business_config(tenant_id))
+                    .get("parameters", {})
+                    .get("quality", {})
+                )
+                if not quality_params.get("finished_inspection", False):
+                    logger.info(f"成品检验开关关闭，跳过自动触发成品检验: 工单 {work_order.code}")
+                    return
                 fg_qc_svc = FinishedGoodsInspectionService()
                 await fg_qc_svc.create_inspection_from_work_order(
                     tenant_id=tenant_id,
@@ -1411,6 +1471,16 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 logger.info(f"末道工序报工 -> 自动触发成品检验需求: 工单 {work_order.code}")
             else:
                 # 触发过程检验
+                quality_params = (
+                    (await BusinessConfigService().get_business_config(tenant_id))
+                    .get("parameters", {})
+                    .get("quality", {})
+                )
+                if not quality_params.get("process_inspection", False):
+                    logger.info(
+                        f"过程检验开关关闭，跳过自动触发过程检验: 工单 {work_order.code}, 工序 {work_order_operation.operation_name}"
+                    )
+                    return
                 proc_qc_svc = ProcessInspectionService()
                 await proc_qc_svc.create_inspection_from_work_order(
                     tenant_id=tenant_id,

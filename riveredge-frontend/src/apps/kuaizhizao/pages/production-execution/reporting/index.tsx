@@ -1022,7 +1022,7 @@ const ReportingPage: React.FC = () => {
           remarks: values.remarks,
         };
 
-        await reportingApi.create(reportingData);
+        await reportingApi.quickCreate(reportingData);
         messageApi.success('报工成功');
         setScanModalVisible(false);
         setCurrentWorkOrder(null);
@@ -2032,7 +2032,7 @@ const ReportingPage: React.FC = () => {
                         sop_parameters: Object.keys(sopParams).length > 0 ? sopParams : undefined,
                       };
 
-                      const reportingRecord = await reportingApi.create(reportingData);
+                      const reportingRecord = await reportingApi.quickCreate(reportingData);
                       messageApi.success('报工成功');
 
                       // 保存上料下料绑定记录（如果存在）

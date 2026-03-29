@@ -20,6 +20,7 @@ from loguru import logger
 from tortoise.transactions import atomic
 
 from apps.kuaizhizao.utils.inventory_helper import get_material_inventory_info
+from infra.services.business_config_service import BusinessConfigService
 
 
 class InventoryService:
@@ -29,6 +30,15 @@ class InventoryService:
     提供 increase_stock、decrease_stock、get_quantity、adjust_inventory 等接口，
     供 warehouse_service、stocktaking_service、assembly_order_service 等调用。
     """
+
+    @staticmethod
+    async def _get_warehouse_management_flags(tenant_id: int) -> tuple[bool, bool]:
+        """读取仓储批号/序列号管理开关。"""
+        from infra.services.business_config_service import BusinessConfigService
+
+        cfg = await BusinessConfigService().get_business_config(tenant_id)
+        wh = cfg.get("parameters", {}).get("warehouse", {})
+        return bool(wh.get("batch_management", False)), bool(wh.get("serial_management", False))
 
     @staticmethod
     @atomic()
@@ -70,6 +80,21 @@ class InventoryService:
             if not use_line_side:
                 # 主仓（normal/wip 或 warehouse_id 为空）：使用 MaterialBatch
                 from apps.master_data.models.material_batch import MaterialBatch
+                from apps.master_data.models.material import Material
+                from infra.exceptions.exceptions import BusinessLogicError
+
+                batch_management_enabled, _ = await InventoryService._get_warehouse_management_flags(tenant_id)
+                if batch_management_enabled:
+                    material = await Material.get_or_none(
+                        tenant_id=tenant_id,
+                        id=material_id,
+                        deleted_at__isnull=True,
+                    )
+                    if material and getattr(material, "batch_managed", False) and not (batch_no and str(batch_no).strip()):
+                        material_code = getattr(material, "main_code", None) or getattr(material, "code", "")
+                        raise BusinessLogicError(
+                            f"物料 {material.name}（{material_code}）启用了批号管理，入库必须提供批号"
+                        )
 
                 batch_no = batch_no or "DEFAULT"
                 batch = await MaterialBatch.filter(
@@ -171,6 +196,24 @@ class InventoryService:
 
             if not use_line_side:
                 from apps.master_data.models.material_batch import MaterialBatch
+                from apps.master_data.models.material import Material
+                from infra.exceptions.exceptions import BusinessLogicError
+
+                batch_management_enabled, _ = await InventoryService._get_warehouse_management_flags(tenant_id)
+                cfg = await BusinessConfigService().get_business_config(tenant_id)
+                wh_cfg = cfg.get("parameters", {}).get("warehouse", {})
+                lifo_enabled = bool(wh_cfg.get("lifo", False))
+                if batch_management_enabled:
+                    material = await Material.get_or_none(
+                        tenant_id=tenant_id,
+                        id=material_id,
+                        deleted_at__isnull=True,
+                    )
+                    if material and getattr(material, "batch_managed", False) and not (batch_no and str(batch_no).strip()):
+                        material_code = getattr(material, "main_code", None) or getattr(material, "code", "")
+                        raise BusinessLogicError(
+                            f"物料 {material.name}（{material_code}）启用了批号管理，出库必须指定批号"
+                        )
 
                 if batch_no:
                     batch = await MaterialBatch.filter(
@@ -204,12 +247,29 @@ class InventoryService:
                                 f"系统内仍存在早期旧批次 (批号:{older_batch.batch_no}) 未用完！"
                                 f"请优先领用早期批次以防产品滞留过期。"
                             )
+                    # 开启 LIFO 且未开启 FIFO 时，强制优先使用最新批次
+                    if lifo_enabled and not enforce_fifo:
+                        newer_batch = await MaterialBatch.filter(
+                            tenant_id=tenant_id,
+                            material_id=material_id,
+                            deleted_at__isnull=True,
+                            status="in_stock",
+                            quantity__gt=0,
+                            id__gt=batch.id,
+                        ).order_by("-id").first()
+                        if newer_batch:
+                            raise BusinessLogicError(
+                                f"【防呆拦截】当前物料不符合后进先出！"
+                                f"系统内仍存在更新批次 (批号:{newer_batch.batch_no}) 未用完！"
+                                f"请优先领用最新批次。"
+                            )
                     batch.quantity = (batch.quantity or Decimal(0)) - quantity
                     if batch.quantity <= 0:
                         batch.status = "out_stock"
                     await batch.save()
                 else:
-                    # FIFO: 按批号取最早的在库批次扣减
+                    # 默认 FIFO；若开启 LIFO 且未开启 FIFO，则按最新批次扣减
+                    order_key = "-id" if (lifo_enabled and not enforce_fifo) else "id"
                     batches = (
                         await MaterialBatch.filter(
                             tenant_id=tenant_id,
@@ -219,7 +279,7 @@ class InventoryService:
                             quantity__gt=0,
                         )
                         .select_for_update()
-                        .order_by("id")
+                        .order_by(order_key)
                         .all()
                     )
                     remaining = quantity

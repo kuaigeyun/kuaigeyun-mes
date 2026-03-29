@@ -42,10 +42,28 @@ async def get_config_schema(
     """
     from infra.services.business_config_service import (
         _build_parameter_keys_schema,
+        _build_process_registry_schema,
+        _build_process_registry_meta_schema,
+        _build_process_registry_param_meta_schema,
+        _build_process_registry_control_meta_schema,
+        _build_parameter_registry_schema,
+        _build_parameter_registry_meta_schema,
+        _build_parameter_registry_param_meta_schema,
+        _build_parameter_registry_control_meta_schema,
+        _build_parameter_implementation_schema,
         ALL_NODES,
     )
     return {
+        "processRegistry": _build_process_registry_schema(),
+        "processRegistryMeta": _build_process_registry_meta_schema(),
+        "processRegistryParamMeta": _build_process_registry_param_meta_schema(),
+        "processRegistryControlMeta": _build_process_registry_control_meta_schema(),
+        "parameterRegistry": _build_parameter_registry_schema(),
+        "parameterRegistryMeta": _build_parameter_registry_meta_schema(),
+        "parameterRegistryParamMeta": _build_parameter_registry_param_meta_schema(),
+        "parameterRegistryControlMeta": _build_parameter_registry_control_meta_schema(),
         "parameterKeys": _build_parameter_keys_schema(),
+        "parameterImplementation": _build_parameter_implementation_schema(),
         "allNodes": ALL_NODES,
     }
 

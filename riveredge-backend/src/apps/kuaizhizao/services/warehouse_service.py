@@ -10,6 +10,7 @@ Date: 2025-12-30
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 from decimal import Decimal
+import json
 import uuid
 from tortoise.transactions import in_transaction
 from tortoise.expressions import Q
@@ -87,6 +88,101 @@ from apps.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
 from infra.models.user import User
+
+
+def _parse_serial_numbers(serial_numbers: Any) -> List[str]:
+    """标准化序列号输入（list/json-string）。"""
+    if serial_numbers is None:
+        return []
+    if isinstance(serial_numbers, list):
+        return [str(x).strip() for x in serial_numbers if str(x).strip()]
+    if isinstance(serial_numbers, str):
+        text = serial_numbers.strip()
+        if not text:
+            return []
+        try:
+            parsed = json.loads(text)
+            if isinstance(parsed, list):
+                return [str(x).strip() for x in parsed if str(x).strip()]
+        except Exception:
+            # 兼容逗号分隔输入
+            return [seg.strip() for seg in text.split(",") if seg.strip()]
+    return []
+
+
+async def _validate_batch_serial_policy(
+    tenant_id: int,
+    material: Any,
+    batch_number: Optional[str],
+    serial_numbers: Any,
+    quantity: Optional[Any],
+    scene: str,
+) -> None:
+    """按业务配置校验批号/序列号要求。"""
+    cfg = await BusinessConfigService().get_business_config(tenant_id)
+    wh = cfg.get("parameters", {}).get("warehouse", {})
+    batch_enabled = bool(wh.get("batch_management", False))
+    serial_enabled = bool(wh.get("serial_management", False))
+
+    material_code = getattr(material, "main_code", None) or getattr(material, "code", "")
+
+    if batch_enabled and getattr(material, "batch_managed", False):
+        if not (batch_number and str(batch_number).strip()):
+            raise ValidationError(
+                f"{scene}失败：物料 {material.name}（{material_code}）启用了批号管理，必须提供批号"
+            )
+
+    if serial_enabled and getattr(material, "serial_managed", False):
+        normalized = _parse_serial_numbers(serial_numbers)
+        if not normalized:
+            raise ValidationError(
+                f"{scene}失败：物料 {material.name}（{material_code}）启用了序列号管理，必须提供序列号"
+            )
+        if quantity is not None and Decimal(str(quantity or 0)) > 0 and len(normalized) <= 0:
+            raise ValidationError(
+                f"{scene}失败：物料 {material.name}（{material_code}）序列号数量不足"
+            )
+
+
+async def _get_warehouse_policy_flags(tenant_id: int) -> tuple[bool, bool]:
+    """读取仓储策略开关（库位管理、自动出库）。"""
+    cfg = await BusinessConfigService().get_business_config(tenant_id)
+    wh = cfg.get("parameters", {}).get("warehouse", {})
+    return bool(wh.get("location_management", False)), bool(wh.get("auto_outbound", False))
+
+
+def _validate_location_if_required(
+    location_required: bool,
+    location_id: Optional[int],
+    location_code: Optional[str],
+    scene: str,
+    material_label: str,
+) -> None:
+    if not location_required:
+        return
+    if location_id is None and not (location_code and str(location_code).strip()):
+        raise ValidationError(f"{scene}失败：物料 {material_label} 启用库位管理后必须提供库位")
+
+
+def _validate_purchase_receipt_tolerance(
+    ordered_quantity: Decimal,
+    already_received_quantity: Decimal,
+    incoming_quantity: Decimal,
+    tolerance_percentage: float,
+    material_label: str,
+) -> None:
+    """校验采购入库是否超过配置容差。"""
+    if ordered_quantity <= 0:
+        return
+    tolerance_ratio = Decimal(str(max(0.0, tolerance_percentage))) / Decimal("100")
+    max_receivable = ordered_quantity * (Decimal("1") + tolerance_ratio)
+    after_receipt = already_received_quantity + incoming_quantity
+    if after_receipt > max_receivable:
+        raise BusinessLogicError(
+            f"采购入库超容差：物料 {material_label} 入库后累计 {after_receipt}，"
+            f"超过允许上限 {max_receivable}（订单数量 {ordered_quantity}，容差 {tolerance_percentage}%）"
+        )
+
 
 class ProductionPickingService(AppBaseService[ProductionPicking]):
     """生产领料单服务"""
@@ -350,6 +446,12 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                         except Exception as calc_e:
                             logger.warning(f"防超发校验过程发生错误，可能是缺少BOM，跳过强制拦截: {calc_e}")
                 picking = await ProductionPicking.get(tenant_id=tenant_id, id=picking_id)
+                biz_config = await BusinessConfigService().get_business_config(tenant_id)
+                enforce_fifo = (
+                    biz_config.get("parameters", {})
+                    .get("warehouse", {})
+                    .get("fifo", False)
+                )
                 for item in picking_items:
                     qty = item.required_quantity or item.picked_quantity or Decimal(0)
                     if qty <= 0:
@@ -364,7 +466,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                         source_type="production_picking",
                         source_doc_id=picking_id,
                         source_doc_code=picking.picking_code,
-                        enforce_fifo=True,
+                        enforce_fifo=enforce_fifo,
                     )
             except Exception as inv_e:
                 logger.error("生产领料确认-更新库存失败: %s", inv_e)
@@ -816,6 +918,7 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                 from apps.kuaizhizao.models.finished_goods_receipt_item import FinishedGoodsReceiptItem
                 from apps.master_data.models.material import Material
                 from apps.kuaizhizao.services.batch_serial_helper import ensure_batch_no_for_item
+                location_required, _ = await _get_warehouse_policy_flags(tenant_id)
                 
                 for item_data in items:
                     material = await Material.get_or_none(
@@ -831,6 +934,13 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                             item_data=item_data,
                             supplier_code=None,
                         ) or batch_number
+                    _validate_location_if_required(
+                        location_required=location_required,
+                        location_id=getattr(item_data, 'location_id', None),
+                        location_code=getattr(item_data, 'location_code', None),
+                        scene="成品入库",
+                        material_label=getattr(item_data, "material_name", None) or getattr(item_data, "material_code", "未知物料"),
+                    )
                     
                     await FinishedGoodsReceiptItem.create(
                         tenant_id=tenant_id,
@@ -1182,6 +1292,8 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "sales_delivery")
         if not is_enabled:
             raise BusinessLogicError("销售发货模块未启用，无法创建出库单")
+        location_required, auto_outbound_enabled = await _get_warehouse_policy_flags(tenant_id)
+        created_delivery_id: Optional[int] = None
 
         async with in_transaction():
             user_info = await self.get_user_info(created_by)
@@ -1271,24 +1383,33 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 from apps.master_data.models.material import Material
                 
                 for item_data in items:
-                    # 验证批号和序列号管理
+                    # 配置驱动的批号/序列号校验
                     material = await Material.get_or_none(
                         tenant_id=tenant_id,
                         id=item_data.material_id
                     )
-                    
-                    # 验证批号
                     batch_number = getattr(item_data, 'batch_number', None)
-                    if material and material.batch_managed and not batch_number:
-                        raise ValidationError(
-                            f"物料 {material.name}（{material.main_code}）启用了批号管理，必须提供批号"
+                    serial_numbers = getattr(item_data, 'serial_numbers', None)
+                    if material:
+                        await _validate_batch_serial_policy(
+                            tenant_id=tenant_id,
+                            material=material,
+                            batch_number=batch_number,
+                            serial_numbers=serial_numbers,
+                            quantity=getattr(item_data, "delivery_quantity", None),
+                            scene="销售出库",
                         )
+                    _validate_location_if_required(
+                        location_required=location_required,
+                        location_id=getattr(item_data, 'location_id', None),
+                        location_code=getattr(item_data, 'location_code', None),
+                        scene="销售出库",
+                        material_label=getattr(item_data, "material_name", None) or getattr(item_data, "material_code", "未知物料"),
+                    )
                     
                     # 序列号信息（批号和序列号选择功能增强）
-                    serial_numbers = getattr(item_data, 'serial_numbers', None)
                     # 如果serial_numbers是列表，转换为JSON格式存储
                     if serial_numbers and isinstance(serial_numbers, list):
-                        import json
                         serial_numbers_json = json.dumps(serial_numbers)
                     elif serial_numbers:
                         # 如果已经是字符串格式的JSON，直接使用
@@ -1382,8 +1503,19 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                         )
                 except Exception as e:
                     logger.warning("建立销售预测→销售出库 单据关联失败: %s", e)
-            
-            return SalesDeliveryResponse.model_validate(delivery)
+            created_delivery_id = delivery.id
+
+        if auto_outbound_enabled and created_delivery_id:
+            delivery_obj = await SalesDelivery.get_or_none(tenant_id=tenant_id, id=created_delivery_id)
+            if delivery_obj and delivery_obj.status == "待出库":
+                return await self.confirm_delivery(
+                    tenant_id=tenant_id,
+                    delivery_id=created_delivery_id,
+                    confirmed_by=created_by,
+                )
+        return SalesDeliveryResponse.model_validate(
+            await SalesDelivery.get(tenant_id=tenant_id, id=created_delivery_id)
+        )
 
     async def get_sales_delivery_by_id(self, tenant_id: int, delivery_id: int) -> SalesDeliveryWithItemsResponse:
         """根据ID获取销售出库单（含明细）"""
@@ -1437,6 +1569,12 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 items = await SalesDeliveryItem.filter(
                     tenant_id=tenant_id, delivery_id=delivery_id
                 ).all()
+                biz_config = await BusinessConfigService().get_business_config(tenant_id)
+                enforce_fifo = (
+                    biz_config.get("parameters", {})
+                    .get("warehouse", {})
+                    .get("fifo", False)
+                )
                 wh_id = delivery.warehouse_id if delivery.warehouse_id else None
                 for item in items:
                     qty = item.delivery_quantity or Decimal(0)
@@ -1451,6 +1589,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                         source_type="sales_delivery",
                         source_doc_id=delivery_id,
                         source_doc_code=delivery.delivery_code,
+                        enforce_fifo=enforce_fifo,
                     )
             except Exception as inv_e:
                 logger.error("销售出库确认-更新库存失败: %s", inv_e)
@@ -1831,6 +1970,8 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
             
             # 获取供应商编码（用于批号规则变量）
             supplier_code = None
+            location_required, _ = await _get_warehouse_policy_flags(tenant_id)
+            tolerance_percentage = await self.business_config_service.get_purchase_tolerance_percentage(tenant_id)
             supplier_id = getattr(receipt_data, "supplier_id", None)
             if supplier_id:
                 from apps.master_data.models.supplier import Supplier
@@ -1843,6 +1984,41 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 # 确保数量字段是Decimal类型
                 receipt_quantity = Decimal(str(item_data.receipt_quantity))
                 unit_price = Decimal(str(item_data.unit_price))
+
+                purchase_order_item_id = int(getattr(item_data, "purchase_order_item_id", 0) or 0)
+                if purchase_order_item_id > 0:
+                    from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+
+                    po_item = await PurchaseOrderItem.get_or_none(
+                        tenant_id=tenant_id,
+                        id=purchase_order_item_id,
+                        deleted_at__isnull=True,
+                    )
+                    if not po_item:
+                        raise ValidationError(f"采购订单明细不存在: {purchase_order_item_id}")
+
+                    historical_items = await PurchaseReceiptItem.filter(
+                        tenant_id=tenant_id,
+                        purchase_order_item_id=purchase_order_item_id,
+                        deleted_at__isnull=True,
+                    ).all()
+                    already_received_qty = Decimal("0")
+                    for historical in historical_items:
+                        historical_receipt = await PurchaseReceipt.get_or_none(
+                            tenant_id=tenant_id,
+                            id=historical.receipt_id,
+                            deleted_at__isnull=True,
+                        )
+                        if historical_receipt and historical_receipt.status not in ("已作废", "作废", "void", "VOID", "cancelled", "CANCELLED"):
+                            already_received_qty += Decimal(str(historical.receipt_quantity or 0))
+
+                    _validate_purchase_receipt_tolerance(
+                        ordered_quantity=Decimal(str(po_item.ordered_quantity or 0)),
+                        already_received_quantity=already_received_qty,
+                        incoming_quantity=receipt_quantity,
+                        tolerance_percentage=tolerance_percentage,
+                        material_label=getattr(item_data, "material_name", None) or getattr(item_data, "material_code", "未知物料"),
+                    )
                 
                 # 批号管理物料：未填写批号时自动生成
                 from apps.master_data.models.material import Material
@@ -1857,6 +2033,13 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     )
                     if batch_no is not None:
                         item_dict["batch_number"] = batch_no
+                _validate_location_if_required(
+                    location_required=location_required,
+                    location_id=getattr(item_data, 'location_id', None),
+                    location_code=getattr(item_data, 'location_code', None),
+                    scene="采购入库",
+                    material_label=getattr(item_data, "material_name", None) or getattr(item_data, "material_code", "未知物料"),
+                )
                 
                 item_dict.update({
                     'tenant_id': tenant_id,
@@ -2752,12 +2935,34 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             
             # 创建退货单明细
             if items:
+                from apps.master_data.models.material import Material
+                location_required, _ = await _get_warehouse_policy_flags(tenant_id)
                 for item_data in items:
+                    material = await Material.get_or_none(
+                        tenant_id=tenant_id,
+                        id=item_data.material_id
+                    )
+                    batch_number = getattr(item_data, 'batch_number', None)
                     # 序列号信息（批号和序列号选择功能增强）
                     serial_numbers = getattr(item_data, 'serial_numbers', None)
+                    if material:
+                        await _validate_batch_serial_policy(
+                            tenant_id=tenant_id,
+                            material=material,
+                            batch_number=batch_number,
+                            serial_numbers=serial_numbers,
+                            quantity=getattr(item_data, "return_quantity", None),
+                            scene="销售退货",
+                        )
+                    _validate_location_if_required(
+                        location_required=location_required,
+                        location_id=getattr(item_data, 'location_id', None),
+                        location_code=getattr(item_data, 'location_code', None),
+                        scene="销售退货",
+                        material_label=getattr(item_data, "material_name", None) or getattr(item_data, "material_code", "未知物料"),
+                    )
                     # 如果serial_numbers是列表，转换为JSON格式存储
                     if serial_numbers and isinstance(serial_numbers, list):
-                        import json
                         serial_numbers_json = json.dumps(serial_numbers)
                     elif serial_numbers:
                         # 如果已经是字符串格式的JSON，直接使用
@@ -3093,12 +3298,34 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
             
             # 创建退货单明细
             if items:
+                from apps.master_data.models.material import Material
+                location_required, _ = await _get_warehouse_policy_flags(tenant_id)
                 for item_data in items:
+                    material = await Material.get_or_none(
+                        tenant_id=tenant_id,
+                        id=item_data.material_id
+                    )
+                    batch_number = getattr(item_data, 'batch_number', None)
                     # 序列号信息（批号和序列号选择功能增强）
                     serial_numbers = getattr(item_data, 'serial_numbers', None)
+                    if material:
+                        await _validate_batch_serial_policy(
+                            tenant_id=tenant_id,
+                            material=material,
+                            batch_number=batch_number,
+                            serial_numbers=serial_numbers,
+                            quantity=getattr(item_data, "return_quantity", None),
+                            scene="采购退货",
+                        )
+                    _validate_location_if_required(
+                        location_required=location_required,
+                        location_id=getattr(item_data, 'location_id', None),
+                        location_code=getattr(item_data, 'location_code', None),
+                        scene="采购退货",
+                        material_label=getattr(item_data, "material_name", None) or getattr(item_data, "material_code", "未知物料"),
+                    )
                     # 如果serial_numbers是列表，转换为JSON格式存储
                     if serial_numbers and isinstance(serial_numbers, list):
-                        import json
                         serial_numbers_json = json.dumps(serial_numbers)
                     elif serial_numbers:
                         # 如果已经是字符串格式的JSON，直接使用
@@ -3294,6 +3521,12 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                 items = await PurchaseReturnItem.filter(
                     tenant_id=tenant_id, return_id=return_id
                 ).all()
+                biz_config = await BusinessConfigService().get_business_config(tenant_id)
+                enforce_fifo = (
+                    biz_config.get("parameters", {})
+                    .get("warehouse", {})
+                    .get("fifo", False)
+                )
                 wh_id = ret_obj.warehouse_id if ret_obj.warehouse_id else None
                 for item in items:
                     qty = item.return_quantity or Decimal(0)
@@ -3308,6 +3541,7 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                         source_type="purchase_return",
                         source_doc_id=return_id,
                         source_doc_code=ret_obj.return_code,
+                        enforce_fifo=enforce_fifo,
                     )
             except Exception as inv_e:
                 logger.error("采购退货确认-更新库存失败: %s", inv_e)
@@ -3578,6 +3812,8 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
         is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "outbound")
         if not is_enabled:
             raise BusinessLogicError("出库管理节点未启用，无法创建其他出库单")
+        location_required, auto_outbound_enabled = await _get_warehouse_policy_flags(tenant_id)
+        created_outbound_id: Optional[int] = None
         async with in_transaction():
             user_info = await self.get_user_info(created_by)
             today = datetime.now().strftime("%Y%m%d")
@@ -3599,6 +3835,13 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
             total_amount = Decimal(0)
             for item_data in items:
                 qty = Decimal(str(item_data.outbound_quantity))
+                _validate_location_if_required(
+                    location_required=location_required,
+                    location_id=getattr(item_data, 'location_id', None),
+                    location_code=getattr(item_data, 'location_code', None),
+                    scene="其他出库",
+                    material_label=getattr(item_data, "material_name", None) or getattr(item_data, "material_code", "未知物料"),
+                )
                 price = Decimal(str(item_data.unit_price))
                 amt = qty * price
                 await OtherOutboundItem.create(
@@ -3616,8 +3859,19 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
                 total_quantity=total_quantity,
                 total_amount=total_amount
             )
-            outbound = await OtherOutbound.get(tenant_id=tenant_id, id=outbound.id)
-            return OtherOutboundResponse.model_validate(outbound)
+            created_outbound_id = outbound.id
+
+        if auto_outbound_enabled and created_outbound_id:
+            outbound_obj = await OtherOutbound.get_or_none(tenant_id=tenant_id, id=created_outbound_id)
+            if outbound_obj and outbound_obj.status == "待出库":
+                return await self.confirm_outbound(
+                    tenant_id=tenant_id,
+                    outbound_id=created_outbound_id,
+                    confirmed_by=created_by,
+                )
+        return OtherOutboundResponse.model_validate(
+            await OtherOutbound.get(tenant_id=tenant_id, id=created_outbound_id)
+        )
 
     async def get_other_outbound_by_id(
         self,
@@ -3720,6 +3974,12 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
                 from apps.kuaizhizao.services.inventory_service import InventoryService
 
                 outbound_obj = await OtherOutbound.get(tenant_id=tenant_id, id=outbound_id)
+                biz_config = await BusinessConfigService().get_business_config(tenant_id)
+                enforce_fifo = (
+                    biz_config.get("parameters", {})
+                    .get("warehouse", {})
+                    .get("fifo", False)
+                )
                 wh_id = outbound_obj.warehouse_id if outbound_obj.warehouse_id else None
                 for item in outbound.items:
                     qty = item.outbound_quantity or Decimal(0)
@@ -3734,6 +3994,7 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
                         source_type="other_outbound",
                         source_doc_id=outbound_id,
                         source_doc_code=outbound_obj.outbound_code,
+                        enforce_fifo=enforce_fifo,
                     )
             except ValueError as inv_e:
                 logger.error("其他出库确认-更新库存失败: %s", inv_e)
@@ -3760,6 +4021,8 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
         created_by: int
     ) -> MaterialBorrowResponse:
         """创建借料单"""
+        location_required, auto_outbound_enabled = await _get_warehouse_policy_flags(tenant_id)
+        created_borrow_id: Optional[int] = None
         async with in_transaction():
             today = datetime.now().strftime("%Y%m%d")
             code = await self.generate_code(tenant_id, "MATERIAL_BORROW_CODE", prefix=f"MB{today}")
@@ -3779,6 +4042,13 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
             total_quantity = Decimal(0)
             for item_data in items:
                 qty = Decimal(str(item_data.borrow_quantity))
+                _validate_location_if_required(
+                    location_required=location_required,
+                    location_id=getattr(item_data, 'location_id', None),
+                    location_code=getattr(item_data, 'location_code', None),
+                    scene="借料",
+                    material_label=getattr(item_data, "material_name", None) or getattr(item_data, "material_code", "未知物料"),
+                )
                 await MaterialBorrowItem.create(
                     tenant_id=tenant_id,
                     borrow_id=borrow.id,
@@ -3789,8 +4059,19 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
                 total_quantity += qty
 
             await MaterialBorrow.filter(tenant_id=tenant_id, id=borrow.id).update(total_quantity=total_quantity)
-            borrow = await MaterialBorrow.get(tenant_id=tenant_id, id=borrow.id)
-            return MaterialBorrowResponse.model_validate(borrow)
+            created_borrow_id = borrow.id
+
+        if auto_outbound_enabled and created_borrow_id:
+            borrow_obj = await MaterialBorrow.get_or_none(tenant_id=tenant_id, id=created_borrow_id, deleted_at__isnull=True)
+            if borrow_obj and borrow_obj.status == "待借出":
+                return await self.confirm_borrow(
+                    tenant_id=tenant_id,
+                    borrow_id=created_borrow_id,
+                    confirmed_by=created_by,
+                )
+        return MaterialBorrowResponse.model_validate(
+            await MaterialBorrow.get(tenant_id=tenant_id, id=created_borrow_id)
+        )
 
     async def get_material_borrow_by_id(
         self,
@@ -3891,6 +4172,12 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
                 from apps.kuaizhizao.services.inventory_service import InventoryService
 
                 borrow_obj = await MaterialBorrow.get(tenant_id=tenant_id, id=borrow_id)
+                biz_config = await BusinessConfigService().get_business_config(tenant_id)
+                enforce_fifo = (
+                    biz_config.get("parameters", {})
+                    .get("warehouse", {})
+                    .get("fifo", False)
+                )
                 for item in borrow.items:
                     qty = item.borrow_quantity or Decimal(0)
                     if qty <= 0:
@@ -3905,6 +4192,7 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
                         source_type="material_borrow",
                         source_doc_id=borrow_id,
                         source_doc_code=borrow_obj.borrow_code,
+                        enforce_fifo=enforce_fifo,
                     )
             except ValueError as inv_e:
                 logger.error("借料确认-更新库存失败: %s", inv_e)

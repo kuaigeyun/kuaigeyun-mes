@@ -27,6 +27,7 @@ from apps.kuaizhizao.schemas.defect_record import (
 
 from apps.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+from infra.services.business_config_service import BusinessConfigService
 
 
 class DefectRecordService(AppBaseService[DefectRecord]):
@@ -38,6 +39,12 @@ class DefectRecordService(AppBaseService[DefectRecord]):
 
     def __init__(self):
         super().__init__(DefectRecord)
+
+    async def _assert_defect_handling_enabled(self, tenant_id: int) -> None:
+        cfg = await BusinessConfigService().get_business_config(tenant_id)
+        quality = cfg.get("parameters", {}).get("quality", {})
+        if not quality.get("defect_handling", False):
+            raise BusinessLogicError("当前组织未开启不良品处理，禁止创建不良品记录")
 
     async def approve_defect_acceptance(
         self,
@@ -351,6 +358,7 @@ class DefectRecordService(AppBaseService[DefectRecord]):
             ValidationError: 数据验证失败
             BusinessLogicError: 业务逻辑错误
         """
+        await self._assert_defect_handling_enabled(tenant_id)
         import uuid
         from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
 
@@ -439,6 +447,7 @@ class DefectRecordService(AppBaseService[DefectRecord]):
             ValidationError: 数据验证失败
             BusinessLogicError: 业务逻辑错误
         """
+        await self._assert_defect_handling_enabled(tenant_id)
         import uuid
         from apps.kuaizhizao.models.process_inspection import ProcessInspection
 
@@ -532,6 +541,7 @@ class DefectRecordService(AppBaseService[DefectRecord]):
             ValidationError: 数据验证失败
             BusinessLogicError: 业务逻辑错误
         """
+        await self._assert_defect_handling_enabled(tenant_id)
         import uuid
         from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
 

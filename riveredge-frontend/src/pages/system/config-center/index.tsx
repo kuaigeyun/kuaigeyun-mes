@@ -5,7 +5,7 @@
  * 配置模板在蓝图设置页内通过「另存为模板」「自定义模板」管理。
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { App, Form, Card, Button, Space, Layout, Menu, InputNumber, ColorPicker, Typography, Spin, Modal, Input, Switch, theme } from 'antd';
@@ -14,18 +14,28 @@ import { useSearchParams } from 'react-router-dom';
 import { MultiTabListPageTemplate } from '../../../components/layout-templates';
 import {
   getBusinessConfig,
+  getBusinessConfigSchema,
   batchUpdateProcessParameters,
   getConfigTemplates,
   saveConfigTemplate,
   applyConfigTemplate,
 } from '../../../services/businessConfig';
 import BusinessFlowConfig from '../business-config/BusinessFlowConfig';
-import { PARAMETER_CATEGORIES, PROCESS_CATEGORIES } from './configTree';
+import { PARAMETER_CATEGORIES, PROCESS_CATEGORIES, type ConfigCategory, type ParamMeta } from './configTree';
 import type { Color } from 'antd/es/color-picker';
 
 const { Sider, Content } = Layout;
 const { Text, Paragraph } = Typography;
 const { useToken } = theme;
+
+export const PARAM_GUIDANCE_I18N_KEY_MAP: Record<string, string> = {
+  'work_order.material_shortage_block_level': 'pages.system.configCenter.param.work_order_material_shortage_block_level_guide',
+  'purchase.tolerance_percentage': 'pages.system.configCenter.param.purchase_tolerance_percentage_guide',
+};
+
+export function getParamGuidanceI18nKey(paramKey: string): string | undefined {
+  return PARAM_GUIDANCE_I18N_KEY_MAP[paramKey];
+}
 
 /** 从 business_config 提取 parameters 下的值到扁平 key */
 function flattenBusinessParams(parameters: Record<string, Record<string, any>>): Record<string, any> {
@@ -54,10 +64,154 @@ function toBusinessParams(flat: Record<string, any>, bizParamKeys: string[]): Re
   return params;
 }
 
+function flattenRegistryKeys(registry?: Record<string, string[]>): Set<string> {
+  const set = new Set<string>();
+  if (!registry) return set;
+  for (const [category, keys] of Object.entries(registry)) {
+    for (const key of keys || []) {
+      set.add(`${category}.${key}`);
+    }
+  }
+  return set;
+}
+
+function buildProcessCategoriesFromRegistry(
+  registry: Record<string, string[]> | undefined,
+  fallbackCategories: ConfigCategory[],
+  categoryMeta?: Record<string, { labelKey?: string; descriptionKey?: string }>,
+  paramMeta?: Record<string, Record<string, { labelKey?: string; descriptionKey?: string }>>,
+  controlMeta?: Record<string, Record<string, { type?: ParamMeta['type']; min?: number; max?: number }>>
+): ConfigCategory[] {
+  if (!registry || Object.keys(registry).length === 0) return fallbackCategories;
+
+  const fallbackCategoryById = new Map<string, ConfigCategory>(
+    fallbackCategories.map((c) => [c.id, c])
+  );
+  const fallbackParamByKey = new Map<string, ParamMeta>();
+  for (const category of fallbackCategories) {
+    for (const param of category.params) {
+      fallbackParamByKey.set(param.key, param);
+    }
+  }
+
+  const categories: ConfigCategory[] = [];
+  for (const [categoryKey, keys] of Object.entries(registry)) {
+    const processCategoryId = `process_${categoryKey}`;
+    const fallbackCategory = fallbackCategoryById.get(processCategoryId);
+    const params: ParamMeta[] = (keys || []).map((key) => {
+      const fullKey = `${categoryKey}.${key}`;
+      const fallbackParam = fallbackParamByKey.get(fullKey);
+      const currentMeta = paramMeta?.[categoryKey]?.[key];
+      const currentControl = controlMeta?.[categoryKey]?.[key];
+      if (fallbackParam) {
+        return {
+          ...fallbackParam,
+          nameKey: currentMeta?.labelKey || fallbackParam.nameKey,
+          descriptionKey: currentMeta?.descriptionKey || fallbackParam.descriptionKey,
+          type: currentControl?.type || fallbackParam.type,
+          min: currentControl?.min ?? fallbackParam.min,
+          max: currentControl?.max ?? fallbackParam.max,
+        };
+      }
+      return {
+        key: fullKey,
+        nameKey: currentMeta?.labelKey || fullKey,
+        descriptionKey: currentMeta?.descriptionKey || `${fullKey}.desc`,
+        source: 'business_config',
+        sourcePath: `parameters.${fullKey}`,
+        type: currentControl?.type || 'boolean',
+        min: currentControl?.min,
+        max: currentControl?.max,
+      };
+    });
+
+    categories.push({
+      id: processCategoryId,
+      nameKey: categoryMeta?.[categoryKey]?.labelKey || fallbackCategory?.nameKey || categoryKey,
+      descriptionKey: categoryMeta?.[categoryKey]?.descriptionKey || fallbackCategory?.descriptionKey,
+      params,
+    });
+  }
+
+  return categories;
+}
+
+function buildParameterCategoriesFromRegistry(
+  registry: Record<string, string[]> | undefined,
+  fallbackCategories: ConfigCategory[],
+  categoryMeta?: Record<string, { labelKey?: string; descriptionKey?: string }>,
+  paramMeta?: Record<string, Record<string, { labelKey?: string; descriptionKey?: string }>>,
+  controlMeta?: Record<string, Record<string, { type?: ParamMeta['type']; min?: number; max?: number }>>
+): ConfigCategory[] {
+  if (!registry || Object.keys(registry).length === 0) return fallbackCategories;
+
+  const fallbackCategoryByBusinessGroup = new Map<string, ConfigCategory>();
+  const fallbackParamByKey = new Map<string, ParamMeta>();
+  for (const category of fallbackCategories) {
+    for (const param of category.params) {
+      fallbackParamByKey.set(param.key, param);
+      const group = param.key.split('.')[0];
+      if (group && !fallbackCategoryByBusinessGroup.has(group)) {
+        fallbackCategoryByBusinessGroup.set(group, category);
+      }
+    }
+  }
+
+  const categories: ConfigCategory[] = [];
+  for (const [categoryKey, keys] of Object.entries(registry)) {
+    const categoryId = `param_${categoryKey}`;
+    const fallbackCategory = fallbackCategoryByBusinessGroup.get(categoryKey);
+    const params: ParamMeta[] = (keys || []).map((key) => {
+      const fullKey = `${categoryKey}.${key}`;
+      const fallbackParam = fallbackParamByKey.get(fullKey);
+      const currentMeta = paramMeta?.[categoryKey]?.[key];
+      const currentControl = controlMeta?.[categoryKey]?.[key];
+      if (fallbackParam) {
+        return {
+          ...fallbackParam,
+          nameKey: currentMeta?.labelKey || fallbackParam.nameKey,
+          descriptionKey: currentMeta?.descriptionKey || fallbackParam.descriptionKey,
+          type: currentControl?.type || fallbackParam.type,
+          min: currentControl?.min ?? fallbackParam.min,
+          max: currentControl?.max ?? fallbackParam.max,
+        };
+      }
+      return {
+        key: fullKey,
+        nameKey: currentMeta?.labelKey || fullKey,
+        descriptionKey: currentMeta?.descriptionKey || `${fullKey}.desc`,
+        source: 'business_config',
+        sourcePath: `parameters.${fullKey}`,
+        type: currentControl?.type || 'boolean',
+        min: currentControl?.min,
+        max: currentControl?.max,
+      };
+    });
+
+    categories.push({
+      id: categoryId,
+      nameKey: categoryMeta?.[categoryKey]?.labelKey || fallbackCategory?.nameKey || categoryKey,
+      descriptionKey: categoryMeta?.[categoryKey]?.descriptionKey || fallbackCategory?.descriptionKey,
+      params,
+    });
+  }
+
+  return categories;
+}
+
+function humanizeKey(raw: string): string {
+  return raw
+    .replace(/\./g, ' / ')
+    .replace(/_/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 const BUSINESS_CONFIG_QUERY_KEY = ['businessConfig'] as const;
+const BUSINESS_CONFIG_SCHEMA_QUERY_KEY = ['businessConfigSchema'] as const;
 
 const ConfigCenterPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
   const [searchParams] = useSearchParams();
@@ -81,10 +235,47 @@ const ConfigCenterPage: React.FC = () => {
     staleTime: 60_000,
     placeholderData: (prev) => prev,
   });
+  const { data: schemaRes } = useQuery({
+    queryKey: BUSINESS_CONFIG_SCHEMA_QUERY_KEY,
+    queryFn: getBusinessConfigSchema,
+    staleTime: 300_000,
+  });
   const loading = configLoading && !bizRes;
 
-  const category = PARAMETER_CATEGORIES.find((c) => c.id === selectedCategory);
-  const processCategory = PROCESS_CATEGORIES.find((c) => c.id === selectedProcessCategory);
+  const processCategories = useMemo(
+    () => buildProcessCategoriesFromRegistry(
+      schemaRes?.processRegistry,
+      PROCESS_CATEGORIES,
+      schemaRes?.processRegistryMeta,
+      schemaRes?.processRegistryParamMeta,
+      schemaRes?.processRegistryControlMeta
+    ),
+    [schemaRes?.processRegistry, schemaRes?.processRegistryMeta, schemaRes?.processRegistryParamMeta, schemaRes?.processRegistryControlMeta]
+  );
+  const parameterCategories = useMemo(
+    () => buildParameterCategoriesFromRegistry(
+      schemaRes?.parameterRegistry,
+      PARAMETER_CATEGORIES,
+      schemaRes?.parameterRegistryMeta,
+      schemaRes?.parameterRegistryParamMeta,
+      schemaRes?.parameterRegistryControlMeta
+    ),
+    [schemaRes?.parameterRegistry, schemaRes?.parameterRegistryMeta, schemaRes?.parameterRegistryParamMeta, schemaRes?.parameterRegistryControlMeta]
+  );
+  const category = parameterCategories.find((c) => c.id === selectedCategory);
+  const processCategory = processCategories.find((c) => c.id === selectedProcessCategory);
+  const parameterImplementation = schemaRes?.parameterImplementation || {};
+  const processRegistryKeySet = flattenRegistryKeys(schemaRes?.processRegistry);
+  const parameterRegistryKeySet = flattenRegistryKeys(schemaRes?.parameterRegistry);
+  const isImplementedParam = (sourcePath: string): boolean => {
+    if (!sourcePath.startsWith('parameters.')) return true;
+    const parts = sourcePath.replace('parameters.', '').split('.');
+    if (parts.length !== 2) return true;
+    const [categoryKey, parameterKey] = parts;
+    const categoryImpl = parameterImplementation[categoryKey];
+    if (!categoryImpl) return true;
+    return categoryImpl[parameterKey] !== false;
+  };
 
   useEffect(() => {
     const t = searchParams.get('tab');
@@ -97,6 +288,34 @@ const ConfigCenterPage: React.FC = () => {
       getConfigTemplates().then(setTemplates).catch(() => setTemplates([]));
     }
   }, [activeMainTab]);
+
+  useEffect(() => {
+    if (!processCategories.length) return;
+    const existed = processCategories.some((c) => c.id === selectedProcessCategory);
+    if (!existed) {
+      setSelectedProcessCategory(processCategories[0].id);
+    }
+  }, [processCategories, selectedProcessCategory]);
+
+  useEffect(() => {
+    if (!parameterCategories.length) return;
+    const existed = parameterCategories.some((c) => c.id === selectedCategory);
+    if (!existed) {
+      setSelectedCategory(parameterCategories[0].id);
+    }
+  }, [parameterCategories, selectedCategory]);
+
+  const renderText = (key: string | undefined, fallback?: string) => {
+    if (!key) return fallback || '';
+    if (i18n.exists(key)) return t(key);
+    return fallback || key;
+  };
+
+  const getParamGuidance = (paramKey: string): string => {
+    const key = getParamGuidanceI18nKey(paramKey);
+    if (!key) return '';
+    return renderText(key, '');
+  };
 
   const handleSaveTemplate = async () => {
     try {
@@ -128,7 +347,9 @@ const ConfigCenterPage: React.FC = () => {
       'procurement.require_purchase_requisition': false,
       'planning.require_production_plan': false,
       'purchase.auto_approval': true,
+      'purchase.tolerance_percentage': 0,
       'reporting.auto_approve': false,
+      'work_order.material_shortage_block_level': 1,
       'warehouse.location_management': false,
       'warehouse.auto_outbound': true,
     };
@@ -152,9 +373,10 @@ const ConfigCenterPage: React.FC = () => {
       setSaving(true);
 
       const bizKeys: string[] = [];
-      for (const cat of PARAMETER_CATEGORIES) {
+      for (const cat of parameterCategories) {
         for (const param of cat.params) {
-          if (param.source === 'business_config') bizKeys.push(param.key);
+          const inRegistry = parameterRegistryKeySet.size === 0 || parameterRegistryKeySet.has(param.key);
+          if (param.source === 'business_config' && isImplementedParam(param.sourcePath) && inRegistry) bizKeys.push(param.key);
         }
       }
 
@@ -180,9 +402,10 @@ const ConfigCenterPage: React.FC = () => {
       setProcessSaving(true);
 
       const bizKeys: string[] = [];
-      for (const cat of PROCESS_CATEGORIES) {
+      for (const cat of processCategories) {
         for (const param of cat.params) {
-          bizKeys.push(param.key);
+          const inRegistry = processRegistryKeySet.size === 0 || processRegistryKeySet.has(param.key);
+          if (isImplementedParam(param.sourcePath) && inRegistry) bizKeys.push(param.key);
         }
       }
 
@@ -222,19 +445,21 @@ const ConfigCenterPage: React.FC = () => {
           selectedKeys={[selectedCategory]}
           mode="inline"
           style={{ border: 'none', background: 'transparent' }}
-          items={PARAMETER_CATEGORIES.map((c) => ({
+          items={parameterCategories.map((c) => ({
             key: c.id,
-            label: t(c.nameKey),
+            label: renderText(c.nameKey, humanizeKey(c.id.replace(/^param_/, ''))),
           }))}
           onClick={({ key }) => setSelectedCategory(key)}
         />
       </Sider>
       <Content style={{ padding: '0 0 0 24px', overflow: 'visible' }}>
         <div style={{ marginBottom: 16 }}>
-          <Text strong style={{ fontSize: 16 }}>{category ? t(category.nameKey) : ''}</Text>
+          <Text strong style={{ fontSize: 16 }}>
+            {category ? renderText(category.nameKey, humanizeKey(category.id.replace(/^param_/, ''))) : ''}
+          </Text>
           {category?.descriptionKey && (
             <Paragraph type="secondary" style={{ marginBottom: 0, marginTop: 4 }}>
-              {t(category.descriptionKey)}
+              {renderText(category.descriptionKey, '')}
             </Paragraph>
           )}
         </div>
@@ -244,6 +469,9 @@ const ConfigCenterPage: React.FC = () => {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
               {category?.params.map((param) => (
                 <Card key={param.key} size="small" style={{ marginBottom: 0 }}>
+                  {(() => {
+                    const implemented = isImplementedParam(param.sourcePath);
+                    return (
                   <div
                     style={{
                       display: 'flex',
@@ -253,10 +481,15 @@ const ConfigCenterPage: React.FC = () => {
                     }}
                   >
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <Text strong>{t(param.nameKey)}</Text>
+                      <Text strong>{renderText(param.nameKey, humanizeKey(param.key))}</Text>
                       <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 4, marginBottom: 0 }}>
-                        {t(param.descriptionKey)}
+                        {renderText(param.descriptionKey, '')}
                       </Paragraph>
+                      {!!getParamGuidance(param.key) && (
+                        <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 4, marginBottom: 0 }}>
+                          {getParamGuidance(param.key)}
+                        </Paragraph>
+                      )}
                     </div>
                     <div style={{ flexShrink: 0 }}>
                       <Form.Item
@@ -270,15 +503,22 @@ const ConfigCenterPage: React.FC = () => {
                         }
                       >
                         {param.type === 'boolean' ? (
-                          <Switch />
+                          <Switch disabled={!implemented} />
                         ) : param.type === 'number' ? (
-                          <InputNumber min={param.min} max={param.max} precision={0} style={{ width: 140 }} />
+                          <InputNumber min={param.min} max={param.max} precision={0} style={{ width: 140 }} disabled={!implemented} />
                         ) : param.type === 'color' ? (
-                          <ColorPicker showText />
+                          <ColorPicker showText disabled={!implemented} />
                         ) : null}
                       </Form.Item>
                     </div>
                   </div>
+                    );
+                  })()}
+                  {!isImplementedParam(param.sourcePath) && (
+                    <Paragraph type="warning" style={{ marginTop: 8, marginBottom: 0, fontSize: 12 }}>
+                      该配置项暂未在后端实装，已禁用编辑。
+                    </Paragraph>
+                  )}
                 </Card>
               ))}
             </div>
@@ -331,19 +571,21 @@ const ConfigCenterPage: React.FC = () => {
           selectedKeys={[selectedProcessCategory]}
           mode="inline"
           style={{ border: 'none', background: 'transparent' }}
-          items={PROCESS_CATEGORIES.map((c) => ({
+          items={processCategories.map((c) => ({
             key: c.id,
-            label: t(c.nameKey),
+            label: renderText(c.nameKey, humanizeKey(c.id.replace(/^process_/, ''))),
           }))}
           onClick={({ key }) => setSelectedProcessCategory(key)}
         />
       </Sider>
       <Content style={{ padding: '0 0 0 24px', overflow: 'visible' }}>
         <div style={{ marginBottom: 16 }}>
-          <Text strong style={{ fontSize: 16 }}>{processCategory ? t(processCategory.nameKey) : ''}</Text>
+          <Text strong style={{ fontSize: 16 }}>
+            {processCategory ? renderText(processCategory.nameKey, humanizeKey(processCategory.id.replace(/^process_/, ''))) : ''}
+          </Text>
           {processCategory?.descriptionKey && (
             <Paragraph type="secondary" style={{ marginBottom: 0, marginTop: 4 }}>
-              {t(processCategory.descriptionKey)}
+              {renderText(processCategory.descriptionKey, '')}
             </Paragraph>
           )}
         </div>
@@ -353,6 +595,9 @@ const ConfigCenterPage: React.FC = () => {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
               {processCategory?.params.map((param) => (
                 <Card key={param.key} size="small" style={{ marginBottom: 0 }}>
+                  {(() => {
+                    const implemented = isImplementedParam(param.sourcePath);
+                    return (
                   <div
                     style={{
                       display: 'flex',
@@ -362,21 +607,44 @@ const ConfigCenterPage: React.FC = () => {
                     }}
                   >
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <Text strong>{t(param.nameKey)}</Text>
+                      <Text strong>{renderText(param.nameKey, humanizeKey(param.key))}</Text>
                       <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 4, marginBottom: 0 }}>
-                        {t(param.descriptionKey)}
+                        {renderText(param.descriptionKey, '')}
                       </Paragraph>
+                      {!!getParamGuidance(param.key) && (
+                        <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 4, marginBottom: 0 }}>
+                          {getParamGuidance(param.key)}
+                        </Paragraph>
+                      )}
                     </div>
                     <div style={{ flexShrink: 0 }}>
                       <Form.Item
                         name={[param.key]}
                         noStyle
-                        valuePropName="checked"
+                        valuePropName={param.type === 'boolean' ? 'checked' : undefined}
+                        getValueFromEvent={
+                          param.type === 'color'
+                            ? (c: Color) => (typeof c?.toHexString === 'function' ? c.toHexString() : c)
+                            : undefined
+                        }
                       >
-                        <Switch />
+                        {param.type === 'boolean' ? (
+                          <Switch disabled={!implemented} />
+                        ) : param.type === 'number' ? (
+                          <InputNumber min={param.min} max={param.max} precision={0} style={{ width: 140 }} disabled={!implemented} />
+                        ) : param.type === 'color' ? (
+                          <ColorPicker showText disabled={!implemented} />
+                        ) : null}
                       </Form.Item>
                     </div>
                   </div>
+                    );
+                  })()}
+                  {!isImplementedParam(param.sourcePath) && (
+                    <Paragraph type="warning" style={{ marginTop: 8, marginBottom: 0, fontSize: 12 }}>
+                      该流程项暂未在后端实装，已禁用编辑。
+                    </Paragraph>
+                  )}
                 </Card>
               ))}
             </div>

@@ -28,10 +28,14 @@ const PATH_SEGMENT_TO_BUSINESS: Record<string, MenuBusinessMeta> = {
   'sales-forecasts': { node: 'sales_forecast', module: 'sales' },
   'sales-orders': { node: 'sales_order', module: 'sales' },
   'shipment-notices': { node: 'shipment_notice', module: 'sales' },
+  'sales-returns': { node: 'sales_return', module: 'sales' },
+  'customer-follow-ups': { node: 'customer_follow_up', module: 'sales' },
   // 采购管理
   'purchase-requisitions': { node: 'purchase_request', module: 'purchase' },
   'purchase-orders': { node: 'purchase_order', module: 'purchase' },
   'receipt-notices': { node: 'receipt_notice', module: 'purchase' },
+  'purchase-returns': { node: 'purchase_return', module: 'purchase' },
+  'logistics-tracking': { node: 'logistics_tracking', module: 'purchase' },
   // 生产执行
   'work-orders': { node: 'work_order', module: 'production' },
   'reporting': { module: 'production' },
@@ -45,6 +49,7 @@ const PATH_SEGMENT_TO_BUSINESS: Record<string, MenuBusinessMeta> = {
   'exception-process': { module: 'production' },
   'exception-statistics': { module: 'production' },
   // 质量管理
+  'inspection-center': { node: 'inspection_center', module: 'quality' },
   'incoming-inspection': { node: 'quality_inspection', module: 'quality' },
   'inspection-plans': { module: 'quality' },
   'quality-standards': { module: 'quality' },
@@ -67,6 +72,8 @@ const PATH_SEGMENT_TO_BUSINESS: Record<string, MenuBusinessMeta> = {
   'barcode-mapping-rules': { node: 'barcode_mapping', module: 'warehouse' },
   'stocktaking': { node: 'stocktaking', module: 'warehouse' },
   'inventory-transfer': { node: 'inventory_transfer', module: 'warehouse' },
+  'batch-inventory-query': { node: 'batch_inventory_query', module: 'warehouse' },
+  'material-calls': { node: 'material_call', module: 'warehouse' },
   'batching-center': { module: 'warehouse' },
   'assembly-orders': { node: 'assembly_order', module: 'warehouse' },
   'disassembly-orders': { node: 'disassembly_order', module: 'warehouse' },
@@ -91,6 +98,8 @@ const PATH_SEGMENT_TO_BUSINESS: Record<string, MenuBusinessMeta> = {
   'tool-maintenances': { node: 'tool_maintenance', module: 'equipment' },
   'tool-calibrations': { node: 'tool_calibration', module: 'equipment' },
   'tool-maintenance-reminders': { node: 'tool_maintenance_reminder', module: 'equipment' },
+  'spare-parts': { node: 'spare_parts', module: 'equipment' },
+  'inspection': { module: 'equipment' },
   // 成本 / 财务管理
   'cost-calculations': { node: 'cost_calculation', module: 'finance' },
   'cost-comparison': { module: 'finance' },

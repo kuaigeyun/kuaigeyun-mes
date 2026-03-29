@@ -1508,10 +1508,20 @@ class DemandComputationService:
             raise BusinessLogicError(f"只能从已完成的计算生成工单和采购单，当前状态: {computation.computation_status}")
         
         # 按配置校验：若必须经生产计划，则不允许直连生成工单（委外工单单独下推不受此限制）
-        needs_work_order = generate_mode in ("all", "work_order_only")
+        needs_work_order = generate_mode in ("all", "work_order_only", "outsource_only")
         if needs_work_order:
             from infra.services.business_config_service import BusinessConfigService
             biz_config = BusinessConfigService()
+            cfg = await biz_config.get_business_config(tenant_id)
+            work_order_auto_generate = (
+                cfg.get("parameters", {})
+                .get("work_order", {})
+                .get("auto_generate", False)
+            )
+            if not work_order_auto_generate:
+                raise BusinessLogicError(
+                    "当前组织未开启自动生成工单，请在参数设置中开启“自动生成工单”。"
+                )
             can_direct = await biz_config.can_direct_generate_work_order_from_computation(tenant_id)
             if not can_direct:
                 raise BusinessLogicError(

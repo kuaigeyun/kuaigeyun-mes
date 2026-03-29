@@ -15,6 +15,83 @@ from loguru import logger
 from infra.models.tenant import Tenant, TenantPlan
 from infra.exceptions.exceptions import ValidationError, NotFoundError, BusinessLogicError
 
+# 注册表分类文案（前端可直接消费，减少硬编码）
+PROCESS_REGISTRY_CATEGORY_META: Dict[str, Dict[str, str]] = {
+    "sales": {
+        "labelKey": "pages.system.configCenter.processCategory.sales",
+        "descriptionKey": "pages.system.configCenter.processCategory.salesDesc",
+    },
+    "planning": {
+        "labelKey": "pages.system.configCenter.processCategory.planning",
+        "descriptionKey": "pages.system.configCenter.processCategory.planningDesc",
+    },
+    "procurement": {
+        "labelKey": "pages.system.configCenter.processCategory.procurement",
+        "descriptionKey": "pages.system.configCenter.processCategory.procurementDesc",
+    },
+    "purchase": {
+        "labelKey": "pages.system.configCenter.processCategory.procurement",
+        "descriptionKey": "pages.system.configCenter.processCategory.procurementDesc",
+    },
+    "quality": {
+        "labelKey": "pages.system.configCenter.processCategory.procurement",
+        "descriptionKey": "pages.system.configCenter.processCategory.procurementDesc",
+    },
+    "work_order": {
+        "labelKey": "pages.system.configCenter.processCategory.work_order",
+        "descriptionKey": "pages.system.configCenter.processCategory.work_orderDesc",
+    },
+    "reporting": {
+        "labelKey": "pages.system.configCenter.processCategory.reporting",
+        "descriptionKey": "pages.system.configCenter.processCategory.reportingDesc",
+    },
+}
+
+PARAMETER_REGISTRY_CATEGORY_META: Dict[str, Dict[str, str]] = {
+    "work_order": {
+        "labelKey": "pages.system.configCenter.category.production",
+        "descriptionKey": "pages.system.configCenter.category.productionDesc",
+    },
+    "reporting": {
+        "labelKey": "pages.system.configCenter.category.production",
+        "descriptionKey": "pages.system.configCenter.category.productionDesc",
+    },
+    "planning": {
+        "labelKey": "pages.system.configCenter.category.production",
+        "descriptionKey": "pages.system.configCenter.category.productionDesc",
+    },
+    "bom": {
+        "labelKey": "pages.system.configCenter.category.production",
+        "descriptionKey": "pages.system.configCenter.category.productionDesc",
+    },
+    "warehouse": {
+        "labelKey": "pages.system.configCenter.category.supply",
+        "descriptionKey": "pages.system.configCenter.category.supplyDesc",
+    },
+    "purchase": {
+        "labelKey": "pages.system.configCenter.category.supply",
+        "descriptionKey": "pages.system.configCenter.category.supplyDesc",
+    },
+    "procurement": {
+        "labelKey": "pages.system.configCenter.category.supply",
+        "descriptionKey": "pages.system.configCenter.category.supplyDesc",
+    },
+    "quality": {
+        "labelKey": "pages.system.configCenter.category.sales_quality",
+        "descriptionKey": "pages.system.configCenter.category.sales_qualityDesc",
+    },
+    "sales": {
+        "labelKey": "pages.system.configCenter.category.sales_quality",
+        "descriptionKey": "pages.system.configCenter.category.sales_qualityDesc",
+    },
+}
+
+# 参数控件元数据（默认 boolean，可按 full key 覆盖为 number/string/color 并附 min/max）
+REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
+    "parameters.purchase.tolerance_percentage": {"type": "number", "min": 0, "max": 100},
+    "parameters.work_order.material_shortage_block_level": {"type": "number", "min": 0, "max": 3},
+}
+
 # 节点配置常量（供预设构建使用）
 _NODE_OFF = {"enabled": False, "auditRequired": False}
 _NODE_ON = {"enabled": True, "auditRequired": False}
@@ -69,12 +146,51 @@ PARAMETER_KEYS = {
     "parameters.warehouse.lifo",
     "parameters.warehouse.location_management",
     "parameters.warehouse.auto_outbound",
+    "parameters.purchase.tolerance_percentage",
     "parameters.quality.incoming_inspection",
     "parameters.quality.require_incoming_inspection_for_receipt",
     "parameters.quality.process_inspection",
     "parameters.quality.finished_inspection",
     "parameters.quality.defect_handling",
     "parameters.bom.bom_multi_version_allowed",
+    "parameters.work_order.material_shortage_block_level",
+}
+
+# 已实装并在后端有明确生效点的配置项（用于前端禁用“假开关”）
+IMPLEMENTED_PARAMETER_KEYS = {
+    # 流程设置
+    "parameters.sales.audit_enabled",
+    "parameters.planning.require_production_plan",
+    "parameters.procurement.require_purchase_requisition",
+    "parameters.purchase.auto_approval",
+    "parameters.reporting.auto_approve",
+    "parameters.work_order.picking_issue_strategy",
+    "parameters.work_order.picking_confirm_warehouse_only",
+    "parameters.work_order.picking_confirm_allowed_role_codes",
+    "parameters.work_order.require_confirmed_picking_before_operation_start",
+    "parameters.work_order.require_confirmed_picking_before_reporting",
+    # 参数设置
+    "parameters.work_order.allow_production_without_material",
+    "parameters.work_order.auto_generate",
+    "parameters.work_order.priority",
+    "parameters.work_order.split",
+    "parameters.work_order.merge",
+    "parameters.reporting.quick_reporting",
+    "parameters.reporting.parameter_reporting",
+    "parameters.reporting.data_correction",
+    "parameters.warehouse.batch_management",
+    "parameters.warehouse.serial_management",
+    "parameters.warehouse.lifo",
+    "parameters.warehouse.location_management",
+    "parameters.warehouse.auto_outbound",
+    "parameters.purchase.tolerance_percentage",
+    "parameters.quality.incoming_inspection",
+    "parameters.quality.require_incoming_inspection_for_receipt",
+    "parameters.quality.process_inspection",
+    "parameters.quality.finished_inspection",
+    "parameters.quality.defect_handling",
+    "parameters.bom.bom_multi_version_allowed",
+    "parameters.work_order.material_shortage_block_level",
 }
 
 DEFAULT_WAREHOUSE_ROLE_CODES = {
@@ -108,11 +224,24 @@ ALL_NODES = [
     "receivable", "payable", "invoice", "cost_calculation",
 ]
 
+KEY_AUDIT_NODES = [
+    "sales_forecast",
+    "sales_order",
+    "purchase_request",
+    "purchase_order",
+    "production_plan",
+    "quality_inspection",
+    "inventory_check",
+    "receivable",
+    "payable",
+    "invoice",
+]
 
-def _build_parameter_keys_schema() -> Dict[str, List[str]]:
-    """从 PARAMETER_KEYS 和 PROCESS_KEYS 构建按 category 分组的参数键 schema"""
+
+def _build_registry_schema(full_keys: set) -> Dict[str, List[str]]:
+    """将 parameters.<category>.<key> 集合构建为 {category: [key]}"""
     result: Dict[str, List[str]] = {}
-    for full_key in PARAMETER_KEYS | PROCESS_KEYS:
+    for full_key in full_keys:
         if not full_key.startswith("parameters."):
             continue
         parts = full_key.replace("parameters.", "").split(".", 1)
@@ -122,6 +251,132 @@ def _build_parameter_keys_schema() -> Dict[str, List[str]]:
                 result[category] = []
             if key not in result[category]:
                 result[category].append(key)
+    return result
+
+
+def _build_process_registry_schema() -> Dict[str, List[str]]:
+    """流程设置注册表（仅流程类 key）"""
+    return _build_registry_schema(PROCESS_KEYS)
+
+
+def _build_parameter_registry_schema() -> Dict[str, List[str]]:
+    """参数设置注册表（仅参数类 key）"""
+    return _build_registry_schema(PARAMETER_KEYS)
+
+
+def _build_registry_category_meta_schema(
+    registry_schema: Dict[str, List[str]],
+    category_meta: Dict[str, Dict[str, str]],
+) -> Dict[str, Dict[str, str]]:
+    """返回注册表分类文案元数据（仅返回当前 registry 中存在的分类）"""
+    result: Dict[str, Dict[str, str]] = {}
+    for category in registry_schema.keys():
+        if category in category_meta:
+            result[category] = dict(category_meta[category])
+    return result
+
+
+def _build_process_registry_meta_schema() -> Dict[str, Dict[str, str]]:
+    return _build_registry_category_meta_schema(
+        _build_process_registry_schema(),
+        PROCESS_REGISTRY_CATEGORY_META,
+    )
+
+
+def _build_parameter_registry_meta_schema() -> Dict[str, Dict[str, str]]:
+    return _build_registry_category_meta_schema(
+        _build_parameter_registry_schema(),
+        PARAMETER_REGISTRY_CATEGORY_META,
+    )
+
+
+def _build_registry_param_meta_schema(
+    registry_schema: Dict[str, List[str]],
+) -> Dict[str, Dict[str, Dict[str, str]]]:
+    """
+    参数项文案元数据（按 category/key）：
+    {category: {key: {labelKey, descriptionKey}}}
+    """
+    result: Dict[str, Dict[str, Dict[str, str]]] = {}
+    for category, keys in registry_schema.items():
+        result[category] = {}
+        for key in keys:
+            base = f"{category}_{key}"
+            result[category][key] = {
+                "labelKey": f"pages.system.configCenter.param.{base}",
+                "descriptionKey": f"pages.system.configCenter.param.{base}_desc",
+            }
+    return result
+
+
+def _build_process_registry_param_meta_schema() -> Dict[str, Dict[str, Dict[str, str]]]:
+    return _build_registry_param_meta_schema(_build_process_registry_schema())
+
+
+def _build_parameter_registry_param_meta_schema() -> Dict[str, Dict[str, Dict[str, str]]]:
+    return _build_registry_param_meta_schema(_build_parameter_registry_schema())
+
+
+def _build_registry_control_meta_schema(
+    registry_schema: Dict[str, List[str]],
+) -> Dict[str, Dict[str, Dict[str, Any]]]:
+    """
+    参数控件元数据（按 category/key）：
+    {category: {key: {type, min?, max?}}}
+    """
+    result: Dict[str, Dict[str, Dict[str, Any]]] = {}
+    for category, keys in registry_schema.items():
+        result[category] = {}
+        for key in keys:
+            full_key = f"parameters.{category}.{key}"
+            override = REGISTRY_PARAM_CONTROL_META.get(full_key, {})
+            item: Dict[str, Any] = {
+                "type": override.get("type", "boolean"),
+            }
+            if "min" in override:
+                item["min"] = override["min"]
+            if "max" in override:
+                item["max"] = override["max"]
+            result[category][key] = item
+    return result
+
+
+def _build_process_registry_control_meta_schema() -> Dict[str, Dict[str, Dict[str, Any]]]:
+    return _build_registry_control_meta_schema(_build_process_registry_schema())
+
+
+def _build_parameter_registry_control_meta_schema() -> Dict[str, Dict[str, Dict[str, Any]]]:
+    return _build_registry_control_meta_schema(_build_parameter_registry_schema())
+
+
+def _build_parameter_keys_schema() -> Dict[str, List[str]]:
+    """
+    兼容字段：保留历史 parameterKeys（流程+参数并集）。
+    建议新调用方改用 processRegistry / parameterRegistry。
+    """
+    result = _build_parameter_registry_schema()
+    for category, keys in _build_process_registry_schema().items():
+        if category not in result:
+            result[category] = []
+        for key in keys:
+            if key not in result[category]:
+                result[category].append(key)
+    return result
+
+
+def _build_parameter_implementation_schema() -> Dict[str, Dict[str, bool]]:
+    """返回参数实装状态：{category: {key: implemented_bool}}"""
+    result: Dict[str, Dict[str, bool]] = {}
+    for full_key in PARAMETER_KEYS | PROCESS_KEYS:
+        if not full_key.startswith("parameters."):
+            continue
+        parts = full_key.replace("parameters.", "").split(".", 1)
+        if len(parts) != 2:
+            continue
+        category, key = parts
+        if category not in result:
+            result[category] = {}
+        result[category][key] = full_key in IMPLEMENTED_PARAMETER_KEYS
     return result
 
 
@@ -204,6 +459,7 @@ class BusinessConfigService:
                 "split": False,          # 关闭拆单
                 "merge": False,          # 关闭合单
                 "allow_production_without_material": False,  # 允许不带料生产（只管制造过程，不检查缺料）
+                "material_shortage_block_level": 1,  # 缺料拦截级别：0=不拦截，1=下达，2=下达+开工，3=下达+开工+报工
                 "picking_issue_strategy": "after_release",
                 "picking_confirm_warehouse_only": True,
                 "picking_confirm_allowed_role_codes": [],
@@ -225,6 +481,7 @@ class BusinessConfigService:
             },
             "purchase": {
                 "auto_approval": True,       # 开启采购自动审批
+                "tolerance_percentage": 0,   # 采购超收容差（%）
                 "price_control": False,      # 关闭价格控制
                 "supplier_evaluation": False,# 关闭供应商评估
             },
@@ -269,9 +526,36 @@ class BusinessConfigService:
         
         当为 true 时，工单下达不检查缺料，只管制造过程；为 false 时，缺料则禁止下达。
         """
+        return (await self.get_material_shortage_block_level(tenant_id)) <= 0
+
+    async def get_material_shortage_block_level(self, tenant_id: int) -> int:
+        """
+        获取缺料拦截级别（0~3）：
+        0=不拦截，1=下达拦截，2=下达+开工拦截，3=下达+开工+报工拦截。
+        """
         config = await self.get_business_config(tenant_id)
         wo_params = config.get("parameters", {}).get("work_order", {})
-        return wo_params.get("allow_production_without_material", False)
+        raw_level = wo_params.get("material_shortage_block_level", None)
+        if raw_level is None:
+            allow_without_material = bool(wo_params.get("allow_production_without_material", False))
+            return 0 if allow_without_material else 1
+
+        try:
+            level = int(raw_level)
+        except Exception:
+            level = 1
+        return max(0, min(3, level))
+
+    async def get_purchase_tolerance_percentage(self, tenant_id: int) -> float:
+        """获取采购超收容差百分比（0~100）。"""
+        config = await self.get_business_config(tenant_id)
+        purchase_params = config.get("parameters", {}).get("purchase", {})
+        raw_pct = purchase_params.get("tolerance_percentage", 0)
+        try:
+            pct = float(raw_pct)
+        except Exception:
+            pct = 0.0
+        return max(0.0, min(100.0, pct))
 
     async def check_audit_required(self, tenant_id: int, node_key: str) -> bool:
         """
@@ -443,6 +727,7 @@ class BusinessConfigService:
                 "split": True,
                 "merge": True,
                 "allow_production_without_material": False,  # 允许不带料生产（只管制造过程，不检查缺料）
+                "material_shortage_block_level": 1,  # 缺料拦截级别：0=不拦截，1=下达，2=下达+开工，3=下达+开工+报工
                 "picking_issue_strategy": "after_release",
                 "picking_confirm_warehouse_only": True,
                 "picking_confirm_allowed_role_codes": [],
@@ -475,6 +760,7 @@ class BusinessConfigService:
             },
             "purchase": {
                 "auto_approval": False,  # 全流程默认走人工审核；与 nodes.purchase_order.auditRequired 配合
+                "tolerance_percentage": 0,  # 采购超收容差（%）
                 "price_control": False,
                 "supplier_evaluation": False,
             },
@@ -490,142 +776,100 @@ class BusinessConfigService:
         },
     }
     
-    # 八级业务复杂度预设（L0-L7，统一新逻辑）
+    # 最小必要内置模式（按最佳实践保留）
     COMPLEXITY_PRESETS = {
-        "L0": {
-            "code": "L0",
-            "name": "试运行模式",
-            "description": "仅工单+报工，快速验证",
-            "nodes": _build_preset_nodes(ALL_NODES, ("work_order", "on")),
+        "M1": {
+            "code": "M1",
+            "name": "快速上线（生产+仓储）",
+            "description": "适合 0-2 周快速试运行，先跑工单与收发存",
+            "nodes": _build_preset_nodes(
+                ALL_NODES,
+                ("work_order", "on"),
+                ("inbound", "on"),
+                ("outbound", "on"),
+            ),
             "modules": {
                 "production": True, "warehouse": True, "demand": False,
                 "purchase": False, "sales": False, "quality": False, "finance": False, "equipment": False,
             },
-            "parameters": {"planning": {"require_production_plan": False}, "work_order": {"allow_production_without_material": True}},
-        },
-        "L1": {
-            "code": "L1",
-            "name": "来料加工模式",
-            "description": "代工/OEM，只接生产任务，材料由委托方提供",
-            "nodes": _build_preset_nodes(ALL_NODES, ("work_order", "on")),
-            "modules": {
-                "production": True, "warehouse": True, "demand": True,
-                "purchase": False, "sales": False, "quality": False, "finance": False, "equipment": False,
+            "parameters": {
+                "planning": {"require_production_plan": False},
+                "procurement": {"require_purchase_requisition": False},
+                "work_order": {"allow_production_without_material": True},
+                "sales": {"audit_enabled": False},
+                "purchase": {"auto_approval": True},
+                "reporting": {"auto_approve": True},
             },
-            "parameters": {"planning": {"require_production_plan": False}, "procurement": {"require_purchase_requisition": False}, "work_order": {"allow_production_without_material": True}},
         },
-        "L2": {
-            "code": "L2",
-            "name": "订单生产模式",
-            "description": "有销售但原料外采或委外，不做采购闭环",
-            "nodes": _build_preset_nodes(ALL_NODES, ("sales_forecast", "on"), ("sales_order", "on"), ("sales_delivery", "on"), ("work_order", "on")),
-            "modules": {
-                "production": True, "warehouse": True, "demand": True,
-                "purchase": False, "sales": True, "quality": False, "finance": False, "equipment": False,
-            },
-            "parameters": {"planning": {"require_production_plan": False}, "procurement": {"require_purchase_requisition": False}, "work_order": {"allow_production_without_material": True}},
-        },
-        "L3": {
-            "code": "L3",
-            "name": "生产物料模式",
-            "description": "自采原料、自管库存的生产车间",
-            "nodes": _build_preset_nodes(ALL_NODES,
-                ("inventory_check", "on"), ("production_plan", "on"), ("purchase_request", "on"),
-                ("purchase_order", "on"), ("inbound_delivery", "on"), ("receipt_notice", "on"),
-                ("work_order", "on"), ("quality_inspection", "on"),
-                ("inbound", "on"), ("outbound", "on"),
-            ),
-            "modules": {
-                "production": True, "warehouse": True, "demand": True,
-                "purchase": True, "sales": False, "quality": True, "finance": False, "equipment": False,
-            },
-            "parameters": {"planning": {"require_production_plan": False}, "procurement": {"require_purchase_requisition": False}, "work_order": {"allow_production_without_material": False}},
-        },
-        "L4": {
-            "code": "L4",
-            "name": "进销存生产模式",
-            "description": "中小厂完整业务，追求效率，不强调内控",
-            "nodes": _build_preset_nodes(ALL_NODES,
+        "M2": {
+            "code": "M2",
+            "name": "标准运营（产供销协同）",
+            "description": "适合 1-3 个月，中小制造企业常用主流程",
+            "nodes": _build_preset_nodes(
+                ALL_NODES,
                 ("quotation", "on"), ("sample_trial", "on"), ("sales_forecast", "on"), ("sales_order", "on"), ("sales_delivery", "on"), ("shipment_notice", "on"), ("delivery_notice", "on"),
                 ("demand", "on"), ("demand_computation", "on"),
                 ("purchase_request", "on"), ("purchase_order", "on"), ("receipt_notice", "on"), ("inbound_delivery", "on"),
                 ("production_plan", "on"), ("work_order", "on"), ("rework_order", "on"), ("outsource_order", "on"),
                 ("quality_inspection", "on"), ("inventory_check", "on"),
-                ("inbound", "on"), ("outbound", "on"), ("other_inbound", "on"), ("other_outbound", "on"), ("stocktaking", "on"), ("inventory_transfer", "on"), ("assembly_order", "on"), ("disassembly_order", "on"), ("material_borrow", "on"), ("material_return", "on"),
+                ("inbound", "on"), ("outbound", "on"), ("other_inbound", "on"), ("other_outbound", "on"), ("stocktaking", "on"), ("inventory_transfer", "on"), ("assembly_order", "on"), ("disassembly_order", "on"), ("material_borrow", "on"), ("material_return", "on"), ("barcode_mapping", "on"),
             ),
             "modules": {
                 "production": True, "warehouse": True, "demand": True,
                 "purchase": True, "sales": True, "quality": True, "finance": False, "equipment": False,
             },
-            "parameters": {"planning": {"require_production_plan": False}, "procurement": {"require_purchase_requisition": False}, "work_order": {"allow_production_without_material": False}},
+            "parameters": {
+                "planning": {"require_production_plan": False},
+                "procurement": {"require_purchase_requisition": False},
+                "work_order": {"allow_production_without_material": False},
+                "sales": {"audit_enabled": False},
+                "purchase": {"auto_approval": True},
+                "reporting": {"auto_approve": True},
+            },
         },
-        "L5": {
-            "code": "L5",
-            "name": "全流程内控模式",
-            "description": "规范企业，需内控与追溯",
-            "nodes": _build_preset_nodes(ALL_NODES,
-                ("quotation", "on"), ("sample_trial", "on"), ("sales_forecast", "audit"), ("sales_order", "audit"), ("sales_delivery", "on"), ("shipment_notice", "on"), ("delivery_notice", "on"),
-                ("demand", "on"), ("demand_computation", "on"),
-                ("purchase_request", "audit"), ("purchase_order", "audit"), ("receipt_notice", "on"), ("inbound_delivery", "on"),
-                ("production_plan", "audit"), ("work_order", "on"), ("rework_order", "on"), ("outsource_order", "on"),
-                ("quality_inspection", "audit"), ("inventory_check", "audit"),
-                ("inbound", "on"), ("outbound", "on"), ("other_inbound", "on"), ("other_outbound", "on"), ("stocktaking", "on"), ("inventory_transfer", "on"), ("assembly_order", "on"), ("disassembly_order", "on"), ("material_borrow", "on"), ("material_return", "on"),
-                ("receivable", "on"), ("payable", "on"), ("invoice", "on"), ("cost_calculation", "on"),
-            ),
+        "M3": {
+            "code": "M3",
+            "name": "全模块全开（无审核）",
+            "description": "全节点启用，适合追求效率与快速流转的团队",
+            "nodes": _build_preset_nodes(ALL_NODES, *[(n, "on") for n in ALL_NODES]),
             "modules": {
                 "production": True, "warehouse": True, "demand": True,
-                "purchase": True, "sales": True, "quality": True, "finance": True, "equipment": False,
+                "purchase": True, "sales": True, "quality": True, "finance": True, "equipment": True,
             },
-            "parameters": {"planning": {"require_production_plan": False}, "procurement": {"require_purchase_requisition": False}, "work_order": {"allow_production_without_material": False}},
+            "parameters": {
+                "planning": {"require_production_plan": False},
+                "procurement": {"require_purchase_requisition": False},
+                "work_order": {"allow_production_without_material": False},
+                "sales": {"audit_enabled": False},
+                "purchase": {"auto_approval": True},
+                "reporting": {"auto_approve": True},
+            },
         },
-        "L6": {
-            "code": "L6",
-            "name": "全模块+设备",
-            "description": "L5 基础上启用设备管理",
-            "nodes": _build_preset_nodes(ALL_NODES,
-                ("quotation", "on"), ("sample_trial", "on"), ("sales_forecast", "audit"), ("sales_order", "audit"), ("sales_delivery", "on"), ("shipment_notice", "on"), ("delivery_notice", "on"),
-                ("demand", "on"), ("demand_computation", "on"),
-                ("purchase_request", "audit"), ("purchase_order", "audit"), ("receipt_notice", "on"), ("inbound_delivery", "on"),
-                ("production_plan", "audit"), ("work_order", "on"), ("rework_order", "on"), ("outsource_order", "on"),
-                ("quality_inspection", "audit"), ("inventory_check", "audit"),
-                ("equipment_fault", "on"), ("maintenance_plan", "on"), ("maintenance_reminder", "on"), ("equipment_status", "on"),
-                ("mold_usage", "on"), ("mold_calibration", "on"), ("mold_maintenance_reminder", "on"),
-                ("tool_usage", "on"), ("tool_maintenance", "on"), ("tool_calibration", "on"), ("tool_maintenance_reminder", "on"),
-                ("inbound", "on"), ("outbound", "on"), ("other_inbound", "on"), ("other_outbound", "on"), ("stocktaking", "on"), ("inventory_transfer", "on"), ("assembly_order", "on"), ("disassembly_order", "on"), ("material_borrow", "on"), ("material_return", "on"), ("barcode_mapping", "on"),
-                ("receivable", "on"), ("payable", "on"), ("invoice", "on"), ("cost_calculation", "on"),
+        "M4": {
+            "code": "M4",
+            "name": "全模块全开（关键节点审核）",
+            "description": "全节点启用，关键业务节点强制审核，兼顾效率与风控",
+            "nodes": _build_preset_nodes(
+                ALL_NODES,
+                *[(n, "audit" if n in KEY_AUDIT_NODES else "on") for n in ALL_NODES]
             ),
             "modules": {
                 "production": True, "warehouse": True, "demand": True,
                 "purchase": True, "sales": True, "quality": True, "finance": True, "equipment": True,
             },
-            "parameters": {"planning": {"require_production_plan": False}, "procurement": {"require_purchase_requisition": False}, "work_order": {"allow_production_without_material": False}},
-        },
-        "L7": {
-            "code": "L7",
-            "name": "全模块+设备+仓储细粒度",
-            "description": "L6 基础上启用全部仓储与财务节点",
-            "nodes": _build_preset_nodes(ALL_NODES,
-                ("quotation", "on"), ("sample_trial", "on"), ("sales_forecast", "audit"), ("sales_order", "audit"), ("sales_delivery", "on"), ("shipment_notice", "on"), ("delivery_notice", "on"),
-                ("demand", "on"), ("demand_computation", "on"),
-                ("purchase_request", "audit"), ("purchase_order", "audit"), ("receipt_notice", "on"), ("inbound_delivery", "on"),
-                ("production_plan", "audit"), ("work_order", "on"), ("rework_order", "on"), ("outsource_order", "on"),
-                ("quality_inspection", "audit"), ("inventory_check", "audit"),
-                ("equipment_fault", "on"), ("maintenance_plan", "on"), ("maintenance_reminder", "on"), ("equipment_status", "on"),
-                ("mold_usage", "on"), ("mold_calibration", "on"), ("mold_maintenance_reminder", "on"),
-                ("tool_usage", "on"), ("tool_maintenance", "on"), ("tool_calibration", "on"), ("tool_maintenance_reminder", "on"),
-                ("inbound", "on"), ("outbound", "on"), ("other_inbound", "on"), ("other_outbound", "on"), ("stocktaking", "on"), ("inventory_transfer", "on"), ("assembly_order", "on"), ("disassembly_order", "on"), ("material_borrow", "on"), ("material_return", "on"), ("barcode_mapping", "on"),
-                ("receivable", "on"), ("payable", "on"), ("invoice", "on"), ("cost_calculation", "on"),
-            ),
-            "modules": {
-                "production": True, "warehouse": True, "demand": True,
-                "purchase": True, "sales": True, "quality": True, "finance": True, "equipment": True,
+            "parameters": {
+                "planning": {"require_production_plan": False},
+                "procurement": {"require_purchase_requisition": True},
+                "work_order": {"allow_production_without_material": False},
+                "sales": {"audit_enabled": True},
+                "purchase": {"auto_approval": False},
+                "reporting": {"auto_approve": False},
             },
-            "parameters": {"planning": {"require_production_plan": False}, "procurement": {"require_purchase_requisition": False}, "work_order": {"allow_production_without_material": False}},
         },
     }
 
     # 默认业务复杂度（新租户或未配置时使用）
-    DEFAULT_COMPLEXITY_LEVEL = "L4"
+    DEFAULT_COMPLEXITY_LEVEL = "M2"
 
     # 核心模块列表（不可关闭）
     CORE_MODULES = ["production", "warehouse"]
@@ -791,17 +1035,18 @@ class BusinessConfigService:
         level: str,
     ) -> Dict[str, Any]:
         """
-        应用业务复杂度预设（L1-L5）
+        应用业务复杂度预设（最小必要内置模式）
 
         Args:
             tenant_id: 组织ID
-            level: 复杂度等级（L1/L2/L3/L4/L5）
+            level: 预设编码（M1/M2/M3/M4）
 
         Returns:
             Dict[str, Any]: 应用结果
         """
         if level not in self.COMPLEXITY_PRESETS:
-            raise ValidationError(f"无效的复杂度等级: {level}，支持 L0-L7")
+            valid_levels = "/".join(self.COMPLEXITY_PRESETS.keys())
+            raise ValidationError(f"无效的复杂度等级: {level}，支持 {valid_levels}")
 
         preset = self.COMPLEXITY_PRESETS[level]
         tenant = await Tenant.get_or_none(id=tenant_id)
@@ -843,9 +1088,9 @@ class BusinessConfigService:
 
     async def get_complexity_presets(self) -> Dict[str, Any]:
         """
-        获取八级业务复杂度预设列表 L0-L7（供前端选择器使用）
+        获取内置业务模式预设列表（供前端选择器使用）
         """
-        order = ["L0", "L1", "L2", "L3", "L4", "L5", "L6", "L7"]
+        order = ["M1", "M2", "M3", "M4"]
         return {
             "presets": [
                 {"code": self.COMPLEXITY_PRESETS[k]["code"], "name": self.COMPLEXITY_PRESETS[k]["name"], "description": self.COMPLEXITY_PRESETS[k]["description"]}

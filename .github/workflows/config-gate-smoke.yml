@@ -1,0 +1,34 @@
+name: config-gate-smoke
+
+on:
+  pull_request:
+    branches: [develop]
+    paths:
+      - "riveredge-backend/src/**"
+      - "riveredge-backend/tests/config_gates/**"
+      - "riveredge-backend/scripts/run_config_gate_smoke.sh"
+      - "docs/optimize/P4_Test_Rollout_Playbook.md"
+      - "docs/optimize/Business_Config_Item_Matrix.md"
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: riveredge-backend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install pytest only
+        run: python -m pip install --upgrade pip pytest pytest-asyncio anyio
+
+      - name: Run config gate smoke (all)
+        run: bash scripts/run_config_gate_smoke.sh all

@@ -33,6 +33,7 @@ from apps.kuaizhizao.schemas.purchase import (
     PriceComparisonResponse, MaterialPriceComparison, PriceComparisonItem
 )
 from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, LEGACY_AUDITED_VALUES, is_draft_status
+from infra.services.business_config_service import BusinessConfigService
 
 
 class PurchaseService(AppBaseService[PurchaseOrder]):
@@ -68,6 +69,28 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             supplier = await Supplier.get_or_none(tenant_id=tenant_id, id=order_data.supplier_id)
             if not supplier:
                 raise NotFoundError(f"供应商不存在: {order_data.supplier_id}")
+
+            # 流程设置强执行：必须先有采购申请才可下采购单
+            config_service = BusinessConfigService()
+            biz_config = await config_service.get_business_config(tenant_id)
+            require_purchase_requisition = (
+                biz_config.get("parameters", {})
+                .get("procurement", {})
+                .get("require_purchase_requisition", False)
+            )
+            if require_purchase_requisition:
+                source_type = (order_data.source_type or "").strip().lower()
+                source_id = order_data.source_id
+                if source_type in {"purchase_request", "purchase_requisition"} and source_id:
+                    pass
+                else:
+                    # 兼容按明细挂接采购申请的场景
+                    all_items_have_source = all(
+                        bool(item.source_id) and (item.source_type or "").strip().lower() in {"purchase_request", "purchase_requisition"}
+                        for item in order_data.items
+                    )
+                    if not all_items_have_source:
+                        raise BusinessLogicError("当前组织要求先采购申请后下单，请先关联采购申请单")
 
             # 创建订单头
             order_dict = order_data.model_dump(exclude={'items'})

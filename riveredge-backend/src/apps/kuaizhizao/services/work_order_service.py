@@ -80,6 +80,17 @@ def _max_reportable_quantity_for_op(work_order: WorkOrder, op: WorkOrderOperatio
     return max_completed_quantity_for_plan(plan_qty, om, ov)
 
 
+def _material_shortage_block_applies(block_level: int, stage: str) -> bool:
+    """缺料拦截级别是否命中当前阶段。"""
+    stage_map = {
+        "release": 1,
+        "operation_start": 2,
+        "reporting": 3,
+    }
+    required_level = stage_map.get(stage, 999)
+    return int(block_level or 0) >= required_level
+
+
 class WorkOrderService(AppBaseService[WorkOrder]):
     """
     工单服务类
@@ -89,6 +100,14 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
     def __init__(self):
         super().__init__(WorkOrder)
+
+    async def _is_work_order_param_enabled(self, tenant_id: int, key: str, default: bool = False) -> bool:
+        config = await BusinessConfigService().get_business_config(tenant_id)
+        return bool(
+            config.get("parameters", {})
+            .get("work_order", {})
+            .get(key, default)
+        )
 
     @staticmethod
     async def has_confirmed_picking_for_work_order(tenant_id: int, work_order_id: int) -> bool:
@@ -1799,6 +1818,9 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             BusinessLogicError: 业务逻辑错误（如已报工不能拆分）
         """
         async with in_transaction():
+            if not await self._is_work_order_param_enabled(tenant_id, "split", False):
+                raise BusinessLogicError("当前组织未开启工单拆分能力，请在参数设置中开启“工单拆分”")
+
             # 获取原工单
             original_work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
 
@@ -2447,6 +2469,27 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 if not has_confirmed:
                     raise BusinessLogicError("未确认领料，禁止开工：请先确认该工单的领料单")
 
+            block_level = await BusinessConfigService().get_material_shortage_block_level(tenant_id)
+            if _material_shortage_block_applies(block_level, "operation_start"):
+                shortage_result = await self.check_material_shortage(
+                    tenant_id=tenant_id,
+                    work_order_id=work_order_id
+                )
+                if shortage_result["has_shortage"]:
+                    shortage_materials = ", ".join([
+                        f"{item['material_name']}(缺{item['shortage_quantity']}{item['unit']})"
+                        for item in shortage_result["shortage_items"][:3]
+                    ])
+                    raise BusinessLogicError(
+                        "工单存在缺料，无法开工。缺料物料："
+                        + shortage_materials
+                        + (
+                            f"等{shortage_result['total_shortage_count']}种物料"
+                            if shortage_result["total_shortage_count"] > 3
+                            else ""
+                        )
+                    )
+
             # 检查工单状态
             if work_order.status not in ['released', 'in_progress']:
                 raise BusinessLogicError(f"只能开始已下达或进行中的工单的工序，当前工单状态：{work_order.status}")
@@ -2633,6 +2676,9 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             ValidationError: 优先级值无效
         """
         async with in_transaction():
+            if not await self._is_work_order_param_enabled(tenant_id, "priority", False):
+                raise BusinessLogicError("当前组织未开启工单优先级能力，请在参数设置中开启“工单优先级”")
+
             work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
 
             # 验证优先级值
@@ -2675,6 +2721,9 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             NotFoundError: 部分工单不存在
         """
         async with in_transaction():
+            if not await self._is_work_order_param_enabled(tenant_id, "priority", False):
+                raise BusinessLogicError("当前组织未开启工单优先级能力，请在参数设置中开启“工单优先级”")
+
             # 验证优先级值
             valid_priorities = ['low', 'normal', 'high', 'urgent']
             if batch_data.priority not in valid_priorities:
@@ -2847,6 +2896,9 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             BusinessLogicError: 业务逻辑错误（如不能合并）
         """
         async with in_transaction():
+            if not await self._is_work_order_param_enabled(tenant_id, "merge", False):
+                raise BusinessLogicError("当前组织未开启工单合并能力，请在参数设置中开启“工单合并”")
+
             if len(merge_data.work_order_ids) < 2:
                 raise ValidationError("至少需要2个工单才能合并")
 

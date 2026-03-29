@@ -260,7 +260,7 @@ const ReportingKioskPage: React.FC = () => {
         remarks: values.remarks || '',
       };
 
-      await reportingApi.create(reportingData);
+      await reportingApi.quickCreate(reportingData);
       messageApi.success('报工成功！');
       
       // 重置表单和状态

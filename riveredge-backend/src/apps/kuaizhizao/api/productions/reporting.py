@@ -133,7 +133,25 @@ async def create_reporting_record(
     return await reporting_service.create_reporting_record(
         tenant_id=tenant_id,
         reporting_data=reporting,
-        reported_by=current_user.id
+        reported_by=current_user.id,
+        entry_mode="manual",
+    )
+
+
+@router.post("/reporting/quick", response_model=ReportingRecordResponse, summary="快捷报工（扫码/工位机）")
+async def create_quick_reporting_record(
+    reporting: ReportingRecordCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ReportingRecordResponse:
+    """
+    快捷报工入口（用于扫码报工、工位机报工）
+    """
+    return await reporting_service.create_reporting_record(
+        tenant_id=tenant_id,
+        reporting_data=reporting,
+        reported_by=current_user.id,
+        entry_mode="quick",
     )
 
 

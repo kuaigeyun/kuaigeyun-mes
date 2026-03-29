@@ -24,6 +24,7 @@ export interface ReportingStatistics {
 export const reportingApi = {
   list: async (params?: any) => apiRequest('/apps/kuaizhizao/reporting', { method: 'GET', params }),
   create: async (data: any) => apiRequest('/apps/kuaizhizao/reporting', { method: 'POST', data }),
+  quickCreate: async (data: any) => apiRequest('/apps/kuaizhizao/reporting/quick', { method: 'POST', data }),
   update: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/reporting/${id}`, { method: 'PUT', data }),
   delete: async (id: string) => apiRequest(`/apps/kuaizhizao/reporting/${id}`, { method: 'DELETE' }),
   get: async (id: string) => apiRequest(`/apps/kuaizhizao/reporting/${id}`, { method: 'GET' }),

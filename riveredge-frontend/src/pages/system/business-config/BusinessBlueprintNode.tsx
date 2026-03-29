@@ -6,6 +6,7 @@
  */
 import React from 'react';
 import { CheckCard } from '@ant-design/pro-components';
+import { Handle, Position } from 'reactflow';
 import type { NodeProps } from 'reactflow';
 
 const BusinessBlueprintNode: React.FC<NodeProps> = ({ data }) => {
@@ -16,6 +17,15 @@ const BusinessBlueprintNode: React.FC<NodeProps> = ({ data }) => {
 
     return (
         <div style={{ background: 'transparent', border: 'none', boxShadow: 'none', padding: 0 }}>
+            {/* 隐藏句柄：用于贝塞尔连线锚点，不影响卡片视觉 */}
+            <Handle id="target-left" type="target" position={Position.Left} style={{ width: 6, height: 6, opacity: 0, pointerEvents: 'none' }} />
+            <Handle id="target-right" type="target" position={Position.Right} style={{ width: 6, height: 6, opacity: 0, pointerEvents: 'none' }} />
+            <Handle id="target-top" type="target" position={Position.Top} style={{ width: 6, height: 6, opacity: 0, pointerEvents: 'none' }} />
+            <Handle id="target-bottom" type="target" position={Position.Bottom} style={{ width: 6, height: 6, opacity: 0, pointerEvents: 'none' }} />
+            <Handle id="source-left" type="source" position={Position.Left} style={{ width: 6, height: 6, opacity: 0, pointerEvents: 'none' }} />
+            <Handle id="source-right" type="source" position={Position.Right} style={{ width: 6, height: 6, opacity: 0, pointerEvents: 'none' }} />
+            <Handle id="source-top" type="source" position={Position.Top} style={{ width: 6, height: 6, opacity: 0, pointerEvents: 'none' }} />
+            <Handle id="source-bottom" type="source" position={Position.Bottom} style={{ width: 6, height: 6, opacity: 0, pointerEvents: 'none' }} />
             <CheckCard
                 className={auditRequired ? 'business-blueprint-node-audit' : undefined}
                 title={

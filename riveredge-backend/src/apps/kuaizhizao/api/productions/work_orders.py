@@ -1070,13 +1070,14 @@ async def release_work_order(
     下达工单
 
     将工单状态从"草稿"更新为"已下达"。
-    是否检查缺料由业务配置「允许不带料生产」决定：开启时只管制造过程，不检查缺料。
+    是否检查缺料由业务配置「缺料拦截级别」决定：
+    0=不拦截，1=下达拦截，2=下达+开工拦截，3=下达+开工+报工拦截。
 
     - **work_order_id**: 工单ID
     """
     from infra.services.business_config_service import BusinessConfigService
-    allow_without_material = await BusinessConfigService().allow_production_without_material(tenant_id)
-    check_shortage = not allow_without_material
+    block_level = await BusinessConfigService().get_material_shortage_block_level(tenant_id)
+    check_shortage = block_level >= 1
     return await WorkOrderService().release_work_order(
         tenant_id=tenant_id,
         work_order_id=work_order_id,
