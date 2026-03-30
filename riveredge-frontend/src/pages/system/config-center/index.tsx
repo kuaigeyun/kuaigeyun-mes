@@ -18,7 +18,6 @@ import {
   batchUpdateProcessParameters,
   getConfigTemplates,
   saveConfigTemplate,
-  applyConfigTemplate,
 } from '../../../services/businessConfig';
 import BusinessFlowConfig from '../business-config/BusinessFlowConfig';
 import { PARAMETER_CATEGORIES, PROCESS_CATEGORIES, type ConfigCategory, type ParamMeta } from './configTree';
@@ -95,9 +94,14 @@ function buildProcessCategoriesFromRegistry(
   }
 
   const categories: ConfigCategory[] = [];
+  const categoryByNameKey = new Map<string, ConfigCategory>();
+
   for (const [categoryKey, keys] of Object.entries(registry)) {
     const processCategoryId = `process_${categoryKey}`;
     const fallbackCategory = fallbackCategoryById.get(processCategoryId);
+    const nameKey = categoryMeta?.[categoryKey]?.labelKey || fallbackCategory?.nameKey || categoryKey;
+    const descriptionKey = categoryMeta?.[categoryKey]?.descriptionKey || fallbackCategory?.descriptionKey;
+
     const params: ParamMeta[] = (keys || []).map((key) => {
       const fullKey = `${categoryKey}.${key}`;
       const fallbackParam = fallbackParamByKey.get(fullKey);
@@ -125,12 +129,18 @@ function buildProcessCategoriesFromRegistry(
       };
     });
 
-    categories.push({
-      id: processCategoryId,
-      nameKey: categoryMeta?.[categoryKey]?.labelKey || fallbackCategory?.nameKey || categoryKey,
-      descriptionKey: categoryMeta?.[categoryKey]?.descriptionKey || fallbackCategory?.descriptionKey,
-      params,
-    });
+    if (categoryByNameKey.has(nameKey)) {
+      categoryByNameKey.get(nameKey)!.params.push(...params);
+    } else {
+      const newCat: ConfigCategory = {
+        id: processCategoryId,
+        nameKey,
+        descriptionKey,
+        params,
+      };
+      categories.push(newCat);
+      categoryByNameKey.set(nameKey, newCat);
+    }
   }
 
   return categories;
@@ -158,9 +168,14 @@ function buildParameterCategoriesFromRegistry(
   }
 
   const categories: ConfigCategory[] = [];
+  const categoryByNameKey = new Map<string, ConfigCategory>();
+
   for (const [categoryKey, keys] of Object.entries(registry)) {
     const categoryId = `param_${categoryKey}`;
     const fallbackCategory = fallbackCategoryByBusinessGroup.get(categoryKey);
+    const nameKey = categoryMeta?.[categoryKey]?.labelKey || fallbackCategory?.nameKey || categoryKey;
+    const descriptionKey = categoryMeta?.[categoryKey]?.descriptionKey || fallbackCategory?.descriptionKey;
+
     const params: ParamMeta[] = (keys || []).map((key) => {
       const fullKey = `${categoryKey}.${key}`;
       const fallbackParam = fallbackParamByKey.get(fullKey);
@@ -188,12 +203,18 @@ function buildParameterCategoriesFromRegistry(
       };
     });
 
-    categories.push({
-      id: categoryId,
-      nameKey: categoryMeta?.[categoryKey]?.labelKey || fallbackCategory?.nameKey || categoryKey,
-      descriptionKey: categoryMeta?.[categoryKey]?.descriptionKey || fallbackCategory?.descriptionKey,
-      params,
-    });
+    if (categoryByNameKey.has(nameKey)) {
+      categoryByNameKey.get(nameKey)!.params.push(...params);
+    } else {
+      const newCat: ConfigCategory = {
+        id: categoryId,
+        nameKey,
+        descriptionKey,
+        params,
+      };
+      categories.push(newCat);
+      categoryByNameKey.set(nameKey, newCat);
+    }
   }
 
   return categories;

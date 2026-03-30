@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Input, theme, Modal, Spin, Form, Row, Col } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Input, theme, Spin, Form, Row, Col } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, SearchOutlined, DatabaseOutlined, MinusCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
@@ -97,7 +97,6 @@ const CustomFieldListPage: React.FC = () => {
   // 功能页面选择状态（左右结构）
   const [selectedPageCode, setSelectedPageCode] = useState<string | null>(null);
   const [pageSearchValue, setPageSearchValue] = useState<string>('');
-  const [pageFieldCounts, setPageFieldCounts] = useState<Record<string, number>>({});
 
   // Modal 相关状态（创建/编辑字段）
   const [modalVisible, setModalVisible] = useState(false);
@@ -193,46 +192,6 @@ const CustomFieldListPage: React.FC = () => {
     if (!selectedPageCode) return null;
     return pageConfigs.find(page => page.pageCode === selectedPageCode) || null;
   };
-
-  /**
-   * 处理选择功能页面
-   */
-  const handleSelectPage = async (pageCode: string) => {
-    setSelectedPageCode(pageCode);
-    // 加载该页面的自定义字段列表
-    actionRef.current?.reload();
-    // 更新字段数量
-    await updatePageFieldCounts();
-  };
-
-  /**
-   * 更新各页面的字段数量
-   */
-  const updatePageFieldCounts = async () => {
-    try {
-      const counts: Record<string, number> = {};
-      for (const page of pageConfigs) {
-        try {
-          const response = await getCustomFieldList({
-            page: 1,
-            page_size: 1,
-            table_name: page.tableName,
-          });
-          counts[page.pageCode] = response.total || 0;
-        } catch (error) {
-          counts[page.pageCode] = 0;
-        }
-      }
-      setPageFieldCounts(counts);
-    } catch (error) {
-      console.error('更新字段数量失败:', error);
-    }
-  };
-
-  // 初始化时加载字段数量
-  useEffect(() => {
-    updatePageFieldCounts();
-  }, []);
 
   /**
    * 处理新建字段
@@ -331,8 +290,6 @@ const CustomFieldListPage: React.FC = () => {
       await deleteCustomField(record.uuid);
       messageApi.success(t('pages.system.deleteSuccess'));
       actionRef.current?.reload();
-      // 更新字段数量
-      updatePageFieldCounts();
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.deleteFailed'));
     }
@@ -366,7 +323,6 @@ const CustomFieldListPage: React.FC = () => {
 
       setSelectedRowKeys([]);
       actionRef.current?.reload();
-      updatePageFieldCounts();
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.deleteFailed'));
     }
@@ -478,8 +434,6 @@ const CustomFieldListPage: React.FC = () => {
 
       setModalVisible(false);
       actionRef.current?.reload();
-      // 更新字段数量
-      updatePageFieldCounts();
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.deleteFailed'));
       throw error;
@@ -1081,11 +1035,10 @@ const CustomFieldListPage: React.FC = () => {
                       </div>
                       {modulePages.map(page => {
                         const isSelected = selectedPageCode === page.pageCode;
-                        const fieldCount = pageFieldCounts[page.pageCode] || 0;
                         return (
                           <div
                             key={page.pageCode}
-                            onClick={() => handleSelectPage(page.pageCode)}
+                            onClick={() => setSelectedPageCode(page.pageCode)}
                             style={{
                               padding: '12px',
                               marginBottom: '4px',
@@ -1117,11 +1070,6 @@ const CustomFieldListPage: React.FC = () => {
                                 {page.tableNameLabel}
                               </div>
                             </div>
-                            {fieldCount > 0 && (
-                              <Tag color="blue" style={{ marginLeft: '8px' }}>
-                                {fieldCount}
-                              </Tag>
-                            )}
                           </div>
                         );
                       })}
@@ -1171,6 +1119,7 @@ const CustomFieldListPage: React.FC = () => {
                 <div className="scrollbar-like-modal" style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '24px' }}>
                   <UniTable<CustomField>
                     actionRef={actionRef}
+                    params={{ table_name: selectedPage.tableName }}
                     columns={columns}
                     request={async (params, _sort, _filter) => {
                       // 处理搜索参数

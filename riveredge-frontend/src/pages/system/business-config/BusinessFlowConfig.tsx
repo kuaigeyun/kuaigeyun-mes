@@ -29,7 +29,7 @@ import type { ConfigTemplate, ComplexityPreset } from '../../../services/busines
 import { getBusinessConfig, updateNodesConfig, deleteConfigTemplate, getComplexityPresets, applyComplexityPreset, applyConfigTemplate } from '../../../services/businessConfig';
 import { useThemeStore } from '../../../stores/themeStore';
 
-import { Background, BackgroundVariant, MarkerType } from 'reactflow';
+import { Background, BackgroundVariant } from 'reactflow';
 import type { Edge } from 'reactflow';
 import type { NodeProps } from 'reactflow';
 import { CANVAS_GRID_REACTFLOW } from '../../../components/layout-templates';
@@ -187,111 +187,197 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
         const fromManifest = t(manifestKey);
         return fromManifest === manifestKey ? fallback : fromManifest;
     };
-    // 按模块分区布局（上半区主业务，下半区设备/财务），避免节点重叠
-    const ROW = 86; // 组内行间距（节点高度约 50，留足安全间隔）
-    const COL = 156; // 同组列间距
-    const TOP_Y = 20;
-    const BOTTOM_Y = 1180;
-    const GROUP_HEADER_OFFSET_Y = 36;
-    const MOD = {
-        sales: 420,
-        plan: 980,       // 中心分组
-        purchase: 1420,
-        production: 1540,
-        warehouse: 2020,
-        equipment: 420,
-        mold: 980,
-        tooling: 1540,
-        finance: 2460,
-    };
+    // 组内严格网格对齐；组间垂直分层避免矩形重叠（采购/财务 → 销售/计划/仓储 → 生产 → 设备行）
+    const ROW = 56;
+    const COL = 112;
+    const NODE_W = 108;
+    const NODE_H = 56;
+    const GROUP_PAD_X = 20;
+    const GROUP_PAD_BOTTOM = 18;
+    const GROUP_HEADER_OFFSET_Y = 26;
+    /** 首行相对分组顶：与 position 公式 n.y = BASE + row*ROW 一致 */
+    const FIRST_ROW_GAP = 12;
+
+    /** 分组容器画布：统一原点、等间距、各行相对中间三列总宽居中，避免东一块西一块 */
+    const CANVAS_ORIGIN_X = 40;
+    const GROUP_GUTTER = 20;
+    /** 顶行节点基准 y；中间行节点基准 y（与 group.y + 12 一致） */
     const BASE_Y = {
-        sales: 300,
-        plan: 260,
         purchase: 120,
-        production: 560,
-        warehouse: 300,
         finance: 120,
+        sales: 400,
+        plan: 400,
+        warehouse: 400,
     };
-    const moduleGroups = [
-        { id: 'group_sales', label: '销售管理', x: MOD.sales - 20, y: BASE_Y.sales - 12, w: 340, h: 700 },
-        { id: 'group_plan', label: '计划管理', x: MOD.plan - 20, y: BASE_Y.plan - 12, w: 340, h: 430 },
-        { id: 'group_purchase', label: '采购管理', x: MOD.purchase - 20, y: BASE_Y.purchase - 12, w: 340, h: 430 },
-        { id: 'group_production', label: '生产执行', x: MOD.production - 20, y: BASE_Y.production - 12, w: 340, h: 560 },
-        { id: 'group_warehouse', label: '仓储管理', x: MOD.warehouse - 20, y: BASE_Y.warehouse - 12, w: 340, h: 840 },
-        { id: 'group_finance', label: '财务管理', x: MOD.finance - 20, y: BASE_Y.finance - 12, w: 340, h: 560 },
-        { id: 'group_equipment', label: '设备管理', x: MOD.equipment - 20, y: BOTTOM_Y - 12, w: 500, h: 220 },
-        { id: 'group_mold', label: '模具管理', x: MOD.mold - 20, y: BOTTOM_Y - 12, w: 340, h: 220 },
-        { id: 'group_tooling', label: '工装管理', x: MOD.tooling - 20, y: BOTTOM_Y - 12, w: 340, h: 220 },
-    ] as const;
-    const moduleGroupMap = moduleGroups.reduce((acc, item) => {
-        acc[item.id] = item;
-        return acc;
-    }, {} as Record<string, (typeof moduleGroups)[number]>);
-    const nodeDefs: Array<{ id: string; groupId: string; x: number; y: number; enabled: boolean; audit: boolean; icon: React.ReactNode }> = [
-        // 销售管理
-        { id: 'quotation', groupId: 'group_sales', x: MOD.sales, y: BASE_Y.sales, enabled: false, audit: false, icon: <FileTextOutlined style={{ color: '#1890ff' }} /> },
-        { id: 'sample_trial', groupId: 'group_sales', x: MOD.sales + COL, y: BASE_Y.sales, enabled: false, audit: false, icon: <FileTextOutlined style={{ color: '#1890ff' }} /> },
-        { id: 'sales_forecast', groupId: 'group_sales', x: MOD.sales, y: BASE_Y.sales + ROW, enabled: true, audit: false, icon: <LineChartOutlined style={{ color: '#1890ff' }} /> },
-        { id: 'sales_order', groupId: 'group_sales', x: MOD.sales, y: BASE_Y.sales + ROW * 2, enabled: true, audit: false, icon: <ShopOutlined style={{ color: '#1890ff' }} /> },
-        { id: 'shipment_notice', groupId: 'group_sales', x: MOD.sales, y: BASE_Y.sales + ROW * 3, enabled: true, audit: false, icon: <FileTextOutlined style={{ color: '#1890ff' }} /> },
-        { id: 'sales_delivery', groupId: 'group_sales', x: MOD.sales, y: BASE_Y.sales + ROW * 4, enabled: true, audit: false, icon: <RocketOutlined style={{ color: '#1890ff' }} /> },
-        { id: 'delivery_notice', groupId: 'group_sales', x: MOD.sales, y: BASE_Y.sales + ROW * 5, enabled: false, audit: false, icon: <FileTextOutlined style={{ color: '#1890ff' }} /> },
-        { id: 'sales_return', groupId: 'group_sales', x: MOD.sales, y: BASE_Y.sales + ROW * 6, enabled: false, audit: false, icon: <ImportOutlined style={{ color: '#1890ff' }} /> },
-        { id: 'customer_follow_up', groupId: 'group_sales', x: MOD.sales + COL, y: BASE_Y.sales + ROW * 2, enabled: false, audit: false, icon: <UnorderedListOutlined style={{ color: '#1890ff' }} /> },
-        // 计划管理
-        { id: 'demand', groupId: 'group_plan', x: MOD.plan, y: BASE_Y.plan + ROW, enabled: true, audit: false, icon: <UnorderedListOutlined style={{ color: '#722ed1' }} /> },
-        { id: 'demand_computation', groupId: 'group_plan', x: MOD.plan, y: BASE_Y.plan + ROW * 2, enabled: true, audit: false, icon: <CalculatorOutlined style={{ color: '#722ed1' }} /> },
-        { id: 'inventory_check', groupId: 'group_plan', x: MOD.plan + COL, y: BASE_Y.plan + ROW * 2, enabled: false, audit: false, icon: <CodeSandboxOutlined style={{ color: '#52c41a' }} /> },
-        { id: 'production_plan', groupId: 'group_plan', x: MOD.plan, y: BASE_Y.plan + ROW * 3, enabled: false, audit: false, icon: <CodeSandboxOutlined style={{ color: '#722ed1' }} /> },
-        { id: 'production_control_tower', groupId: 'group_plan', x: MOD.plan + COL, y: BASE_Y.plan + ROW * 3, enabled: false, audit: false, icon: <CalculatorOutlined style={{ color: '#722ed1' }} /> },
-        // 采购管理
-        { id: 'purchase_request', groupId: 'group_purchase', x: MOD.purchase, y: BASE_Y.purchase, enabled: true, audit: false, icon: <ShoppingCartOutlined /> },
-        { id: 'purchase_order', groupId: 'group_purchase', x: MOD.purchase, y: BASE_Y.purchase + ROW, enabled: true, audit: false, icon: <ShoppingCartOutlined /> },
-        { id: 'inbound_delivery', groupId: 'group_purchase', x: MOD.purchase, y: BASE_Y.purchase + ROW * 2, enabled: true, audit: false, icon: <CloudUploadOutlined /> },
-        { id: 'receipt_notice', groupId: 'group_purchase', x: MOD.purchase, y: BASE_Y.purchase + ROW * 3, enabled: true, audit: false, icon: <FileTextOutlined /> },
-        { id: 'logistics_tracking', groupId: 'group_purchase', x: MOD.purchase + COL, y: BASE_Y.purchase + ROW, enabled: false, audit: false, icon: <LineChartOutlined /> },
-        { id: 'purchase_return', groupId: 'group_purchase', x: MOD.purchase + COL, y: BASE_Y.purchase + ROW * 2, enabled: false, audit: false, icon: <ImportOutlined /> },
-        // 生产执行
-        { id: 'work_order', groupId: 'group_production', x: MOD.production, y: BASE_Y.production + ROW, enabled: true, audit: false, icon: <CodeSandboxOutlined style={{ color: '#722ed1' }} /> },
-        { id: 'quality_inspection', groupId: 'group_production', x: MOD.production, y: BASE_Y.production + ROW * 2, enabled: true, audit: false, icon: <CodeSandboxOutlined style={{ color: '#faad14' }} /> },
-        { id: 'inspection_center', groupId: 'group_production', x: MOD.production + COL, y: BASE_Y.production + ROW * 2, enabled: false, audit: false, icon: <UnorderedListOutlined style={{ color: '#faad14' }} /> },
-        { id: 'rework_order', groupId: 'group_production', x: MOD.production, y: BASE_Y.production + ROW * 3, enabled: false, audit: false, icon: <CodeSandboxOutlined style={{ color: '#722ed1' }} /> },
-        { id: 'outsource_order', groupId: 'group_production', x: MOD.production, y: BASE_Y.production + ROW * 4, enabled: false, audit: false, icon: <CodeSandboxOutlined style={{ color: '#722ed1' }} /> },
-        // 仓储管理
-        { id: 'inbound', groupId: 'group_warehouse', x: MOD.warehouse, y: BASE_Y.warehouse + ROW * 2, enabled: true, audit: false, icon: <InboxOutlined /> },
-        { id: 'outbound', groupId: 'group_warehouse', x: MOD.warehouse + COL, y: BASE_Y.warehouse + ROW * 4, enabled: true, audit: false, icon: <InboxOutlined /> },
-        { id: 'other_inbound', groupId: 'group_warehouse', x: MOD.warehouse + COL, y: BASE_Y.warehouse + ROW, enabled: false, audit: false, icon: <PlusOutlined /> },
-        { id: 'other_outbound', groupId: 'group_warehouse', x: MOD.warehouse + COL, y: BASE_Y.warehouse + ROW * 5, enabled: false, audit: false, icon: <MinusOutlined /> },
-        { id: 'stocktaking', groupId: 'group_warehouse', x: MOD.warehouse, y: BASE_Y.warehouse + ROW * 3, enabled: false, audit: false, icon: <FileTextOutlined /> },
-        { id: 'inventory_transfer', groupId: 'group_warehouse', x: MOD.warehouse, y: BASE_Y.warehouse + ROW * 4, enabled: false, audit: false, icon: <FileTextOutlined /> },
-        { id: 'batch_inventory_query', groupId: 'group_warehouse', x: MOD.warehouse + COL, y: BASE_Y.warehouse + ROW * 3, enabled: false, audit: false, icon: <UnorderedListOutlined /> },
-        { id: 'material_call', groupId: 'group_warehouse', x: MOD.warehouse + COL, y: BASE_Y.warehouse + ROW * 4, enabled: false, audit: false, icon: <ExportOutlined /> },
-        { id: 'assembly_order', groupId: 'group_warehouse', x: MOD.warehouse, y: BASE_Y.warehouse + ROW * 5, enabled: false, audit: false, icon: <FileTextOutlined /> },
-        { id: 'disassembly_order', groupId: 'group_warehouse', x: MOD.warehouse, y: BASE_Y.warehouse + ROW * 6, enabled: false, audit: false, icon: <FileTextOutlined /> },
-        { id: 'material_borrow', groupId: 'group_warehouse', x: MOD.warehouse + COL, y: BASE_Y.warehouse + ROW * 6, enabled: false, audit: false, icon: <ExportOutlined /> },
-        { id: 'material_return', groupId: 'group_warehouse', x: MOD.warehouse + COL, y: BASE_Y.warehouse + ROW * 7, enabled: false, audit: false, icon: <ImportOutlined /> },
-        { id: 'barcode_mapping', groupId: 'group_warehouse', x: MOD.warehouse + COL, y: BASE_Y.warehouse + ROW * 8, enabled: false, audit: false, icon: <BarcodeOutlined /> },
-        // 设备管理
-        { id: 'equipment_fault', groupId: 'group_equipment', x: MOD.equipment, y: BOTTOM_Y, enabled: false, audit: false, icon: <ToolOutlined /> },
-        { id: 'maintenance_plan', groupId: 'group_equipment', x: MOD.equipment + COL, y: BOTTOM_Y, enabled: false, audit: false, icon: <ToolOutlined /> },
-        { id: 'maintenance_reminder', groupId: 'group_equipment', x: MOD.equipment + COL * 2, y: BOTTOM_Y, enabled: false, audit: false, icon: <ToolOutlined /> },
-        { id: 'equipment_status', groupId: 'group_equipment', x: MOD.equipment, y: BOTTOM_Y + ROW, enabled: false, audit: false, icon: <ToolOutlined /> },
-        { id: 'spare_parts', groupId: 'group_equipment', x: MOD.equipment + COL, y: BOTTOM_Y + ROW, enabled: false, audit: false, icon: <ToolOutlined /> },
-        // 模具管理
-        { id: 'mold_usage', groupId: 'group_mold', x: MOD.mold, y: BOTTOM_Y, enabled: false, audit: false, icon: <BlockOutlined /> },
-        { id: 'mold_calibration', groupId: 'group_mold', x: MOD.mold + COL, y: BOTTOM_Y, enabled: false, audit: false, icon: <BlockOutlined /> },
-        { id: 'mold_maintenance_reminder', groupId: 'group_mold', x: MOD.mold, y: BOTTOM_Y + ROW, enabled: false, audit: false, icon: <BlockOutlined /> },
-        // 工装管理
-        { id: 'tool_usage', groupId: 'group_tooling', x: MOD.tooling, y: BOTTOM_Y, enabled: false, audit: false, icon: <BuildOutlined /> },
-        { id: 'tool_maintenance', groupId: 'group_tooling', x: MOD.tooling + COL, y: BOTTOM_Y, enabled: false, audit: false, icon: <BuildOutlined /> },
-        { id: 'tool_calibration', groupId: 'group_tooling', x: MOD.tooling, y: BOTTOM_Y + ROW, enabled: false, audit: false, icon: <BuildOutlined /> },
-        { id: 'tool_maintenance_reminder', groupId: 'group_tooling', x: MOD.tooling + COL, y: BOTTOM_Y + ROW, enabled: false, audit: false, icon: <BuildOutlined /> },
-        // 财务管理（上移到主流程区域，减少跨层连线）
-        { id: 'receivable', groupId: 'group_finance', x: MOD.finance, y: BASE_Y.finance + ROW * 2, enabled: false, audit: false, icon: <WalletOutlined /> },
-        { id: 'payable', groupId: 'group_finance', x: MOD.finance + COL, y: BASE_Y.finance + ROW * 2, enabled: false, audit: false, icon: <WalletOutlined /> },
-        { id: 'invoice', groupId: 'group_finance', x: MOD.finance, y: BASE_Y.finance + ROW * 3, enabled: false, audit: false, icon: <WalletOutlined /> },
-        { id: 'cost_calculation', groupId: 'group_finance', x: MOD.finance + COL, y: BASE_Y.finance + ROW * 4, enabled: false, audit: false, icon: <CalculatorOutlined /> },
+
+    type GridCell = { id: string; groupId: string; row: number; col: number; enabled: boolean; audit: boolean; icon: React.ReactNode };
+    const blueprintGrid: GridCell[] = [
+        // 销售管理：5 行 × 2 列，行优先填满
+        { id: 'quotation', groupId: 'group_sales', row: 0, col: 0, enabled: false, audit: false, icon: <FileTextOutlined style={{ color: '#1890ff' }} /> },
+        { id: 'sample_trial', groupId: 'group_sales', row: 0, col: 1, enabled: false, audit: false, icon: <FileTextOutlined style={{ color: '#1890ff' }} /> },
+        { id: 'sales_forecast', groupId: 'group_sales', row: 1, col: 0, enabled: true, audit: false, icon: <LineChartOutlined style={{ color: '#1890ff' }} /> },
+        { id: 'customer_follow_up', groupId: 'group_sales', row: 1, col: 1, enabled: false, audit: false, icon: <UnorderedListOutlined style={{ color: '#1890ff' }} /> },
+        { id: 'sales_order', groupId: 'group_sales', row: 2, col: 0, enabled: true, audit: false, icon: <ShopOutlined style={{ color: '#1890ff' }} /> },
+        { id: 'shipment_notice', groupId: 'group_sales', row: 2, col: 1, enabled: true, audit: false, icon: <FileTextOutlined style={{ color: '#1890ff' }} /> },
+        { id: 'sales_delivery', groupId: 'group_sales', row: 3, col: 0, enabled: true, audit: false, icon: <RocketOutlined style={{ color: '#1890ff' }} /> },
+        { id: 'delivery_notice', groupId: 'group_sales', row: 3, col: 1, enabled: false, audit: false, icon: <FileTextOutlined style={{ color: '#1890ff' }} /> },
+        { id: 'sales_return', groupId: 'group_sales', row: 4, col: 0, enabled: false, audit: false, icon: <ImportOutlined style={{ color: '#1890ff' }} /> },
+        // 计划管理：3 行 × 2 列
+        { id: 'demand', groupId: 'group_plan', row: 0, col: 0, enabled: true, audit: false, icon: <UnorderedListOutlined style={{ color: '#722ed1' }} /> },
+        { id: 'demand_computation', groupId: 'group_plan', row: 0, col: 1, enabled: true, audit: false, icon: <CalculatorOutlined style={{ color: '#722ed1' }} /> },
+        { id: 'inventory_check', groupId: 'group_plan', row: 1, col: 0, enabled: false, audit: false, icon: <CodeSandboxOutlined style={{ color: '#52c41a' }} /> },
+        { id: 'production_plan', groupId: 'group_plan', row: 1, col: 1, enabled: false, audit: false, icon: <CodeSandboxOutlined style={{ color: '#722ed1' }} /> },
+        { id: 'production_control_tower', groupId: 'group_plan', row: 2, col: 0, enabled: false, audit: false, icon: <CalculatorOutlined style={{ color: '#722ed1' }} /> },
+        // 采购管理：左列主流程自上而下，右列对齐同行
+        { id: 'purchase_request', groupId: 'group_purchase', row: 0, col: 0, enabled: true, audit: false, icon: <ShoppingCartOutlined /> },
+        { id: 'logistics_tracking', groupId: 'group_purchase', row: 0, col: 1, enabled: false, audit: false, icon: <LineChartOutlined /> },
+        { id: 'purchase_order', groupId: 'group_purchase', row: 1, col: 0, enabled: true, audit: false, icon: <ShoppingCartOutlined /> },
+        { id: 'purchase_return', groupId: 'group_purchase', row: 1, col: 1, enabled: false, audit: false, icon: <ImportOutlined /> },
+        { id: 'inbound_delivery', groupId: 'group_purchase', row: 2, col: 0, enabled: true, audit: false, icon: <CloudUploadOutlined /> },
+        { id: 'receipt_notice', groupId: 'group_purchase', row: 2, col: 1, enabled: true, audit: false, icon: <FileTextOutlined /> },
+        // 生产执行：左列工单链，右上质检中心与质检同行
+        { id: 'work_order', groupId: 'group_production', row: 0, col: 0, enabled: true, audit: false, icon: <CodeSandboxOutlined style={{ color: '#722ed1' }} /> },
+        { id: 'inspection_center', groupId: 'group_production', row: 0, col: 1, enabled: false, audit: false, icon: <UnorderedListOutlined style={{ color: '#faad14' }} /> },
+        { id: 'quality_inspection', groupId: 'group_production', row: 1, col: 0, enabled: true, audit: false, icon: <CodeSandboxOutlined style={{ color: '#faad14' }} /> },
+        { id: 'rework_order', groupId: 'group_production', row: 1, col: 1, enabled: false, audit: false, icon: <CodeSandboxOutlined style={{ color: '#722ed1' }} /> },
+        { id: 'outsource_order', groupId: 'group_production', row: 2, col: 0, enabled: false, audit: false, icon: <CodeSandboxOutlined style={{ color: '#722ed1' }} /> },
+        // 仓储管理：7 行 × 2 列，行优先
+        { id: 'other_inbound', groupId: 'group_warehouse', row: 0, col: 0, enabled: false, audit: false, icon: <PlusOutlined /> },
+        { id: 'inbound', groupId: 'group_warehouse', row: 0, col: 1, enabled: true, audit: false, icon: <InboxOutlined /> },
+        { id: 'stocktaking', groupId: 'group_warehouse', row: 1, col: 0, enabled: false, audit: false, icon: <FileTextOutlined /> },
+        { id: 'outbound', groupId: 'group_warehouse', row: 1, col: 1, enabled: true, audit: false, icon: <InboxOutlined /> },
+        { id: 'inventory_transfer', groupId: 'group_warehouse', row: 2, col: 0, enabled: false, audit: false, icon: <FileTextOutlined /> },
+        { id: 'batch_inventory_query', groupId: 'group_warehouse', row: 2, col: 1, enabled: false, audit: false, icon: <UnorderedListOutlined /> },
+        { id: 'assembly_order', groupId: 'group_warehouse', row: 3, col: 0, enabled: false, audit: false, icon: <FileTextOutlined /> },
+        { id: 'material_call', groupId: 'group_warehouse', row: 3, col: 1, enabled: false, audit: false, icon: <ExportOutlined /> },
+        { id: 'disassembly_order', groupId: 'group_warehouse', row: 4, col: 0, enabled: false, audit: false, icon: <FileTextOutlined /> },
+        { id: 'material_borrow', groupId: 'group_warehouse', row: 4, col: 1, enabled: false, audit: false, icon: <ExportOutlined /> },
+        { id: 'material_return', groupId: 'group_warehouse', row: 5, col: 0, enabled: false, audit: false, icon: <ImportOutlined /> },
+        { id: 'other_outbound', groupId: 'group_warehouse', row: 5, col: 1, enabled: false, audit: false, icon: <MinusOutlined /> },
+        { id: 'barcode_mapping', groupId: 'group_warehouse', row: 6, col: 0, enabled: false, audit: false, icon: <BarcodeOutlined /> },
+        // 财务管理：2×2
+        { id: 'receivable', groupId: 'group_finance', row: 0, col: 0, enabled: false, audit: false, icon: <WalletOutlined /> },
+        { id: 'payable', groupId: 'group_finance', row: 0, col: 1, enabled: false, audit: false, icon: <WalletOutlined /> },
+        { id: 'invoice', groupId: 'group_finance', row: 1, col: 0, enabled: false, audit: false, icon: <WalletOutlined /> },
+        { id: 'cost_calculation', groupId: 'group_finance', row: 1, col: 1, enabled: false, audit: false, icon: <CalculatorOutlined /> },
+        // 设备管理：3+2 列网格
+        { id: 'equipment_fault', groupId: 'group_equipment', row: 0, col: 0, enabled: false, audit: false, icon: <ToolOutlined /> },
+        { id: 'maintenance_plan', groupId: 'group_equipment', row: 0, col: 1, enabled: false, audit: false, icon: <ToolOutlined /> },
+        { id: 'maintenance_reminder', groupId: 'group_equipment', row: 0, col: 2, enabled: false, audit: false, icon: <ToolOutlined /> },
+        { id: 'equipment_status', groupId: 'group_equipment', row: 1, col: 0, enabled: false, audit: false, icon: <ToolOutlined /> },
+        { id: 'spare_parts', groupId: 'group_equipment', row: 1, col: 1, enabled: false, audit: false, icon: <ToolOutlined /> },
+        // 模具：2+1
+        { id: 'mold_usage', groupId: 'group_mold', row: 0, col: 0, enabled: false, audit: false, icon: <BlockOutlined /> },
+        { id: 'mold_calibration', groupId: 'group_mold', row: 0, col: 1, enabled: false, audit: false, icon: <BlockOutlined /> },
+        { id: 'mold_maintenance_reminder', groupId: 'group_mold', row: 1, col: 0, enabled: false, audit: false, icon: <BlockOutlined /> },
+        // 工装：2×2
+        { id: 'tool_usage', groupId: 'group_tooling', row: 0, col: 0, enabled: false, audit: false, icon: <BuildOutlined /> },
+        { id: 'tool_maintenance', groupId: 'group_tooling', row: 0, col: 1, enabled: false, audit: false, icon: <BuildOutlined /> },
+        { id: 'tool_calibration', groupId: 'group_tooling', row: 1, col: 0, enabled: false, audit: false, icon: <BuildOutlined /> },
+        { id: 'tool_maintenance_reminder', groupId: 'group_tooling', row: 1, col: 1, enabled: false, audit: false, icon: <BuildOutlined /> },
     ];
+
+    const computeGroupSize = (cells: GridCell[]) => {
+        let maxRow = 0;
+        let maxCol = 0;
+        for (const c of cells) {
+            maxRow = Math.max(maxRow, c.row);
+            maxCol = Math.max(maxCol, c.col);
+        }
+        const w = GROUP_PAD_X * 2 + maxCol * COL + NODE_W;
+        const h = FIRST_ROW_GAP + GROUP_HEADER_OFFSET_Y + maxRow * ROW + NODE_H + GROUP_PAD_BOTTOM;
+        return { w, h, maxRow, maxCol };
+    };
+
+    const cellsByGroup = blueprintGrid.reduce((acc, cell) => {
+        if (!acc[cell.groupId]) acc[cell.groupId] = [];
+        acc[cell.groupId].push(cell);
+        return acc;
+    }, {} as Record<string, GridCell[]>);
+
+    const blueprintLayout = useMemo(() => {
+        const sz = (id: keyof typeof cellsByGroup) => computeGroupSize(cellsByGroup[id]);
+        const sSales = sz('group_sales');
+        const sPlan = sz('group_plan');
+        const sPurchase = sz('group_purchase');
+        const sProd = sz('group_production');
+        const sWh = sz('group_warehouse');
+        const sFin = sz('group_finance');
+        const sEq = sz('group_equipment');
+        const sMold = sz('group_mold');
+        const sTool = sz('group_tooling');
+
+        const G = GROUP_GUTTER;
+        const ox = CANVAS_ORIGIN_X;
+
+        /** 中间行总宽（销售|计划|仓储），作为整幅对齐基准 */
+        const rowMidWidth = sSales.w + G + sPlan.w + G + sWh.w;
+
+        const yTop = BASE_Y.purchase - 12;
+        const yMid = BASE_Y.sales - 12;
+
+        /** 顶行：采购 + 财务，相对中间行总宽居中 */
+        const rowTopWidth = sPurchase.w + G + sFin.w;
+        let x = ox + Math.max(0, (rowMidWidth - rowTopWidth) / 2);
+        const gPurchase = { id: 'group_purchase' as const, label: '采购管理', x, y: yTop, w: sPurchase.w, h: sPurchase.h };
+        x += sPurchase.w + G;
+        const gFinance = { id: 'group_finance' as const, label: '财务管理', x, y: yTop, w: sFin.w, h: sFin.h };
+
+        /** 中间行：销售 | 计划 | 仓储，左缘对齐画布原点 */
+        x = ox;
+        const gSales = { id: 'group_sales' as const, label: '销售管理', x, y: yMid, w: sSales.w, h: sSales.h };
+        x += sSales.w + G;
+        const gPlan = { id: 'group_plan' as const, label: '计划管理', x, y: yMid, w: sPlan.w, h: sPlan.h };
+        x += sPlan.w + G;
+        const gWarehouse = { id: 'group_warehouse' as const, label: '仓储管理', x, y: yMid, w: sWh.w, h: sWh.h };
+
+        const middleBandBottom = Math.max(gSales.y + gSales.h, gPlan.y + gPlan.h, gWarehouse.y + gWarehouse.h);
+        const productionTop = middleBandBottom + G;
+        const gProd = {
+            id: 'group_production' as const,
+            label: '生产执行',
+            x: ox + Math.max(0, (rowMidWidth - sProd.w) / 2),
+            y: productionTop,
+            w: sProd.w,
+            h: sProd.h,
+        };
+        const productionBottom = gProd.y + gProd.h;
+        const bottomY = productionBottom + 36;
+
+        /** 底行：设备 | 模具 | 工装，相对中间行总宽居中 */
+        const rowBotWidth = sEq.w + G + sMold.w + G + sTool.w;
+        x = ox + Math.max(0, (rowMidWidth - rowBotWidth) / 2);
+        const gEquipment = { id: 'group_equipment' as const, label: '设备管理', x, y: bottomY - 12, w: sEq.w, h: sEq.h };
+        x += sEq.w + G;
+        const gMold = { id: 'group_mold' as const, label: '模具管理', x, y: bottomY - 12, w: sMold.w, h: sMold.h };
+        x += sMold.w + G;
+        const gTooling = { id: 'group_tooling' as const, label: '工装管理', x, y: bottomY - 12, w: sTool.w, h: sTool.h };
+
+        const moduleGroups = [gSales, gPlan, gPurchase, gProd, gWarehouse, gFinance, gEquipment, gMold, gTooling];
+        const moduleGroupMap = moduleGroups.reduce((acc, item) => {
+            acc[item.id] = item;
+            return acc;
+        }, {} as Record<string, (typeof moduleGroups)[number]>);
+
+        return { moduleGroups, moduleGroupMap };
+    }, []);
+
+    const { moduleGroups, moduleGroupMap } = blueprintLayout;
+
+    const nodeDefs: Array<{ id: string; groupId: string; x: number; y: number; enabled: boolean; audit: boolean; icon: React.ReactNode }> = useMemo(() => {
+        return blueprintGrid.map((c) => {
+            const g = moduleGroupMap[c.groupId];
+            return {
+                id: c.id,
+                groupId: c.groupId,
+                x: g.x + GROUP_PAD_X + c.col * COL,
+                y: g.y + 12 + c.row * ROW,
+                enabled: c.enabled,
+                audit: c.audit,
+                icon: c.icon,
+            };
+        });
+    }, [moduleGroupMap]);
     const groupNodes = useMemo(
         () =>
             moduleGroups.map((g) => ({
@@ -326,73 +412,8 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
         [t, getNodeStyle, moduleGroupMap]
     );
 
-    const nodePositionMap = useMemo(
-        () =>
-            nodeDefs.reduce((acc, n) => {
-                acc[n.id] = { x: n.x, y: n.y };
-                return acc;
-            }, {} as Record<string, { x: number; y: number }>),
-        [nodeDefs]
-    );
-
-    const getEdgeHandlesByDirection = (sourceId: string, targetId: string) => {
-        const sourcePos = nodePositionMap[sourceId];
-        const targetPos = nodePositionMap[targetId];
-        if (!sourcePos || !targetPos) {
-            return { sourceHandle: 'source-right', targetHandle: 'target-left' };
-        }
-        const dx = targetPos.x - sourcePos.x;
-        const dy = targetPos.y - sourcePos.y;
-        const isHorizontal = Math.abs(dx) >= Math.abs(dy);
-        if (isHorizontal) {
-            return dx >= 0
-                ? { sourceHandle: 'source-right', targetHandle: 'target-left' }
-                : { sourceHandle: 'source-left', targetHandle: 'target-right' };
-        }
-        return dy >= 0
-            ? { sourceHandle: 'source-bottom', targetHandle: 'target-top' }
-            : { sourceHandle: 'source-top', targetHandle: 'target-bottom' };
-    };
-
-    // 主干业务链路（精简版）：只保留最主要流程节点
-    const edges = useMemo<Edge[]>(
-        () => [
-            // 销售主链
-            { id: 'e-forecast-order', source: 'sales_forecast', target: 'sales_order' },
-            { id: 'e-order-shipment', source: 'sales_order', target: 'shipment_notice' },
-            { id: 'e-shipment-delivery', source: 'shipment_notice', target: 'sales_delivery' },
-            // 计划主链
-            { id: 'e-order-demand', source: 'sales_order', target: 'demand' },
-            { id: 'e-demand-compute', source: 'demand', target: 'demand_computation' },
-            { id: 'e-compute-plan', source: 'demand_computation', target: 'production_plan' },
-            // 采购入库主链
-            { id: 'e-plan-pr', source: 'production_plan', target: 'purchase_request' },
-            { id: 'e-pr-po', source: 'purchase_request', target: 'purchase_order' },
-            { id: 'e-po-inboundDelivery', source: 'purchase_order', target: 'inbound_delivery' },
-            { id: 'e-inboundDelivery-receipt', source: 'inbound_delivery', target: 'receipt_notice' },
-            { id: 'e-receipt-inbound', source: 'receipt_notice', target: 'inbound' },
-            // 生产出库主链
-            { id: 'e-plan-wo', source: 'production_plan', target: 'work_order' },
-            { id: 'e-wo-quality', source: 'work_order', target: 'quality_inspection' },
-            { id: 'e-quality-outbound', source: 'quality_inspection', target: 'outbound' },
-            // 财务主链
-            { id: 'e-outbound-receivable', source: 'outbound', target: 'receivable' },
-            { id: 'e-po-payable', source: 'purchase_order', target: 'payable' },
-            { id: 'e-receivable-invoice', source: 'receivable', target: 'invoice' },            
-            { id: 'e-invoice-cost', source: 'invoice', target: 'cost_calculation' },
-        ].map((edge) => {
-            const handles = getEdgeHandlesByDirection(edge.source, edge.target);
-            return {
-                ...edge,
-                ...handles,
-                type: 'default',
-                animated: false,
-                style: { stroke: '#7c3aed', strokeWidth: 1.35, opacity: 0.62 },
-                markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color: '#7c3aed' },
-            };
-        }),
-        [nodePositionMap]
-    );
+    // 蓝图仅按分组展示能力开关，不绘制节点间连线，避免视觉干扰
+    const edges = useMemo<Edge[]>(() => [], []);
 
     const [nodes, setNodes] = useState(initialNodes);
 

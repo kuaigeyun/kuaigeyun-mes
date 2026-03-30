@@ -699,7 +699,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   // 表格密度优先级：User Preference > Default('large')
   const defaultSize = getPreference('ui.default_table_density', 'large') as 'large' | 'middle' | 'small'
 
-  const loadingDelay = loadingDelayProp ?? getConfig('ui.table_loading_delay', 800)
+  const loadingDelay = loadingDelayProp ?? getConfig('ui.table_loading_delay', 0)
 
   /** 已 patch @ant-design/pro-table：`debounceTime != null ? debounceTime : 30`，0 为同步触发 */
   const tableRequestDebounce = restProps.debounceTime ?? 0
