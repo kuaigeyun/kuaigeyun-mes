@@ -209,98 +209,11 @@ const CodeRuleListPage: React.FC = () => {
     loadPageConfigsAndRules();
   }, []);
 
-  const handleSelectPage = async (pageCode: string, rulesList?: CodeRule[]) => {
-    setSelectedPageCode(pageCode);
-
-    // 等待一小会儿确保状态更新或直接使用传入的规则列表
-    setTimeout(async () => {
-      // 加载该页面对应的编号规则
-      const pageConfig = pageConfigs.find(p => p.pageCode === pageCode);
-      const ruleCode = pageConfig?.ruleCode || pageCode.toUpperCase().replace(/-/g, '_');
-      if (ruleCode) {
-        try {
-          // 优先使用传入的列表，否则使用 state
-          const currentRules = rulesList || allRules;
-          const rule = currentRules.find(r => r.code === ruleCode);
-          if (rule) {
-            // 如果规则存在，加载规则数据到表单
-            pageRuleFormRef.current?.setFieldsValue({
-              name: rule.name,
-              code: rule.code,
-              expression: rule.expression,
-              description: rule.description,
-              seq_start: rule.seq_start,
-              seq_step: rule.seq_step,
-              seq_reset_rule: rule.seq_reset_rule,
-              is_active: rule.is_active,
-            });
-
-            if (rule.rule_components && Array.isArray(rule.rule_components) && rule.rule_components.length > 0) {
-              setRuleComponents(rule.rule_components);
-            } else if (rule.expression) {
-              setRuleComponents(CodeRuleComponentService.expressionToComponents(rule.expression));
-            } else {
-              setRuleComponents([createDefaultAutoCounterComponent(0)]);
-            }
-          } else {
-            // 如果规则不存在，使用预设的默认规则组件（根据页面类型）
-            // 基础数据：功能缩写+流水号
-            // 业务单据：功能缩写+年月日+流水号
-            const isBusinessDocument = pageCode.startsWith('kuaizhizao-');
-            let defaultComponents: CodeRuleComponent[];
-
-            const abbreviation = pageConfig?.fixedTextPreset ?? 'ZM';
-            if (isBusinessDocument) {
-              // 业务单据：拼音缩写+YYYYMMDD+4位流水
-              defaultComponents = [
-                { type: 'fixed_text', order: 0, text: abbreviation } as FixedTextComponent,
-                createDefaultDateComponent(1, 'YYYYMMDD'),
-                createDefaultAutoCounterComponent(2, 4, 'daily'),
-              ];
-            } else {
-              // 基础数据：拼音缩写+4位流水
-              defaultComponents = [
-                {
-                  type: 'fixed_text',
-                  order: 0,
-                  text: abbreviation,
-                } as FixedTextComponent,
-                createDefaultAutoCounterComponent(1, 4, 'never'),
-              ];
-            }
-
-            setRuleComponents(defaultComponents);
-
-            const defaultExpression = CodeRuleComponentService.componentsToExpression(defaultComponents);
-            pageRuleFormRef.current?.setFieldsValue({
-              name: t('pages.system.codeRules.ruleNameTemplate', { pageName: pageConfig?.pageName || '' }),
-              code: ruleCode, // 使用生成的规则代码
-              expression: defaultExpression,
-              description: t('pages.system.codeRules.ruleDescTemplate', { pageName: pageConfig?.pageName || '' }),
-              seq_start: 1,
-              seq_step: 1,
-              seq_reset_rule: isBusinessDocument ? 'daily' : 'never',
-              is_active: true,
-            });
-          }
-        } catch (error) {
-          console.error('加载规则失败:', error);
-          resetPageRuleForm(pageCode);
-        }
-      } else {
-        // 如果没有关联规则，重置表单
-        resetPageRuleForm(pageCode);
-      }
-    }, 100);
-  };
-
   /**
-   * 重置页面规则表单
+   * 重置页面规则表单（移至 handleSelectPage 之前避免引用错误）
    */
   const resetPageRuleForm = (pageCode: string) => {
-    // 从 pageConfigs 中查找页面配置
-    const pageConfig = pageConfigs.find(p => p.pageCode === pageCode) ||
-      pageConfigs.find(p => p.pageCode === pageCode);
+    const pageConfig = pageConfigs.find(p => p.pageCode === pageCode);
     const defaultRuleCode = `auto-${pageCode}`;
     const defaultExpression = '{YYYY}{MM}{DD}-{SEQ:4}';
     pageRuleFormRef.current?.setFieldsValue({
@@ -316,6 +229,87 @@ const CodeRuleListPage: React.FC = () => {
     const defaultComponents = CodeRuleComponentService.expressionToComponents(defaultExpression);
     setRuleComponents(defaultComponents);
   };
+
+  /**
+   * 处理选择功能页面
+   */
+  const handleSelectPage = (pageCode: string, rulesList?: CodeRule[]) => {
+    setSelectedPageCode(pageCode);
+
+    // 立即从 allRules 或传入的 rulesList 中获取数据，不使用 setTimeout
+    const currentRules = rulesList || allRules;
+    const currentConfigs = pageConfigs; 
+
+    // 加载该页面对应的编号规则
+    const pageConfig = currentConfigs.find(p => p.pageCode === pageCode);
+    const ruleCode = pageConfig?.ruleCode || pageCode.toUpperCase().replace(/-/g, '_');
+
+    if (ruleCode) {
+      try {
+        const rule = currentRules.find(r => r.code === ruleCode);
+        if (rule) {
+          // 如果规则存在，加载规则数据到表单
+          pageRuleFormRef.current?.setFieldsValue({
+            name: rule.name,
+            code: rule.code,
+            expression: rule.expression,
+            description: rule.description,
+            seq_start: rule.seq_start,
+            seq_step: rule.seq_step,
+            seq_reset_rule: rule.seq_reset_rule,
+            is_active: rule.is_active,
+          });
+
+          if (rule.rule_components && Array.isArray(rule.rule_components) && rule.rule_components.length > 0) {
+            setRuleComponents(rule.rule_components);
+          } else if (rule.expression) {
+            setRuleComponents(CodeRuleComponentService.expressionToComponents(rule.expression));
+          } else {
+            setRuleComponents([createDefaultAutoCounterComponent(0)]);
+          }
+        } else {
+          // 如果规则不存在，使用预设的默认规则组件（根据页面类型）
+          const isBusinessDocument = pageCode.startsWith('kuaizhizao-');
+          let defaultComponents: CodeRuleComponent[];
+
+          const abbreviation = pageConfig?.fixedTextPreset ?? 'ZM';
+          if (isBusinessDocument) {
+            defaultComponents = [
+              { type: 'fixed_text', order: 0, text: abbreviation } as FixedTextComponent,
+              createDefaultDateComponent(1, 'YYYYMMDD'),
+              createDefaultAutoCounterComponent(2, 4, 'daily'),
+            ];
+          } else {
+            defaultComponents = [
+              { type: 'fixed_text', order: 0, text: abbreviation } as FixedTextComponent,
+              createDefaultAutoCounterComponent(1, 4, 'never'),
+            ];
+          }
+
+          setRuleComponents(defaultComponents);
+
+          const defaultExpression = CodeRuleComponentService.componentsToExpression(defaultComponents);
+          pageRuleFormRef.current?.setFieldsValue({
+            name: t('pages.system.codeRules.ruleNameTemplate', { pageName: pageConfig?.pageName || '' }),
+            code: ruleCode,
+            expression: defaultExpression,
+            description: t('pages.system.codeRules.ruleDescTemplate', { pageName: pageConfig?.pageName || '' }),
+            seq_start: 1,
+            seq_step: 1,
+            seq_reset_rule: isBusinessDocument ? 'daily' : 'never',
+            is_active: true,
+          });
+        }
+      } catch (error) {
+        console.error('加载规则失败:', error);
+        resetPageRuleForm(pageCode);
+      }
+    } else {
+      // 如果没有关联规则，重置表单
+      resetPageRuleForm(pageCode);
+    }
+  };
+
 
   /**
    * 处理保存页面规则配置

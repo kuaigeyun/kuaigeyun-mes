@@ -201,19 +201,19 @@ class SalesOrderService:
             "customer_name": order.customer_name,
             "customer_contact": order.customer_contact,
             "customer_phone": order.customer_phone,
-            "total_quantity": order.total_quantity,
-            "total_amount": order.total_amount,
+            "total_quantity": order.total_quantity if order.total_quantity is not None else Decimal("0"),
+            "total_amount": order.total_amount if order.total_amount is not None else Decimal("0"),
             "price_type": getattr(order, "price_type", None) or "tax_exclusive",
             "discount_amount": getattr(order, "discount_amount", None) or Decimal("0"),
             "status": order.status,
             "submit_time": getattr(order, "submit_time", None),
-            "reviewer_id": order.reviewer_id,
-            "reviewer_name": order.reviewer_name,
-            "review_time": order.review_time,
+            "reviewer_id": getattr(order, "reviewer_id", None),
+            "reviewer_name": getattr(order, "reviewer_name", None),
+            "review_time": getattr(order, "review_time", None),
             "review_status": order.review_status,
-            "review_remarks": order.review_remarks,
-            "salesman_id": order.salesman_id,
-            "salesman_name": order.salesman_name,
+            "review_remarks": getattr(order, "review_remarks", None),
+            "salesman_id": getattr(order, "salesman_id", None),
+            "salesman_name": getattr(order, "salesman_name", None),
             "shipping_address": order.shipping_address,
             "shipping_method": order.shipping_method,
             "payment_terms": order.payment_terms,
@@ -224,7 +224,7 @@ class SalesOrderService:
             "total_fee_amount": getattr(order, "total_fee_amount", None) or Decimal("0"),
             "is_active": order.is_active,
             "created_by": order.created_by,
-            "updated_by": order.updated_by,
+            "updated_by": getattr(order, "updated_by", None),
             "created_at": order.created_at,
             "updated_at": order.updated_at,
         }
@@ -270,21 +270,21 @@ class SalesOrderService:
                     material_name=_material_val(it, "material_name", "name", 200),
                     material_spec=_material_val(it, "material_spec", "spec", 200),
                     material_unit=_material_val(it, "material_unit", "unit"),
-                    required_quantity=it.order_quantity,
-                    delivery_date=it.delivery_date,
-                    unit_price=it.unit_price,
+                    required_quantity=it.order_quantity if getattr(it, "order_quantity", None) is not None else Decimal("0"),
+                    delivery_date=getattr(it, "delivery_date", date.today()),
+                    unit_price=it.unit_price if getattr(it, "unit_price", None) is not None else Decimal("0"),
                     tax_rate=getattr(it, "tax_rate", None) or Decimal("0"),
-                    item_amount=it.total_amount,
+                    item_amount=it.total_amount if getattr(it, "total_amount", None) is not None else Decimal("0"),
                     notes=it.notes,
                     variant_attributes=getattr(it, "variant_attributes", None),
                     configurable_selections=getattr(it, "configurable_selections", None),
-                    delivered_quantity=it.delivered_quantity,
-                    remaining_quantity=it.remaining_quantity,
+                    delivered_quantity=it.delivered_quantity if getattr(it, "delivered_quantity", None) is not None else Decimal("0"),
+                    remaining_quantity=it.remaining_quantity if getattr(it, "remaining_quantity", None) is not None else Decimal("0"),
                     delivery_status=it.delivery_status,
-                    work_order_id=it.work_order_id,
-                    work_order_code=it.work_order_code,
-                    created_at=it.created_at,
-                    updated_at=it.updated_at,
+                    work_order_id=getattr(it, "work_order_id", None),
+                    work_order_code=getattr(it, "work_order_code", None),
+                    created_at=it.created_at if getattr(it, "created_at", None) else datetime.now(),
+                    updated_at=it.updated_at if getattr(it, "updated_at", None) else datetime.now(),
                 )
                 for it in items
             ]
@@ -854,7 +854,8 @@ class SalesOrderService:
         if need_audit_sync or need_review_sync:
             refetched = await SalesOrder.filter(tenant_id=tenant_id, id__in=order_ids).order_by(order_clause)
             refetched_by_id = {o.id: o for o in refetched}
-            orders = [refetched_by_id[oid] for oid in order_ids]
+            # 安全重组订单列表，避免并发删除导致的 KeyError
+            orders = [refetched_by_id[oid] for oid in order_ids if oid in refetched_by_id]
 
         # 2. 批量查询 Demand
         demands = await Demand.filter(

@@ -165,7 +165,7 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
         };
     }, []);
 
-    // 后端约定的节点白名单（45 节点，与菜单结构对齐：设备/模具/工装运营细粒度）
+    // 后端 ALL_NODES 与蓝图一致（新增节点须同步后端 business_config_service.ALL_NODES）
     const BACKEND_NODE_IDS = [
         'quotation', 'sample_trial', 'sales_forecast', 'sales_order', 'sales_delivery', 'shipment_notice', 'delivery_notice',
         'sales_return', 'customer_follow_up',

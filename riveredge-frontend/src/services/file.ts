@@ -227,6 +227,9 @@ export async function batchDeleteFiles(fileUuids: string[]): Promise<{ deleted_c
   });
 }
 
+// 全局文件预览 URL 缓存，减少重复请求（每会话单次请求即可）
+const previewUrlCache = new Map<string, FilePreviewResponse>();
+
 /**
  * 获取文件预览信息
  * 
@@ -241,12 +244,20 @@ export async function getFilePreview(
   fileUuid: string,
   options?: { forAvatar?: boolean }
 ): Promise<FilePreviewResponse> {
+  // 构建缓存 Key（区分头像缩略图和普通预览）
+  const cacheKey = `${fileUuid}${options?.forAvatar ? '_avatar' : ''}`;
+  const cached = previewUrlCache.get(cacheKey);
+  if (cached) return cached;
+
   try {
     const params = new URLSearchParams();
     if (options?.forAvatar) params.set('for_avatar', 'true');
     const qs = params.toString();
     const url = qs ? `/core/files/${fileUuid}/preview?${qs}` : `/core/files/${fileUuid}/preview`;
     const result = await apiRequest<FilePreviewResponse>(url);
+    
+    // 缓存结果
+    previewUrlCache.set(cacheKey, result);
     return result;
   } catch (error) {
     console.error('获取文件预览失败:', error);

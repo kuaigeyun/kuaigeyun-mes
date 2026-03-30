@@ -998,12 +998,12 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           overflow: visible !important;
           /* Chrome 式外圆角效果 - 强制显示圆角，防止被父容器裁剪 */
           border-radius: 8px 8px 0 0 !important;
-          height: 38px !important;
           padding: 8px 16px !important;
           padding-bottom: 8px !important;
           box-sizing: border-box !important;
           display: flex !important;
           align-items: center !important;
+          box-shadow: inset 0 3px 6px -3px rgba(0, 0, 0, 0.12) !important;
         }
         /* Chrome 式反向圆角 - 使用伪元素实现左右两侧的内凹圆角 */
         .uni-tabs-container .ant-tabs-tab-active::before,

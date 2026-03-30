@@ -8,7 +8,7 @@
 import React, { useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
-import { ActionType, ProColumns, ProFormInstance, ProFormText, ProFormTextArea, ProFormDigit } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormInstance, ProFormText, ProFormTextArea, ProFormDigit, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Switch, Card, Dropdown } from 'antd';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../components/layout-templates';
 import { UniTable } from '../../../../components/uni-table';
@@ -541,7 +541,7 @@ const ApplicationListPage: React.FC = () => {
           display: 'flex',
           flexDirection: 'column',
           borderRadius: themeToken.borderRadiusLG,
-          border: `1px solid ${themeToken.colorBorder}`,
+          border: `1px solid ${themeToken.colorBorderSecondary}`,
           overflow: 'hidden',
         }}
         cover={
@@ -553,7 +553,7 @@ const ApplicationListPage: React.FC = () => {
               justifyContent: 'center',
               background: getCardGradient(application.code, !!(application.is_active && application.is_installed)),
               padding: '16px',
-              borderBottom: `1px solid ${themeToken.colorBorder}`,
+              borderBottom: `1px solid ${themeToken.colorBorderSecondary}`,
               borderTopLeftRadius: themeToken.borderRadiusLG,
               borderTopRightRadius: themeToken.borderRadiusLG,
             }}
@@ -681,7 +681,7 @@ const ApplicationListPage: React.FC = () => {
                   fontSize: 12,
                   color: '#8c8c8c',
                   paddingTop: 8,
-                  borderTop: `1px solid ${themeToken.colorBorder}`,
+                  borderTop: `1px solid ${themeToken.colorBorderSecondary}`,
                 }}
               >
                 <span>{t('pages.system.applications.codeLabel')}: {application.code}</span>
@@ -702,7 +702,7 @@ const ApplicationListPage: React.FC = () => {
   /**
    * 详情列定义
    */
-  const detailColumns = [
+  const detailColumns: ProDescriptionsItemProps<Application>[] = [
     { title: t('pages.system.applications.name'), dataIndex: 'name' },
     { title: t('pages.system.applications.code'), dataIndex: 'code' },
     { title: t('pages.system.applications.description'), dataIndex: 'description' },
