@@ -7,8 +7,10 @@ Author: Luigi Lu
 Date: 2026-01-16
 """
 
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+import uuid
+from typing import Any, Optional
+from fastapi import APIRouter, Depends, HTTPException as FastAPIHTTPException, status, Query
+from loguru import logger
 
 from apps.kuaizhizao.schemas.maintenance_reminder import (
     MaintenanceReminderResponse,
@@ -23,6 +25,32 @@ from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(prefix="/maintenance-reminders", tags=["Kuaige Zhizao Maintenance Reminders"])
+
+
+def _http_exception_with_trace(
+    status_code: int,
+    message: str,
+    route: str = "/maintenance-reminders",
+    tenant_id: Optional[int] = None,
+) -> FastAPIHTTPException:
+    trace_id = uuid.uuid4().hex
+    logger.warning(
+        "kuaizhizao_maintenance_reminders_api_error trace_id={} tenant_id={} route={} status_code={} message={}",
+        trace_id,
+        tenant_id,
+        route,
+        status_code,
+        message,
+    )
+    return FastAPIHTTPException(
+        status_code=status_code,
+        detail={"message": message, "trace_id": trace_id},
+    )
+
+
+def HTTPException(*, status_code: int, detail: Any, **kwargs) -> FastAPIHTTPException:
+    message = detail.get("message") if isinstance(detail, dict) else str(detail)
+    return _http_exception_with_trace(status_code, message)
 
 
 @router.get("", response_model=MaintenanceReminderListResponse)

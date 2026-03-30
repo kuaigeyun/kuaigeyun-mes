@@ -7,9 +7,9 @@ Author: RiverEdge Team
 Date: 2026-02-19
 """
 
-from typing import Optional
+from typing import List, Optional
 from datetime import date
-from fastapi import APIRouter, Depends, Query, Path, HTTPException, status as http_status
+from fastapi import APIRouter, Body, Depends, Query, Path, HTTPException, status as http_status
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
@@ -218,6 +218,7 @@ class ConvertToOrderResponse(QuotationResponse):
 )
 async def convert_to_sales_order(
     quotation_id: int = Path(..., description="报价单ID"),
+    selected_item_ids: Optional[List[int]] = Body(default=None, embed=True, description="可选：仅转换指定报价明细ID"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -232,6 +233,7 @@ async def convert_to_sales_order(
             tenant_id=tenant_id,
             quotation_id=quotation_id,
             created_by=current_user.id,
+            selected_item_ids=selected_item_ids,
         )
         return {
             "sales_order": sales_order,

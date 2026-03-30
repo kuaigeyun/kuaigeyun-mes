@@ -3,9 +3,11 @@
 """
 
 from datetime import datetime
-from typing import Optional
+import uuid
+from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from fastapi import APIRouter, Depends, HTTPException as FastAPIHTTPException, Path, Query, status
+from loguru import logger
 
 from apps.kuaizhizao.schemas.customer_follow_up import (
     CustomerFollowUpCreate,
@@ -21,6 +23,32 @@ from infra.models.user import User
 router = APIRouter(prefix="/customer-follow-ups", tags=["Kuaige Zhizao - Customer Follow-up"])
 
 _service = CustomerFollowUpService()
+
+
+def _http_exception_with_trace(
+    status_code: int,
+    message: str,
+    route: str = "/customer-follow-ups",
+    tenant_id: Optional[int] = None,
+) -> FastAPIHTTPException:
+    trace_id = uuid.uuid4().hex
+    logger.warning(
+        "kuaizhizao_customer_follow_ups_api_error trace_id={} tenant_id={} route={} status_code={} message={}",
+        trace_id,
+        tenant_id,
+        route,
+        status_code,
+        message,
+    )
+    return FastAPIHTTPException(
+        status_code=status_code,
+        detail={"message": message, "trace_id": trace_id},
+    )
+
+
+def HTTPException(*, status_code: int, detail: Any, **kwargs) -> FastAPIHTTPException:
+    message = detail.get("message") if isinstance(detail, dict) else str(detail)
+    return _http_exception_with_trace(status_code, message)
 
 
 @router.post("", response_model=CustomerFollowUpResponse, summary="创建客户跟进")

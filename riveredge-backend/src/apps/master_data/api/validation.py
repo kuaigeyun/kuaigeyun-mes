@@ -4,8 +4,10 @@
 提供基础数据完整性验证的 RESTful API 接口，用于MES创建工单前的数据校验。
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from typing import Optional, Annotated
+import uuid
+from fastapi import APIRouter, Depends, HTTPException as FastAPIHTTPException, Query, status
+from typing import Any, Optional, Annotated
+from loguru import logger
 
 from core.api.deps.deps import get_current_user, get_current_tenant
 from infra.models.user import User
@@ -26,6 +28,32 @@ class ValidationResponse(BaseModel):
 
 
 router = APIRouter(prefix="/validation", tags=["Data Validation"])
+
+
+def _http_exception_with_trace(
+    status_code: int,
+    message: str,
+    route: str = "/validation",
+    tenant_id: Optional[int] = None,
+) -> FastAPIHTTPException:
+    trace_id = uuid.uuid4().hex
+    logger.warning(
+        "master_data_validation_api_error trace_id={} tenant_id={} route={} status_code={} message={}",
+        trace_id,
+        tenant_id,
+        route,
+        status_code,
+        message,
+    )
+    return FastAPIHTTPException(
+        status_code=status_code,
+        detail={"message": message, "trace_id": trace_id},
+    )
+
+
+def HTTPException(*, status_code: int, detail: Any, **kwargs) -> FastAPIHTTPException:
+    message = detail.get("message") if isinstance(detail, dict) else str(detail)
+    return _http_exception_with_trace(status_code, message)
 
 
 # ==================== 数据验证接口 ====================

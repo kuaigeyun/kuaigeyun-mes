@@ -5,9 +5,10 @@ KU-AI 智能建议 API 路由
 """
 
 import json
+import uuid
 from typing import Optional, Dict, Any
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException as FastAPIHTTPException, status, Query
 
 from apps.kuaiai.services.suggestion_service import SuggestionService
 from core.api.deps.deps import get_current_tenant
@@ -16,6 +17,32 @@ from infra.models.user import User
 from loguru import logger
 
 router = APIRouter(prefix="/suggestions", tags=["KU-AI Suggestions"])
+
+
+def _http_exception_with_trace(
+    status_code: int,
+    message: str,
+    route: str = "/suggestions",
+    tenant_id: Optional[int] = None,
+) -> FastAPIHTTPException:
+    trace_id = uuid.uuid4().hex
+    logger.warning(
+        "kuaiai_suggestions_api_error trace_id={} tenant_id={} route={} status_code={} message={}",
+        trace_id,
+        tenant_id,
+        route,
+        status_code,
+        message,
+    )
+    return FastAPIHTTPException(
+        status_code=status_code,
+        detail={"message": message, "trace_id": trace_id},
+    )
+
+
+def HTTPException(*, status_code: int, detail: Any, **kwargs) -> FastAPIHTTPException:
+    message = detail.get("message") if isinstance(detail, dict) else str(detail)
+    return _http_exception_with_trace(status_code, message)
 
 
 @router.get("/{scene}")

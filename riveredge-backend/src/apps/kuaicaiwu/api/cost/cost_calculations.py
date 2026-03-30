@@ -5,8 +5,10 @@ Author: Luigi Lu
 Date: 2026-03-14
 """
 
+import uuid
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from loguru import logger
 
 from apps.kuaizhizao.schemas.cost import (
     CostCalculationResponse,
@@ -28,6 +30,27 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 router = APIRouter(prefix="/cost/calculations", tags=["Kuaicaiwu Cost Calculations"])
 
 
+def _http_exception_with_trace(
+    status_code: int,
+    message: str,
+    route: str,
+    tenant_id: Optional[int] = None,
+) -> HTTPException:
+    trace_id = uuid.uuid4().hex
+    logger.warning(
+        "kuaicaiwu_cost_calculations_api_error trace_id={} tenant_id={} route={} status_code={} message={}",
+        trace_id,
+        tenant_id,
+        route,
+        status_code,
+        message,
+    )
+    return HTTPException(
+        status_code=status_code,
+        detail={"message": message, "trace_id": trace_id},
+    )
+
+
 @router.post("/work-order", response_model=CostCalculationResponse, status_code=status.HTTP_201_CREATED)
 async def calculate_work_order_cost(
     data: WorkOrderCostCalculationRequest,
@@ -42,9 +65,9 @@ async def calculate_work_order_cost(
         )
         return CostCalculationResponse.model_validate(cost_calculation)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(status.HTTP_404_NOT_FOUND, str(e), "/cost/calculations/work-order", tenant_id)
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise _http_exception_with_trace(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e), "/cost/calculations/work-order", tenant_id)
 
 
 @router.post("/product", response_model=CostCalculationResponse, status_code=status.HTTP_201_CREATED)
@@ -61,9 +84,9 @@ async def calculate_product_cost(
         )
         return CostCalculationResponse.model_validate(cost_calculation)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(status.HTTP_404_NOT_FOUND, str(e), "/cost/calculations/product", tenant_id)
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise _http_exception_with_trace(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e), "/cost/calculations/product", tenant_id)
 
 
 @router.get("", response_model=CostCalculationListResponse)
@@ -121,7 +144,7 @@ async def get_cost_calculation(
         )
         return CostCalculationResponse.model_validate(cost_calculation_response)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(status.HTTP_404_NOT_FOUND, str(e), "/cost/calculations/{uuid}", tenant_id)
 
 
 @router.get("/product/{product_id}/compare", response_model=CostComparisonResponse)
@@ -137,7 +160,7 @@ async def compare_costs(
         )
         return CostComparisonResponse.model_validate(cost_comparison)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(status.HTTP_404_NOT_FOUND, str(e), "/cost/calculations/product/{product_id}/compare", tenant_id)
 
 
 @router.get("/product/{product_id}/analyze", response_model=CostAnalysisResponse)
@@ -153,7 +176,7 @@ async def analyze_cost(
         )
         return CostAnalysisResponse.model_validate(cost_analysis)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(status.HTTP_404_NOT_FOUND, str(e), "/cost/calculations/product/{product_id}/analyze", tenant_id)
 
 
 @router.get("/product/{product_id}/optimization", response_model=CostOptimizationResponse)
@@ -169,7 +192,7 @@ async def get_cost_optimization(
         )
         return CostOptimizationResponse.model_validate(cost_optimization)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(status.HTTP_404_NOT_FOUND, str(e), "/cost/calculations/product/{product_id}/optimization", tenant_id)
 
 
 @router.get("/period-summary")
@@ -187,7 +210,7 @@ async def get_period_summary(
         )
         return summary
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        raise _http_exception_with_trace(status.HTTP_500_INTERNAL_SERVER_ERROR, str(e), "/cost/calculations/period-summary", tenant_id)
 
 
 @router.post("/monthly-settlement", status_code=status.HTTP_201_CREATED)
@@ -206,6 +229,27 @@ async def perform_monthly_settlement(
         )
         return {"status": "success", "data": results}
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise _http_exception_with_trace(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e), "/cost/calculations/monthly-settlement", tenant_id)
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        raise _http_exception_with_trace(status.HTTP_500_INTERNAL_SERVER_ERROR, str(e), "/cost/calculations/monthly-settlement", tenant_id)
+
+
+@router.post("/realtime-refresh", status_code=status.HTTP_200_OK)
+async def refresh_realtime_costs(
+    lookback_hours: int = Query(24, ge=1, le=168, description="回溯窗口（小时）"),
+    max_work_orders: int = Query(50, ge=1, le=500, description="单次最大刷新工单数"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        result = await CostCalculationService().refresh_realtime_costs(
+            tenant_id=tenant_id,
+            created_by=current_user.id,
+            lookback_hours=lookback_hours,
+            max_work_orders=max_work_orders,
+        )
+        return result
+    except ValidationError as e:
+        raise _http_exception_with_trace(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e), "/cost/calculations/realtime-refresh", tenant_id)
+    except Exception as e:
+        raise _http_exception_with_trace(status.HTTP_500_INTERNAL_SERVER_ERROR, str(e), "/cost/calculations/realtime-refresh", tenant_id)

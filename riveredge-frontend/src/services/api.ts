@@ -430,7 +430,11 @@ export async function apiRequest<T = any>(
             // 如果是数组，提取第一个错误信息
             errorMessage = data.detail[0]?.msg || JSON.stringify(data.detail);
           } else {
-            errorMessage = JSON.stringify(data.detail);
+            // 新兼容：支持后端 detail 结构化对象 { message, trace_id }
+            const detailObj = data.detail as { message?: string; trace_id?: string };
+            const detailMessage = detailObj?.message || JSON.stringify(data.detail);
+            const traceSuffix = detailObj?.trace_id ? ` (trace_id: ${detailObj.trace_id})` : '';
+            errorMessage = `${detailMessage}${traceSuffix}`;
           }
           // 对于 404 错误，如果 detail 是 "Not Found"，提供更友好的错误信息
           if (response.status === 404) {

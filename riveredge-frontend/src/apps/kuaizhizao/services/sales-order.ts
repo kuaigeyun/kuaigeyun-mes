@@ -44,6 +44,8 @@ export interface SalesOrder {
   shipping_address?: string;
   shipping_method?: string;
   payment_terms?: string;
+  /** 币种代码（默认 CNY） */
+  currency_code?: string;
   pushed_to_computation?: boolean;
   computation_id?: number;
   computation_code?: string;
@@ -85,6 +87,8 @@ export interface SalesOrderItem {
   material_name?: string;
   material_spec?: string;
   material_unit?: string;
+  /** 单位换算因子（业务单位 -> 基础单位） */
+  conversion_factor?: number;
   required_quantity?: number;
   delivery_date?: string;
   delivered_quantity?: number;

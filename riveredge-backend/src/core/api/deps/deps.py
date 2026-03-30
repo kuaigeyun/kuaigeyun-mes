@@ -16,6 +16,7 @@ from infra.api.deps.deps import (
 from infra.models.user import User
 from infra.domain.tenant_context import get_current_tenant_id as get_tenant_id_from_context, set_current_tenant_id
 from infra.domain.security.infra_superadmin_security import get_infra_superadmin_token_payload
+from infra.domain.security.security import get_token_payload
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
@@ -64,6 +65,18 @@ async def get_current_tenant(
             is_infra_superadmin = True
     
     tenant_id = None
+    token_tenant_id: Optional[int] = None
+
+    if token and not is_infra_superadmin:
+        payload = get_token_payload(token)
+        if payload and payload.get("tenant_id") is not None:
+            try:
+                token_tenant_id = int(payload.get("tenant_id"))
+            except (TypeError, ValueError):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Token中的组织信息无效",
+                )
 
     # 优先从请求头获取
     if x_tenant_id:
@@ -73,6 +86,13 @@ async def get_current_tenant(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="无效的组织ID"
+            )
+
+        # 非平台超级管理员必须保证 Header 与 JWT 租户一致
+        if token_tenant_id is not None and tenant_id != token_tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="租户上下文不匹配，禁止跨租户访问",
             )
 
     # 如果请求头没有，则从上下文获取

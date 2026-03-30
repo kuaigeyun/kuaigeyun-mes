@@ -5,8 +5,9 @@
 """
 
 import os
+import uuid
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTPException, Body
+from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTPException as FastAPIHTTPException, Body
 from fastapi.responses import JSONResponse, FileResponse
 from loguru import logger
 
@@ -38,6 +39,32 @@ from apps.kuaizhizao.schemas.quality import (
 defect_record_service = DefectRecordService()
 
 router = APIRouter(tags=["Kuaige Zhizao - Quality Execution"])
+
+
+def _http_exception_with_trace(
+    status_code: int,
+    message: str,
+    route: str = "/quality-execution",
+    tenant_id: Optional[int] = None,
+) -> FastAPIHTTPException:
+    trace_id = uuid.uuid4().hex
+    logger.warning(
+        "kuaizhizao_quality_execution_api_error trace_id={} tenant_id={} route={} status_code={} message={}",
+        trace_id,
+        tenant_id,
+        route,
+        status_code,
+        message,
+    )
+    return FastAPIHTTPException(
+        status_code=status_code,
+        detail={"message": message, "trace_id": trace_id},
+    )
+
+
+def HTTPException(*, status_code: int, detail: Any, **kwargs) -> FastAPIHTTPException:
+    message = detail.get("message") if isinstance(detail, dict) else str(detail)
+    return _http_exception_with_trace(status_code, message)
 
 
 # ============ 来料检验管理 API ============

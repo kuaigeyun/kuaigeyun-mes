@@ -8,9 +8,11 @@ Date: 2026-01-16
 """
 
 from datetime import date
+import uuid
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from decimal import Decimal
+from loguru import logger
 
 from apps.kuaizhizao.schemas.cost import (
     CostTrendAnalysisRequest,
@@ -27,6 +29,27 @@ from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
 router = APIRouter(prefix="/cost-report", tags=["Kuaicaiwu Cost Report"])
+
+
+def _http_exception_with_trace(
+    status_code: int,
+    message: str,
+    route: str,
+    tenant_id: Optional[int] = None,
+) -> HTTPException:
+    trace_id = uuid.uuid4().hex
+    logger.warning(
+        "kuaicaiwu_cost_report_api_error trace_id={} tenant_id={} route={} status_code={} message={}",
+        trace_id,
+        tenant_id,
+        route,
+        status_code,
+        message,
+    )
+    return HTTPException(
+        status_code=status_code,
+        detail={"message": message, "trace_id": trace_id},
+    )
 
 
 @router.post("/trend", response_model=CostTrendAnalysisResponse, status_code=status.HTTP_200_OK)
@@ -63,14 +86,13 @@ async def analyze_cost_trend(
         )
         return CostTrendAnalysisResponse(**result)
     except ValidationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e)
-        )
+        raise _http_exception_with_trace(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e), "/cost-report/trend", tenant_id)
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"分析成本趋势失败: {str(e)}"
+        raise _http_exception_with_trace(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"分析成本趋势失败: {str(e)}",
+            "/cost-report/trend",
+            tenant_id,
         )
 
 
@@ -107,14 +129,13 @@ async def analyze_cost_structure(
         )
         return CostStructureAnalysisResponse(**result)
     except ValidationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e)
-        )
+        raise _http_exception_with_trace(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e), "/cost-report/structure", tenant_id)
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"分析成本结构失败: {str(e)}"
+        raise _http_exception_with_trace(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"分析成本结构失败: {str(e)}",
+            "/cost-report/structure",
+            tenant_id,
         )
 
 
@@ -141,9 +162,11 @@ async def generate_cost_report(
         HTTPException: 当数据验证失败时抛出
     """
     if data.report_type not in ["trend", "structure", "comprehensive"]:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="report_type必须是trend、structure或comprehensive之一"
+        raise _http_exception_with_trace(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "report_type必须是trend、structure或comprehensive之一",
+            "/cost-report/generate",
+            tenant_id,
         )
     
     try:
@@ -159,12 +182,11 @@ async def generate_cost_report(
         )
         return CostReportResponse(**result)
     except ValidationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e)
-        )
+        raise _http_exception_with_trace(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e), "/cost-report/generate", tenant_id)
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"生成成本报表失败: {str(e)}"
+        raise _http_exception_with_trace(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"生成成本报表失败: {str(e)}",
+            "/cost-report/generate",
+            tenant_id,
         )

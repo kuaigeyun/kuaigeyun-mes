@@ -1,0 +1,26 @@
+import React from 'react';
+import { ProColumns } from '@ant-design/pro-components';
+import ReportBase from '../../../components/ReportBase';
+import { useTranslation } from 'react-i18next';
+
+const TransferTracking: React.FC = () => {
+  const { t } = useTranslation();
+  const columns: ProColumns[] = [
+    { title: '调拨单号', dataIndex: 'order_code', width: 150 },
+    { title: '调出仓库', dataIndex: 'from_warehouse', width: 150 },
+    { title: '调入仓库', dataIndex: 'to_warehouse', width: 150 },
+    { title: '物料名称', dataIndex: 'material_name', width: 200 },
+    { title: '调拨数量', dataIndex: 'quantity', valueType: 'digit', width: 100 },
+    { title: '状态', dataIndex: 'status', width: 100 },
+  ];
+
+  return (
+    <ReportBase
+      title={t('app.kuaizhizao.menu.reports.transfer-tracking')}
+      reportType="transfer_tracking"
+      columns={columns}
+    />
+  );
+};
+
+export default TransferTracking;

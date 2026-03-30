@@ -373,7 +373,7 @@ const DefectTypesPage: React.FC = () => {
         true: { text: '启用', status: 'Success' },
         false: { text: '禁用', status: 'Default' },
       },
-      render: (_, record) => {
+      render: (_: any, record: DefectType) => {
         const isActive = record?.isActive ?? false;
         return (
           <Tag color={isActive ? 'success' : 'default'}>
@@ -389,7 +389,7 @@ const DefectTypesPage: React.FC = () => {
       valueType: 'dateTime',
       hideInSearch: true,
       sorter: true,
-      render: (_, record) => {
+      render: (_: any, record: DefectType) => {
         const val = record.createdAt;
         return val ? (typeof val === 'string' ? new Date(val).toLocaleString() : val) : '-';
       },
@@ -399,7 +399,7 @@ const DefectTypesPage: React.FC = () => {
       valueType: 'option',
       width: 150,
       fixed: 'right',
-      render: (_, record) => (
+      render: (_: any, record: DefectType) => (
         <Space>
           <Button
             type="link"
@@ -527,7 +527,7 @@ const DefectTypesPage: React.FC = () => {
         showImportButton={true}
         onImport={handleImport}
         importHeaders={['*不良品编号', '*不良品名称', '分类', '描述']}
-        importExampleRow={['BL001', '尺寸不良', '外观类', '产品尺寸超差导致不合格']}
+        importExampleRow={['DEF-WX-001', '无锡精工尺寸超差', '加工质量', '精密压铸件外径超出公差范围']}
         importFieldMap={{
           '不良品编号': 'code', '*不良品编号': 'code', '编号': 'code', 'code': 'code',
           '不良品名称': 'name', '*不良品名称': 'name', '名称': 'name', 'name': 'name',

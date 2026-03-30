@@ -6,7 +6,7 @@
 
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProDescriptionsItemType, ProDescriptions } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProDescriptions } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
 import { downloadFile } from '../../../../../utils';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
@@ -576,12 +576,12 @@ const WorkshopsPage: React.FC = () => {
         title: t('app.master-data.workshops.plantName'),
         dataIndex: 'plantId',
         width: 150,
-        valueType: 'select',
+        valueType: 'select' as any,
         valueEnum: plants.reduce((acc, plant) => {
           acc[plant.id] = { text: plant.name };
           return acc;
         }, {} as Record<number, { text: string }>),
-        render: (_, record) => {
+        render: (_text: any, record: Workshop) => {
           const plant = plants.find(p => p.id === record.plantId);
           return plant ? plant.name : <Typography.Text type="secondary">-</Typography.Text>;
         },
@@ -596,12 +596,12 @@ const WorkshopsPage: React.FC = () => {
         title: t('app.master-data.workshops.statusLabel'),
         dataIndex: 'isActive',
         width: 100,
-        valueType: 'select',
+        valueType: 'select' as any,
         valueEnum: {
           true: { text: t('common.enabled'), status: 'Success' },
           false: { text: t('common.disabled'), status: 'Default' },
         },
-        render: (_, record) => {
+        render: (_text: any, record: Workshop) => {
           const isActive = record?.isActive ?? (record as any)?.is_active;
           return (
             <Tag color={isActive ? 'success' : 'default'}>
@@ -616,7 +616,7 @@ const WorkshopsPage: React.FC = () => {
         title: t('common.createdAt'),
         dataIndex: 'createdAt',
         width: 180,
-        valueType: 'dateTime',
+        valueType: 'dateTime' as any,
         hideInSearch: true,
         sorter: true,
       },
@@ -625,7 +625,7 @@ const WorkshopsPage: React.FC = () => {
         valueType: 'option',
         width: 150,
         fixed: 'right' as const,
-        render: (_, record) => (
+        render: (_text: any, record: Workshop) => (
           <Space>
             <Button
               type="link"
@@ -667,7 +667,7 @@ const WorkshopsPage: React.FC = () => {
   /**
    * 详情 Drawer 的列定义
    */
-  const detailColumns: ProDescriptionsItemType<Workshop>[] = [
+  const detailColumns: ProDescriptionsItemProps<Workshop>[] = [
     {
       title: t('app.master-data.workshops.code'),
       dataIndex: 'code',
@@ -742,10 +742,10 @@ const WorkshopsPage: React.FC = () => {
         onImport={handleImport}
         importHeaders={['*车间编号', '*车间名称', '所属厂区', '描述']}
         importExampleRow={[
-          'WS001', 
-          '装配车间', 
-          plants.length > 0 ? plants[0].code : 'PLANT001', 
-          '主要负责产品装配作业'
+          'WS-WX-01-01', 
+          '精密加工车间', 
+          plants.length > 0 ? plants[0].code : 'PLANT-WX-01', 
+          '负责核心零部件加工'
         ]}
         importFieldMap={{
           '车间编号': 'code',

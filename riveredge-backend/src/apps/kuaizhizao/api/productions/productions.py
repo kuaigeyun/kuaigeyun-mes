@@ -7,6 +7,7 @@
 from datetime import date, datetime
 from typing import List, Optional, Dict, Any
 from decimal import Decimal
+import uuid
 from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTPException, Body
 from fastapi.responses import JSONResponse, FileResponse
 from loguru import logger
@@ -266,6 +267,27 @@ router.include_router(quality_execution_router)
 router.include_router(document_relations_legacy_router)
 
 
+def _http_exception_with_trace(
+    status_code: int,
+    message: str,
+    route: str,
+    tenant_id: Optional[int] = None,
+) -> HTTPException:
+    trace_id = uuid.uuid4().hex
+    logger.warning(
+        "productions_api_error trace_id={} tenant_id={} route={} status_code={} message={}",
+        trace_id,
+        tenant_id,
+        route,
+        status_code,
+        message,
+    )
+    return HTTPException(
+        status_code=status_code,
+        detail={"message": message, "trace_id": trace_id},
+    )
+
+
 # ============ 质量异常与质检标准 API ============
 # 注：来料检验、过程检验、成品检验 API 已迁移至 quality_execution.py
 
@@ -340,9 +362,9 @@ async def create_quality_standard(
             created_by=current_user.id
         )
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/quality-standards", tenant_id)
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/quality-standards", tenant_id)
 
 
 @router.get("/quality-standards", response_model=List[QualityStandardListResponse], summary="获取质检标准列表")
@@ -375,7 +397,7 @@ async def list_quality_standards(
         )
     except Exception as e:
         logger.error(f"获取质检标准列表失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"获取列表失败: {str(e)}")
+        raise _http_exception_with_trace(500, f"获取列表失败: {str(e)}", "/quality-standards", tenant_id)
 
 
 @router.get("/quality-standards/{standard_id}", response_model=QualityStandardResponse, summary="获取质检标准详情")
@@ -395,7 +417,7 @@ async def get_quality_standard(
             standard_id=standard_id
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/quality-standards/{standard_id}", tenant_id)
 
 
 @router.put("/quality-standards/{standard_id}", response_model=QualityStandardResponse, summary="更新质检标准")
@@ -419,7 +441,7 @@ async def update_quality_standard(
             updated_by=current_user.id
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/quality-standards/{standard_id}", tenant_id)
 
 
 @router.delete("/quality-standards/{standard_id}", summary="删除质检标准")
@@ -443,7 +465,7 @@ async def delete_quality_standard(
             status_code=http_status.HTTP_200_OK
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/quality-standards/{standard_id}", tenant_id)
 
 
 @router.get("/quality-standards/by-material/{material_id}", response_model=List[QualityStandardListResponse], summary="根据物料ID获取质检标准")
@@ -469,7 +491,7 @@ async def get_standards_by_material(
         )
     except Exception as e:
         logger.error(f"根据物料ID获取质检标准失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"获取标准失败: {str(e)}")
+        raise _http_exception_with_trace(500, f"获取标准失败: {str(e)}", "/quality-standards/by-material/{material_id}", tenant_id)
 
 
 # ============ 质检方案管理 API ============
@@ -488,9 +510,9 @@ async def create_inspection_plan(
             created_by=current_user.id,
         )
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/inspection-plans", tenant_id)
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/inspection-plans", tenant_id)
 
 
 @router.get("/inspection-plans", response_model=List[InspectionPlanListResponse], summary="获取质检方案列表")
@@ -523,7 +545,7 @@ async def list_inspection_plans(
         )
     except Exception as e:
         logger.error(f"获取质检方案列表失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"获取列表失败: {str(e)}")
+        raise _http_exception_with_trace(500, f"获取列表失败: {str(e)}", "/inspection-plans", tenant_id)
 
 
 @router.get("/inspection-plans/{plan_id}", response_model=InspectionPlanResponse, summary="获取质检方案详情")
@@ -539,7 +561,7 @@ async def get_inspection_plan(
             plan_id=plan_id,
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/inspection-plans/{plan_id}", tenant_id)
 
 
 @router.put("/inspection-plans/{plan_id}", response_model=InspectionPlanResponse, summary="更新质检方案")
@@ -558,9 +580,9 @@ async def update_inspection_plan(
             updated_by=current_user.id,
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/inspection-plans/{plan_id}", tenant_id)
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/inspection-plans/{plan_id}", tenant_id)
 
 
 @router.delete("/inspection-plans/{plan_id}", summary="删除质检方案")
@@ -580,7 +602,7 @@ async def delete_inspection_plan(
             status_code=http_status.HTTP_200_OK,
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/inspection-plans/{plan_id}", tenant_id)
 
 
 @router.get("/inspection-plans/by-material/{material_id}", response_model=List[InspectionPlanListResponse], summary="根据物料ID获取质检方案")
@@ -599,7 +621,7 @@ async def get_inspection_plans_by_material(
         )
     except Exception as e:
         logger.error(f"根据物料ID获取质检方案失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"获取方案失败: {str(e)}")
+        raise _http_exception_with_trace(500, f"获取方案失败: {str(e)}", "/inspection-plans/by-material/{material_id}", tenant_id)
 
 
 @router.get("/quality/statistics", summary="质量统计分析")
@@ -1212,15 +1234,19 @@ async def import_sales_forecasts(
         return result
                 
     except ValidationError as e:
-        raise HTTPException(
-            status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e)
+        raise _http_exception_with_trace(
+            http_status.HTTP_422_UNPROCESSABLE_ENTITY,
+            str(e),
+            "/sales-forecasts/import",
+            tenant_id,
         )
     except Exception as e:
         logger.error(f"导入销售预测失败: {str(e)}")
-        raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"导入失败: {str(e)}"
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"导入失败: {str(e)}",
+            "/sales-forecasts/import",
+            tenant_id,
         )
 
 
@@ -1256,9 +1282,11 @@ async def export_sales_forecasts(
         )
         
         if not os.path.exists(file_path):
-            raise HTTPException(
-                status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="导出文件生成失败"
+            raise _http_exception_with_trace(
+                http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+                "导出文件生成失败",
+                "/sales-forecasts/export",
+                tenant_id,
             )
         
         return FileResponse(
@@ -1269,9 +1297,11 @@ async def export_sales_forecasts(
                 
     except Exception as e:
         logger.error(f"导出销售预测失败: {str(e)}")
-        raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"导出失败: {str(e)}"
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"导出失败: {str(e)}",
+            "/sales-forecasts/export",
+            tenant_id,
         )
 
 
@@ -1505,13 +1535,15 @@ async def push_production_plan_to_work_orders(
     except Exception as e:
         from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
         if isinstance(e, NotFoundError):
-            raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+            raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/production-plans/{plan_id}/push-to-work-orders", tenant_id)
         if isinstance(e, BusinessLogicError):
-            raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+            raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/production-plans/{plan_id}/push-to-work-orders", tenant_id)
         logger.exception("生产计划转工单失败")
-        raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"生产计划转工单失败: {str(e)}",
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"生产计划转工单失败: {str(e)}",
+            "/production-plans/{plan_id}/push-to-work-orders",
+            tenant_id,
         )
 
 
@@ -1842,9 +1874,11 @@ async def trigger_exception_detection(
         }
     except Exception as e:
         logger.error(f"触发异常检测失败: {e}")
-        raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"触发异常检测失败: {str(e)}"
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"触发异常检测失败: {str(e)}",
+            "/exceptions/detect",
+            tenant_id,
         )
 
 
@@ -1872,9 +1906,9 @@ async def start_exception_process(
             current_user_id=current_user.id,
         )
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/exceptions/process/start", tenant_id)
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/exceptions/process/start", tenant_id)
 
 
 @router.get("/exceptions/process", response_model=List[ExceptionProcessRecordListResponse], summary="获取异常处理流程列表")
@@ -1910,7 +1944,7 @@ async def list_exception_processes(
         )
     except Exception as e:
         logger.error(f"获取异常处理流程列表失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _http_exception_with_trace(500, str(e), "/exceptions/process", tenant_id)
 
 
 @router.get("/exceptions/process/{process_record_id}", response_model=ExceptionProcessRecordDetailResponse, summary="获取异常处理流程详情")
@@ -1932,7 +1966,7 @@ async def get_exception_process(
             process_record_id=process_record_id,
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/exceptions/process/{process_record_id}", tenant_id)
 
 
 @router.post("/exceptions/process/{process_record_id}/assign", response_model=ExceptionProcessRecordResponse, summary="分配异常处理流程")
@@ -1957,9 +1991,9 @@ async def assign_exception_process(
             current_user_id=current_user.id,
         )
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/exceptions/process/{process_record_id}/assign", tenant_id)
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/exceptions/process/{process_record_id}/assign", tenant_id)
 
 
 @router.post("/exceptions/process/{process_record_id}/step-transition", response_model=ExceptionProcessRecordResponse, summary="异常处理步骤流转")
@@ -1984,9 +2018,9 @@ async def transition_exception_process_step(
             current_user_id=current_user.id,
         )
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/exceptions/process/{process_record_id}/step-transition", tenant_id)
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/exceptions/process/{process_record_id}/step-transition", tenant_id)
 
 
 @router.post("/exceptions/process/{process_record_id}/resolve", response_model=ExceptionProcessRecordResponse, summary="解决异常处理流程")
@@ -2011,9 +2045,9 @@ async def resolve_exception_process(
             current_user_id=current_user.id,
         )
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/exceptions/process/{process_record_id}/resolve", tenant_id)
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/exceptions/process/{process_record_id}/resolve", tenant_id)
 
 
 @router.post("/exceptions/process/{process_record_id}/cancel", response_model=ExceptionProcessRecordResponse, summary="取消异常处理流程")
@@ -2037,9 +2071,9 @@ async def cancel_exception_process(
             comment=comment,
         )
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/exceptions/process/{process_record_id}/cancel", tenant_id)
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/exceptions/process/{process_record_id}/cancel", tenant_id)
 
 
 # ============ 报表 API ============
@@ -2210,9 +2244,9 @@ async def create_stocktaking(
             created_by=current_user.id
         )
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/stocktakings", tenant_id)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"创建盘点单失败: {str(e)}")
+        raise _http_exception_with_trace(500, f"创建盘点单失败: {str(e)}", "/stocktakings", tenant_id)
 
 
 @router.get("/stocktakings", response_model=StocktakingListResponse, summary="获取库存盘点单列表")
@@ -2272,7 +2306,7 @@ async def get_stocktaking(
             stocktaking_id=stocktaking_id
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/stocktakings/{stocktaking_id}", tenant_id)
 
 
 @router.put("/stocktakings/{stocktaking_id}", response_model=StocktakingResponse, summary="更新库存盘点单")
@@ -2300,9 +2334,9 @@ async def update_stocktaking(
             updated_by=current_user.id
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/stocktakings/{stocktaking_id}", tenant_id)
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/stocktakings/{stocktaking_id}", tenant_id)
 
 
 @router.post("/stocktakings/{stocktaking_id}/start", response_model=StocktakingResponse, summary="开始盘点")
@@ -2327,9 +2361,9 @@ async def start_stocktaking(
             started_by=current_user.id
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/stocktakings/{stocktaking_id}/start", tenant_id)
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/stocktakings/{stocktaking_id}/start", tenant_id)
 
 
 @router.post("/stocktakings/{stocktaking_id}/items", response_model=StocktakingItemResponse, summary="添加盘点明细")
@@ -2357,9 +2391,9 @@ async def create_stocktaking_item(
             created_by=current_user.id
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/stocktakings/{stocktaking_id}/items", tenant_id)
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/stocktakings/{stocktaking_id}/items", tenant_id)
 
 
 @router.put("/stocktakings/{stocktaking_id}/items/{item_id}", response_model=StocktakingItemResponse, summary="更新盘点明细")
@@ -2389,9 +2423,9 @@ async def update_stocktaking_item(
             updated_by=current_user.id
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/stocktakings/{stocktaking_id}/items/{item_id}", tenant_id)
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/stocktakings/{stocktaking_id}/items/{item_id}", tenant_id)
 
 
 @router.post("/stocktakings/{stocktaking_id}/items/{item_id}/execute", response_model=StocktakingItemResponse, summary="执行盘点明细")
@@ -2424,9 +2458,9 @@ async def execute_stocktaking_item(
             remarks=remarks
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/stocktakings/{stocktaking_id}/items/{item_id}/execute", tenant_id)
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/stocktakings/{stocktaking_id}/items/{item_id}/execute", tenant_id)
 
 
 @router.post("/stocktakings/{stocktaking_id}/adjust", response_model=StocktakingResponse, summary="处理盘点差异")
@@ -2451,9 +2485,9 @@ async def adjust_stocktaking_differences(
             adjusted_by=current_user.id
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/stocktakings/{stocktaking_id}/adjust", tenant_id)
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/stocktakings/{stocktaking_id}/adjust", tenant_id)
 
 
 @router.delete("/stocktakings/{stocktaking_id}", status_code=http_status.HTTP_204_NO_CONTENT, summary="删除盘点单")
@@ -2493,9 +2527,9 @@ async def create_inventory_transfer(
             created_by=current_user.id
         )
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/inventory-transfers", tenant_id)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"创建调拨单失败: {str(e)}")
+        raise _http_exception_with_trace(500, f"创建调拨单失败: {str(e)}", "/inventory-transfers", tenant_id)
 
 
 @router.get("/inventory-transfers", response_model=InventoryTransferListResponse, summary="获取库存调拨单列表")
@@ -2555,7 +2589,7 @@ async def get_inventory_transfer(
             transfer_id=transfer_id
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/inventory-transfers/{transfer_id}", tenant_id)
 
 
 @router.put("/inventory-transfers/{transfer_id}", response_model=InventoryTransferResponse, summary="更新库存调拨单")
@@ -2583,9 +2617,9 @@ async def update_inventory_transfer(
             updated_by=current_user.id
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/inventory-transfers/{transfer_id}", tenant_id)
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/inventory-transfers/{transfer_id}", tenant_id)
 
 
 @router.post("/inventory-transfers/{transfer_id}/items", response_model=InventoryTransferItemResponse, summary="添加调拨明细")
@@ -2613,9 +2647,9 @@ async def create_inventory_transfer_item(
             created_by=current_user.id
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/inventory-transfers/{transfer_id}/items", tenant_id)
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/inventory-transfers/{transfer_id}/items", tenant_id)
 
 
 @router.put("/inventory-transfers/{transfer_id}/items/{item_id}", response_model=InventoryTransferItemResponse, summary="更新调拨明细")
@@ -2645,9 +2679,9 @@ async def update_inventory_transfer_item(
             updated_by=current_user.id
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/inventory-transfers/{transfer_id}/items/{item_id}", tenant_id)
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/inventory-transfers/{transfer_id}/items/{item_id}", tenant_id)
 
 
 @router.post("/inventory-transfers/{transfer_id}/execute", response_model=InventoryTransferResponse, summary="执行调拨")
@@ -2672,9 +2706,9 @@ async def execute_inventory_transfer(
             executed_by=current_user.id
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/inventory-transfers/{transfer_id}/execute", tenant_id)
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/inventory-transfers/{transfer_id}/execute", tenant_id)
 
 
 @router.delete("/inventory-transfers/{transfer_id}", status_code=http_status.HTTP_204_NO_CONTENT, summary="删除调拨单")
@@ -2706,9 +2740,9 @@ async def create_assembly_order(
             created_by=current_user.id
         )
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/assembly-orders", tenant_id)
     except BusinessLogicError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/assembly-orders", tenant_id)
 
 
 @router.get("/assembly-orders", response_model=AssemblyOrderListResponse, summary="获取组装单列表")
@@ -2745,7 +2779,7 @@ async def get_assembly_order(
             order_id=order_id
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/assembly-orders/{order_id}", tenant_id)
 
 
 @router.put("/assembly-orders/{order_id}", response_model=AssemblyOrderResponse, summary="更新组装单")
@@ -2764,9 +2798,9 @@ async def update_assembly_order(
             updated_by=current_user.id
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/assembly-orders/{order_id}", tenant_id)
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/assembly-orders/{order_id}", tenant_id)
 
 
 @router.post("/assembly-orders/{order_id}/items", response_model=AssemblyOrderItemResponse, summary="添加组装明细")
@@ -2785,9 +2819,9 @@ async def create_assembly_order_item(
             created_by=current_user.id
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/assembly-orders/{order_id}/items", tenant_id)
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/assembly-orders/{order_id}/items", tenant_id)
 
 
 @router.put("/assembly-orders/{order_id}/items/{item_id}", response_model=AssemblyOrderItemResponse, summary="更新组装明细")
@@ -2807,9 +2841,9 @@ async def update_assembly_order_item(
             updated_by=current_user.id
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/assembly-orders/{order_id}/items/{item_id}", tenant_id)
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/assembly-orders/{order_id}/items/{item_id}", tenant_id)
 
 
 @router.delete("/assembly-orders/{order_id}", status_code=http_status.HTTP_204_NO_CONTENT, summary="删除组装单")
@@ -2841,9 +2875,9 @@ async def execute_assembly_order(
             request_data=request_data
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/assembly-orders/{order_id}/execute", tenant_id)
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/assembly-orders/{order_id}/execute", tenant_id)
 
 
 # ============ 拆卸单 API ============
@@ -2862,9 +2896,9 @@ async def create_disassembly_order(
             created_by=current_user.id
         )
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/disassembly-orders", tenant_id)
     except BusinessLogicError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/disassembly-orders", tenant_id)
 
 
 @router.get("/disassembly-orders", response_model=DisassemblyOrderListResponse, summary="获取拆卸单列表")
@@ -2901,7 +2935,7 @@ async def get_disassembly_order(
             order_id=order_id
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/disassembly-orders/{order_id}", tenant_id)
 
 
 @router.put("/disassembly-orders/{order_id}", response_model=DisassemblyOrderResponse, summary="更新拆卸单")
@@ -2920,9 +2954,9 @@ async def update_disassembly_order(
             updated_by=current_user.id
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/disassembly-orders/{order_id}", tenant_id)
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/disassembly-orders/{order_id}", tenant_id)
 
 
 @router.post("/disassembly-orders/{order_id}/items", response_model=DisassemblyOrderItemResponse, summary="添加拆卸明细")
@@ -2941,9 +2975,9 @@ async def create_disassembly_order_item(
             created_by=current_user.id
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/disassembly-orders/{order_id}/items", tenant_id)
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/disassembly-orders/{order_id}/items", tenant_id)
 
 
 @router.put("/disassembly-orders/{order_id}/items/{item_id}", response_model=DisassemblyOrderItemResponse, summary="更新拆卸明细")
@@ -2963,9 +2997,9 @@ async def update_disassembly_order_item(
             updated_by=current_user.id
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/disassembly-orders/{order_id}/items/{item_id}", tenant_id)
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/disassembly-orders/{order_id}/items/{item_id}", tenant_id)
 
 
 @router.delete("/disassembly-orders/{order_id}", status_code=http_status.HTTP_204_NO_CONTENT, summary="删除拆卸单")
@@ -2995,9 +3029,9 @@ async def execute_disassembly_order(
             executed_by=current_user.id
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/disassembly-orders/{order_id}/execute", tenant_id)
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/disassembly-orders/{order_id}/execute", tenant_id)
 
 
 # ==================== 工单委外管理 API ====================
@@ -3024,9 +3058,9 @@ async def create_outsource_work_order(
             created_by=current_user.id
         )
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/outsource-work-orders", tenant_id)
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/outsource-work-orders", tenant_id)
 
 
 @router.get("/outsource-work-orders", response_model=OutsourceWorkOrderListResponse, summary="获取工单委外列表")
@@ -3066,7 +3100,7 @@ async def list_outsource_work_orders(
         )
     except Exception as e:
         logger.error(f"获取工单委外列表失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _http_exception_with_trace(500, str(e), "/outsource-work-orders", tenant_id)
 
 
 @router.get("/outsource-work-orders/{work_order_id}", response_model=OutsourceWorkOrderResponse, summary="获取工单委外详情")
@@ -3090,7 +3124,7 @@ async def get_outsource_work_order(
             work_order_id=work_order_id
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/outsource-work-orders/{work_order_id}", tenant_id)
 
 
 @router.put("/outsource-work-orders/{work_order_id}", response_model=OutsourceWorkOrderResponse, summary="更新工单委外")
@@ -3118,9 +3152,9 @@ async def update_outsource_work_order(
             updated_by=current_user.id
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/outsource-work-orders/{work_order_id}", tenant_id)
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/outsource-work-orders/{work_order_id}", tenant_id)
 
 
 @router.delete("/outsource-work-orders/{work_order_id}", summary="删除工单委外")
@@ -3146,9 +3180,9 @@ async def delete_outsource_work_order(
         )
         return JSONResponse(content={"success": True, "message": "工单委外删除成功"})
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/outsource-work-orders/{work_order_id}", tenant_id)
     except BusinessLogicError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/outsource-work-orders/{work_order_id}", tenant_id)
 
 
 # ==================== 委外发料 API ====================
@@ -3175,9 +3209,9 @@ async def create_outsource_material_issue(
             created_by=current_user.id
         )
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/outsource-material-issues", tenant_id)
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/outsource-material-issues", tenant_id)
 
 
 @router.get("/outsource-material-issues", response_model=List[OutsourceMaterialIssueResponse], summary="获取委外发料单列表")
@@ -3214,7 +3248,7 @@ async def list_outsource_material_issues(
         )
     except Exception as e:
         logger.error(f"获取委外发料单列表失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _http_exception_with_trace(500, str(e), "/outsource-material-issues", tenant_id)
 
 
 @router.get("/outsource-material-issues/{issue_id}", response_model=OutsourceMaterialIssueResponse, summary="获取委外发料单详情")
@@ -3238,7 +3272,7 @@ async def get_outsource_material_issue(
             issue_id=issue_id
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/outsource-material-issues/{issue_id}", tenant_id)
 
 
 @router.post("/outsource-material-issues/{issue_id}/complete", response_model=OutsourceMaterialIssueResponse, summary="完成委外发料")
@@ -3263,9 +3297,9 @@ async def complete_outsource_material_issue(
             completed_by=current_user.id
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/outsource-material-issues/{issue_id}/complete", tenant_id)
     except BusinessLogicError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/outsource-material-issues/{issue_id}/complete", tenant_id)
 
 
 # ==================== 委外收货 API ====================
@@ -3292,9 +3326,9 @@ async def create_outsource_material_receipt(
             created_by=current_user.id
         )
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/outsource-material-receipts", tenant_id)
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/outsource-material-receipts", tenant_id)
 
 
 @router.get("/outsource-material-receipts", response_model=List[OutsourceMaterialReceiptResponse], summary="获取委外收货单列表")
@@ -3331,7 +3365,7 @@ async def list_outsource_material_receipts(
         )
     except Exception as e:
         logger.error(f"获取委外收货单列表失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise _http_exception_with_trace(500, str(e), "/outsource-material-receipts", tenant_id)
 
 
 @router.get("/outsource-material-receipts/{receipt_id}", response_model=OutsourceMaterialReceiptResponse, summary="获取委外收货单详情")
@@ -3355,7 +3389,7 @@ async def get_outsource_material_receipt(
             receipt_id=receipt_id
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/outsource-material-receipts/{receipt_id}", tenant_id)
 
 
 @router.post("/outsource-material-receipts/{receipt_id}/complete", response_model=OutsourceMaterialReceiptResponse, summary="完成委外收货")
@@ -3380,9 +3414,9 @@ async def complete_outsource_material_receipt(
             completed_by=current_user.id
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/outsource-material-receipts/{receipt_id}/complete", tenant_id)
     except BusinessLogicError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/outsource-material-receipts/{receipt_id}/complete", tenant_id)
 
 
 # ==================== 供应商协同 API ====================
@@ -3409,9 +3443,9 @@ async def send_purchase_order_to_supplier(
         )
         return JSONResponse(content=result, status_code=http_status.HTTP_200_OK)
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/purchase-orders/{purchase_order_id}/send-to-supplier", tenant_id)
     except BusinessLogicError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/purchase-orders/{purchase_order_id}/send-to-supplier", tenant_id)
 
 
 @router.post("/purchase-orders/{purchase_order_id}/update-progress", summary="更新采购订单进度")
@@ -3439,9 +3473,9 @@ async def update_purchase_order_progress(
         )
         return JSONResponse(content=result, status_code=http_status.HTTP_200_OK)
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/purchase-orders/{purchase_order_id}/update-progress", tenant_id)
     except BusinessLogicError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/purchase-orders/{purchase_order_id}/update-progress", tenant_id)
 
 
 @router.post("/purchase-orders/{purchase_order_id}/submit-delivery-notice", summary="提交发货通知")
@@ -3469,9 +3503,9 @@ async def submit_delivery_notice(
         )
         return JSONResponse(content=result, status_code=http_status.HTTP_200_OK)
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/purchase-orders/{purchase_order_id}/submit-delivery-notice", tenant_id)
     except BusinessLogicError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/purchase-orders/{purchase_order_id}/submit-delivery-notice", tenant_id)
 
 
 @router.get("/suppliers/{supplier_id}/purchase-orders", summary="获取供应商的采购订单列表")
@@ -3498,7 +3532,7 @@ async def get_supplier_purchase_orders(
         )
         return JSONResponse(content=result, status_code=http_status.HTTP_200_OK)
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/suppliers/{supplier_id}/purchase-orders", tenant_id)
 
 
 # ==================== 客户协同 API ====================
@@ -3527,7 +3561,7 @@ async def get_customer_sales_orders(
         )
         return JSONResponse(content=result, status_code=http_status.HTTP_200_OK)
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/customers/{customer_id}/sales-orders", tenant_id)
 
 
 @router.get("/sales-orders/{sales_order_id}/production-progress", response_model=SalesOrderProductionProgressResponse, summary="获取销售订单生产进度")
@@ -3551,7 +3585,7 @@ async def get_sales_order_production_progress(
         )
         return SalesOrderProductionProgressResponse(**result)
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/sales-orders/{sales_order_id}/production-progress", tenant_id)
 
 
 @router.get("/customers/{customer_id}/order-summary", response_model=CustomerOrderSummaryResponse, summary="获取客户订单汇总")
@@ -3575,4 +3609,4 @@ async def get_customer_order_summary(
         )
         return CustomerOrderSummaryResponse(**result)
     except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise _http_exception_with_trace(404, str(e), "/customers/{customer_id}/order-summary", tenant_id)

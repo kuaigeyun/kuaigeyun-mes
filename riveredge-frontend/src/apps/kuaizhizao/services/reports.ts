@@ -17,6 +17,8 @@ import { apiRequest } from '../../../services/api';
 export interface ReportParams {
   startDate?: string;
   endDate?: string;
+  date_start?: string;
+  date_end?: string;
   reportType?: string;
   filters?: Record<string, any>;
 }
@@ -304,7 +306,94 @@ export async function exportQualityReport(params: ReportParams = {}): Promise<Bl
   });
 }
 
+/** 销售报表接口定义 */
+export interface SalesReportResponse {
+  data: any[];
+  summary: Record<string, any>;
+  success: boolean;
+}
+
+/** 获取销售报表 */
+export async function getSalesReport(params: ReportParams & { report_type?: string } = {}): Promise<SalesReportResponse> {
+  return apiRequest<SalesReportResponse>('/apps/kuaizhizao/reports/sales', {
+    method: 'GET',
+    params: {
+      report_type: params.report_type || 'summary',
+      date_start: params.date_start || params.startDate,
+      date_end: params.date_end || params.endDate,
+      customer_id: params.filters?.customer_id,
+      ...params,
+    },
+  });
+}
+
+/** 获取计划报表 */
+export async function getPlanReport(params: ReportParams & { report_type?: string } = {}): Promise<SalesReportResponse> {
+  return apiRequest<SalesReportResponse>('/apps/kuaizhizao/reports/plans', {
+    method: 'GET',
+    params: {
+      report_type: params.report_type || 'fulfillment',
+      date_start: params.date_start || params.startDate,
+      date_end: params.date_end || params.endDate,
+      ...params,
+    },
+  });
+}
+
+/** 获取采购报表 */
+export async function getPurchaseReport(params: ReportParams & { report_type?: string } = {}): Promise<SalesReportResponse> {
+  return apiRequest<SalesReportResponse>('/apps/kuaizhizao/reports/purchases', {
+    method: 'GET',
+    params: {
+      report_type: params.report_type || 'requisition_tracking',
+      date_start: params.date_start || params.startDate,
+      date_end: params.date_end || params.endDate,
+      ...params,
+    },
+  });
+}
+
+/** 获取设备报表 */
+export async function getEquipmentReport(params: ReportParams & { report_type?: string } = {}): Promise<SalesReportResponse> {
+  return apiRequest<SalesReportResponse>('/apps/kuaizhizao/reports/equipment', {
+    method: 'GET',
+    params: {
+      report_type: params.report_type || 'maintenance',
+      date_start: params.date_start || params.startDate,
+      date_end: params.date_end || params.endDate,
+      ...params,
+    },
+  });
+}
+
+/** 获取仓库报表 (如果与现有 inventory 报表不重合) */
+export async function getWarehouseReport(params: ReportParams & { report_type?: string } = {}): Promise<SalesReportResponse> {
+  return apiRequest<SalesReportResponse>('/apps/kuaizhizao/reports/warehouse', {
+    method: 'GET',
+    params: {
+      report_type: params.report_type || 'inbound_summary',
+      date_start: params.date_start || params.startDate,
+      date_end: params.date_end || params.endDate,
+      ...params,
+    },
+  });
+}
+
+/** 获取绩效报表 */
+export async function getPerformanceReport(params: ReportParams & { report_type?: string } = {}): Promise<SalesReportResponse> {
+  return apiRequest<SalesReportResponse>('/apps/kuaizhizao/reports/performance', {
+    method: 'GET',
+    params: {
+      report_type: params.report_type || 'efficiency_ranking',
+      date_start: params.date_start || params.startDate,
+      date_end: params.date_end || params.endDate,
+      ...params,
+    },
+  });
+}
+
 // 图表数据API
+
 export async function getReportCharts(params: ReportParams = {}): Promise<TrendChartData> {
   return apiRequest<TrendChartData>('/apps/kuaizhizao/reports/charts', {
     method: 'GET',

@@ -9,7 +9,7 @@
 
 import React, { useRef, useState, useEffect, useCallback } from 'react'
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions, ProFormInstance, ProFormSelect } from '@ant-design/pro-components'
-import { App, Button, Tag, Space, Drawer, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Typography } from 'antd'
+import { App, Button, Tag, Space, Drawer, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Typography, Modal } from 'antd'
 import { PlusOutlined, DeleteOutlined, EyeOutlined, EditOutlined, ArrowDownOutlined, ShoppingOutlined, ImportOutlined } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -100,7 +100,14 @@ export default function SalesForecastsPage() {
   const [drawerVisible, setDrawerVisible] = useState(false)
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false)
   const [importModalVisible, setImportModalVisible] = useState(false)
+  const [matrixModalVisible, setMatrixModalVisible] = useState(false)
+  const [matrixMonths, setMatrixMonths] = useState<dayjs.Dayjs[]>([])
+  const [matrixRows, setMatrixRows] = useState<any[]>([])
   const [auditEnabled, setAuditEnabled] = useState(true)
+  const [salesNodesEnabled, setSalesNodesEnabled] = useState({
+    sales_forecast: true,
+    demand_computation: true,
+  })
 
   useEffect(() => {
     const loadConfig = async () => {
@@ -108,9 +115,18 @@ export default function SalesForecastsPage() {
         const config = await getBusinessConfig()
         const enabled = config.parameters?.sales?.audit_enabled === true
         setAuditEnabled(enabled)
+        const nodes = config?.nodes || {}
+        setSalesNodesEnabled({
+          sales_forecast: nodes?.sales_forecast?.enabled !== false,
+          demand_computation: nodes?.demand_computation?.enabled !== false,
+        })
       } catch (error) {
         console.error('Failed to load business config:', error)
         setAuditEnabled(true)
+        setSalesNodesEnabled({
+          sales_forecast: true,
+          demand_computation: true,
+        })
       }
     }
     loadConfig()
@@ -199,6 +215,10 @@ export default function SalesForecastsPage() {
   };
 
   const handleCreate = async () => {
+    if (!salesNodesEnabled.sales_forecast) {
+      messageApi.warning('销售预测节点未启用，无法新建')
+      return
+    }
     setIsEdit(false);
     setCurrentId(null);
     setPreviewCode(null);
@@ -243,6 +263,85 @@ export default function SalesForecastsPage() {
       setEffectiveAutoGen(false);
     }
   };
+
+  const openMatrixEntry = () => {
+    const rawItems = formRef.current?.getFieldValue('items') ?? []
+    const currentItems = Array.isArray(rawItems) ? rawItems : []
+    if (!currentItems.length) {
+      messageApi.warning('请先添加至少一个物料明细')
+      return
+    }
+
+    const startDateRaw = formRef.current?.getFieldValue('start_date')
+    const baseMonth = dayjs(startDateRaw || dayjs()).startOf('month')
+    const months = Array.from({ length: 6 }).map((_, idx) => baseMonth.add(idx, 'month'))
+    const monthKeys = months.map((m) => m.format('YYYY-MM'))
+    const materialMap = new Map<number, any>()
+
+    currentItems.forEach((it: any) => {
+      const materialId = Number(it?.material_id) || 0
+      if (!materialId) return
+      if (!materialMap.has(materialId)) {
+        materialMap.set(materialId, {
+          material_id: materialId,
+          material_code: it.material_code ?? '',
+          material_name: it.material_name ?? '',
+          material_spec: it.material_spec ?? '',
+          material_unit: it.material_unit ?? '件',
+          values: {},
+        })
+      }
+      const fd = it?.forecast_date ? dayjs(it.forecast_date) : null
+      const monthKey = fd?.isValid?.() ? fd.startOf('month').format('YYYY-MM') : ''
+      if (!monthKey || !monthKeys.includes(monthKey)) return
+      const row = materialMap.get(materialId)
+      row.values[monthKey] = Number(row.values[monthKey] || 0) + (Number(it?.forecast_quantity) || 0)
+    })
+
+    const rows = Array.from(materialMap.values())
+    if (!rows.length) {
+      messageApi.warning('当前明细缺少有效物料，无法矩阵录入')
+      return
+    }
+
+    setMatrixMonths(months)
+    setMatrixRows(rows)
+    setMatrixModalVisible(true)
+  }
+
+  const applyMatrixEntry = () => {
+    const rows = Array.isArray(matrixRows) ? matrixRows : []
+    if (!rows.length) {
+      messageApi.warning('矩阵为空，无法应用')
+      return
+    }
+    const nextItems: any[] = []
+    rows.forEach((row: any) => {
+      matrixMonths.forEach((month) => {
+        const key = month.format('YYYY-MM')
+        const qty = Number(row?.values?.[key]) || 0
+        if (qty <= 0) return
+        nextItems.push({
+          material_id: row.material_id,
+          material_code: row.material_code,
+          material_name: row.material_name,
+          material_spec: row.material_spec,
+          material_unit: row.material_unit || '件',
+          forecast_quantity: qty,
+          forecast_date: month.startOf('month'),
+          confidence_level: 1.0,
+          forecast_method: 'MANUAL',
+        })
+      })
+    })
+    if (!nextItems.length) {
+      messageApi.warning('请至少录入一个大于0的预测数量')
+      return
+    }
+    formRef.current?.setFieldsValue({ items: nextItems })
+    setMatrixModalVisible(false)
+    messageApi.success(`已从矩阵生成 ${nextItems.length} 条预测明细`)
+  }
 
   const handleEdit = async (id: number) => {
     setIsEdit(true)
@@ -397,6 +496,10 @@ export default function SalesForecastsPage() {
 
   const handleSaveInternal = async (values: any, isDraft: boolean = false) => {
     try {
+      if (!isEdit && !salesNodesEnabled.sales_forecast) {
+        messageApi.warning('销售预测节点未启用，无法创建')
+        return
+      }
       const rawItems = values.items ?? []
       if (!rawItems.length) {
         messageApi.warning(t('app.kuaizhizao.salesForecast.itemsRequired'))
@@ -469,6 +572,10 @@ export default function SalesForecastsPage() {
   };
 
   const handlePushToMrp = async (id: number) => {
+    if (!salesNodesEnabled.demand_computation) {
+      messageApi.warning('需求计算节点未启用，无法下推')
+      return
+    }
     modalApi.confirm({
       title: t('app.kuaizhizao.salesForecast.pushToMrp'),
       content: t('app.kuaizhizao.salesForecast.pushToMrpConfirm'),
@@ -744,6 +851,7 @@ export default function SalesForecastsPage() {
                 type="link"
                 size="small"
                 icon={<ArrowDownOutlined />}
+                disabled={!salesNodesEnabled.demand_computation}
                 onClick={() => handlePushToMrp(record.id)}
               >
                 {t('app.kuaizhizao.salesForecast.pushToMrp')}
@@ -921,7 +1029,7 @@ export default function SalesForecastsPage() {
           showAdvancedSearch={true}
           enableRowSelection={true}
           onRowSelectionChange={() => {}}
-          showCreateButton={true}
+          showCreateButton={salesNodesEnabled.sales_forecast}
           createButtonText={t('app.kuaizhizao.salesForecast.create')}
           onCreate={handleCreate}
           showDeleteButton={true}
@@ -1027,6 +1135,9 @@ export default function SalesForecastsPage() {
               onClick={() => setImportModalVisible(true)}
             >
               导入明细
+            </Button>
+            <Button size="small" onClick={openMatrixEntry}>
+              矩阵录入
             </Button>
           </div>
           <ProForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: t('app.kuaizhizao.salesForecast.itemsRequired') }]}>
@@ -1174,6 +1285,71 @@ export default function SalesForecastsPage() {
         onCancel={() => setMaterialPickerOpen(false)}
         onConfirm={appendForecastItemsFromMaterials}
       />
+
+      <Modal
+        title="销售预测矩阵录入"
+        open={matrixModalVisible}
+        width={980}
+        onCancel={() => setMatrixModalVisible(false)}
+        onOk={applyMatrixEntry}
+        okText="应用到明细"
+      >
+        <Table
+          size="small"
+          rowKey="material_id"
+          pagination={false}
+          dataSource={matrixRows}
+          scroll={{ x: 900 }}
+          columns={[
+            {
+              title: '物料',
+              dataIndex: 'material_name',
+              width: 240,
+              fixed: 'left',
+              render: (_: any, row: any) => (
+                <div>
+                  <div>{row.material_name || '-'}</div>
+                  <Typography.Text type="secondary">
+                    {row.material_code || '-'} / {row.material_unit || '-'}
+                  </Typography.Text>
+                </div>
+              ),
+            },
+            ...matrixMonths.map((month) => {
+              const key = month.format('YYYY-MM')
+              return {
+                title: key,
+                dataIndex: key,
+                width: 110,
+                render: (_: any, row: any, rowIndex: number) => (
+                  <InputNumber
+                    min={0}
+                    precision={2}
+                    style={{ width: '100%' }}
+                    value={Number(row?.values?.[key]) || 0}
+                    onChange={(val) => {
+                      const numVal = Number(val ?? 0)
+                      setMatrixRows((prev) =>
+                        prev.map((r, idx) =>
+                          idx !== rowIndex
+                            ? r
+                            : {
+                                ...r,
+                                values: {
+                                  ...(r.values || {}),
+                                  [key]: numVal,
+                                },
+                              }
+                        )
+                      )
+                    }}
+                  />
+                ),
+              }
+            }),
+          ]}
+        />
+      </Modal>
 
       <Drawer
         title={

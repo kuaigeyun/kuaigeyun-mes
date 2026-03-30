@@ -13,39 +13,10 @@ import { Line, Bar, Column } from '@ant-design/charts';
 import { DownloadOutlined, ReloadOutlined } from '@ant-design/icons';
 import { App } from 'antd';
 import { reportingApi } from '../../../../services/production';
+import type { ReportingDetailedStatistics } from '../../../../services/reporting';
 import dayjs, { Dayjs } from 'dayjs';
 
 const { RangePicker } = DatePicker;
-
-interface ReportingStatistics {
-  total_count: number;
-  pending_count: number;
-  approved_count: number;
-  rejected_count: number;
-  total_reported_quantity: number;
-  total_qualified_quantity: number;
-  total_unqualified_quantity: number;
-  total_work_hours: number;
-  qualification_rate: number;
-  unqualified_rate: number;
-  avg_quantity_per_hour: number;
-  operation_stats: Array<{
-    operation_name: string;
-    count: number;
-    reported_quantity: number;
-    qualified_quantity: number;
-    work_hours: number;
-    qualification_rate: number;
-  }>;
-  worker_stats: Array<{
-    worker_name: string;
-    count: number;
-    reported_quantity: number;
-    qualified_quantity: number;
-    work_hours: number;
-    qualification_rate: number;
-  }>;
-}
 
 const ReportingStatisticsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
@@ -54,7 +25,7 @@ const ReportingStatisticsPage: React.FC = () => {
     dayjs().subtract(30, 'day'),
     dayjs(),
   ]);
-  const [statistics, setStatistics] = useState<ReportingStatistics | null>(null);
+  const [statistics, setStatistics] = useState<ReportingDetailedStatistics | null>(null);
 
   /**
    * 加载统计数据
@@ -67,7 +38,7 @@ const ReportingStatisticsPage: React.FC = () => {
         date_start: startDate.format('YYYY-MM-DD'),
         date_end: endDate.format('YYYY-MM-DD'),
       });
-      setStatistics(result as any);
+      setStatistics(result);
     } catch (error: any) {
       messageApi.error(error.message || '加载统计数据失败');
     } finally {

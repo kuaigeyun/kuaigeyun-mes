@@ -134,6 +134,7 @@ async def query_batch_inventory(
     batch_number: Optional[str] = Query(None, description="批号"),
     include_expired: bool = Query(False, description="是否包含过期批次"),
     summary_only: bool = Query(False, description="是否仅返回物料汇总（material_totals），用于批量检查"),
+    include_sales_commitment: bool = Query(False, description="是否扣减销售已承诺未交付数量（用于ATP动态可承诺）"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> dict:
@@ -147,6 +148,7 @@ async def query_batch_inventory(
     - **batch_number**: 批号（可选）
     - **include_expired**: 是否包含过期批次（默认：否）
     - **summary_only**: 是否仅返回物料汇总（默认：否）
+    - **include_sales_commitment**: 是否扣减销售承诺量（默认：否）
     
     返回每个批次的库存数量、生产日期、有效期等信息；summary_only 时返回 { material_totals: { material_id: quantity } }。
     """
@@ -158,4 +160,215 @@ async def query_batch_inventory(
         batch_number=batch_number,
         include_expired=include_expired,
         summary_only=summary_only,
+        include_sales_commitment=include_sales_commitment,
+    )
+
+
+@router.get("/sales", summary="获取销售报表")
+async def get_sales_report(
+    report_type: str = Query("summary", description="报表类型（summary/execution/customer_summary/product_ranking/forecast_actual）"),
+    date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
+    date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
+    customer_id: Optional[int] = Query(None, description="客户ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> dict:
+    """
+    获取销售报表数据
+
+    支持多种报表类型：
+    - summary: 销售订单综合查询统计
+    - execution: 销售订单执行跟踪统计
+    - customer_summary: 客户销售业绩汇总
+    - product_ranking: 产品销售排行榜
+    - forecast_actual: 销售预测与实际对比
+
+    - **report_type**: 报表类型
+    - **date_start**: 开始日期（可选）
+    - **date_end**: 结束日期（可选）
+    - **customer_id**: 客户ID（可选）
+    """
+    date_start_dt = None
+    date_end_dt = None
+
+    if date_start:
+        try:
+            date_start_dt = datetime.strptime(date_start, "%Y-%m-%d")
+        except ValueError:
+            raise ValidationError("开始日期格式错误，应为YYYY-MM-DD")
+
+    if date_end:
+        try:
+            date_end_dt = datetime.strptime(date_end, "%Y-%m-%d")
+        except ValueError:
+            raise ValidationError("结束日期格式错误，应为YYYY-MM-DD")
+
+    return await report_service.get_sales_report(
+        tenant_id=tenant_id,
+        report_type=report_type,
+        date_start=date_start_dt,
+        date_end=date_end_dt,
+        customer_id=customer_id,
+    )
+    
+@router.get("/plans", summary="获取计划报表")
+async def get_plan_report(
+    report_type: str = Query("fulfillment", description="报表类型"),
+    date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
+    date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> dict:
+    date_start_dt = None
+    date_end_dt = None
+    if date_start:
+        try:
+            date_start_dt = datetime.strptime(date_start, "%Y-%m-%d")
+        except ValueError:
+            raise ValidationError("开始日期格式错误，应为YYYY-MM-DD")
+    if date_end:
+        try:
+            date_end_dt = datetime.strptime(date_end, "%Y-%m-%d")
+        except ValueError:
+            raise ValidationError("结束日期格式错误，应为YYYY-MM-DD")
+    return await report_service.get_plan_report(
+        tenant_id=tenant_id,
+        report_type=report_type,
+        date_start=date_start_dt,
+        date_end=date_end_dt,
+    )
+
+@router.get("/purchases", summary="获取采购报表")
+async def get_purchase_report(
+    report_type: str = Query("requisition_tracking", description="报表类型"),
+    date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
+    date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> dict:
+    date_start_dt = None
+    date_end_dt = None
+    if date_start:
+        try:
+            date_start_dt = datetime.strptime(date_start, "%Y-%m-%d")
+        except ValueError:
+            raise ValidationError("开始日期格式错误，应为YYYY-MM-DD")
+    if date_end:
+        try:
+            date_end_dt = datetime.strptime(date_end, "%Y-%m-%d")
+        except ValueError:
+            raise ValidationError("结束日期格式错误，应为YYYY-MM-DD")
+    return await report_service.get_purchase_report(
+        tenant_id=tenant_id,
+        report_type=report_type,
+        date_start=date_start_dt,
+        date_end=date_end_dt,
+    )
+
+@router.get("/quality", summary="获取质量报表")
+async def get_quality_report(
+    report_type: str = Query("analysis", description="报表类型"),
+    date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
+    date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> dict:
+    date_start_dt = None
+    date_end_dt = None
+    if date_start:
+        try:
+            date_start_dt = datetime.strptime(date_start, "%Y-%m-%d")
+        except ValueError:
+            raise ValidationError("开始日期格式错误，应为YYYY-MM-DD")
+    if date_end:
+        try:
+            date_end_dt = datetime.strptime(date_end, "%Y-%m-%d")
+        except ValueError:
+            raise ValidationError("结束日期格式错误，应为YYYY-MM-DD")
+    return await report_service.get_quality_report(
+        tenant_id=tenant_id,
+        report_type=report_type,
+        date_start=date_start_dt,
+        date_end=date_end_dt,
+    )
+
+@router.get("/equipment", summary="获取设备报表")
+async def get_equipment_report(
+    report_type: str = Query("maintenance", description="报表类型"),
+    date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
+    date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> dict:
+    date_start_dt = None
+    date_end_dt = None
+    if date_start:
+        try:
+            date_start_dt = datetime.strptime(date_start, "%Y-%m-%d")
+        except ValueError:
+            raise ValidationError("开始日期格式错误，应为YYYY-MM-DD")
+    if date_end:
+        try:
+            date_end_dt = datetime.strptime(date_end, "%Y-%m-%d")
+        except ValueError:
+            raise ValidationError("结束日期格式错误，应为YYYY-MM-DD")
+    return await report_service.get_equipment_report(
+        tenant_id=tenant_id,
+        report_type=report_type,
+        date_start=date_start_dt,
+        date_end=date_end_dt,
+    )
+
+@router.get("/warehouse", summary="获取仓库相关报表")
+async def get_warehouse_report(
+    report_type: str = Query("inbound_summary", description="报表类型"),
+    date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
+    date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> dict:
+    date_start_dt = None
+    date_end_dt = None
+    if date_start:
+        try:
+            date_start_dt = datetime.strptime(date_start, "%Y-%m-%d")
+        except ValueError:
+            raise ValidationError("开始日期格式错误，应为YYYY-MM-DD")
+    if date_end:
+        try:
+            date_end_dt = datetime.strptime(date_end, "%Y-%m-%d")
+        except ValueError:
+            raise ValidationError("结束日期格式错误，应为YYYY-MM-DD")
+    return await report_service.get_warehouse_report(
+        tenant_id=tenant_id,
+        report_type=report_type,
+        date_start=date_start_dt,
+        date_end=date_end_dt,
+    )
+
+@router.get("/performance", summary="获取绩效报表")
+async def get_performance_report(
+    report_type: str = Query("efficiency_ranking", description="报表类型"),
+    date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
+    date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> dict:
+    date_start_dt = None
+    date_end_dt = None
+    if date_start:
+        try:
+            date_start_dt = datetime.strptime(date_start, "%Y-%m-%d")
+        except ValueError:
+            raise ValidationError("开始日期格式错误，应为YYYY-MM-DD")
+    if date_end:
+        try:
+            date_end_dt = datetime.strptime(date_end, "%Y-%m-%d")
+        except ValueError:
+            raise ValidationError("结束日期格式错误，应为YYYY-MM-DD")
+    return await report_service.get_performance_report(
+        tenant_id=tenant_id,
+        report_type=report_type,
+        date_start=date_start_dt,
+        date_end=date_end_dt,
     )

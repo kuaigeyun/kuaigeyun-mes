@@ -397,7 +397,7 @@ const ProcessRoutesPage: React.FC = () => {
         true: { text: '启用', status: 'Success' },
         false: { text: '禁用', status: 'Default' },
       },
-      render: (_, record) => {
+      render: (_: any, record: ProcessRoute) => {
         const isActive = record?.is_active ?? (record as any)?.isActive;
         return (
           <Tag color={isActive ? 'success' : 'default'}>
@@ -419,7 +419,7 @@ const ProcessRoutesPage: React.FC = () => {
       valueType: 'option',
       width: 200,
       fixed: 'right',
-      render: (_, record) => (
+      render: (_: any, record: ProcessRoute) => (
         <Space>
           <Button
             type="link"
@@ -528,13 +528,11 @@ const ProcessRoutesPage: React.FC = () => {
         showImportButton={true}
         onImport={handleImport}
         importHeaders={['*工艺路线编号', '*工艺路线名称', '描述']}
-        importExampleRow={['ROUTE001', '装配工艺', '产品装配工艺路线']}
+        importExampleRow={['PR-WX-001', '无锡总部标准装配工艺', '适用于所有X系列产品的标准工艺流程']}
         importFieldMap={{
-          '工艺路线编号': 'code',
-          '*工艺路线编号': 'code',
-          '工艺路线名称': 'name',
-          '*工艺路线名称': 'name',
-          '描述': 'description',
+          '工艺路线编号': 'code', '*工艺路线编号': 'code', '编号': 'code', 'code': 'code',
+          '工艺路线名称': 'name', '*工艺路线名称': 'name', '名称': 'name', 'name': 'name',
+          '描述': 'description', 'description': 'description',
         }}
         importFieldRules={{ code: { required: true }, name: { required: true } }}
         showExportButton={true}
@@ -595,7 +593,7 @@ const ProcessRoutesPage: React.FC = () => {
                   } else {
                     // 尝试直接使用对象的值
                     const entries = Object.entries(seqObj);
-                    for (const [key, value] of entries) {
+                    for (const [_, value] of entries) {
                       if (Array.isArray(value)) {
                         operations = value;
                         break;

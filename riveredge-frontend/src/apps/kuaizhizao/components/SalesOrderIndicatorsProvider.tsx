@@ -32,6 +32,7 @@ async function fetchBatchInventory(materialIds: number[]): Promise<Record<number
           material_ids: materialIds,
           summary_only: true,
           include_expired: false,
+          include_sales_commitment: true,
         },
       }
     );

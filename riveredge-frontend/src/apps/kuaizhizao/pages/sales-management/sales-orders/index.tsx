@@ -108,6 +108,83 @@ function formatMoneyYuan(n: number): string {
   return `¥${(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+const toSafeNumber = (value: unknown): number => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const toCents = (value: unknown): number => Math.round(toSafeNumber(value) * 100);
+const fromCents = (cents: number): number => cents / 100;
+
+const resolveSaleUnitConversionFactor = (material: Material | undefined, materialUnit: unknown): number => {
+  if (!material) return 1;
+  const selectedUnit = String(materialUnit ?? '').trim();
+  if (!selectedUnit) return 1;
+
+  const baseUnit = String((material as any).baseUnit ?? (material as any).base_unit ?? '').trim();
+  if (!baseUnit || selectedUnit === baseUnit) return 1;
+
+  const unitsCfg = (material as any).units;
+  const units = Array.isArray(unitsCfg?.units) ? unitsCfg.units : [];
+  const matched = units.find((u: any) => String(u?.unit ?? '').trim() === selectedUnit);
+  if (!matched) return 1;
+
+  const numerator = Number(matched?.numerator ?? 1);
+  const denominator = Number(matched?.denominator ?? 1);
+  if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || numerator <= 0 || denominator <= 0) {
+    return 1;
+  }
+  return numerator / denominator;
+};
+
+const calcSalesLineAmounts = (qtyInput: unknown, priceInput: unknown, taxRateInput: unknown, priceTypeInput?: string) => {
+  const qty = toSafeNumber(qtyInput);
+  const unitPriceCents = toCents(priceInput);
+  const taxRate = toSafeNumber(taxRateInput);
+  const priceType = priceTypeInput ?? 'tax_exclusive';
+
+  if (priceType === 'tax_inclusive') {
+    const inclCents = Math.round(qty * unitPriceCents);
+    const exclCents = Math.round(inclCents / (1 + taxRate / 100));
+    const taxCents = inclCents - exclCents;
+    return {
+      excl: fromCents(exclCents),
+      tax: fromCents(taxCents),
+      incl: fromCents(inclCents),
+    };
+  }
+
+  const exclCents = Math.round(qty * unitPriceCents);
+  const taxCents = Math.round((exclCents * taxRate) / 100);
+  return {
+    excl: fromCents(exclCents),
+    tax: fromCents(taxCents),
+    incl: fromCents(exclCents + taxCents),
+  };
+};
+
+const convertUnitPriceByPriceType = (
+  unitPriceInput: unknown,
+  taxRateInput: unknown,
+  fromPriceType: string,
+  toPriceType: string,
+): number => {
+  const unitPriceCents = toCents(unitPriceInput);
+  if (fromPriceType === toPriceType) return fromCents(unitPriceCents);
+
+  const taxRate = toSafeNumber(taxRateInput);
+  const factor = 1 + taxRate / 100;
+  if (factor <= 0) return fromCents(unitPriceCents);
+
+  if (fromPriceType === 'tax_exclusive' && toPriceType === 'tax_inclusive') {
+    return fromCents(Math.round(unitPriceCents * factor));
+  }
+  if (fromPriceType === 'tax_inclusive' && toPriceType === 'tax_exclusive') {
+    return fromCents(Math.round(unitPriceCents / factor));
+  }
+  return fromCents(unitPriceCents);
+};
+
 /** 与销售明细表格中价税逻辑一致，用于表单内实时汇总 */
 function computeSalesOrderFormTotals(
   items: any[] | undefined,
@@ -116,52 +193,39 @@ function computeSalesOrderFormTotals(
 ) {
   const pt = priceType ?? 'tax_exclusive';
   const rows = Array.isArray(items) ? items : [];
-  let goodsExcl = 0;
-  let taxAmount = 0;
-  let goodsIncl = 0;
+  let goodsExclCents = 0;
+  let taxAmountCents = 0;
+  let goodsInclCents = 0;
 
   for (const row of rows) {
-    const qty = Number(row?.required_quantity) || 0;
-    const price = Number(row?.unit_price) || 0;
-    const taxRate = Number(row?.tax_rate) || 0;
-    
-    if (pt === 'tax_inclusive' && price > 0) {
-      const exclAmt = (qty * price) / (1 + taxRate / 100);
-      const taxAmt = exclAmt * (taxRate / 100);
-      goodsExcl += exclAmt;
-      taxAmount += taxAmt;
-      goodsIncl += exclAmt + taxAmt;
-    } else {
-      const exclAmt = qty * price;
-      const taxAmt = exclAmt * (taxRate / 100);
-      goodsExcl += exclAmt;
-      taxAmount += taxAmt;
-      goodsIncl += exclAmt + taxAmt;
-    }
+    const line = calcSalesLineAmounts(row?.required_quantity, row?.unit_price, row?.tax_rate, pt);
+    goodsExclCents += toCents(line.excl);
+    taxAmountCents += toCents(line.tax);
+    goodsInclCents += toCents(line.incl);
   }
 
-  let customerFees = 0; // other_side
-  let ourFees = 0;      // our_side
+  let customerFeesCents = 0; // other_side
+  let ourFeesCents = 0;      // our_side
   for (const fee of feeDetails || []) {
-    const amt = Number(fee?.amount) || 0;
-    if (fee?.bearer === 'other_side') customerFees += amt;
-    else ourFees += amt;
+    const feeCents = toCents(fee?.amount);
+    if (fee?.bearer === 'other_side') customerFeesCents += feeCents;
+    else ourFeesCents += feeCents;
   }
 
   // 预计应收 = 含税货值 + 我方垫付 (假设我方垫付的费用最终由客户结算)
   // 如果业务逻辑是我方承担则不计入应收，则此处需调整。参考采购订单逻辑：应付 = 货值 + 对方(供应商)费用
   // 对应到销售：应收 = 货值 + 我方(销售方)垫付费用
-  const estimatedReceivable = goodsIncl + ourFees;
-  const estimatedNetIncome = goodsIncl; // 纯货值部分（含税）
+  const estimatedReceivableCents = goodsInclCents + ourFeesCents;
+  const estimatedNetIncomeCents = goodsInclCents; // 纯货值部分（含税）
 
   return {
-    goodsExcl,
-    taxAmount,
-    goodsIncl,
-    customerFees,
-    ourFees,
-    estimatedReceivable,
-    estimatedNetIncome,
+    goodsExcl: fromCents(goodsExclCents),
+    taxAmount: fromCents(taxAmountCents),
+    goodsIncl: fromCents(goodsInclCents),
+    customerFees: fromCents(customerFeesCents),
+    ourFees: fromCents(ourFeesCents),
+    estimatedReceivable: fromCents(estimatedReceivableCents),
+    estimatedNetIncome: fromCents(estimatedNetIncomeCents),
   };
 }
 
@@ -293,6 +357,13 @@ const SalesOrdersPage: React.FC = () => {
 
   // 销售订单审核开关（从业务配置加载）
   const [auditEnabled, setAuditEnabled] = useState(true);
+  const [salesNodeEnabled, setSalesNodeEnabled] = useState({
+    sales_order: true,
+    demand_computation: true,
+    work_order: true,
+    shipment_notice: true,
+    invoice: true,
+  });
   // 与 UniTable viewTypes 同步：table=订单，detailTable/card/gantt=销售明细
   const [viewTypeState, setViewTypeState] = useState<'table' | 'detailTable' | 'card' | 'gantt' | 'help'>('table');
   const dataViewMode = viewTypeState === 'table' ? 'order' : 'detail';
@@ -311,9 +382,24 @@ const SalesOrdersPage: React.FC = () => {
         // 只有明确设置为 true 时才开启
         const enabled = config.parameters?.sales?.audit_enabled === true;
         setAuditEnabled(enabled);
+        const nodes = config?.nodes || {};
+        setSalesNodeEnabled({
+          sales_order: nodes?.sales_order?.enabled !== false,
+          demand_computation: nodes?.demand_computation?.enabled !== false,
+          work_order: nodes?.work_order?.enabled !== false,
+          shipment_notice: nodes?.shipment_notice?.enabled !== false,
+          invoice: nodes?.invoice?.enabled !== false,
+        });
       } catch (error) {
         console.error('加载业务配置失败:', error);
         setAuditEnabled(true);
+        setSalesNodeEnabled({
+          sales_order: true,
+          demand_computation: true,
+          work_order: true,
+          shipment_notice: true,
+          invoice: true,
+        });
       }
     };
     loadConfig();
@@ -327,6 +413,7 @@ const SalesOrdersPage: React.FC = () => {
   /** 价税合计正在编辑的行：{ index, value }，失焦时反算单价 */
   const [editingIncl, setEditingIncl] = useState<{ index: number; value: number | null } | null>(null);
   const editingInclValueRef = useRef<number | null>(null);
+  const lastPriceTypeRef = useRef<'tax_exclusive' | 'tax_inclusive'>('tax_exclusive');
 
   const [modalSubmitting, setModalSubmitting] = useState(false);
 
@@ -472,12 +559,17 @@ const SalesOrdersPage: React.FC = () => {
   const defaultOrderItem = { material_id: undefined, material_code: '', material_name: '', material_spec: '', material_unit: '', required_quantity: 1, delivery_date: dayjs(), unit_price: 0, tax_rate: 0, variant_attributes: '' };
 
   const handleCreate = async () => {
+    if (!salesNodeEnabled.sales_order) {
+      messageApi.warning('销售订单节点未启用，无法新建');
+      return;
+    }
     setIsEdit(false);
     setCurrentId(null);
     setModalVisible(true);
     formRef.current?.resetFields();
     setTimeout(() => {
       formRef.current?.setFieldsValue({ price_type: 'tax_exclusive', items: [defaultOrderItem] });
+      lastPriceTypeRef.current = 'tax_exclusive';
     }, 100);
     let ruleCode = getPageRuleCode('kuaizhizao-sales-order');
     let autoGenerate = isAutoGenerateEnabled('kuaizhizao-sales-order');
@@ -558,6 +650,7 @@ const SalesOrdersPage: React.FC = () => {
         };
 
         formRef.current?.setFieldsValue(formData);
+        lastPriceTypeRef.current = ((formData as any)?.price_type === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive');
       } catch (error: any) {
         messageApi.error(t('app.kuaizhizao.salesOrder.detailFailed'));
         console.error('编辑销售订单错误:', error);
@@ -580,6 +673,36 @@ const SalesOrdersPage: React.FC = () => {
         messageApi.error(t('app.kuaizhizao.salesOrder.detailFailed'));
       }
     }
+  };
+
+  const handlePriceTypeToggle = (checked: boolean) => {
+    const nextType: 'tax_exclusive' | 'tax_inclusive' = checked ? 'tax_inclusive' : 'tax_exclusive';
+    const currentTypeRaw = formRef.current?.getFieldValue?.('price_type') ?? lastPriceTypeRef.current;
+    const currentType: 'tax_exclusive' | 'tax_inclusive' =
+      currentTypeRaw === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive';
+    if (currentType === nextType) {
+      lastPriceTypeRef.current = nextType;
+      return;
+    }
+
+    const items = formRef.current?.getFieldValue?.('items') ?? [];
+    if (Array.isArray(items) && items.length > 0) {
+      const convertedItems = items.map((row: any) => ({
+        ...row,
+        unit_price: convertUnitPriceByPriceType(
+          row?.unit_price,
+          row?.tax_rate,
+          currentType,
+          nextType,
+        ),
+      }));
+      formRef.current?.setFieldsValue({ items: convertedItems, price_type: nextType });
+    } else {
+      formRef.current?.setFieldsValue({ price_type: nextType });
+    }
+    setEditingIncl(null);
+    editingInclValueRef.current = null;
+    lastPriceTypeRef.current = nextType;
   };
 
   const openFollowUpFromSalesOrder = (record: SalesOrder) => {
@@ -730,7 +853,6 @@ const SalesOrdersPage: React.FC = () => {
 
       // 计算金额汇总（对齐采购订单逻辑）
       values.price_type = values.price_type || 'tax_exclusive';
-      values.discount_amount = 0;
       const feeDetails = values.fee_details ?? [];
       const sums = computeSalesOrderFormTotals(items, feeDetails, values.price_type);
       values.total_amount = sums.estimatedReceivable;
@@ -746,8 +868,9 @@ const SalesOrdersPage: React.FC = () => {
 
       const mainDeliveryStr = values.delivery_date != null ? dayjs(values.delivery_date).format('YYYY-MM-DD') : undefined;
       values.items = items.map((it: SalesOrderItem) => {
-        const exclAmt = q(it) * p(it);
-        const inclAmt = exclAmt * (1 + taxR(it) / 100);
+        const line = calcSalesLineAmounts(q(it), p(it), taxR(it), values.price_type);
+        const material = materials.find((m) => m.id === Number((it as any).material_id));
+        const conversionFactor = resolveSaleUnitConversionFactor(material, (it as any).material_unit);
         const d = (it as any).delivery_date;
         const deliveryDateStr = d != null ? (typeof d === 'string' ? d.slice(0, 10) : dayjs(d).format('YYYY-MM-DD')) : mainDeliveryStr;
         return {
@@ -762,11 +885,12 @@ const SalesOrdersPage: React.FC = () => {
             try { return va ? JSON.parse(va) : undefined; } catch { return undefined; }
           })(),
           material_unit: (it as any).material_unit,
+          conversion_factor: conversionFactor,
           required_quantity: q(it),
           delivery_date: deliveryDateStr ?? mainDeliveryStr ?? dayjs().format('YYYY-MM-DD'),
           unit_price: p(it),
           tax_rate: taxR(it),
-          item_amount: inclAmt,
+          item_amount: line.incl,
           notes: (it as any).notes,
         };
       });
@@ -935,6 +1059,10 @@ const SalesOrdersPage: React.FC = () => {
    * 处理下推到需求计算（含预览）
    */
   const handlePushToComputation = async (id: number) => {
+    if (!salesNodeEnabled.demand_computation) {
+      messageApi.warning('需求计算节点未启用，无法下推');
+      return;
+    }
     showPushPreviewModal(
       () => previewPushSalesOrderToComputation(id),
       () => pushSalesOrderToComputation(id),
@@ -945,6 +1073,10 @@ const SalesOrdersPage: React.FC = () => {
 
   /** 处理下推到发货通知单 */
   const handlePushToShipmentNotice = async (id: number) => {
+    if (!salesNodeEnabled.shipment_notice) {
+      messageApi.warning('发货通知节点未启用，无法下推');
+      return;
+    }
     modalApi.confirm({
       title: t('app.kuaizhizao.salesOrder.pushToShipmentTitle'),
       content: t('app.kuaizhizao.salesOrder.pushToShipmentConfirm'),
@@ -962,6 +1094,10 @@ const SalesOrdersPage: React.FC = () => {
 
   /** 处理下推到销售发票 */
   const handlePushToInvoice = async (id: number) => {
+    if (!salesNodeEnabled.invoice) {
+      messageApi.warning('销售发票节点未启用，无法下推');
+      return;
+    }
     modalApi.confirm({
       title: t('app.kuaizhizao.salesOrder.pushToInvoiceTitle'),
       content: t('app.kuaizhizao.salesOrder.pushToInvoiceConfirm'),
@@ -1040,6 +1176,10 @@ const SalesOrdersPage: React.FC = () => {
 
   /** 直推工单（含预览） */
   const handlePushToWorkOrder = async (id: number) => {
+    if (!salesNodeEnabled.work_order) {
+      messageApi.warning('工单节点未启用，无法下推');
+      return;
+    }
     showPushPreviewModal(
       () => previewPushSalesOrderToWorkOrder(id),
       () => pushSalesOrderToWorkOrder(id),
@@ -1459,11 +1599,11 @@ const SalesOrdersPage: React.FC = () => {
             <Dropdown
               menu={{
                 items: [
-                  { key: 'computation', label: t('app.kuaizhizao.salesOrder.demandComputation'), icon: <ArrowDownOutlined />, disabled: !!record.pushed_to_computation, onClick: () => !record.pushed_to_computation && handlePushToComputation(record.id!) },
-                  { key: 'workorder', label: t('app.kuaizhizao.salesOrder.pushToWorkOrder'), icon: <ArrowDownOutlined />, onClick: () => handlePushToWorkOrder(record.id!) },
+                  { key: 'computation', label: t('app.kuaizhizao.salesOrder.demandComputation'), icon: <ArrowDownOutlined />, disabled: !!record.pushed_to_computation || !salesNodeEnabled.demand_computation, onClick: () => !record.pushed_to_computation && handlePushToComputation(record.id!) },
+                  { key: 'workorder', label: t('app.kuaizhizao.salesOrder.pushToWorkOrder'), icon: <ArrowDownOutlined />, disabled: !salesNodeEnabled.work_order, onClick: () => handlePushToWorkOrder(record.id!) },
                   { type: 'divider' },
-                  { key: 'shipment', label: t('app.kuaizhizao.salesOrder.shipmentNotice'), icon: <SendOutlined />, onClick: () => handlePushToShipmentNotice(record.id!) },
-                  { key: 'invoice', label: t('app.kuaizhizao.salesOrder.salesInvoice'), icon: <FileTextOutlined />, onClick: () => handlePushToInvoice(record.id!) },
+                  { key: 'shipment', label: t('app.kuaizhizao.salesOrder.shipmentNotice'), icon: <SendOutlined />, disabled: !salesNodeEnabled.shipment_notice, onClick: () => handlePushToShipmentNotice(record.id!) },
+                  { key: 'invoice', label: t('app.kuaizhizao.salesOrder.salesInvoice'), icon: <FileTextOutlined />, disabled: !salesNodeEnabled.invoice, onClick: () => handlePushToInvoice(record.id!) },
                   { key: 'sales-return', label: '下推销售退货单', icon: <RollbackOutlined />, onClick: () => handlePushToSalesReturn(record.id!) },
                   ...(record.pushed_to_computation ? [{ type: 'divider' as const }, { key: 'withdraw', label: t('app.kuaizhizao.salesOrder.withdrawComputation'), icon: <RollbackOutlined />, onClick: () => handleWithdrawFromComputation(record.id!) }] : []),
                 ],
@@ -2372,6 +2512,7 @@ const SalesOrdersPage: React.FC = () => {
                   <Switch
                     checkedChildren={t('app.kuaizhizao.salesOrder.taxInclusive')}
                     unCheckedChildren={t('app.kuaizhizao.salesOrder.taxExclusive')}
+                    onChange={handlePriceTypeToggle}
                   />
                 </ProForm.Item>
               </Space>
@@ -2558,10 +2699,13 @@ const SalesOrdersPage: React.FC = () => {
                                 {({ getFieldValue }: any) => {
                                   const items = getFieldValue('items') ?? [];
                                   const row = items[index];
-                                  const qty = Number(row?.required_quantity) || 0;
-                                  const price = Number(row?.unit_price) || 0;
-                                  const exclAmt = qty * price;
-                                  return <AmountDisplay resource="sales_order" value={exclAmt} />;
+                                  const line = calcSalesLineAmounts(
+                                    row?.required_quantity,
+                                    row?.unit_price,
+                                    row?.tax_rate,
+                                    priceType,
+                                  );
+                                  return <AmountDisplay resource="sales_order" value={line.excl} />;
                                 }}
                               </AntForm.Item>
                             ),
@@ -2608,12 +2752,13 @@ const SalesOrdersPage: React.FC = () => {
                                 {({ getFieldValue }: any) => {
                                   const items = getFieldValue('items') ?? [];
                                   const row = items[index];
-                                  const qty = Number(row?.required_quantity) || 0;
-                                  const price = Number(row?.unit_price) || 0;
-                                  const taxRate = Number(row?.tax_rate) || 0;
-                                  const exclAmt = qty * price;
-                                  const taxAmt = exclAmt * (taxRate / 100);
-                                  return <AmountDisplay resource="sales_order" value={taxAmt} />;
+                                  const line = calcSalesLineAmounts(
+                                    row?.required_quantity,
+                                    row?.unit_price,
+                                    row?.tax_rate,
+                                    priceType,
+                                  );
+                                  return <AmountDisplay resource="sales_order" value={line.tax} />;
                                 }}
                               </AntForm.Item>
                             ),
@@ -2630,11 +2775,14 @@ const SalesOrdersPage: React.FC = () => {
                             const items = getFieldValue('items') ?? [];
                             const row = items[index];
                             const qty = Number(row?.required_quantity) || 0;
-                            const price = Number(row?.unit_price) || 0;
                             const taxRate = Number(row?.tax_rate) || 0;
-                            const exclAmt = qty * price;
-                            const taxAmt = exclAmt * (taxRate / 100);
-                            const totalIncl = exclAmt + taxAmt;
+                            const line = calcSalesLineAmounts(
+                              row?.required_quantity,
+                              row?.unit_price,
+                              row?.tax_rate,
+                              priceType,
+                            );
+                            const totalIncl = line.incl;
                             const isEditing = editingIncl?.index === index;
                             const displayValue = isEditing ? editingIncl.value : totalIncl;
                             return (
@@ -2658,8 +2806,10 @@ const SalesOrdersPage: React.FC = () => {
                                 onBlur={() => {
                                   const incl = editingInclValueRef.current;
                                   if (editingIncl?.index === index && incl != null && qty > 0) {
-                                    const excl = (1 + taxRate / 100) > 0 ? incl / (1 + taxRate / 100) : incl;
-                                    const newPrice = excl / qty;
+                                    const factor = 1 + taxRate / 100;
+                                    const newPrice = priceType === 'tax_inclusive'
+                                      ? incl / qty
+                                      : (factor > 0 ? incl / factor : incl) / qty;
                                     const next = [...items];
                                     next[index] = { ...row, unit_price: newPrice };
                                     formRef.current?.setFieldsValue({ items: next });
@@ -2974,11 +3124,11 @@ const SalesOrdersPage: React.FC = () => {
                 <Dropdown
                   menu={{
                     items: [
-                      { key: 'computation', label: t('app.kuaizhizao.salesOrder.demandComputation'), icon: <ArrowDownOutlined />, disabled: !!currentSalesOrder.pushed_to_computation, onClick: () => !currentSalesOrder.pushed_to_computation && handlePushToComputation(currentSalesOrder.id!) },
-                      { key: 'workorder', label: t('app.kuaizhizao.salesOrder.pushToWorkOrder'), icon: <ArrowDownOutlined />, onClick: () => handlePushToWorkOrder(currentSalesOrder.id!) },
+                      { key: 'computation', label: t('app.kuaizhizao.salesOrder.demandComputation'), icon: <ArrowDownOutlined />, disabled: !!currentSalesOrder.pushed_to_computation || !salesNodeEnabled.demand_computation, onClick: () => !currentSalesOrder.pushed_to_computation && handlePushToComputation(currentSalesOrder.id!) },
+                      { key: 'workorder', label: t('app.kuaizhizao.salesOrder.pushToWorkOrder'), icon: <ArrowDownOutlined />, disabled: !salesNodeEnabled.work_order, onClick: () => handlePushToWorkOrder(currentSalesOrder.id!) },
                       { type: 'divider' },
-                      { key: 'shipment', label: t('app.kuaizhizao.salesOrder.shipmentNotice'), icon: <SendOutlined />, onClick: () => handlePushToShipmentNotice(currentSalesOrder.id!) },
-                      { key: 'invoice', label: t('app.kuaizhizao.salesOrder.salesInvoice'), icon: <FileTextOutlined />, onClick: () => handlePushToInvoice(currentSalesOrder.id!) },
+                      { key: 'shipment', label: t('app.kuaizhizao.salesOrder.shipmentNotice'), icon: <SendOutlined />, disabled: !salesNodeEnabled.shipment_notice, onClick: () => handlePushToShipmentNotice(currentSalesOrder.id!) },
+                      { key: 'invoice', label: t('app.kuaizhizao.salesOrder.salesInvoice'), icon: <FileTextOutlined />, disabled: !salesNodeEnabled.invoice, onClick: () => handlePushToInvoice(currentSalesOrder.id!) },
                       { key: 'sales-return', label: '下推销售退货单', icon: <RollbackOutlined />, onClick: () => handlePushToSalesReturn(currentSalesOrder.id!) },
                     ],
                   }}

@@ -186,6 +186,10 @@ class InventoryService:
             是否成功
         """
         try:
+            quantity = Decimal(str(quantity or 0))
+            if quantity <= 0:
+                raise ValueError(f"扣减数量必须大于0: {quantity}")
+
             # 根据 warehouse_type 决定扣减目标：line_side → LineSideInventory，否则 → MaterialBatch
             use_line_side = False
             if warehouse_id is not None:
@@ -263,7 +267,13 @@ class InventoryService:
                                 f"系统内仍存在更新批次 (批号:{newer_batch.batch_no}) 未用完！"
                                 f"请优先领用最新批次。"
                             )
-                    batch.quantity = (batch.quantity or Decimal(0)) - quantity
+                    next_qty = (batch.quantity or Decimal(0)) - quantity
+                    if next_qty < 0:
+                        raise ValueError(
+                            f"并发扣减导致库存不足: material={material_id} batch={batch_no} "
+                            f"need={quantity} have={batch.quantity or 0}"
+                        )
+                    batch.quantity = next_qty
                     if batch.quantity <= 0:
                         batch.status = "out_stock"
                     await batch.save()
@@ -327,7 +337,13 @@ class InventoryService:
                         f"线边仓库存不足: warehouse={warehouse_id} material={material_id} "
                         f"need={quantity} available={available}"
                     )
-                inv.quantity = (inv.quantity or Decimal(0)) - quantity
+                next_qty = (inv.quantity or Decimal(0)) - quantity
+                if next_qty < 0:
+                    raise ValueError(
+                        f"并发扣减导致线边仓负库存: warehouse={warehouse_id} material={material_id} "
+                        f"need={quantity} have={inv.quantity or 0}"
+                    )
+                inv.quantity = next_qty
                 await inv.save()
                 logger.info(
                     f"InventoryService.decrease_stock(line_side): tenant={tenant_id} "

@@ -8,9 +8,11 @@ Date: 2026-01-16
 """
 
 from datetime import date
+import uuid
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status
 from decimal import Decimal
+from loguru import logger
 
 from apps.kuaizhizao.schemas.cost import (
     CostComparisonRequest,
@@ -25,6 +27,27 @@ from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
 router = APIRouter(prefix="/cost-comparison", tags=["Kuaicaiwu Cost Comparison"])
+
+
+def _http_exception_with_trace(
+    status_code: int,
+    message: str,
+    route: str,
+    tenant_id: Optional[int] = None,
+) -> HTTPException:
+    trace_id = uuid.uuid4().hex
+    logger.warning(
+        "kuaicaiwu_cost_comparison_api_error trace_id={} tenant_id={} route={} status_code={} message={}",
+        trace_id,
+        tenant_id,
+        route,
+        status_code,
+        message,
+    )
+    return HTTPException(
+        status_code=status_code,
+        detail={"message": message, "trace_id": trace_id},
+    )
 
 
 @router.post("/compare", response_model=CostComparisonResponse, status_code=status.HTTP_200_OK)
@@ -69,24 +92,17 @@ async def compare_standard_vs_actual_cost(
         )
         return CostComparisonResponse(**result)
     except NotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
+        raise _http_exception_with_trace(status.HTTP_404_NOT_FOUND, str(e), "/cost-comparison/compare", tenant_id)
     except ValidationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e)
-        )
+        raise _http_exception_with_trace(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e), "/cost-comparison/compare", tenant_id)
     except BusinessLogicError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise _http_exception_with_trace(status.HTTP_400_BAD_REQUEST, str(e), "/cost-comparison/compare", tenant_id)
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"成本对比失败: {str(e)}"
+        raise _http_exception_with_trace(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"成本对比失败: {str(e)}",
+            "/cost-comparison/compare",
+            tenant_id,
         )
 
 
@@ -122,12 +138,16 @@ async def compare_costs_by_source_type(
         )
         return CostComparisonBySourceTypeResponse(**result)
     except ValidationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e)
+        raise _http_exception_with_trace(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            str(e),
+            "/cost-comparison/compare-by-source-type",
+            tenant_id,
         )
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"按物料来源类型对比成本失败: {str(e)}"
+        raise _http_exception_with_trace(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"按物料来源类型对比成本失败: {str(e)}",
+            "/cost-comparison/compare-by-source-type",
+            tenant_id,
         )

@@ -1,5 +1,7 @@
-from fastapi import APIRouter, Depends, Query, Body
-from typing import Optional
+import uuid
+from fastapi import APIRouter, Depends, Query, Body, HTTPException as FastAPIHTTPException
+from typing import Any, Optional
+from loguru import logger
 from core.api.deps import get_current_user, get_current_tenant
 from core.services.application.application_service import ApplicationService
 from core.services.system.menu_service import MenuService
@@ -12,6 +14,32 @@ from apps.kuaireport.schemas.dashboard import (
 router = APIRouter(prefix="/dashboards", tags=["KuanReport - Dashboards"])
 
 dashboard_service = DashboardService()
+
+
+def _http_exception_with_trace(
+    status_code: int,
+    message: str,
+    route: str = "/dashboards",
+    tenant_id: Optional[int] = None,
+) -> FastAPIHTTPException:
+    trace_id = uuid.uuid4().hex
+    logger.warning(
+        "kuaireport_dashboard_api_error trace_id={} tenant_id={} route={} status_code={} message={}",
+        trace_id,
+        tenant_id,
+        route,
+        status_code,
+        message,
+    )
+    return FastAPIHTTPException(
+        status_code=status_code,
+        detail={"message": message, "trace_id": trace_id},
+    )
+
+
+def HTTPException(*, status_code: int, detail: Any, **kwargs) -> FastAPIHTTPException:
+    message = detail.get("message") if isinstance(detail, dict) else str(detail)
+    return _http_exception_with_trace(status_code, message)
 
 @router.post("", response_model=DashboardResponse, summary="创建看板")
 async def create_dashboard(
@@ -38,7 +66,6 @@ async def get_dashboard_by_share_token(
     """通过分享令牌获取大屏详情，无需登录"""
     dashboard = await dashboard_service.get_by_share_token(token)
     if not dashboard:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="分享链接无效或已过期")
     return DashboardResponse.model_validate(dashboard)
 
@@ -104,7 +131,6 @@ async def mount_dashboard_to_menu(
     dashboard = await dashboard_service.get_by_id(tenant_id=tenant_id, id=id)
     app = await ApplicationService.get_application_by_code(tenant_id, "kuaireport")
     if not app:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="报表与看板应用未安装")
     name = menu_name or dashboard.name
     path = f"/apps/kuaireport/dashboards/{id}"

@@ -4,10 +4,12 @@
 提供绩效数据的 RESTful API 接口（假期、技能、员工绩效），支持多组织隔离。
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Path, Body, status
-from typing import List, Optional, Dict
+import uuid
+from fastapi import APIRouter, Depends, HTTPException as FastAPIHTTPException, Query, Path, Body, status
+from typing import Any, List, Optional, Dict
 from decimal import Decimal
 from datetime import date
+from loguru import logger
 
 from core.api.deps.deps import get_current_user, get_current_tenant
 from infra.models.user import User
@@ -42,6 +44,32 @@ from apps.master_data.schemas.employee_performance_schemas import (
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(prefix="/performance", tags=["Performance"])
+
+
+def _http_exception_with_trace(
+    status_code: int,
+    message: str,
+    route: str = "/performance",
+    tenant_id: Optional[int] = None,
+) -> FastAPIHTTPException:
+    trace_id = uuid.uuid4().hex
+    logger.warning(
+        "master_data_performance_api_error trace_id={} tenant_id={} route={} status_code={} message={}",
+        trace_id,
+        tenant_id,
+        route,
+        status_code,
+        message,
+    )
+    return FastAPIHTTPException(
+        status_code=status_code,
+        detail={"message": message, "trace_id": trace_id},
+    )
+
+
+def HTTPException(*, status_code: int, detail: Any, **kwargs) -> FastAPIHTTPException:
+    message = detail.get("message") if isinstance(detail, dict) else str(detail)
+    return _http_exception_with_trace(status_code, message)
 
 
 # ==================== 假期相关接口 ====================

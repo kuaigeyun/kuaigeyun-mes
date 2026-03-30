@@ -26,6 +26,7 @@ class SalesOrderItemBase(BaseSchema):
     material_name: str = Field(..., max_length=200, description="物料名称")
     material_spec: Optional[str] = Field(None, max_length=200, description="物料规格")
     material_unit: Optional[str] = Field(None, max_length=20, description="物料单位")
+    conversion_factor: Optional[Decimal] = Field(None, gt=0, description="单位换算因子（业务单位->基础单位）")
     required_quantity: Decimal = Field(..., gt=0, description="需求数量")
     delivery_date: date = Field(..., description="交货日期")
     unit_price: Optional[Decimal] = Field(None, ge=0, description="单价（不含税）")
@@ -48,6 +49,7 @@ class SalesOrderItemUpdate(BaseSchema):
     material_name: Optional[str] = Field(None, max_length=200)
     material_spec: Optional[str] = Field(None, max_length=200)
     material_unit: Optional[str] = Field(None, max_length=20)
+    conversion_factor: Optional[Decimal] = Field(None, gt=0)
     required_quantity: Optional[Decimal] = Field(None, gt=0)
     delivery_date: Optional[date] = None
     unit_price: Optional[Decimal] = Field(None, ge=0)
@@ -119,6 +121,7 @@ class SalesOrderBase(BaseSchema):
     shipping_address: Optional[str] = Field(None, description="收货地址")
     shipping_method: Optional[str] = Field(None, max_length=50, description="发货方式")
     payment_terms: Optional[str] = Field(None, max_length=100, description="付款条件")
+    currency_code: Optional[str] = Field("CNY", max_length=20, description="币种代码（默认 CNY）")
     
     notes: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
@@ -158,6 +161,7 @@ class SalesOrderUpdate(BaseSchema):
     shipping_address: Optional[str] = None
     shipping_method: Optional[str] = Field(None, max_length=50)
     payment_terms: Optional[str] = Field(None, max_length=100)
+    currency_code: Optional[str] = Field(None, max_length=20)
     notes: Optional[str] = None
     attachments: Optional[List[dict]] = None
     fee_details: Optional[List[dict]] = None

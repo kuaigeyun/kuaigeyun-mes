@@ -7,8 +7,10 @@ Author: Antigravity
 Date: 2026-02-02
 """
 
-from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+import uuid
+from typing import Any, Optional, List
+from fastapi import APIRouter, Depends, HTTPException as FastAPIHTTPException, status, Query
+from loguru import logger
 
 from apps.kuaizhizao.models.tool import Tool
 from apps.kuaizhizao.schemas.tool import (
@@ -25,6 +27,32 @@ from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(prefix="/tools", tags=["Kuaige Zhizao Tools"])
+
+
+def _http_exception_with_trace(
+    status_code: int,
+    message: str,
+    route: str = "/tools",
+    tenant_id: Optional[int] = None,
+) -> FastAPIHTTPException:
+    trace_id = uuid.uuid4().hex
+    logger.warning(
+        "kuaizhizao_tools_api_error trace_id={} tenant_id={} route={} status_code={} message={}",
+        trace_id,
+        tenant_id,
+        route,
+        status_code,
+        message,
+    )
+    return FastAPIHTTPException(
+        status_code=status_code,
+        detail={"message": message, "trace_id": trace_id},
+    )
+
+
+def HTTPException(*, status_code: int, detail: Any, **kwargs) -> FastAPIHTTPException:
+    message = detail.get("message") if isinstance(detail, dict) else str(detail)
+    return _http_exception_with_trace(status_code, message)
 
 
 # --- 工装基础信息 ---

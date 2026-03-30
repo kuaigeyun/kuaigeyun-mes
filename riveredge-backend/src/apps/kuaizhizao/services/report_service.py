@@ -405,10 +405,13 @@ class ReportService:
     async def query_batch_inventory(
         self, tenant_id: int, material_id: Optional[int] = None, material_ids: Optional[List[int]] = None,
         warehouse_id: Optional[int] = None, batch_number: Optional[str] = None, include_expired: bool = False, summary_only: bool = False,
+        include_sales_commitment: bool = False,
     ) -> Dict[str, Any]:
         """批次库存查询"""
         from apps.master_data.models.material_batch import MaterialBatch
         from apps.kuaizhizao.models.line_side_inventory import LineSideInventory
+        from apps.kuaizhizao.models.sales_order import SalesOrder
+        from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
         from tortoise.expressions import Q
         query = MaterialBatch.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if material_ids: query = query.filter(material_id__in=material_ids)
@@ -425,6 +428,28 @@ class ReportService:
             totals = {str(mid): 0.0 for mid in (material_ids if material_ids else [material_id])}
             for b in batches: totals[str(b.material_id)] = totals.get(str(b.material_id), 0) + float(b.quantity)
             for l in line_items: totals[str(l.material_id)] = totals.get(str(l.material_id), 0) + float(l.quantity - l.reserved_quantity)
+            if include_sales_commitment:
+                active_order_ids = await SalesOrder.filter(
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                ).exclude(status__in=["草稿", "DRAFT", "已驳回", "REJECTED", "已取消", "CANCELLED"]).values_list("id", flat=True)
+                if active_order_ids:
+                    item_query = SalesOrderItem.filter(
+                        tenant_id=tenant_id,
+                        sales_order_id__in=list(active_order_ids),
+                        deleted_at__isnull=True,
+                        remaining_quantity__gt=0,
+                    )
+                    if material_ids:
+                        item_query = item_query.filter(material_id__in=material_ids)
+                    elif material_id:
+                        item_query = item_query.filter(material_id=material_id)
+                    committed_rows = await item_query.values_list("material_id", "remaining_quantity")
+                    for mid, qty in committed_rows:
+                        key = str(mid)
+                        current = float(totals.get(key, 0) or 0)
+                        next_qty = current - float(qty or 0)
+                        totals[key] = next_qty if next_qty > 0 else 0.0
             return {"material_totals": totals}
         items = []
         for b in batches:

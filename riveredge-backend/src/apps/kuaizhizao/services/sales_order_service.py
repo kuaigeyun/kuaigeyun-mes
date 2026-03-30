@@ -31,7 +31,13 @@ from apps.kuaizhizao.schemas.sales_order import (
     SalesOrderCreate, SalesOrderUpdate, SalesOrderResponse, SalesOrderListResponse,
     SalesOrderItemCreate, SalesOrderItemResponse,
 )
-from apps.kuaizhizao.constants import DemandStatus, ReviewStatus, LEGACY_AUDITED_VALUES
+from apps.kuaizhizao.constants import (
+    DemandStatus,
+    ReviewStatus,
+    LEGACY_AUDITED_VALUES,
+    REVIEW_STATUS_ALIASES,
+    normalize_status,
+)
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
 
@@ -46,6 +52,91 @@ class SalesOrderService:
 
     def __init__(self):
         self.business_config_service = BusinessConfigService()
+
+    @staticmethod
+    def _validate_sales_item_non_negative(
+        *,
+        required_quantity: Decimal,
+        unit_price: Decimal,
+        tax_rate: Decimal,
+        item_amount: Optional[Decimal],
+    ) -> None:
+        if required_quantity <= Decimal("0"):
+            raise ValidationError("销售订单明细数量必须大于0")
+        if unit_price < Decimal("0"):
+            raise ValidationError("销售订单明细单价不能为负数")
+        if tax_rate < Decimal("0"):
+            raise ValidationError("销售订单明细税率不能为负数")
+        if item_amount is not None and item_amount < Decimal("0"):
+            raise ValidationError("销售订单明细金额不能为负数")
+
+    @staticmethod
+    def _validate_sales_order_non_negative(
+        *,
+        discount_amount: Decimal,
+        total_quantity: Optional[Decimal],
+        total_amount: Optional[Decimal],
+        total_fee_amount: Optional[Decimal],
+    ) -> None:
+        if discount_amount < Decimal("0"):
+            raise ValidationError("销售订单优惠金额不能为负数")
+        if total_quantity is not None and total_quantity < Decimal("0"):
+            raise ValidationError("销售订单总数量不能为负数")
+        if total_amount is not None and total_amount < Decimal("0"):
+            raise ValidationError("销售订单总金额不能为负数")
+        if total_fee_amount is not None and total_fee_amount < Decimal("0"):
+            raise ValidationError("销售订单费用金额不能为负数")
+
+    @staticmethod
+    def _money(value: Decimal) -> Decimal:
+        return Decimal(str(value or 0)).quantize(Decimal("0.01"))
+
+    @classmethod
+    def _allocate_total_amount_with_proration(
+        cls,
+        *,
+        source_amounts: List[Decimal],
+        target_total: Decimal,
+    ) -> List[Decimal]:
+        """
+        P1-S-004: 整单金额覆盖 + 尾差平摊。
+        - 按原始行金额占比分配目标总额
+        - 按“最大余数法”分配分币尾差，确保行合计严格等于目标总额
+        """
+        if not source_amounts:
+            return []
+
+        target = cls._money(target_total)
+        if target < Decimal("0"):
+            target = Decimal("0")
+        target_cents = int((target * 100).to_integral_value())
+
+        normalized = [cls._money(max(Decimal("0"), Decimal(str(v or 0)))) for v in source_amounts]
+        subtotal = sum(normalized, Decimal("0"))
+        if subtotal <= Decimal("0"):
+            out = [Decimal("0.00") for _ in normalized]
+            out[0] = target
+            return out
+
+        raw_cents: List[Decimal] = [
+            (Decimal(target_cents) * amt / subtotal) if amt > 0 else Decimal("0")
+            for amt in normalized
+        ]
+        base_cents: List[int] = [int(v) for v in raw_cents]
+        residual = target_cents - sum(base_cents)
+
+        # 最大余数优先补分，保证总额守恒且分配尽量公平
+        if residual > 0:
+            frac_pairs = sorted(
+                [(raw_cents[i] - Decimal(base_cents[i]), i) for i in range(len(base_cents))],
+                key=lambda x: x[0],
+                reverse=True,
+            )
+            for n in range(residual):
+                _, idx = frac_pairs[n % len(frac_pairs)]
+                base_cents[idx] += 1
+
+        return [Decimal(c) / Decimal("100") for c in base_cents]
 
     async def _log_state_transition(
         self,
@@ -126,6 +217,7 @@ class SalesOrderService:
             "shipping_address": order.shipping_address,
             "shipping_method": order.shipping_method,
             "payment_terms": order.payment_terms,
+            "currency_code": getattr(order, "currency_code", None) or "CNY",
             "notes": order.notes,
             "attachments": getattr(order, "attachments", None),
             "fee_details": getattr(order, "fee_details", None),
@@ -228,16 +320,261 @@ class SalesOrderService:
 
     def _is_audited(self, status: str) -> bool:
         """判断是否已审核（兼容中英文状态）"""
-        return status in LEGACY_AUDITED_VALUES or status == DemandStatus.AUDITED
+        normalized = normalize_status(status or "")
+        return (
+            normalized in (DemandStatus.AUDITED.value, DemandStatus.CONFIRMED.value)
+            or status in LEGACY_AUDITED_VALUES
+        )
+
+    def _normalize_review_status(self, review_status: Optional[str]) -> str:
+        raw = (review_status or "").strip()
+        if not raw:
+            return ""
+        return REVIEW_STATUS_ALIASES.get(raw, raw.upper())
 
     def _is_review_approved(self, review_status: Optional[str]) -> bool:
         """判断 review_status 是否已审核通过（与 document_lifecycle _is_approved 一致）"""
-        r = (review_status or "").strip()
-        return r in ("APPROVED", "审核通过", "通过", "已通过", "已审核")
+        return self._normalize_review_status(review_status) == ReviewStatus.APPROVED.value
+
+    def _is_review_pending(self, review_status: Optional[str]) -> bool:
+        return self._normalize_review_status(review_status) == ReviewStatus.PENDING.value
 
     def _is_draft(self, status: str) -> bool:
         """判断是否草稿（兼容中英文状态）"""
-        return status in (DemandStatus.DRAFT, "DRAFT", "草稿")
+        return normalize_status(status or "") == DemandStatus.DRAFT.value
+
+    def _is_pending_review_status(self, status: Optional[str]) -> bool:
+        raw = str(status or "").strip()
+        normalized = normalize_status(raw)
+        return normalized == DemandStatus.PENDING_REVIEW.value or raw.upper() == "PENDING"
+
+    def _is_rejected_status(self, status: Optional[str]) -> bool:
+        return normalize_status(status or "") == DemandStatus.REJECTED.value
+
+    async def _validate_customer_credit_limit_before_release(
+        self,
+        *,
+        tenant_id: int,
+        customer_id: Optional[int],
+        customer_name: Optional[str],
+        order_total_amount: Decimal,
+    ) -> None:
+        """
+        P1-S-012: 信用额度阻断（后端硬拦截）。
+        在订单提交/审核前校验：客户未收应收余额 + 当前订单金额 <= 客户信用额度。
+        """
+        if not customer_id:
+            return
+
+        customer = await Customer.get_or_none(
+            tenant_id=tenant_id,
+            id=customer_id,
+            deleted_at__isnull=True,
+        )
+        if not customer:
+            return
+
+        credit_limit = getattr(customer, "credit_limit", None)
+        if credit_limit is None:
+            return
+        credit_limit = Decimal(str(credit_limit))
+        if credit_limit <= Decimal("0"):
+            return
+
+        outstanding_rows = await Receivable.filter(
+            tenant_id=tenant_id,
+            customer_id=customer_id,
+            deleted_at__isnull=True,
+            remaining_amount__gt=0,
+        ).values_list("remaining_amount", flat=True)
+        current_outstanding = sum((Decimal(str(v or 0)) for v in outstanding_rows), Decimal("0"))
+        projected_exposure = current_outstanding + Decimal(str(order_total_amount or 0))
+
+        if projected_exposure > credit_limit:
+            display_name = customer_name or getattr(customer, "name", None) or str(customer_id)
+            raise BusinessLogicError(
+                f"客户 {display_name} 信用额度超限：当前应收{current_outstanding} + 本单{order_total_amount} > 额度{credit_limit}"
+            )
+
+    @staticmethod
+    def _resolve_material_unit_cost(defaults: Any) -> Decimal:
+        """从物料 defaults 提取单位成本（standard_cost -> purchase_price -> moving_average_cost）。"""
+        if not isinstance(defaults, dict):
+            return Decimal("0")
+        for key in ("standard_cost", "purchase_price", "moving_average_cost"):
+            raw = defaults.get(key)
+            if raw in (None, ""):
+                continue
+            try:
+                return Decimal(str(raw))
+            except Exception:
+                continue
+        return Decimal("0")
+
+    @staticmethod
+    def _compute_order_estimated_margin_percent(
+        *,
+        order_items: List[SalesOrderItem],
+        material_cost_map: Dict[int, Decimal],
+    ) -> Optional[Decimal]:
+        """
+        计算订单预估毛利率（%）。
+        若收入或可计算成本缺失，返回 None（不触发拦截）。
+        """
+        total_revenue = Decimal("0")
+        total_cost = Decimal("0")
+        has_cost_basis = False
+
+        for item in order_items:
+            qty = Decimal(str(getattr(item, "order_quantity", 0) or 0))
+            revenue = Decimal(str(getattr(item, "total_amount", 0) or 0))
+            total_revenue += revenue
+
+            material_id = getattr(item, "material_id", None)
+            unit_cost = material_cost_map.get(material_id or 0, Decimal("0"))
+            if unit_cost > 0:
+                has_cost_basis = True
+                total_cost += qty * unit_cost
+
+        if total_revenue <= 0 or not has_cost_basis:
+            return None
+        return ((total_revenue - total_cost) / total_revenue) * Decimal("100")
+
+    @staticmethod
+    def _resolve_material_default_sale_price(defaults: Any) -> Decimal:
+        """提取物料默认销售价（兼容 camel/snake 与嵌套 sales 结构）。"""
+        if not isinstance(defaults, dict):
+            return Decimal("0")
+
+        candidates = [
+            defaults.get("defaultSalePrice"),
+            defaults.get("default_sale_price"),
+        ]
+        sales_defaults = defaults.get("sales")
+        if isinstance(sales_defaults, dict):
+            candidates.extend(
+                [
+                    sales_defaults.get("defaultSalePrice"),
+                    sales_defaults.get("default_sale_price"),
+                    sales_defaults.get("standard_price"),
+                ]
+            )
+        for raw in candidates:
+            if raw in (None, ""):
+                continue
+            try:
+                val = Decimal(str(raw))
+            except Exception:
+                continue
+            if val > 0:
+                return val
+        return Decimal("0")
+
+    async def _check_price_deviation_requires_approval(
+        self,
+        *,
+        tenant_id: int,
+        sales_order_id: int,
+    ) -> tuple[bool, Optional[str]]:
+        """
+        P1-S-005: 价格偏差触发审批。
+        当配置阈值>0 且存在行偏差超过阈值时，强制进入审批流程。
+        """
+        threshold = await self.business_config_service.get_sales_price_deviation_approval_threshold_percent(tenant_id)
+        threshold_pct = Decimal(str(threshold or 0))
+        if threshold_pct <= 0:
+            return False, None
+
+        order_items = await SalesOrderItem.filter(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+            deleted_at__isnull=True,
+        ).all()
+        if not order_items:
+            return False, None
+
+        material_ids = sorted({it.material_id for it in order_items if getattr(it, "material_id", None)})
+        if not material_ids:
+            return False, None
+
+        materials = await Material.filter(
+            tenant_id=tenant_id,
+            id__in=material_ids,
+            deleted_at__isnull=True,
+        ).all()
+        baseline_price_map: Dict[int, Decimal] = {
+            m.id: self._resolve_material_default_sale_price(getattr(m, "defaults", None)) for m in materials
+        }
+
+        max_deviation = Decimal("0")
+        max_label = None
+        for item in order_items:
+            material_id = getattr(item, "material_id", None)
+            if not material_id:
+                continue
+            baseline = baseline_price_map.get(int(material_id), Decimal("0"))
+            if baseline <= 0:
+                continue
+            price = Decimal(str(getattr(item, "unit_price", 0) or 0))
+            deviation = abs(price - baseline) / baseline * Decimal("100")
+            if deviation > max_deviation:
+                max_deviation = deviation
+                max_label = getattr(item, "material_code", None) or getattr(item, "material_name", None) or str(material_id)
+
+        if max_deviation > threshold_pct:
+            detail = f"物料 {max_label} 价格偏差 {max_deviation.quantize(Decimal('0.01'))}% 超过阈值 {threshold_pct.quantize(Decimal('0.01'))}%"
+            return True, detail
+        return False, None
+
+    async def _validate_sales_order_margin_before_release(
+        self,
+        *,
+        tenant_id: int,
+        sales_order_id: int,
+        order_code: Optional[str],
+    ) -> None:
+        """
+        P1-S-008: 成本联动与低毛利预警（后端硬拦截）。
+        当配置了低毛利阈值时，在提交/审核前校验订单预估毛利率。
+        """
+        threshold = await self.business_config_service.get_sales_low_margin_threshold_percent(tenant_id)
+        threshold_pct = Decimal(str(threshold or 0))
+        if threshold_pct <= 0:
+            return
+
+        order_items = await SalesOrderItem.filter(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+            deleted_at__isnull=True,
+        ).all()
+        if not order_items:
+            return
+
+        material_ids = sorted({it.material_id for it in order_items if getattr(it, "material_id", None)})
+        if not material_ids:
+            return
+
+        materials = await Material.filter(
+            tenant_id=tenant_id,
+            id__in=material_ids,
+            deleted_at__isnull=True,
+        ).all()
+        material_cost_map: Dict[int, Decimal] = {
+            m.id: self._resolve_material_unit_cost(getattr(m, "defaults", None)) for m in materials
+        }
+
+        margin_pct = self._compute_order_estimated_margin_percent(
+            order_items=order_items,
+            material_cost_map=material_cost_map,
+        )
+        if margin_pct is None:
+            return
+
+        if margin_pct < threshold_pct:
+            code = order_code or str(sales_order_id)
+            raise BusinessLogicError(
+                f"销售订单 {code} 预估毛利率 {margin_pct.quantize(Decimal('0.01'))}% 低于阈值 {threshold_pct.quantize(Decimal('0.01'))}%"
+            )
 
     async def _generate_order_code(self, tenant_id: int, order_date: Optional[date]) -> str:
         """生成销售订单编码"""
@@ -285,6 +622,12 @@ class SalesOrderService:
             )
 
         async with in_transaction():
+            self._validate_sales_order_non_negative(
+                discount_amount=getattr(sales_order_data, "discount_amount", Decimal("0")) or Decimal("0"),
+                total_quantity=getattr(sales_order_data, "total_quantity", None),
+                total_amount=getattr(sales_order_data, "total_amount", None),
+                total_fee_amount=getattr(sales_order_data, "total_fee_amount", None),
+            )
             order_dict = sales_order_data.model_dump(exclude={"items", "order_name"})
             order_dict["status"] = sales_order_data.status
             order_dict["review_status"] = sales_order_data.review_status
@@ -304,37 +647,72 @@ class SalesOrderService:
 
             total_qty = Decimal("0")
             subtotal = Decimal("0")
+            item_rows: List[Dict[str, Any]] = []
             for item_data in sales_order_data.items:
                 req_qty = item_data.required_quantity
                 unit_pr = item_data.unit_price or Decimal("0")
                 tax_r = item_data.tax_rate or Decimal("0")
+                self._validate_sales_item_non_negative(
+                    required_quantity=req_qty,
+                    unit_price=unit_pr,
+                    tax_rate=tax_r,
+                    item_amount=item_data.item_amount,
+                )
                 # 未税金额 = 数量×单价，价税合计 = 未税金额×(1+税率/100)
                 excl_amt = req_qty * unit_pr
                 item_amt = item_data.item_amount if item_data.item_amount is not None else (excl_amt * (Decimal("1") + tax_r / Decimal("100")))
+                item_amt = self._money(item_amt)
                 total_qty += req_qty
                 subtotal += item_amt
+                item_rows.append({
+                    "material_id": item_data.material_id or 0,
+                    "material_code": (item_data.material_code or "")[:50],
+                    "material_name": (item_data.material_name or "")[:200],
+                    "material_spec": (item_data.material_spec or "")[:200] or None,
+                    "material_unit": (item_data.material_unit or "")[:20],
+                    "order_quantity": req_qty,
+                    "delivered_quantity": Decimal("0"),
+                    "remaining_quantity": req_qty,
+                    "unit_price": unit_pr,
+                    "tax_rate": tax_r,
+                    "delivery_date": item_data.delivery_date,
+                    "delivery_status": "待交货",
+                    "variant_attributes": getattr(item_data, "variant_attributes", None),
+                    "configurable_selections": getattr(item_data, "configurable_selections", None),
+                    "notes": item_data.notes,
+                    "_item_amount": item_amt,
+                })
+
+            discount = Decimal(str(getattr(sales_order_data, "discount_amount", None) or 0))
+            provided_total = getattr(sales_order_data, "total_amount", None)
+            target_total = Decimal(str(provided_total)) if provided_total is not None else max(Decimal("0"), subtotal - discount)
+            target_total = self._money(target_total)
+            allocated_amounts = self._allocate_total_amount_with_proration(
+                source_amounts=[row["_item_amount"] for row in item_rows],
+                target_total=target_total,
+            )
+            for idx, row in enumerate(item_rows):
                 await SalesOrderItem.create(
                     tenant_id=tenant_id,
                     sales_order_id=order.id,
-                    material_id=item_data.material_id or 0,
-                    material_code=(item_data.material_code or "")[:50],
-                    material_name=(item_data.material_name or "")[:200],
-                    material_spec=(item_data.material_spec or "")[:200] or None,
-                    material_unit=(item_data.material_unit or "")[:20],
-                    order_quantity=req_qty,
-                    delivered_quantity=Decimal("0"),
-                    remaining_quantity=req_qty,
-                    unit_price=unit_pr,
-                    tax_rate=tax_r,
-                    total_amount=item_amt,
-                    delivery_date=item_data.delivery_date,
-                    delivery_status="待交货",
-                    variant_attributes=getattr(item_data, "variant_attributes", None),
-                    configurable_selections=getattr(item_data, "configurable_selections", None),
-                    notes=item_data.notes,
+                    material_id=row["material_id"],
+                    material_code=row["material_code"],
+                    material_name=row["material_name"],
+                    material_spec=row["material_spec"],
+                    material_unit=row["material_unit"],
+                    order_quantity=row["order_quantity"],
+                    delivered_quantity=row["delivered_quantity"],
+                    remaining_quantity=row["remaining_quantity"],
+                    unit_price=row["unit_price"],
+                    tax_rate=row["tax_rate"],
+                    total_amount=allocated_amounts[idx],
+                    delivery_date=row["delivery_date"],
+                    delivery_status=row["delivery_status"],
+                    variant_attributes=row["variant_attributes"],
+                    configurable_selections=row["configurable_selections"],
+                    notes=row["notes"],
                 )
-            discount = getattr(sales_order_data, "discount_amount", None) or Decimal("0")
-            total_amt = max(Decimal("0"), subtotal - discount)
+            total_amt = sum(allocated_amounts, Decimal("0"))
             await SalesOrder.filter(id=order.id).update(
                 total_quantity=total_qty,
                 total_amount=total_amt,
@@ -650,6 +1028,12 @@ class SalesOrderService:
         items_changed = sales_order_data.items is not None
 
         async with in_transaction():
+            self._validate_sales_order_non_negative(
+                discount_amount=getattr(sales_order_data, "discount_amount", Decimal("0")) or Decimal("0"),
+                total_quantity=getattr(sales_order_data, "total_quantity", None),
+                total_amount=getattr(sales_order_data, "total_amount", None),
+                total_fee_amount=getattr(sales_order_data, "total_fee_amount", None),
+            )
             upd = sales_order_data.model_dump(exclude_unset=True, exclude={"items"})
             upd["updated_by"] = updated_by
             # status/review_status 由工作流控制，禁止通过 update 修改，确保二者始终同步
@@ -664,36 +1048,70 @@ class SalesOrderService:
                 ).delete()
                 total_qty = Decimal("0")
                 subtotal = Decimal("0")
+                item_rows: List[Dict[str, Any]] = []
                 for item_data in sales_order_data.items:
                     req_qty = item_data.required_quantity
                     unit_pr = item_data.unit_price or Decimal("0")
                     tax_r = item_data.tax_rate or Decimal("0")
+                    self._validate_sales_item_non_negative(
+                        required_quantity=req_qty,
+                        unit_price=unit_pr,
+                        tax_rate=tax_r,
+                        item_amount=item_data.item_amount,
+                    )
                     excl_amt = req_qty * unit_pr
                     item_amt = item_data.item_amount if item_data.item_amount is not None else (excl_amt * (Decimal("1") + tax_r / Decimal("100")))
+                    item_amt = self._money(item_amt)
                     total_qty += req_qty
                     subtotal += item_amt
+                    item_rows.append({
+                        "material_id": item_data.material_id or 0,
+                        "material_code": (item_data.material_code or "")[:50],
+                        "material_name": (item_data.material_name or "")[:200],
+                        "material_spec": (item_data.material_spec or "")[:200] or None,
+                        "material_unit": (item_data.material_unit or "")[:20],
+                        "order_quantity": req_qty,
+                        "delivered_quantity": Decimal("0"),
+                        "remaining_quantity": req_qty,
+                        "unit_price": unit_pr,
+                        "tax_rate": tax_r,
+                        "delivery_date": item_data.delivery_date,
+                        "delivery_status": "待交货",
+                        "variant_attributes": getattr(item_data, "variant_attributes", None),
+                        "configurable_selections": getattr(item_data, "configurable_selections", None),
+                        "notes": item_data.notes,
+                        "_item_amount": item_amt,
+                    })
+                discount = Decimal(str(getattr(sales_order_data, "discount_amount", None) or 0))
+                provided_total = getattr(sales_order_data, "total_amount", None)
+                target_total = Decimal(str(provided_total)) if provided_total is not None else max(Decimal("0"), subtotal - discount)
+                target_total = self._money(target_total)
+                allocated_amounts = self._allocate_total_amount_with_proration(
+                    source_amounts=[row["_item_amount"] for row in item_rows],
+                    target_total=target_total,
+                )
+                for idx, row in enumerate(item_rows):
                     await SalesOrderItem.create(
                         tenant_id=tenant_id,
                         sales_order_id=sales_order_id,
-                        material_id=item_data.material_id or 0,
-                        material_code=(item_data.material_code or "")[:50],
-                        material_name=(item_data.material_name or "")[:200],
-                        material_spec=(item_data.material_spec or "")[:200] or None,
-                        material_unit=(item_data.material_unit or "")[:20],
-                        order_quantity=req_qty,
-                        delivered_quantity=Decimal("0"),
-                        remaining_quantity=req_qty,
-                        unit_price=unit_pr,
-                        tax_rate=tax_r,
-                        total_amount=item_amt,
-                        delivery_date=item_data.delivery_date,
-                        delivery_status="待交货",
-                        variant_attributes=getattr(item_data, "variant_attributes", None),
-                        configurable_selections=getattr(item_data, "configurable_selections", None),
-                        notes=item_data.notes,
+                        material_id=row["material_id"],
+                        material_code=row["material_code"],
+                        material_name=row["material_name"],
+                        material_spec=row["material_spec"],
+                        material_unit=row["material_unit"],
+                        order_quantity=row["order_quantity"],
+                        delivered_quantity=row["delivered_quantity"],
+                        remaining_quantity=row["remaining_quantity"],
+                        unit_price=row["unit_price"],
+                        tax_rate=row["tax_rate"],
+                        total_amount=allocated_amounts[idx],
+                        delivery_date=row["delivery_date"],
+                        delivery_status=row["delivery_status"],
+                        variant_attributes=row["variant_attributes"],
+                        configurable_selections=row["configurable_selections"],
+                        notes=row["notes"],
                     )
-                discount = getattr(sales_order_data, "discount_amount", None) or Decimal("0")
-                total_amt = max(Decimal("0"), subtotal - discount)
+                total_amt = sum(allocated_amounts, Decimal("0"))
                 await SalesOrder.filter(id=sales_order_id).update(
                     total_quantity=total_qty,
                     total_amount=total_amt,
@@ -746,11 +1164,17 @@ class SalesOrderService:
                 reason_extra=reason_extra,
             )
         # 若是自动审核配置，撤回审核后的订单（当前待审核）编辑保存后自动再次审核
-        pending_values = (DemandStatus.PENDING_REVIEW, "PENDING_REVIEW", "PENDING", "待审核")
-        if order.status in pending_values:
+        if self._is_pending_review_status(order.status):
             audit_required = await self.business_config_service.check_audit_required(
                 tenant_id, "sales_order"
             )
+            force_approval, force_reason = await self._check_price_deviation_requires_approval(
+                tenant_id=tenant_id,
+                sales_order_id=sales_order_id,
+            )
+            if force_approval:
+                audit_required = True
+                logger.info("销售订单 %s 命中价格偏差审批阈值，编辑后保持待审核: %s", sales_order_id, force_reason)
             if not audit_required:
                 logger.info("销售订单 %s 为待审核且无需审核，保存后自动通过", sales_order_id)
                 return await self.approve_sales_order(tenant_id, sales_order_id, updated_by, is_auto_approve=True)
@@ -778,14 +1202,32 @@ class SalesOrderService:
         order = await self.get_sales_order_by_id(tenant_id, sales_order_id)
 
         # 已审核订单无需重复提交，直接返回（避免编辑流程中 update 已自动审核后，前端再调 submit 产生重复日志）
-        audited_values = (DemandStatus.AUDITED, "AUDITED", "已审核")
-        if order.status in audited_values:
+        if self._is_audited(order.status):
             return await self.get_sales_order_by_id(tenant_id, sales_order_id)
+
+        await self._validate_customer_credit_limit_before_release(
+            tenant_id=tenant_id,
+            customer_id=order.customer_id,
+            customer_name=order.customer_name,
+            order_total_amount=Decimal(str(order.total_amount or 0)),
+        )
+        await self._validate_sales_order_margin_before_release(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+            order_code=order.order_code,
+        )
 
         # 蓝图设置 auditRequired=False 时表示自动审核，优先于审批流程
         audit_required = await self.business_config_service.check_audit_required(
             tenant_id, "sales_order"
         )
+        force_approval, force_reason = await self._check_price_deviation_requires_approval(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+        )
+        if force_approval:
+            audit_required = True
+            logger.info("销售订单 %s 命中价格偏差审批阈值，强制走审批: %s", sales_order_id, force_reason)
         if not audit_required:
             logger.info("销售订单 %s 蓝图配置为自动审核，提交后直接通过", sales_order_id)
             from apps.base_service import AppBaseService
@@ -861,9 +1303,20 @@ class SalesOrderService:
         )
         if not order:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
-        pending_review = (ReviewStatus.PENDING, "PENDING", "待审核")
-        if order.review_status not in pending_review:
+        if not self._is_review_pending(order.review_status):
             raise BusinessLogicError(f"只能审核待审核状态的订单，当前: {order.review_status}")
+
+        await self._validate_customer_credit_limit_before_release(
+            tenant_id=tenant_id,
+            customer_id=order.customer_id,
+            customer_name=order.customer_name,
+            order_total_amount=Decimal(str(order.total_amount or 0)),
+        )
+        await self._validate_sales_order_margin_before_release(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+            order_code=order.order_code,
+        )
 
         from apps.base_service import AppBaseService
         approver_name = await AppBaseService().get_user_name(approved_by)
@@ -909,8 +1362,7 @@ class SalesOrderService:
         )
         if not order:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
-        pending_review = (ReviewStatus.PENDING, "PENDING", "待审核")
-        if order.review_status not in pending_review:
+        if not self._is_review_pending(order.review_status):
             raise BusinessLogicError(f"只能审核待审核状态的订单，当前: {order.review_status}")
 
         from apps.base_service import AppBaseService
@@ -947,11 +1399,10 @@ class SalesOrderService:
         if not order:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
         # 已审核、已驳回 均可反审核。若检测到 status 与 review_status 不同步，先修复再继续
-        rejected_ok = (DemandStatus.REJECTED, "REJECTED", "已驳回", "驳回")
         can_unapprove = (
             self._is_audited(order.status)
             or self._is_review_approved(order.review_status)
-            or order.status in rejected_ok
+            or self._is_rejected_status(order.status)
         )
         if not can_unapprove:
             raise BusinessLogicError(f"只能反审核已审核或已驳回的订单，当前: status={order.status}, review_status={order.review_status}")
@@ -1321,6 +1772,7 @@ class SalesOrderService:
         tenant_id: int,
         sales_order_id: int,
         created_by: int,
+        selected_item_ids: Optional[List[int]] = None,
     ) -> Dict[str, Any]:
         """
         直推销售订单到工单（跳过需求计算）。
@@ -1340,6 +1792,11 @@ class SalesOrderService:
         ).order_by("id")
         if not items:
             raise BusinessLogicError("销售订单无明细，无法直推工单")
+        if selected_item_ids is not None:
+            selected = {int(v) for v in selected_item_ids if v is not None}
+            items = [it for it in items if int(getattr(it, "id", 0)) in selected]
+            if not items:
+                raise BusinessLogicError("所选明细为空，无法直推工单")
 
         from datetime import datetime
         from apps.kuaizhizao.services.work_order_service import WorkOrderService
@@ -1677,8 +2134,7 @@ class SalesOrderService:
         )
         if not order:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
-        pending_ok = (DemandStatus.PENDING_REVIEW, "PENDING_REVIEW", "PENDING", "待审核")
-        if order.status not in pending_ok:
+        if not self._is_pending_review_status(order.status):
             raise BusinessLogicError(f"只能撤回待审核的订单，当前: {order.status}")
 
         async with in_transaction():
@@ -1707,7 +2163,8 @@ class SalesOrderService:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
         deletable = (
             self._is_draft(order.status)
-            or order.status in (DemandStatus.PENDING_REVIEW, "PENDING_REVIEW", "PENDING", "待审核", "已提交")
+            or self._is_pending_review_status(order.status)
+            or str(order.status or "").strip() == "已提交"
         )
         if not deletable:
             raise BusinessLogicError(f"只能删除草稿或待审核状态的订单，当前: {order.status}")
@@ -1803,6 +2260,7 @@ class SalesOrderService:
         tenant_id: int,
         sales_order_id: int,
         created_by: int,
+        selected_item_ids: Optional[List[int]] = None,
     ) -> Dict[str, Any]:
         """下推销售订单到发货通知单"""
         order = await SalesOrder.get_or_none(
@@ -1818,6 +2276,11 @@ class SalesOrderService:
         ).order_by("id")
         if not items:
             raise BusinessLogicError("销售订单无明细，无法下推发货通知单")
+        if selected_item_ids is not None:
+            selected = {int(v) for v in selected_item_ids if v is not None}
+            items = [it for it in items if int(getattr(it, "id", 0)) in selected]
+            if not items:
+                raise BusinessLogicError("所选明细为空，无法下推发货通知单")
 
         from apps.kuaizhizao.services.shipment_notice_service import ShipmentNoticeService
         today = datetime.now().strftime("%Y%m%d")
@@ -1845,7 +2308,11 @@ class SalesOrderService:
             total_qty = Decimal("0")
             total_amt = Decimal("0")
             for it in items:
-                qty = it.order_quantity or Decimal("0")
+                # P1-S-009: 发货通知下推应取欠发量，避免把总量重复通知给仓库
+                qty = (it.remaining_quantity if it.remaining_quantity is not None else ((it.order_quantity or Decimal("0")) - (it.delivered_quantity or Decimal("0"))))
+                qty = max(Decimal("0"), Decimal(str(qty)))
+                if qty <= Decimal("0"):
+                    continue
                 amt = it.total_amount or (qty * (it.unit_price or Decimal("0")))
                 await ShipmentNoticeItem.create(
                     tenant_id=tenant_id,
@@ -1862,6 +2329,8 @@ class SalesOrderService:
                 )
                 total_qty += qty
                 total_amt += amt
+            if total_qty <= Decimal("0"):
+                raise BusinessLogicError("销售订单无欠发明细，无法下推发货通知单")
             await ShipmentNotice.filter(tenant_id=tenant_id, id=notice.id).update(
                 total_quantity=total_qty,
                 total_amount=total_amt,
@@ -1872,6 +2341,113 @@ class SalesOrderService:
             "message": "已生成发货通知单",
             "notice_id": notice.id,
             "notice_code": code,
+        }
+
+    async def push_sales_order_auto_route(
+        self,
+        tenant_id: int,
+        sales_order_id: int,
+        created_by: int,
+    ) -> Dict[str, Any]:
+        """
+        P1-S-007: MTO/MTS 自动路由。
+        - order_type=MTO：全量下推工单
+        - order_type=MTS：全量下推发货通知
+        - 其他：按物料来源 + 动态可用库存自动拆分
+        """
+        from apps.kuaizhizao.utils.material_source_helper import (
+            SOURCE_TYPE_CONFIGURE,
+            SOURCE_TYPE_MAKE,
+            SOURCE_TYPE_OUTSOURCE,
+            get_material_source_type,
+        )
+        from apps.kuaizhizao.services.shipment_notice_service import get_material_available_quantity
+
+        order = await SalesOrder.get_or_none(
+            tenant_id=tenant_id,
+            id=sales_order_id,
+            deleted_at__isnull=True,
+        )
+        if not order:
+            raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+        if not self._is_audited(order.status):
+            raise ValidationError(f"只能下推已审核的销售订单，当前状态: {order.status}")
+
+        items = await SalesOrderItem.filter(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+            deleted_at__isnull=True,
+        ).order_by("id")
+        if not items:
+            raise BusinessLogicError("销售订单无明细，无法自动路由")
+
+        order_type = str(getattr(order, "order_type", "") or "").strip().upper()
+        mto_ids: List[int] = []
+        mts_ids: List[int] = []
+
+        if order_type == "MTO":
+            mto_ids = [int(it.id) for it in items]
+        elif order_type == "MTS":
+            mts_ids = [int(it.id) for it in items]
+        else:
+            available_cache: Dict[int, Decimal] = {}
+            for it in items:
+                item_id = int(getattr(it, "id", 0) or 0)
+                if item_id <= 0:
+                    continue
+                material_id = int(getattr(it, "material_id", 0) or 0)
+                qty = Decimal(str(getattr(it, "remaining_quantity", None) or getattr(it, "order_quantity", 0) or 0))
+                if qty <= Decimal("0"):
+                    continue
+
+                source_type = await get_material_source_type(tenant_id, material_id) if material_id else None
+                if source_type in (SOURCE_TYPE_MAKE, SOURCE_TYPE_OUTSOURCE, SOURCE_TYPE_CONFIGURE):
+                    mto_ids.append(item_id)
+                    continue
+
+                if material_id not in available_cache:
+                    avail = await get_material_available_quantity(
+                        tenant_id=tenant_id,
+                        material_id=material_id,
+                    )
+                    available_cache[material_id] = Decimal(str(avail or 0))
+                current_avail = available_cache.get(material_id, Decimal("0"))
+                if current_avail >= qty:
+                    mts_ids.append(item_id)
+                    available_cache[material_id] = current_avail - qty
+                else:
+                    mto_ids.append(item_id)
+
+        results: List[Dict[str, Any]] = []
+        if mto_ids:
+            mto_res = await self.push_sales_order_to_work_order(
+                tenant_id=tenant_id,
+                sales_order_id=sales_order_id,
+                created_by=created_by,
+                selected_item_ids=mto_ids,
+            )
+            results.append({"route": "MTO", "item_ids": mto_ids, "result": mto_res})
+        if mts_ids:
+            mts_res = await self.push_sales_order_to_shipment_notice(
+                tenant_id=tenant_id,
+                sales_order_id=sales_order_id,
+                created_by=created_by,
+                selected_item_ids=mts_ids,
+            )
+            results.append({"route": "MTS", "item_ids": mts_ids, "result": mts_res})
+
+        if not results:
+            raise BusinessLogicError("销售订单无可路由的有效欠发明细")
+
+        return {
+            "success": True,
+            "message": f"自动路由完成：MTO {len(mto_ids)} 行，MTS {len(mts_ids)} 行",
+            "route_summary": {
+                "order_type": order_type or "AUTO",
+                "mto_item_count": len(mto_ids),
+                "mts_item_count": len(mts_ids),
+            },
+            "route_results": results,
         }
 
     async def push_sales_order_to_invoice(

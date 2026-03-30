@@ -8,9 +8,11 @@ Date: 2026-01-16
 """
 
 from datetime import date
+import uuid
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status
 from decimal import Decimal
+from loguru import logger
 
 from apps.kuaizhizao.schemas.cost import (
     CostOptimizationRequest,
@@ -24,6 +26,27 @@ from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
 router = APIRouter(prefix="/cost-optimization", tags=["Kuaicaiwu Cost Optimization"])
+
+
+def _http_exception_with_trace(
+    status_code: int,
+    message: str,
+    route: str,
+    tenant_id: Optional[int] = None,
+) -> HTTPException:
+    trace_id = uuid.uuid4().hex
+    logger.warning(
+        "kuaicaiwu_cost_optimization_api_error trace_id={} tenant_id={} route={} status_code={} message={}",
+        trace_id,
+        tenant_id,
+        route,
+        status_code,
+        message,
+    )
+    return HTTPException(
+        status_code=status_code,
+        detail={"message": message, "trace_id": trace_id},
+    )
 
 
 @router.post("/suggestions", response_model=CostOptimizationResponse, status_code=status.HTTP_200_OK)
@@ -54,9 +77,11 @@ async def generate_optimization_suggestions_single(
         HTTPException: 当物料不存在或数据验证失败时抛出
     """
     if not data.material_id:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="单个物料分析时必须提供material_id"
+        raise _http_exception_with_trace(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "单个物料分析时必须提供material_id",
+            "/cost-optimization/suggestions",
+            tenant_id,
         )
     
     try:
@@ -70,19 +95,15 @@ async def generate_optimization_suggestions_single(
         )
         return CostOptimizationResponse(**result)
     except NotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
+        raise _http_exception_with_trace(status.HTTP_404_NOT_FOUND, str(e), "/cost-optimization/suggestions", tenant_id)
     except ValidationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e)
-        )
+        raise _http_exception_with_trace(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e), "/cost-optimization/suggestions", tenant_id)
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"生成成本优化建议失败: {str(e)}"
+        raise _http_exception_with_trace(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"生成成本优化建议失败: {str(e)}",
+            "/cost-optimization/suggestions",
+            tenant_id,
         )
 
 
@@ -109,9 +130,11 @@ async def generate_optimization_suggestions_batch(
         HTTPException: 当数据验证失败时抛出
     """
     if not data.material_ids:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="批量分析时必须提供material_ids"
+        raise _http_exception_with_trace(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "批量分析时必须提供material_ids",
+            "/cost-optimization/suggestions/batch",
+            tenant_id,
         )
     
     try:
@@ -125,12 +148,11 @@ async def generate_optimization_suggestions_batch(
         )
         return CostOptimizationBatchResponse(**result)
     except ValidationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e)
-        )
+        raise _http_exception_with_trace(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e), "/cost-optimization/suggestions/batch", tenant_id)
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"批量生成成本优化建议失败: {str(e)}"
+        raise _http_exception_with_trace(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"批量生成成本优化建议失败: {str(e)}",
+            "/cost-optimization/suggestions/batch",
+            tenant_id,
         )

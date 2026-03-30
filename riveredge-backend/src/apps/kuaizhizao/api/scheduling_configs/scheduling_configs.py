@@ -7,8 +7,9 @@ Author: Plan - 排程管理增强
 Date: 2026-02-26
 """
 
-from typing import Optional
-from fastapi import APIRouter, Depends, Query, Path, HTTPException, status
+import uuid
+from typing import Any, Optional
+from fastapi import APIRouter, Depends, Query, Path, HTTPException as FastAPIHTTPException, status
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
@@ -25,6 +26,32 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 router = APIRouter(prefix="/scheduling-configs", tags=["排程配置"])
 
 config_service = SchedulingConfigService()
+
+
+def _http_exception_with_trace(
+    status_code: int,
+    message: str,
+    route: str = "/scheduling-configs",
+    tenant_id: Optional[int] = None,
+) -> FastAPIHTTPException:
+    trace_id = uuid.uuid4().hex
+    logger.warning(
+        "kuaizhizao_scheduling_configs_api_error trace_id={} tenant_id={} route={} status_code={} message={}",
+        trace_id,
+        tenant_id,
+        route,
+        status_code,
+        message,
+    )
+    return FastAPIHTTPException(
+        status_code=status_code,
+        detail={"message": message, "trace_id": trace_id},
+    )
+
+
+def HTTPException(*, status_code: int, detail: Any, **kwargs) -> FastAPIHTTPException:
+    message = detail.get("message") if isinstance(detail, dict) else str(detail)
+    return _http_exception_with_trace(status_code, message)
 
 
 @router.post("", response_model=SchedulingConfigResponse, summary="创建排程配置")

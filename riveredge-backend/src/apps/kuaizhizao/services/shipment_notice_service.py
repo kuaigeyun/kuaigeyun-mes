@@ -8,6 +8,7 @@ Date: 2026-02-22
 """
 
 import logging
+from collections import defaultdict
 from typing import List
 from datetime import datetime
 from decimal import Decimal
@@ -18,6 +19,7 @@ from apps.base_service import AppBaseService
 logger = logging.getLogger(__name__)
 from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
 from apps.kuaizhizao.models.shipment_notice_item import ShipmentNoticeItem
+from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
 from apps.kuaizhizao.schemas.shipment_notice import (
     ShipmentNoticeCreate,
     ShipmentNoticeUpdate,
@@ -29,6 +31,7 @@ from apps.kuaizhizao.schemas.shipment_notice import (
 )
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
+from apps.kuaizhizao.utils.inventory_helper import get_material_available_quantity
 
 
 class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
@@ -37,6 +40,155 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
     def __init__(self):
         super().__init__(ShipmentNotice)
         self.business_config_service = BusinessConfigService()
+
+    async def _validate_not_overdelivery_on_notify(
+        self,
+        *,
+        tenant_id: int,
+        notice: ShipmentNotice,
+    ) -> None:
+        """
+        P1-S-009: 在通知仓库（提交）前做超发校验。
+        以销售订单明细可发数量（剩余数量）为上限，且扣除其他“已通知”单据已占用数量。
+        """
+        notice_items = await ShipmentNoticeItem.filter(
+            tenant_id=tenant_id,
+            notice_id=notice.id,
+        ).all()
+        if not notice_items:
+            raise BusinessLogicError("发货通知单无明细，无法通知仓库")
+
+        order_items = await SalesOrderItem.filter(
+            tenant_id=tenant_id,
+            sales_order_id=notice.sales_order_id,
+        ).all()
+        if not order_items:
+            raise BusinessLogicError("销售订单明细不存在，无法校验发货通知数量")
+
+        order_item_by_id = {int(it.id): it for it in order_items}
+
+        reserved_notice_ids = await ShipmentNotice.filter(
+            tenant_id=tenant_id,
+            sales_order_id=notice.sales_order_id,
+            status="已通知",
+            deleted_at__isnull=True,
+        ).exclude(id=notice.id).values_list("id", flat=True)
+
+        reserved_by_item_id: dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+        if reserved_notice_ids:
+            reserved_items = await ShipmentNoticeItem.filter(
+                tenant_id=tenant_id,
+                notice_id__in=list(reserved_notice_ids),
+            ).all()
+            for rit in reserved_items:
+                so_item_id = getattr(rit, "sales_order_item_id", None)
+                if so_item_id is None:
+                    continue
+                reserved_by_item_id[int(so_item_id)] += Decimal(str(rit.notice_quantity or 0))
+
+        for n_item in notice_items:
+            qty = Decimal(str(n_item.notice_quantity or 0))
+            if qty <= Decimal("0"):
+                raise BusinessLogicError("发货通知数量必须大于0")
+
+            so_item_id = getattr(n_item, "sales_order_item_id", None)
+            if so_item_id is None:
+                # 无法映射到订单行时，不做超发额度校验（但保留数量>0校验）
+                continue
+            so_item_id = int(so_item_id)
+            so_item = order_item_by_id.get(so_item_id)
+            if not so_item:
+                raise BusinessLogicError(f"发货通知明细缺少有效的订单行关联: {so_item_id}")
+
+            remaining_qty = (
+                Decimal(str(so_item.remaining_quantity))
+                if getattr(so_item, "remaining_quantity", None) is not None
+                else Decimal(str(so_item.order_quantity or 0)) - Decimal(str(so_item.delivered_quantity or 0))
+            )
+            remaining_qty = max(Decimal("0"), remaining_qty)
+            available_qty = max(Decimal("0"), remaining_qty - reserved_by_item_id.get(so_item_id, Decimal("0")))
+            if qty > available_qty:
+                material_label = (getattr(so_item, "material_code", None) or getattr(so_item, "material_name", None) or str(so_item_id))
+                raise BusinessLogicError(
+                    f"物料 {material_label} 通知数量 {qty} 超过可通知欠发量 {available_qty}"
+                )
+
+    async def _validate_inventory_reservation_on_notify(
+        self,
+        *,
+        tenant_id: int,
+        notice: ShipmentNotice,
+    ) -> None:
+        """
+        P1-S-011: 通知仓库前校验库存预占量。
+        以仓内可用库存为基础，扣除其他“已通知”单据对同仓同物料的预占量后再判断。
+        """
+        notice_items = await ShipmentNoticeItem.filter(
+            tenant_id=tenant_id,
+            notice_id=notice.id,
+        ).all()
+        if not notice_items:
+            return
+
+        required_by_material: dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+        material_labels: dict[int, str] = {}
+        for item in notice_items:
+            material_id = getattr(item, "material_id", None)
+            if not material_id:
+                continue
+            qty = Decimal(str(getattr(item, "notice_quantity", 0) or 0))
+            if qty <= Decimal("0"):
+                continue
+            material_id = int(material_id)
+            required_by_material[material_id] += qty
+            material_labels[material_id] = (
+                getattr(item, "material_code", None)
+                or getattr(item, "material_name", None)
+                or str(material_id)
+            )
+
+        if not required_by_material:
+            return
+
+        reserved_notice_query = ShipmentNotice.filter(
+            tenant_id=tenant_id,
+            status="已通知",
+            deleted_at__isnull=True,
+        ).exclude(id=notice.id)
+        if getattr(notice, "warehouse_id", None) is not None:
+            reserved_notice_query = reserved_notice_query.filter(warehouse_id=notice.warehouse_id)
+        reserved_notice_ids = await reserved_notice_query.values_list("id", flat=True)
+
+        reserved_by_material: dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+        if reserved_notice_ids:
+            reserved_items = await ShipmentNoticeItem.filter(
+                tenant_id=tenant_id,
+                notice_id__in=list(reserved_notice_ids),
+            ).all()
+            for rit in reserved_items:
+                material_id = getattr(rit, "material_id", None)
+                if not material_id:
+                    continue
+                qty = Decimal(str(getattr(rit, "notice_quantity", 0) or 0))
+                if qty <= Decimal("0"):
+                    continue
+                reserved_by_material[int(material_id)] += qty
+
+        for material_id, required_qty in required_by_material.items():
+            available_qty = await get_material_available_quantity(
+                tenant_id=tenant_id,
+                material_id=material_id,
+                warehouse_id=getattr(notice, "warehouse_id", None),
+            )
+            effective_qty = max(
+                Decimal("0"),
+                Decimal(str(available_qty or 0)) - reserved_by_material.get(material_id, Decimal("0")),
+            )
+            if required_qty > effective_qty:
+                label = material_labels.get(material_id, str(material_id))
+                raise BusinessLogicError(
+                    f"物料 {label} 通知数量 {required_qty} 超过库存可用量 {effective_qty}（已扣减预占）"
+                )
 
     async def create_shipment_notice(
         self,
@@ -183,6 +335,15 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             raise NotFoundError(f"发货通知单不存在: {notice_id}")
         if notice.status != "待发货":
             raise BusinessLogicError("只有待发货状态的通知单才能通知仓库")
+
+        await self._validate_not_overdelivery_on_notify(
+            tenant_id=tenant_id,
+            notice=notice,
+        )
+        await self._validate_inventory_reservation_on_notify(
+            tenant_id=tenant_id,
+            notice=notice,
+        )
 
         await ShipmentNotice.filter(tenant_id=tenant_id, id=notice_id).update(
             status="已通知",

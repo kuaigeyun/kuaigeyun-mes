@@ -6,12 +6,17 @@
 
 from datetime import datetime
 from typing import List, Optional
+from decimal import Decimal
+import uuid
+import httpx
 from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTPException, Body
 from fastapi.responses import JSONResponse
+from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
 from infra.models.user import User
-from infra.exceptions.exceptions import ValidationError, BusinessLogicError
+from infra.exceptions.exceptions import ValidationError, BusinessLogicError, NotFoundError
+from infra.services.business_config_service import BusinessConfigService
 
 from apps.kuaizhizao.services.reporting_service import ReportingService
 from apps.kuaizhizao.services.scrap_record_service import ScrapRecordService
@@ -23,6 +28,8 @@ from apps.kuaizhizao.schemas.reporting_record import (
     ReportingRecordUpdate,
     ReportingRecordResponse,
     ReportingRecordListResponse,
+    ReportingOverviewStatisticsResponse,
+    ReportingDetailedStatisticsResponse,
 )
 from apps.kuaizhizao.schemas.scrap_record import (
     ScrapRecordCreateFromReporting,
@@ -49,18 +56,110 @@ material_binding_service = MaterialBindingService()
 router = APIRouter(tags=["Kuaige Zhizao - Production Execution"])
 
 
+def _parse_iso_datetime_or_400(value: Optional[str], field_name: str) -> Optional[datetime]:
+    """统一日期入参解析，非法格式直接返回 400。"""
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        value = getattr(value, "default", None)
+        if value is None:
+            return None
+        value = str(value)
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        raise _http_exception_with_trace(
+            status_code=400,
+            message=f"{field_name} 格式无效，应为 ISO 时间格式",
+            route="query_datetime_parser",
+        )
+
+
+def _http_exception_with_trace(
+    status_code: int,
+    message: str,
+    route: str,
+    tenant_id: Optional[int] = None,
+) -> HTTPException:
+    """统一错误响应：透出 trace_id 并打结构化日志。"""
+    trace_id = uuid.uuid4().hex
+    logger.warning(
+        "reporting_api_error trace_id={} tenant_id={} route={} status_code={} message={}",
+        trace_id,
+        tenant_id,
+        route,
+        status_code,
+        message,
+    )
+    return HTTPException(
+        status_code=status_code,
+        detail={"message": message, "trace_id": trace_id},
+    )
+
+
+async def _get_reporting_estimated_wage_rate(tenant_id: int) -> Decimal:
+    """读取报工统计预估工资基数，未配置时回退到 30。"""
+    default_rate = Decimal("30")
+    try:
+        biz_config = await BusinessConfigService().get_business_config(tenant_id)
+        reporting_cfg = (biz_config or {}).get("parameters", {}).get("reporting", {})
+        configured_rate = reporting_cfg.get("estimated_wage_rate")
+        if configured_rate is None:
+            return default_rate
+        rate = Decimal(str(configured_rate))
+        return rate if rate > 0 else default_rate
+    except Exception:
+        return default_rate
+
+
+async def _emit_overview_statistics_alert(tenant_id: int, trace_id: str, error_message: str) -> None:
+    """overview 统计异常告警钩子（可配置启用）。"""
+    try:
+        biz_config = await BusinessConfigService().get_business_config(tenant_id)
+        reporting_cfg = (biz_config or {}).get("parameters", {}).get("reporting", {})
+        alert_enabled = bool(reporting_cfg.get("overview_alert_enabled", False))
+        webhook_url = reporting_cfg.get("overview_alert_webhook_url")
+        if not alert_enabled or not webhook_url:
+            return
+
+        payload = {
+            "event": "reporting_overview_statistics_failed",
+            "tenant_id": tenant_id,
+            "trace_id": trace_id,
+            "route": "/reporting/overview-statistics",
+            "error": error_message,
+            "occurred_at": datetime.now().isoformat(),
+        }
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            await client.post(str(webhook_url), json=payload)
+    except Exception as notify_err:
+        logger.warning(
+            "reporting_overview_statistics_alert_failed trace_id={} tenant_id={} error={}",
+            trace_id,
+            tenant_id,
+            str(notify_err),
+        )
+
+
 # ============ 报工管理 API ============
 
-@router.get("/reporting/statistics", summary="获取报工统计（用于指标卡片）")
-async def get_reporting_statistics(
+@router.get(
+    "/reporting/overview-statistics",
+    response_model=ReportingOverviewStatisticsResponse,
+    summary="获取报工统计（用于指标卡片）",
+)
+async def get_reporting_overview_statistics(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-):
+) -> ReportingOverviewStatisticsResponse:
     from datetime import date, timedelta
     from apps.kuaizhizao.models.reporting_record import ReportingRecord
 
     today = date.today()
     base = ReportingRecord.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+    wage_rate = await _get_reporting_estimated_wage_rate(tenant_id)
 
     try:
         # 当月累计工时
@@ -68,8 +167,8 @@ async def get_reporting_statistics(
         hours_vals = await base.filter(report_date__gte=month_start).values_list("actual_hours", flat=True)
         cumulative_hours = round(float(sum(v or 0 for v in hours_vals)), 1)
 
-        # 估算工资（工时 × 默认时薪 ¥45）
-        estimated_wages = round(cumulative_hours * 45, 2)
+        # 估算工资（工时 × 统一配置基数）
+        estimated_wages = round(cumulative_hours * float(wage_rate), 2)
 
         # 停机记录数（当月）
         try:
@@ -101,11 +200,22 @@ async def get_reporting_statistics(
             trend_hours.append(round(float(sum(v or 0 for v in vals)), 1))
 
     except Exception as e:
-        import logging; logging.warning(f"reporting-statistics: {e}")
+        trace_id = uuid.uuid4().hex
+        logger.error(
+            "reporting_overview_statistics_failed trace_id={} tenant_id={} route=/reporting/overview-statistics error={}",
+            trace_id,
+            tenant_id,
+            str(e),
+        )
+        await _emit_overview_statistics_alert(
+            tenant_id=tenant_id,
+            trace_id=trace_id,
+            error_message=str(e),
+        )
         cumulative_hours = 0; estimated_wages = 0; downtime_records = 0
         exception_reports = 0; efficiency = 0; trend_hours = [0] * 7
 
-    return {
+    return ReportingOverviewStatisticsResponse.model_validate({
         "cumulative_hours": cumulative_hours,
         "estimated_wages": estimated_wages,
         "downtime_records": downtime_records,
@@ -113,10 +223,10 @@ async def get_reporting_statistics(
         "efficiency": efficiency,
         "trends": {
             "hours": trend_hours,
-            "wages": [round(h * 45, 2) for h in trend_hours],
+            "wages": [round(h * float(wage_rate), 2) for h in trend_hours],
             "efficiency": [efficiency] * 7,
         },
-    }
+    })
 
 
 @router.post("/reporting", response_model=ReportingRecordResponse, summary="创建报工记录")
@@ -130,12 +240,19 @@ async def create_reporting_record(
 
     - **reporting**: 报工数据
     """
-    return await reporting_service.create_reporting_record(
-        tenant_id=tenant_id,
-        reporting_data=reporting,
-        reported_by=current_user.id,
-        entry_mode="manual",
-    )
+    try:
+        return await reporting_service.create_reporting_record(
+            tenant_id=tenant_id,
+            reporting_data=reporting,
+            reported_by=current_user.id,
+            entry_mode="manual",
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/reporting", tenant_id)
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/reporting", tenant_id)
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(400, str(e), "/reporting", tenant_id)
 
 
 @router.post("/reporting/quick", response_model=ReportingRecordResponse, summary="快捷报工（扫码/工位机）")
@@ -147,12 +264,19 @@ async def create_quick_reporting_record(
     """
     快捷报工入口（用于扫码报工、工位机报工）
     """
-    return await reporting_service.create_reporting_record(
-        tenant_id=tenant_id,
-        reporting_data=reporting,
-        reported_by=current_user.id,
-        entry_mode="quick",
-    )
+    try:
+        return await reporting_service.create_reporting_record(
+            tenant_id=tenant_id,
+            reporting_data=reporting,
+            reported_by=current_user.id,
+            entry_mode="quick",
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/reporting/quick", tenant_id)
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/reporting/quick", tenant_id)
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(400, str(e), "/reporting/quick", tenant_id)
 
 
 @router.get("/reporting", response_model=List[ReportingRecordListResponse], summary="获取报工记录列表")
@@ -174,20 +298,8 @@ async def list_reporting_records(
 
     支持多种筛选条件的高级搜索。
     """
-    reported_at_start_dt = None
-    reported_at_end_dt = None
-
-    if reported_at_start:
-        try:
-            reported_at_start_dt = datetime.fromisoformat(reported_at_start.replace('Z', '+00:00'))
-        except ValueError:
-            pass
-
-    if reported_at_end:
-        try:
-            reported_at_end_dt = datetime.fromisoformat(reported_at_end.replace('Z', '+00:00'))
-        except ValueError:
-            pass
+    reported_at_start_dt = _parse_iso_datetime_or_400(reported_at_start, "reported_at_start")
+    reported_at_end_dt = _parse_iso_datetime_or_400(reported_at_end, "reported_at_end")
 
     return await reporting_service.list_reporting_records(
         tenant_id=tenant_id,
@@ -203,43 +315,27 @@ async def list_reporting_records(
     )
 
 
-@router.get("/reporting/statistics", summary="获取报工统计信息")
+@router.get("/reporting/statistics", response_model=ReportingDetailedStatisticsResponse, summary="获取报工统计信息")
 async def get_reporting_statistics(
     date_start: Optional[str] = Query(None, description="开始日期（ISO格式）"),
     date_end: Optional[str] = Query(None, description="结束日期（ISO格式）"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> JSONResponse:
+) -> ReportingDetailedStatisticsResponse:
     """
     获取报工统计信息
 
     返回报工数量、合格率等统计数据。
     """
-    date_start_dt = None
-    date_end_dt = None
-
-    if date_start:
-        try:
-            date_start_dt = datetime.fromisoformat(date_start.replace('Z', '+00:00'))
-        except ValueError:
-            pass
-
-    if date_end:
-        try:
-            date_end_dt = datetime.fromisoformat(date_end.replace('Z', '+00:00'))
-        except ValueError:
-            pass
+    date_start_dt = _parse_iso_datetime_or_400(date_start, "date_start")
+    date_end_dt = _parse_iso_datetime_or_400(date_end, "date_end")
 
     statistics = await reporting_service.get_reporting_statistics(
         tenant_id=tenant_id,
         date_start=date_start_dt,
         date_end=date_end_dt,
     )
-
-    return JSONResponse(
-        content=statistics,
-        status_code=http_status.HTTP_200_OK
-    )
+    return ReportingDetailedStatisticsResponse.model_validate(statistics)
 
 
 @router.get("/reporting/{record_id}", response_model=ReportingRecordResponse, summary="获取报工记录详情")
@@ -253,10 +349,17 @@ async def get_reporting_record(
 
     - **record_id**: 报工记录ID
     """
-    return await reporting_service.get_reporting_record_by_id(
-        tenant_id=tenant_id,
-        record_id=record_id
-    )
+    try:
+        return await reporting_service.get_reporting_record_by_id(
+            tenant_id=tenant_id,
+            record_id=record_id
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/reporting/{record_id}", tenant_id)
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/reporting/{record_id}", tenant_id)
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(400, str(e), "/reporting/{record_id}", tenant_id)
 
 
 @router.post("/reporting/{record_id}/approve", response_model=ReportingRecordResponse, summary="审核报工记录")
@@ -272,12 +375,19 @@ async def approve_reporting_record(
     - **record_id**: 报工记录ID
     - **rejection_reason**: 驳回原因（可选，不填则通过）
     """
-    return await reporting_service.approve_reporting_record(
-        tenant_id=tenant_id,
-        record_id=record_id,
-        approved_by=current_user.id,
-        rejection_reason=rejection_reason
-    )
+    try:
+        return await reporting_service.approve_reporting_record(
+            tenant_id=tenant_id,
+            record_id=record_id,
+            approved_by=current_user.id,
+            rejection_reason=rejection_reason
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/reporting/{record_id}/approve", tenant_id)
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/reporting/{record_id}/approve", tenant_id)
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(400, str(e), "/reporting/{record_id}/approve", tenant_id)
 
 
 @router.post("/reporting/{record_id}/revoke", response_model=ReportingRecordResponse, summary="撤销审核报工记录")
@@ -291,11 +401,18 @@ async def revoke_reporting_approval(
 
     - **record_id**: 报工记录ID
     """
-    return await reporting_service.revoke_reporting_approval(
-        tenant_id=tenant_id,
-        record_id=record_id,
-        revoked_by=current_user.id
-    )
+    try:
+        return await reporting_service.revoke_reporting_approval(
+            tenant_id=tenant_id,
+            record_id=record_id,
+            revoked_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/reporting/{record_id}/revoke", tenant_id)
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/reporting/{record_id}/revoke", tenant_id)
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(400, str(e), "/reporting/{record_id}/revoke", tenant_id)
 
 
 @router.post("/reporting/batch-revoke", summary="批量撤回报工记录审核")
@@ -309,11 +426,16 @@ async def batch_revoke_reporting_approval(
 
     - **record_ids**: 报工记录ID列表
     """
-    return await reporting_service.batch_revoke_reporting_approval(
-        tenant_id=tenant_id,
-        record_ids=record_ids,
-        revoked_by=current_user.id
-    )
+    try:
+        return await reporting_service.batch_revoke_reporting_approval(
+            tenant_id=tenant_id,
+            record_ids=record_ids,
+            revoked_by=current_user.id
+        )
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/reporting/batch-revoke", tenant_id)
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(400, str(e), "/reporting/batch-revoke", tenant_id)
 
 
 @router.put("/reporting/{record_id}/correct", response_model=ReportingRecordResponse, summary="修正报工数据")
@@ -333,13 +455,20 @@ async def correct_reporting_data(
     - **correct_data**: 修正数据
     - **correction_reason**: 修正原因（必填）
     """
-    return await reporting_service.correct_reporting_data(
-        tenant_id=tenant_id,
-        record_id=record_id,
-        correct_data=correct_data,
-        corrected_by=current_user.id,
-        correction_reason=correction_reason
-    )
+    try:
+        return await reporting_service.correct_reporting_data(
+            tenant_id=tenant_id,
+            record_id=record_id,
+            correct_data=correct_data,
+            corrected_by=current_user.id,
+            correction_reason=correction_reason
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/reporting/{record_id}/correct", tenant_id)
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/reporting/{record_id}/correct", tenant_id)
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(400, str(e), "/reporting/{record_id}/correct", tenant_id)
 
 
 @router.delete("/reporting/{record_id}", summary="删除报工记录")
@@ -353,10 +482,17 @@ async def delete_reporting_record(
 
     - **record_id**: 报工记录ID
     """
-    await reporting_service.delete_reporting_record(
-        tenant_id=tenant_id,
-        record_id=record_id
-    )
+    try:
+        await reporting_service.delete_reporting_record(
+            tenant_id=tenant_id,
+            record_id=record_id
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/reporting/{record_id}", tenant_id)
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/reporting/{record_id}", tenant_id)
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(400, str(e), "/reporting/{record_id}", tenant_id)
 
     return JSONResponse(
         content={"message": "报工记录删除成功"},
@@ -379,12 +515,19 @@ async def create_scrap_record_from_reporting(
     - **record_id**: 报工记录ID
     - **scrap_data**: 报废记录创建数据（报废数量、报废原因、报废类型、单位成本等）
     """
-    return await reporting_service.record_scrap(
-        tenant_id=tenant_id,
-        reporting_record_id=record_id,
-        scrap_data=scrap_data,
-        created_by=current_user.id
-    )
+    try:
+        return await reporting_service.record_scrap(
+            tenant_id=tenant_id,
+            reporting_record_id=record_id,
+            scrap_data=scrap_data,
+            created_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/reporting/{record_id}/scrap", tenant_id)
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/reporting/{record_id}/scrap", tenant_id)
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(400, str(e), "/reporting/{record_id}/scrap", tenant_id)
 
 
 # ============ 物料绑定 API ============
@@ -405,12 +548,19 @@ async def create_feeding_binding_from_reporting(
     - **binding_data**: 物料绑定创建数据（物料ID、数量、仓库、批次等）
     """
     binding_data.binding_type = "feeding"
-    return await material_binding_service.create_material_binding_from_reporting(
-        tenant_id=tenant_id,
-        reporting_record_id=record_id,
-        binding_data=binding_data,
-        bound_by=current_user.id
-    )
+    try:
+        return await material_binding_service.create_material_binding_from_reporting(
+            tenant_id=tenant_id,
+            reporting_record_id=record_id,
+            binding_data=binding_data,
+            bound_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/reporting/{record_id}/material-binding/feeding", tenant_id)
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/reporting/{record_id}/material-binding/feeding", tenant_id)
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(400, str(e), "/reporting/{record_id}/material-binding/feeding", tenant_id)
 
 
 @router.post("/reporting/{record_id}/material-binding/discharging", response_model=MaterialBindingResponse, summary="从报工记录创建下料绑定")
@@ -429,12 +579,19 @@ async def create_discharging_binding_from_reporting(
     - **binding_data**: 物料绑定创建数据（物料ID、数量、仓库、批次等）
     """
     binding_data.binding_type = "discharging"
-    return await material_binding_service.create_material_binding_from_reporting(
-        tenant_id=tenant_id,
-        reporting_record_id=record_id,
-        binding_data=binding_data,
-        bound_by=current_user.id
-    )
+    try:
+        return await material_binding_service.create_material_binding_from_reporting(
+            tenant_id=tenant_id,
+            reporting_record_id=record_id,
+            binding_data=binding_data,
+            bound_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/reporting/{record_id}/material-binding/discharging", tenant_id)
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/reporting/{record_id}/material-binding/discharging", tenant_id)
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(400, str(e), "/reporting/{record_id}/material-binding/discharging", tenant_id)
 
 
 @router.get("/reporting/{record_id}/material-binding", response_model=List[MaterialBindingListResponse], summary="获取报工记录的物料绑定记录")
@@ -448,10 +605,17 @@ async def get_material_bindings_by_reporting_record(
 
     - **record_id**: 报工记录ID
     """
-    return await material_binding_service.get_material_bindings_by_reporting_record(
-        tenant_id=tenant_id,
-        reporting_record_id=record_id
-    )
+    try:
+        return await material_binding_service.get_material_bindings_by_reporting_record(
+            tenant_id=tenant_id,
+            reporting_record_id=record_id
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/reporting/{record_id}/material-binding", tenant_id)
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/reporting/{record_id}/material-binding", tenant_id)
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(400, str(e), "/reporting/{record_id}/material-binding", tenant_id)
 
 
 @router.delete("/material-binding/{binding_id}", summary="删除物料绑定记录")
@@ -465,10 +629,17 @@ async def delete_material_binding(
 
     - **binding_id**: 物料绑定记录ID
     """
-    await material_binding_service.delete_material_binding(
-        tenant_id=tenant_id,
-        binding_id=binding_id
-    )
+    try:
+        await material_binding_service.delete_material_binding(
+            tenant_id=tenant_id,
+            binding_id=binding_id
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/material-binding/{binding_id}", tenant_id)
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/material-binding/{binding_id}", tenant_id)
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(400, str(e), "/material-binding/{binding_id}", tenant_id)
 
     return JSONResponse(
         content={"message": "物料绑定记录删除成功"},
@@ -501,10 +672,12 @@ async def approve_scrap_record(
             approved_by=current_user.id,
             rejection_reason=rejection_reason
         )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/scrap/{scrap_id}/approve", tenant_id)
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/scrap/{scrap_id}/approve", tenant_id)
     except BusinessLogicError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/scrap/{scrap_id}/approve", tenant_id)
 
 
 @router.get("/scrap", response_model=List[ScrapRecordListResponse], summary="查询报废记录列表")
@@ -532,12 +705,8 @@ async def list_scrap_records(
     - **date_start**: 开始日期（可选）
     - **date_end**: 结束日期（可选）
     """
-    date_start_dt = None
-    date_end_dt = None
-    if date_start:
-        date_start_dt = datetime.fromisoformat(date_start.replace('Z', '+00:00'))
-    if date_end:
-        date_end_dt = datetime.fromisoformat(date_end.replace('Z', '+00:00'))
+    date_start_dt = _parse_iso_datetime_or_400(date_start, "date_start")
+    date_end_dt = _parse_iso_datetime_or_400(date_end, "date_end")
 
     return await scrap_record_service.list_scrap_records(
         tenant_id=tenant_id,
@@ -573,12 +742,8 @@ async def get_scrap_statistics(
     - **product_id**: 产品ID（可选）
     - **scrap_type**: 报废类型（可选）
     """
-    date_start_dt = None
-    date_end_dt = None
-    if date_start:
-        date_start_dt = datetime.fromisoformat(date_start.replace('Z', '+00:00'))
-    if date_end:
-        date_end_dt = datetime.fromisoformat(date_end.replace('Z', '+00:00'))
+    date_start_dt = _parse_iso_datetime_or_400(date_start, "date_start")
+    date_end_dt = _parse_iso_datetime_or_400(date_end, "date_end")
 
     statistics = await scrap_record_service.get_scrap_statistics(
         tenant_id=tenant_id,
@@ -611,12 +776,19 @@ async def create_defect_record_from_reporting(
     - **record_id**: 报工记录ID
     - **defect_data**: 不良品记录创建数据（不良品数量、不良品类型、不良品原因、处理方式等）
     """
-    return await reporting_service.record_defect(
-        tenant_id=tenant_id,
-        reporting_record_id=record_id,
-        defect_data=defect_data,
-        created_by=current_user.id
-    )
+    try:
+        return await reporting_service.record_defect(
+            tenant_id=tenant_id,
+            reporting_record_id=record_id,
+            defect_data=defect_data,
+            created_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/reporting/{record_id}/defect", tenant_id)
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/reporting/{record_id}/defect", tenant_id)
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(400, str(e), "/reporting/{record_id}/defect", tenant_id)
 
 
 @router.post("/defect/{defect_id}/approve-acceptance", response_model=DefectRecordResponse, summary="审批不良品让步接收")
@@ -642,10 +814,12 @@ async def approve_defect_acceptance(
             approved_by=current_user.id,
             rejection_reason=rejection_reason
         )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/defect/{defect_id}/approve-acceptance", tenant_id)
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/defect/{defect_id}/approve-acceptance", tenant_id)
     except BusinessLogicError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise _http_exception_with_trace(400, str(e), "/defect/{defect_id}/approve-acceptance", tenant_id)
 
 
 @router.get("/defect", response_model=List[DefectRecordListResponse], summary="查询不良品记录列表")
@@ -675,12 +849,8 @@ async def list_defect_records(
     - **date_start**: 开始日期（可选）
     - **date_end**: 结束日期（可选）
     """
-    date_start_dt = None
-    date_end_dt = None
-    if date_start:
-        date_start_dt = datetime.fromisoformat(date_start.replace('Z', '+00:00'))
-    if date_end:
-        date_end_dt = datetime.fromisoformat(date_end.replace('Z', '+00:00'))
+    date_start_dt = _parse_iso_datetime_or_400(date_start, "date_start")
+    date_end_dt = _parse_iso_datetime_or_400(date_end, "date_end")
 
     return await defect_record_service.list_defect_records(
         tenant_id=tenant_id,
@@ -719,12 +889,8 @@ async def get_defect_statistics(
     - **defect_type**: 不良品类型（可选）
     - **disposition**: 处理方式（可选）
     """
-    date_start_dt = None
-    date_end_dt = None
-    if date_start:
-        date_start_dt = datetime.fromisoformat(date_start.replace('Z', '+00:00'))
-    if date_end:
-        date_end_dt = datetime.fromisoformat(date_end.replace('Z', '+00:00'))
+    date_start_dt = _parse_iso_datetime_or_400(date_start, "date_start")
+    date_end_dt = _parse_iso_datetime_or_400(date_end, "date_end")
 
     statistics = await defect_record_service.get_defect_statistics(
         tenant_id=tenant_id,

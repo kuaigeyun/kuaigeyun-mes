@@ -9,6 +9,7 @@ Author: Luigi Lu
 Date: 2025-01-14
 """
 
+import uuid
 from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTPException
 from loguru import logger
@@ -39,6 +40,27 @@ document_relation_service = DocumentRelationNewService()
 router = APIRouter(prefix="/demands", tags=["Kuaige Zhizao - Demand Management"])
 
 
+def _http_exception_with_trace(
+    status_code: int,
+    message: str,
+    route: str,
+    tenant_id: Optional[int] = None,
+) -> HTTPException:
+    trace_id = uuid.uuid4().hex
+    logger.warning(
+        "demand_api_error trace_id={} tenant_id={} route={} status_code={} message={}",
+        trace_id,
+        tenant_id,
+        route,
+        status_code,
+        message,
+    )
+    return HTTPException(
+        status_code=status_code,
+        detail={"message": message, "trace_id": trace_id},
+    )
+
+
 @router.post("", response_model=DemandResponse, summary="创建需求")
 async def create_demand(
     demand_data: DemandCreate,
@@ -61,10 +83,10 @@ async def create_demand(
         )
         return result
     except ValidationError as e:
-        raise HTTPException(status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_422_UNPROCESSABLE_ENTITY, str(e), "/demands", tenant_id)
     except Exception as e:
         logger.error(f"创建需求失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="创建需求失败")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "创建需求失败", "/demands", tenant_id)
 
 
 @router.post("/batch", response_model=Dict[str, Any], summary="批量创建需求")
@@ -112,9 +134,11 @@ async def batch_create_demands(
         }
     except Exception as e:
         logger.error(f"批量创建需求异常: {e}")
-        raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"批量创建需求失败: {str(e)}",
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"批量创建需求失败: {str(e)}",
+            "/demands/batch",
+            tenant_id,
         )
 
 
@@ -233,7 +257,7 @@ async def list_demands(
         return result
     except Exception as e:
         logger.error(f"获取需求列表失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取需求列表失败")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "获取需求列表失败", "/demands", tenant_id)
 
 
 @router.get("/orphan-report", response_model=Dict[str, Any], summary="巡检孤儿需求（仅查询）")
@@ -252,9 +276,11 @@ async def inspect_orphan_demands(
         return result
     except Exception as e:
         logger.error(f"巡检孤儿需求失败: {e}")
-        raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"巡检孤儿需求失败: {str(e)}",
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"巡检孤儿需求失败: {str(e)}",
+            "/demands/orphan-report",
+            tenant_id,
         )
 
 
@@ -281,10 +307,10 @@ async def get_demand(
         
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/demands/{demand_id}", tenant_id)
     except Exception as e:
         logger.error(f"获取需求详情失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取需求详情失败")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "获取需求详情失败", "/demands/{demand_id}", tenant_id)
 
 
 @router.get("/{demand_id}/change-impact", response_model=ChangeImpactResponse, summary="获取需求变更影响")
@@ -303,10 +329,10 @@ async def get_demand_change_impact(
             demand_id=demand_id,
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/demands/{demand_id}/change-impact", tenant_id)
     except Exception as e:
         logger.error(f"获取需求变更影响失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取变更影响失败")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "获取变更影响失败", "/demands/{demand_id}/change-impact", tenant_id)
 
 
 @router.get("/{demand_id}/recalc-history", summary="获取需求重算历史")
@@ -322,7 +348,7 @@ async def get_demand_recalc_history(
             tenant_id=tenant_id, demand_id=demand_id, limit=limit
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/demands/{demand_id}/recalc-history", tenant_id)
 
 
 @router.get("/{demand_id}/snapshots", summary="获取需求快照列表")
@@ -338,7 +364,7 @@ async def get_demand_snapshots(
             tenant_id=tenant_id, demand_id=demand_id, limit=limit
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/demands/{demand_id}/snapshots", tenant_id)
 
 
 @router.delete("/{demand_id}", summary="删除需求")
@@ -356,12 +382,12 @@ async def delete_demand(
         await demand_service.delete_demand(tenant_id=tenant_id, demand_id=demand_id)
         return {"success": True, "message": "删除成功"}
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/demands/{demand_id}", tenant_id)
     except BusinessLogicError as e:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/demands/{demand_id}", tenant_id)
     except Exception as e:
         logger.error(f"删除需求失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="删除需求失败")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "删除需求失败", "/demands/{demand_id}", tenant_id)
 
 
 @router.put("/{demand_id}", response_model=DemandResponse, summary="更新需求")
@@ -386,12 +412,12 @@ async def update_demand(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/demands/{demand_id}", tenant_id)
     except BusinessLogicError as e:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/demands/{demand_id}", tenant_id)
     except Exception as e:
         logger.error(f"更新需求失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="更新需求失败")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "更新需求失败", "/demands/{demand_id}", tenant_id)
 
 
 @router.post("/{demand_id}/submit", response_model=DemandResponse, summary="提交需求")
@@ -413,12 +439,12 @@ async def submit_demand(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/demands/{demand_id}/submit", tenant_id)
     except BusinessLogicError as e:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/demands/{demand_id}/submit", tenant_id)
     except Exception as e:
         logger.error(f"提交需求失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="提交需求失败")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "提交需求失败", "/demands/{demand_id}/submit", tenant_id)
 
 
 @router.post("/{demand_id}/approve", response_model=DemandResponse, summary="审核通过需求")
@@ -441,12 +467,12 @@ async def approve_demand(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/demands/{demand_id}/approve", tenant_id)
     except BusinessLogicError as e:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/demands/{demand_id}/approve", tenant_id)
     except Exception as e:
         logger.error(f"审核需求失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="审核需求失败")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "审核需求失败", "/demands/{demand_id}/approve", tenant_id)
 
 
 @router.post("/{demand_id}/reject", response_model=DemandResponse, summary="驳回需求")
@@ -470,12 +496,12 @@ async def reject_demand(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/demands/{demand_id}/reject", tenant_id)
     except BusinessLogicError as e:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/demands/{demand_id}/reject", tenant_id)
     except Exception as e:
         logger.error(f"驳回需求失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="驳回需求失败")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "驳回需求失败", "/demands/{demand_id}/reject", tenant_id)
 
 
 # ==================== 需求明细管理 ====================
@@ -502,12 +528,12 @@ async def add_demand_item(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/demands/{demand_id}/items", tenant_id)
     except ValidationError as e:
-        raise HTTPException(status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_422_UNPROCESSABLE_ENTITY, str(e), "/demands/{demand_id}/items", tenant_id)
     except Exception as e:
         logger.error(f"添加需求明细失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="添加需求明细失败")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "添加需求明细失败", "/demands/{demand_id}/items", tenant_id)
 
 
 @router.put("/{demand_id}/items/{item_id}", response_model=DemandItemResponse, summary="更新需求明细")
@@ -532,12 +558,12 @@ async def update_demand_item(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/demands/{demand_id}/items/{item_id}", tenant_id)
     except ValidationError as e:
-        raise HTTPException(status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_422_UNPROCESSABLE_ENTITY, str(e), "/demands/{demand_id}/items/{item_id}", tenant_id)
     except Exception as e:
         logger.error(f"更新需求明细失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="更新需求明细失败")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "更新需求明细失败", "/demands/{demand_id}/items/{item_id}", tenant_id)
 
 
 @router.delete("/{demand_id}/items/{item_id}", summary="删除需求明细")
@@ -560,10 +586,10 @@ async def delete_demand_item(
         )
         return {"success": True, "message": "删除成功"}
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/demands/{demand_id}/items/{item_id}", tenant_id)
     except Exception as e:
         logger.error(f"删除需求明细失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="删除需求明细失败")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "删除需求明细失败", "/demands/{demand_id}/items/{item_id}", tenant_id)
 
 
 @router.post("/{demand_id}/push-to-computation", response_model=Dict[str, Any], summary="下推需求到物料需求运算")
@@ -587,12 +613,17 @@ async def push_demand_to_computation(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/demands/{demand_id}/push-to-computation", tenant_id)
     except ValidationError as e:
-        raise HTTPException(status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_422_UNPROCESSABLE_ENTITY, str(e), "/demands/{demand_id}/push-to-computation", tenant_id)
     except Exception as e:
         logger.error(f"下推需求失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"下推需求失败: {str(e)}")
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"下推需求失败: {str(e)}",
+            "/demands/{demand_id}/push-to-computation",
+            tenant_id,
+        )
 
 
 @router.post("/{demand_id}/withdraw-from-computation", response_model=DemandResponse, summary="撤回需求计算")
@@ -614,12 +645,17 @@ async def withdraw_demand_from_computation(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/demands/{demand_id}/withdraw-from-computation", tenant_id)
     except BusinessLogicError as e:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/demands/{demand_id}/withdraw-from-computation", tenant_id)
     except Exception as e:
         logger.error(f"撤回需求计算失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"撤回需求计算失败: {str(e)}")
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"撤回需求计算失败: {str(e)}",
+            "/demands/{demand_id}/withdraw-from-computation",
+            tenant_id,
+        )
 
 
 @router.post("/clean-orphans", response_model=Dict[str, Any], summary="清理孤儿需求")
@@ -638,7 +674,9 @@ async def clean_orphan_demands(
         return result
     except Exception as e:
         logger.error(f"清理孤儿需求失败: {e}")
-        raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"清理孤儿需求失败: {str(e)}",
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"清理孤儿需求失败: {str(e)}",
+            "/demands/clean-orphans",
+            tenant_id,
         )

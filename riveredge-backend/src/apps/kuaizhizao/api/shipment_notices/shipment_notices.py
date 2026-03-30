@@ -7,8 +7,9 @@ Author: RiverEdge Team
 Date: 2026-02-22
 """
 
+import uuid
 from typing import List, Optional
-from fastapi import APIRouter, Depends, Query, Path, HTTPException, status as http_status
+from fastapi import APIRouter, Depends, Query, Path, HTTPException as FastAPIHTTPException, status as http_status
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
@@ -26,6 +27,31 @@ from apps.kuaizhizao.schemas.shipment_notice import (
 
 shipment_notice_service = ShipmentNoticeService()
 router = APIRouter(prefix="/shipment-notices", tags=["Kuaige Zhizao - Shipment Notice"])
+
+
+def _http_exception_with_trace(
+    status_code: int,
+    message: str,
+    route: str = "/shipment-notices",
+    tenant_id: Optional[int] = None,
+) -> FastAPIHTTPException:
+    trace_id = uuid.uuid4().hex
+    logger.warning(
+        "kuaizhizao_shipment_notices_api_error trace_id={} tenant_id={} route={} status_code={} message={}",
+        trace_id,
+        tenant_id,
+        route,
+        status_code,
+        message,
+    )
+    return FastAPIHTTPException(
+        status_code=status_code,
+        detail={"message": message, "trace_id": trace_id},
+    )
+
+
+def HTTPException(*, status_code: int, detail: str, **kwargs) -> FastAPIHTTPException:
+    return _http_exception_with_trace(status_code, str(detail))
 
 
 @router.post("", response_model=ShipmentNoticeResponse, summary="创建发货通知单")

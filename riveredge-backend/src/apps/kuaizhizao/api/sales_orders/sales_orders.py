@@ -10,6 +10,7 @@ Date: 2026-01-19
 from typing import Optional, Dict, Any, List
 from datetime import date, datetime, timedelta
 import zoneinfo
+import uuid
 from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTPException, Body
 from loguru import logger
 
@@ -41,6 +42,27 @@ document_relation_service = DocumentRelationNewService()
 router = APIRouter(prefix="/sales-orders", tags=["Kuaige Zhizao - Sales Order Management"])
 
 
+def _http_exception_with_trace(
+    status_code: int,
+    message: str,
+    route: str,
+    tenant_id: Optional[int] = None,
+) -> HTTPException:
+    trace_id = uuid.uuid4().hex
+    logger.warning(
+        "sales_order_api_error trace_id={} tenant_id={} route={} status_code={} message={}",
+        trace_id,
+        tenant_id,
+        route,
+        status_code,
+        message,
+    )
+    return HTTPException(
+        status_code=status_code,
+        detail={"message": message, "trace_id": trace_id},
+    )
+
+
 @router.post("", response_model=SalesOrderResponse, summary="创建销售订单")
 async def create_sales_order(
     sales_order_data: SalesOrderCreate,
@@ -60,10 +82,10 @@ async def create_sales_order(
         )
         return result
     except ValidationError as e:
-        raise HTTPException(status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_422_UNPROCESSABLE_ENTITY, str(e), "/sales-orders", tenant_id)
     except Exception as e:
         logger.error(f"创建销售订单失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="创建销售订单失败")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "创建销售订单失败", "/sales-orders", tenant_id)
 
 
 # 销售订单可排序字段白名单（防止注入）
@@ -347,7 +369,7 @@ async def list_sales_orders(
         return result
     except Exception as e:
         logger.error(f"获取销售订单列表失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取销售订单列表失败")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "获取销售订单列表失败", "/sales-orders", tenant_id)
 
 
 @router.get("/{sales_order_id}", response_model=SalesOrderResponse, summary="获取销售订单详情")
@@ -373,10 +395,10 @@ async def get_sales_order(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}", tenant_id)
     except Exception as e:
         logger.error(f"获取销售订单详情失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取销售订单详情失败")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "获取销售订单详情失败", "/sales-orders/{sales_order_id}", tenant_id)
 
 
 @router.get("/{sales_order_id}/tracking", response_model=SalesOrderTrackingResponse, summary="获取销售订单全息追踪视图")
@@ -397,10 +419,10 @@ async def get_sales_order_tracking(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}/tracking", tenant_id)
     except Exception as e:
         logger.error(f"获取销售订单追踪视图失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取销售订单追踪视图失败")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "获取销售订单追踪视图失败", "/sales-orders/{sales_order_id}/tracking", tenant_id)
 
 
 @router.get("/{sales_order_id}/change-impact", response_model=ChangeImpactResponse, summary="获取销售订单变更影响")
@@ -419,10 +441,10 @@ async def get_sales_order_change_impact(
             order_id=sales_order_id,
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}/change-impact", tenant_id)
     except Exception as e:
         logger.error(f"获取销售订单变更影响失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取变更影响失败")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "获取变更影响失败", "/sales-orders/{sales_order_id}/change-impact", tenant_id)
 
 
 @router.put("/{sales_order_id}", response_model=SalesOrderResponse, summary="更新销售订单")
@@ -446,14 +468,14 @@ async def update_sales_order(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}", tenant_id)
     except ValidationError as e:
-        raise HTTPException(status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_422_UNPROCESSABLE_ENTITY, str(e), "/sales-orders/{sales_order_id}", tenant_id)
     except BusinessLogicError as e:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/{sales_order_id}", tenant_id)
     except Exception as e:
         logger.error(f"更新销售订单失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="更新销售订单失败")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "更新销售订单失败", "/sales-orders/{sales_order_id}", tenant_id)
 
 
 @router.post("/{sales_order_id}/submit", response_model=SalesOrderResponse, summary="提交销售订单")
@@ -475,12 +497,12 @@ async def submit_sales_order(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}/submit", tenant_id)
     except BusinessLogicError as e:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/{sales_order_id}/submit", tenant_id)
     except Exception as e:
         logger.error(f"提交销售订单失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="提交销售订单失败")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "提交销售订单失败", "/sales-orders/{sales_order_id}/submit", tenant_id)
 
 
 @router.post("/{sales_order_id}/approve", response_model=SalesOrderResponse, summary="审核通过销售订单")
@@ -502,12 +524,12 @@ async def approve_sales_order(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}/approve", tenant_id)
     except BusinessLogicError as e:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/{sales_order_id}/approve", tenant_id)
     except Exception as e:
         logger.error(f"审核通过销售订单失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="审核通过销售订单失败")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "审核通过销售订单失败", "/sales-orders/{sales_order_id}/approve", tenant_id)
 
 
 @router.post("/{sales_order_id}/unapprove", response_model=SalesOrderResponse, summary="反审核销售订单")
@@ -529,12 +551,12 @@ async def unapprove_sales_order(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}/unapprove", tenant_id)
     except BusinessLogicError as e:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/{sales_order_id}/unapprove", tenant_id)
     except Exception as e:
         logger.error(f"反审核销售订单失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="反审核销售订单失败")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "反审核销售订单失败", "/sales-orders/{sales_order_id}/unapprove", tenant_id)
 
 
 @router.post("/{sales_order_id}/reject", response_model=SalesOrderResponse, summary="驳回销售订单")
@@ -558,12 +580,12 @@ async def reject_sales_order(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}/reject", tenant_id)
     except BusinessLogicError as e:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/{sales_order_id}/reject", tenant_id)
     except Exception as e:
         logger.error(f"驳回销售订单失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="驳回销售订单失败")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "驳回销售订单失败", "/sales-orders/{sales_order_id}/reject", tenant_id)
 
 
 @router.get("/{sales_order_id}/push-to-computation/preview", response_model=Dict[str, Any], summary="下推需求计算预览")
@@ -580,9 +602,9 @@ async def preview_push_sales_order_to_computation(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}/push-to-computation/preview", tenant_id)
     except (BusinessLogicError, ValidationError) as e:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/{sales_order_id}/push-to-computation/preview", tenant_id)
 
 
 @router.post("/{sales_order_id}/push-to-computation", response_model=Dict[str, Any], summary="下推销售订单到需求计算")
@@ -604,12 +626,12 @@ async def push_sales_order_to_computation(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}/push-to-computation", tenant_id)
     except BusinessLogicError as e:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/{sales_order_id}/push-to-computation", tenant_id)
     except Exception as e:
         logger.error(f"下推销售订单到需求计算失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="下推销售订单到需求计算失败")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "下推销售订单到需求计算失败", "/sales-orders/{sales_order_id}/push-to-computation", tenant_id)
 
 
 @router.get("/{sales_order_id}/push-to-production-plan/preview", response_model=Dict[str, Any], summary="直推生产计划预览")
@@ -626,9 +648,9 @@ async def preview_push_sales_order_to_production_plan(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}/push-to-production-plan/preview", tenant_id)
     except (BusinessLogicError, ValidationError) as e:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/{sales_order_id}/push-to-production-plan/preview", tenant_id)
 
 
 @router.post("/{sales_order_id}/push-to-production-plan", response_model=Dict[str, Any], summary="直推销售订单到生产计划")
@@ -650,12 +672,12 @@ async def push_sales_order_to_production_plan(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}/push-to-production-plan", tenant_id)
     except (BusinessLogicError, ValidationError) as e:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/{sales_order_id}/push-to-production-plan", tenant_id)
     except Exception as e:
         logger.error(f"直推生产计划失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="直推生产计划失败")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "直推生产计划失败", "/sales-orders/{sales_order_id}/push-to-production-plan", tenant_id)
 
 
 @router.get("/{sales_order_id}/push-to-work-order/preview", response_model=Dict[str, Any], summary="直推工单预览")
@@ -672,9 +694,9 @@ async def preview_push_sales_order_to_work_order(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}/push-to-work-order/preview", tenant_id)
     except (BusinessLogicError, ValidationError) as e:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/{sales_order_id}/push-to-work-order/preview", tenant_id)
 
 
 @router.post("/{sales_order_id}/push-to-work-order", response_model=Dict[str, Any], summary="直推销售订单到工单")
@@ -696,12 +718,12 @@ async def push_sales_order_to_work_order(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}/push-to-work-order", tenant_id)
     except (BusinessLogicError, ValidationError) as e:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/{sales_order_id}/push-to-work-order", tenant_id)
     except Exception as e:
         logger.error(f"直推工单失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="直推工单失败")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "直推工单失败", "/sales-orders/{sales_order_id}/push-to-work-order", tenant_id)
 
 
 @router.post("/{sales_order_id}/remind", response_model=Dict[str, Any], summary="发送销售订单提醒")
@@ -727,12 +749,12 @@ async def create_sales_order_reminder(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}/remind", tenant_id)
     except (BusinessLogicError, ValidationError) as e:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/{sales_order_id}/remind", tenant_id)
     except Exception as e:
         logger.error(f"发送提醒失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="发送提醒失败")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "发送提醒失败", "/sales-orders/{sales_order_id}/remind", tenant_id)
 
 
 @router.post("/{sales_order_id}/withdraw-from-computation", response_model=SalesOrderResponse, summary="撤回销售订单的需求计算")
@@ -754,12 +776,12 @@ async def withdraw_sales_order_from_computation(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}/withdraw-from-computation", tenant_id)
     except BusinessLogicError as e:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/{sales_order_id}/withdraw-from-computation", tenant_id)
     except Exception as e:
         logger.error(f"撤回销售订单需求计算失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="撤回销售订单需求计算失败")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "撤回销售订单需求计算失败", "/sales-orders/{sales_order_id}/withdraw-from-computation", tenant_id)
 
 
 @router.post("/{sales_order_id}/confirm", response_model=SalesOrderResponse, summary="确认销售订单")
@@ -779,12 +801,12 @@ async def confirm_sales_order(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}/confirm", tenant_id)
     except BusinessLogicError as e:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/{sales_order_id}/confirm", tenant_id)
     except Exception as e:
         logger.error(f"确认销售订单失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="确认销售订单失败")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "确认销售订单失败", "/sales-orders/{sales_order_id}/confirm", tenant_id)
 
 
 @router.post("/{sales_order_id}/push-to-shipment-notice", response_model=Dict[str, Any], summary="下推到发货通知单")
@@ -804,12 +826,39 @@ async def push_sales_order_to_shipment_notice(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}/push-to-shipment-notice", tenant_id)
     except (BusinessLogicError, ValidationError) as e:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/{sales_order_id}/push-to-shipment-notice", tenant_id)
     except Exception as e:
         logger.error(f"下推发货通知单失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="下推发货通知单失败")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "下推发货通知单失败", "/sales-orders/{sales_order_id}/push-to-shipment-notice", tenant_id)
+
+
+@router.post("/{sales_order_id}/push-auto-route", response_model=Dict[str, Any], summary="按MTO/MTS自动路由下推")
+async def push_sales_order_auto_route(
+    sales_order_id: int = Path(..., description="销售订单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    按订单类型与库存可用量自动路由：
+    - MTO：下推工单
+    - MTS：下推发货通知
+    - AUTO：按明细自动拆分为 MTO/MTS 两路
+    """
+    try:
+        return await sales_order_service.push_sales_order_auto_route(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+            created_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}/push-auto-route", tenant_id)
+    except (BusinessLogicError, ValidationError) as e:
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/{sales_order_id}/push-auto-route", tenant_id)
+    except Exception as e:
+        logger.error(f"自动路由下推失败: {e}")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "自动路由下推失败", "/sales-orders/{sales_order_id}/push-auto-route", tenant_id)
 
 
 @router.post("/{sales_order_id}/push-to-invoice", response_model=Dict[str, Any], summary="下推到销售发票")
@@ -829,12 +878,12 @@ async def push_sales_order_to_invoice(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}/push-to-invoice", tenant_id)
     except (BusinessLogicError, ValidationError) as e:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/{sales_order_id}/push-to-invoice", tenant_id)
     except Exception as e:
         logger.error(f"下推销售发票失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="下推销售发票失败")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "下推销售发票失败", "/sales-orders/{sales_order_id}/push-to-invoice", tenant_id)
 
 
 @router.post("/{sales_order_id}/push-to-delivery", summary="下推到销售出库")
@@ -856,12 +905,12 @@ async def push_sales_order_to_delivery(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}/push-to-delivery", tenant_id)
     except BusinessLogicError as e:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/{sales_order_id}/push-to-delivery", tenant_id)
     except Exception as e:
         logger.error(f"下推销售出库失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="下推销售出库失败")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "下推销售出库失败", "/sales-orders/{sales_order_id}/push-to-delivery", tenant_id)
 
 
 
@@ -884,12 +933,12 @@ async def withdraw_sales_order(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}/withdraw", tenant_id)
     except BusinessLogicError as e:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/{sales_order_id}/withdraw", tenant_id)
     except Exception as e:
         logger.error(f"撤回销售订单失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="撤回销售订单失败")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "撤回销售订单失败", "/sales-orders/{sales_order_id}/withdraw", tenant_id)
 
 
 @router.delete("/{sales_order_id}", status_code=http_status.HTTP_204_NO_CONTENT, summary="删除销售订单")
@@ -909,12 +958,12 @@ async def delete_sales_order(
             sales_order_id=sales_order_id
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}", tenant_id)
     except BusinessLogicError as e:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/{sales_order_id}", tenant_id)
     except Exception as e:
         logger.error(f"删除销售订单失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="删除销售订单失败")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "删除销售订单失败", "/sales-orders/{sales_order_id}", tenant_id)
 
 
 @router.post("/batch-delete", response_model=Dict[str, Any], summary="批量删除销售订单")
@@ -937,7 +986,7 @@ async def bulk_delete_sales_orders(
         return result
     except Exception as e:
         logger.error(f"批量删除销售订单失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="批量删除销售订单失败")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "批量删除销售订单失败", "/sales-orders/batch-delete", tenant_id)
 
 
 @router.get("/quote-breakdown/{material_id}", response_model=QuoteBreakdownResponse, summary="获取产品核价明细 (敏捷核价)")
@@ -955,8 +1004,8 @@ async def get_quote_breakdown(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/quote-breakdown/{material_id}", tenant_id)
     except Exception as e:
         logger.error(f"获取核价明细失败: {e}")
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取核价明细失败")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "获取核价明细失败", "/sales-orders/quote-breakdown/{material_id}", tenant_id)
 

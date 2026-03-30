@@ -8,9 +8,11 @@ Date: 2026-01-16
 """
 
 from datetime import date
+import uuid
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from decimal import Decimal
+from loguru import logger
 
 from apps.kuaizhizao.schemas.cost import (
     ProductionCostCalculationRequest,
@@ -23,6 +25,27 @@ from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
 router = APIRouter(prefix="/production-cost", tags=["Kuaicaiwu Production Cost"])
+
+
+def _http_exception_with_trace(
+    status_code: int,
+    message: str,
+    route: str,
+    tenant_id: Optional[int] = None,
+) -> HTTPException:
+    trace_id = uuid.uuid4().hex
+    logger.warning(
+        "kuaicaiwu_production_cost_api_error trace_id={} tenant_id={} route={} status_code={} message={}",
+        trace_id,
+        tenant_id,
+        route,
+        status_code,
+        message,
+    )
+    return HTTPException(
+        status_code=status_code,
+        detail={"message": message, "trace_id": trace_id},
+    )
 
 
 @router.post("/calculate", response_model=ProductionCostCalculationResponse, status_code=status.HTTP_200_OK)
@@ -62,22 +85,15 @@ async def calculate_production_cost(
         )
         return ProductionCostCalculationResponse(**result)
     except NotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
+        raise _http_exception_with_trace(status.HTTP_404_NOT_FOUND, str(e), "/production-cost/calculate", tenant_id)
     except ValidationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e)
-        )
+        raise _http_exception_with_trace(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e), "/production-cost/calculate", tenant_id)
     except BusinessLogicError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise _http_exception_with_trace(status.HTTP_400_BAD_REQUEST, str(e), "/production-cost/calculate", tenant_id)
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"核算生产成本失败: {str(e)}"
+        raise _http_exception_with_trace(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"核算生产成本失败: {str(e)}",
+            "/production-cost/calculate",
+            tenant_id,
         )

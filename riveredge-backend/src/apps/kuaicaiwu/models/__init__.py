@@ -13,6 +13,7 @@ from .settlement import SettlementRecord
 from .partner_statement import PartnerStatement
 from .receipt import Receipt
 from .payment import Payment
+from .accounting_event import AccountingEvent
 
 __all__ = [
     "Receivable",
@@ -27,4 +28,5 @@ __all__ = [
     "PartnerStatement",
     "Receipt",
     "Payment",
+    "AccountingEvent",
 ]

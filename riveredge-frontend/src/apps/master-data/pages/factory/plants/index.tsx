@@ -685,7 +685,7 @@ const PlantsPage: React.FC = () => {
             t('app.master-data.plants.address'),
             t('app.master-data.plants.description')
           ]}
-          importExampleRow={['PLANT001', 'Plant A', 'Address A', 'Description A']}
+          importExampleRow={['PLANT-WX-01', '无锡高新生产基地', '江苏省无锡市新吴区机电五支路15号', '核心制造基地']}
           importFieldMap={{
             [t('app.master-data.plants.code')]: 'code',
             [`*${t('app.master-data.plants.code')}`]: 'code',

@@ -6,7 +6,7 @@
 
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProDescriptionsItemType } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography, Table } from 'antd';
 import { downloadFile } from '../../../../../utils';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
@@ -31,7 +31,6 @@ const WarehousesPage: React.FC = () => {
   
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
-  const [currentWarehouseUuid, setCurrentWarehouseUuid] = useState<string | null>(null);
   const [warehouseDetail, setWarehouseDetail] = useState<Warehouse | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   
@@ -482,7 +481,6 @@ const WarehousesPage: React.FC = () => {
    */
   const handleOpenDetail = async (record: Warehouse) => {
     try {
-      setCurrentWarehouseUuid(record.uuid);
       setDrawerVisible(true);
       setDetailLoading(true);
       
@@ -500,7 +498,6 @@ const WarehousesPage: React.FC = () => {
    */
   const handleCloseDetail = () => {
     setDrawerVisible(false);
-    setCurrentWarehouseUuid(null);
     setWarehouseDetail(null);
   };
 
@@ -577,7 +574,7 @@ const WarehousesPage: React.FC = () => {
         true: { text: t('common.enabled'), status: 'Success' },
         false: { text: t('common.disabled'), status: 'Default' },
       },
-      render: (_, record) => (
+      render: (_: any, record: Warehouse) => (
         <Tag color={record?.isActive ? 'success' : 'default'}>
           {record?.isActive ? t('common.enabled') : t('common.disabled')}
         </Tag>
@@ -635,7 +632,7 @@ const WarehousesPage: React.FC = () => {
   /**
    * 详情 Drawer 的列定义
    */
-  const detailColumns: ProDescriptionsItemType<Warehouse>[] = [
+  const detailColumns: ProDescriptionsItemProps<Warehouse>[] = [
     {
       title: t('app.master-data.warehouses.code'),
       dataIndex: 'code',
@@ -691,7 +688,7 @@ const WarehousesPage: React.FC = () => {
         <UniTable<Warehouse>
         actionRef={actionRef}
         columns={columns}
-        request={async (params, sort, _filter, searchFormValues) => {
+        request={async (params, _sort, _filter, searchFormValues) => {
           // 处理搜索参数
           const apiParams: any = {
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
@@ -730,7 +727,7 @@ const WarehousesPage: React.FC = () => {
         showImportButton={true}
         onImport={handleImport}
         importHeaders={['*仓库编号', '*仓库名称', '仓库类型', '车间', '工作中心', '描述']}
-        importExampleRow={['WH001', '成品仓库', '普通仓', '', '', '主要用于存储成品']}
+        importExampleRow={['WH-WX-01', '无锡中心仓', '普通仓', '', '', '综合性零件存储']}
         importFieldMap={{
           '仓库编号': 'code',
           '*仓库编号': 'code',

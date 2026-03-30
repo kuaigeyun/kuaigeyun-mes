@@ -2,15 +2,18 @@
 收款单管理 API 路由
 """
 
+import uuid
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from datetime import date, datetime
+from loguru import logger
 
 from apps.kuaicaiwu.schemas.finance import (
     ReceiptVoucherCreate, ReceiptVoucherUpdate,
     ReceiptVoucherResponse, ReceiptVoucherListResponse,
 )
 from apps.kuaicaiwu.models.receipt import Receipt
+from core.api.deps.access import require_access
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
@@ -18,10 +21,31 @@ from infra.models.user import User
 router = APIRouter(prefix="/receipts", tags=["Kuaicaiwu Finance"])
 
 
-async def _get_or_404(tenant_id: int, receipt_id: int) -> Receipt:
+def _http_exception_with_trace(
+    status_code: int,
+    message: str,
+    route: str,
+    tenant_id: Optional[int] = None,
+) -> HTTPException:
+    trace_id = uuid.uuid4().hex
+    logger.warning(
+        "kuaicaiwu_receipts_api_error trace_id={} tenant_id={} route={} status_code={} message={}",
+        trace_id,
+        tenant_id,
+        route,
+        status_code,
+        message,
+    )
+    return HTTPException(
+        status_code=status_code,
+        detail={"message": message, "trace_id": trace_id},
+    )
+
+
+async def _get_or_404(tenant_id: int, receipt_id: int, route: str = "/receipts/{id}") -> Receipt:
     obj = await Receipt.get_or_none(tenant_id=tenant_id, id=receipt_id, deleted_at__isnull=True)
     if not obj:
-        raise HTTPException(status_code=404, detail=f"收款单不存在: {receipt_id}")
+        raise _http_exception_with_trace(404, f"收款单不存在: {receipt_id}", route, tenant_id)
     return obj
 
 
@@ -32,6 +56,13 @@ def _serialize(obj: Receipt) -> ReceiptVoucherResponse:
 @router.post("", response_model=ReceiptVoucherResponse, status_code=status.HTTP_201_CREATED)
 async def create_receipt(
     data: ReceiptVoucherCreate,
+    _auth: object = Depends(
+        require_access(
+            "finance.receipt",
+            "create",
+            required_permissions=["kuaicaiwu:receivable:create"],
+        )
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):
@@ -65,6 +96,13 @@ async def list_receipts(
     customer_id: Optional[int] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
+    _auth: object = Depends(
+        require_access(
+            "finance.receipt",
+            "read",
+            required_permissions=["kuaicaiwu:receivable:view"],
+        )
+    ),
     tenant_id: int = Depends(get_current_tenant)
 ):
     """获取收款单列表"""
@@ -89,6 +127,13 @@ async def list_receipts(
 @router.get("/{id}", response_model=ReceiptVoucherResponse)
 async def get_receipt(
     id: int,
+    _auth: object = Depends(
+        require_access(
+            "finance.receipt",
+            "read",
+            required_permissions=["kuaicaiwu:receivable:view"],
+        )
+    ),
     tenant_id: int = Depends(get_current_tenant)
 ):
     """获取收款单详情"""
@@ -100,13 +145,20 @@ async def get_receipt(
 async def update_receipt(
     id: int,
     data: ReceiptVoucherUpdate,
+    _auth: object = Depends(
+        require_access(
+            "finance.receipt",
+            "update",
+            required_permissions=["kuaicaiwu:receivable:update"],
+        )
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):
     """更新收款单"""
     receipt = await _get_or_404(tenant_id, id)
     if receipt.status == "Confirmed":
-        raise HTTPException(status_code=400, detail="已确认的收款单不能修改")
+        raise _http_exception_with_trace(400, "已确认的收款单不能修改", "/receipts/{id}", tenant_id)
     update_data = data.model_dump(exclude_unset=True)
     await Receipt.filter(id=id).update(**update_data)
     return _serialize(await _get_or_404(tenant_id, id))
@@ -115,13 +167,20 @@ async def update_receipt(
 @router.post("/{id}/confirm", response_model=ReceiptVoucherResponse)
 async def confirm_receipt(
     id: int,
+    _auth: object = Depends(
+        require_access(
+            "finance.receipt",
+            "update",
+            required_permissions=["kuaicaiwu:receivable:update"],
+        )
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):
     """确认收款单"""
     receipt = await _get_or_404(tenant_id, id)
     if receipt.status != "Draft":
-        raise HTTPException(status_code=400, detail="只有草稿状态的收款单可以确认")
+        raise _http_exception_with_trace(400, "只有草稿状态的收款单可以确认", "/receipts/{id}/confirm", tenant_id)
     await Receipt.filter(id=id).update(status="Confirmed")
     return _serialize(await _get_or_404(tenant_id, id))
 
@@ -129,13 +188,20 @@ async def confirm_receipt(
 @router.post("/{id}/cancel", response_model=ReceiptVoucherResponse)
 async def cancel_receipt(
     id: int,
+    _auth: object = Depends(
+        require_access(
+            "finance.receipt",
+            "update",
+            required_permissions=["kuaicaiwu:receivable:update"],
+        )
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):
     """作废收款单"""
     receipt = await _get_or_404(tenant_id, id)
     if receipt.settled_amount > 0:
-        raise HTTPException(status_code=400, detail="已有核销记录的收款单不能作废")
+        raise _http_exception_with_trace(400, "已有核销记录的收款单不能作废", "/receipts/{id}/cancel", tenant_id)
     await Receipt.filter(id=id).update(status="Cancelled")
     return _serialize(await _get_or_404(tenant_id, id))
 
@@ -143,11 +209,18 @@ async def cancel_receipt(
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_receipt(
     id: int,
+    _auth: object = Depends(
+        require_access(
+            "finance.receipt",
+            "delete",
+            required_permissions=["kuaicaiwu:receivable:delete"],
+        )
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):
     """删除收款单"""
     receipt = await _get_or_404(tenant_id, id)
     if receipt.status == "Confirmed":
-        raise HTTPException(status_code=400, detail="已确认的收款单不能删除")
+        raise _http_exception_with_trace(400, "已确认的收款单不能删除", "/receipts/{id}", tenant_id)
     await Receipt.filter(id=id).delete()

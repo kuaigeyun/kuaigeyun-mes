@@ -4,9 +4,11 @@
 提供工艺数据的 RESTful API 接口（不良品、工序、工艺路线、作业程序），支持多组织隔离。
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status, Body
-from typing import List, Optional, Annotated
+import uuid
+from fastapi import APIRouter, Depends, HTTPException as FastAPIHTTPException, Query, status, Body
+from typing import Any, List, Optional, Annotated
 from pydantic import BaseModel, Field
+from loguru import logger
 
 from core.api.deps.deps import get_current_user, get_current_tenant
 from infra.models.user import User
@@ -29,6 +31,32 @@ from apps.master_data.schemas.process_route_change_schemas import (
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(prefix="/process", tags=["Process"])
+
+
+def _http_exception_with_trace(
+    status_code: int,
+    message: str,
+    route: str = "/process",
+    tenant_id: Optional[int] = None,
+) -> FastAPIHTTPException:
+    trace_id = uuid.uuid4().hex
+    logger.warning(
+        "master_data_process_api_error trace_id={} tenant_id={} route={} status_code={} message={}",
+        trace_id,
+        tenant_id,
+        route,
+        status_code,
+        message,
+    )
+    return FastAPIHTTPException(
+        status_code=status_code,
+        detail={"message": message, "trace_id": trace_id},
+    )
+
+
+def HTTPException(*, status_code: int, detail: Any, **kwargs) -> FastAPIHTTPException:
+    message = detail.get("message") if isinstance(detail, dict) else str(detail)
+    return _http_exception_with_trace(status_code, message)
 
 
 # ==================== 不良品相关接口 ====================

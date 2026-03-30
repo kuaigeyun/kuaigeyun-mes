@@ -89,7 +89,8 @@ export interface WorkOrderQRCodeGenerateRequest {
 export interface OperationQRCodeGenerateRequest {
   operation_uuid: string;
   operation_name: string;
-  work_order_code: string;
+  operation_code: string;
+  work_order_code?: string;
   size?: number;
   border?: number;
   error_correction?: ErrorCorrectionLevel;

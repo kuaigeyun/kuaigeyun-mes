@@ -5,9 +5,11 @@ Author: RiverEdge Team
 Date: 2025-02-01
 """
 
+import uuid
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Query, Path, HTTPException, status
+from fastapi import APIRouter, Depends, Query, Path, HTTPException as FastAPIHTTPException, status
+from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
 from infra.models.user import User
@@ -21,6 +23,31 @@ from apps.kuaizhizao.schemas.purchase_requisition import (
 from apps.kuaizhizao.services.purchase_requisition_service import PurchaseRequisitionService
 
 router = APIRouter(tags=["采购申请管理"])
+
+
+def _http_exception_with_trace(
+    status_code: int,
+    message: str,
+    route: str = "/purchase-requisitions",
+    tenant_id: Optional[int] = None,
+) -> FastAPIHTTPException:
+    trace_id = uuid.uuid4().hex
+    logger.warning(
+        "kuaizhizao_purchase_requisitions_api_error trace_id={} tenant_id={} route={} status_code={} message={}",
+        trace_id,
+        tenant_id,
+        route,
+        status_code,
+        message,
+    )
+    return FastAPIHTTPException(
+        status_code=status_code,
+        detail={"message": message, "trace_id": trace_id},
+    )
+
+
+def HTTPException(*, status_code: int, detail: str, **kwargs) -> FastAPIHTTPException:
+    return _http_exception_with_trace(status_code, str(detail))
 
 
 @router.post("/purchase-requisitions", response_model=PurchaseRequisitionResponse, summary="创建采购申请")

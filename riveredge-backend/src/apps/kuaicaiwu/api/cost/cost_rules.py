@@ -5,9 +5,11 @@ Author: Luigi Lu
 Date: 2026-03-14
 """
 
+import uuid
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from tortoise.queryset import Q
+from loguru import logger
 
 from apps.kuaizhizao.schemas.cost import (
     CostRuleCreate,
@@ -25,6 +27,27 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 router = APIRouter(prefix="/cost/rules", tags=["Kuaicaiwu Cost Rules"])
 
 
+def _http_exception_with_trace(
+    status_code: int,
+    message: str,
+    route: str,
+    tenant_id: Optional[int] = None,
+) -> HTTPException:
+    trace_id = uuid.uuid4().hex
+    logger.warning(
+        "kuaicaiwu_cost_rules_api_error trace_id={} tenant_id={} route={} status_code={} message={}",
+        trace_id,
+        tenant_id,
+        route,
+        status_code,
+        message,
+    )
+    return HTTPException(
+        status_code=status_code,
+        detail={"message": message, "trace_id": trace_id},
+    )
+
+
 @router.post("", response_model=CostRuleResponse, status_code=status.HTTP_201_CREATED)
 async def create_cost_rule(
     data: CostRuleCreate,
@@ -39,7 +62,7 @@ async def create_cost_rule(
         )
         return CostRuleResponse.model_validate(cost_rule)
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise _http_exception_with_trace(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e), "/cost/rules", tenant_id)
 
 
 @router.get("", response_model=CostRuleListResponse)
@@ -92,7 +115,7 @@ async def get_cost_rule(
         )
         return CostRuleResponse.model_validate(cost_rule_response)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(status.HTTP_404_NOT_FOUND, str(e), "/cost/rules/{uuid}", tenant_id)
 
 
 @router.put("/{uuid}", response_model=CostRuleResponse)
@@ -114,9 +137,9 @@ async def update_cost_rule(
         )
         return CostRuleResponse.model_validate(cost_rule_response)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(status.HTTP_404_NOT_FOUND, str(e), "/cost/rules/{uuid}", tenant_id)
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise _http_exception_with_trace(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e), "/cost/rules/{uuid}", tenant_id)
 
 
 @router.delete("/{uuid}", status_code=status.HTTP_204_NO_CONTENT)
@@ -134,7 +157,7 @@ async def delete_cost_rule(
             cost_rule_id=cost_rule.id
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_exception_with_trace(status.HTTP_404_NOT_FOUND, str(e), "/cost/rules/{uuid}", tenant_id)
 
 
 @router.post("/init-presets", status_code=status.HTTP_201_CREATED)
@@ -149,4 +172,4 @@ async def init_preset_rules(
         )
         return {"status": "success", "message": "已初始化推荐成本核算规则"}
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        raise _http_exception_with_trace(status.HTTP_500_INTERNAL_SERVER_ERROR, str(e), "/cost/rules/init-presets", tenant_id)

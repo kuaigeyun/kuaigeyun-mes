@@ -26,15 +26,20 @@ interface MaterialInventoryIndicatorProps {
 /** 获取物料可用库存总量（汇总批次库存）- 单物料请求，用于非 Provider 场景 */
 async function fetchMaterialInventory(materialId: number): Promise<number> {
   try {
-    const res = await apiRequest<{ items?: { quantity: number }[] }>(
+    const res = await apiRequest<{ material_totals?: Record<string, number> }>(
       '/apps/kuaizhizao/reports/inventory/batch-query',
       {
         method: 'GET',
-        params: { material_id: materialId, include_expired: false },
+        params: {
+          material_id: materialId,
+          include_expired: false,
+          summary_only: true,
+          include_sales_commitment: true,
+        },
       }
     );
-    const items = res?.items ?? [];
-    return items.reduce((sum, it) => sum + (Number(it?.quantity) || 0), 0);
+    const totals = res?.material_totals ?? {};
+    return Number(totals[String(materialId)] ?? 0) || 0;
   } catch {
     return 0;
   }

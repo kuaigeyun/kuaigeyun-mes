@@ -29,7 +29,7 @@ from apps.kuaizhizao.schemas.quotation import (
 )
 from apps.kuaizhizao.schemas.sales_order import SalesOrderCreate, SalesOrderItemCreate
 from apps.kuaizhizao.constants import DemandStatus, ReviewStatus
-from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
+from infra.exceptions.exceptions import NotFoundError, BusinessLogicError, ValidationError
 from infra.models.user import User
 from infra.services.business_config_service import BusinessConfigService
 
@@ -39,6 +39,31 @@ class QuotationService:
 
     def __init__(self):
         self.business_config_service = BusinessConfigService()
+
+    @staticmethod
+    def _validate_quotation_item_non_negative(
+        *,
+        quote_quantity: Decimal,
+        unit_price: Decimal,
+        total_amount: Optional[Decimal],
+    ) -> None:
+        if quote_quantity <= Decimal("0"):
+            raise ValidationError("报价单明细数量必须大于0")
+        if unit_price < Decimal("0"):
+            raise ValidationError("报价单明细单价不能为负数")
+        if total_amount is not None and total_amount < Decimal("0"):
+            raise ValidationError("报价单明细金额不能为负数")
+
+    @staticmethod
+    def _validate_quotation_non_negative(
+        *,
+        total_quantity: Optional[Decimal],
+        total_amount: Optional[Decimal],
+    ) -> None:
+        if total_quantity is not None and total_quantity < Decimal("0"):
+            raise ValidationError("报价单总数量不能为负数")
+        if total_amount is not None and total_amount < Decimal("0"):
+            raise ValidationError("报价单总金额不能为负数")
 
     def _quotation_to_response(
         self,
@@ -214,6 +239,10 @@ class QuotationService:
             )
 
         async with in_transaction():
+            self._validate_quotation_non_negative(
+                total_quantity=getattr(quotation_data, "total_quantity", None),
+                total_amount=getattr(quotation_data, "total_amount", None),
+            )
             q_dict = quotation_data.model_dump(exclude={"items"})
             q_dict["created_by"] = created_by
             q_dict["updated_by"] = created_by
@@ -233,6 +262,11 @@ class QuotationService:
                 qty = item_data.quote_quantity
                 unit_pr = item_data.unit_price or Decimal("0")
                 amt = item_data.total_amount or (qty * unit_pr)
+                self._validate_quotation_item_non_negative(
+                    quote_quantity=qty,
+                    unit_price=unit_pr,
+                    total_amount=item_data.total_amount,
+                )
                 total_qty += qty
                 total_amt += amt
                 await QuotationItem.create(
@@ -381,6 +415,10 @@ class QuotationService:
             )
 
         async with in_transaction():
+            self._validate_quotation_non_negative(
+                total_quantity=getattr(quotation_data, "total_quantity", None),
+                total_amount=getattr(quotation_data, "total_amount", None),
+            )
             upd = quotation_data.model_dump(exclude_unset=True, exclude={"items"})
             upd["updated_by"] = updated_by
             if upd:
@@ -396,6 +434,11 @@ class QuotationService:
                     qty = item_data.quote_quantity
                     unit_pr = item_data.unit_price or Decimal("0")
                     amt = item_data.total_amount or (qty * unit_pr)
+                    self._validate_quotation_item_non_negative(
+                        quote_quantity=qty,
+                        unit_price=unit_pr,
+                        total_amount=item_data.total_amount,
+                    )
                     total_qty += qty
                     total_amt += amt
                     await QuotationItem.create(
@@ -441,6 +484,7 @@ class QuotationService:
         tenant_id: int,
         quotation_id: int,
         created_by: int,
+        selected_item_ids: Optional[List[int]] = None,
     ):
         """
         将报价单转为销售订单
@@ -463,6 +507,20 @@ class QuotationService:
         ).order_by("id")
         if not items:
             raise BusinessLogicError("报价单无明细，无法转为销售订单")
+
+        if selected_item_ids is not None:
+            selected_ids = {
+                int(v) for v in selected_item_ids if v is not None and str(v).strip()
+            }
+            if not selected_ids:
+                raise BusinessLogicError("未选择可转换的报价明细")
+            item_map = {int(it.id): it for it in items}
+            missing_ids = sorted([iid for iid in selected_ids if iid not in item_map])
+            if missing_ids:
+                raise BusinessLogicError(f"存在无效的报价明细ID: {missing_ids}")
+            items = [it for it in items if int(it.id) in selected_ids]
+            if not items:
+                raise BusinessLogicError("所选报价明细为空，无法转为销售订单")
 
         # 构建 SalesOrderCreate
         order_date = quotation.quotation_date
@@ -503,6 +561,7 @@ class QuotationService:
             shipping_address=quotation.shipping_address,
             shipping_method=quotation.shipping_method,
             payment_terms=quotation.payment_terms,
+            currency_code=quotation.currency_code or "CNY",
             notes=quotation.notes or f"由报价单 {quotation.quotation_code} 转入",
             items=so_items,
         )

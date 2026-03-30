@@ -42,6 +42,97 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
     def __init__(self):
         super().__init__(PurchaseOrder)
 
+    @staticmethod
+    def _validate_supplier_admission_for_material(
+        *,
+        supplier_id: int,
+        supplier_name: str,
+        material: Material,
+    ) -> None:
+        """
+        P3-P-003: 供方准入联锁（最小闭环）。
+        对采购件（Buy）若已配置默认供应商，则仅允许该供应商下单。
+        """
+        source_type = str(getattr(material, "source_type", "") or "").strip().lower()
+        if source_type != "buy":
+            return
+
+        cfg = getattr(material, "source_config", None)
+        if not isinstance(cfg, dict):
+            return
+        inner = cfg.get("source_config") if isinstance(cfg.get("source_config"), dict) else cfg
+        default_supplier_id = inner.get("default_supplier_id") if isinstance(inner, dict) else None
+        if default_supplier_id in (None, ""):
+            return
+        try:
+            admitted_supplier_id = int(default_supplier_id)
+        except Exception:
+            return
+        if admitted_supplier_id != int(supplier_id):
+            material_label = getattr(material, "main_code", None) or getattr(material, "code", None) or str(material.id)
+            raise BusinessLogicError(
+                f"物料 {material_label} 仅允许供应商 {admitted_supplier_id} 供货，当前供应商 {supplier_name or supplier_id} 不在准入清单"
+            )
+
+    @staticmethod
+    def _extract_material_purchase_benchmark_price(material: Material) -> Optional[Decimal]:
+        """
+        从物料默认值中提取采购基准价，用于采购价格偏差风控。
+        优先级：defaults.purchase.standard_price -> defaults.purchase.purchase_price -> source_config.purchase_price。
+        """
+        def _to_decimal(v: Any) -> Optional[Decimal]:
+            if v is None or v == "":
+                return None
+            try:
+                d = Decimal(str(v))
+            except Exception:
+                return None
+            if d <= 0:
+                return None
+            return d
+
+        defaults = getattr(material, "defaults", None)
+        if isinstance(defaults, dict):
+            purchase_defaults = defaults.get("purchase") if isinstance(defaults.get("purchase"), dict) else {}
+            for key in ("standard_price", "purchase_price"):
+                d = _to_decimal(purchase_defaults.get(key))
+                if d is not None:
+                    return d
+
+        source_cfg = getattr(material, "source_config", None)
+        if isinstance(source_cfg, dict):
+            d = _to_decimal(source_cfg.get("purchase_price"))
+            if d is not None:
+                return d
+        return None
+
+    @staticmethod
+    def _validate_purchase_price_fluctuation_for_material(
+        *,
+        material: Material,
+        unit_price: Decimal,
+        fluctuation_limit_percent: float,
+    ) -> None:
+        """
+        P3-P-004: 采购价格风控（最小闭环）。
+        当阈值>0 且物料存在采购基准价时，若偏差超阈值则阻断下单/改单。
+        """
+        if fluctuation_limit_percent <= 0:
+            return
+
+        benchmark_price = PurchaseService._extract_material_purchase_benchmark_price(material)
+        if benchmark_price is None or benchmark_price <= 0:
+            return
+
+        current_price = Decimal(str(unit_price or 0))
+        deviation_pct = (abs(current_price - benchmark_price) / benchmark_price) * Decimal("100")
+        if deviation_pct > Decimal(str(fluctuation_limit_percent)):
+            material_label = getattr(material, "main_code", None) or getattr(material, "code", None) or str(material.id)
+            raise BusinessLogicError(
+                f"物料 {material_label} 采购单价偏差 {deviation_pct:.2f}% 超过阈值 "
+                f"{Decimal(str(fluctuation_limit_percent)):.2f}%（基准价={benchmark_price}，当前={current_price}）"
+            )
+
     async def create_purchase_order(
         self,
         tenant_id: int,
@@ -73,6 +164,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             # 流程设置强执行：必须先有采购申请才可下采购单
             config_service = BusinessConfigService()
             biz_config = await config_service.get_business_config(tenant_id)
+            purchase_price_fluctuation_limit = await config_service.get_purchase_price_fluctuation_limit_percent(tenant_id)
             require_purchase_requisition = (
                 biz_config.get("parameters", {})
                 .get("procurement", {})
@@ -117,6 +209,16 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 material = await Material.get_or_none(tenant_id=tenant_id, id=item_data.material_id)
                 if not material:
                     raise NotFoundError(f"物料不存在: {item_data.material_id}")
+                self._validate_supplier_admission_for_material(
+                    supplier_id=order_data.supplier_id,
+                    supplier_name=order_data.supplier_name or supplier.name,
+                    material=material,
+                )
+                self._validate_purchase_price_fluctuation_for_material(
+                    material=material,
+                    unit_price=item_data.unit_price,
+                    fluctuation_limit_percent=purchase_price_fluctuation_limit,
+                )
 
                 # 计算总价
                 total_price = item_data.ordered_quantity * item_data.unit_price
@@ -323,6 +425,9 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
 
             # 如果有明细更新，重新计算金额
             if order_data.items:
+                purchase_price_fluctuation_limit = await BusinessConfigService().get_purchase_price_fluctuation_limit_percent(
+                    tenant_id
+                )
                 # 删除原有明细
                 await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order_id).delete()
 
@@ -331,6 +436,22 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 total_amount = Decimal(0)
 
                 for item_data in order_data.items:
+                    material = await Material.get_or_none(tenant_id=tenant_id, id=item_data.material_id)
+                    if not material:
+                        raise NotFoundError(f"物料不存在: {item_data.material_id}")
+                    final_supplier_id = int(order_data.supplier_id or order.supplier_id or 0)
+                    if final_supplier_id > 0:
+                        self._validate_supplier_admission_for_material(
+                            supplier_id=final_supplier_id,
+                            supplier_name=(order_data.supplier_name or order.supplier_name or ""),
+                            material=material,
+                        )
+                    self._validate_purchase_price_fluctuation_for_material(
+                        material=material,
+                        unit_price=item_data.unit_price,
+                        fluctuation_limit_percent=purchase_price_fluctuation_limit,
+                    )
+
                     total_price = item_data.ordered_quantity * item_data.unit_price
                     outstanding_quantity = item_data.ordered_quantity
 

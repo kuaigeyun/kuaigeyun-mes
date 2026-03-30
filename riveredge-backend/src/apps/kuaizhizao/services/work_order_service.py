@@ -1562,21 +1562,23 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             if work_order.status != 'draft':
                 raise ValidationError("只能下达草稿状态的工单")
 
-            # 检查缺料
-            if check_shortage:
+            # 检查缺料（按参数开关 + 缺料拦截级别在“下达”阶段是否生效）
+            block_level = await BusinessConfigService().get_material_shortage_block_level(tenant_id)
+            if check_shortage and _material_shortage_block_applies(block_level, "release"):
                 shortage_result = await self.check_material_shortage(
                     tenant_id=tenant_id,
                     work_order_id=work_order_id
                 )
-                if shortage_result["has_shortage"]:
+                if shortage_result.get("has_shortage"):
+                    shortage_items = shortage_result.get("shortage_items") or []
+                    total_shortage_count = int(shortage_result.get("total_shortage_count") or len(shortage_items) or 0)
                     shortage_materials = ", ".join([
                         f"{item['material_name']}(缺{item['shortage_quantity']}{item['unit']})"
-                        for item in shortage_result["shortage_items"][:3]
+                        for item in shortage_items[:3]
                     ])
                     raise BusinessLogicError(
                         f"工单存在缺料，无法下达。缺料物料：{shortage_materials}"
-                        + (f"等{shortage_result['total_shortage_count']}种物料" 
-                           if shortage_result['total_shortage_count'] > 3 else "")
+                        + (f"等{total_shortage_count}种物料" if total_shortage_count > 3 else "")
                     )
 
             # 更新状态
@@ -2463,6 +2465,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             # 获取工单
             work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
 
+            # 冻结态禁止开工
+            if getattr(work_order, "is_frozen", False):
+                raise BusinessLogicError(f"工单已冻结，不能开工。冻结原因：{getattr(work_order, 'freeze_reason', None) or '无'}")
+
             policy = await BusinessConfigService().get_work_order_picking_policy(tenant_id)
             if policy.get("require_confirmed_picking_before_operation_start", False):
                 has_confirmed = await self.has_confirmed_picking_for_work_order(tenant_id, work_order_id)
@@ -2475,17 +2481,19 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     tenant_id=tenant_id,
                     work_order_id=work_order_id
                 )
-                if shortage_result["has_shortage"]:
+                if shortage_result.get("has_shortage"):
+                    shortage_items = shortage_result.get("shortage_items") or []
+                    total_shortage_count = int(shortage_result.get("total_shortage_count") or len(shortage_items) or 0)
                     shortage_materials = ", ".join([
                         f"{item['material_name']}(缺{item['shortage_quantity']}{item['unit']})"
-                        for item in shortage_result["shortage_items"][:3]
+                        for item in shortage_items[:3]
                     ])
                     raise BusinessLogicError(
                         "工单存在缺料，无法开工。缺料物料："
                         + shortage_materials
                         + (
-                            f"等{shortage_result['total_shortage_count']}种物料"
-                            if shortage_result["total_shortage_count"] > 3
+                            f"等{total_shortage_count}种物料"
+                            if total_shortage_count > 3
                             else ""
                         )
                     )
@@ -3086,6 +3094,11 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             if reporting_records:
                 raise BusinessLogicError("工单已有报工记录，不允许撤回。只能撤回未报工的工单。")
 
+            # 兜底保护：即便报工记录缺失，也不允许撤回已有执行痕迹的工单
+            completed_qty = work_order.completed_quantity or Decimal("0")
+            if (getattr(work_order, "actual_start_date", None) is not None) or completed_qty > 0:
+                raise BusinessLogicError("工单已有执行痕迹（已开工或有产出），不允许撤回。")
+
             # 保存原始状态用于节点时间记录
             original_status = work_order.status
 
@@ -3108,6 +3121,14 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                         document_type="work_order",
                         document_id=work_order_id,
                         node_code="released",
+                        operator_id=revoked_by,
+                    )
+                elif original_status == 'completed':
+                    await timing_service.record_node_end(
+                        tenant_id=tenant_id,
+                        document_type="work_order",
+                        document_id=work_order_id,
+                        node_code="completed",
                         operator_id=revoked_by,
                     )
             except Exception as e:
@@ -3142,13 +3163,19 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         """
         async with in_transaction():
             work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
+            previous_status = str(getattr(work_order, "status", "") or "")
 
             # 检查工单状态：不能对已取消的工单指定结束
-            if work_order.status == 'cancelled':
+            if previous_status == 'cancelled':
                 raise ValidationError("已取消的工单不能指定结束")
 
+            # 仅允许对已下达/执行中的工单做指定结束；草稿及其他异常状态应先规范到可执行状态。
+            allowed_statuses = {"released", "in_progress", "completed"}
+            if previous_status not in allowed_statuses:
+                raise ValidationError("只能对已下达或进行中的工单指定结束")
+
             # 如果已经是已完成状态，直接返回
-            if work_order.status == 'completed' and work_order.manually_completed:
+            if previous_status == 'completed':
                 return WorkOrderResponse.model_validate(work_order)
 
             # 更新状态为已完成，并标记为指定结束
@@ -3166,8 +3193,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             try:
                 timing_service = DocumentTimingService()
                 # 结束当前节点（如果存在）
-                if work_order.status in ['released', 'in_progress']:
-                    current_node = 'released' if work_order.status == 'released' else 'in_progress'
+                if previous_status in ['released', 'in_progress']:
+                    current_node = 'released' if previous_status == 'released' else 'in_progress'
                     await timing_service.record_node_end(
                         tenant_id=tenant_id,
                         document_type="work_order",

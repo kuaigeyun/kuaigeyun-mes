@@ -4,9 +4,11 @@
 提供工厂数据的 RESTful API 接口（厂区、车间、产线、工位），支持多组织隔离。
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from typing import List, Optional, Annotated
+import uuid
+from fastapi import APIRouter, Depends, HTTPException as FastAPIHTTPException, Query, status
+from typing import Any, List, Optional, Annotated
 from uuid import UUID
+from loguru import logger
 
 from core.api.deps.deps import get_current_user, get_current_tenant
 from infra.models.user import User
@@ -30,6 +32,32 @@ from apps.master_data.services.work_group_service import WorkGroupService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(prefix="/factory", tags=["Factory"])
+
+
+def _http_exception_with_trace(
+    status_code: int,
+    message: str,
+    route: str = "/factory",
+    tenant_id: Optional[int] = None,
+) -> FastAPIHTTPException:
+    trace_id = uuid.uuid4().hex
+    logger.warning(
+        "master_data_factory_api_error trace_id={} tenant_id={} route={} status_code={} message={}",
+        trace_id,
+        tenant_id,
+        route,
+        status_code,
+        message,
+    )
+    return FastAPIHTTPException(
+        status_code=status_code,
+        detail={"message": message, "trace_id": trace_id},
+    )
+
+
+def HTTPException(*, status_code: int, detail: Any, **kwargs) -> FastAPIHTTPException:
+    message = detail.get("message") if isinstance(detail, dict) else str(detail)
+    return _http_exception_with_trace(status_code, message)
 
 
 # ==================== 厂区相关接口 ====================

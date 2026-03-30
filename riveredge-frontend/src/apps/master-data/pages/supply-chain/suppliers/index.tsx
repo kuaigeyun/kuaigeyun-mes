@@ -840,7 +840,7 @@ const SuppliersPage: React.FC = () => {
           t('field.supplier.address'),
           t('field.supplier.category'),
         ]}
-        importExampleRow={['SUPP001', '供应商A', '供A', '李四', '13900139000', 'b@c.com', '上海市浦东新区', '原材料']}
+        importExampleRow={['SUPP-WX-001', '无锡德力精密零件有限公司', '德力精密', '王经理', '0510-82220002', 'contact@deli-wx.com', '无锡市锡山经济技术开发区二号路88号', '原材料']}
         importFieldMap={{
           [t('field.supplier.code')]: 'code',
           [`*${t('field.supplier.code')}`]: 'code',

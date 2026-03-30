@@ -54,6 +54,20 @@ class ReportingService(AppBaseService[ReportingRecord]):
     def __init__(self):
         super().__init__(ReportingRecord)
 
+    async def _get_reporting_estimated_wage_rate(self, tenant_id: int) -> Decimal:
+        """读取报工统计预估工资基数，未配置时回退到 30。"""
+        default_rate = Decimal("30")
+        try:
+            biz_config = await BusinessConfigService().get_business_config(tenant_id)
+            reporting_cfg = (biz_config or {}).get("parameters", {}).get("reporting", {})
+            configured_rate = reporting_cfg.get("estimated_wage_rate")
+            if configured_rate is None:
+                return default_rate
+            rate = Decimal(str(configured_rate))
+            return rate if rate > 0 else default_rate
+        except Exception:
+            return default_rate
+
     async def create_reporting_record(
         self,
         tenant_id: int,
@@ -86,6 +100,14 @@ class ReportingService(AppBaseService[ReportingRecord]):
             if not work_order:
                 raise NotFoundError(f"工单不存在: {reporting_data.work_order_id}")
 
+            # 报工人身份一致性：提交人必须与报工操作工一致，避免代填绕过
+            try:
+                worker_id_int = int(getattr(reporting_data, "worker_id"))
+            except Exception:
+                raise ValidationError("报工操作工ID无效")
+            if worker_id_int != int(reported_by):
+                raise BusinessLogicError("报工人身份不一致：提交人与操作工不匹配")
+
             block_level = await BusinessConfigService().get_material_shortage_block_level(tenant_id)
             if block_level >= 3:
                 from apps.kuaizhizao.services.work_order_service import WorkOrderService
@@ -94,16 +116,18 @@ class ReportingService(AppBaseService[ReportingRecord]):
                     work_order_id=reporting_data.work_order_id,
                 )
                 if shortage_result.get("has_shortage"):
+                    shortage_items = shortage_result.get("shortage_items", []) or []
+                    total_shortage_count = int(shortage_result.get("total_shortage_count") or len(shortage_items) or 0)
                     shortage_materials = ", ".join([
                         f"{item['material_name']}(缺{item['shortage_quantity']}{item['unit']})"
-                        for item in shortage_result.get("shortage_items", [])[:3]
+                        for item in shortage_items[:3]
                     ])
                     raise BusinessLogicError(
                         "工单存在缺料，无法报工。缺料物料："
                         + shortage_materials
                         + (
-                            f"等{shortage_result.get('total_shortage_count', 0)}种物料"
-                            if shortage_result.get("total_shortage_count", 0) > 3
+                            f"等{total_shortage_count}种物料"
+                            if total_shortage_count > 3
                             else ""
                         )
                     )
@@ -187,6 +211,21 @@ class ReportingService(AppBaseService[ReportingRecord]):
                     reported_quantity=reported_quantity_dec,
                 )
 
+            # 工时合法性：必须为正数
+            if Decimal(str(getattr(reporting_data, "work_hours", 0) or 0)) <= 0:
+                raise ValidationError("报工工时必须大于0")
+
+            # 报工时间合法性：禁止未来时间（兼容时区 aware/naive）
+            if getattr(reporting_data, "reported_at", None):
+                reported_at = reporting_data.reported_at
+                now_ref = (
+                    datetime.now(reported_at.tzinfo)
+                    if getattr(reported_at, "tzinfo", None) is not None
+                    else datetime.now()
+                )
+                if reported_at > now_ref:
+                    raise ValidationError("报工时间不能晚于当前时间")
+
             # 数量报工：累计完成不可超过工单计划 + 超报上限（存于工单工序行）
             if reporting_type == "quantity":
                 from apps.kuaizhizao.services.over_report_rules import (
@@ -248,16 +287,22 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 approved_by = reported_by
                 approved_by_name = reporting_data.worker_name or "自动审核"
 
+            # 关键主数据标识以后端查询结果为准，避免前端篡改编码/名称
+            trusted_work_order_code = getattr(work_order, "code", None) or reporting_data.work_order_code
+            trusted_work_order_name = getattr(work_order, "name", None) or reporting_data.work_order_name
+            trusted_operation_code = getattr(work_order_operation, "operation_code", None) or reporting_data.operation_code
+            trusted_operation_name = getattr(work_order_operation, "operation_name", None) or reporting_data.operation_name
+
             # 创建报工记录
             reporting_record = await ReportingRecord.create(
                 tenant_id=tenant_id,
                 uuid=str(uuid.uuid4()),
                 work_order_id=reporting_data.work_order_id,
-                work_order_code=reporting_data.work_order_code,
-                work_order_name=reporting_data.work_order_name,
+                work_order_code=trusted_work_order_code,
+                work_order_name=trusted_work_order_name,
                 operation_id=reporting_data.operation_id,
-                operation_code=reporting_data.operation_code,
-                operation_name=reporting_data.operation_name,
+                operation_code=trusted_operation_code,
+                operation_name=trusted_operation_name,
                 worker_id=reporting_data.worker_id,
                 worker_name=reporting_data.worker_name,
                 reported_quantity=reporting_data.reported_quantity,
@@ -331,7 +376,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
                     report_id=reporting_record.id,
                     report_quantity=float(reporting_data.reported_quantity),
                     operation_id=reporting_data.operation_id,
-                    operation_code=reporting_data.operation_code,
+                    operation_code=trusted_operation_code,
                     processed_by=reported_by,
                 )
             except Exception as backflush_err:
@@ -486,6 +531,17 @@ class ReportingService(AppBaseService[ReportingRecord]):
             if record.status != 'pending':
                 raise ValidationError("只能审核待审核状态的报工记录")
 
+            # 审核前置校验：未来报工时间不允许通过审核（兼容时区 aware/naive）
+            if getattr(record, "reported_at", None):
+                reported_at = record.reported_at
+                now_ref = (
+                    datetime.now(reported_at.tzinfo)
+                    if getattr(reported_at, "tzinfo", None) is not None
+                    else datetime.now()
+                )
+                if reported_at > now_ref:
+                    raise ValidationError("报工时间不能晚于当前时间")
+
             # 获取审核人信息
             approved_by_name = await self.get_user_name(approved_by)
 
@@ -495,11 +551,19 @@ class ReportingService(AppBaseService[ReportingRecord]):
             record.approved_by_name = approved_by_name
 
             # 根据是否有驳回原因设置状态
+            if rejection_reason is not None and not str(rejection_reason).strip():
+                raise ValidationError("驳回原因不能为空")
+
             if rejection_reason:
                 record.status = 'rejected'
-                record.rejection_reason = rejection_reason
+                record.rejection_reason = str(rejection_reason).strip()
             else:
+                # 审核分离：报工人不可自审通过
+                if int(approved_by) == int(getattr(record, "worker_id", 0) or 0):
+                    raise BusinessLogicError("报工人不能审核通过自己的报工记录")
                 record.status = 'approved'
+                # 状态切回通过时，清理历史驳回原因，避免脏字段残留
+                record.rejection_reason = None
 
             await record.save()
 
@@ -595,6 +659,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
             record.approved_at = None
             record.approved_by = None
             record.approved_by_name = None
+            record.rejection_reason = None
             
             # 记录在备注中
             user_info = await self.get_user_info(revoked_by)
@@ -630,6 +695,11 @@ class ReportingService(AppBaseService[ReportingRecord]):
         Returns:
             dict: 操作结果统计
         """
+        if not record_ids:
+            raise ValidationError("报工记录ID列表不能为空")
+        if any((not isinstance(rid, int)) or rid <= 0 for rid in record_ids):
+            raise ValidationError("报工记录ID必须为正整数")
+
         results = {
             "total": len(record_ids),
             "success": 0,
@@ -664,6 +734,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
                     record.approved_at = None
                     record.approved_by = None
                     record.approved_by_name = None
+                    record.rejection_reason = None
                     
                     revocation_note = f"\n[批量撤回审核] {now_str} 由 {revoked_by_name} 撤回审核"
                     if record.remarks:
@@ -714,6 +785,10 @@ class ReportingService(AppBaseService[ReportingRecord]):
         if record.status == 'approved':
             raise ValidationError("已审核通过的报工记录不允许直接删除，请先撤销审核")
 
+        def _dec_non_negative(value: Decimal) -> Decimal:
+            """防御性兜底：删除回退后计数不允许小于 0。"""
+            return value if value >= Decimal("0") else Decimal("0")
+
         async with in_transaction():
             # 获取工单工序并扣减计数
             work_order_op = await WorkOrderOperation.get_or_none(
@@ -723,9 +798,9 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 deleted_at__isnull=True,
             )
             if work_order_op:
-                work_order_op.completed_quantity = (work_order_op.completed_quantity or Decimal('0')) - record.reported_quantity
-                work_order_op.qualified_quantity = (work_order_op.qualified_quantity or Decimal('0')) - record.qualified_quantity
-                work_order_op.unqualified_quantity = (work_order_op.unqualified_quantity or Decimal('0')) - record.unqualified_quantity
+                work_order_op.completed_quantity = _dec_non_negative((work_order_op.completed_quantity or Decimal('0')) - record.reported_quantity)
+                work_order_op.qualified_quantity = _dec_non_negative((work_order_op.qualified_quantity or Decimal('0')) - record.qualified_quantity)
+                work_order_op.unqualified_quantity = _dec_non_negative((work_order_op.unqualified_quantity or Decimal('0')) - record.unqualified_quantity)
                 
                 # 如果之前是已完成，变回进行中
                 if work_order_op.status == 'completed':
@@ -739,9 +814,9 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 # 注意：WorkOrder 的计数通常由 _update_work_order_progress (只看 approved) 维护。
                 # 但如果在 pending 状态删除，也需要从 work_order.completed_quantity 扣减（如果它在 create 时加了）。
                 # 在 create_reporting_record 中确实加了。
-                work_order.completed_quantity = (work_order.completed_quantity or Decimal('0')) - record.reported_quantity
-                work_order.qualified_quantity = (work_order.qualified_quantity or Decimal('0')) - record.qualified_quantity
-                work_order.unqualified_quantity = (work_order.unqualified_quantity or Decimal('0')) - record.unqualified_quantity
+                work_order.completed_quantity = _dec_non_negative((work_order.completed_quantity or Decimal('0')) - record.reported_quantity)
+                work_order.qualified_quantity = _dec_non_negative((work_order.qualified_quantity or Decimal('0')) - record.qualified_quantity)
+                work_order.unqualified_quantity = _dec_non_negative((work_order.unqualified_quantity or Decimal('0')) - record.unqualified_quantity)
                 
                 if work_order.status == 'completed':
                     work_order.status = 'in_progress'
@@ -791,6 +866,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
         total_qualified_quantity = sum(r.qualified_quantity for r in records) or Decimal("0")
         total_unqualified_quantity = sum(r.unqualified_quantity for r in records) or Decimal("0")
         total_work_hours = sum(r.work_hours for r in records) or Decimal("0")
+
+        wage_rate = await self._get_reporting_estimated_wage_rate(tenant_id)
 
         # 计算合格率
         qualification_rate = float((total_qualified_quantity / total_reported_quantity * 100)) if total_reported_quantity > 0 else 0
@@ -868,15 +945,18 @@ class ReportingService(AppBaseService[ReportingRecord]):
             'total_unqualified_quantity': float(total_unqualified_quantity),
             'total_work_hours': float(total_work_hours),
             'cumulative_hours': float(total_work_hours),  # 映射为前端需要的字段
-            'estimated_wages': float(total_work_hours * 30),  # 假定平均时薪 30 基数
+            'estimated_wages': float(total_work_hours * wage_rate),
             'qualification_rate': qualification_rate,
             'unqualified_rate': unqualified_rate,
             'avg_quantity_per_hour': avg_quantity_per_hour,
+            # 与 overview 统计口径保持关键字段对齐，减少前端分支判断
+            'efficiency': qualification_rate,
             'operation_stats': operation_stats_list,
             'worker_stats': worker_stats_list,
             'trends': {
                 'hours': [120, 145, 138, 160, 155, 175, float(total_work_hours)],
-                'wages': [1200, 1500, 1800, 1600, 2100, 1900, float(total_work_hours * 30)],
+                'wages': [1200, 1500, 1800, 1600, 2100, 1900, float(total_work_hours * wage_rate)],
+                'efficiency': [qualification_rate] * 7,
             }
         }
 
@@ -1388,6 +1468,47 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
             # 更新报工记录
             update_data = correct_data.model_dump(exclude_unset=True)
+
+            # 数据修正仅允许业务数据，不允许直接改审核字段
+            forbidden_fields = {"status", "approved_by", "approved_by_name", "rejection_reason"}
+            touched_forbidden = forbidden_fields.intersection(update_data.keys())
+            if touched_forbidden:
+                raise ValidationError("报工数据修正不允许直接修改审核字段")
+
+            # 数量合法性：不得为负，且合格+不合格不得超过报工数量
+            reported_qty = update_data.get("reported_quantity", reporting_record.reported_quantity)
+            qualified_qty = update_data.get("qualified_quantity", reporting_record.qualified_quantity)
+            unqualified_qty = update_data.get("unqualified_quantity", reporting_record.unqualified_quantity)
+
+            for _name, _value in (
+                ("reported_quantity", reported_qty),
+                ("qualified_quantity", qualified_qty),
+                ("unqualified_quantity", unqualified_qty),
+            ):
+                if _value is not None and Decimal(str(_value)) < Decimal("0"):
+                    raise ValidationError("报工数量相关字段不能为负数")
+
+            if (
+                reported_qty is not None
+                and qualified_qty is not None
+                and unqualified_qty is not None
+                and (Decimal(str(qualified_qty)) + Decimal(str(unqualified_qty)) > Decimal(str(reported_qty)))
+            ):
+                raise ValidationError("合格数与不合格数之和不能超过报工数量")
+
+            # 与创建口径一致：工时必须大于 0，报工时间不得晚于当前时间
+            if "work_hours" in update_data and Decimal(str(update_data.get("work_hours") or 0)) <= Decimal("0"):
+                raise ValidationError("报工工时必须大于0")
+            if "reported_at" in update_data and update_data.get("reported_at") is not None:
+                corrected_reported_at = update_data["reported_at"]
+                now_ref = (
+                    datetime.now(corrected_reported_at.tzinfo)
+                    if getattr(corrected_reported_at, "tzinfo", None) is not None
+                    else datetime.now()
+                )
+                if corrected_reported_at > now_ref:
+                    raise ValidationError("报工时间不能晚于当前时间")
+
             update_data['remarks'] = updated_remarks
             update_data['updated_by'] = corrected_by
             update_data['updated_by_name'] = user_info['name']

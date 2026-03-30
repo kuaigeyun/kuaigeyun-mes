@@ -134,23 +134,116 @@ class ManagementReportService:
 
     async def get_wip_valuation(self, tenant_id: int) -> Dict[str, Any]:
         """在制品 (WIP) 价值实时跟踪"""
-        # 查找所有进行中的工单
         active_orders = await WorkOrder.filter(
             tenant_id=tenant_id,
             status__in=["released", "in_progress"],
             deleted_at__isnull=True
         ).all()
-        
-        total_wip_value = Decimal(0)
-        # 这里只是一个估算逻辑：工单已领料总额 - 已入库成品总额
-        # 实际实现需要查询 ProductionPicking 和 FinishedGoodsReceipt
-        
-        # 占位实现
-        total_wip_value = len(active_orders) * Decimal("5000.00") 
+
+        if not active_orders:
+            return {
+                "active_work_orders_count": 0,
+                "estimated_wip_value": 0.0,
+                "generated_at": date.today().isoformat(),
+                "items": [],
+                "realtime_window_minutes": 10,
+                "realtime_visible_ratio": 0.0,
+            }
+
+        work_order_ids = [o.id for o in active_orders]
+        reporting_rows = await ReportingRecord.filter(
+            tenant_id=tenant_id,
+            work_order_id__in=work_order_ids,
+            status="approved",
+            deleted_at__isnull=True,
+        ).all()
+
+        reporting_stats: Dict[int, Dict[str, Any]] = {}
+        for row in reporting_rows:
+            data = reporting_stats.setdefault(
+                row.work_order_id,
+                {
+                    "reported_qualified_qty": Decimal("0.00"),
+                    "reported_unqualified_qty": Decimal("0.00"),
+                    "reported_hours": Decimal("0.00"),
+                    "latest_reported_at": None,
+                },
+            )
+            data["reported_qualified_qty"] += Decimal(str(row.qualified_quantity or 0))
+            data["reported_unqualified_qty"] += Decimal(str(row.unqualified_quantity or 0))
+            data["reported_hours"] += Decimal(str(row.work_hours or 0))
+            ts = row.reported_at
+            if ts and (data["latest_reported_at"] is None or ts > data["latest_reported_at"]):
+                data["latest_reported_at"] = ts
+
+        now = date.today()
+        realtime_cutoff = timedelta(minutes=10)
+        total_wip_value = Decimal("0.00")
+        realtime_visible_count = 0
+        items: List[Dict[str, Any]] = []
+
+        for order in active_orders:
+            latest_calc = await CostCalculation.filter(
+                tenant_id=tenant_id,
+                work_order_id=order.id,
+                calculation_type="工单成本",
+                deleted_at__isnull=True,
+            ).order_by("-created_at").first()
+
+            stats = reporting_stats.get(order.id, {})
+            planned_qty = Decimal(str(order.quantity or 0))
+            completed_qty = Decimal(str(order.completed_quantity or 0))
+            wip_qty = planned_qty - completed_qty
+            if wip_qty < Decimal("0.00"):
+                wip_qty = Decimal("0.00")
+
+            unit_cost = Decimal(str(latest_calc.unit_cost)) if latest_calc else Decimal("0.00")
+            wip_value = (wip_qty * unit_cost).quantize(Decimal("0.01"))
+            total_wip_value += wip_value
+
+            latest_reported_at = stats.get("latest_reported_at")
+            latest_cost_at = latest_calc.created_at if latest_calc else None
+            latest_update_at = max(
+                [v for v in [latest_reported_at, latest_cost_at, order.updated_at] if v is not None],
+                default=None,
+            )
+            if latest_update_at and (latest_update_at.date() == now):
+                # 当天有更新视为近实时可见（轻量口径）
+                realtime_visible_count += 1
+
+            items.append(
+                {
+                    "work_order_id": order.id,
+                    "work_order_code": order.code,
+                    "product_id": order.product_id,
+                    "product_code": order.product_code,
+                    "product_name": order.product_name,
+                    "status": order.status,
+                    "planned_quantity": float(planned_qty),
+                    "completed_quantity": float(completed_qty),
+                    "wip_quantity": float(wip_qty),
+                    "unit_cost": float(unit_cost),
+                    "estimated_wip_value": float(wip_value),
+                    "reported_qualified_quantity": float(stats.get("reported_qualified_qty", Decimal("0.00"))),
+                    "reported_unqualified_quantity": float(stats.get("reported_unqualified_qty", Decimal("0.00"))),
+                    "reported_work_hours": float(stats.get("reported_hours", Decimal("0.00"))),
+                    "latest_reported_at": latest_reported_at.isoformat() if latest_reported_at else None,
+                    "latest_cost_calculated_at": latest_cost_at.isoformat() if latest_cost_at else None,
+                    "latest_update_at": latest_update_at.isoformat() if latest_update_at else None,
+                }
+            )
+
+        items.sort(key=lambda x: x["latest_update_at"] or "", reverse=True)
+        total_count = len(items)
+        realtime_ratio = (realtime_visible_count / total_count) if total_count else 0.0
 
         return {
-            "active_work_orders_count": len(active_orders),
-            "estimated_wip_value": float(total_wip_value)
+            "active_work_orders_count": total_count,
+            "estimated_wip_value": float(total_wip_value.quantize(Decimal("0.01"))),
+            "generated_at": now.isoformat(),
+            "realtime_window_minutes": int(realtime_cutoff.total_seconds() / 60),
+            "realtime_visible_ratio": round(realtime_ratio, 4),
+            "items": items,
         }
 
     async def get_cost_variance_report(self, tenant_id: int, product_id: int) -> Dict[str, Any]:

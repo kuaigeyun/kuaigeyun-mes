@@ -24,6 +24,8 @@ from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
 from apps.kuaizhizao.models.finished_goods_receipt_item import FinishedGoodsReceiptItem
 from apps.kuaizhizao.models.sales_delivery import SalesDelivery
 from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
+from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
+from apps.kuaizhizao.models.shipment_notice_item import ShipmentNoticeItem
 from apps.kuaizhizao.models.sales_return import SalesReturn
 from apps.kuaizhizao.models.sales_return_item import SalesReturnItem
 from apps.kuaizhizao.models.purchase_return import PurchaseReturn
@@ -110,6 +112,61 @@ def _parse_serial_numbers(serial_numbers: Any) -> List[str]:
     return []
 
 
+def _resolve_unit_conversion_factor(material_units: Any, unit_name: Optional[str]) -> Decimal:
+    """从物料多单位配置中解析“业务单位 -> 基础单位”换算因子。"""
+    if not unit_name:
+        return Decimal("1")
+    if not isinstance(material_units, dict):
+        return Decimal("1")
+    units = material_units.get("units")
+    if not isinstance(units, list):
+        return Decimal("1")
+
+    target = str(unit_name).strip()
+    if not target:
+        return Decimal("1")
+
+    for unit_cfg in units:
+        if not isinstance(unit_cfg, dict):
+            continue
+        if str(unit_cfg.get("unit", "")).strip() != target:
+            continue
+        try:
+            numerator = Decimal(str(unit_cfg.get("numerator", 1) or 1))
+            denominator = Decimal(str(unit_cfg.get("denominator", 1) or 1))
+            if numerator <= 0 or denominator <= 0:
+                return Decimal("1")
+            return numerator / denominator
+        except Exception:
+            return Decimal("1")
+    return Decimal("1")
+
+
+def _to_base_quantity(
+    *,
+    quantity: Decimal,
+    material_unit: Optional[str],
+    material: Optional[Any],
+) -> Decimal:
+    """把业务数量按物料多单位规则换算为基础单位数量。"""
+    qty = Decimal(str(quantity or 0))
+    if qty <= 0 or not material:
+        return qty
+
+    base_unit = str(getattr(material, "base_unit", "") or "").strip()
+    unit_name = str(material_unit or "").strip()
+    if not unit_name or not base_unit or unit_name == base_unit:
+        return qty
+
+    factor = _resolve_unit_conversion_factor(
+        getattr(material, "units", None),
+        unit_name,
+    )
+    if factor <= 0:
+        factor = Decimal("1")
+    return qty * factor
+
+
 async def _validate_batch_serial_policy(
     tenant_id: int,
     material: Any,
@@ -164,6 +221,29 @@ def _validate_location_if_required(
         raise ValidationError(f"{scene}失败：物料 {material_label} 启用库位管理后必须提供库位")
 
 
+def _validate_sales_return_batch_traceability(
+    *,
+    source_batch_number: Optional[str],
+    return_batch_number: Optional[str],
+    material_label: str,
+) -> None:
+    """
+    P1-S-010: 销售退货批次追溯门禁。
+    关联原销售出库明细且存在原批次时，退货必须录入且与原批次一致。
+    """
+    source_batch = str(source_batch_number or "").strip()
+    if not source_batch:
+        return
+
+    return_batch = str(return_batch_number or "").strip()
+    if not return_batch:
+        raise ValidationError(f"销售退货失败：物料 {material_label} 必须录入原出库批次号")
+    if return_batch != source_batch:
+        raise ValidationError(
+            f"销售退货失败：物料 {material_label} 的退货批次号 {return_batch} 与原出库批次号 {source_batch} 不一致"
+        )
+
+
 def _validate_purchase_receipt_tolerance(
     ordered_quantity: Decimal,
     already_received_quantity: Decimal,
@@ -182,6 +262,35 @@ def _validate_purchase_receipt_tolerance(
             f"采购入库超容差：物料 {material_label} 入库后累计 {after_receipt}，"
             f"超过允许上限 {max_receivable}（订单数量 {ordered_quantity}，容差 {tolerance_percentage}%）"
         )
+
+
+def _resolve_purchase_item_quality_fields(
+    *,
+    receipt_quantity: Decimal,
+    qualified_quantity: Optional[Any],
+    unqualified_quantity: Optional[Any],
+    quality_status: Optional[str],
+    require_incoming_inspection: bool,
+) -> tuple[Decimal, Decimal, str]:
+    """
+    P2-W-003: 来料检验必需时，禁止在入库单明细手工自判质量结果。
+    开启后统一置为“待检 + 0/0”，实际判定以来料检验单为准。
+    """
+    if require_incoming_inspection:
+        return Decimal("0"), Decimal("0"), "待检"
+
+    q = (
+        Decimal(str(qualified_quantity))
+        if qualified_quantity is not None
+        else Decimal(str(receipt_quantity or 0))
+    )
+    uq = (
+        Decimal(str(unqualified_quantity))
+        if unqualified_quantity is not None
+        else Decimal("0")
+    )
+    qs = str(quality_status or "合格")
+    return q, uq, qs
 
 
 class ProductionPickingService(AppBaseService[ProductionPicking]):
@@ -1543,6 +1652,82 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         deliveries = await query.offset(skip).limit(limit).order_by('-created_at')
         return [SalesDeliveryResponse.model_validate(delivery) for delivery in deliveries]
 
+    async def _consume_shipment_notice_reservation_after_delivery(
+        self,
+        *,
+        tenant_id: int,
+        delivery: SalesDelivery,
+        delivery_items: List[SalesDeliveryItem],
+        updated_by: int,
+    ) -> None:
+        """
+        P2-W-004: 发货通知与库存锁定闭环。
+        出库确认后，按数量消费可匹配的“已通知”发货通知并置为“已出库”，释放预占。
+        """
+        sales_order_id = getattr(delivery, "sales_order_id", None)
+        if not sales_order_id:
+            return
+
+        delivery_remaining: Dict[int, Decimal] = {}
+        for item in delivery_items:
+            material_id = int(getattr(item, "material_id", 0) or 0)
+            qty = Decimal(str(getattr(item, "delivery_quantity", 0) or 0))
+            if material_id <= 0 or qty <= 0:
+                continue
+            delivery_remaining[material_id] = delivery_remaining.get(material_id, Decimal("0")) + qty
+        if not delivery_remaining:
+            return
+
+        notice_query = ShipmentNotice.filter(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+            status="已通知",
+            deleted_at__isnull=True,
+            sales_delivery_id__isnull=True,
+        )
+        if getattr(delivery, "warehouse_id", None):
+            notice_query = notice_query.filter(warehouse_id=delivery.warehouse_id)
+        notices = await notice_query.order_by("notified_at", "id").all()
+        if not notices:
+            return
+
+        consumed_notice_ids: List[int] = []
+        for notice in notices:
+            notice_items = await ShipmentNoticeItem.filter(
+                tenant_id=tenant_id,
+                notice_id=notice.id,
+            ).all()
+            if not notice_items:
+                continue
+
+            required_pairs: List[tuple[int, Decimal]] = []
+            can_consume = True
+            for n_item in notice_items:
+                material_id = int(getattr(n_item, "material_id", 0) or 0)
+                req_qty = Decimal(str(getattr(n_item, "notice_quantity", 0) or 0))
+                if material_id <= 0 or req_qty <= 0:
+                    continue
+                if delivery_remaining.get(material_id, Decimal("0")) < req_qty:
+                    can_consume = False
+                    break
+                required_pairs.append((material_id, req_qty))
+
+            if can_consume and required_pairs:
+                for material_id, req_qty in required_pairs:
+                    delivery_remaining[material_id] = delivery_remaining.get(material_id, Decimal("0")) - req_qty
+                consumed_notice_ids.append(int(notice.id))
+
+        if consumed_notice_ids:
+            await ShipmentNotice.filter(
+                tenant_id=tenant_id,
+                id__in=consumed_notice_ids,
+            ).update(
+                status="已出库",
+                sales_delivery_id=delivery.id,
+                sales_delivery_code=delivery.delivery_code,
+                updated_by=updated_by,
+            )
+
     async def confirm_delivery(self, tenant_id: int, delivery_id: int, confirmed_by: int) -> SalesDeliveryResponse:
         """确认出库"""
         async with in_transaction():
@@ -1564,11 +1749,19 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             # 更新库存（扣减）
             try:
                 from apps.kuaizhizao.services.inventory_service import InventoryService
+                from apps.master_data.models.material import Material
 
                 delivery = await SalesDelivery.get(tenant_id=tenant_id, id=delivery_id)
                 items = await SalesDeliveryItem.filter(
                     tenant_id=tenant_id, delivery_id=delivery_id
                 ).all()
+                material_ids = list({it.material_id for it in items if getattr(it, "material_id", None)})
+                materials = await Material.filter(
+                    tenant_id=tenant_id,
+                    id__in=material_ids,
+                    deleted_at__isnull=True,
+                ).all() if material_ids else []
+                material_by_id = {m.id: m for m in materials}
                 biz_config = await BusinessConfigService().get_business_config(tenant_id)
                 enforce_fifo = (
                     biz_config.get("parameters", {})
@@ -1580,10 +1773,15 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     qty = item.delivery_quantity or Decimal(0)
                     if qty <= 0:
                         continue
+                    base_qty = _to_base_quantity(
+                        quantity=Decimal(str(qty)),
+                        material_unit=getattr(item, "material_unit", None),
+                        material=material_by_id.get(item.material_id),
+                    )
                     await InventoryService.decrease_stock(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
-                        quantity=qty,
+                        quantity=base_qty,
                         warehouse_id=wh_id,
                         batch_no=item.batch_number or None,
                         source_type="sales_delivery",
@@ -1594,6 +1792,13 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             except Exception as inv_e:
                 logger.error("销售出库确认-更新库存失败: %s", inv_e)
                 raise
+
+            await self._consume_shipment_notice_reservation_after_delivery(
+                tenant_id=tenant_id,
+                delivery=delivery,
+                delivery_items=items,
+                updated_by=confirmed_by,
+            )
 
             # 自动生成应收单
             try:
@@ -1972,6 +2177,9 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
             supplier_code = None
             location_required, _ = await _get_warehouse_policy_flags(tenant_id)
             tolerance_percentage = await self.business_config_service.get_purchase_tolerance_percentage(tenant_id)
+            config = await self.business_config_service.get_business_config(tenant_id)
+            quality_params = config.get("parameters", {}).get("quality", {})
+            require_incoming_inspection = bool(quality_params.get("require_incoming_inspection_for_receipt"))
             supplier_id = getattr(receipt_data, "supplier_id", None)
             if supplier_id:
                 from apps.master_data.models.supplier import Supplier
@@ -1989,11 +2197,11 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 if purchase_order_item_id > 0:
                     from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
 
-                    po_item = await PurchaseOrderItem.get_or_none(
+                    po_item = await PurchaseOrderItem.filter(
                         tenant_id=tenant_id,
                         id=purchase_order_item_id,
                         deleted_at__isnull=True,
-                    )
+                    ).select_for_update().first()
                     if not po_item:
                         raise ValidationError(f"采购订单明细不存在: {purchase_order_item_id}")
 
@@ -2047,9 +2255,17 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     'receipt_quantity': receipt_quantity,
                     'unit_price': unit_price,
                     'total_amount': receipt_quantity * unit_price,
-                    'qualified_quantity': Decimal(str(item_data.qualified_quantity)) if hasattr(item_data, 'qualified_quantity') and item_data.qualified_quantity is not None else receipt_quantity,
-                    'unqualified_quantity': Decimal(str(item_data.unqualified_quantity)) if hasattr(item_data, 'unqualified_quantity') and item_data.unqualified_quantity is not None else Decimal(0),
                 })
+                resolved_qualified_qty, resolved_unqualified_qty, resolved_quality_status = _resolve_purchase_item_quality_fields(
+                    receipt_quantity=receipt_quantity,
+                    qualified_quantity=getattr(item_data, "qualified_quantity", None),
+                    unqualified_quantity=getattr(item_data, "unqualified_quantity", None),
+                    quality_status=getattr(item_data, "quality_status", None),
+                    require_incoming_inspection=require_incoming_inspection,
+                )
+                item_dict["qualified_quantity"] = resolved_qualified_qty
+                item_dict["unqualified_quantity"] = resolved_unqualified_qty
+                item_dict["quality_status"] = resolved_quality_status
                 
                 await PurchaseReceiptItem.create(**item_dict)
                 
@@ -2134,12 +2350,83 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 await PurchaseReceiptItem.filter(tenant_id=tenant_id, receipt_id=receipt_id).delete()
                 total_quantity = Decimal(0)
                 total_amount = Decimal(0)
+                tolerance_percentage = await self.business_config_service.get_purchase_tolerance_percentage(tenant_id)
+                config = await self.business_config_service.get_business_config(tenant_id)
+                quality_params = config.get("parameters", {}).get("quality", {})
+                require_incoming_inspection = bool(quality_params.get("require_incoming_inspection_for_receipt"))
+                supplier_code = None
+                supplier_id = getattr(receipt, "supplier_id", None) or getattr(receipt_data, "supplier_id", None)
+                if supplier_id:
+                    from apps.master_data.models.supplier import Supplier
+
+                    supplier = await Supplier.get_or_none(tenant_id=tenant_id, id=supplier_id, deleted_at__isnull=True)
+                    if supplier:
+                        supplier_code = supplier.code
                 for item_data in receipt_data.items:
                     qty = Decimal(str(item_data.receipt_quantity or 0))
                     if qty <= 0:
                         raise ValidationError(f"物料 {item_data.material_code} 的实际数量必须大于 0")
                     unit_price = Decimal(str(item_data.unit_price or 0))
                     line_amount = qty * unit_price
+
+                    purchase_order_item_id = int(getattr(item_data, "purchase_order_item_id", 0) or 0)
+                    if purchase_order_item_id > 0:
+                        from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+
+                        po_item = await PurchaseOrderItem.filter(
+                            tenant_id=tenant_id,
+                            id=purchase_order_item_id,
+                            deleted_at__isnull=True,
+                        ).select_for_update().first()
+                        if not po_item:
+                            raise ValidationError(f"采购订单明细不存在: {purchase_order_item_id}")
+
+                        historical_items = await PurchaseReceiptItem.filter(
+                            tenant_id=tenant_id,
+                            purchase_order_item_id=purchase_order_item_id,
+                            deleted_at__isnull=True,
+                        ).all()
+                        already_received_qty = Decimal("0")
+                        for historical in historical_items:
+                            historical_receipt = await PurchaseReceipt.get_or_none(
+                                tenant_id=tenant_id,
+                                id=historical.receipt_id,
+                                deleted_at__isnull=True,
+                            )
+                            if historical_receipt and int(historical_receipt.id) != int(receipt_id) and historical_receipt.status not in (
+                                "已作废",
+                                "作废",
+                                "void",
+                                "VOID",
+                                "cancelled",
+                                "CANCELLED",
+                            ):
+                                already_received_qty += Decimal(str(historical.receipt_quantity or 0))
+
+                        _validate_purchase_receipt_tolerance(
+                            ordered_quantity=Decimal(str(po_item.ordered_quantity or 0)),
+                            already_received_quantity=already_received_qty,
+                            incoming_quantity=qty,
+                            tolerance_percentage=tolerance_percentage,
+                            material_label=getattr(item_data, "material_name", None) or getattr(item_data, "material_code", "未知物料"),
+                        )
+
+                    from apps.master_data.models.material import Material
+                    from apps.kuaizhizao.services.batch_serial_helper import ensure_batch_no_for_item
+
+                    material = await Material.get_or_none(
+                        tenant_id=tenant_id,
+                        id=getattr(item_data, "material_id", None),
+                        deleted_at__isnull=True,
+                    )
+                    auto_batch_no = None
+                    if material:
+                        auto_batch_no = await ensure_batch_no_for_item(
+                            tenant_id=tenant_id,
+                            material=material,
+                            item_data=item_data,
+                            supplier_code=supplier_code,
+                        )
 
                     item_dict = item_data.model_dump(exclude_unset=True)
                     item_dict.update({
@@ -2148,13 +2435,19 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                         "receipt_quantity": qty,
                         "unit_price": unit_price,
                         "total_amount": line_amount,
-                        "qualified_quantity": Decimal(str(item_data.qualified_quantity))
-                        if item_data.qualified_quantity is not None
-                        else qty,
-                        "unqualified_quantity": Decimal(str(item_data.unqualified_quantity))
-                        if item_data.unqualified_quantity is not None
-                        else Decimal(0),
                     })
+                    resolved_qualified_qty, resolved_unqualified_qty, resolved_quality_status = _resolve_purchase_item_quality_fields(
+                        receipt_quantity=qty,
+                        qualified_quantity=getattr(item_data, "qualified_quantity", None),
+                        unqualified_quantity=getattr(item_data, "unqualified_quantity", None),
+                        quality_status=getattr(item_data, "quality_status", None),
+                        require_incoming_inspection=require_incoming_inspection,
+                    )
+                    item_dict["qualified_quantity"] = resolved_qualified_qty
+                    item_dict["unqualified_quantity"] = resolved_unqualified_qty
+                    item_dict["quality_status"] = resolved_quality_status
+                    if auto_batch_no is not None:
+                        item_dict["batch_number"] = auto_batch_no
                     await PurchaseReceiptItem.create(**item_dict)
                     total_quantity += qty
                     total_amount += line_amount
@@ -2943,6 +3236,24 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                         id=item_data.material_id
                     )
                     batch_number = getattr(item_data, 'batch_number', None)
+                    sales_delivery_item_id = getattr(item_data, "sales_delivery_item_id", None)
+                    if sales_delivery_id and sales_delivery_item_id:
+                        source_item = await SalesDeliveryItem.get_or_none(
+                            tenant_id=tenant_id,
+                            delivery_id=sales_delivery_id,
+                            id=sales_delivery_item_id,
+                            deleted_at__isnull=True,
+                        )
+                        if not source_item:
+                            raise ValidationError(
+                                f"销售退货失败：未找到关联的销售出库明细 {sales_delivery_item_id}"
+                            )
+                        _validate_sales_return_batch_traceability(
+                            source_batch_number=getattr(source_item, "batch_number", None),
+                            return_batch_number=batch_number,
+                            material_label=getattr(item_data, "material_name", None)
+                            or getattr(item_data, "material_code", "未知物料"),
+                        )
                     # 序列号信息（批号和序列号选择功能增强）
                     serial_numbers = getattr(item_data, 'serial_numbers', None)
                     if material:

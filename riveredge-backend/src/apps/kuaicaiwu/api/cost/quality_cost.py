@@ -8,9 +8,11 @@ Date: 2026-01-16
 """
 
 from datetime import date
+import uuid
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from decimal import Decimal
+from loguru import logger
 
 from apps.kuaizhizao.schemas.cost import (
     QualityCostCalculationRequest,
@@ -23,6 +25,27 @@ from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
 router = APIRouter(prefix="/quality-cost", tags=["Kuaicaiwu Quality Cost"])
+
+
+def _http_exception_with_trace(
+    status_code: int,
+    message: str,
+    route: str,
+    tenant_id: Optional[int] = None,
+) -> HTTPException:
+    trace_id = uuid.uuid4().hex
+    logger.warning(
+        "kuaicaiwu_quality_cost_api_error trace_id={} tenant_id={} route={} status_code={} message={}",
+        trace_id,
+        tenant_id,
+        route,
+        status_code,
+        message,
+    )
+    return HTTPException(
+        status_code=status_code,
+        detail={"message": message, "trace_id": trace_id},
+    )
 
 
 @router.post("/calculate", response_model=QualityCostCalculationResponse, status_code=status.HTTP_200_OK)
@@ -62,17 +85,13 @@ async def calculate_quality_cost(
         )
         return QualityCostCalculationResponse(**result)
     except ValidationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e)
-        )
+        raise _http_exception_with_trace(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e), "/quality-cost/calculate", tenant_id)
     except BusinessLogicError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise _http_exception_with_trace(status.HTTP_400_BAD_REQUEST, str(e), "/quality-cost/calculate", tenant_id)
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"核算质量成本失败: {str(e)}"
+        raise _http_exception_with_trace(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"核算质量成本失败: {str(e)}",
+            "/quality-cost/calculate",
+            tenant_id,
         )

@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, Query, Body, HTTPException
+import uuid
+from fastapi import APIRouter, Depends, Query, Body, HTTPException as FastAPIHTTPException
 from typing import Optional, Dict, Any
 from loguru import logger
 from infra.models.user import User
@@ -14,6 +15,32 @@ from apps.kuaireport.schemas.report import (
 router = APIRouter(prefix="/reports", tags=["报表中心 - Reports"])
 
 report_service = ReportService()
+
+
+def _http_exception_with_trace(
+    status_code: int,
+    message: str,
+    route: str = "/reports",
+    tenant_id: Optional[int] = None,
+) -> FastAPIHTTPException:
+    trace_id = uuid.uuid4().hex
+    logger.warning(
+        "kuaireport_report_api_error trace_id={} tenant_id={} route={} status_code={} message={}",
+        trace_id,
+        tenant_id,
+        route,
+        status_code,
+        message,
+    )
+    return FastAPIHTTPException(
+        status_code=status_code,
+        detail={"message": message, "trace_id": trace_id},
+    )
+
+
+def HTTPException(*, status_code: int, detail: Any, **kwargs) -> FastAPIHTTPException:
+    message = detail.get("message") if isinstance(detail, dict) else str(detail)
+    return _http_exception_with_trace(status_code, message)
 
 
 # ── 系统报表 ─────────────────────────────────────────────────────
@@ -57,7 +84,6 @@ async def get_report_by_share_token(
     """通过分享令牌获取报表详情，无需登录"""
     report = await report_service.get_by_share_token(token)
     if not report:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="分享链接无效或已过期")
     return ReportResponse.model_validate(report)
 
@@ -183,7 +209,6 @@ async def mount_report_to_menu(
     report = await report_service.get_by_id(tenant_id=tenant_id, id=id)
     app = await ApplicationService.get_application_by_code(tenant_id, "kuaireport")
     if not app:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="报表与看板应用未安装")
     name = menu_name or report.name
     path = f"/apps/kuaireport/reports/{id}"

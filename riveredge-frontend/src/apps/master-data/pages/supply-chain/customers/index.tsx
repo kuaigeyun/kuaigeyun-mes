@@ -828,7 +828,7 @@ const CustomersPage: React.FC = () => {
           t('field.customer.address'),
           t('field.customer.category'),
         ]}
-        importExampleRow={['CUST001', '客户A', '客A', '张三', '13800138000', 'a@b.com', '北京市朝阳区', 'VIP']}
+        importExampleRow={['CUST-WX-001', '无锡盛世高新装备有限公司', '盛世高新', '张经理', '0510-81110001', 'contact@shengshi-wx.com', '无锡市新吴区机电五支路1000号', '制造业']}
         importFieldMap={{
           [t('field.customer.code')]: 'code',
           [`*${t('field.customer.code')}`]: 'code',

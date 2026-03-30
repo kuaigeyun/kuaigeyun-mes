@@ -84,12 +84,20 @@ PARAMETER_REGISTRY_CATEGORY_META: Dict[str, Dict[str, str]] = {
         "labelKey": "pages.system.configCenter.category.sales_quality",
         "descriptionKey": "pages.system.configCenter.category.sales_qualityDesc",
     },
+    "finance": {
+        "labelKey": "pages.system.configCenter.category.supply",
+        "descriptionKey": "pages.system.configCenter.category.supplyDesc",
+    },
 }
 
 # 参数控件元数据（默认 boolean，可按 full key 覆盖为 number/string/color 并附 min/max）
 REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
     "parameters.purchase.tolerance_percentage": {"type": "number", "min": 0, "max": 100},
+    "parameters.purchase.price_fluctuation_limit_percent": {"type": "number", "min": 0, "max": 100},
     "parameters.work_order.material_shortage_block_level": {"type": "number", "min": 0, "max": 3},
+    "parameters.finance.auto_write_off_precision_limit": {"type": "number", "min": 0, "max": 100},
+    "parameters.sales.low_margin_threshold_percent": {"type": "number", "min": 0, "max": 100},
+    "parameters.sales.price_deviation_approval_threshold_percent": {"type": "number", "min": 0, "max": 100},
 }
 
 # 节点配置常量（供预设构建使用）
@@ -147,6 +155,7 @@ PARAMETER_KEYS = {
     "parameters.warehouse.location_management",
     "parameters.warehouse.auto_outbound",
     "parameters.purchase.tolerance_percentage",
+    "parameters.purchase.price_fluctuation_limit_percent",
     "parameters.quality.incoming_inspection",
     "parameters.quality.require_incoming_inspection_for_receipt",
     "parameters.quality.process_inspection",
@@ -154,6 +163,11 @@ PARAMETER_KEYS = {
     "parameters.quality.defect_handling",
     "parameters.bom.bom_multi_version_allowed",
     "parameters.work_order.material_shortage_block_level",
+    "parameters.finance.auto_write_off_precision_limit",
+    "parameters.finance.auto_generate_receivable_from_sales_invoice",
+    "parameters.finance.auto_generate_payable_from_purchase_invoice",
+    "parameters.sales.low_margin_threshold_percent",
+    "parameters.sales.price_deviation_approval_threshold_percent",
 }
 
 # 已实装并在后端有明确生效点的配置项（用于前端禁用“假开关”）
@@ -184,6 +198,7 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.warehouse.location_management",
     "parameters.warehouse.auto_outbound",
     "parameters.purchase.tolerance_percentage",
+    "parameters.purchase.price_fluctuation_limit_percent",
     "parameters.quality.incoming_inspection",
     "parameters.quality.require_incoming_inspection_for_receipt",
     "parameters.quality.process_inspection",
@@ -191,6 +206,11 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.quality.defect_handling",
     "parameters.bom.bom_multi_version_allowed",
     "parameters.work_order.material_shortage_block_level",
+    "parameters.finance.auto_write_off_precision_limit",
+    "parameters.finance.auto_generate_receivable_from_sales_invoice",
+    "parameters.finance.auto_generate_payable_from_purchase_invoice",
+    "parameters.sales.low_margin_threshold_percent",
+    "parameters.sales.price_deviation_approval_threshold_percent",
 }
 
 DEFAULT_WAREHOUSE_ROLE_CODES = {
@@ -482,6 +502,7 @@ class BusinessConfigService:
             "purchase": {
                 "auto_approval": True,       # 开启采购自动审批
                 "tolerance_percentage": 0,   # 采购超收容差（%）
+                "price_fluctuation_limit_percent": 0,  # 采购价格偏差阈值（%），0 表示不启用
                 "price_control": False,      # 关闭价格控制
                 "supplier_evaluation": False,# 关闭供应商评估
             },
@@ -490,6 +511,15 @@ class BusinessConfigService:
             },
             "planning": {
                 "require_production_plan": False,  # 极简模式下计划节点关闭，仅可直连工单
+            },
+            "sales": {
+                "low_margin_threshold_percent": 0,  # 低毛利阈值（%），0 表示不启用拦截
+                "price_deviation_approval_threshold_percent": 0,  # 销售价格偏差触发审批阈值（%），0 表示不启用
+            },
+            "finance": {
+                "auto_write_off_precision_limit": 0,  # 核销尾差自动冲平限额（本位币）
+                "auto_generate_receivable_from_sales_invoice": False,  # 销售开票自动生成应收
+                "auto_generate_payable_from_purchase_invoice": False,  # 采购开票自动生成应付
             },
         }
     }
@@ -556,6 +586,62 @@ class BusinessConfigService:
         except Exception:
             pct = 0.0
         return max(0.0, min(100.0, pct))
+
+    async def get_purchase_price_fluctuation_limit_percent(self, tenant_id: int) -> float:
+        """获取采购价格偏差阈值（0~100，0=关闭）。"""
+        config = await self.get_business_config(tenant_id)
+        purchase_params = config.get("parameters", {}).get("purchase", {})
+        raw_pct = purchase_params.get("price_fluctuation_limit_percent", 0)
+        try:
+            pct = float(raw_pct)
+        except Exception:
+            pct = 0.0
+        return max(0.0, min(100.0, pct))
+
+    async def get_sales_low_margin_threshold_percent(self, tenant_id: int) -> float:
+        """获取销售低毛利阈值百分比（0~100，0=关闭）。"""
+        config = await self.get_business_config(tenant_id)
+        sales_params = config.get("parameters", {}).get("sales", {})
+        raw_pct = sales_params.get("low_margin_threshold_percent", 0)
+        try:
+            pct = float(raw_pct)
+        except Exception:
+            pct = 0.0
+        return max(0.0, min(100.0, pct))
+
+    async def get_sales_price_deviation_approval_threshold_percent(self, tenant_id: int) -> float:
+        """获取销售价格偏差触发审批阈值（0~100，0=关闭）。"""
+        config = await self.get_business_config(tenant_id)
+        sales_params = config.get("parameters", {}).get("sales", {})
+        raw_pct = sales_params.get("price_deviation_approval_threshold_percent", 0)
+        try:
+            pct = float(raw_pct)
+        except Exception:
+            pct = 0.0
+        return max(0.0, min(100.0, pct))
+
+    async def get_finance_auto_write_off_precision_limit(self, tenant_id: int) -> float:
+        """获取财务尾差自动冲平限额（>=0）。"""
+        config = await self.get_business_config(tenant_id)
+        finance_params = config.get("parameters", {}).get("finance", {})
+        raw_limit = finance_params.get("auto_write_off_precision_limit", 0)
+        try:
+            limit = float(raw_limit)
+        except Exception:
+            limit = 0.0
+        return max(0.0, min(100.0, limit))
+
+    async def get_finance_auto_generate_receivable_from_sales_invoice(self, tenant_id: int) -> bool:
+        """是否启用销售开票自动生成应收。"""
+        config = await self.get_business_config(tenant_id)
+        finance_params = config.get("parameters", {}).get("finance", {})
+        return bool(finance_params.get("auto_generate_receivable_from_sales_invoice", False))
+
+    async def get_finance_auto_generate_payable_from_purchase_invoice(self, tenant_id: int) -> bool:
+        """是否启用采购开票自动生成应付。"""
+        config = await self.get_business_config(tenant_id)
+        finance_params = config.get("parameters", {}).get("finance", {})
+        return bool(finance_params.get("auto_generate_payable_from_purchase_invoice", False))
 
     async def check_audit_required(self, tenant_id: int, node_key: str) -> bool:
         """
@@ -757,10 +843,13 @@ class BusinessConfigService:
             },
             "sales": {
                 "audit_enabled": True,
+                "low_margin_threshold_percent": 0,  # 低毛利阈值（%），0 表示不启用拦截
+                "price_deviation_approval_threshold_percent": 0,  # 销售价格偏差触发审批阈值（%），0 表示不启用
             },
             "purchase": {
                 "auto_approval": False,  # 全流程默认走人工审核；与 nodes.purchase_order.auditRequired 配合
                 "tolerance_percentage": 0,  # 采购超收容差（%）
+                "price_fluctuation_limit_percent": 0,  # 采购价格偏差阈值（%），0 表示不启用
                 "price_control": False,
                 "supplier_evaluation": False,
             },
@@ -772,6 +861,11 @@ class BusinessConfigService:
             },
             "bom": {
                 "bom_multi_version_allowed": True,  # BOM 是否允许多版本共存，需求计算时可选择版本
+            },
+            "finance": {
+                "auto_write_off_precision_limit": 0,  # 核销尾差自动冲平限额（本位币）
+                "auto_generate_receivable_from_sales_invoice": False,  # 销售开票自动生成应收
+                "auto_generate_payable_from_purchase_invoice": False,  # 采购开票自动生成应付
             },
         },
     }

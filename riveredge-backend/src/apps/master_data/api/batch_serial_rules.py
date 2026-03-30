@@ -8,8 +8,10 @@ Author: RiverEdge Team
 Date: 2026-02-26
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from typing import Optional, Annotated
+import uuid
+from fastapi import APIRouter, Depends, HTTPException as FastAPIHTTPException, Query, status
+from typing import Any, Optional, Annotated
+from loguru import logger
 
 from core.api.deps.deps import get_current_user, get_current_tenant
 from infra.models.user import User
@@ -22,6 +24,32 @@ from apps.master_data.schemas.batch_serial_rule_schemas import (
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(prefix="/materials", tags=["Batch & Serial Rules"])
+
+
+def _http_exception_with_trace(
+    status_code: int,
+    message: str,
+    route: str = "/materials",
+    tenant_id: Optional[int] = None,
+) -> FastAPIHTTPException:
+    trace_id = uuid.uuid4().hex
+    logger.warning(
+        "master_data_batch_serial_rules_api_error trace_id={} tenant_id={} route={} status_code={} message={}",
+        trace_id,
+        tenant_id,
+        route,
+        status_code,
+        message,
+    )
+    return FastAPIHTTPException(
+        status_code=status_code,
+        detail={"message": message, "trace_id": trace_id},
+    )
+
+
+def HTTPException(*, status_code: int, detail: Any, **kwargs) -> FastAPIHTTPException:
+    message = detail.get("message") if isinstance(detail, dict) else str(detail)
+    return _http_exception_with_trace(status_code, message)
 
 
 # ==================== 批号规则 ====================

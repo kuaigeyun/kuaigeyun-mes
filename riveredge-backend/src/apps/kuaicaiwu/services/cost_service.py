@@ -9,7 +9,7 @@ Date: 2026-01-05
 """
 
 import uuid
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import List, Optional, Dict, Any
 from decimal import Decimal
 from tortoise.transactions import in_transaction
@@ -226,6 +226,89 @@ class CostCalculationService(AppBaseService[CostCalculation]):
     def __init__(self):
         super().__init__(CostCalculation)
         self.cost_rule_service = CostRuleService()
+
+    async def refresh_realtime_costs(
+        self,
+        tenant_id: int,
+        created_by: int,
+        lookback_hours: int = 24,
+        max_work_orders: int = 50,
+    ) -> Dict[str, Any]:
+        """
+        近实时增量刷新工单成本：
+        - 从最近报工/领料变更中提取脏工单
+        - 仅重算落后于最新业务事件的工单
+        """
+        now = datetime.now()
+        cutoff = now - timedelta(hours=max(1, min(lookback_hours, 168)))
+
+        reporting_rows = await ReportingRecord.filter(
+            tenant_id=tenant_id,
+            reported_at__gte=cutoff,
+            status="approved",
+            deleted_at__isnull=True,
+        ).all()
+        picking_rows = await ProductionPicking.filter(
+            tenant_id=tenant_id,
+            picking_time__gte=cutoff,
+            status="已完成",
+            deleted_at__isnull=True,
+        ).all()
+
+        latest_activity: Dict[int, datetime] = {}
+        for row in reporting_rows:
+            ts = getattr(row, "reported_at", None)
+            if getattr(row, "work_order_id", None) and ts:
+                current = latest_activity.get(row.work_order_id)
+                latest_activity[row.work_order_id] = ts if not current or ts > current else current
+        for row in picking_rows:
+            ts = getattr(row, "picking_time", None)
+            if getattr(row, "work_order_id", None) and ts:
+                current = latest_activity.get(row.work_order_id)
+                latest_activity[row.work_order_id] = ts if not current or ts > current else current
+
+        candidate_ids = list(latest_activity.keys())[: max(1, max_work_orders)]
+        refreshed_work_order_ids: List[int] = []
+        skipped_fresh_work_order_ids: List[int] = []
+        failed_work_order_ids: List[int] = []
+
+        for work_order_id in candidate_ids:
+            latest_calc = await CostCalculation.filter(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                calculation_type="工单成本",
+                deleted_at__isnull=True,
+            ).order_by("-created_at").first()
+            latest_event_time = latest_activity[work_order_id]
+            if latest_calc and latest_calc.created_at and latest_calc.created_at >= latest_event_time:
+                skipped_fresh_work_order_ids.append(work_order_id)
+                continue
+            try:
+                await self.calculate_work_order_cost(
+                    tenant_id=tenant_id,
+                    request=WorkOrderCostCalculationRequest(
+                        work_order_id=work_order_id,
+                        calculation_date=now.date(),
+                        remark="系统自动增量刷新（近实时）",
+                    ),
+                    created_by=created_by,
+                )
+                refreshed_work_order_ids.append(work_order_id)
+            except Exception:
+                failed_work_order_ids.append(work_order_id)
+
+        return {
+            "lookback_hours": lookback_hours,
+            "candidate_count": len(candidate_ids),
+            "refreshed_count": len(refreshed_work_order_ids),
+            "skipped_fresh_count": len(skipped_fresh_work_order_ids),
+            "failed_count": len(failed_work_order_ids),
+            "refreshed_work_order_ids": refreshed_work_order_ids,
+            "skipped_fresh_work_order_ids": skipped_fresh_work_order_ids,
+            "failed_work_order_ids": failed_work_order_ids,
+            "generated_at": now.isoformat(),
+            "sla_target": "T+0 明细（近实时增量刷新）",
+        }
 
     async def _get_standard_value(self, tenant_id: int, target_type: str, target_id: int, item_type: str) -> Decimal:
         """获取标准值（单价或费率）"""

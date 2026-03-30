@@ -5,7 +5,7 @@
 import { apiRequest } from '../../../services/api';
 
 /** 报工统计（用于指标卡片） */
-export interface ReportingStatistics {
+export interface ReportingOverviewStatistics {
   cumulative_hours?: number;
   estimated_wages?: number;
   downtime_records?: number;
@@ -21,6 +21,45 @@ export interface ReportingStatistics {
   efficiency_yoy?: number;
 }
 
+/** 报工统计（用于统计分析页） */
+export interface ReportingDetailedStatistics {
+  total_count: number;
+  pending_count: number;
+  approved_count: number;
+  rejected_count: number;
+  total_reported_quantity: number;
+  total_qualified_quantity: number;
+  total_unqualified_quantity: number;
+  total_work_hours: number;
+  cumulative_hours?: number;
+  estimated_wages?: number;
+  qualification_rate: number;
+  unqualified_rate: number;
+  avg_quantity_per_hour: number;
+  efficiency?: number;
+  operation_stats: Array<{
+    operation_name: string;
+    count: number;
+    reported_quantity: number;
+    qualified_quantity: number;
+    work_hours: number;
+    qualification_rate: number;
+  }>;
+  worker_stats: Array<{
+    worker_name: string;
+    count: number;
+    reported_quantity: number;
+    qualified_quantity: number;
+    work_hours: number;
+    qualification_rate: number;
+  }>;
+  trends?: {
+    hours?: number[];
+    wages?: number[];
+    efficiency?: number[];
+  };
+}
+
 export const reportingApi = {
   list: async (params?: any) => apiRequest('/apps/kuaizhizao/reporting', { method: 'GET', params }),
   create: async (data: any) => apiRequest('/apps/kuaizhizao/reporting', { method: 'POST', data }),
@@ -34,7 +73,8 @@ export const reportingApi = {
     apiRequest(`/apps/kuaizhizao/reporting/${id}/revoke`, { method: 'POST' }),
   batchRevoke: async (ids: string[]) =>
     apiRequest('/apps/kuaizhizao/reporting/batch-revoke', { method: 'POST', data: { record_ids: ids.map(Number) } }),
-  getStatistics: async (params?: any) => apiRequest<ReportingStatistics>('/apps/kuaizhizao/reporting/statistics', { method: 'GET', params }),
+  getStatistics: async (params?: any) =>
+    apiRequest<ReportingDetailedStatistics>('/apps/kuaizhizao/reporting/statistics', { method: 'GET', params }),
   recordScrap: async (recordId: string, data: any) =>
     apiRequest(`/apps/kuaizhizao/reporting/${recordId}/scrap`, { method: 'POST', data }),
   recordDefect: async (recordId: string, data: any) =>
@@ -53,7 +93,8 @@ export const reportingApi = {
 };
 
 /** 报工统计快捷函数（采用 useQuery） */
-export const getReportingStatistics = async () => reportingApi.getStatistics();
+export const getReportingStatistics = async () =>
+  apiRequest<ReportingOverviewStatistics>('/apps/kuaizhizao/reporting/overview-statistics', { method: 'GET' });
 
 export const materialBindingApi = {
   createFeeding: async (recordId: string, data: any) =>

@@ -58,6 +58,7 @@ class ReportingRecordUpdate(BaseModel):
     qualified_quantity: Optional[Decimal] = Field(None, description="合格数量")
     unqualified_quantity: Optional[Decimal] = Field(None, description="不合格数量")
     work_hours: Optional[Decimal] = Field(None, description="工时（小时）")
+    reported_at: Optional[datetime] = Field(None, description="报工时间")
     remarks: Optional[str] = Field(None, description="备注")
     sop_parameters: Optional[Any] = Field(None, description="SOP参数数据（JSON格式）")
     status: Optional[str] = Field(None, description="审核状态")
@@ -106,3 +107,78 @@ class ReportingRecordListResponse(BaseModel):
     status: str = Field(..., description="审核状态")
     reported_at: datetime = Field(..., description="报工时间")
     created_at: datetime = Field(..., description="创建时间")
+
+
+class ReportingStatisticsTrendsResponse(BaseModel):
+    """报工统计趋势数据。"""
+
+    hours: list[float] = Field(default_factory=list, description="工时趋势")
+    wages: list[float] = Field(default_factory=list, description="工资趋势")
+    efficiency: list[float] = Field(default_factory=list, description="效率趋势")
+
+
+class ReportingOverviewStatisticsResponse(BaseModel):
+    """报工概览统计（指标卡片）。"""
+
+    cumulative_hours: float = Field(0, description="累计工时")
+    estimated_wages: float = Field(0, description="预估工资")
+    downtime_records: int = Field(0, description="停机记录数")
+    exception_reports: int = Field(0, description="异常报工数")
+    efficiency: float = Field(0, description="效率")
+    trends: ReportingStatisticsTrendsResponse = Field(
+        default_factory=ReportingStatisticsTrendsResponse,
+        description="趋势数据",
+    )
+
+
+class ReportingOperationStatisticsItemResponse(BaseModel):
+    """按工序统计项。"""
+
+    operation_name: str = Field(..., description="工序名称")
+    count: int = Field(..., description="报工次数")
+    reported_quantity: float = Field(..., description="报工数量")
+    qualified_quantity: float = Field(..., description="合格数量")
+    work_hours: float = Field(..., description="工时")
+    qualification_rate: float = Field(..., description="合格率")
+
+
+class ReportingWorkerStatisticsItemResponse(BaseModel):
+    """按操作工统计项。"""
+
+    worker_name: str = Field(..., description="操作工姓名")
+    count: int = Field(..., description="报工次数")
+    reported_quantity: float = Field(..., description="报工数量")
+    qualified_quantity: float = Field(..., description="合格数量")
+    work_hours: float = Field(..., description="工时")
+    qualification_rate: float = Field(..., description="合格率")
+
+
+class ReportingDetailedStatisticsResponse(BaseModel):
+    """报工详细统计。"""
+
+    total_count: int = Field(0, description="总报工数")
+    pending_count: int = Field(0, description="待审核数")
+    approved_count: int = Field(0, description="已审核数")
+    rejected_count: int = Field(0, description="已驳回数")
+    total_reported_quantity: float = Field(0, description="总报工数量")
+    total_qualified_quantity: float = Field(0, description="总合格数量")
+    total_unqualified_quantity: float = Field(0, description="总不合格数量")
+    total_work_hours: float = Field(0, description="总工时")
+    cumulative_hours: float = Field(0, description="累计工时")
+    estimated_wages: float = Field(0, description="预估工资")
+    qualification_rate: float = Field(0, description="合格率")
+    unqualified_rate: float = Field(0, description="不合格率")
+    avg_quantity_per_hour: float = Field(0, description="平均每小时报工数量")
+    efficiency: float = Field(0, description="效率")
+    operation_stats: list[ReportingOperationStatisticsItemResponse] = Field(
+        default_factory=list,
+        description="按工序统计",
+    )
+    worker_stats: list[ReportingWorkerStatisticsItemResponse] = Field(
+        default_factory=list,
+        description="按操作工统计",
+    )
+    trends: ReportingStatisticsTrendsResponse = Field(
+        default_factory=ReportingStatisticsTrendsResponse,
+        description="趋势数据",
+    )

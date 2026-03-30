@@ -8,6 +8,7 @@ Date: 2025-12-30
 """
 
 from datetime import datetime, date
+from decimal import Decimal
 from typing import Optional, List
 from pydantic import Field
 from core.schemas.base import BaseSchema
@@ -23,9 +24,9 @@ class PayableBase(BaseSchema):
     source_code: str = Field(..., max_length=50, description="来源单据编码")
     supplier_id: int = Field(..., description="供应商ID")
     supplier_name: str = Field(..., max_length=200, description="供应商名称")
-    total_amount: float = Field(..., gt=0, description="应付总金额")
-    paid_amount: float = Field(0, ge=0, description="已付金额")
-    remaining_amount: float = Field(..., ge=0, description="剩余金额")
+    total_amount: Decimal = Field(..., gt=0, description="应付总金额")
+    paid_amount: Decimal = Field(Decimal("0"), ge=0, description="已付金额")
+    remaining_amount: Decimal = Field(..., ge=0, description="剩余金额")
     due_date: date = Field(..., description="到期日期")
     payment_terms: Optional[str] = Field(None, max_length=100, description="付款条件")
     status: str = Field("未付款", max_length=20, description="付款状态")
@@ -81,10 +82,10 @@ class PurchaseInvoiceBase(BaseSchema):
     invoice_number: str = Field(..., max_length=100, description="发票号码")
     invoice_date: date = Field(..., description="发票日期")
     invoice_type: str = Field(..., max_length=20, description="发票类型")
-    tax_rate: float = Field(..., ge=0, le=100, description="税率")
-    invoice_amount: float = Field(..., ge=0, description="发票金额")
-    tax_amount: float = Field(..., ge=0, description="税额")
-    total_amount: float = Field(..., ge=0, description="价税合计")
+    tax_rate: Decimal = Field(..., ge=0, le=100, description="税率")
+    invoice_amount: Decimal = Field(..., ge=0, description="发票金额")
+    tax_amount: Decimal = Field(..., ge=0, description="税额")
+    total_amount: Decimal = Field(..., ge=0, description="价税合计")
     status: str = Field("未审核", max_length=20, description="发票状态")
     reviewer_id: Optional[int] = Field(None, description="审核人ID")
     reviewer_name: Optional[str] = Field(None, max_length=100, description="审核人姓名")
@@ -136,9 +137,9 @@ class ReceivableBase(BaseSchema):
     source_code: str = Field(..., max_length=50, description="来源单据编码")
     customer_id: int = Field(..., description="客户ID")
     customer_name: str = Field(..., max_length=200, description="客户名称")
-    total_amount: float = Field(..., gt=0, description="应收总金额")
-    received_amount: float = Field(0, ge=0, description="已收金额")
-    remaining_amount: float = Field(..., ge=0, description="剩余金额")
+    total_amount: Decimal = Field(..., gt=0, description="应收总金额")
+    received_amount: Decimal = Field(Decimal("0"), ge=0, description="已收金额")
+    remaining_amount: Decimal = Field(..., ge=0, description="剩余金额")
     due_date: date = Field(..., description="到期日期")
     payment_terms: Optional[str] = Field(None, max_length=100, description="收款条件")
     status: str = Field("未收款", max_length=20, description="收款状态")
@@ -187,7 +188,7 @@ class ReceivableListResponse(BaseSchema):
 class PaymentRecordBase(BaseSchema):
     """付款记录基础schema"""
     payable_id: int = Field(..., description="应付单ID")
-    payment_amount: float = Field(..., gt=0, description="付款金额")
+    payment_amount: Decimal = Field(..., gt=0, description="付款金额")
     payment_date: date = Field(..., description="付款日期")
     payment_method: str = Field(..., max_length=50, description="付款方式")
     reference_number: Optional[str] = Field(None, max_length=100, description="参考号")
@@ -202,7 +203,7 @@ class PaymentRecordCreate(PaymentRecordBase):
 class ReceiptRecordBase(BaseSchema):
     """收款记录基础schema"""
     receivable_id: int = Field(..., description="应收单ID")
-    receipt_amount: float = Field(..., gt=0, description="收款金额")
+    receipt_amount: Decimal = Field(..., gt=0, description="收款金额")
     receipt_date: date = Field(..., description="收款日期")
     receipt_method: str = Field(..., max_length=50, description="收款方式")
     reference_number: Optional[str] = Field(None, max_length=100, description="参考号")
@@ -220,7 +221,7 @@ class PaymentVoucherBase(BaseSchema):
     """付款单基础schema"""
     supplier_id: int = Field(..., description="供应商ID")
     supplier_name: str = Field(..., max_length=200, description="供应商名称")
-    total_amount: float = Field(..., gt=0, description="付款总额")
+    total_amount: Decimal = Field(..., gt=0, description="付款总额")
     payment_date: date = Field(..., description="付款日期")
     payment_method: str = Field(..., max_length=50, description="付款方式")
     bank_account: Optional[str] = Field(None, max_length=100, description="出款账号")
@@ -245,8 +246,8 @@ class PaymentVoucherResponse(PaymentVoucherBase):
     id: int
     tenant_id: int
     payment_code: str
-    settled_amount: float = 0.0
-    unsettled_amount: float = 0.0
+    settled_amount: Decimal = Decimal("0")
+    unsettled_amount: Decimal = Decimal("0")
     status: str = "Draft"
     created_at: datetime
     updated_at: datetime
@@ -269,7 +270,7 @@ class ReceiptVoucherBase(BaseSchema):
     """收款单基础schema"""
     customer_id: int = Field(..., description="客户ID")
     customer_name: str = Field(..., max_length=200, description="客户名称")
-    total_amount: float = Field(..., gt=0, description="收款总额")
+    total_amount: Decimal = Field(..., gt=0, description="收款总额")
     receipt_date: date = Field(..., description="收款日期")
     payment_method: str = Field(..., max_length=50, description="收款方式")
     bank_account: Optional[str] = Field(None, max_length=100, description="收款账号")
@@ -294,8 +295,8 @@ class ReceiptVoucherResponse(ReceiptVoucherBase):
     id: int
     tenant_id: int
     receipt_code: str
-    settled_amount: float = 0.0
-    unsettled_amount: float = 0.0
+    settled_amount: Decimal = Decimal("0")
+    unsettled_amount: Decimal = Decimal("0")
     status: str = "Draft"
     created_at: datetime
     updated_at: datetime
@@ -323,10 +324,10 @@ class SalesInvoiceBase(BaseSchema):
     invoice_number: str = Field(..., max_length=100, description="发票号码")
     invoice_date: date = Field(..., description="开票日期")
     invoice_type: str = Field("增值税专用发票", max_length=50, description="发票类型")
-    tax_rate: float = Field(13.0, ge=0, le=100, description="税率(%)")
-    invoice_amount: float = Field(..., ge=0, description="不含税金额")
-    tax_amount: float = Field(..., ge=0, description="税额")
-    total_amount: float = Field(..., ge=0, description="价税合计")
+    tax_rate: Decimal = Field(Decimal("13"), ge=0, le=100, description="税率(%)")
+    invoice_amount: Decimal = Field(..., ge=0, description="不含税金额")
+    tax_amount: Decimal = Field(..., ge=0, description="税额")
+    total_amount: Decimal = Field(..., ge=0, description="价税合计")
     receivable_id: Optional[int] = Field(None, description="关联应收单ID")
     receivable_code: Optional[str] = Field(None, max_length=50, description="关联应收单编码")
     attachment_path: Optional[str] = Field(None, max_length=500, description="附件路径")
@@ -343,10 +344,10 @@ class SalesInvoiceUpdate(BaseSchema):
     invoice_number: Optional[str] = Field(None, max_length=100)
     invoice_date: Optional[date] = None
     invoice_type: Optional[str] = Field(None, max_length=50)
-    tax_rate: Optional[float] = None
-    invoice_amount: Optional[float] = None
-    tax_amount: Optional[float] = None
-    total_amount: Optional[float] = None
+    tax_rate: Optional[Decimal] = None
+    invoice_amount: Optional[Decimal] = None
+    tax_amount: Optional[Decimal] = None
+    total_amount: Optional[Decimal] = None
     notes: Optional[str] = None
 
 

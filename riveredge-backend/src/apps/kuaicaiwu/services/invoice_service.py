@@ -8,6 +8,7 @@ from typing import List, Optional
 from tortoise.transactions import in_transaction
 
 from apps.kuaicaiwu.models.invoice import Invoice, InvoiceItem
+from apps.kuaicaiwu.services.accounting_event_service import AccountingEventService
 from apps.kuaicaiwu.schemas.invoice import InvoiceCreate, InvoiceUpdate
 from apps.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
@@ -20,6 +21,7 @@ class InvoiceService(AppBaseService[Invoice]):
     def __init__(self):
         super().__init__(Invoice)
         self.business_config_service = BusinessConfigService()
+        self.accounting_event_service = AccountingEventService()
 
     async def create_invoice(self, tenant_id: int, data: InvoiceCreate, created_by: int) -> Invoice:
         """创建发票"""
@@ -42,6 +44,22 @@ class InvoiceService(AppBaseService[Invoice]):
                     invoice=invoice,
                     **item_data.model_dump()
                 )
+            await self.accounting_event_service.record_event(
+                tenant_id=tenant_id,
+                event_type="INVOICE_CREATED",
+                business_type="invoice",
+                target_doc_type="Invoice",
+                target_doc_id=invoice.id,
+                target_doc_code=invoice.invoice_code,
+                amount=invoice.total_amount,
+                currency="CNY",
+                operator_id=created_by,
+                payload={
+                    "category": invoice.category,
+                    "status": invoice.status,
+                    "item_count": len(data.items),
+                },
+            )
             return await self.get_invoice_by_uuid(tenant_id, code)
 
     async def get_invoice_by_uuid(self, tenant_id: int, code: str) -> Invoice:

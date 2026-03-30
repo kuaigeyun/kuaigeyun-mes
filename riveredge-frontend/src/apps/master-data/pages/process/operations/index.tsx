@@ -368,7 +368,7 @@ const OperationsPage: React.FC = () => {
         quantity: { text: '按数量报工', status: 'Processing' },
         status: { text: '按状态报工', status: 'Success' },
       },
-      render: (_, record) => (
+      render: (_: any, record: Operation) => (
         <Tag color={record.reportingType === 'quantity' ? 'blue' : 'green'}>
           {record.reportingType === 'quantity' ? '按数量报工' : '按状态报工'}
         </Tag>
@@ -396,7 +396,7 @@ const OperationsPage: React.FC = () => {
         true: { text: '启用', status: 'Success' },
         false: { text: '禁用', status: 'Default' },
       },
-      render: (_, record) => (
+      render: (_: any, record: Operation) => (
         <Tag color={record.isActive ? 'success' : 'default'}>
           {record.isActive ? '启用' : '禁用'}
         </Tag>
@@ -408,7 +408,7 @@ const OperationsPage: React.FC = () => {
       width: 180,
       hideInSearch: true,
       ellipsis: true,
-      render: (_, record: Operation) => {
+      render: (_: any, record: Operation) => {
         const dts = record.defectTypes ?? record.defect_types ?? [];
         const arr = Array.isArray(dts) ? dts : [];
         if (!arr.length) return '-';
@@ -428,7 +428,7 @@ const OperationsPage: React.FC = () => {
       width: 180,
       hideInSearch: true,
       ellipsis: true,
-      render: (_, record: Operation) => {
+      render: (_: any, record: Operation) => {
         const names = record.defaultOperatorNames ?? record.default_operator_names ?? [];
         const arr = Array.isArray(names) ? names : [];
         if (!arr.length) return '-';
@@ -449,7 +449,7 @@ const OperationsPage: React.FC = () => {
       valueType: 'dateTime',
       hideInSearch: true,
       sorter: true,
-      render: (_, record) => {
+      render: (_: any, record: Operation) => {
         const val = record.createdAt ?? (record as any).created_at;
         if (val == null || val === '') return '-';
         return dayjs(val).isValid() ? dayjs(val).format('YYYY-MM-DD HH:mm:ss') : String(val);
@@ -460,7 +460,7 @@ const OperationsPage: React.FC = () => {
       valueType: 'option',
       width: 150,
       fixed: 'right',
-      render: (_, record) => (
+      render: (_: any, record: Operation) => (
         <Space>
           <Button
             type="link"
@@ -516,11 +516,11 @@ const OperationsPage: React.FC = () => {
           try {
             const result = await operationApi.list(apiParams);
             // 兼容：接口可能直接返回数组或 { data: [] }，且保证每条含 defect_types
-            const listData = Array.isArray(result) ? result : (result?.data ?? []);
+            const listData = Array.isArray(result) ? result : ((result as any)?.data ?? []);
             return {
               data: listData,
               success: true,
-              total: listData.length,
+              total: (result as any)?.total ?? listData.length,
             };
           } catch (error: any) {
             console.error('获取工序列表失败:', error);
@@ -591,7 +591,14 @@ const OperationsPage: React.FC = () => {
         showImportButton
         onImport={handleImport}
         importHeaders={['*工序编号', '*工序名称', '描述', '启用状态', '不良品项']}
-        importExampleRow={['OP001', '装配工序', '工序描述', '启用', '尺寸不良,外观不良']}
+        importExampleRow={['OP-WX-001', '精密装配工序', '针对无锡工厂电子单元的精密装配', '启用', '尺寸偏差,外观划痕']}
+        importFieldMap={{
+          '工序编号': 'code', '*工序编号': 'code', '编号': 'code', 'code': 'code',
+          '工序名称': 'name', '*工序名称': 'name', '名称': 'name', 'name': 'name',
+          '描述': 'description', 'description': 'description',
+          '启用状态': 'isActive', 'isActive': 'isActive',
+          '不良品项': 'defectTypes', 'defectTypes': 'defectTypes',
+        }}
         showExportButton
         onExport={handleExport}
       />
