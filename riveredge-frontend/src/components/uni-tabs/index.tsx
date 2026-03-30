@@ -43,12 +43,7 @@ interface UniTabsProps {
   onToggleFullscreen?: () => void;
 }
 
-/**
- * 标签栏配置常量
- */
-const TAB_CONFIG = {
-  MAX_TABS: 20, // 最大标签数量，超过后自动关闭最旧的标签
-};
+
 
 /**
  * 统一标签栏组件
@@ -1148,18 +1143,19 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         }
         .uni-tabs-content {
           flex: 1;
-          min-height: 0 !important;
           display: flex;
           flex-direction: column;
           overflow-y: auto;
           overflow-x: hidden;
           position: relative;
           background: var(--ant-colorBgLayout);
-          margin-top: 0 !important;
-          padding-top: 16px !important;
-          padding-bottom: 16px !important;
-          height: auto !important;
-          max-height: none !important;
+          margin-top: 16px !important;
+          padding-top: 0 !important;
+          padding-bottom: 0 !important;
+          /* 修复滚动：使用 calc 计算确切的内容区高度（视口 - 顶栏 - 标签栏 - 间距） */
+          height: calc(100vh - ${isFullscreen ? '0px' : '56px'} - 56px - 16px) !important;
+          max-height: calc(100vh - ${isFullscreen ? '0px' : '56px'} - 56px - 16px) !important;
+          /* 彻底隐藏滚动条且不占用空间 */
           scrollbar-width: none !important;
           -ms-overflow-style: none !important;
         }
@@ -1172,19 +1168,20 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           ? `
         .uni-tabs-content.uni-tabs-content-business-board {
           box-sizing: border-box !important;
-          min-height: calc(100vh - var(--header-height) - var(--tabs-height) + 16px) !important;
+          min-height: calc(100vh - var(--header-height) - var(--tabs-height) - 16px)  !important;
         }
         `
           : ''}
         .uni-tabs-content::-webkit-scrollbar {
-          display: none !important;
-          width: 0 !important;
-          height: 0 !important;
+          display: block !important;
+          width: 6px !important;
+          height: 6px !important;
         }
         .uni-tabs-content-hmi-container {
           display: flex;
           flex-direction: column;
           flex: 1;
+          height: 100%;
           min-height: 0;
           width: 100%;
           box-sizing: border-box;
@@ -1224,7 +1221,8 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           /* visible：避免裁切中间 WebGL 核（略超出时仍完整）；背景与看板同色，圆角外溢不明显 */
           overflow: visible !important;
           isolation: isolate;
-          border: 1px solid var(--river-border-color);
+          /* 移除边框，使看板内容与背景融为一体 */
+          border: none;
         }
         .uni-tabs-content-board-inner > * {
           flex: 1;
@@ -1588,7 +1586,10 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         .uni-tabs-content {
           flex: 1;
           min-height: 0;
-          overflow: auto;
+          display: flex;
+          flex-direction: column;
+          overflow-y: auto;
+          overflow-x: hidden;
           position: relative;
         }
 
