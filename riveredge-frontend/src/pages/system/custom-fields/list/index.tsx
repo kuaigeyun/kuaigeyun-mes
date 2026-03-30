@@ -118,21 +118,17 @@ const CustomFieldListPage: React.FC = () => {
   /**
    * 根据已启用应用过滤页面：只展示已安装且启用的应用下的页面
    */
-  const filterPagesByEnabledApps = async (
+  const filterPagesByEnabledApps = (
     pages: CustomFieldPageConfig[],
-  ): Promise<CustomFieldPageConfig[]> => {
-    try {
-      const apps = await getApplicationList({ is_installed: true, is_active: true });
-      const enabledPrefixes = apps.map((a) => a.route_path || `/apps/${a.code}`).filter(Boolean);
-      if (enabledPrefixes.length === 0) return [];
-      return pages.filter((p) =>
-        enabledPrefixes.some(
-          (prefix) => p.pagePath === prefix || p.pagePath.startsWith(prefix + '/'),
-        ),
-      );
-    } catch {
-      return pages;
-    }
+    apps: any[]
+  ): CustomFieldPageConfig[] => {
+    const enabledPrefixes = apps.map((a) => a.route_path || `/apps/${a.code}`).filter(Boolean);
+    if (enabledPrefixes.length === 0) return [];
+    return pages.filter((p) =>
+      enabledPrefixes.some(
+        (prefix) => p.pagePath === prefix || p.pagePath.startsWith(prefix + '/'),
+      ),
+    );
   };
 
   /**
@@ -141,8 +137,12 @@ const CustomFieldListPage: React.FC = () => {
   const loadPageConfigs = async () => {
     try {
       setPageConfigsLoading(true);
-      const allPages = await getCustomFieldPages();
-      const pages = await filterPagesByEnabledApps(allPages);
+      // 并行加载全部页面配置和已安装应用列表，显著提升首屏加载性能
+      const [allPages, apps] = await Promise.all([
+        getCustomFieldPages(),
+        getApplicationList({ is_installed: true, is_active: true })
+      ]);
+      const pages = filterPagesByEnabledApps(allPages, apps);
       setPageConfigs(pages);
 
       // 默认选中第一个页面（仅当没有选中页面时）；若当前选中项已不在列表中（应用被禁用），则重置为第一项
@@ -169,29 +169,6 @@ const CustomFieldListPage: React.FC = () => {
     loadPageConfigs();
   }, []);
 
-  /**
-   * 获取过滤后的功能页面列表
-   */
-  const getFilteredPages = (): CustomFieldPageConfig[] => {
-    if (!pageSearchValue) {
-      return pageConfigs;
-    }
-    const searchLower = pageSearchValue.toLowerCase();
-    return (pageConfigs || []).filter(
-      page =>
-        page.pageName.toLowerCase().includes(searchLower) ||
-        page.pagePath.toLowerCase().includes(searchLower) ||
-        page.tableName.toLowerCase().includes(searchLower)
-    );
-  };
-
-  /**
-   * 获取选中的页面配置
-   */
-  const getSelectedPageConfig = (): CustomFieldPageConfig | null => {
-    if (!selectedPageCode) return null;
-    return pageConfigs.find(page => page.pageCode === selectedPageCode) || null;
-  };
 
   /**
    * 处理新建字段
@@ -895,8 +872,25 @@ const CustomFieldListPage: React.FC = () => {
   ];
 
   // 获取过滤后的页面列表和选中的页面配置
-  const filteredPages = getFilteredPages();
-  const selectedPage = getSelectedPageConfig();
+  const filteredPages = React.useMemo(() => {
+    if (!pageSearchValue) return pageConfigs;
+    const searchLower = pageSearchValue.toLowerCase();
+    return (pageConfigs || []).filter(
+      page =>
+        page.pageName.toLowerCase().includes(searchLower) ||
+        page.pagePath.toLowerCase().includes(searchLower) ||
+        page.tableName.toLowerCase().includes(searchLower)
+    );
+  }, [pageConfigs, pageSearchValue]);
+
+  const selectedPage = React.useMemo(() => {
+    if (!selectedPageCode) return null;
+    return pageConfigs.find(page => page.pageCode === selectedPageCode) || null;
+  }, [pageConfigs, selectedPageCode]);
+
+  const modules = React.useMemo(() => {
+    return Array.from(new Set(pageConfigs.map(p => p.module)));
+  }, [pageConfigs]);
 
   /**
    * 详情列定义
@@ -1010,7 +1004,7 @@ const CustomFieldListPage: React.FC = () => {
                   </div>
                 </div>
               ) : (
-                Array.from(new Set(pageConfigs.map(p => p.module))).map(module => {
+                modules.map(module => {
                   const modulePages = (filteredPages || []).filter(page => page?.module === module);
                   if (modulePages.length === 0) return null;
 
