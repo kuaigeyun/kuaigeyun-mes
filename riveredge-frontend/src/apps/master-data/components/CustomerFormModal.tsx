@@ -4,11 +4,10 @@
  * 供客户管理页、报价单/销售订单等页面的「快速新建客户」使用。
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 import { ProFormInstance } from '@ant-design/pro-components';
-import { App } from 'antd';
+import { App, Modal, Input } from 'antd';
 import { FormModalTemplate } from '../../../components/layout-templates';
 import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
 import { customerApi, getUserOptions, getDictionaryOptions } from '../services/supply-chain';
@@ -18,6 +17,7 @@ import { useGlobalStore } from '../../../stores/globalStore';
 import type { Customer, CustomerCreate, CustomerUpdate } from '../types/supply-chain';
 import { SchemaFormRenderer } from '../../../components/schema-form';
 import { customerFormSchema } from '../schemas/customer';
+import { getDataDictionaryByCode, createDictionaryItem } from '../../../services/dataDictionary';
 
 const PAGE_CODE = 'master-data-supply-chain-customer';
 
@@ -37,7 +37,6 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
   onSuccess,
 }) => {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const formRef = useRef<ProFormInstance>();
   const [formLoading, setFormLoading] = useState(false);
@@ -46,34 +45,46 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
   const [optionsMap, setOptionsMap] = useState<
     Record<string, Array<{ value: any; label: string }>>
   >({});
+  const [quickCreateTarget, setQuickCreateTarget] = useState<{
+    field: string;
+    dictionaryCode: string;
+    label: string;
+  } | null>(null);
+  const [quickCreateValue, setQuickCreateValue] = useState('');
+  const [quickCreateName, setQuickCreateName] = useState('');
+  const [quickCreateLoading, setQuickCreateLoading] = useState(false);
 
   const isEdit = Boolean(editUuid);
+
+  const loadOptions = useCallback(async () => {
+    const [users, industry, level, lead, category, contactTitle] = await Promise.all([
+      getUserOptions(),
+      getDictionaryOptions('INDUSTRY_SECTOR'),
+      getDictionaryOptions('CUSTOMER_LEVEL'),
+      getDictionaryOptions('PARTNER_SOURCE_CHANNEL'),
+      getDictionaryOptions('CUSTOMER_CATEGORY'),
+      getDictionaryOptions('CONTACT_TITLE'),
+    ]);
+    setOptionsMap({
+      salesmanId: users,
+      industryCode: industry,
+      customerLevelCode: level,
+      leadSourceCode: lead,
+      category,
+      contactTitle,
+    });
+  }, []);
 
   useEffect(() => {
     if (!open) return;
     (async () => {
       try {
-        const [users, industry, level, lead, category, contactTitle] = await Promise.all([
-          getUserOptions(),
-          getDictionaryOptions('INDUSTRY_SECTOR'),
-          getDictionaryOptions('CUSTOMER_LEVEL'),
-          getDictionaryOptions('PARTNER_SOURCE_CHANNEL'),
-          getDictionaryOptions('CUSTOMER_CATEGORY'),
-          getDictionaryOptions('CONTACT_TITLE'),
-        ]);
-        setOptionsMap({
-          salesmanId: users,
-          industryCode: industry,
-          customerLevelCode: level,
-          leadSourceCode: lead,
-          category,
-          contactTitle,
-        });
+        await loadOptions();
       } catch {
         setOptionsMap({});
       }
     })();
-  }, [open]);
+  }, [open, loadOptions]);
 
   useEffect(() => {
     if (!open) return;
@@ -211,34 +222,86 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
     setPreviewCode(null);
   };
 
+  const handleQuickCreateSubmit = async () => {
+    if (!quickCreateTarget) return;
+    if (!quickCreateName.trim() || !quickCreateValue.trim()) {
+      messageApi.warning('请填写名称和值');
+      return;
+    }
+    try {
+      setQuickCreateLoading(true);
+      const dict = await getDataDictionaryByCode(quickCreateTarget.dictionaryCode);
+      await createDictionaryItem(dict.uuid, {
+        label: quickCreateName.trim(),
+        value: quickCreateValue.trim(),
+        is_active: true,
+      });
+      await loadOptions();
+      formRef.current?.setFieldsValue({ [quickCreateTarget.field]: quickCreateValue.trim() });
+      messageApi.success(t('common.createSuccess'));
+      setQuickCreateTarget(null);
+      setQuickCreateName('');
+      setQuickCreateValue('');
+    } catch (error: any) {
+      messageApi.error(error?.message || '新增字典项失败');
+    } finally {
+      setQuickCreateLoading(false);
+    }
+  };
+
   return (
-    <FormModalTemplate
-      title={isEdit ? t('field.customer.editTitle') : t('field.customer.createTitle')}
-      open={open}
-      onClose={handleClose}
-      onFinish={handleSubmit}
-      isEdit={isEdit}
-      loading={formLoading}
-      width={MODAL_CONFIG.STANDARD_WIDTH}
-      formRef={formRef as React.RefObject<ProFormInstance>}
-      initialValues={{ isActive: true, isPublic: false }}
-      layout="vertical"
-      grid
-    >
-      <SchemaFormRenderer
-        schema={customerFormSchema}
-        codeField="code"
-        codeAutoGenerated={isAutoGenerateEnabled(PAGE_CODE)}
+    <>
+      <FormModalTemplate
+        title={isEdit ? t('field.customer.editTitle') : t('field.customer.createTitle')}
+        open={open}
+        onClose={handleClose}
+        onFinish={handleSubmit}
         isEdit={isEdit}
-        optionsMap={optionsMap}
-        dropdownEnhanceMap={{
-          category: { quickCreate: { label: '数据字典管理', onClick: () => navigate('/system/data-dictionaries') } },
-          contactTitle: { quickCreate: { label: '数据字典管理', onClick: () => navigate('/system/data-dictionaries') } },
-          industryCode: { quickCreate: { label: '数据字典管理', onClick: () => navigate('/system/data-dictionaries') } },
-          customerLevelCode: { quickCreate: { label: '数据字典管理', onClick: () => navigate('/system/data-dictionaries') } },
-          leadSourceCode: { quickCreate: { label: '数据字典管理', onClick: () => navigate('/system/data-dictionaries') } },
+        loading={formLoading}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        formRef={formRef as React.RefObject<ProFormInstance>}
+        initialValues={{ isActive: true, isPublic: false }}
+        layout="vertical"
+        grid
+      >
+        <SchemaFormRenderer
+          schema={customerFormSchema}
+          codeField="code"
+          codeAutoGenerated={isAutoGenerateEnabled(PAGE_CODE)}
+          isEdit={isEdit}
+          optionsMap={optionsMap}
+          dropdownEnhanceMap={{
+            category: { quickCreate: { label: '快速新增', onClick: () => setQuickCreateTarget({ field: 'category', dictionaryCode: 'CUSTOMER_CATEGORY', label: t('field.customer.category') }) } },
+            contactTitle: { quickCreate: { label: '快速新增', onClick: () => setQuickCreateTarget({ field: 'contactTitle', dictionaryCode: 'CONTACT_TITLE', label: t('field.customer.contactTitle') }) } },
+            industryCode: { quickCreate: { label: '快速新增', onClick: () => setQuickCreateTarget({ field: 'industryCode', dictionaryCode: 'INDUSTRY_SECTOR', label: t('field.customer.industry') }) } },
+            customerLevelCode: { quickCreate: { label: '快速新增', onClick: () => setQuickCreateTarget({ field: 'customerLevelCode', dictionaryCode: 'CUSTOMER_LEVEL', label: t('field.customer.level') }) } },
+            leadSourceCode: { quickCreate: { label: '快速新增', onClick: () => setQuickCreateTarget({ field: 'leadSourceCode', dictionaryCode: 'PARTNER_SOURCE_CHANNEL', label: t('field.customer.leadSource') }) } },
+          }}
+        />
+      </FormModalTemplate>
+      <Modal
+        title={quickCreateTarget ? `快速新增${quickCreateTarget.label}` : '快速新增'}
+        open={!!quickCreateTarget}
+        onOk={handleQuickCreateSubmit}
+        confirmLoading={quickCreateLoading}
+        onCancel={() => {
+          setQuickCreateTarget(null);
+          setQuickCreateName('');
+          setQuickCreateValue('');
         }}
-      />
-    </FormModalTemplate>
+      >
+        <Input
+          style={{ marginBottom: 12 }}
+          placeholder="名称（显示文本）"
+          value={quickCreateName}
+          onChange={(e) => setQuickCreateName(e.target.value)}
+        />
+        <Input
+          placeholder="值（唯一编码）"
+          value={quickCreateValue}
+          onChange={(e) => setQuickCreateValue(e.target.value)}
+        />
+      </Modal>
+    </>
   );
 };

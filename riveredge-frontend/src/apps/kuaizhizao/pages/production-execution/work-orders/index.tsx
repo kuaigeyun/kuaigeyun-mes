@@ -3341,7 +3341,26 @@ const WorkOrdersPage: React.FC = () => {
   }
 
   const statCards: StatCard[] = hasPageMetricConfig
-    ? pageMetricCards
+    ? pageMetricCards.map((card) => {
+        if (!statistics) return card
+        const title = String(card.title || '')
+        if (title.includes('工单总数')) {
+          return { ...card, value: statistics.total_count ?? 0 }
+        }
+        if (title.includes('运行工单') || title.includes('进行中工单') || title.includes('在制工单')) {
+          return { ...card, value: statistics.in_progress_count ?? 0 }
+        }
+        if (title.includes('工单完成率')) {
+          return { ...card, value: statistics.completion_rate ?? 0, suffix: '%' }
+        }
+        if (title.includes('完工数量') || title.includes('今日完工')) {
+          return { ...card, value: statistics.completed_today_count ?? 0 }
+        }
+        if (title.includes('产线达成率') || title.includes('计划达成率')) {
+          return { ...card, value: statistics.plan_achievement_rate ?? 0, suffix: '%' }
+        }
+        return card
+      })
     : statistics
     ? [
         {

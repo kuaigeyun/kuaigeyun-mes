@@ -12,11 +12,13 @@ export interface WorkOrderTrendItem {
 
 /** 工单统计（用于指标卡片） */
 export interface WorkOrderStatistics {
+  total_count?: number;
   in_progress_count: number;
   completed_today_count: number;
   overdue_count: number;
   draft_count: number;
   completed_count: number;
+  completion_rate?: number;
   qualified_output_today?: number;
   /** 今日合格率（%） */
   qualified_rate_today?: number;

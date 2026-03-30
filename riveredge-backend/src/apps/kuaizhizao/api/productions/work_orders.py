@@ -99,6 +99,7 @@ async def get_work_order_statistics(
     overdue_count = 0
     draft_count = 0
     completed_count = 0
+    total_count = 0
 
     try:
         from tortoise import Tortoise
@@ -107,6 +108,7 @@ async def get_work_order_statistics(
             rows = await conn.execute_query_dict(
                 """
                 SELECT
+                    COUNT(*) AS total_count,
                     COUNT(*) FILTER (WHERE status IN ('released', 'in_progress')) AS in_progress_count,
                     COUNT(*) FILTER (WHERE status = 'completed' AND actual_end_date >= $1 AND actual_end_date <= $2) AS completed_today_count,
                     COUNT(*) FILTER (WHERE status IN ('released', 'in_progress') AND planned_end_date < $1) AS overdue_count,
@@ -119,6 +121,7 @@ async def get_work_order_statistics(
             )
             if rows and len(rows) > 0:
                 r = rows[0]
+                total_count = int(r.get("total_count", 0) or 0)
                 in_progress_count = int(r.get("in_progress_count", 0) or 0)
                 completed_today_count = int(r.get("completed_today_count", 0) or 0)
                 overdue_count = int(r.get("overdue_count", 0) or 0)
@@ -131,6 +134,7 @@ async def get_work_order_statistics(
     if not sql_ok:
         from apps.kuaizhizao.models.work_order import WorkOrder
         base = WorkOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        total_count = await base.count()
         in_progress_count = await base.filter(status__in=["released", "in_progress"]).count()
         completed_today_count = await base.filter(
             status="completed",
@@ -160,6 +164,7 @@ async def get_work_order_statistics(
         qualified_output_today = 0
 
     total_wip = in_progress_count  # 在制品数 = 进行中工单数
+    completion_rate = round(completed_count / total_count * 100, 1) if total_count > 0 else 0
     # 一次合格率：completed / (completed + overdue) 的简化近似
     denom = completed_count + overdue_count or 1
     first_pass_yield = round(completed_count / denom * 100, 1)
@@ -257,6 +262,8 @@ async def get_work_order_statistics(
         "overdue_count": overdue_count,
         "draft_count": draft_count,
         "completed_count": completed_count,
+        "total_count": total_count,
+        "completion_rate": completion_rate,
         "qualified_output_today": qualified_output_today,
         "qualified_rate_today": qualified_rate_today,
         "operation_completed_today": operation_completed_today,
