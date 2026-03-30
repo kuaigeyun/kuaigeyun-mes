@@ -48,12 +48,16 @@ const SuppliersPage: React.FC = () => {
           getDictionaryOptions('INDUSTRY_SECTOR'),
           getDictionaryOptions('SUPPLIER_LEVEL'),
           getDictionaryOptions('PARTNER_SOURCE_CHANNEL'),
+          getDictionaryOptions('CUSTOMER_CATEGORY'),
+          getDictionaryOptions('CONTACT_TITLE'),
         ]);
         if (cancelled) return;
         setDictLabelMaps({
           INDUSTRY_SECTOR: Object.fromEntries(packs[0].map((o) => [o.value, o.label])),
           SUPPLIER_LEVEL: Object.fromEntries(packs[1].map((o) => [o.value, o.label])),
           PARTNER_SOURCE_CHANNEL: Object.fromEntries(packs[2].map((o) => [o.value, o.label])),
+          CUSTOMER_CATEGORY: Object.fromEntries(packs[3].map((o) => [o.value, o.label])),
+          CONTACT_TITLE: Object.fromEntries(packs[4].map((o) => [o.value, o.label])),
         });
       } catch {
         if (!cancelled) setDictLabelMaps({});
@@ -525,6 +529,7 @@ const SuppliersPage: React.FC = () => {
       dataIndex: 'category',
       width: 120,
       hideInSearch: true,
+      render: (_, r) => dictLabel('CUSTOMER_CATEGORY', r.category),
     },
     {
       title: t('field.supplier.industry'),
@@ -666,6 +671,7 @@ const SuppliersPage: React.FC = () => {
     {
       title: t('field.supplier.contactTitle'),
       dataIndex: 'contactTitle',
+      render: (_, r) => dictLabel('CONTACT_TITLE', r.contactTitle),
     },
     {
       title: t('field.supplier.phone'),
@@ -683,6 +689,7 @@ const SuppliersPage: React.FC = () => {
     {
       title: t('field.supplier.category'),
       dataIndex: 'category',
+      render: (_, r) => dictLabel('CUSTOMER_CATEGORY', r.category),
     },
     {
       title: t('field.supplier.industry'),

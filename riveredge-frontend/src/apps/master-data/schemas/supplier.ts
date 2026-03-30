@@ -52,12 +52,11 @@ export const supplierFormSchema: FieldConfig[] = [
   },
   {
     name: 'contactTitle',
-    type: 'text',
+    type: 'select',
     labelKey: 'field.supplier.contactTitle',
     placeholderKey: 'field.supplier.contactTitlePlaceholder',
-    maxLength: 100,
     colSpan: 12,
-    rules: [{ maxLength: 100, messageKey: 'field.supplier.contactTitleMaxLength' }],
+    allowClear: true,
   },
   {
     name: 'industryCode',
@@ -122,12 +121,11 @@ export const supplierFormSchema: FieldConfig[] = [
   },
   {
     name: 'category',
-    type: 'text',
+    type: 'select',
     labelKey: 'field.supplier.category',
     placeholderKey: 'field.supplier.categoryPlaceholder',
-    maxLength: 50,
     colSpan: 12,
-    rules: [{ maxLength: 50, messageKey: 'field.supplier.categoryMaxLength' }],
+    allowClear: true,
   },
   {
     name: 'buyerId',
