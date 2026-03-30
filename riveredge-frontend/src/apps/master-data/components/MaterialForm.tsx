@@ -108,13 +108,39 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
   const [activeTab, setActiveTab] = useState<string>('basic');
   const [variantManaged, setVariantManaged] = useState<boolean>(false);
 
+  const emitAgentDebugLog = useCallback(
+    (runId: string, hypothesisId: string, location: string, message: string, data: Record<string, any>) => {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/b117966e-dad0-4d01-bd6a-e3ba9296abb4', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e3a76' },
+        body: JSON.stringify({
+          sessionId: '8e3a76',
+          runId,
+          hypothesisId,
+          location,
+          message,
+          data,
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+    },
+    []
+  );
+
   // 打开表单时同步 variantManaged 状态（编辑已有属性物料时，属性管理标签页需可用）
   useEffect(() => {
     if (open) {
+      emitAgentDebugLog('run-2', 'H6', 'MaterialForm.tsx:open-effect', 'material form opened', {
+        isEdit,
+        hasMaterial: !!material,
+        materialUuid: (material as any)?.uuid ?? null,
+      });
       const vm = material?.variantManaged ?? (material as any)?.variant_managed ?? initialValues?.variantManaged ?? initialValues?.variant_managed ?? false;
       setVariantManaged(!!vm);
     }
-  }, [open, material?.variantManaged, (material as any)?.variant_managed, initialValues?.variantManaged, initialValues?.variant_managed]);
+  }, [open, isEdit, material, material?.variantManaged, (material as any)?.variant_managed, initialValues?.variantManaged, initialValues?.variant_managed, emitAgentDebugLog]);
   
   // 客户和供应商列表
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -530,13 +556,30 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         }
         
         if (Object.keys(formDefaults).length > 0) {
+          emitAgentDebugLog('run-1', 'H5', 'MaterialForm.tsx:553', 'edit defaults prepared for setFieldsValue', {
+            materialUuid: (material as any)?.uuid,
+            materialDefaultsKeys: Object.keys(materialDefaults || {}),
+            formDefaultsKeys: Object.keys(formDefaults || {}),
+            defaultTaxRate: formDefaults?.defaultTaxRate,
+            defaultSalePrice: formDefaults?.defaultSalePrice,
+          });
           setTimeout(() => {
             const fieldsToSet: any = { defaults: formDefaults };
-            // ProForm 的 name="defaults.defaultProcessRouteUuid" 需要扁平 key 才能正确显示
-            if (formDefaults.defaultProcessRouteUuid != null) {
-              fieldsToSet['defaults.defaultProcessRouteUuid'] = formDefaults.defaultProcessRouteUuid;
-            }
+            // ProForm 在 name 使用 "defaults.xxx" 时，需要同步写入扁平 key 才能稳定回显
+            Object.keys(formDefaults).forEach((key) => {
+              fieldsToSet[`defaults.${key}`] = formDefaults[key];
+            });
             formRef.current?.setFieldsValue(fieldsToSet);
+            emitAgentDebugLog('run-4', 'H10', 'MaterialForm.tsx:560', 'edit defaults flatten setFieldsValue applied', {
+              defaultsKeysSet: Object.keys((fieldsToSet && fieldsToSet.defaults) || {}),
+              flatDefaultsKeyCount: Object.keys(fieldsToSet).filter((k) => k.startsWith('defaults.')).length,
+              flatDefaultTaxRate: fieldsToSet['defaults.defaultTaxRate'] ?? null,
+              flatDefaultSalePrice: fieldsToSet['defaults.defaultSalePrice'] ?? null,
+            });
+            emitAgentDebugLog('run-1', 'H5', 'MaterialForm.tsx:560', 'edit defaults setFieldsValue applied', {
+              defaultsKeysSet: Object.keys((fieldsToSet && fieldsToSet.defaults) || {}),
+              flatRouteSet: fieldsToSet['defaults.defaultProcessRouteUuid'] ?? null,
+            });
           }, 100);
         }
         
@@ -666,6 +709,12 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
    */
   const handleSubmit = async (values: any) => {
     try {
+      emitAgentDebugLog('run-1', 'H1', 'MaterialForm.tsx:688', 'submit started', {
+        isEdit,
+        valueKeys: Object.keys(values || {}),
+        hasDefaultsObject: !!values?.defaults,
+        hasFlatDefaultTaxRate: values?.['defaults.defaultTaxRate'] !== undefined,
+      });
       // 处理物料来源数据（兼容处理：同时设置 camelCase 和 snake_case）
       const sourceType = values.sourceType || values.source_type;
       const originalSourceType = (material as any)?.source_type || (material as any)?.sourceType;
@@ -722,6 +771,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
       }
       
       // 处理默认值数据转换（合并已有 defaults，避免只改物料来源时覆盖其他默认值）
+      const allFormValues = formRef.current?.getFieldsValue?.(true) || {};
       const existingDefaults = (material as any)?.defaults || {};
       let formDefaultsRaw = values.defaults || {};
       // 兼容：若 values 中没有 defaults，尝试从 formRef 直接读取（处理条件渲染字段）
@@ -731,12 +781,38 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
           formDefaultsRaw = directDefaults;
         }
       }
+      // 再兜底：有些场景下 defaults 仅存在于 getFieldsValue(true) 中
+      if (Object.keys(formDefaultsRaw).length === 0 && allFormValues.defaults) {
+        formDefaultsRaw = allFormValues.defaults;
+      }
+      // ProForm 在 name 使用 "defaults.xxx" 字符串时，可能返回扁平键（如 values["defaults.defaultTaxRate"]）
+      // 统一回填到 defaults 对象，避免默认值在提交时被遗漏
+      const extractFlatDefaults = (obj: Record<string, any>) =>
+        Object.keys(obj).reduce((acc, key) => {
+          if (key.startsWith('defaults.')) {
+            const nestedKey = key.slice('defaults.'.length);
+            acc[nestedKey] = obj[key];
+          }
+          return acc;
+        }, {} as Record<string, any>);
+      const flatDefaultsFromValues = {
+        ...extractFlatDefaults(values as Record<string, any>),
+        ...extractFlatDefaults(allFormValues as Record<string, any>),
+      };
       // ProForm 可能用扁平 key 存储嵌套字段，兼容 values['defaults.defaultProcessRouteUuid']
       const formDefaults = {
         ...formDefaultsRaw,
+        ...flatDefaultsFromValues,
         ...(values['defaults.defaultProcessRouteUuid'] !== undefined && { defaultProcessRouteUuid: values['defaults.defaultProcessRouteUuid'] }),
       };
       const processedDefaults: any = { ...existingDefaults, ...formDefaults };
+      emitAgentDebugLog('run-1', 'H2', 'MaterialForm.tsx:775', 'defaults merged', {
+        rawDefaultsKeys: Object.keys(formDefaultsRaw || {}),
+        flatDefaultsKeys: Object.keys(flatDefaultsFromValues || {}),
+        mergedDefaultsKeys: Object.keys(processedDefaults || {}),
+        defaultTaxRate: processedDefaults?.defaultTaxRate,
+        defaultSalePrice: processedDefaults?.defaultSalePrice,
+      });
       
       // 将 ID 数组转换为对象数组
       if (formDefaults.defaultSupplierIds && Array.isArray(formDefaults.defaultSupplierIds)) {
@@ -883,6 +959,12 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         over_report_mode: values.overReportMode || 'none',
         over_report_value: values.overReportValue ?? 0,
       };
+      emitAgentDebugLog('run-1', 'H3', 'MaterialForm.tsx:859', 'submit payload built', {
+        hasDefaultsPayload: submitData.defaults !== undefined,
+        payloadDefaultsKeys: Object.keys(submitData.defaults || {}),
+        payloadDefaultTaxRate: submitData.defaults?.defaultTaxRate,
+        payloadDefaultSalePrice: submitData.defaults?.defaultSalePrice,
+      });
       
       // 移除 undefined 值
       Object.keys(submitData).forEach(key => {
@@ -892,6 +974,9 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
       });
 
       const result = await onFinish(submitData);
+      emitAgentDebugLog('run-1', 'H4', 'MaterialForm.tsx:894', 'onFinish resolved', {
+        resultType: typeof result,
+      });
       
       // 如果是新建模式，需要等待物料创建完成后再保存外部系统编号映射
       // 如果是编辑模式，外部系统编号映射已经在 CodeMappingTab 中单独管理

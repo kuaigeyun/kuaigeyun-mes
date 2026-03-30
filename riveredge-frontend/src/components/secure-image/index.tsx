@@ -10,8 +10,10 @@ import { Image, Skeleton } from 'antd';
 import { getFileDownloadUrlWithToken } from '../../services/file';
 
 export interface SecureImageProps {
-  /** 文件 UUID */
-  fileUuid: string;
+  /** 文件 UUID 或 直接图片 URL */
+  fileUuid?: string;
+  /** 直接图片 URL (可选，如果提供则跳过鉴权请求) */
+  src?: string;
   /** 图片 alt 文本 */
   alt?: string;
   /** 宽度 */
@@ -35,6 +37,7 @@ export interface SecureImageProps {
  */
 export const SecureImage: React.FC<SecureImageProps> = ({
   fileUuid,
+  src: initialSrc,
   alt = '',
   width,
   height,
@@ -44,21 +47,47 @@ export const SecureImage: React.FC<SecureImageProps> = ({
   onError,
   onLoad,
 }) => {
-  const [src, setSrc] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [src, setSrc] = useState<string | null>(initialSrc || null);
+  const [loading, setLoading] = useState(!initialSrc);
   const [error, setError] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
-  const [previewOpen, setPreviewOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const restoreBodyInteraction = React.useCallback(() => {
-    // Ant Image 预览关闭后偶发遗留样式，导致页面无法点击
+    // Ant Image 预览关闭后可能遗留 pointer-events: none 样式导致页面无法点击
     if (typeof document === 'undefined') return;
-    const hasOpenPreview = !!document.querySelector('.ant-image-preview-wrap');
-    if (!hasOpenPreview) {
-      document.body.style.pointerEvents = '';
-      document.body.style.overflow = '';
-    }
+    
+    // 强制恢复样式，不论 DOM 是否还存在预览容器
+    document.body.style.pointerEvents = 'auto';
+    document.body.style.overflow = 'auto';
+    // 移除 Ant 可能添加的全局类名
+    document.body.classList.remove('ant-scrolling-effect');
+    // 兜底清空 inline style
+    document.body.style.removeProperty('pointer-events');
+    document.body.style.removeProperty('overflow');
+    
+    // 移除遮罩和预览容器：Ant 5 的容器可能带多种类名
+    // 根据 subagent 发现，残留元素主要是 .ant-image-preview 且带有 fade-leave 状态
+    const selectors = [
+      '.ant-image-preview',
+      '.ant-image-preview-root',
+      '.ant-image-preview-wrap',
+      '.ant-image-preview-mask',
+      '.ant-image-preview-moving'
+    ];
+    
+    selectors.forEach(selector => {
+      const elements = document.querySelectorAll(selector);
+      elements.forEach(el => {
+        try {
+          if (el.parentNode) {
+            el.parentNode.removeChild(el);
+          }
+        } catch (e) {
+          // 忽略移除失败
+        }
+      });
+    });
   }, []);
 
   // 1. 延迟加载：仅当组件进入可视区域时才触发 API 请求鉴权 URL
@@ -75,13 +104,23 @@ export const SecureImage: React.FC<SecureImageProps> = ({
     }
 
     return () => observer.disconnect();
-  }, [fileUuid]);
+  }, [fileUuid, initialSrc]);
 
   // 2. 获取鉴权后的预览 URL
   useEffect(() => {
-    if (!isVisible || !fileUuid) return;
+    if (!isVisible) return;
+    
+    // 如果已经有初始 src，就不需要请求
+    if (initialSrc) {
+      setSrc(initialSrc);
+      setLoading(false);
+      return;
+    }
+
+    if (!fileUuid) return;
 
     let cancelled = false;
+    setLoading(true);
     getFileDownloadUrlWithToken(fileUuid, { forAvatar })
       .then((url) => {
         if (!cancelled) {
@@ -100,11 +139,49 @@ export const SecureImage: React.FC<SecureImageProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [fileUuid, forAvatar, isVisible]);
+  }, [fileUuid, forAvatar, isVisible, initialSrc]);
 
   useEffect(() => {
     return () => {
       restoreBodyInteraction();
+    };
+  }, [restoreBodyInteraction]);
+
+  const previewConfig = React.useMemo(() => {
+    if (!preview) return false;
+    const base = typeof preview === 'object' ? { ...preview } : {};
+    return {
+      ...base,
+      src: src || undefined,
+      onVisibleChange: (visible: boolean) => {
+        if (!visible) {
+          // 动画结束后强制恢复交互，分多个延时周期循环清理，直到确认 body 样式恢复
+          // 这是由于 Ant Design 5 内部清理有时会被 React 并发渲染打断或产生竞争
+          let count = 0;
+          const interval = setInterval(() => {
+            restoreBodyInteraction();
+            count++;
+            if (count > 5) clearInterval(interval);
+          }, 200);
+        }
+      },
+    };
+  }, [preview, src, restoreBodyInteraction]);
+
+  // 全局逃生口：在 window 层侦测 mousedown，如果有任何卡死迹象，强制恢复
+  useEffect(() => {
+    const handleGlobalRecovery = () => {
+      if (typeof document !== 'undefined' && 
+          (document.body.style.pointerEvents === 'none' || 
+           document.querySelector('.ant-image-preview-root'))) {
+        restoreBodyInteraction();
+      }
+    };
+    window.addEventListener('mousedown', handleGlobalRecovery, { capture: true });
+    window.addEventListener('touchstart', handleGlobalRecovery, { capture: true, passive: true });
+    return () => {
+      window.removeEventListener('mousedown', handleGlobalRecovery, { capture: true });
+      window.removeEventListener('touchstart', handleGlobalRecovery, { capture: true });
     };
   }, [restoreBodyInteraction]);
 
@@ -151,28 +228,10 @@ export const SecureImage: React.FC<SecureImageProps> = ({
     );
   }
 
-  const previewConfig = React.useMemo(() => {
-    if (!preview) return false;
-    const base = typeof preview === 'object' ? { ...preview } : {};
-    return {
-      ...base,
-      src,
-      getContainer: () => document.body,
-      visible: previewOpen,
-      onVisibleChange: (visible: boolean) => {
-        setPreviewOpen(visible);
-        if (!visible) {
-          // 动画结束后再恢复，避免与 antd 关闭过渡竞争
-          window.setTimeout(() => restoreBodyInteraction(), 50);
-        }
-      },
-    };
-  }, [preview, previewOpen, src, restoreBodyInteraction]);
-
   return (
     <div ref={containerRef} style={{ display: 'inline-block', lineHeight: 0 }}>
       <Image
-        src={src}
+        src={src || undefined}
         alt={alt}
         width={width}
         height={height}

@@ -18,7 +18,6 @@ import {
   Tag,
   theme,
   Menu,
-  Image,
   List,
   Typography,
 } from 'antd'
@@ -113,11 +112,33 @@ const MaterialsManagementPage: React.FC = () => {
   const [materialGroups, setMaterialGroups] = useState<MaterialGroup[]>([])
   const [materialGroupsLoading, setMaterialGroupsLoading] = useState(false)
   const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null)
+  const selectedGroupIdRef = useRef<number | null>(null)
 
   // 右键菜单状态
   const [contextMenuVisible, setContextMenuVisible] = useState(false)
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 })
   const [contextMenuGroup, setContextMenuGroup] = useState<MaterialGroup | null>(null)
+
+  const emitAgentDebugLog = useCallback(
+    (runId: string, hypothesisId: string, location: string, message: string, data: Record<string, any>) => {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/b117966e-dad0-4d01-bd6a-e3ba9296abb4', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e3a76' },
+        body: JSON.stringify({
+          sessionId: '8e3a76',
+          runId,
+          hypothesisId,
+          location,
+          message,
+          data,
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {})
+      // #endregion
+    },
+    []
+  )
 
   // 恢复暂存的物料表单（从悬浮按钮返回时：URL 带 restore=1 + sessionStorage 有数据）
   useEffect(() => {
@@ -264,9 +285,11 @@ const MaterialsManagementPage: React.FC = () => {
       setSelectedGroupKeys(selectedKeys)
 
       if (key === 'all') {
+        selectedGroupIdRef.current = null
         setSelectedGroupId(null)
       } else {
         const groupId = parseInt(key)
+        selectedGroupIdRef.current = groupId
         setSelectedGroupId(groupId)
       }
 
@@ -773,9 +796,27 @@ const MaterialsManagementPage: React.FC = () => {
   const handleMaterialSubmit = async (values: any) => {
     try {
       setMaterialFormLoading(true)
+      emitAgentDebugLog('run-1', 'H3', 'management.tsx:handleMaterialSubmit:start', 'received values from MaterialForm', {
+        isEdit: materialIsEdit,
+        hasDefaults: !!values?.defaults,
+        defaultsKeys: Object.keys(values?.defaults || {}),
+        defaultTaxRate: values?.defaults?.defaultTaxRate,
+        defaultSalePrice: values?.defaults?.defaultSalePrice,
+      })
 
       if (materialIsEdit && currentMaterial) {
         await materialApi.update(currentMaterial.uuid, values as MaterialUpdate)
+        emitAgentDebugLog('run-1', 'H4', 'management.tsx:handleMaterialSubmit:update-ok', 'update api resolved', {
+          materialUuid: currentMaterial.uuid,
+        })
+        const refreshed = await materialApi.get(currentMaterial.uuid)
+        emitAgentDebugLog('run-1', 'H4', 'management.tsx:handleMaterialSubmit:readback', 'readback after update', {
+          materialUuid: currentMaterial.uuid,
+          hasDefaults: !!(refreshed as any)?.defaults,
+          defaultsKeys: Object.keys(((refreshed as any)?.defaults || {})),
+          defaultTaxRate: (refreshed as any)?.defaults?.defaultTaxRate,
+          defaultSalePrice: (refreshed as any)?.defaults?.defaultSalePrice,
+        })
         messageApi.success(t('app.master-data.materials.updateSuccessNotify'))
       } else {
         // 新建物料时，如果启用了自动编号，不传递编号，让后端自动生成
@@ -846,12 +887,11 @@ const MaterialsManagementPage: React.FC = () => {
             }
             if (firstImage.url) {
               return (
-                <Image
+                <SecureImage
                   src={firstImage.url}
                   alt={firstImage.name || t('app.master-data.materials.image')}
                   width={40}
                   height={40}
-                  style={{ objectFit: 'cover', borderRadius: 4 }}
                   preview={{ src: firstImage.url }}
                 />
               );
@@ -1123,9 +1163,9 @@ const MaterialsManagementPage: React.FC = () => {
                   searchFormValues.groupId !== ''
                 ) {
                   apiParams.groupId = Number(searchFormValues.groupId)
-                } else if (selectedGroupId) {
-                  // 如果没有搜索表单值，使用左侧树选择
-                  apiParams.groupId = selectedGroupId
+                } else if (selectedGroupIdRef.current !== null) {
+                  // 如果没有搜索表单值，使用左侧树选择（使用 ref，避免 state 异步导致滞后一拍）
+                  apiParams.groupId = selectedGroupIdRef.current
                 }
 
                 // 启用状态筛选

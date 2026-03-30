@@ -48,10 +48,15 @@ def _http_exception_with_trace(
     route: str,
     tenant_id: Optional[int] = None,
 ) -> HTTPException:
+    trace_id = uuid.uuid4().hex
+    logger.warning(
+        "sales_order_api_error trace_id={} tenant_id={} route={} status_code={} message={}",
+        trace_id,
+        tenant_id,
+        route,
+        status_code,
+        message,
     )
-    import traceback
-    logger.error(f"sales_order_api_error trace_id={trace_id} tenant_id={tenant_id} route={route} status_code={status_code} message={message}")
-    logger.error(traceback.format_exc())
     return HTTPException(
         status_code=status_code,
         detail={"message": message, "trace_id": trace_id},

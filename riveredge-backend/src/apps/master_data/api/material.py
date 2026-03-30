@@ -5,6 +5,8 @@
 """
 
 import uuid
+import json
+import time
 from fastapi import APIRouter, Depends, HTTPException as FastAPIHTTPException, Query, Path, Body, status
 from typing import List, Optional, Annotated, Dict, Any
 from loguru import logger
@@ -43,6 +45,23 @@ from apps.master_data.schemas.bom_change_schemas import (
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(prefix="/materials", tags=["Material"])
+
+
+def _agent_debug_log(run_id: str, hypothesis_id: str, location: str, message: str, data: Dict[str, Any]) -> None:
+    try:
+        payload = {
+            "sessionId": "8e3a76",
+            "runId": run_id,
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data,
+            "timestamp": int(time.time() * 1000),
+        }
+        with open("f:/dev/riveredge/debug-8e3a76.log", "a", encoding="utf-8") as f:
+            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
 
 
 def _http_exception_with_trace(
@@ -1466,7 +1485,22 @@ async def get_material(
     - **material_uuid**: 物料UUID
     """
     try:
-        return await MaterialService.get_material_by_uuid(tenant_id, material_uuid)
+        result = await MaterialService.get_material_by_uuid(tenant_id, material_uuid)
+        defaults = (result or {}).get("defaults") if isinstance(result, dict) else getattr(result, "defaults", None)
+        _agent_debug_log(
+            "run-3",
+            "H7",
+            "material.py:get_material",
+            "material detail fetched",
+            {
+                "tenantId": tenant_id,
+                "materialUuid": material_uuid,
+                "defaultsKeys": list((defaults or {}).keys()) if isinstance(defaults, dict) else [],
+                "defaultTaxRate": (defaults or {}).get("defaultTaxRate") if isinstance(defaults, dict) else None,
+                "defaultSalePrice": (defaults or {}).get("defaultSalePrice") if isinstance(defaults, dict) else None,
+            },
+        )
+        return result
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
@@ -1497,9 +1531,38 @@ async def update_material(
     - **is_active**: 是否启用（可选）
     """
     try:
-        return await MaterialService.update_material(
+        incoming_defaults = data.defaults if hasattr(data, "defaults") else None
+        _agent_debug_log(
+            "run-3",
+            "H8",
+            "material.py:update_material:input",
+            "material update received",
+            {
+                "tenantId": tenant_id,
+                "materialUuid": material_uuid,
+                "incomingDefaultsKeys": list((incoming_defaults or {}).keys()) if isinstance(incoming_defaults, dict) else [],
+                "incomingDefaultTaxRate": (incoming_defaults or {}).get("defaultTaxRate") if isinstance(incoming_defaults, dict) else None,
+                "incomingDefaultSalePrice": (incoming_defaults or {}).get("defaultSalePrice") if isinstance(incoming_defaults, dict) else None,
+            },
+        )
+        result = await MaterialService.update_material(
             tenant_id, material_uuid, data, updated_by=current_user.id
         )
+        result_defaults = (result or {}).get("defaults") if isinstance(result, dict) else getattr(result, "defaults", None)
+        _agent_debug_log(
+            "run-3",
+            "H9",
+            "material.py:update_material:output",
+            "material update returned",
+            {
+                "tenantId": tenant_id,
+                "materialUuid": material_uuid,
+                "resultDefaultsKeys": list((result_defaults or {}).keys()) if isinstance(result_defaults, dict) else [],
+                "resultDefaultTaxRate": (result_defaults or {}).get("defaultTaxRate") if isinstance(result_defaults, dict) else None,
+                "resultDefaultSalePrice": (result_defaults or {}).get("defaultSalePrice") if isinstance(result_defaults, dict) else None,
+            },
+        )
+        return result
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
