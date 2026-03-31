@@ -21,6 +21,10 @@ interface WeatherWidgetProps {
   showRefresh?: boolean;
   /** 自定义样式 */
   style?: React.CSSProperties;
+  /** 天气数据变化时回调（用于外层卡片背景随天气变化） */
+  onWeatherChange?: (data: WeatherData | null) => void;
+  /** 紧凑布局（窄列、工作台首行） */
+  compact?: boolean;
 }
 
 /**
@@ -28,7 +32,9 @@ interface WeatherWidgetProps {
  */
 export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ 
   showRefresh = true,
-  style 
+  style,
+  onWeatherChange,
+  compact = false,
 }) => {
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -44,12 +50,17 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
       const data = await getWeatherByIP();
       if (data) {
         setWeather(data);
+        onWeatherChange?.(data);
       } else {
+        setWeather(null);
         setError('无法获取天气信息');
+        onWeatherChange?.(null);
       }
     } catch (err: any) {
       console.error('加载天气失败:', err);
+      setWeather(null);
       setError(err.message || '加载天气失败');
+      onWeatherChange?.(null);
     } finally {
       setLoading(false);
     }
@@ -66,11 +77,15 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
     return () => clearInterval(timer);
   }, []);
 
+  const iconBox = 56;
+  const tempSize = compact ? 24 : 20;
+  const metaSize = compact ? 12 : 13;
+
   if (loading) {
     return (
-      <Space style={style}>
+      <Space style={style} size={compact ? 'small' : 'middle'}>
         <Spin size="small" />
-        <Text style={{ color: 'rgba(255, 255, 255, 0.85)', fontSize: 14 }}>
+        <Text style={{ color: 'rgba(255, 255, 255, 0.85)', fontSize: compact ? 12 : 14 }}>
           加载天气...
         </Text>
       </Space>
@@ -79,8 +94,8 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
 
   if (error || !weather) {
     return (
-      <Space style={style}>
-        <Text style={{ color: 'rgba(255, 255, 255, 0.65)', fontSize: 14 }}>
+      <Space style={style} size={compact ? 'small' : 'middle'}>
+        <Text style={{ color: 'rgba(255, 255, 255, 0.65)', fontSize: compact ? 12 : 14 }}>
           天气信息暂不可用
         </Text>
         {showRefresh && (
@@ -102,21 +117,21 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
 
   return (
     <Space 
-      size="middle" 
+      size={compact ? 'small' : 'middle'}
       style={style}
     >
       {/* 天气图标 */}
-      <div style={{ fontSize: 48, lineHeight: 1 }}>
+      <div style={{ fontSize: iconBox, lineHeight: 1, flexShrink: 0 }}>
         {WeatherIcon}
       </div>
       
       {/* 天气信息 */}
-      <Space orientation="vertical" size={0}>
+      <Space orientation="vertical" size={compact ? 2 : 0}>
         <Space size="small">
           <Text 
             style={{ 
               color: '#ffffff', 
-              fontSize: 20, 
+              fontSize: tempSize, 
               fontWeight: 600,
               lineHeight: 1,
             }}
@@ -127,7 +142,7 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
             <Text 
               style={{ 
                 color: 'rgba(255, 255, 255, 0.65)', 
-                fontSize: 12,
+                fontSize: compact ? 11 : 12,
                 lineHeight: 1,
               }}
             >
@@ -135,12 +150,12 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
             </Text>
           )}
         </Space>
-        <Space size="small">
+        <Space size="small" wrap>
           <Text 
             style={{ 
               color: 'rgba(255, 255, 255, 0.85)', 
-              fontSize: 13,
-              lineHeight: 1,
+              fontSize: metaSize,
+              lineHeight: 1.2,
             }}
           >
             {weather.city}
@@ -148,8 +163,8 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
           <Text 
             style={{ 
               color: 'rgba(255, 255, 255, 0.65)', 
-              fontSize: 13,
-              lineHeight: 1,
+              fontSize: metaSize,
+              lineHeight: 1.2,
             }}
           >
             {weather.description}
@@ -164,7 +179,7 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
             style={{ 
               color: 'rgba(255, 255, 255, 0.65)', 
               cursor: 'pointer',
-              fontSize: 14,
+              fontSize: compact ? 13 : 14,
             }}
             onClick={loadWeather}
           />

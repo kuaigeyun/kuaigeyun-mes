@@ -7,12 +7,12 @@
  * Date: 2026-01-21
  */
 
-import React, { useState, useMemo } from 'react';
-import { Card, Button, Modal, Tree, Space, message, theme } from 'antd';
+import React, { useState } from 'react';
+import { Card, Button, Modal, Tree, message, theme } from 'antd';
 import { SettingOutlined, PlusOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import type { DataNode } from 'antd/es/tree';
-import { QuickEntryIcon, type QuickEntryIconProps } from './QuickEntryIcon';
+import { QuickEntryIcon } from './QuickEntryIcon';
 
 const { useToken } = theme;
 
@@ -34,8 +34,6 @@ export interface QuickEntryItem {
 export interface QuickEntryGridProps {
   /** 快捷入口列表 */
   items: QuickEntryItem[];
-  /** 是否小屏 */
-  isSmallScreen?: boolean;
   /** 菜单树数据（用于配置选择） */
   menuTree?: DataNode[];
   /** 是否显示配置按钮 */
@@ -58,7 +56,6 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
   onSave,
   renderMenuIcon,
   title,
-  isSmallScreen = false,
 }) => {
   const { token } = useToken();
   const navigate = useNavigate();
@@ -166,23 +163,29 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
         }
         style={{
           width: '100%',
+          flex: 1,
+          minHeight: 0,
           display: 'flex',
           flexDirection: 'column',
-          minHeight: '400px',
+          borderRadius: token.borderRadiusLG,
+          boxShadow: token.boxShadowTertiary,
         }}
         styles={{
           body: {
             flex: 1,
+            minHeight: 0,
             overflow: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
           },
         }}
       >
-        <div style={{ width: '100%', height: '100%' }}>
+        <div style={{ width: '100%', flex: 1, minHeight: 0 }}>
           {editingItems.length > 0 ? (
             <div 
               style={{ 
                 display: 'grid', 
-                gridTemplateColumns: `repeat(auto-fill, minmax(${isSmallScreen ? 60 : 76}px, 1fr))`, 
+                gridTemplateColumns: 'repeat(auto-fill, minmax(76px, 1fr))',
                 gap: '16px 8px' 
               }}
             >
@@ -199,7 +202,6 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
                   gradient={item.gradient || generateGradient(index)}
                   editable={configModalVisible}
                   onDelete={() => handleDeleteItem(item.menu_uuid)}
-                  isSmallScreen={isSmallScreen}
                 />
               ))}
             </div>

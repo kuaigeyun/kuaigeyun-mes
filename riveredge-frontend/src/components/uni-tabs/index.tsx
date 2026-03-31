@@ -839,6 +839,9 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
 
   const isBusinessBoardAnalysisPage = location.pathname === '/system/dashboard/analysis';
 
+  /** 仅系统工作台首页：去掉标签栏下 16px 间距（其它含 dashboard 类名的页面如分析/角色权限保持原样） */
+  const isWorkplaceDashboardPage = location.pathname === '/system/dashboard/workplace';
+
   // 如果没有标签，直接渲染子组件
   if (tabs.length === 0) {
     return (
@@ -1162,6 +1165,13 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         /* 工作台：不滚动，边距由内部 DashboardTemplate 控制避免加载抖动 */
         .uni-tabs-content.uni-tabs-content-dashboard {
           overflow: hidden !important;
+        }
+        /* 仅 /system/dashboard/workplace：无标签栏下 16px；高度 calc 去掉原 margin 对应的 −16px，避免页面变矮 */
+        .uni-tabs-content.uni-tabs-content-workplace {
+          margin-top: 0 !important;
+          /* 使用 flex 自适应，避免标签栏高度变更后在底部留下空白 */
+          height: auto !important;
+          max-height: none !important;
         }
         /* 运营看板（非全屏）：至少占满视口 − 顶栏 − 标签栏；border-box 内含上下各 16px padding */
         ${!isFullscreen
@@ -1707,7 +1717,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           </div>
         </div>
         <div
-          className={`uni-tabs-content${isDashboardOrAnalysisPage ? ' uni-tabs-content-dashboard' : ''}${isBusinessBoardAnalysisPage ? ' uni-tabs-content-business-board' : ''}`}
+          className={`uni-tabs-content${isDashboardOrAnalysisPage ? ' uni-tabs-content-dashboard' : ''}${isBusinessBoardAnalysisPage ? ' uni-tabs-content-business-board' : ''}${isWorkplaceDashboardPage ? ' uni-tabs-content-workplace' : ''}`}
           key={`content-refresh-${refreshKey}`}
         >
           {isHMIPage ? (

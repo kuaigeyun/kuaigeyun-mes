@@ -896,3 +896,148 @@ code {
   background: transparent !important;
 }
 
+/* 工作台首行便当：列等高、子块撑满宽度 */
+.dashboard-bento-top-row.ant-row {
+  align-items: stretch;
+}
+.dashboard-bento-top-row > .ant-col {
+  display: flex;
+}
+.dashboard-bento-top-row .ant-card {
+  width: 100%;
+}
+
+/* 操作提示：卡片层次 + 拟物灯泡略超出卡片 */
+.dashboard-workplace-tip-card {
+  /* 圆角与阴影由内联 style 使用 antd token，与首行其它卡片一致 */
+  border: 1px solid rgba(15, 23, 42, 0.09);
+  background: #ffffff;
+  /* 略减上内边距：与首行其它卡顶对齐感更好，长文案时也不显下沉 */
+  padding: 20px 14px 14px 12px;
+  /* 固定卡片高度：提示内容变化不影响整体布局 */
+  height: 124px;
+  min-height: 124px;
+  max-height: 124px;
+  box-sizing: border-box;
+}
+.dashboard-workplace-tip-bulb-wrap {
+  position: absolute;
+  left: -7px;
+  top: -9px;
+  z-index: 2;
+  pointer-events: none;
+  filter: drop-shadow(0 10px 16px rgba(217, 119, 6, 0.42));
+  transform: rotate(-7deg);
+}
+.dashboard-workplace-tip-body {
+  position: relative;
+  z-index: 1;
+  padding-left: 2.125rem;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.dashboard-workplace-tip-text {
+  min-height: 0;
+  overflow: hidden;
+}
+.dashboard-workplace-tip-text .ant-typography {
+  display: -webkit-box !important;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* 工作台下方四卡：与首行一致列等高 */
+.dashboard-bento-main-row.ant-row {
+  align-items: stretch;
+}
+.dashboard-bento-main-row > .ant-col {
+  display: flex;
+}
+
+/* 工作台主区：左侧快捷+版本与右侧 KPI 等高 */
+.dashboard-main-body.ant-row {
+  align-items: stretch;
+}
+.dashboard-main-body > .ant-col {
+  display: flex;
+}
+/* 勿对 min-height 使用 !important，否则会盖住 QuickEntryGrid 的 style.minHeight */
+.dashboard-bento-left-quick .ant-card {
+  flex: 1;
+  min-height: 0;
+  display: flex !important;
+  flex-direction: column !important;
+}
+.dashboard-bento-left-quick .ant-card .ant-card-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+/* 工作台标题条压缩：快捷入口 + 底部三卡 统一减 16px（约 56 -> 40） */
+.dashboard-bento-left-quick .ant-card .ant-card-head,
+.dashboard-four-cards-row .ant-card .ant-card-head {
+  min-height: 40px;
+  padding: 0 16px;
+}
+.dashboard-bento-left-quick .ant-card .ant-card-head-wrapper,
+.dashboard-four-cards-row .ant-card .ant-card-head-wrapper {
+  min-height: 40px;
+}
+.dashboard-bento-left-quick .ant-card .ant-card-head-title,
+.dashboard-four-cards-row .ant-card .ant-card-head-title,
+.dashboard-bento-left-quick .ant-card .ant-card-extra,
+.dashboard-four-cards-row .ant-card .ant-card-extra {
+  padding: 8px 0;
+}
+.dashboard-date-strip {
+  min-height: 0;
+}
+
+/* KPI 两行与右侧日期条同高：Row 交叉轴拉伸，子列可撑满 */
+.dashboard-kpi-strip-row.ant-row {
+  align-items: stretch;
+}
+.dashboard-kpi-strip-row > .ant-col {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.dashboard-date-strip--bare {
+  height: 100%;
+  overflow: hidden;
+}
+/* 七枚时间范围按钮：单独成块，与下方自定义 RangePicker 区分 */
+.dashboard-date-strip-buttons-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  border-radius: var(--ant-border-radius-lg, 8px);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(15, 23, 42, 0.03);
+  box-sizing: border-box;
+  box-shadow:
+    0 1px 2px 0 rgba(0, 0, 0, 0.03),
+    0 1px 6px -1px rgba(0, 0, 0, 0.02),
+    0 2px 4px 0 rgba(0, 0, 0, 0.02);
+}
+.dashboard-date-strip--bare .dashboard-date-strip-btn {
+  white-space: normal;
+  line-height: 1.2;
+  padding-block: 4px;
+  font-size: 11px !important;
+  font-weight: 400;
+}
+.dashboard-date-strip--bare .dashboard-date-strip-btn.ant-btn-default {
+  color: rgba(15, 23, 42, 0.5) !important;
+}
+.dashboard-date-strip--bare .dashboard-date-strip-btn.ant-btn-primary {
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.92) !important;
+}
+

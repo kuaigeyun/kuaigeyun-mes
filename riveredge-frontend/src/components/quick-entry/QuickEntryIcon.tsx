@@ -12,8 +12,6 @@ const { useToken } = theme;
 export interface QuickEntryIconProps {
   /** 图标 */
   icon: React.ReactNode;
-  /** 是否小屏 */
-  isSmallScreen?: boolean;
   /** 标题 */
   title: string;
   /** 点击事件 */
@@ -36,7 +34,6 @@ export const QuickEntryIcon: React.FC<QuickEntryIconProps> = ({
   gradient,
   editable = false,
   onDelete,
-  isSmallScreen = false,
 }) => {
   const { token } = useToken();
 
@@ -58,11 +55,11 @@ export const QuickEntryIcon: React.FC<QuickEntryIconProps> = ({
       {/* 扁平图标容器 */}
       <div
         style={{
-          width: isSmallScreen ? '48px' : '64px',
-          height: isSmallScreen ? '48px' : '64px',
-          borderRadius: isSmallScreen ? '10px' : '12px',
+          width: '64px',
+          height: '64px',
+          borderRadius: token.borderRadiusLG,
           background: bgColor,
-          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.12)',
+          boxShadow: token.boxShadowTertiary,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -74,18 +71,18 @@ export const QuickEntryIcon: React.FC<QuickEntryIconProps> = ({
         onMouseEnter={(e) => {
           if (onClick) {
             e.currentTarget.style.transform = 'translateY(-2px)';
-            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.16)';
+            e.currentTarget.style.boxShadow = token.boxShadowSecondary;
           }
         }}
         onMouseLeave={(e) => {
           e.currentTarget.style.transform = 'translateY(0)';
-          e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.12)';
+          e.currentTarget.style.boxShadow = token.boxShadowTertiary;
         }}
       >
         {/* 图标 */}
         <div
           style={{
-            fontSize: isSmallScreen ? '20px' : '24px',
+            fontSize: '24px',
             color: '#ffffff',
             display: 'flex',
             alignItems: 'center',
@@ -119,7 +116,7 @@ export const QuickEntryIcon: React.FC<QuickEntryIconProps> = ({
               justifyContent: 'center',
               cursor: 'pointer',
               zIndex: 10,
-              boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)',
+              boxShadow: token.boxShadowTertiary,
               transition: 'all 0.2s',
             }}
             onMouseEnter={(e) => {

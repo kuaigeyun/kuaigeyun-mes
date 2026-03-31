@@ -130,14 +130,19 @@ export const DashboardTemplate: React.FC<DashboardTemplateProps> = ({
   onConfigClick,
 }) => {
   const { token } = useToken();
+  const showLegacyBoardRow =
+    todos.length > 0 || stats.length > 0 || quickEntries.length > 0;
 
   return (
     <div
       className={className}
       style={{
-        padding: `0 ${PAGE_SPACING.PADDING}px ${PAGE_SPACING.PADDING}px ${PAGE_SPACING.PADDING}px`,
-        height: '100%',
-        minHeight: '100%',
+        /* 边距由页面内层提供：避免与 overflow:hidden 同层时子元素略超出（如灯泡）被裁切 */
+        padding: 0,
+        /* 在 UniTabs / RouteTransition 的 flex 列中占满内容区高度（height:100% 单独用常无法获得剩余高度） */
+        flex: 1,
+        minHeight: 0,
+        width: '100%',
         display: 'flex',
         flexDirection: 'column',
         backgroundColor: token.colorBgLayout,
@@ -216,6 +221,7 @@ export const DashboardTemplate: React.FC<DashboardTemplateProps> = ({
         </Card>
       )}
 
+      {showLegacyBoardRow && (
       <Row gutter={ANT_DESIGN_TOKENS.SPACING.MD}>
         {/* 左侧：待办事项 + 数据看板 */}
         <Col xs={24} lg={16}>
@@ -351,10 +357,19 @@ export const DashboardTemplate: React.FC<DashboardTemplateProps> = ({
           )}
         </Col>
       </Row>
+      )}
 
-      {/* 自定义内容 */}
+      {/* 自定义内容：占满模板内剩余高度，子页面再用 flex:1 分配首行/主区 */}
       {children && (
-        <div style={{ marginTop: 0 }}>
+        <div
+          style={{
+            flex: 1,
+            minHeight: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            marginTop: 0,
+          }}
+        >
           {children}
         </div>
       )}
