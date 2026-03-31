@@ -271,6 +271,10 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     [getTabTitle]
   );
 
+  /** 始终指向最新 addTab，供「路由同步标签」effect 使用，避免因 getTabTitle/menuConfig 变化导致 addTab 引用变、effect 在无导航时反复执行引发 #185 */
+  const addTabRef = useRef(addTab);
+  addTabRef.current = addTab;
+
   /**
    * 移除标签
    */
@@ -396,18 +400,19 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     // if (!isInitialized) return;
 
     if (location.pathname) {
+      const add = addTabRef.current;
       // 确保工作台标签始终存在（固定第一个）
-      addTab('/system/dashboard/workplace');
+      add('/system/dashboard/workplace');
       // 使用 pathname+search 作为 tabKey，切换回来时保留 query（如 designer?materialId=xxx）
       // 排除 _refresh 参数，避免右键刷新时因 URL 变化而新建标签
       const searchParams = new URLSearchParams(location.search || '');
       searchParams.delete('_refresh');
       const cleanSearch = searchParams.toString();
       const tabKey = location.pathname + (cleanSearch ? `?${cleanSearch}` : '');
-      addTab(tabKey);
-      setActiveKey(tabKey);
+      add(tabKey);
+      setActiveKey((prev) => (prev === tabKey ? prev : tabKey));
     }
-  }, [location.pathname, location.search, addTab]);
+  }, [location.pathname, location.search]);
 
   /**
    * 监听自定义事件更新标签标题
