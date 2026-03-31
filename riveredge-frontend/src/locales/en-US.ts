@@ -1056,7 +1056,7 @@ export default {
   'pages.factoryTopology.viewFlat': 'Flat Topology',
   'pages.factoryTopology.view3D': '3D Topology',
   'pages.factoryTopology.viewDetail': 'View Details',
-  'path.kuaizhizao': 'Kuaimes Manufacturing',
+  'path.kuaizhizao': 'Quick Manufacturing',
   'path.kuaicaiwu': 'Light Management Accounting',
   'path.plan-management': 'Plan Management',
   'path.demand-management': 'Demand Plan',

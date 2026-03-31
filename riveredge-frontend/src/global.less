@@ -920,6 +920,10 @@ code {
   max-height: 124px;
   box-sizing: border-box;
 }
+[data-theme='dark'] .dashboard-workplace-tip-card {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: var(--ant-colorBgElevated);
+}
 .dashboard-workplace-tip-bulb-wrap {
   position: absolute;
   left: -7px;
@@ -1026,6 +1030,11 @@ code {
     0 1px 6px -1px rgba(0, 0, 0, 0.02),
     0 2px 4px 0 rgba(0, 0, 0, 0.02);
 }
+[data-theme='dark'] .dashboard-date-strip-buttons-wrap {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: none;
+}
 .dashboard-date-strip--bare .dashboard-date-strip-btn {
   white-space: normal;
   line-height: 1.2;
@@ -1036,8 +1045,17 @@ code {
 .dashboard-date-strip--bare .dashboard-date-strip-btn.ant-btn-default {
   color: rgba(15, 23, 42, 0.5) !important;
 }
+[data-theme='dark'] .dashboard-date-strip--bare .dashboard-date-strip-btn.ant-btn-default {
+  color: rgba(255, 255, 255, 0.72) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  background: rgba(255, 255, 255, 0.02) !important;
+}
 .dashboard-date-strip--bare .dashboard-date-strip-btn.ant-btn-primary {
   font-weight: 500;
   color: rgba(255, 255, 255, 0.92) !important;
+}
+[data-theme='dark'] .dashboard-date-strip--bare .dashboard-date-strip-btn.ant-btn-primary {
+  background: var(--ant-colorPrimary) !important;
+  border-color: var(--ant-colorPrimary) !important;
 }
 

@@ -22,6 +22,8 @@ export interface QuickEntryIconProps {
   editable?: boolean;
   /** 删除事件（编辑模式下） */
   onDelete?: () => void;
+  /** 右键删除事件（非编辑态快捷删除） */
+  onContextDelete?: () => void;
 }
 
 /**
@@ -34,6 +36,7 @@ export const QuickEntryIcon: React.FC<QuickEntryIconProps> = ({
   gradient,
   editable = false,
   onDelete,
+  onContextDelete,
 }) => {
   const { token } = useToken();
 
@@ -51,6 +54,12 @@ export const QuickEntryIcon: React.FC<QuickEntryIconProps> = ({
         userSelect: 'none',
       }}
       onClick={onClick}
+      onContextMenu={(e) => {
+        if (!onContextDelete) return;
+        e.preventDefault();
+        e.stopPropagation();
+        onContextDelete();
+      }}
     >
       {/* 扁平图标容器 */}
       <div

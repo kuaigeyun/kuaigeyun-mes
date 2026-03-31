@@ -6,8 +6,8 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Tabs, Button, Dropdown, MenuProps, theme, Tooltip } from 'antd';
-import { CaretLeftFilled, CaretRightFilled, ReloadOutlined, FullscreenOutlined, FullscreenExitOutlined, PushpinOutlined } from '@ant-design/icons';
+import { Tabs, Button, Dropdown, MenuProps, theme, Tooltip, message } from 'antd';
+import { CaretLeftFilled, CaretRightFilled, ReloadOutlined, FullscreenOutlined, FullscreenExitOutlined, PushpinOutlined, StarOutlined } from '@ant-design/icons';
 import type { MenuDataItem } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import { findMenuTitleWithTranslation } from '../../utils/menuTranslation';
@@ -75,6 +75,8 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
 
   // 1. 持久化配置：优先从 store 读取，store 未就绪时从 localStorage 回退
   const storeTabsPersistence = useUserPreferenceStore((s) => s.preferences?.tabs_persistence);
+  const dashboardQuickEntries = useUserPreferenceStore((s) => (s.preferences?.dashboard_quick_entries as any[]) || []);
+  const updatePreferences = useUserPreferenceStore((s) => s.updatePreferences);
   const tabsPersistence = storeTabsPersistence !== undefined ? Boolean(storeTabsPersistence) : getInitialPersistence();
 
   // 2. 同步初始化标签列表（直接从本地存储读取并过滤）
@@ -611,6 +613,54 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     }
   }, [navigate, location.pathname, location.search]);
 
+  /** 从 menuConfig 中按 path 查找菜单元数据 */
+  const findMenuItemByPath = useCallback((targetPath: string): any | null => {
+    const normalizedTarget = (targetPath || '').split('?')[0].replace(/\/$/, '');
+    const walk = (items?: any[]): any | null => {
+      if (!items?.length) return null;
+      for (const item of items) {
+        const itemPath = ((item?.path as string) || '').replace(/\/$/, '');
+        if (itemPath && itemPath === normalizedTarget) return item;
+        const found = walk(item?.children || item?.routes);
+        if (found) return found;
+      }
+      return null;
+    };
+    return walk(menuConfig as any[]);
+  }, [menuConfig]);
+
+  /** 收藏当前标签到工作台快捷入口 */
+  const handleFavoriteToQuickEntry = useCallback(async (tabKey: string) => {
+    const menuPath = (tabKey || '').split('?')[0];
+    if (!menuPath || menuPath === '/system/dashboard/workplace') {
+      message.warning('该页面不支持收藏到快捷入口');
+      return;
+    }
+
+    const menuItem = findMenuItemByPath(menuPath);
+    const menuUuid = String(menuItem?.uuid || menuItem?.key || menuPath);
+    const menuName = String(menuItem?.name || menuItem?.title || getTabTitle(menuPath) || menuPath);
+    const exists = dashboardQuickEntries.some(
+      (item) => item?.menu_path === menuPath || String(item?.menu_uuid) === menuUuid,
+    );
+    if (exists) {
+      message.info('已在快捷入口中');
+      return;
+    }
+
+    const nextEntries = [
+      ...dashboardQuickEntries,
+      {
+        menu_uuid: menuUuid,
+        menu_name: menuName,
+        menu_path: menuPath,
+        sort_order: dashboardQuickEntries.length,
+      },
+    ];
+    await updatePreferences({ dashboard_quick_entries: nextEntries });
+    message.success('已收藏到快捷入口');
+  }, [dashboardQuickEntries, findMenuItemByPath, getTabTitle, updatePreferences]);
+
   /**
    * 获取标签右键菜单
    */
@@ -636,6 +686,12 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         key: 'pin',
         label: isPinned ? t('tabs.unpin') : t('tabs.pin'),
         icon: <PushpinOutlined style={{ transform: isPinned ? 'rotate(-45deg)' : 'none' }} />,
+      },
+      {
+        key: 'favoriteToQuickEntry',
+        label: t('tabs.favoriteToQuickEntry', { defaultValue: '收藏' }),
+        icon: <StarOutlined />,
+        disabled: isWorkplace,
       },
       {
         type: 'divider',
@@ -665,13 +721,16 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
 
     return {
       items: menuItems,
-      onClick: ({ key }) => {
+      onClick: async ({ key }) => {
         switch (key) {
           case 'refresh':
             handleTabRefresh(tabKey);
             break;
           case 'pin':
             togglePinTab(tabKey);
+            break;
+          case 'favoriteToQuickEntry':
+            await handleFavoriteToQuickEntry(tabKey);
             break;
           case 'close':
             handleTabClose(tabKey);

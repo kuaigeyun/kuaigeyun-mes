@@ -33,11 +33,7 @@ import {
   ClockCircleOutlined,
   RightOutlined,
   ShopOutlined,
-  SettingOutlined,
   PlayCircleOutlined,
-  SafetyOutlined,
-  FileTextOutlined,
-  DatabaseOutlined,
   AppstoreOutlined,
   BulbOutlined,
 } from '@ant-design/icons';
@@ -62,11 +58,18 @@ import {
 import { getMenuTree, type MenuTree } from '../../../services/menu';
 import { getBusinessConfig } from '../../../services/businessConfig';
 import { filterMenuByBusinessConfig } from '../../../utils/menuBusinessFilter';
+import {
+  extractAppCodeFromPath,
+  getAppDisplayName,
+  translateAppMenuItemName,
+  translateMenuName,
+} from '../../../utils/menuTranslation';
 import { getUserPreference, type UserPreference } from '../../../services/userPreference';
 import { useUserPreferenceStore } from '../../../stores/userPreferenceStore';
 import { ManufacturingIcons } from '../../../utils/manufacturingIcons';
 import { getAvatarUrl, getAvatarText } from '../../../utils/avatar';
 import { useGlobalStore } from '../../../stores';
+import { useThemeStore } from '../../../stores/themeStore';
 import { getUserInfo } from '../../../utils/auth';
 import { getUserByUuid, getUserList } from '../../../services/user';
 import WeatherWidget from '../../../components/weather/WeatherWidget';
@@ -85,9 +88,60 @@ const { useBreakpoint } = Grid;
  * 渲染菜单图标
  */
 const renderMenuIcon = (menu: MenuTree): React.ReactNode => {
-  if (!menu.icon) {
-    return <ShopOutlined />;
-  }
+  const resolveIconByPath = (path?: string): React.ComponentType<any> | null => {
+    if (!path) return null;
+    const p = path.toLowerCase();
+    const segments = p.split('/').filter(Boolean);
+    const appCode = segments[1] || '';
+    const moduleCode = segments[2] || '';
+
+    // 1) 先按业务关键词精确匹配（单据优先）
+    if (p.includes('work-order')) return LucideIcons.FileText;
+    if (p.includes('reporting') || p.includes('report')) return LucideIcons.FileBarChart2;
+    if (p.includes('inventory')) return LucideIcons.Boxes;
+    if (p.includes('inbound') || p.includes('receipt') || p.includes('putaway')) return LucideIcons.ArrowDownToLine;
+    if (p.includes('outbound') || p.includes('shipment') || p.includes('picking')) return LucideIcons.ArrowUpFromLine;
+    if (p.includes('transfer') || p.includes('allocation')) return LucideIcons.ArrowLeftRight;
+    if (p.includes('warning') || p.includes('alert')) return LucideIcons.AlertTriangle;
+    if (p.includes('quality') || p.includes('inspection') || p.includes('iqc') || p.includes('oqc')) return LucideIcons.ClipboardCheck;
+    if (p.includes('purchase')) return LucideIcons.ShoppingCart;
+    if (p.includes('sales')) return LucideIcons.ReceiptText;
+    if (p.includes('plan') || p.includes('scheduling')) return LucideIcons.CalendarClock;
+    if (p.includes('equipment') || p.includes('maintenance')) return LucideIcons.Wrench;
+    if (p.includes('master-data') || p.includes('base-data')) return LucideIcons.Database;
+
+    // 2) 按模块匹配（保证全量菜单都能落到主题一致图标）
+    const moduleIconMap: Record<string, React.ComponentType<any>> = {
+      'sales-management': LucideIcons.ReceiptText,
+      'purchase-management': LucideIcons.ShoppingCart,
+      'warehouse-management': LucideIcons.Boxes,
+      'production-execution': LucideIcons.FileText,
+      'quality-management': LucideIcons.ClipboardCheck,
+      'equipment-management': LucideIcons.Wrench,
+      'plan-management': LucideIcons.CalendarClock,
+      'performance-management': LucideIcons.Target,
+      reports: LucideIcons.BarChart3,
+      analytics: LucideIcons.BarChart3,
+      'analysis-center': LucideIcons.BarChart3,
+      'master-data': LucideIcons.Database,
+    };
+    if (moduleCode && moduleIconMap[moduleCode]) {
+      return moduleIconMap[moduleCode];
+    }
+
+    // 3) 按应用匹配（最终兜底）
+    const appIconMap: Record<string, React.ComponentType<any>> = {
+      kuaicrm: LucideIcons.Users,
+      kuaipdm: LucideIcons.Layers,
+      kuaizhizao: LucideIcons.Factory,
+      kuaichain: LucideIcons.GitBranch,
+      kuaicaiwu: LucideIcons.Calculator,
+      kuaireport: LucideIcons.BarChart3,
+      'master-data': LucideIcons.Database,
+      kuaiai: LucideIcons.Sparkles,
+    };
+    return appIconMap[appCode] || null;
+  };
 
   // 尝试从 Lucide Icons 获取
   const lucideIconMap: Record<string, React.ComponentType<any>> = {
@@ -114,48 +168,212 @@ const renderMenuIcon = (menu: MenuTree): React.ReactNode => {
     'LoginOutlined': ManufacturingIcons.login,
     'UserOutlined': ManufacturingIcons.user,
     'TeamOutlined': ManufacturingIcons.team,
+    // 业务单据相关（补全快捷入口常见场景）
+    'FileSearchOutlined': LucideIcons.FileSearch,
+    'FileDoneOutlined': LucideIcons.FileCheck,
+    'FileAddOutlined': LucideIcons.FilePlus2,
+    'FileProtectOutlined': LucideIcons.FileLock2,
+    'FileExclamationOutlined': LucideIcons.FileWarning,
+    'FileSyncOutlined': LucideIcons.FileClock,
+    'ReconciliationOutlined': LucideIcons.ClipboardCheck,
+    'AuditOutlined': LucideIcons.ClipboardCheck,
+    'ContainerOutlined': LucideIcons.Boxes,
+    'WarningOutlined': LucideIcons.AlertTriangle,
+    'AlertOutlined': LucideIcons.AlertTriangle,
+    'SwapOutlined': LucideIcons.ArrowLeftRight,
+    'ImportOutlined': LucideIcons.ArrowDownToLine,
+    'ExportOutlined': LucideIcons.ArrowUpFromLine,
+  };
+  const lowerCaseIconMap: Record<string, React.ComponentType<any>> = {
+    order: LucideIcons.FileText,
+    workorder: LucideIcons.FileText,
+    work_order: LucideIcons.FileText,
+    report: LucideIcons.FileBarChart2,
+    reporting: LucideIcons.FileBarChart2,
+    inventory: LucideIcons.Boxes,
+    inbound: LucideIcons.ArrowDownToLine,
+    outbound: LucideIcons.ArrowUpFromLine,
+    transfer: LucideIcons.ArrowLeftRight,
+    warning: LucideIcons.AlertTriangle,
+    quality: LucideIcons.ClipboardCheck,
+    inspection: LucideIcons.ClipboardCheck,
+    purchase: LucideIcons.ShoppingCart,
+    sales: LucideIcons.ReceiptText,
+    plan: LucideIcons.CalendarClock,
+    equipment: LucideIcons.Wrench,
+    warehouse: LucideIcons.Boxes,
+    production: LucideIcons.Factory,
+    masterdata: LucideIcons.Database,
+    'master-data': LucideIcons.Database,
   };
 
   // 先检查预定义映射
-  if (lucideIconMap[menu.icon]) {
+  if (menu.icon && lucideIconMap[menu.icon]) {
     const IconComponent = lucideIconMap[menu.icon];
     return React.createElement(IconComponent, { size: 24 });
   }
 
   // 尝试直接从 Lucide Icons 中获取
-  const iconName = menu.icon as string;
-  let DirectIcon = (LucideIcons as any)[iconName];
-  
-  if (!DirectIcon) {
-    const pascalCaseName = iconName
-      .split(/[-_]/)
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-      .join('');
-    DirectIcon = (LucideIcons as any)[pascalCaseName];
+  if (menu.icon) {
+    const iconName = menu.icon as string;
+    let DirectIcon = (LucideIcons as any)[iconName];
+
+    if (!DirectIcon) {
+      const pascalCaseName = iconName
+        .split(/[-_]/)
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+        .join('');
+      DirectIcon = (LucideIcons as any)[pascalCaseName];
+    }
+
+    if (DirectIcon) {
+      return React.createElement(DirectIcon, { size: 24 });
+    }
+
+    const normalizedIconName = iconName.toLowerCase().replace(/[\s-_]/g, '');
+    if (lowerCaseIconMap[normalizedIconName]) {
+      const IconComponent = lowerCaseIconMap[normalizedIconName];
+      return React.createElement(IconComponent, { size: 24 });
+    }
   }
 
-  if (DirectIcon) {
-    return React.createElement(DirectIcon, { size: 24 });
+  const pathIcon = resolveIconByPath(menu.path);
+  if (pathIcon) {
+    return React.createElement(pathIcon, { size: 24 });
   }
 
-  // 默认图标
-  return <ShopOutlined />;
+  // 最终兜底图标（主题一致）
+  return React.createElement(LucideIcons.LayoutGrid, { size: 24 });
 };
 
 /**
  * 将菜单树转换为树形数据
  */
-const convertMenuTreeToTreeData = (menus: MenuTree[]): DataNode[] => {
-  return menus
-    .filter(menu => menu.path && !menu.is_external) // 只显示有路径且非外部链接的菜单
-    .map(menu => ({
-      title: menu.name,
+const getTranslatedMenuTitle = (
+  menu: MenuTree,
+  t: (key: string, options?: any) => string,
+): string => {
+  const findFirstPath = (children?: MenuTree[]): string | undefined => {
+    if (!children?.length) return undefined;
+    for (const child of children) {
+      if (child.path) return child.path;
+      const nested = findFirstPath(child.children);
+      if (nested) return nested;
+    }
+    return undefined;
+  };
+
+  const effectivePath = menu.path || findFirstPath(menu.children);
+  const appCode = extractAppCodeFromPath(effectivePath);
+
+  if (effectivePath?.startsWith('/apps/')) {
+    const translated = translateAppMenuItemName(menu.name, effectivePath, t, menu.children);
+    // 仅应用根节点使用统一应用名，避免覆盖二/三级菜单真实翻译
+    const isAppRootByPath = !!appCode && (menu.path || '').replace(/\/$/, '') === `/apps/${appCode}`;
+    const isAppRootByNameKey = typeof menu.name === 'string' && /^app\.[a-z0-9-]+\.name$/i.test(menu.name);
+    if (appCode && (isAppRootByPath || isAppRootByNameKey)) {
+      const appDisplayName = getAppDisplayName(appCode, t, translated || menu.name);
+      if (appDisplayName && appDisplayName.trim() !== '') {
+        return appDisplayName;
+      }
+    }
+    return translated;
+  }
+  return translateMenuName(menu.name, t, effectivePath);
+};
+
+const convertMenuTreeToTreeData = (
+  menus: MenuTree[],
+  t: (key: string, options?: any) => string,
+): DataNode[] => {
+  const convertNode = (menu: MenuTree): DataNode | null => {
+    if (menu.is_external) return null;
+
+    const children = (menu.children || [])
+      .map(convertNode)
+      .filter((item): item is DataNode => item !== null);
+
+    const hasValidPath = !!menu.path && menu.path !== '/system/dashboard/workplace';
+    // 无路由且无可用子节点时，整节点不展示
+    if (!hasValidPath && children.length === 0) return null;
+
+    return {
+      title: getTranslatedMenuTitle(menu, t),
       key: menu.uuid,
       icon: renderMenuIcon(menu),
-      path: menu.path, // 添加path信息，供QuickEntryGrid使用
-      children: menu.children ? convertMenuTreeToTreeData(menu.children) : undefined,
-      isLeaf: !menu.children || menu.children.length === 0,
-    }));
+      path: menu.path, // 添加 path 信息，供 QuickEntryGrid 保存时校验
+      children: children.length > 0 ? children : undefined,
+      isLeaf: children.length === 0,
+      // 目录节点可展开但不可勾选；仅有真实路由的菜单可选
+      disabled: !hasValidPath,
+    } as DataNode;
+  };
+
+  return menus
+    .map(convertNode)
+    .filter((item): item is DataNode => item !== null);
+};
+
+/**
+ * 从真实菜单树提取快捷入口候选（优先业务系统 /apps 路由）
+ */
+const buildQuickEntriesFromMenuTree = (
+  menus: MenuTree[],
+  renderIcon: (menu: MenuTree) => React.ReactNode,
+  t: (key: string, options?: any) => string,
+  limit = 10,
+): QuickEntryItem[] => {
+  const allPathMenus: MenuTree[] = [];
+
+  const walk = (nodes: MenuTree[]) => {
+    nodes.forEach((menu) => {
+      if (menu.children?.length) {
+        walk(menu.children);
+      }
+      if (menu.path && !menu.is_external && menu.path !== '/system/dashboard/workplace') {
+        allPathMenus.push(menu);
+      }
+    });
+  };
+
+  walk(menus);
+
+  const uniqueMenus = Array.from(
+    new Map(allPathMenus.map((menu) => [menu.uuid, menu])).values(),
+  );
+  const businessMenus = uniqueMenus.filter((menu) => menu.path?.startsWith('/apps/'));
+  const sourceMenus = businessMenus.length > 0 ? businessMenus : uniqueMenus;
+  const priorityPatterns = [
+    '/production-execution/work-orders',
+    '/production-execution/reporting',
+    '/warehouse-management/inventory',
+    '/warehouse-management/inbound',
+    '/warehouse-management/outbound',
+    '/quality-management',
+    '/equipment-management/equipment',
+    '/equipment-management/maintenance',
+    '/plan-management',
+    '/master-data',
+  ];
+
+  const sortedMenus = [...sourceMenus].sort((a, b) => {
+    const aPath = a.path || '';
+    const bPath = b.path || '';
+    const aPriority = priorityPatterns.findIndex((pattern) => aPath.includes(pattern));
+    const bPriority = priorityPatterns.findIndex((pattern) => bPath.includes(pattern));
+    const aRank = aPriority === -1 ? Number.MAX_SAFE_INTEGER : aPriority;
+    const bRank = bPriority === -1 ? Number.MAX_SAFE_INTEGER : bPriority;
+    if (aRank !== bRank) return aRank - bRank;
+    return (a.sort_order ?? 0) - (b.sort_order ?? 0);
+  });
+
+  return sortedMenus.slice(0, limit).map((menu, index) => ({
+    menu_uuid: menu.uuid,
+    menu_name: getTranslatedMenuTitle(menu, t),
+    menu_path: menu.path || '',
+    menu_icon: renderIcon(menu),
+    sort_order: index,
+  }));
 };
 
 /** 工作台 TIPS 的 i18n 键（共 12 条，随机展示一条） */
@@ -324,6 +542,7 @@ function DashboardKpiRichCard({
   rightTop,
   rightBottom,
   onClick,
+  isDark,
 }: {
   gradient: string;
   title: string;
@@ -333,14 +552,15 @@ function DashboardKpiRichCard({
   rightTop: KpiRichSide;
   rightBottom: KpiRichSide;
   onClick?: () => void;
+  isDark?: boolean;
 }) {
   const { token } = useToken();
   const text = {
-    title: '#64748b',
-    main: '#0f172a',
-    secondary: '#475569',
-    muted: '#94a3b8',
-    divider: 'rgba(15, 23, 42, 0.1)',
+    title: isDark ? 'rgba(255,255,255,0.8)' : '#64748b',
+    main: isDark ? '#ffffff' : '#0f172a',
+    secondary: isDark ? 'rgba(255,255,255,0.9)' : '#475569',
+    muted: isDark ? 'rgba(255,255,255,0.6)' : '#94a3b8',
+    divider: isDark ? 'rgba(255,255,255,0.16)' : 'rgba(15, 23, 42, 0.1)',
   } as const;
 
   return (
@@ -487,6 +707,7 @@ export default function DashboardPage() {
   const queryClient = useQueryClient();
   const { token } = useToken();
   const screens = useBreakpoint();
+  const isDark = useThemeStore((s) => s.resolved.isDark);
   // 右侧两个小统计卡在空间不足时优先隐藏，避免欢迎区内容换行
   const showUserStatTiles = !!screens.xxl;
   // 首行宽度不足时，日历卡仅显示模拟时钟，避免撑高布局
@@ -705,14 +926,14 @@ export default function DashboardPage() {
   });
 
   // 获取菜单树（菜单管理）
-  const { data: menuTree } = useQuery({
+  const { data: menuTree, isLoading: menuTreeLoading } = useQuery({
     queryKey: ['dashboard-menu-tree'],
     queryFn: () => getMenuTree({ is_active: true }),
     staleTime: 5 * 60 * 1000, // 5分钟缓存
   });
 
   // 获取业务配置（蓝图设置），用于菜单过滤
-  const { data: businessConfig } = useQuery({
+  const { data: businessConfig, isLoading: businessConfigLoading } = useQuery({
     queryKey: ['businessConfig'],
     queryFn: getBusinessConfig,
     enabled: !!currentUser,
@@ -724,6 +945,11 @@ export default function DashboardPage() {
     if (!menuTree) return [];
     return filterMenuByBusinessConfig(menuTree, businessConfig ?? undefined);
   }, [menuTree, businessConfig]);
+  // 快捷入口兜底：若业务过滤结果为空，回退到原始菜单树，避免刷新后整块空白
+  const quickEntryMenuTree = useMemo(() => {
+    if (filteredMenuTree.length > 0) return filteredMenuTree;
+    return menuTree || [];
+  }, [filteredMenuTree, menuTree]);
 
   // 获取生产播报（使用真实API）
   const { data: productionBroadcastData, isLoading: productionBroadcastLoading } = useQuery<ProductionBroadcastItem[]>({
@@ -735,11 +961,12 @@ export default function DashboardPage() {
   const productionBroadcast = useMemo(() => Array.isArray(productionBroadcastData) ? productionBroadcastData : [], [productionBroadcastData]);
 
   // 获取用户偏好设置
-  const { data: userPreference } = useQuery<UserPreference>({
+  const { data: userPreference, isLoading: userPreferenceLoading } = useQuery<UserPreference>({
     queryKey: ['dashboard-user-preference'],
     queryFn: getUserPreference,
     staleTime: 5 * 60 * 1000,
   });
+  const quickEntryLoading = userPreferenceLoading || menuTreeLoading || (!!currentUser && businessConfigLoading);
 
   const updatePreferences = useUserPreferenceStore((s) => s.updatePreferences);
 
@@ -755,6 +982,21 @@ export default function DashboardPage() {
       }
     }
     return null;
+  };
+  const getMenuIconByPath = (menuPath: string, menuName?: string): React.ReactNode => {
+    const pseudoMenu = {
+      uuid: menuPath || 'quick-entry',
+      tenant_id: 0,
+      name: menuName || menuPath || '',
+      path: menuPath,
+      sort_order: 0,
+      is_active: true,
+      is_external: false,
+      created_at: '',
+      updated_at: '',
+      children: [],
+    } as MenuTree;
+    return renderMenuIcon(pseudoMenu);
   };
 
   // 处理待办事项
@@ -803,13 +1045,14 @@ export default function DashboardPage() {
         }
       }}
       style={{
-        borderRadius: 10,
-        padding: '8px 10px',
-        background: 'rgba(255,255,255,0.14)',
-        border: '1px solid rgba(255,255,255,0.28)',
+        padding: '4px 12px 4px 14px',
         cursor: 'pointer',
-        minWidth: 100,
+        minWidth: 92,
         whiteSpace: 'nowrap',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        borderLeft: '1px solid rgba(255,255,255,0.32)',
       }}
     >
       <Space size={4} align="center" wrap={false}>
@@ -845,13 +1088,14 @@ export default function DashboardPage() {
         }
       }}
       style={{
-        borderRadius: 10,
-        padding: '8px 10px',
-        background: 'rgba(255,255,255,0.14)',
-        border: '1px solid rgba(255,255,255,0.28)',
+        padding: '4px 0 4px 14px',
         cursor: 'pointer',
-        minWidth: 100,
+        minWidth: 92,
         whiteSpace: 'nowrap',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        borderLeft: '1px solid rgba(255,255,255,0.32)',
       }}
     >
       <Space size={4} align="center" wrap={false}>
@@ -934,14 +1178,14 @@ export default function DashboardPage() {
               <div
                 style={{
                   display: 'flex',
-                  alignItems: 'flex-start',
+                  alignItems: 'center',
                   justifyContent: 'space-between',
                   gap: 16,
                   width: '100%',
                   flexWrap: 'nowrap',
                 }}
               >
-                <Space size="large" align="start">
+                <Space size="large" align="center">
                   <div
                     style={{
                       position: 'relative',
@@ -999,7 +1243,7 @@ export default function DashboardPage() {
                   </div>
                 </Space>
                 {showUserStatTiles ? (
-                  <Space size={8} wrap={false} style={{ flexShrink: 0 }} align="start">
+                  <Space size={0} wrap={false} style={{ flexShrink: 0 }} align="center">
                     {messageStatTile}
                     {todoStatTile}
                   </Space>
@@ -1073,7 +1317,7 @@ export default function DashboardPage() {
               width: '100%',
               borderRadius: dashboardCardRadius,
               border: `1px solid ${token.colorBorderSecondary}`,
-              background: '#ffffff',
+              background: token.colorBgElevated,
               boxShadow: dashboardCardShadow,
               overflow: 'hidden',
             }}
@@ -1086,7 +1330,7 @@ export default function DashboardPage() {
                 justifyContent: showCalendarText ? 'flex-start' : 'center',
                 gap: 14,
                 minHeight: 0,
-                background: '#ffffff',
+                background: token.colorBgElevated,
                 /* Ant Design 无标题时 body 默认仅下圆角，白底会露出上直角 */
                 borderRadius: dashboardCardRadius,
               },
@@ -1161,47 +1405,52 @@ export default function DashboardPage() {
                 </Space>
               }
               items={useMemo(() => {
+                if (quickEntryLoading) {
+                  return [];
+                }
                 const quickEntries = userPreference?.preferences?.dashboard_quick_entries as QuickEntryItem[] | undefined;
 
-                if (quickEntries && quickEntries.length > 0 && filteredMenuTree.length) {
+                // 用户偏好优先：只要有保存项，始终优先展示用户自己的快捷入口
+                if (Array.isArray(quickEntries) && quickEntries.length > 0) {
                   return quickEntries
                     .sort((a, b) => a.sort_order - b.sort_order)
                     .map((entry) => {
-                      const menu = findMenuInTree(filteredMenuTree, entry.menu_uuid);
-                      if (!menu || !menu.path) return null;
+                      const menu = quickEntryMenuTree.length ? findMenuInTree(quickEntryMenuTree, entry.menu_uuid) : null;
+                      const resolvedPath = entry.menu_path || menu?.path || '';
+                      if (!resolvedPath) return null;
 
                       return {
                         ...entry,
-                        menu_name: entry.menu_name || menu.name,
-                        menu_path: entry.menu_path || menu.path,
-                        menu_icon: renderMenuIcon(menu),
+                        menu_name: entry.menu_name || (menu ? getTranslatedMenuTitle(menu, t) : ''),
+                        menu_path: resolvedPath,
+                        menu_icon: menu ? renderMenuIcon(menu) : getMenuIconByPath(resolvedPath, entry.menu_name),
                       };
                     })
                     .filter((item): item is any => item !== null);
                 }
 
-                const defaultEntries: QuickEntryItem[] = [
-                  { menu_uuid: 'work-orders', menu_name: t('pages.dashboard.defaultWorkOrders'), menu_path: '/apps/kuaizhizao/production-execution/work-orders', menu_icon: <FileTextOutlined />, sort_order: 0 },
-                  { menu_uuid: 'inventory', menu_name: t('pages.dashboard.defaultInventory'), menu_path: '/apps/kuaizhizao/warehouse-management/inventory', menu_icon: <DatabaseOutlined />, sort_order: 1 },
-                  { menu_uuid: 'quality', menu_name: t('pages.dashboard.defaultQuality'), menu_path: '/apps/kuaizhizao/quality-management', menu_icon: <SafetyOutlined />, sort_order: 2 },
-                  { menu_uuid: 'equipment', menu_name: t('pages.dashboard.defaultEquipment'), menu_path: '/apps/kuaizhizao/equipment-management/equipment', menu_icon: <SettingOutlined />, sort_order: 3 },
-                  { menu_uuid: 'plan', menu_name: t('pages.dashboard.defaultPlan'), menu_path: '/apps/kuaizhizao/plan-management', menu_icon: <CheckCircleOutlined />, sort_order: 4 },
-                ];
+                if (!quickEntryMenuTree.length) {
+                  return [];
+                }
 
-                return defaultEntries;
-              }, [userPreference, filteredMenuTree, t])}
+                // 无用户配置时：直接使用真实业务菜单生成快捷入口
+                return buildQuickEntriesFromMenuTree(quickEntryMenuTree, renderMenuIcon, t, 10);
+              }, [quickEntryLoading, userPreference, quickEntryMenuTree, t])}
+              loading={quickEntryLoading}
               menuTree={useMemo(() => {
-                if (!filteredMenuTree.length) return [];
-                return convertMenuTreeToTreeData(filteredMenuTree);
-              }, [filteredMenuTree])}
+                if (!quickEntryMenuTree.length) return [];
+                return convertMenuTreeToTreeData(quickEntryMenuTree, t);
+              }, [quickEntryMenuTree, t])}
               showConfig={true}
               onSave={async (items: QuickEntryItem[]) => {
-                await updatePreferences({ dashboard_quick_entries: items });
+                // 偏好设置需要可 JSON 序列化，不能保存 ReactNode（menu_icon）
+                const serializableItems = items.map(({ menu_icon, ...rest }) => rest);
+                await updatePreferences({ dashboard_quick_entries: serializableItems });
                 queryClient.invalidateQueries({ queryKey: ['dashboard-user-preference'] });
               }}
               renderMenuIcon={(menuUuid: string) => {
-                if (!filteredMenuTree.length) return <ShopOutlined />;
-                const menu = findMenuInTree(filteredMenuTree, menuUuid);
+                if (!quickEntryMenuTree.length) return <ShopOutlined />;
+                const menu = findMenuInTree(quickEntryMenuTree, menuUuid);
                 return menu ? renderMenuIcon(menu) : <ShopOutlined />;
               }}
             />
@@ -1231,7 +1480,7 @@ export default function DashboardPage() {
         {/* 工单总数 */}
         <Col xs={24} sm={12} md={8} lg={8} style={{ display: 'flex', minWidth: 0 }}>
           <DashboardKpiRichCard
-            gradient="linear-gradient(102deg, #eef2f7 0%, #e6edf6 45%, #dfe8f3 100%)"
+            gradient={isDark ? 'linear-gradient(102deg, #1d2633 0%, #1a2230 45%, #161e2b 100%)' : 'linear-gradient(102deg, #eef2f7 0%, #e6edf6 45%, #dfe8f3 100%)'}
             title={t('pages.dashboard.statWorkOrderTotal')}
             mainValue={formatDashboardMetric(statistics?.production?.total)}
             mainSuffix={t('pages.dashboard.unitOrder')}
@@ -1244,6 +1493,7 @@ export default function DashboardPage() {
               label: t('pages.dashboard.kpiSideInProgress'),
               value: `${formatDashboardMetric(statistics?.production?.in_progress)}${t('pages.dashboard.unitOrder')}`,
             }}
+            isDark={isDark}
             onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders')}
           />
         </Col>
@@ -1251,7 +1501,7 @@ export default function DashboardPage() {
         {/* 进行中工单 */}
         <Col xs={24} sm={12} md={8} lg={8} style={{ display: 'flex', minWidth: 0 }}>
           <DashboardKpiRichCard
-            gradient="linear-gradient(102deg, #ecf4f7 0%, #e3eef4 50%, #dbe8ef 100%)"
+            gradient={isDark ? 'linear-gradient(102deg, #1c2a31 0%, #18262d 50%, #15222a 100%)' : 'linear-gradient(102deg, #ecf4f7 0%, #e3eef4 50%, #dbe8ef 100%)'}
             title={t('pages.dashboard.statWorkOrderInProgress')}
             mainValue={formatDashboardMetric(statistics?.production?.in_progress)}
             mainSuffix={t('pages.dashboard.unitOrder')}
@@ -1264,6 +1514,7 @@ export default function DashboardPage() {
               label: t('pages.dashboard.statWorkOrderCompletion'),
               value: `${formatDashboardRate(statistics?.production?.completion_rate)}%`,
             }}
+            isDark={isDark}
             onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders?status=in_progress')}
           />
         </Col>
@@ -1271,7 +1522,7 @@ export default function DashboardPage() {
         {/* 工单完成率 */}
         <Col xs={24} sm={12} md={8} lg={8} style={{ display: 'flex', minWidth: 0 }}>
           <DashboardKpiRichCard
-            gradient="linear-gradient(102deg, #f0f5f2 0%, #e8f0eb 48%, #dfe9e3 100%)"
+            gradient={isDark ? 'linear-gradient(102deg, #1f2a26 0%, #1a2521 48%, #15201c 100%)' : 'linear-gradient(102deg, #f0f5f2 0%, #e8f0eb 48%, #dfe9e3 100%)'}
             title={t('pages.dashboard.statWorkOrderCompletion')}
             mainValue={formatDashboardRate(statistics?.production?.completion_rate)}
             mainSuffix="%"
@@ -1284,6 +1535,7 @@ export default function DashboardPage() {
               label: t('pages.dashboard.kpiSideTotalOrders'),
               value: `${formatDashboardMetric(statistics?.production?.total)}${t('pages.dashboard.unitOrder')}`,
             }}
+            isDark={isDark}
             onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders?status=completed')}
           />
         </Col>
@@ -1293,7 +1545,7 @@ export default function DashboardPage() {
         {/* 完工数量 */}
         <Col xs={24} sm={12} md={8} lg={8} style={{ display: 'flex', minWidth: 0 }}>
           <DashboardKpiRichCard
-            gradient="linear-gradient(102deg, #f7f4ef 0%, #f0ebe4 50%, #e8e2d9 100%)"
+            gradient={isDark ? 'linear-gradient(102deg, #2a261f 0%, #252118 50%, #201c15 100%)' : 'linear-gradient(102deg, #f7f4ef 0%, #f0ebe4 50%, #e8e2d9 100%)'}
             title={t('pages.dashboard.statCompletedQuantity')}
             mainValue={formatDashboardMetric(statistics?.production?.completed_quantity)}
             mainSuffix={t('pages.dashboard.unitPiece')}
@@ -1306,6 +1558,7 @@ export default function DashboardPage() {
               label: t('pages.dashboard.kpiSideClosedWorkOrders'),
               value: `${formatDashboardMetric(statistics?.production?.completed)}${t('pages.dashboard.unitOrder')}`,
             }}
+            isDark={isDark}
             onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders')}
           />
         </Col>
@@ -1313,7 +1566,7 @@ export default function DashboardPage() {
         {/* 库存预警 */}
         <Col xs={24} sm={12} md={8} lg={8} style={{ display: 'flex', minWidth: 0 }}>
           <DashboardKpiRichCard
-            gradient="linear-gradient(102deg, #f1f3f5 0%, #eaecef 50%, #e3e6ea 100%)"
+            gradient={isDark ? 'linear-gradient(102deg, #23272d 0%, #1f2329 50%, #1b1f24 100%)' : 'linear-gradient(102deg, #f1f3f5 0%, #eaecef 50%, #e3e6ea 100%)'}
             title={t('pages.dashboard.statInventoryAlert')}
             mainValue={formatDashboardMetric(statistics?.inventory?.alert_count)}
             mainSuffix={t('pages.dashboard.unitAlert')}
@@ -1326,6 +1579,7 @@ export default function DashboardPage() {
               label: t('pages.dashboard.kpiSideStockQuantity'),
               value: formatDashboardMetric(statistics?.inventory?.total_quantity),
             }}
+            isDark={isDark}
             onClick={() => navigate('/apps/kuaizhizao/warehouse-management/inventory')}
           />
         </Col>
@@ -1333,7 +1587,7 @@ export default function DashboardPage() {
         {/* 质量概览 */}
         <Col xs={24} sm={12} md={8} lg={8} style={{ display: 'flex', minWidth: 0 }}>
           <DashboardKpiRichCard
-            gradient="linear-gradient(102deg, #f5f1f3 0%, #ede8ec 48%, #e6dfe5 100%)"
+            gradient={isDark ? 'linear-gradient(102deg, #292327 0%, #241f23 48%, #1f1a1e 100%)' : 'linear-gradient(102deg, #f5f1f3 0%, #ede8ec 48%, #e6dfe5 100%)'}
             title={t('pages.dashboard.statQualitySummary')}
             mainValue={formatDashboardRate(statistics?.quality?.quality_rate)}
             mainSuffix="%"
@@ -1346,6 +1600,7 @@ export default function DashboardPage() {
               label: t('pages.dashboard.kpiSideTotalExceptions'),
               value: formatDashboardMetric(statistics?.quality?.total_exceptions),
             }}
+            isDark={isDark}
             onClick={() => navigate('/apps/kuaizhizao/quality-management')}
           />
         </Col>

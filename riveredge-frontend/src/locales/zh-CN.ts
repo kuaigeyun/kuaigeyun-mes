@@ -994,7 +994,7 @@ export default {
 
   // 路径翻译（用于面包屑和标签栏的后备方案）
   'path.apps': '',
-  'path.kuaizhizao': '快格轻制造',
+  'path.kuaizhizao': '快制造',
   'path.kuaicaiwu': '轻管理会计',
   'path.plan-management': '计划管理',
   'path.demand-management': '需求计划',

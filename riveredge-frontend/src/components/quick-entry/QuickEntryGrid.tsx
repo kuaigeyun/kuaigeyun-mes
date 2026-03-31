@@ -7,8 +7,8 @@
  * Date: 2026-01-21
  */
 
-import React, { useState } from 'react';
-import { Card, Button, Modal, Tree, message, theme } from 'antd';
+import React, { useEffect, useState } from 'react';
+import { Card, Button, Modal, Tree, message, theme, Spin } from 'antd';
 import { SettingOutlined, PlusOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import type { DataNode } from 'antd/es/tree';
@@ -34,6 +34,8 @@ export interface QuickEntryItem {
 export interface QuickEntryGridProps {
   /** 快捷入口列表 */
   items: QuickEntryItem[];
+  /** 是否处于加载中 */
+  loading?: boolean;
   /** 菜单树数据（用于配置选择） */
   menuTree?: DataNode[];
   /** 是否显示配置按钮 */
@@ -51,6 +53,7 @@ export interface QuickEntryGridProps {
  */
 export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
   items,
+  loading = false,
   menuTree = [],
   showConfig = true,
   onSave,
@@ -61,7 +64,17 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
   const navigate = useNavigate();
   const [configModalVisible, setConfigModalVisible] = useState(false);
   const [selectedMenuKeys, setSelectedMenuKeys] = useState<React.Key[]>([]);
+  const normalizeCheckedKeys = (checked: React.Key[] | { checked: React.Key[]; halfChecked: React.Key[] }): React.Key[] =>
+    Array.isArray(checked) ? checked : checked.checked;
+
   const [editingItems, setEditingItems] = useState<QuickEntryItem[]>(items);
+
+  // 父组件异步加载/刷新后，同步最新 items，避免首次空数组后不再更新
+  useEffect(() => {
+    if (!configModalVisible) {
+      setEditingItems(items);
+    }
+  }, [items, configModalVisible]);
 
   // 打开配置模态框
   const handleOpenConfig = () => {
@@ -130,17 +143,47 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
     setSelectedMenuKeys(newItems.map(item => item.menu_uuid));
   };
 
+  // 右键快捷删除（非编辑态）
+  const handleDeleteByContextMenu = (targetItem: QuickEntryItem) => {
+    Modal.confirm({
+      title: '删除快捷方式',
+      content: `确定要删除“${targetItem.menu_name}”吗？`,
+      okText: '删除',
+      cancelText: '取消',
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        const newItems = editingItems
+          .filter(item => item.menu_uuid !== targetItem.menu_uuid)
+          .map((item, index) => ({ ...item, sort_order: index }));
+
+        if (onSave) {
+          await onSave(newItems);
+        }
+        setEditingItems(newItems);
+        setSelectedMenuKeys(newItems.map(item => item.menu_uuid));
+        message.success('快捷方式已删除');
+      },
+    });
+  };
+
   // 生成渐变色（根据索引生成不同颜色，使用不透明实色）
   const generateGradient = (index: number): string => {
     const gradients = [
-      'linear-gradient(135deg, #00c6ff 0%, #0072ff 100%)',     // 纯蓝 - 工单管理
-      'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',    // 粉紫 - 库存管理
-      'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',     // 蓝色 - 质量管理
-      'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',     // 绿色 - 设备管理
-      'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',     // 粉黄 - 计划管理
-      'linear-gradient(135deg, #30cfd0 0%, #330867 100%)',     // 青紫
-      'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',     // 薄荷粉
-      'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)',     // 珊瑚粉
+      'linear-gradient(135deg, #0A84FF 0%, #5AC8FA 100%)',     // iOS 蓝
+      'linear-gradient(135deg, #5E5CE6 0%, #7D7AFF 100%)',     // iOS 靛蓝
+      'linear-gradient(135deg, #BF5AF2 0%, #DA8FFF 100%)',     // iOS 紫
+      'linear-gradient(135deg, #FF2D55 0%, #FF6482 100%)',     // iOS 粉红
+      'linear-gradient(135deg, #FF375F 0%, #FF7A95 100%)',     // 玫红
+      'linear-gradient(135deg, #FF9F0A 0%, #FFC15A 100%)',     // iOS 橙
+      'linear-gradient(135deg, #FFCC00 0%, #FFE066 100%)',     // iOS 黄
+      'linear-gradient(135deg, #30D158 0%, #6DE28A 100%)',     // iOS 绿
+      'linear-gradient(135deg, #00C7BE 0%, #5EDFD7 100%)',     // iOS 薄荷
+      'linear-gradient(135deg, #64D2FF 0%, #9BE4FF 100%)',     // 天空蓝
+      'linear-gradient(135deg, #AC8E68 0%, #C8A983 100%)',     // 沙金
+      'linear-gradient(135deg, #6C8CF5 0%, #9AAEF9 100%)',     // 冷紫蓝
+      'linear-gradient(135deg, #34C759 0%, #7FDF95 100%)',     // 青草绿
+      'linear-gradient(135deg, #FF6B6B 0%, #FF9A8B 100%)',     // 珊瑚红
+      'linear-gradient(135deg, #3A7BD5 0%, #6FB1FC 100%)',     // 海洋蓝
     ];
     return gradients[index % gradients.length];
   };
@@ -181,7 +224,11 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
         }}
       >
         <div style={{ width: '100%', flex: 1, minHeight: 0 }}>
-          {editingItems.length > 0 ? (
+          {loading ? (
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Spin size="small" />
+            </div>
+          ) : editingItems.length > 0 ? (
             <div 
               style={{ 
                 display: 'grid', 
@@ -202,6 +249,7 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
                   gradient={item.gradient || generateGradient(index)}
                   editable={configModalVisible}
                   onDelete={() => handleDeleteItem(item.menu_uuid)}
+                  onContextDelete={() => handleDeleteByContextMenu(item)}
                 />
               ))}
             </div>
@@ -236,9 +284,12 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
           </p>
           <Tree
             checkable
-            checkedKeys={selectedMenuKeys}
+            checkedKeys={{ checked: selectedMenuKeys, halfChecked: [] }}
             onCheck={(checkedKeys) => {
-              setSelectedMenuKeys(checkedKeys as React.Key[]);
+              const normalized = normalizeCheckedKeys(
+                checkedKeys as React.Key[] | { checked: React.Key[]; halfChecked: React.Key[] },
+              );
+              setSelectedMenuKeys(normalized);
             }}
             treeData={menuTree}
             checkStrictly
