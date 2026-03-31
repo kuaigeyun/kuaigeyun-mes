@@ -628,7 +628,7 @@ function DashboardKpiRichCard({
         </div>
         <Text
           style={{
-            fontSize: 14,
+            fontSize: 11,
             color: text.muted,
             marginTop: 2,
             lineHeight: 1.45,
@@ -1254,63 +1254,33 @@ export default function DashboardPage() {
             </div>
           </Card>
         </Col>
-        <Col xs={24} sm={12} lg={12} xl={5} style={{ display: 'flex', overflow: 'visible' }}>
-          <div
-            className="dashboard-workplace-tip-card"
+        <Col xs={24} sm={12} lg={12} xl={5} style={{ display: 'flex' }}>
+          <Card
             style={{
               flex: 1,
               width: '100%',
               minHeight: dashboardTopCardHeight,
               height: dashboardTopCardHeight,
               maxHeight: dashboardTopCardHeight,
-              position: 'relative',
-              display: 'flex',
-              alignItems: 'flex-start',
-              alignSelf: 'stretch',
-              overflow: 'visible',
               borderRadius: dashboardCardRadius,
+              border: 'none',
+              background: getWeatherCardGradient(weatherForDashboard),
               boxShadow: dashboardCardShadow,
+              overflow: 'hidden',
+            }}
+            styles={{
+              body: {
+                padding: '12px 12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minHeight: '100%',
+                borderRadius: dashboardCardRadius,
+              },
             }}
           >
-            <div className="dashboard-workplace-tip-bulb-wrap" aria-hidden>
-              <BulbOutlined
-                style={{
-                  fontSize: 46,
-                  color: token.colorWarning,
-                  display: 'block',
-                }}
-              />
-            </div>
-            <div
-              className="dashboard-workplace-tip-body"
-              style={{
-                width: '100%',
-                color: token.colorText,
-                lineHeight: 1.6,
-              }}
-            >
-              <Text strong style={{ fontSize: 14, color: token.colorText, display: 'block', marginBottom: 6 }}>
-                {t('pages.dashboard.workplaceTips')}
-              </Text>
-              <div
-                key={tipIndex}
-                className="dashboard-workplace-tip-text"
-                style={{
-                  animation: 'workplace-tip-in 0.4s ease-out',
-                }}
-              >
-                <Text type="secondary" style={{ fontSize: 14, display: 'block' }}>
-                  {currentTip}
-                </Text>
-              </div>
-            </div>
-            <style>{`
-              @keyframes workplace-tip-in {
-                from { opacity: 0; transform: translateY(4px); }
-                to { opacity: 1; transform: translateY(0); }
-              }
-            `}</style>
-          </div>
+            <WeatherWidget onWeatherChange={setWeatherForDashboard} />
+          </Card>
         </Col>
         <Col xs={24} sm={12} lg={12} xl={5} style={{ display: 'flex' }}>
           <Card
@@ -1369,39 +1339,70 @@ export default function DashboardPage() {
             ) : null}
           </Card>
         </Col>
-        <Col xs={24} sm={12} lg={12} xl={5} style={{ display: 'flex' }}>
-          <Card
+        <Col xs={24} sm={12} lg={12} xl={5} style={{ display: 'flex', overflow: 'visible' }}>
+          <div
+            className="dashboard-workplace-tip-card"
             style={{
               flex: 1,
               width: '100%',
               minHeight: dashboardTopCardHeight,
               height: dashboardTopCardHeight,
               maxHeight: dashboardTopCardHeight,
+              position: 'relative',
+              display: 'flex',
+              alignItems: 'flex-start',
+              alignSelf: 'stretch',
+              overflow: 'visible',
               borderRadius: dashboardCardRadius,
-              border: 'none',
-              background: getWeatherCardGradient(weatherForDashboard),
               boxShadow: dashboardCardShadow,
-              overflow: 'hidden',
-            }}
-            styles={{
-              body: {
-                padding: '12px 12px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                minHeight: '100%',
-                borderRadius: dashboardCardRadius,
-              },
             }}
           >
-            <WeatherWidget onWeatherChange={setWeatherForDashboard} />
-          </Card>
+            <div className="dashboard-workplace-tip-bulb-wrap" aria-hidden>
+              <BulbOutlined
+                style={{
+                  fontSize: 46,
+                  color: token.colorWarning,
+                  display: 'block',
+                }}
+              />
+            </div>
+            <div
+              className="dashboard-workplace-tip-body"
+              style={{
+                width: '100%',
+                color: token.colorText,
+                lineHeight: 1.6,
+              }}
+            >
+              <Text strong style={{ fontSize: 14, color: token.colorText, display: 'block', marginBottom: 6 }}>
+                {t('pages.dashboard.workplaceTips')}
+              </Text>
+              <div
+                key={tipIndex}
+                className="dashboard-workplace-tip-text"
+                style={{
+                  animation: 'workplace-tip-in 0.4s ease-out',
+                }}
+              >
+                <Text type="secondary" style={{ fontSize: 14, display: 'block' }}>
+                  {currentTip}
+                </Text>
+              </div>
+            </div>
+            <style>{`
+              @keyframes workplace-tip-in {
+                from { opacity: 0; transform: translateY(4px); }
+                to { opacity: 1; transform: translateY(0); }
+              }
+            `}</style>
+          </div>
         </Col>
+        
       </Row>
 
       {/* 主区：左侧快捷+版本 | 右侧 KPI + 日期条 + 三列表（示意图） */}
       <Row gutter={[16, 16]} align="stretch" className="dashboard-main-body" style={{ flex: 1, minHeight: 0 }}>
-        <Col xs={24} xl={5} style={{ display: 'flex', flexDirection: 'column', gap: 16, minHeight: 0, minWidth: 0 }}>
+        <Col xs={24} lg={5} style={{ display: 'flex', flexDirection: 'column', gap: 16, minHeight: 0, minWidth: 0 }}>
           <div
             className="dashboard-bento-left-quick"
             style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
@@ -1475,156 +1476,150 @@ export default function DashboardPage() {
           </Card>
         </Col>
 
-        <Col xs={24} xl={19} style={{ display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0 }}>
+        {/* 主体第二块：19；内部再分两层 7773 / 7710 */}
+        <Col xs={24} lg={19} style={{ display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0 }}>
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
             <Row
-              gutter={[12, 16]}
-              wrap={false}
+              gutter={[16, 16]}
+              wrap={!screens.lg}
               align="stretch"
               className="dashboard-kpi-strip-row"
               style={{ flexShrink: 0 }}
             >
-              <Col flex="auto" style={{ minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-                <Row gutter={[16, 16]} style={{ display: 'flex', alignItems: 'stretch', marginBottom: 16 }}>
-        {/* 工单总数 */}
-        <Col xs={24} sm={12} md={8} lg={8} style={{ display: 'flex', minWidth: 0 }}>
-          <DashboardKpiRichCard
-            gradient={isDark ? 'linear-gradient(102deg, #1d2633 0%, #1a2230 45%, #161e2b 100%)' : 'linear-gradient(102deg, #eef2f7 0%, #e6edf6 45%, #dfe8f3 100%)'}
-            title={t('pages.dashboard.statWorkOrderTotal')}
-            mainValue={formatDashboardMetric(statistics?.production?.total)}
-            mainSuffix={t('pages.dashboard.unitOrder')}
-            subtitle={t('pages.dashboard.kpiSubWorkOrdersInRange')}
-            rightTop={{
-              label: t('pages.dashboard.kpiSideCompleted'),
-              value: `${formatDashboardMetric(statistics?.production?.completed)}${t('pages.dashboard.unitOrder')}`,
-            }}
-            rightBottom={{
-              label: t('pages.dashboard.kpiSideInProgress'),
-              value: `${formatDashboardMetric(statistics?.production?.in_progress)}${t('pages.dashboard.unitOrder')}`,
-            }}
-            isDark={isDark}
-            onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders')}
-          />
-        </Col>
-
-        {/* 进行中工单 */}
-        <Col xs={24} sm={12} md={8} lg={8} style={{ display: 'flex', minWidth: 0 }}>
-          <DashboardKpiRichCard
-            gradient={isDark ? 'linear-gradient(102deg, #1c2a31 0%, #18262d 50%, #15222a 100%)' : 'linear-gradient(102deg, #ecf4f7 0%, #e3eef4 50%, #dbe8ef 100%)'}
-            title={t('pages.dashboard.statWorkOrderInProgress')}
-            mainValue={formatDashboardMetric(statistics?.production?.in_progress)}
-            mainSuffix={t('pages.dashboard.unitOrder')}
-            subtitle={t('pages.dashboard.kpiSubWorkOrdersExecuting')}
-            rightTop={{
-              label: t('pages.dashboard.kpiSideCompleted'),
-              value: `${formatDashboardMetric(statistics?.production?.completed)}${t('pages.dashboard.unitOrder')}`,
-            }}
-            rightBottom={{
-              label: t('pages.dashboard.statWorkOrderCompletion'),
-              value: `${formatDashboardRate(statistics?.production?.completion_rate)}%`,
-            }}
-            isDark={isDark}
-            onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders?status=in_progress')}
-          />
-        </Col>
-
-        {/* 工单完成率 */}
-        <Col xs={24} sm={12} md={8} lg={8} style={{ display: 'flex', minWidth: 0 }}>
-          <DashboardKpiRichCard
-            gradient={isDark ? 'linear-gradient(102deg, #1f2a26 0%, #1a2521 48%, #15201c 100%)' : 'linear-gradient(102deg, #f0f5f2 0%, #e8f0eb 48%, #dfe9e3 100%)'}
-            title={t('pages.dashboard.statWorkOrderCompletion')}
-            mainValue={formatDashboardRate(statistics?.production?.completion_rate)}
-            mainSuffix="%"
-            subtitle={t('pages.dashboard.kpiSubCompletionByOrders')}
-            rightTop={{
-              label: t('pages.dashboard.kpiSideCompletedOrders'),
-              value: `${formatDashboardMetric(statistics?.production?.completed)}${t('pages.dashboard.unitOrder')}`,
-            }}
-            rightBottom={{
-              label: t('pages.dashboard.kpiSideTotalOrders'),
-              value: `${formatDashboardMetric(statistics?.production?.total)}${t('pages.dashboard.unitOrder')}`,
-            }}
-            isDark={isDark}
-            onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders?status=completed')}
-          />
-        </Col>
-        </Row>
-        <Row gutter={[16, 16]} style={{ display: 'flex', alignItems: 'stretch', marginBottom: 0 }}>
-
-        {/* 完工数量 */}
-        <Col xs={24} sm={12} md={8} lg={8} style={{ display: 'flex', minWidth: 0 }}>
-          <DashboardKpiRichCard
-            gradient={isDark ? 'linear-gradient(102deg, #2a261f 0%, #252118 50%, #201c15 100%)' : 'linear-gradient(102deg, #f7f4ef 0%, #f0ebe4 50%, #e8e2d9 100%)'}
-            title={t('pages.dashboard.statCompletedQuantity')}
-            mainValue={formatDashboardMetric(statistics?.production?.completed_quantity)}
-            mainSuffix={t('pages.dashboard.unitPiece')}
-            subtitle={t('pages.dashboard.kpiSubOutputInRange')}
-            rightTop={{
-              label: t('pages.dashboard.statCapacityRate'),
-              value: `${formatDashboardRate(statistics?.production?.capacity_achievement_rate)}%`,
-            }}
-            rightBottom={{
-              label: t('pages.dashboard.kpiSideClosedWorkOrders'),
-              value: `${formatDashboardMetric(statistics?.production?.completed)}${t('pages.dashboard.unitOrder')}`,
-            }}
-            isDark={isDark}
-            onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders')}
-          />
-        </Col>
-
-        {/* 库存预警 */}
-        <Col xs={24} sm={12} md={8} lg={8} style={{ display: 'flex', minWidth: 0 }}>
-          <DashboardKpiRichCard
-            gradient={isDark ? 'linear-gradient(102deg, #23272d 0%, #1f2329 50%, #1b1f24 100%)' : 'linear-gradient(102deg, #f1f3f5 0%, #eaecef 50%, #e3e6ea 100%)'}
-            title={t('pages.dashboard.statInventoryAlert')}
-            mainValue={formatDashboardMetric(statistics?.inventory?.alert_count)}
-            mainSuffix={t('pages.dashboard.unitAlert')}
-            subtitle={t('pages.dashboard.kpiSubInventoryAlerts')}
-            rightTop={{
-              label: t('pages.dashboard.kpiSideTurnoverRate'),
-              value: `${formatDashboardRate(statistics?.inventory?.turnover_rate)}%`,
-            }}
-            rightBottom={{
-              label: t('pages.dashboard.kpiSideStockQuantity'),
-              value: formatDashboardMetric(statistics?.inventory?.total_quantity),
-            }}
-            isDark={isDark}
-            onClick={() => navigate('/apps/kuaizhizao/warehouse-management/inventory')}
-          />
-        </Col>
-
-        {/* 质量概览 */}
-        <Col xs={24} sm={12} md={8} lg={8} style={{ display: 'flex', minWidth: 0 }}>
-          <DashboardKpiRichCard
-            gradient={isDark ? 'linear-gradient(102deg, #292327 0%, #241f23 48%, #1f1a1e 100%)' : 'linear-gradient(102deg, #f5f1f3 0%, #ede8ec 48%, #e6dfe5 100%)'}
-            title={t('pages.dashboard.statQualitySummary')}
-            mainValue={formatDashboardRate(statistics?.quality?.quality_rate)}
-            mainSuffix="%"
-            subtitle={t('pages.dashboard.kpiSubQualityInRange')}
-            rightTop={{
-              label: t('pages.dashboard.statQualityOpenSuffix'),
-              value: formatDashboardMetric(statistics?.quality?.open_exceptions),
-            }}
-            rightBottom={{
-              label: t('pages.dashboard.kpiSideTotalExceptions'),
-              value: formatDashboardMetric(statistics?.quality?.total_exceptions),
-            }}
-            isDark={isDark}
-            onClick={() => navigate('/apps/kuaizhizao/quality-management')}
-          />
-        </Col>
-
-        </Row>
+              <Col xs={24} lg={7} style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {/* 工单总数 */}
+                <div style={{ display: 'flex', minWidth: 0, minHeight: 0 }}>
+                  <DashboardKpiRichCard
+                    gradient={isDark ? 'linear-gradient(102deg, #1d2633 0%, #1a2230 45%, #161e2b 100%)' : 'linear-gradient(102deg, #eef2f7 0%, #e6edf6 45%, #dfe8f3 100%)'}
+                    title={t('pages.dashboard.statWorkOrderTotal')}
+                    mainValue={formatDashboardMetric(statistics?.production?.total)}
+                    mainSuffix={t('pages.dashboard.unitOrder')}
+                    subtitle={t('pages.dashboard.kpiSubWorkOrdersInRange')}
+                    rightTop={{
+                      label: t('pages.dashboard.kpiSideCompleted'),
+                      value: `${formatDashboardMetric(statistics?.production?.completed)}${t('pages.dashboard.unitOrder')}`,
+                    }}
+                    rightBottom={{
+                      label: t('pages.dashboard.kpiSideInProgress'),
+                      value: `${formatDashboardMetric(statistics?.production?.in_progress)}${t('pages.dashboard.unitOrder')}`,
+                    }}
+                    isDark={isDark}
+                    onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders')}
+                  />
+                </div>
+                {/* 完工数量 */}
+                <div style={{ display: 'flex', minWidth: 0, minHeight: 0 }}>
+                  <DashboardKpiRichCard
+                    gradient={isDark ? 'linear-gradient(102deg, #2a261f 0%, #252118 50%, #201c15 100%)' : 'linear-gradient(102deg, #f7f4ef 0%, #f0ebe4 50%, #e8e2d9 100%)'}
+                    title={t('pages.dashboard.statCompletedQuantity')}
+                    mainValue={formatDashboardMetric(statistics?.production?.completed_quantity)}
+                    mainSuffix={t('pages.dashboard.unitPiece')}
+                    subtitle={t('pages.dashboard.kpiSubOutputInRange')}
+                    rightTop={{
+                      label: t('pages.dashboard.statCapacityRate'),
+                      value: `${formatDashboardRate(statistics?.production?.capacity_achievement_rate)}%`,
+                    }}
+                    rightBottom={{
+                      label: t('pages.dashboard.kpiSideClosedWorkOrders'),
+                      value: `${formatDashboardMetric(statistics?.production?.completed)}${t('pages.dashboard.unitOrder')}`,
+                    }}
+                    isDark={isDark}
+                    onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders')}
+                  />
+                </div>
+              </Col>
+              <Col xs={24} lg={7} style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {/* 进行中工单 */}
+                <div style={{ display: 'flex', minWidth: 0, minHeight: 0 }}>
+                  <DashboardKpiRichCard
+                    gradient={isDark ? 'linear-gradient(102deg, #1c2a31 0%, #18262d 50%, #15222a 100%)' : 'linear-gradient(102deg, #ecf4f7 0%, #e3eef4 50%, #dbe8ef 100%)'}
+                    title={t('pages.dashboard.statWorkOrderInProgress')}
+                    mainValue={formatDashboardMetric(statistics?.production?.in_progress)}
+                    mainSuffix={t('pages.dashboard.unitOrder')}
+                    subtitle={t('pages.dashboard.kpiSubWorkOrdersExecuting')}
+                    rightTop={{
+                      label: t('pages.dashboard.kpiSideCompleted'),
+                      value: `${formatDashboardMetric(statistics?.production?.completed)}${t('pages.dashboard.unitOrder')}`,
+                    }}
+                    rightBottom={{
+                      label: t('pages.dashboard.statWorkOrderCompletion'),
+                      value: `${formatDashboardRate(statistics?.production?.completion_rate)}%`,
+                    }}
+                    isDark={isDark}
+                    onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders?status=in_progress')}
+                  />
+                </div>
+                {/* 库存预警 */}
+                <div style={{ display: 'flex', minWidth: 0, minHeight: 0 }}>
+                  <DashboardKpiRichCard
+                    gradient={isDark ? 'linear-gradient(102deg, #23272d 0%, #1f2329 50%, #1b1f24 100%)' : 'linear-gradient(102deg, #f1f3f5 0%, #eaecef 50%, #e3e6ea 100%)'}
+                    title={t('pages.dashboard.statInventoryAlert')}
+                    mainValue={formatDashboardMetric(statistics?.inventory?.alert_count)}
+                    mainSuffix={t('pages.dashboard.unitAlert')}
+                    subtitle={t('pages.dashboard.kpiSubInventoryAlerts')}
+                    rightTop={{
+                      label: t('pages.dashboard.kpiSideTurnoverRate'),
+                      value: `${formatDashboardRate(statistics?.inventory?.turnover_rate)}%`,
+                    }}
+                    rightBottom={{
+                      label: t('pages.dashboard.kpiSideStockQuantity'),
+                      value: formatDashboardMetric(statistics?.inventory?.total_quantity),
+                    }}
+                    isDark={isDark}
+                    onClick={() => navigate('/apps/kuaizhizao/warehouse-management/inventory')}
+                  />
+                </div>
+              </Col>
+              <Col xs={24} lg={7} style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {/* 工单完成率 */}
+                <div style={{ display: 'flex', minWidth: 0, minHeight: 0 }}>
+                  <DashboardKpiRichCard
+                    gradient={isDark ? 'linear-gradient(102deg, #1f2a26 0%, #1a2521 48%, #15201c 100%)' : 'linear-gradient(102deg, #f0f5f2 0%, #e8f0eb 48%, #dfe9e3 100%)'}
+                    title={t('pages.dashboard.statWorkOrderCompletion')}
+                    mainValue={formatDashboardRate(statistics?.production?.completion_rate)}
+                    mainSuffix="%"
+                    subtitle={t('pages.dashboard.kpiSubCompletionByOrders')}
+                    rightTop={{
+                      label: t('pages.dashboard.kpiSideCompletedOrders'),
+                      value: `${formatDashboardMetric(statistics?.production?.completed)}${t('pages.dashboard.unitOrder')}`,
+                    }}
+                    rightBottom={{
+                      label: t('pages.dashboard.kpiSideTotalOrders'),
+                      value: `${formatDashboardMetric(statistics?.production?.total)}${t('pages.dashboard.unitOrder')}`,
+                    }}
+                    isDark={isDark}
+                    onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders?status=completed')}
+                  />
+                </div>
+                {/* 质量概览 */}
+                <div style={{ display: 'flex', minWidth: 0, minHeight: 0 }}>
+                  <DashboardKpiRichCard
+                    gradient={isDark ? 'linear-gradient(102deg, #292327 0%, #241f23 48%, #1f1a1e 100%)' : 'linear-gradient(102deg, #f5f1f3 0%, #ede8ec 48%, #e6dfe5 100%)'}
+                    title={t('pages.dashboard.statQualitySummary')}
+                    mainValue={formatDashboardRate(statistics?.quality?.quality_rate)}
+                    mainSuffix="%"
+                    subtitle={t('pages.dashboard.kpiSubQualityInRange')}
+                    rightTop={{
+                      label: t('pages.dashboard.statQualityOpenSuffix'),
+                      value: formatDashboardMetric(statistics?.quality?.open_exceptions),
+                    }}
+                    rightBottom={{
+                      label: t('pages.dashboard.kpiSideTotalExceptions'),
+                      value: formatDashboardMetric(statistics?.quality?.total_exceptions),
+                    }}
+                    isDark={isDark}
+                    onClick={() => navigate('/apps/kuaizhizao/quality-management')}
+                  />
+                </div>
               </Col>
               <Col
-                flex="none"
+                xs={24}
+                lg={3}
                 style={{
-                  width: 88,
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'stretch',
                   alignSelf: 'stretch',
-                  paddingLeft: 4,
                   minHeight: 0,
                 }}
                 className="dashboard-date-strip dashboard-date-strip--bare"
@@ -1669,6 +1664,7 @@ export default function DashboardPage() {
             <Row
               gutter={[16, 16]}
               className="dashboard-four-cards-row dashboard-bento-main-row"
+              wrap={!screens.lg}
               style={{
                 flex: 1,
                 display: 'flex',
@@ -1687,7 +1683,13 @@ export default function DashboardPage() {
         `}</style>
 
         {/* 待办事项 */}
-        <Col xs={24} sm={12} md={8} lg={8} style={{ display: 'flex' }}>
+        <Col
+          xs={24}
+          sm={12}
+          md={8}
+          lg={7}
+          style={{ display: 'flex' }}
+        >
           <Card
             title={
               <Space>
@@ -1863,7 +1865,13 @@ export default function DashboardPage() {
         </Col>
 
         {/* 消息通知 */}
-        <Col xs={24} sm={12} md={8} lg={8} style={{ display: 'flex' }}>
+        <Col
+          xs={24}
+          sm={12}
+          md={8}
+          lg={7}
+          style={{ display: 'flex' }}
+        >
           <Card
             title={
               <Space>
@@ -1943,13 +1951,23 @@ export default function DashboardPage() {
                 ))}
               </div>
             ) : (
-              <Empty description={t('pages.dashboard.emptyMessage')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+              <Empty
+                description="暂无消息通知"
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                style={{ padding: '40px 0' }}
+              />
             )}
           </Card>
         </Col>
 
         {/* 最新操作（生产播报） */}
-        <Col xs={24} sm={12} md={8} lg={8} style={{ display: 'flex' }}>
+        <Col
+          xs={24}
+          sm={12}
+          md={8}
+          lg={10}
+          style={{ display: 'flex' }}
+        >
           <Card
             title={
               <Space>
