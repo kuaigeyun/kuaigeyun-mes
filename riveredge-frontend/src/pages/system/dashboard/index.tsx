@@ -1314,6 +1314,7 @@ export default function DashboardPage() {
         </Col>
         <Col xs={24} sm={12} lg={12} xl={5} style={{ display: 'flex' }}>
           <Card
+            className="dashboard-clock-date-card"
             style={{
               flex: 1,
               width: '100%',
@@ -1322,7 +1323,6 @@ export default function DashboardPage() {
               maxHeight: dashboardTopCardHeight,
               borderRadius: dashboardCardRadius,
               border: `1px solid ${token.colorBorderSecondary}`,
-              background: token.colorBgElevated,
               boxShadow: dashboardCardShadow,
               overflow: 'hidden',
             }}
@@ -1335,7 +1335,8 @@ export default function DashboardPage() {
                 justifyContent: showCalendarText ? 'flex-start' : 'center',
                 gap: 14,
                 minHeight: 0,
-                background: token.colorBgElevated,
+                /* 背景由 .dashboard-clock-date-card 极浅渐变提供 */
+                background: 'transparent',
                 /* Ant Design 无标题时 body 默认仅下圆角，白底会露出上直角 */
                 borderRadius: dashboardCardRadius,
               },

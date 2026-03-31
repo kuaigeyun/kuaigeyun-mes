@@ -911,7 +911,13 @@ code {
 .dashboard-workplace-tip-card {
   /* 圆角与阴影由内联 style 使用 antd token，与首行其它卡片一致 */
   border: 1px solid rgba(15, 23, 42, 0.09);
-  background: #ffffff;
+  /* 极浅暖白渐变，与灯泡点缀呼应 */
+  background: linear-gradient(
+    145deg,
+    #ffffff 0%,
+    #fbfaf8 45%,
+    #f4f2ef 100%
+  );
   /* 略减上内边距：与首行其它卡顶对齐感更好，长文案时也不显下沉 */
   padding: 20px 14px 14px 12px;
   /* 固定卡片高度：提示内容变化不影响整体布局 */
@@ -922,7 +928,33 @@ code {
 }
 [data-theme='dark'] .dashboard-workplace-tip-card {
   border-color: rgba(255, 255, 255, 0.14);
-  background: var(--ant-colorBgElevated);
+  background: linear-gradient(
+    145deg,
+    var(--ant-color-bg-elevated, var(--ant-colorBgElevated)) 0%,
+    rgba(255, 255, 255, 0.05) 55%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+}
+
+/* 首行日期+时钟卡片：极浅冷灰渐变 */
+.dashboard-clock-date-card.ant-card {
+  background: linear-gradient(
+    145deg,
+    #ffffff 0%,
+    #f8fafc 48%,
+    #f0f4f8 100%
+  );
+}
+.dashboard-clock-date-card .ant-card-body {
+  background: transparent !important;
+}
+[data-theme='dark'] .dashboard-clock-date-card.ant-card {
+  background: linear-gradient(
+    145deg,
+    var(--ant-color-bg-elevated, var(--ant-colorBgElevated)) 0%,
+    rgba(255, 255, 255, 0.04) 50%,
+    rgba(255, 255, 255, 0.01) 100%
+  );
 }
 .dashboard-workplace-tip-bulb-wrap {
   position: absolute;

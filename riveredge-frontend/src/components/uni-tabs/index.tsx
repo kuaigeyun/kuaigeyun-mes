@@ -75,7 +75,11 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
 
   // 1. 持久化配置：优先从 store 读取，store 未就绪时从 localStorage 回退
   const storeTabsPersistence = useUserPreferenceStore((s) => s.preferences?.tabs_persistence);
-  const dashboardQuickEntries = useUserPreferenceStore((s) => (s.preferences?.dashboard_quick_entries as any[]) || []);
+  const dashboardQuickEntriesRaw = useUserPreferenceStore((s) => s.preferences?.dashboard_quick_entries);
+  const dashboardQuickEntries = useMemo(
+    () => (Array.isArray(dashboardQuickEntriesRaw) ? dashboardQuickEntriesRaw : []),
+    [dashboardQuickEntriesRaw],
+  );
   const updatePreferences = useUserPreferenceStore((s) => s.updatePreferences);
   const tabsPersistence = storeTabsPersistence !== undefined ? Boolean(storeTabsPersistence) : getInitialPersistence();
 
@@ -148,6 +152,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
   const [refreshKey, setRefreshKey] = useState<number>(0);
+  const favoriteSavingRef = useRef(false);
 
   // 从 themeStore 订阅标签栏背景色（单一数据源，无需事件监听）
   const storeTabsBgColor = useThemeStore((s) => s.resolved.tabsBgColor);
@@ -631,6 +636,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
 
   /** 收藏当前标签到工作台快捷入口 */
   const handleFavoriteToQuickEntry = useCallback(async (tabKey: string) => {
+    if (favoriteSavingRef.current) return;
     const menuPath = (tabKey || '').split('?')[0];
     if (!menuPath || menuPath === '/system/dashboard/workplace') {
       message.warning('该页面不支持收藏到快捷入口');
@@ -657,7 +663,12 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         sort_order: dashboardQuickEntries.length,
       },
     ];
-    await updatePreferences({ dashboard_quick_entries: nextEntries });
+    favoriteSavingRef.current = true;
+    try {
+      await updatePreferences({ dashboard_quick_entries: nextEntries });
+    } finally {
+      favoriteSavingRef.current = false;
+    }
     message.success('已收藏到快捷入口');
   }, [dashboardQuickEntries, findMenuItemByPath, getTabTitle, updatePreferences]);
 

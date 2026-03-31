@@ -7,7 +7,7 @@
  * Date: 2026-01-21
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Card, Button, Modal, Tree, message, theme, Spin } from 'antd';
 import { SettingOutlined, PlusOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
@@ -64,21 +64,14 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
   const navigate = useNavigate();
   const [configModalVisible, setConfigModalVisible] = useState(false);
   const [selectedMenuKeys, setSelectedMenuKeys] = useState<React.Key[]>([]);
-  const normalizeCheckedKeys = (checked: React.Key[] | { checked: React.Key[]; halfChecked: React.Key[] }): React.Key[] =>
-    Array.isArray(checked) ? checked : checked.checked;
 
   const [editingItems, setEditingItems] = useState<QuickEntryItem[]>(items);
-
-  // 父组件异步加载/刷新后，同步最新 items，避免首次空数组后不再更新
-  useEffect(() => {
-    if (!configModalVisible) {
-      setEditingItems(items);
-    }
-  }, [items, configModalVisible]);
+  const displayedItems = configModalVisible ? editingItems : items;
 
   // 打开配置模态框
   const handleOpenConfig = () => {
-    setSelectedMenuKeys(items.map(item => item.menu_uuid));
+    const keys = items.map(item => item.menu_uuid);
+    setSelectedMenuKeys(keys);
     setEditingItems([...items]);
     setConfigModalVisible(true);
   };
@@ -140,7 +133,8 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
   const handleDeleteItem = (menuUuid: string) => {
     const newItems = editingItems.filter(item => item.menu_uuid !== menuUuid);
     setEditingItems(newItems);
-    setSelectedMenuKeys(newItems.map(item => item.menu_uuid));
+    const keys = newItems.map(item => item.menu_uuid);
+    setSelectedMenuKeys(keys);
   };
 
   // 右键快捷删除（非编辑态）
@@ -152,7 +146,7 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
       cancelText: '取消',
       okButtonProps: { danger: true },
       onOk: async () => {
-        const newItems = editingItems
+        const newItems = displayedItems
           .filter(item => item.menu_uuid !== targetItem.menu_uuid)
           .map((item, index) => ({ ...item, sort_order: index }));
 
@@ -160,7 +154,8 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
           await onSave(newItems);
         }
         setEditingItems(newItems);
-        setSelectedMenuKeys(newItems.map(item => item.menu_uuid));
+        const keys = newItems.map(item => item.menu_uuid);
+        setSelectedMenuKeys(keys);
         message.success('快捷方式已删除');
       },
     });
@@ -228,7 +223,7 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
             <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Spin size="small" />
             </div>
-          ) : editingItems.length > 0 ? (
+          ) : displayedItems.length > 0 ? (
             <div 
               style={{ 
                 display: 'grid', 
@@ -236,7 +231,7 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
                 gap: '16px 8px' 
               }}
             >
-              {editingItems.map((item, index) => (
+              {displayedItems.map((item, index) => (
                 <QuickEntryIcon
                   key={item.menu_uuid}
                   icon={item.menu_icon || <PlusOutlined />}
@@ -284,15 +279,11 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
           </p>
           <Tree
             checkable
-            checkedKeys={{ checked: selectedMenuKeys, halfChecked: [] }}
+            checkedKeys={selectedMenuKeys}
             onCheck={(checkedKeys) => {
-              const normalized = normalizeCheckedKeys(
-                checkedKeys as React.Key[] | { checked: React.Key[]; halfChecked: React.Key[] },
-              );
-              setSelectedMenuKeys(normalized);
+              setSelectedMenuKeys(checkedKeys as React.Key[]);
             }}
             treeData={menuTree}
-            checkStrictly
             defaultExpandAll
             style={{ maxHeight: 400, overflow: 'auto' }}
           />
