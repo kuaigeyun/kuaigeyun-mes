@@ -22,6 +22,14 @@
         },
         "children": [
           {
+            "title": "app.kuaizhizao.menu.sales-management.dashboard",
+            "path": "/apps/kuaizhizao/sales-management/dashboard",
+            "sort_order": 0,
+            "meta": {
+              "module": "sales"
+            }
+          },
+          {
             "title": "app.kuaizhizao.menu.sales-management.quotations",
             "path": "/apps/kuaizhizao/sales-management/quotations",
             "sort_order": 1,
@@ -153,6 +161,14 @@
         "sort_order": 2,
         "children": [
           {
+            "title": "app.kuaizhizao.menu.plan-management.dashboard",
+            "path": "/apps/kuaizhizao/plan-management/dashboard",
+            "sort_order": 0,
+            "meta": {
+              "module": "demand"
+            }
+          },
+          {
             "title": "app.kuaizhizao.menu.plan-management.demand-management",
             "path": "/apps/kuaizhizao/plan-management/demand-management",
             "sort_order": 2,
@@ -164,14 +180,6 @@
             "title": "app.kuaizhizao.menu.plan-management.demand-computation",
             "path": "/apps/kuaizhizao/plan-management/demand-computation",
             "sort_order": 3,
-            "meta": {
-              "module": "demand"
-            }
-          },
-          {
-            "title": "app.kuaizhizao.menu.plan-management.control-tower",
-            "path": "/apps/kuaizhizao/plan-management/production-control-tower",
-            "sort_order": 1,
             "meta": {
               "module": "demand"
             }
@@ -236,6 +244,14 @@
           "module": "purchase"
         },
         "children": [
+          {
+            "title": "app.kuaizhizao.menu.purchase-management.dashboard",
+            "path": "/apps/kuaizhizao/purchase-management/dashboard",
+            "sort_order": 0,
+            "meta": {
+              "module": "purchase"
+            }
+          },
           {
             "title": "app.kuaizhizao.menu.purchase-management.purchase-requisitions",
             "path": "/apps/kuaizhizao/purchase-management/purchase-requisitions",
@@ -340,6 +356,14 @@
           "module": "production"
         },
         "children": [
+          {
+            "title": "app.kuaizhizao.menu.production-execution.dashboard",
+            "path": "/apps/kuaizhizao/production-execution/dashboard",
+            "sort_order": 0,
+            "meta": {
+              "module": "production"
+            }
+          },
           {
             "title": "app.kuaizhizao.menu.production-execution.work-orders",
             "path": "/apps/kuaizhizao/production-execution/work-orders",
@@ -525,8 +549,8 @@
         },
         "children": [
           {
-            "title": "app.kuaizhizao.menu.quality-management.inspection-center",
-            "path": "/apps/kuaizhizao/quality-management/inspection-center",
+            "title": "app.kuaizhizao.menu.quality-management.dashboard",
+            "path": "/apps/kuaizhizao/quality-management/dashboard",
             "sort_order": 0,
             "meta": {
               "node": "quality_inspection",
@@ -626,6 +650,14 @@
         "icon": "wrench",
         "sort_order": 6,
         "children": [
+          {
+            "title": "app.kuaizhizao.menu.equipment-management.dashboard",
+            "path": "/apps/kuaizhizao/equipment-management/dashboard",
+            "sort_order": 0,
+            "meta": {
+              "module": "equipment"
+            }
+          },
           {
             "title": "app.kuaizhizao.menu.equipment-management.asset-ledger",
             "children": [
@@ -832,10 +864,8 @@
           {
             "title": "app.kuaizhizao.menu.warehouse-management.dashboard",
             "path": "/apps/kuaizhizao/warehouse-management/dashboard",
-            "permission": "kuaizhizao:warehouse:view",
             "sort_order": 0,
             "meta": {
-              "node": "warehouse_dashboard",
               "module": "warehouse"
             }
           },

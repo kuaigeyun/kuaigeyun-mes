@@ -1834,56 +1834,85 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
 
     async def get_inspection_center_summary(self, tenant_id: int) -> dict:
         """
-        质检中心看板：待检数量、今日综合合格率、近 7 日按检验数量加权的综合合格率曲线。
+        获取质检中心看板汇总数据：待检验数量、合格率趋势等。
         """
+        import asyncio
+        from datetime import datetime, timedelta
+        from decimal import Decimal
+        from tortoise.functions import Sum
+
         now = datetime.now()
-        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start = datetime(now.year, now.month, now.day)
+        month_start = datetime(now.year, now.month, 1)
+        last_month_end = month_start - timedelta(seconds=1)
+        last_month_start = datetime(last_month_end.year, last_month_end.month, 1)
 
-        pending_incoming = await IncomingInspection.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True, status="待检验"
-        ).count()
-        pending_process = await ProcessInspection.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True, status="待检验"
-        ).count()
-        pending_finished = await FinishedGoodsInspection.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True, status="待检验"
-        ).count()
+        # 1. 并行获取待检验数量
+        pending_tasks = [
+            IncomingInspection.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="待检验").count(),
+            ProcessInspection.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="待检验").count(),
+            FinishedGoodsInspection.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="待检验").count()
+        ]
 
-        async def sum_qualified_between(
-            start: datetime, end: datetime, *, end_inclusive: bool = False
-        ) -> tuple:
-            total_q = Decimal(0)
-            qual_q = Decimal(0)
+        async def sum_qualified_between(start: datetime, end: datetime, *, end_inclusive: bool = False) -> tuple:
+            """使用聚合函数计算特定时间范围内的合格率数据，避免加载全部行。"""
+            time_kw = {"inspection_time__gte": start, "inspection_time__lte": end} if end_inclusive else {"inspection_time__gte": start, "inspection_time__lt": end}
+            
+            total_sum = Decimal(0)
+            qual_sum = Decimal(0)
+            
+            # 对三种检验类型并行获取数据
+            agg_tasks = []
             for model in (IncomingInspection, ProcessInspection, FinishedGoodsInspection):
-                time_kw = (
-                    {"inspection_time__gte": start, "inspection_time__lte": end}
-                    if end_inclusive
-                    else {"inspection_time__gte": start, "inspection_time__lt": end}
-                )
-                rows = await model.filter(
-                    tenant_id=tenant_id,
-                    deleted_at__isnull=True,
-                    status="已检验",
-                    **time_kw,
-                ).all()
-                for row in rows:
-                    total_q += row.inspection_quantity or Decimal(0)
-                    qual_q += row.qualified_quantity or Decimal(0)
-            return total_q, qual_q
+                agg_tasks.append(model.filter(
+                    tenant_id=tenant_id, deleted_at__isnull=True, status="已检验", **time_kw
+                ).values_list("inspection_quantity", "qualified_quantity"))
+            
+            results = await asyncio.gather(*agg_tasks)
+            for model_results in results:
+                for t, q in model_results:
+                    total_sum += Decimal(str(t or 0))
+                    qual_sum += Decimal(str(q or 0))
+                
+            return total_sum, qual_sum
 
-        t_today, q_today = await sum_qualified_between(today_start, now, end_inclusive=True)
+        # 2. 获取汇总数据（今日、本月、上月）
+        (
+            (pending_incoming, pending_process, pending_finished), 
+            (t_today, q_today),
+            (t_month, q_month),
+            (t_last_month, q_last_month)
+        ) = await asyncio.gather(
+            asyncio.gather(*pending_tasks),
+            sum_qualified_between(today_start, now, end_inclusive=True),
+            sum_qualified_between(month_start, now, end_inclusive=True),
+            sum_qualified_between(last_month_start, last_month_end, end_inclusive=True)
+        )
+        
         today_qualified_rate = float(q_today / t_today * 100) if t_today > 0 else 0.0
+        month_qualified_rate = float(q_month / t_month * 100) if t_month > 0 else 0.0
+        last_month_qualified_rate = float(q_last_month / t_last_month * 100) if t_last_month > 0 else 0.0
 
+        total_inspected_today = float(t_today)
+
+        # 3. 并行获取近 7 日趋势
         daily_trend = []
         today_d = now.date()
+        trend_tasks = []
+        dates = []
+
         for i in range(6, -1, -1):
             d = today_d - timedelta(days=i)
+            dates.append(d)
             ds = datetime(d.year, d.month, d.day)
             if d == today_d:
-                tq, qq = await sum_qualified_between(ds, now, end_inclusive=True)
+                trend_tasks.append(sum_qualified_between(ds, now, end_inclusive=True))
             else:
                 de = ds + timedelta(days=1)
-                tq, qq = await sum_qualified_between(ds, de, end_inclusive=False)
+                trend_tasks.append(sum_qualified_between(ds, de, end_inclusive=False))
+        
+        trend_results = await asyncio.gather(*trend_tasks)
+        for d, (tq, qq) in zip(dates, trend_results):
             rate = float(qq / tq * 100) if tq > 0 else 0.0
             daily_trend.append({"date": d.isoformat(), "rate": round(rate, 2)})
 
@@ -1893,7 +1922,10 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
             "pending_incoming": pending_incoming,
             "pending_process": pending_process,
             "pending_finished": pending_finished,
+            "total_inspected_today": total_inspected_today,
             "today_qualified_rate": round(today_qualified_rate, 2),
+            "month_qualified_rate": round(month_qualified_rate, 2),
+            "last_month_qualified_rate": round(last_month_qualified_rate, 2),
             "daily_pass_rate_trend": daily_trend,
             "sparkline_rates": sparkline_rates,
         }

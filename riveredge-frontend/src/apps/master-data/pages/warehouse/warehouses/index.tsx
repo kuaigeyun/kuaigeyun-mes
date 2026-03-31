@@ -421,7 +421,7 @@ const WarehousesPage: React.FC = () => {
       } else {
         // 导出全部数据
         const allData = await warehouseApi.list({ skip: 0, limit: 10000 });
-        exportData = allData;
+        exportData = allData.items;
         filename = t('app.master-data.warehouses.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) });
       }
 
@@ -707,9 +707,9 @@ const WarehousesPage: React.FC = () => {
           try {
             const result = await warehouseApi.list(apiParams);
             return {
-              data: result,
+              data: result.items,
               success: true,
-              total: result.length,
+              total: result.total,
             };
           } catch (error: any) {
             console.error('获取仓库列表失败:', error);

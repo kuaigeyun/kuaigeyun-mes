@@ -29,6 +29,7 @@ const ProductionControlTower = lazy(() => import('./pages/plan-management/produc
 const MESDashboard = lazy(() => import('./pages/dashboard'));
 
 // 生产执行页面
+const ManufacturingDashboardPage = lazy(() => import('./pages/production-execution/dashboard'));
 const WorkOrdersPage = lazy(() => import('./pages/production-execution/work-orders'));
 const WorkOrdersTerminalPage = lazy(() => import('./pages/production-execution/work-orders/kiosk'));
 const WorkOrderDetailKioskPage = lazy(() => import('./pages/production-execution/work-orders/detail-kiosk'));
@@ -42,6 +43,7 @@ const ReworkOrdersPage = lazy(() => import('./pages/production-execution/rework-
 const OutsourceManagementPage = lazy(() => import('./pages/production-execution/outsource-management'));
 
 // 采购管理页面
+const PurchaseDashboardPage = lazy(() => import('./pages/purchase-management/dashboard'));
 const PurchaseOrdersPage = lazy(() => import('./pages/purchase-management/purchase-orders'));
 const PurchaseRequisitionsPage = lazy(() => import('./pages/purchase-management/purchase-requisitions'));
 const ReceiptNoticesPage = lazy(() => import('./pages/purchase-management/receipt-notices'));
@@ -49,6 +51,7 @@ const LogisticsTrackingPage = lazy(() => import('./pages/purchase-management/log
 const PurchaseReturnsPage = lazy(() => import('./pages/purchase-management/purchase-returns'));
 
 // 销售管理页面
+const SalesDashboardPage = lazy(() => import('./pages/sales-management/dashboard'));
 const SalesForecastsPage = lazy(() => import('./pages/sales-management/sales-forecasts'));
 const QuotationsPage = lazy(() => import('./pages/sales-management/quotations'));
 const SalesOrdersPage = lazy(() => import('./pages/sales-management/sales-orders'));
@@ -67,6 +70,7 @@ const TraceabilityPage = lazy(() => import('./pages/quality-management/traceabil
 const InspectionPlansPage = lazy(() => import('./pages/quality-management/inspection-plans'));
 
 // 设备管理页面
+const EquipmentDashboardPage = lazy(() => import('./pages/equipment-management/dashboard'));
 const EquipmentPage = lazy(() => import('./pages/equipment-management/equipment'));
 const EquipmentFaultsPage = lazy(() => import('./pages/equipment-management/equipment-faults'));
 const MaintenancePlansPage = lazy(() => import('./pages/equipment-management/maintenance-plans'));
@@ -228,11 +232,13 @@ const KuaizhizaoApp: React.FC = () => {
       {/* 计划管理路由 */}
       <Route path="plan-management/demand-management" element={withPageSuspense(DemandManagementPage)} />
       <Route path="plan-management/demand-computation" element={withPageSuspense(DemandComputationPage)} />
+      <Route path="plan-management/dashboard" element={withPageSuspense(ProductionControlTower)} />
       <Route path="plan-management/production-control-tower" element={withPageSuspense(ProductionControlTower)} />
       <Route path="plan-management/computation-config" element={withPageSuspense(ComputationConfigPage)} />
       <Route path="plan-management/scheduling" element={withPageSuspense(SchedulingPage)} />
 
       {/* 采购管理路由 */}
+      <Route path="purchase-management/dashboard" element={withPageSuspense(PurchaseDashboardPage)} />
       <Route path="purchase-management/purchase-orders" element={withPageSuspense(PurchaseOrdersPage)} />
       <Route path="purchase-management/purchase-requisitions" element={withPageSuspense(PurchaseRequisitionsPage)} />
       <Route path="purchase-management/receipt-notices" element={withPageSuspense(ReceiptNoticesPage)} />
@@ -240,6 +246,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="purchase-management/purchase-returns" element={withPageSuspense(PurchaseReturnsPage)} />
 
       {/* 生产执行路由 */}
+      <Route path="production-execution/dashboard" element={withPageSuspense(ManufacturingDashboardPage)} />
       <Route path="production-execution/work-orders" element={withPageSuspense(WorkOrdersPage)} />
       <Route path="production-execution/terminal" element={withPageSuspense(WorkOrdersTerminalPage)} />
       <Route path="production-execution/reporting" element={withPageSuspense(ReportingPage)} />
@@ -258,6 +265,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="production-execution/exception-process" element={withPageSuspense(ExceptionProcessPage)} />
 
       {/* 销售管理路由 */}
+      <Route path="sales-management/dashboard" element={withPageSuspense(SalesDashboardPage)} />
       <Route path="sales-management/sales-forecasts" element={withPageSuspense(SalesForecastsPage)} />
       <Route path="sales-management/quotations" element={withPageSuspense(QuotationsPage)} />
       <Route path="sales-management/sales-orders" element={withPageSuspense(SalesOrdersPage)} />
@@ -269,6 +277,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="production-execution/work-orders/:id/kiosk" element={withPageSuspense(WorkOrderDetailKioskPage)} />
 
       {/* 质量管理路由 */}
+      <Route path="quality-management/dashboard" element={withPageSuspense(InspectionCenterPage)} />
       <Route path="quality-management/inspection-center" element={withPageSuspense(InspectionCenterPage)} />
       <Route path="quality-management/incoming-inspection" element={withPageSuspense(IncomingInspectionPage)} />
       <Route path="quality-management/process-inspection" element={withPageSuspense(ProcessInspectionPage)} />
@@ -277,6 +286,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="quality-management/inspection-plans" element={withPageSuspense(InspectionPlansPage)} />
 
       {/* 设备管理路由 */}
+      <Route path="equipment-management/dashboard" element={withPageSuspense(EquipmentDashboardPage)} />
       <Route path="equipment-management/equipment" element={withPageSuspense(EquipmentPage)} />
       <Route path="equipment-management/equipment-faults" element={withPageSuspense(EquipmentFaultsPage)} />
       <Route path="equipment-management/maintenance-plans" element={withPageSuspense(MaintenancePlansPage)} />

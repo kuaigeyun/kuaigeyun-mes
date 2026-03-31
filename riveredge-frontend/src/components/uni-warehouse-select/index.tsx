@@ -60,7 +60,7 @@ export const UniWarehouseSelect: React.FC<UniWarehouseSelectProps> = ({
         ...(activeOnly ? { isActive: true } : {}),
       } as any);
       // 兼容不同服务层的返回结构
-      const items = response.data || response.items || response || [];
+      const items = response.items || response.data || response || [];
       setData(items);
     } catch (error) {
       console.error('Failed to fetch warehouses:', error);

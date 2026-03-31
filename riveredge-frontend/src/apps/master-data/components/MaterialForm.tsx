@@ -228,7 +228,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
     try {
       setWarehousesLoading(true);
       const result = await warehouseApi.list({ limit: 1000, isActive: true });
-      setWarehouses(result);
+      setWarehouses(result.items);
     } catch (error: any) {
       console.error(t('app.master-data.materialForm.fetchWarehousesFailed'), error);
     } finally {

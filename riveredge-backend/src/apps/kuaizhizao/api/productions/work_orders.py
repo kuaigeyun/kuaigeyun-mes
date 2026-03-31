@@ -151,7 +151,7 @@ async def get_work_order_statistics(
     # 补充前端指标卡需要的字段（基于现有数据合理计算）
     from apps.kuaizhizao.models.work_order import WorkOrder
     from apps.kuaizhizao.models.reporting_record import ReportingRecord
-    rb = ReportingRecord.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+    rb = ReportingRecord.filter(tenant_id=tenant_id)
     try:
         today_start = datetime.combine(today, datetime.min.time())
         today_end = datetime.combine(today, datetime.max.time())

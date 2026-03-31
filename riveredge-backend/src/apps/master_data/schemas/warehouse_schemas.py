@@ -325,3 +325,36 @@ class BatchDeleteStorageLocationsRequest(BaseModel):
     """批量删除库位请求"""
     uuids: List[str] = Field(..., description="要删除的库位UUID列表", min_items=1, max_items=100)
 
+
+class WarehouseListResponse(BaseModel):
+    """仓库列表响应 Schema"""
+    items: List[WarehouseResponse]
+    total: int
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        by_alias=True
+    )
+
+
+class StorageAreaListResponse(BaseModel):
+    """库区列表响应 Schema"""
+    items: List[StorageAreaResponse]
+    total: int
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        by_alias=True
+    )
+
+
+class StorageLocationListResponse(BaseModel):
+    """库位列表响应 Schema"""
+    items: List[StorageLocationResponse]
+    total: int
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        by_alias=True
+    )
+

@@ -212,6 +212,12 @@ class ProductionPlanningService(BaseService):
         mto_total = sales_order_plans + mto_from_comp + orphan_lrp_plans
         mts_total = mts_from_comp
 
+        pending_review_plans = await base_query.filter(status__in=['草稿', '待审核', '已驳回']).count()
+        overdue_plans = await base_query.filter(
+            execution_status='未执行',
+            plan_end_date__lt=datetime.now()
+        ).count()
+
         return {
             "total_count": total_plans,
             "mts_count": mts_total,
@@ -220,6 +226,8 @@ class ProductionPlanningService(BaseService):
             "lrp_count": mto_total,
             "executed_count": executed_plans,
             "pending_execution_count": pending_execution_plans,
+            "pending_review_count": pending_review_plans,
+            "overdue_plans_count": overdue_plans,
         }
 
     async def get_plan_items(self, tenant_id: int, plan_id: int) -> List[ProductionPlanItemResponse]:

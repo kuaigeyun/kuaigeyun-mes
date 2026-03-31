@@ -127,3 +127,17 @@ export interface StorageLocationListParams {
   isActive?: boolean;
 }
 
+export interface WarehouseListResponse {
+  items: Warehouse[];
+  total: number;
+}
+
+export interface StorageAreaListResponse {
+  items: StorageArea[];
+  total: number;
+}
+
+export interface StorageLocationListResponse {
+  items: StorageLocation[];
+  total: number;
+}

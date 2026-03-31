@@ -44,7 +44,7 @@ export const StorageLocationFormModal: React.FC<StorageLocationFormModalProps> =
     const loadStorageAreas = async () => {
       try {
         const result = await storageAreaApi.list({ limit: 1000, isActive: true });
-        setStorageAreas(result);
+        setStorageAreas(result.items);
       } catch (error) {
         console.error('加载库区列表失败:', error);
       }

@@ -50,4 +50,31 @@ export const mesDashboardService = {
       method: 'GET',
     });
   },
+  // 获取销售中心汇总
+  getSalesSummary: async () => {
+    return apiRequest('/apps/kuaizhizao/dashboard/sales-summary', {
+      method: 'GET',
+    });
+  },
+
+  // 获取采购中心汇总
+  getPurchaseSummary: async () => {
+    return apiRequest('/apps/kuaizhizao/dashboard/purchase-summary', {
+      method: 'GET',
+    });
+  },
+
+  // 获取制造中心汇总
+  getManufacturingSummary: async () => {
+    return apiRequest('/apps/kuaizhizao/dashboard/manufacturing-summary', {
+      method: 'GET',
+    });
+  },
+
+  // 获取设备看板汇总
+  getEquipmentSummary: async () => {
+    return apiRequest('/apps/kuaizhizao/dashboard/equipment-summary', {
+      method: 'GET',
+    });
+  },
 };

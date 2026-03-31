@@ -14,9 +14,9 @@ from core.api.deps.deps import get_current_user, get_current_tenant
 from infra.models.user import User
 from apps.master_data.services.warehouse_service import WarehouseService
 from apps.master_data.schemas.warehouse_schemas import (
-    WarehouseCreate, WarehouseUpdate, WarehouseResponse,
-    StorageAreaCreate, StorageAreaUpdate, StorageAreaResponse,
-    StorageLocationCreate, StorageLocationUpdate, StorageLocationResponse,
+    WarehouseCreate, WarehouseUpdate, WarehouseResponse, WarehouseListResponse,
+    StorageAreaCreate, StorageAreaUpdate, StorageAreaResponse, StorageAreaListResponse,
+    StorageLocationCreate, StorageLocationUpdate, StorageLocationResponse, StorageLocationListResponse,
     WarehouseTreeResponse, BatchDeleteWarehousesRequest,
     BatchDeleteStorageAreasRequest, BatchDeleteStorageLocationsRequest
 )
@@ -73,7 +73,7 @@ async def create_warehouse(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/warehouses", response_model=List[WarehouseResponse], response_model_by_alias=True, summary="获取仓库列表")
+@router.get("/warehouses", response_model=WarehouseListResponse, response_model_by_alias=True, summary="获取仓库列表")
 async def list_warehouses(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -262,7 +262,7 @@ async def create_storage_area(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/storage-areas", response_model=List[StorageAreaResponse], summary="获取库区列表")
+@router.get("/storage-areas", response_model=StorageAreaListResponse, summary="获取库区列表")
 async def list_storage_areas(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -398,7 +398,7 @@ async def create_storage_location(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/storage-locations", response_model=List[StorageLocationResponse], summary="获取库位列表")
+@router.get("/storage-locations", response_model=StorageLocationListResponse, summary="获取库位列表")
 async def list_storage_locations(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],

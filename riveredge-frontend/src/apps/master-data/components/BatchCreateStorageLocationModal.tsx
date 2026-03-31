@@ -86,7 +86,7 @@ export const BatchCreateStorageLocationModal: React.FC<BatchCreateStorageLocatio
 
   React.useEffect(() => {
     if (open) {
-      storageAreaApi.list({ limit: 1000, isActive: true }).then(setStorageAreas).catch(() => {});
+      storageAreaApi.list({ limit: 1000, isActive: true }).then(res => setStorageAreas(res.items)).catch(() => {});
       form.resetFields();
       setStep(STEP_FORM);
       setPreviewItems([]);

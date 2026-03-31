@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -60,8 +60,8 @@ async def _inventory_statistics_core(
         material_ids = await batch_query.values_list("material_id", flat=True)
         total_materials = len(set(material_ids)) if material_ids else 0
 
-        agg = await batch_query.aggregate(total_qty=Sum("quantity"))
-        total_quantity = float(agg.get("total_qty") or 0)
+        quantities = await batch_query.values_list("quantity", flat=True)
+        total_quantity = sum(float(q or 0) for q in quantities)
     except Exception as e:
         logger.warning(f"warehouse-dashboard batch stats: {e}")
 
@@ -198,164 +198,123 @@ class WarehouseDashboardService:
             "normal_stock": 0,
             "total_inventory_value": 0.0,
             "pending_inbound": 0,
+            "overdue_inbound": 0,
             "pending_outbound": 0,
             "recent_inbounds": [],
             "recent_outbounds": [],
         }
 
-        try:
-            total_sku, total_qty, low_stock, out_of_stock, high_stock, normal_stock = (
-                await _inventory_statistics_core(tenant_id)
-            )
-        except Exception as e:
-            logger.warning(f"warehouse-dashboard inventory core: {e}")
-            return safe_empty
+        import asyncio
+
+        # 1. 定义并行动作：库存核心统计、总价值、待办数
+        tasks = [
+            _inventory_statistics_core(tenant_id),
+            _total_inventory_value(tenant_id),
+            PurchaseReceipt.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="待入库").count(),
+            PurchaseReceipt.filter(
+                tenant_id=tenant_id, 
+                deleted_at__isnull=True, 
+                status="待入库", 
+                created_at__lt=datetime.now() - timedelta(days=3)
+            ).count(),
+            SalesDelivery.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="待出库").count(),
+            OtherOutbound.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="待出库").count()
+        ]
 
         try:
-            total_inventory_value = await _total_inventory_value(tenant_id)
-        except Exception as e:
-            logger.warning(f"warehouse-dashboard inventory value: {e}")
-            total_inventory_value = 0.0
-
-        try:
-            pending_inbound = await PurchaseReceipt.filter(
-                tenant_id=tenant_id, deleted_at__isnull=True, status="待入库"
-            ).count()
-        except Exception as e:
-            logger.warning(f"warehouse-dashboard pending_inbound: {e}")
-            pending_inbound = 0
-
-        try:
-            p_sd = await SalesDelivery.filter(
-                tenant_id=tenant_id, deleted_at__isnull=True, status="待出库"
-            ).count()
-            p_oo = await OtherOutbound.filter(
-                tenant_id=tenant_id, deleted_at__isnull=True, status="待出库"
-            ).count()
+            (
+                (total_sku, total_qty, low_stock, out_of_stock, high_stock, normal_stock),
+                total_inventory_value,
+                pending_inbound,
+                overdue_inbound,
+                p_sd,
+                p_oo
+            ) = await asyncio.gather(*tasks)
             pending_outbound = p_sd + p_oo
         except Exception as e:
-            logger.warning(f"warehouse-dashboard pending_outbound: {e}")
-            pending_outbound = 0
+            logger.warning(f"warehouse-dashboard summary parallel tasks failed: {e}")
+            return safe_empty
 
-        recent_inbounds: List[Dict[str, Any]] = []
-        try:
-            # 取最近一批再按业务时间排序，避免全表加载
-            fetch_n = max(recent_limit * 4, 32)
-            cand = (
-                await PurchaseReceipt.filter(
-                    tenant_id=tenant_id, deleted_at__isnull=True, status="已入库"
-                )
-                .order_by("-updated_at")
-                .limit(fetch_n)
-            )
+        # 2. 并行获取最近入库和出库记录（稍微复杂，保持逻辑一致）
+        async def fetch_recent_in(limit):
+            rb = []
+            fetch_n = max(limit * 4, 32)
+            cand = await PurchaseReceipt.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True, status="已入库"
+            ).order_by("-updated_at").limit(fetch_n).all()
+            
             cand = list(cand)
-            cand.sort(
-                key=lambda r: (r.receipt_time or r.updated_at or datetime.min),
-                reverse=True,
-            )
-            cand = cand[:recent_limit]
+            cand.sort(key=lambda r: (r.receipt_time or r.updated_at or datetime.min), reverse=True)
+            cand = cand[:limit]
             rids = [r.id for r in cand]
             labels = await _first_purchase_item_labels(tenant_id, rids)
             for r in cand:
                 name, nlines = labels.get(r.id, ("", 0))
-                mat_label = name
-                if nlines > 1 and name:
-                    mat_label = f"{name} 等{nlines}项"
-                elif nlines > 1:
-                    mat_label = f"共{nlines}项"
+                mat_label = f"{name} 等{nlines}项" if nlines > 1 and name else (f"共{nlines}项" if nlines > 1 else name)
                 ts = r.receipt_time or r.updated_at
-                recent_inbounds.append(
-                    {
-                        "doc_code": r.receipt_code,
-                        "material_name": mat_label,
-                        "quantity": float(r.total_quantity or 0),
-                        "time": _iso(ts),
-                        "doc_type": "purchase_receipt",
-                    }
-                )
-        except Exception as e:
-            logger.warning(f"warehouse-dashboard recent_inbounds: {e}")
+                rb.append({
+                    "doc_code": r.receipt_code,
+                    "material_name": mat_label,
+                    "quantity": float(r.total_quantity or 0),
+                    "time": _iso(ts),
+                    "doc_type": "purchase_receipt",
+                })
+            return rb
 
-        recent_outbounds: List[Dict[str, Any]] = []
-        try:
-            fetch_n = max(recent_limit * 4, 32)
-            sd_list = list(
-                await SalesDelivery.filter(
-                    tenant_id=tenant_id, deleted_at__isnull=True, status="已出库"
-                )
-                .order_by("-updated_at")
-                .limit(fetch_n)
-            )
-            oo_list = list(
-                await OtherOutbound.filter(
-                    tenant_id=tenant_id, deleted_at__isnull=True, status="已出库"
-                )
-                .order_by("-updated_at")
-                .limit(fetch_n)
-            )
-
-            merged: List[Tuple[datetime, str, Dict[str, Any]]] = []
+        async def fetch_recent_out(limit):
+            ro = []
+            fetch_n = max(limit * 4, 32)
+            sd_task = SalesDelivery.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True, status="已出库"
+            ).order_by("-updated_at").limit(fetch_n).all()
+            oo_task = OtherOutbound.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True, status="已出库"
+            ).order_by("-updated_at").limit(fetch_n).all()
+            
+            sd_list, oo_list = await asyncio.gather(sd_task, oo_task)
+            
+            merged = []
             for d in sd_list:
-                ts = d.delivery_time or d.updated_at or datetime.min
-                merged.append(
-                    (
-                        ts,
-                        "sales",
-                        {
-                            "doc_code": d.delivery_code,
-                            "quantity": float(d.total_quantity or 0),
-                            "delivery_id": d.id,
-                        },
-                    )
-                )
+                merged.append((d.delivery_time or d.updated_at or datetime.min, "sales", {
+                    "doc_code": d.delivery_code, "quantity": float(d.total_quantity or 0), "delivery_id": d.id,
+                }))
             for o in oo_list:
-                ts = o.delivery_time or o.updated_at or datetime.min
-                merged.append(
-                    (
-                        ts,
-                        "other",
-                        {
-                            "doc_code": o.outbound_code,
-                            "quantity": float(o.total_quantity or 0),
-                            "outbound_id": o.id,
-                        },
-                    )
-                )
+                merged.append((o.delivery_time or o.updated_at or datetime.min, "other", {
+                    "doc_code": o.outbound_code, "quantity": float(o.total_quantity or 0), "outbound_id": o.id,
+                }))
             merged.sort(key=lambda x: x[0], reverse=True)
-            merged = merged[:recent_limit]
+            merged = merged[:limit]
 
             sd_ids = [m[2]["delivery_id"] for m in merged if m[1] == "sales"]
             oo_ids = [m[2]["outbound_id"] for m in merged if m[1] == "other"]
-            sd_names = await _first_sales_item_name(tenant_id, sd_ids)
-            oo_names = await _first_other_out_item_name(tenant_id, oo_ids)
+            sd_names_task = _first_sales_item_name(tenant_id, sd_ids)
+            oo_names_task = _first_other_out_item_name(tenant_id, oo_ids)
+            sd_names, oo_names = await asyncio.gather(sd_names_task, oo_names_task)
 
             for ts, kind, payload in merged:
                 if kind == "sales":
-                    mid = payload["delivery_id"]
-                    mat = sd_names.get(mid, "")
-                    recent_outbounds.append(
-                        {
-                            "doc_code": payload["doc_code"],
-                            "material_name": mat,
-                            "quantity": payload["quantity"],
-                            "time": _iso(ts if ts != datetime.min else None),
-                            "doc_type": "sales_delivery",
-                        }
-                    )
+                    ro.append({
+                        "doc_code": payload["doc_code"],
+                        "material_name": sd_names.get(payload["delivery_id"], ""),
+                        "quantity": payload["quantity"],
+                        "time": _iso(ts if ts != datetime.min else None),
+                        "doc_type": "sales_delivery",
+                    })
                 else:
-                    mid = payload["outbound_id"]
-                    mat = oo_names.get(mid, "")
-                    recent_outbounds.append(
-                        {
-                            "doc_code": payload["doc_code"],
-                            "material_name": mat,
-                            "quantity": payload["quantity"],
-                            "time": _iso(ts if ts != datetime.min else None),
-                            "doc_type": "other_outbound",
-                        }
-                    )
-        except Exception as e:
-            logger.warning(f"warehouse-dashboard recent_outbounds: {e}")
+                    ro.append({
+                        "doc_code": payload["doc_code"],
+                        "material_name": oo_names.get(payload["outbound_id"], ""),
+                        "quantity": payload["quantity"],
+                        "time": _iso(ts if ts != datetime.min else None),
+                        "doc_type": "other_outbound",
+                    })
+            return ro
+
+        # 3. 并行获取最近流水
+        recent_inbounds, recent_outbounds = await asyncio.gather(
+            fetch_recent_in(recent_limit),
+            fetch_recent_out(recent_limit)
+        )
 
         return {
             "total_sku": total_sku,
@@ -366,6 +325,7 @@ class WarehouseDashboardService:
             "normal_stock": normal_stock,
             "total_inventory_value": total_inventory_value,
             "pending_inbound": pending_inbound,
+            "overdue_inbound": overdue_inbound,
             "pending_outbound": pending_outbound,
             "recent_inbounds": recent_inbounds,
             "recent_outbounds": recent_outbounds,

@@ -158,7 +158,7 @@ async def get_reporting_overview_statistics(
     from apps.kuaizhizao.models.reporting_record import ReportingRecord
 
     today = date.today()
-    base = ReportingRecord.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+    base = ReportingRecord.filter(tenant_id=tenant_id)
     wage_rate = await _get_reporting_estimated_wage_rate(tenant_id)
 
     try:

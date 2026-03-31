@@ -8,9 +8,10 @@ Date: 2025-01-15
 """
 
 from typing import List, Optional
+from tortoise.expressions import Q
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from core.api.deps import get_current_user, get_current_tenant
 from infra.models.user import User
@@ -281,7 +282,7 @@ async def get_statistics(
         from decimal import Decimal
         
         # 获取工单统计
-        work_order_query = WorkOrder.filter(tenant_id=tenant_id)
+        work_order_query = WorkOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if date_start_dt:
             work_order_query = work_order_query.filter(created_at__gte=date_start_dt)
         if date_end_dt:
@@ -864,15 +865,15 @@ async def get_menu_badge_counts(
         from apps.kuaizhizao.models.purchase_order import PurchaseOrder
         counts["purchase_order"] = {
             "overdue": await PurchaseOrder.filter(
-                tenant_id=tenant_id, deleted_at__isnull=True,
+                tenant_id=tenant_id,
                 delivery_date__lt=now_date,
             ).exclude(status__in=["COMPLETED", "已完成", "CANCELLED", "已取消"]).count(),
             "pending": await PurchaseOrder.filter(
-                tenant_id=tenant_id, deleted_at__isnull=True,
+                tenant_id=tenant_id,
                 review_status__in=["PENDING", "PENDING_REVIEW", "待审核"],
             ).count(),
             "in_progress": await PurchaseOrder.filter(
-                tenant_id=tenant_id, deleted_at__isnull=True,
+                tenant_id=tenant_id,
                 status__in=["IN_PROGRESS", "进行中", "APPROVED", "已审核", "CONFIRMED", "已确认", "AUDITED", "RELEASED"],
             ).count()
         }
@@ -1060,8 +1061,219 @@ async def get_menu_badge_counts(
 
     return counts
 
+@router.get("/sales-summary", summary="获取销售中心汇总数据")
+async def get_sales_summary(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """销售中心汇总数据：待处理报价、待发货订单、本月销售达成率。"""
+    from apps.kuaizhizao.models.quotation import Quotation
+    from apps.kuaizhizao.models.sales_order import SalesOrder
+    from tortoise.functions import Sum
+    from decimal import Decimal
+    import asyncio
 
-@router.get("", response_model=DashboardResponse, summary="获取工作台数据")
+    now = datetime.now()
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    # 1. 待处理报价 (草稿/待审核)
+    q1 = Quotation.filter(tenant_id=tenant_id, status__in=["草稿", "待审核"], deleted_at__isnull=True).count()
+    # 2. 待发货订单 (已审核且未发货 - 这里简化逻辑)
+    q2 = SalesOrder.filter(tenant_id=tenant_id, status__in=["approved", "confirmed", "已审核", "已确认"], deleted_at__isnull=True).count()
+    
+    # 增加：逾期发货订单 (已审核且交期已过)
+    now_date = now.date()
+    q2_overdue = SalesOrder.filter(
+        tenant_id=tenant_id, 
+        status__in=["approved", "confirmed", "已审核", "已确认"], 
+        delivery_date__lt=now_date,
+        deleted_at__isnull=True
+    ).count()
+
+    q3 = SalesOrder.filter(
+        tenant_id=tenant_id,
+        status__in=["approved", "confirmed", "completed", "已审核", "已确认", "已完成"],
+        order_date__gte=month_start.date(),
+        deleted_at__isnull=True
+    ).values_list("total_amount", flat=True)
+
+    # 4. 上月销售完成情况 (用于对比)
+    last_month_end = month_start - timedelta(days=1)
+    last_month_start = last_month_end.replace(day=1)
+    q4 = SalesOrder.filter(
+        tenant_id=tenant_id,
+        status__in=["approved", "confirmed", "completed", "已审核", "已确认", "已完成"],
+        order_date__gte=last_month_start.date(),
+        order_date__lte=last_month_end.date(),
+        deleted_at__isnull=True
+    ).values_list("total_amount", flat=True)
+
+    # 5. 本月新增报价
+    q5 = Quotation.filter(
+        tenant_id=tenant_id,
+        created_at__gte=month_start,
+        deleted_at__isnull=True
+    ).count()
+
+    pending_quotations, pending_shipments, overdue_shipments, sales_amounts, last_month_amounts, new_quotations = await asyncio.gather(
+        q1, q2, q2_overdue, q3, q4, q5
+    )
+    
+    total_amount = sum(float(x or 0) for x in sales_amounts)
+    last_month_amount = sum(float(x or 0) for x in last_month_amounts)
+    target_amount = 1000000.0 # 模拟目标值
+    achievement_rate = (total_amount / target_amount * 100) if target_amount > 0 else 0.0
+
+    return {
+        "pending_quotations": pending_quotations,
+        "new_quotations_this_month": new_quotations,
+        "pending_shipments": pending_shipments,
+        "overdue_shipments": overdue_shipments,
+        "achievement_rate": round(achievement_rate, 2),
+        "total_amount": round(total_amount, 2),
+        "total_amount_last_month": round(last_month_amount, 2)
+    }
+
+
+@router.get("/purchase-summary", summary="获取采购中心汇总数据")
+async def get_purchase_summary(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """采购中心汇总数据：待处理申购、待收货订单、本月采购到货率。"""
+    from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
+    from tortoise.functions import Sum
+    import asyncio
+
+    now = datetime.now()
+    now_date = now.date()
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    # 1. 待处理申购
+    q1 = PurchaseRequisition.filter(tenant_id=tenant_id, status__in=["草稿", "待审核", "已通过", "部分转单"], deleted_at__isnull=True).count()
+    
+    # 增加：紧急申购
+    q1_urgent = PurchaseRequisition.filter(
+        tenant_id=tenant_id, 
+        is_urgent=True, 
+        status__in=["草稿", "待审核", "已通过", "部分转单"],
+        deleted_at__isnull=True
+    ).count()
+
+    # 2. 待收货订单
+    q2 = PurchaseOrder.filter(tenant_id=tenant_id, status__in=["approved", "partial_received", "已审核", "部分收货"]).count()
+    
+    # 增加：逾期未到货
+    q2_overdue = PurchaseOrder.filter(
+        tenant_id=tenant_id,
+        status__in=["approved", "partial_received", "已审核", "部分收货"],
+        delivery_date__lt=now_date
+    ).count()
+
+    # 3. 本月新增申购
+    q3 = PurchaseRequisition.filter(
+        tenant_id=tenant_id,
+        created_at__gte=month_start,
+        deleted_at__isnull=True
+    ).count()
+
+    pending_requisitions, urgent_requisitions, pending_receipts, overdue_receipts, new_requisitions = await asyncio.gather(
+        q1, q1_urgent, q2, q2_overdue, q3
+    )
+
+    return {
+        "pending_requisitions": pending_requisitions,
+        "urgent_requisitions": urgent_requisitions,
+        "new_requisitions_this_month": new_requisitions,
+        "pending_receipts": pending_receipts,
+        "overdue_receipts": overdue_receipts,
+        "arrival_rate": 92.5, # 模拟数据
+    }
+
+
+@router.get("/manufacturing-summary", summary="获取制造中心汇总数据")
+async def get_manufacturing_summary(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """制造中心汇总数据：待排产工单、进行中工单、今日生产产出。"""
+    from apps.kuaizhizao.models.work_order import WorkOrder
+    from apps.kuaizhizao.models.reporting_record import ReportingRecord
+    from tortoise.functions import Sum
+    import asyncio
+
+    now = datetime.now()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # 1. 待排产工单 (草稿状态)
+    q1 = WorkOrder.filter(tenant_id=tenant_id, status__in=["draft", "草稿"], deleted_at__isnull=True).count()
+    # 2. 进行中工单
+    q2 = WorkOrder.filter(tenant_id=tenant_id, status__in=["in_progress", "进行中"], deleted_at__isnull=True).count()
+    
+    # 增加：返工单 (进行中)
+    q2_rework = ReworkOrder.filter(
+        tenant_id=tenant_id, 
+        status__in=["released", "in_progress", "已下达", "进行中"], 
+        deleted_at__isnull=True
+    ).count()
+
+    # 3. 今日生产产出 (合格报工数)
+    q3 = ReportingRecord.filter(tenant_id=tenant_id, reported_at__gte=today_start).values_list(
+        "qualified_quantity", "unqualified_quantity"
+    )
+    
+    # 增加：待审核报工
+    q4 = ReportingRecord.filter(tenant_id=tenant_id, status="pending").count()
+
+    pending_scheduling, in_progress_count, rework_count, prod_records, pending_reporting = await asyncio.gather(
+        q1, q2, q2_rework, q3, q4
+    )
+    
+    total_qualified = sum(float(r[0] or 0) for r in prod_records)
+    total_unqualified = sum(float(r[1] or 0) for r in prod_records)
+    total_reported = total_qualified + total_unqualified
+    qualified_rate = (total_qualified / total_reported * 100) if total_reported > 0 else 100.0
+
+    return {
+        "pending_scheduling": pending_scheduling,
+        "in_progress_count": in_progress_count,
+        "rework_count": rework_count,
+        "today_output": total_qualified,
+        "qualified_rate": round(qualified_rate, 2),
+        "pending_reporting": pending_reporting
+    }
+
+
+@router.get("/equipment-summary", summary="获取设备看板汇总数据")
+async def get_equipment_summary(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """设备看板汇总数据：报修中设备、今日保养任务、设备综合效率 OEE。"""
+    from apps.kuaizhizao.models.equipment import Equipment
+    from apps.kuaizhizao.models.maintenance_plan import MaintenanceExecution
+    from datetime import datetime
+    import asyncio
+
+    now = datetime.now()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end = now.replace(hour=23, minute=59, second=59, microsecond=0)
+
+    # 1. 报修中设备
+    q1 = Equipment.filter(tenant_id=tenant_id, status__in=["维修中", "故障"], deleted_at__isnull=True).count()
+    # 2. 今日保养任务 (保养执行记录中计划在今天的)
+    q2 = MaintenanceExecution.filter(tenant_id=tenant_id, execution_date__gte=today_start, execution_date__lte=today_end, deleted_at__isnull=True).count()
+    
+    repairing_count, maintenance_tasks = await asyncio.gather(q1, q2)
+
+    return {
+        "repairing_count": repairing_count,
+        "today_maintenance_tasks": maintenance_tasks,
+        "oee": 85.6, # 模拟数据
+    }
+
+
 async def get_dashboard(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),

@@ -45,7 +45,7 @@ const StorageLocationsPage: React.FC = () => {
     const loadStorageAreas = async () => {
       try {
         const result = await storageAreaApi.list({ limit: 1000, isActive: true });
-        setStorageAreas(result);
+        setStorageAreas(result.items);
       } catch (error: any) {
         console.error('加载库区列表失败:', error);
       }
@@ -451,7 +451,7 @@ const StorageLocationsPage: React.FC = () => {
       } else {
         // 导出全部数据
         const allData = await storageLocationApi.list({ skip: 0, limit: 10000 });
-        exportData = allData;
+        exportData = allData.items;
         filename = t('app.master-data.storageLocations.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) });
       }
 
@@ -689,9 +689,9 @@ const StorageLocationsPage: React.FC = () => {
           try {
             const result = await storageLocationApi.list(apiParams);
             return {
-              data: result,
+              data: result.items,
               success: true,
-              total: result.length,
+              total: result.total,
             };
           } catch (error: any) {
             console.error('获取库位列表失败:', error);

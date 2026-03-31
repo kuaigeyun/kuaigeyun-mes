@@ -18,6 +18,9 @@ import type {
   StorageLocationCreate,
   StorageLocationUpdate,
   StorageLocationListParams,
+  WarehouseListResponse,
+  StorageAreaListResponse,
+  StorageLocationListResponse,
 } from '../types/warehouse';
 
 /**
@@ -34,7 +37,7 @@ export const warehouseApi = {
   /**
    * 获取仓库列表
    */
-  list: async (params?: WarehouseListParams): Promise<Warehouse[]> => {
+  list: async (params?: WarehouseListParams): Promise<WarehouseListResponse> => {
     return api.get('/apps/master-data/warehouse/warehouses', { params });
   },
 
@@ -120,7 +123,7 @@ export const storageAreaApi = {
   /**
    * 获取库区列表
    */
-  list: async (params?: StorageAreaListParams): Promise<StorageArea[]> => {
+  list: async (params?: StorageAreaListParams): Promise<StorageAreaListResponse> => {
     return api.get('/apps/master-data/warehouse/storage-areas', { params });
   },
 
@@ -179,7 +182,7 @@ export const storageLocationApi = {
   /**
    * 获取库位列表
    */
-  list: async (params?: StorageLocationListParams): Promise<StorageLocation[]> => {
+  list: async (params?: StorageLocationListParams): Promise<StorageLocationListResponse> => {
     return api.get('/apps/master-data/warehouse/storage-locations', { params });
   },
 

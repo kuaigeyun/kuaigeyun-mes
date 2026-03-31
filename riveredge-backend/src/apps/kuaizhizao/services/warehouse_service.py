@@ -2286,7 +2286,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
                     from apps.kuaizhizao.models.purchase_order import PurchaseOrder
 
-                    po = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=purchase_order_id, deleted_at__isnull=True)
+                    po = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=purchase_order_id)
                     if po:
                         rel_svc = DocumentRelationNewService()
                         await rel_svc.create_relation(

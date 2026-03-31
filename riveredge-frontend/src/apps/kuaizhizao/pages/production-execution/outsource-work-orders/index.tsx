@@ -135,7 +135,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
 
         // 加载仓库列表
         const warehouses = await warehouseApi.list({ isActive: true });
-        setWarehouseList(warehouses);
+        setWarehouseList(Array.isArray(warehouses) ? warehouses : (warehouses as any)?.items ?? []);
       } catch (error) {
         console.error('获取数据失败:', error);
         messageApi.error('获取数据失败');

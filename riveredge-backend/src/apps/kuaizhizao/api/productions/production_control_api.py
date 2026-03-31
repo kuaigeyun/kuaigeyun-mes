@@ -48,15 +48,32 @@ async def get_control_tower_summary(
     """获取管控塔核心指标汇总"""
     tenant_id = current_user.tenant_id
     
-    readiness = await service.get_global_material_readiness(tenant_id)
-    load = await service.get_resource_load_analysis(tenant_id)
-    risks = await service.get_delivery_risk_orders(tenant_id)
+    # 并行获取各项指标，大幅缩短加载响应时间
+    import asyncio
     
-    total_wip = await WorkOrder.filter(
+    # 定义待并行执行的任务
+    readiness_task = service.get_global_material_readiness(tenant_id)
+    load_task = service.get_resource_load_analysis(tenant_id)
+    risks_task = service.get_delivery_risk_orders(tenant_id)
+    wip_count_task = WorkOrder.filter(
         tenant_id=tenant_id,
         status__in=['released', 'in_progress'],
         deleted_at__isnull=True
     ).count()
+
+    try:
+        readiness, load, risks, total_wip = await asyncio.gather(
+            readiness_task, load_task, risks_task, wip_count_task
+        )
+    except Exception as e:
+        logger.error(f"Error fetching control tower summary: {e}")
+        # 返回降级数据
+        return {
+            "material_readiness": [],
+            "resource_load": [],
+            "delivery_risks": [],
+            "total_wip_orders": 0
+        }
     
     return ControlTowerSummary(
         material_readiness=readiness,

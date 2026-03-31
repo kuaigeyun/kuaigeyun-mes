@@ -45,7 +45,7 @@ const StorageAreasPage: React.FC = () => {
     const loadWarehouses = async () => {
       try {
         const result = await warehouseApi.list({ limit: 1000, isActive: true });
-        setWarehouses(result);
+        setWarehouses(result.items);
       } catch (error: any) {
         console.error('加载仓库列表失败:', error);
       }
@@ -451,7 +451,7 @@ const StorageAreasPage: React.FC = () => {
       } else {
         // 导出全部数据
         const allData = await storageAreaApi.list({ skip: 0, limit: 10000 });
-        exportData = allData;
+        exportData = allData.items;
         filename = t('app.master-data.storageAreas.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) });
       }
 
@@ -690,9 +690,9 @@ const StorageAreasPage: React.FC = () => {
           try {
             const result = await storageAreaApi.list(apiParams);
             return {
-              data: result,
+              data: result.items,
               success: true,
-              total: result.length,
+              total: result.total,
             };
           } catch (error: any) {
             console.error('获取库区列表失败:', error);

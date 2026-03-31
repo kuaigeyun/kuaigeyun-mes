@@ -108,7 +108,7 @@ async def get_purchase_order_statistics(
         return float(sum(v for v in vals if v is not None))
 
     today = date.today()
-    base = PurchaseOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+    base = PurchaseOrder.filter(tenant_id=tenant_id)
     audited = ("AUDITED", "已审核", "CONFIRMED", "已确认", "audited", "已通过")
     pending_review = ("PENDING", "PENDING_REVIEW", "待审核", "pending_review")
     cancelled = ["DRAFT", "草稿", "draft", "CANCELLED", "已取消", "cancelled"]

@@ -65,29 +65,6 @@ export const SecureImage: React.FC<SecureImageProps> = ({
     // 兜底清空 inline style
     document.body.style.removeProperty('pointer-events');
     document.body.style.removeProperty('overflow');
-    
-    // 移除遮罩和预览容器：Ant 5 的容器可能带多种类名
-    // 根据 subagent 发现，残留元素主要是 .ant-image-preview 且带有 fade-leave 状态
-    const selectors = [
-      '.ant-image-preview',
-      '.ant-image-preview-root',
-      '.ant-image-preview-wrap',
-      '.ant-image-preview-mask',
-      '.ant-image-preview-moving'
-    ];
-    
-    selectors.forEach(selector => {
-      const elements = document.querySelectorAll(selector);
-      elements.forEach(el => {
-        try {
-          if (el.parentNode) {
-            el.parentNode.removeChild(el);
-          }
-        } catch (e) {
-          // 忽略移除失败
-        }
-      });
-    });
   }, []);
 
   // 1. 延迟加载：仅当组件进入可视区域时才触发 API 请求鉴权 URL
@@ -172,8 +149,7 @@ export const SecureImage: React.FC<SecureImageProps> = ({
   useEffect(() => {
     const handleGlobalRecovery = () => {
       if (typeof document !== 'undefined' && 
-          (document.body.style.pointerEvents === 'none' || 
-           document.querySelector('.ant-image-preview-root'))) {
+          document.body.style.pointerEvents === 'none') {
         restoreBodyInteraction();
       }
     };

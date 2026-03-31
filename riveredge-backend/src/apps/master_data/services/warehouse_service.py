@@ -190,7 +190,7 @@ class WarehouseService:
         limit: int = 100,
         is_active: Optional[bool] = None,
         warehouse_type: Optional[str] = None,
-    ) -> List[WarehouseResponse]:
+    ) -> dict:
         """
         获取仓库列表
 
@@ -202,7 +202,7 @@ class WarehouseService:
             warehouse_type: 仓库类型（可选）
 
         Returns:
-            List[WarehouseResponse]: 仓库列表
+            dict: 包含 items (仓库列表) 和 total (总数) 的字典
         """
         query = Warehouse.filter(
             tenant_id=tenant_id,
@@ -214,9 +214,13 @@ class WarehouseService:
         if warehouse_type:
             query = query.filter(warehouse_type=warehouse_type)
 
+        total = await query.count()
         warehouses = await query.offset(skip).limit(limit).order_by("code").all()
 
-        return [WarehouseResponse.model_validate(w) for w in warehouses]
+        return {
+            "items": [WarehouseResponse.model_validate(w) for w in warehouses],
+            "total": total
+        }
     
     @staticmethod
     async def update_warehouse(
@@ -529,7 +533,7 @@ class WarehouseService:
         limit: int = 100,
         warehouse_id: Optional[int] = None,
         is_active: Optional[bool] = None
-    ) -> List[StorageAreaResponse]:
+    ) -> dict:
         """
         获取库区列表
         
@@ -541,7 +545,7 @@ class WarehouseService:
             is_active: 是否启用（可选）
             
         Returns:
-            List[StorageAreaResponse]: 库区列表
+            dict: 包含 items (库区列表) 和 total (总数) 的字典
         """
         query = StorageArea.filter(
             tenant_id=tenant_id,
@@ -554,9 +558,13 @@ class WarehouseService:
         if is_active is not None:
             query = query.filter(is_active=is_active)
         
+        total = await query.count()
         storage_areas = await query.offset(skip).limit(limit).order_by("code").all()
         
-        return [StorageAreaResponse.model_validate(sa) for sa in storage_areas]
+        return {
+            "items": [StorageAreaResponse.model_validate(sa) for sa in storage_areas],
+            "total": total
+        }
     
     @staticmethod
     async def update_storage_area(
@@ -865,7 +873,7 @@ class WarehouseService:
         limit: int = 100,
         storage_area_id: Optional[int] = None,
         is_active: Optional[bool] = None
-    ) -> List[StorageLocationResponse]:
+    ) -> dict:
         """
         获取库位列表
         
@@ -877,7 +885,7 @@ class WarehouseService:
             is_active: 是否启用（可选）
             
         Returns:
-            List[StorageLocationResponse]: 库位列表
+            dict: 包含 items (库位列表) 和 total (总数) 的字典
         """
         query = StorageLocation.filter(
             tenant_id=tenant_id,
@@ -890,9 +898,13 @@ class WarehouseService:
         if is_active is not None:
             query = query.filter(is_active=is_active)
         
+        total = await query.count()
         storage_locations = await query.offset(skip).limit(limit).order_by("code").all()
         
-        return [StorageLocationResponse.model_validate(sl) for sl in storage_locations]
+        return {
+            "items": [StorageLocationResponse.model_validate(sl) for sl in storage_locations],
+            "total": total
+        }
     
     @staticmethod
     async def update_storage_location(

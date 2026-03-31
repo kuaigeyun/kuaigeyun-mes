@@ -42,8 +42,9 @@ class ProductionControlService:
             deleted_at__isnull=True
         ).all()
         
-        results = []
-        for wo in work_orders:
+        import asyncio
+
+        async def analyze_wo(wo):
             try:
                 # 复用工单服务的缺料检查逻辑
                 shortage_info = await self.work_order_service.check_material_shortage(
@@ -51,11 +52,7 @@ class ProductionControlService:
                     work_order_id=wo.id
                 )
                 
-                # 计算齐套率
-                # 这里简单定义：齐套率 = 已备齐品种数 / 总品种数
-                # 后面可以优化为按数量加权。但对于计划员来说，品种齐不齐更关键。
-                
-                # 重新计算品种总数（为了得到 100% 时的基数）
+                # 重新计算品种总数
                 variant_attrs = getattr(wo, "variant_attributes", None)
                 cfg_selections = getattr(wo, "configurable_selections", None)
                 try:
@@ -76,7 +73,7 @@ class ProductionControlService:
                 
                 readiness_rate = (ready_vars / total_vars) if total_vars > 0 else 1.0
                 
-                results.append({
+                return {
                     "work_order_id": wo.id,
                     "work_order_code": wo.code,
                     "product_name": wo.product_name,
@@ -85,9 +82,17 @@ class ProductionControlService:
                     "readiness_rate": round(readiness_rate * 100, 2),
                     "shortage_count": shortage_vars,
                     "planned_start_date": wo.planned_start_date.isoformat() if wo.planned_start_date else None,
-                })
+                }
             except Exception as e:
                 logger.error(f"分析工单 {wo.id} 齐套性失败: {e}")
+                return None
+
+        # 并行执行分析
+        tasks = [analyze_wo(wo) for wo in work_orders]
+        results = await asyncio.gather(*tasks)
+        
+        # 过滤失败的任务
+        results = [r for r in results if r is not None]
                 
         return sorted(results, key=lambda x: x["readiness_rate"])
 

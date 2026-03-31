@@ -129,6 +129,7 @@ const InventoryPage: React.FC = () => {
         {
           method: 'GET',
           params: {
+            ..._params,
             material_id: search.material_id,
             warehouse_id: search.warehouse_id,
             batch_number: search.batch_no ?? search.batch_number,

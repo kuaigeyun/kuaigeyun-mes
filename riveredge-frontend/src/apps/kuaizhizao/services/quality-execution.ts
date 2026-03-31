@@ -17,7 +17,10 @@ export interface InspectionCenterSummary {
   pending_incoming: number;
   pending_process: number;
   pending_finished: number;
+  total_inspected_today: number;
   today_qualified_rate: number;
+  month_qualified_rate: number;
+  last_month_qualified_rate: number;
   daily_pass_rate_trend: { date: string; rate: number }[];
   sparkline_rates: number[];
 }

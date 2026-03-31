@@ -21,6 +21,7 @@ export type WarehouseDashboardSummary = {
   normal_stock: number;
   total_inventory_value: number;
   pending_inbound: number;
+  overdue_inbound: number;
   pending_outbound: number;
   recent_inbounds: WarehouseDashboardRecentRow[];
   recent_outbounds: WarehouseDashboardRecentRow[];
