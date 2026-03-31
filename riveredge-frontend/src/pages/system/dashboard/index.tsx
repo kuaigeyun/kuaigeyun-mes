@@ -715,6 +715,8 @@ export default function DashboardPage() {
   /** 工作台卡片：圆角与阴影与 Ant Design 系统 token 一致，阴影用较轻的 tertiary */
   const dashboardCardRadius = token.borderRadiusLG;
   const dashboardCardShadow = token.boxShadowTertiary;
+  // 首行四卡统一固定高度
+  const dashboardTopCardHeight = 126;
   const currentUser = useGlobalStore((s) => s.currentUser);
   const [currentTime, setCurrentTime] = useState(dayjs());
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
@@ -1152,9 +1154,9 @@ export default function DashboardPage() {
               marginTop: 0,
               flex: 1,
               width: '100%',
-              height: 124,
-              minHeight: 124,
-              maxHeight: 124,
+              height: dashboardTopCardHeight,
+              minHeight: dashboardTopCardHeight,
+              maxHeight: dashboardTopCardHeight,
               borderRadius: dashboardCardRadius,
               border: 'none',
               background: `linear-gradient(145deg, ${token.colorPrimary} 0%, ${token.colorPrimaryActive} 100%)`,
@@ -1258,9 +1260,9 @@ export default function DashboardPage() {
             style={{
               flex: 1,
               width: '100%',
-              minHeight: 126,
-              height: 126,
-              maxHeight: 126,
+              minHeight: dashboardTopCardHeight,
+              height: dashboardTopCardHeight,
+              maxHeight: dashboardTopCardHeight,
               position: 'relative',
               display: 'flex',
               alignItems: 'flex-start',
@@ -1315,6 +1317,9 @@ export default function DashboardPage() {
             style={{
               flex: 1,
               width: '100%',
+              minHeight: dashboardTopCardHeight,
+              height: dashboardTopCardHeight,
+              maxHeight: dashboardTopCardHeight,
               borderRadius: dashboardCardRadius,
               border: `1px solid ${token.colorBorderSecondary}`,
               background: token.colorBgElevated,
@@ -1368,6 +1373,9 @@ export default function DashboardPage() {
             style={{
               flex: 1,
               width: '100%',
+              minHeight: dashboardTopCardHeight,
+              height: dashboardTopCardHeight,
+              maxHeight: dashboardTopCardHeight,
               borderRadius: dashboardCardRadius,
               border: 'none',
               background: getWeatherCardGradient(weatherForDashboard),
