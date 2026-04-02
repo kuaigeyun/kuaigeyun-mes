@@ -12,7 +12,7 @@ Date: 2025-01-14
 import asyncio
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta, date
-from decimal import Decimal
+from decimal import Decimal, ROUND_CEILING
 from tortoise.transactions import in_transaction
 from loguru import logger
 
@@ -39,7 +39,10 @@ from apps.kuaizhizao.utils.material_source_helper import (
     SOURCE_TYPE_OUTSOURCE,
     SOURCE_TYPE_CONFIGURE,
 )
-from apps.kuaizhizao.utils.inventory_helper import get_material_inventory_info
+from apps.kuaizhizao.utils.inventory_helper import (
+    get_material_inventory_info,
+    batch_sum_open_supply_quantities,
+)
 from core.services.business.code_generation_service import CodeGenerationService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
@@ -58,6 +61,34 @@ def _safe_configurable_selections(cfg: Any) -> Optional[Dict[str, int]]:
         except (TypeError, ValueError):
             pass
     return result if result else None
+
+
+def _preview_date_iso(d: Optional[Any]) -> Optional[str]:
+    """需求计算预览：日期序列化为 YYYY-MM-DD"""
+    if d is None:
+        return None
+    if isinstance(d, datetime):
+        d = d.date()
+    if hasattr(d, "isoformat"):
+        return d.isoformat()
+    return str(d)
+
+
+def _preview_planned_date_iso(item: DemandComputationItem) -> Optional[str]:
+    """
+    预览「计划时间」：优先计划开工/请购日（已按提前期+排程缓冲倒推），与需求时间区分。
+    若无开始日再回落到完成/到货日（与交期同日时仅后者有值的情况）。
+    """
+    for attr in (
+        "production_start_date",
+        "procurement_start_date",
+        "production_completion_date",
+        "procurement_completion_date",
+    ):
+        val = getattr(item, attr, None)
+        if val is not None:
+            return _preview_date_iso(val)
+    return None
 
 
 class _PreviewResultCarrier(Exception):
@@ -94,13 +125,163 @@ async def _get_material_safety_reorder(
     return safety, reorder
 
 
+async def _resolve_mrp_warehouse_ids(tenant_id: int, computation_params: Dict[str, Any]) -> List[int]:
+    """
+    参与 MRP 库存汇总的仓库 ID。
+    - 若 computation_params 含非空 warehouse_ids：按用户选择
+    - 否则：当前租户全部启用且 warehouse_type=normal 的仓库
+    """
+    raw = computation_params.get("warehouse_ids")
+    if isinstance(raw, list):
+        out: List[int] = []
+        for x in raw:
+            if x is None:
+                continue
+            try:
+                out.append(int(x))
+            except (TypeError, ValueError):
+                continue
+        if out:
+            return out
+        return []
+
+    from apps.master_data.models.warehouse import Warehouse
+
+    rows = await Warehouse.filter(
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+        is_active=True,
+        warehouse_type="normal",
+    ).values_list("id", flat=True)
+    return list(rows)
+
+
+def _mrp_planning_cutoff_date(computation_params: Dict[str, Any]) -> Optional[date]:
+    """planning_horizon：从今天起的天数；None 表示不裁剪需求行交期。"""
+    raw = computation_params.get("planning_horizon")
+    if raw is None or raw == "":
+        return None
+    try:
+        days = int(raw)
+    except (TypeError, ValueError):
+        return None
+    if days <= 0:
+        return None
+    return date.today() + timedelta(days=days)
+
+
+def _bom_max_level_from_params(computation_params: Dict[str, Any]) -> int:
+    raw = computation_params.get("bom_expand_level")
+    try:
+        lv = int(raw) if raw is not None else 10
+    except (TypeError, ValueError):
+        lv = 10
+    return max(1, min(lv, 100))
+
+
+def _mrp_suggestion_basis(computation_params: Dict[str, Any]) -> str:
+    """建议工单/采购/委外量依据：net=净需求（默认），gross=毛需求。"""
+    v = computation_params.get("mrp_suggestion_basis")
+    if isinstance(v, str) and v.strip().lower() == "gross":
+        return "gross"
+    return "net"
+
+
+def _mrp_planning_suggestion_quantity(
+    basis: str, gross_requirement: float, net_requirement: float
+) -> float:
+    if basis == "gross":
+        return max(0.0, float(gross_requirement))
+    return max(0.0, float(net_requirement))
+
+
+def _netting_params_for_mrp_supply(computation_params: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    供 _compute_supply_and_net 使用的参数副本。
+    毛需求模式下关闭安全库存、在途、预留、再订货点等供需净算项，与前端隐藏开关一致。
+    """
+    if _mrp_suggestion_basis(computation_params) != "gross":
+        return computation_params
+    return {
+        **computation_params,
+        "include_safety_stock": False,
+        "include_in_transit": False,
+        "include_reserved": False,
+        "include_reorder_point": False,
+    }
+
+
+def _decimal_opt(v: Any) -> Optional[Decimal]:
+    if v is None or v == "":
+        return None
+    try:
+        d = Decimal(str(v))
+        return d if d > 0 else None
+    except Exception:
+        return None
+
+
+def _extract_lot_rules(
+    material: Any,
+    source_type: Optional[str],
+    computation_params: Dict[str, Any],
+) -> tuple[Optional[Decimal], Optional[Decimal], Optional[Decimal]]:
+    """(min, max, multiple)；computation_params 全局键优先于物料 defaults。"""
+    min_q = _decimal_opt(computation_params.get("suggested_qty_min"))
+    max_q = _decimal_opt(computation_params.get("suggested_qty_max"))
+    mult = _decimal_opt(computation_params.get("suggested_qty_multiple"))
+
+    defaults = getattr(material, "defaults", None) or {}
+    if not isinstance(defaults, dict):
+        return min_q, max_q, mult
+
+    st = source_type or ""
+    if st == SOURCE_TYPE_BUY:
+        pur = defaults.get("purchase") if isinstance(defaults.get("purchase"), dict) else {}
+        min_q = min_q or _decimal_opt(pur.get("min_order_quantity") or pur.get("min_order_qty"))
+        max_q = max_q or _decimal_opt(pur.get("max_order_quantity") or pur.get("max_order_qty"))
+        mult = mult or _decimal_opt(pur.get("order_multiple") or pur.get("quantity_multiple"))
+    elif st in (SOURCE_TYPE_MAKE, SOURCE_TYPE_OUTSOURCE):
+        prod = defaults.get("production") if isinstance(defaults.get("production"), dict) else {}
+        min_q = min_q or _decimal_opt(
+            prod.get("min_batch_quantity") or prod.get("min_batch_qty") or prod.get("min_order_quantity")
+        )
+        max_q = max_q or _decimal_opt(
+            prod.get("max_batch_quantity") or prod.get("max_batch_qty") or prod.get("max_order_quantity")
+        )
+        mult = mult or _decimal_opt(
+            prod.get("batch_multiple") or prod.get("order_multiple") or prod.get("quantity_multiple")
+        )
+
+    return min_q, max_q, mult
+
+
+def _apply_suggested_lot_rules(
+    raw: Decimal,
+    min_q: Optional[Decimal],
+    max_q: Optional[Decimal],
+    mult: Optional[Decimal],
+) -> Decimal:
+    if raw <= 0:
+        return Decimal(0)
+    q = raw
+    if min_q is not None:
+        q = max(q, min_q)
+    if mult is not None and mult > 0:
+        units = (q / mult).to_integral_value(rounding=ROUND_CEILING)
+        q = units * mult
+    if max_q is not None and q > max_q:
+        q = max_q
+    return q
+
+
 def _compute_supply_and_net(
     inventory_info: Dict[str, Any],
     safety_stock: float,
     reorder_point: float,
     gross_requirement: float,
     computation_params: Dict[str, Any],
-) -> tuple[float, float]:
+) -> tuple[float, float, Dict[str, Any]]:
     """
     按可配置参数计算可供应量与净需求。
     公式：可供应量 = 可用库存 + [在途] - [安全库存]
@@ -118,6 +299,8 @@ def _compute_supply_and_net(
     else:
         available = float(inventory_info.get("on_hand", inventory_info.get("available_quantity", 0)))
     in_transit = float(inventory_info.get("in_transit_quantity", 0))
+    on_hand = float(inventory_info.get("on_hand", 0))
+    avail_col = float(inventory_info.get("available_quantity", 0))
 
     supply = available
     if include_in_transit:
@@ -132,7 +315,49 @@ def _compute_supply_and_net(
     else:
         net_requirement = net_base
 
-    return supply, net_requirement
+    def _fmt(n: float) -> str:
+        s = f"{float(n):.4f}".rstrip("0").rstrip(".")
+        return s if s else "0"
+
+    lines_zh: List[str] = []
+    if include_reserved:
+        lines_zh.append(
+            f"净需求计算基数（可供应起点）= 可用库存 = 在库({_fmt(on_hand)}) − 线边预留 = {_fmt(avail_col)}"
+        )
+    else:
+        lines_zh.append(
+            f"净需求计算基数（可供应起点）= 在库合计（不减预留）= {_fmt(available)}（本列「可用库存」为 {_fmt(avail_col)}）"
+        )
+    if include_in_transit:
+        lines_zh.append(f"计入在途 / 在制：+{_fmt(in_transit)}")
+    if include_safety:
+        lines_zh.append(f"扣减安全库存：−{_fmt(float(safety_stock))}")
+    lines_zh.append(f"可供应量 = {_fmt(supply)}")
+    lines_zh.append(
+        f"净需求 = max(0, 毛需求({_fmt(gross_requirement)}) − 可供应量)；当前结果 = {_fmt(net_requirement)}"
+    )
+    if include_reorder and reorder_point > 0:
+        lines_zh.append(
+            f"已启用再订货点：当可供应 < 再订货点({_fmt(float(reorder_point))}) 时，净需求会与「补足到再订货点」取较大值"
+        )
+
+    calc_detail: Dict[str, Any] = {
+        "include_reserved": include_reserved,
+        "include_in_transit": include_in_transit,
+        "include_safety_stock": include_safety,
+        "include_reorder_point": include_reorder,
+        "on_hand": on_hand,
+        "available_quantity_column": avail_col,
+        "base_for_supply": available,
+        "in_transit_quantity": in_transit,
+        "safety_stock": float(safety_stock),
+        "reorder_point": float(reorder_point),
+        "supply": supply,
+        "gross_requirement": float(gross_requirement),
+        "net_requirement": float(net_requirement),
+        "lines_zh": lines_zh,
+    }
+    return supply, net_requirement, calc_detail
 
 
 class DemandComputationService:
@@ -720,15 +945,19 @@ class DemandComputationService:
                 preview_items = []
                 for item in items:
                     preview_items.append({
+                        "material_id": item.material_id,
                         "material_code": item.material_code,
                         "material_name": item.material_name,
                         "material_unit": item.material_unit or "",
+                        "delivery_date": _preview_date_iso(item.delivery_date),
+                        "planned_date": _preview_planned_date_iso(item),
                         "required_quantity": float(item.required_quantity or 0),
                         "available_inventory": float(item.available_inventory or 0),
                         "net_requirement": float(item.net_requirement or 0),
                         "suggested_work_order_quantity": float(item.suggested_work_order_quantity or 0),
                         "suggested_purchase_order_quantity": float(item.suggested_purchase_order_quantity or 0),
                         "material_source_type": item.material_source_type,
+                        "detail_results": item.detail_results,
                     })
 
                 preview_data = {
@@ -1020,7 +1249,6 @@ class DemandComputationService:
         
         # 2. 计算参数（库存相关开关、BOM版本、4M 开关供后续排产扩展）
         computation_params = computation.computation_params or {}
-        include_safety_stock = computation_params.get("include_safety_stock", True)
         consider_capacity = computation_params.get("consider_capacity", True)
         consider_material_readiness = computation_params.get("consider_material_readiness", True)
         consider_equipment_availability = computation_params.get("consider_equipment_availability", False)
@@ -1041,6 +1269,10 @@ class DemandComputationService:
             material_bom_versions = None
             use_default_bom = True
 
+        wh_ids = await _resolve_mrp_warehouse_ids(tenant_id, computation_params)
+        bom_max_level = _bom_max_level_from_params(computation_params)
+        planning_cutoff = _mrp_planning_cutoff_date(computation_params)
+
         # 3. 存储所有物料需求（用于汇总）
         all_material_requirements = {}  # material_id -> requirement info
 
@@ -1060,6 +1292,11 @@ class DemandComputationService:
 
             if required_quantity <= 0:
                 continue
+
+            if planning_cutoff and delivery_date is not None:
+                dd = delivery_date.date() if hasattr(delivery_date, "date") else delivery_date
+                if isinstance(dd, date) and dd > planning_cutoff:
+                    continue
             
             # 获取物料信息
             material = await Material.get_or_none(tenant_id=tenant_id, id=material_id)
@@ -1093,6 +1330,7 @@ class DemandComputationService:
                     material_id=material_id,
                     required_quantity=required_quantity,
                     only_approved=True,
+                    max_level=bom_max_level,
                     bom_version=bom_version,
                     use_default_bom=use_default_bom,
                     material_bom_versions=material_bom_versions,
@@ -1126,6 +1364,7 @@ class DemandComputationService:
                     material_id=material_id,
                     required_quantity=required_quantity,
                     only_approved=True,
+                    max_level=bom_max_level,
                     bom_version=bom_version,
                     use_default_bom=use_default_bom,
                     material_bom_versions=material_bom_versions,
@@ -1191,6 +1430,7 @@ class DemandComputationService:
                         material_id=material_id,
                         required_quantity=required_quantity,
                         only_approved=True,
+                        max_level=bom_max_level,
                         bom_version=bom_version,
                         use_default_bom=use_default_bom,
                         material_bom_versions=material_bom_versions,
@@ -1214,6 +1454,12 @@ class DemandComputationService:
                         all_material_requirements[req_material_id]["required_quantity"] += req["required_quantity"]
                         _append_demand_item_id(all_material_requirements[req_material_id], demand_item.id)
         
+        in_transit_map = await batch_sum_open_supply_quantities(
+            tenant_id, list(all_material_requirements.keys())
+        )
+
+        netting_params_for_supply = _netting_params_for_mrp_supply(computation_params)
+
         # 5. 生成计算结果明细
         for material_id, req_info in all_material_requirements.items():
             # 获取物料信息
@@ -1234,26 +1480,34 @@ class DemandComputationService:
             source_config = await get_material_source_config(tenant_id, material_id) or {}
             
             # 获取库存信息与安全库存/再订货点
+            transit_dec = in_transit_map.get(material_id, Decimal("0"))
             inventory_info = await get_material_inventory_info(
                 tenant_id=tenant_id,
                 material_id=material_id,
                 warehouse_id=None,
+                warehouse_ids=wh_ids,
+                in_transit_quantity=float(transit_dec),
+                with_breakdown=True,
             )
             safety_stock, reorder_point = await _get_material_safety_reorder(
                 material=material,
                 computation_params=computation_params,
             )
-            _, net_requirement = _compute_supply_and_net(
+            _supply, net_requirement, supply_calc_detail = _compute_supply_and_net(
                 inventory_info=inventory_info,
                 safety_stock=safety_stock,
                 reorder_point=reorder_point,
                 gross_requirement=req_info["required_quantity"],
-                computation_params=computation_params,
+                computation_params=netting_params_for_supply,
             )
             available_inventory = float(inventory_info.get("available_quantity", 0))
             in_transit_qty = float(inventory_info.get("in_transit_quantity", 0))
             reserved_qty = float(inventory_info.get("reserved_quantity", 0))
             gross_requirement = req_info["required_quantity"]
+            mrp_basis = _mrp_suggestion_basis(computation_params)
+            planning_qty = _mrp_planning_suggestion_quantity(
+                mrp_basis, float(gross_requirement), float(net_requirement)
+            )
 
             delivery_date = req_info.get("delivery_date")
             production_start_date = None
@@ -1266,30 +1520,66 @@ class DemandComputationService:
             planned_production = Decimal(0)
             planned_procurement = Decimal(0)
 
+            try:
+                schedule_buffer_days = max(0, int(computation_params.get("schedule_buffer_days") or 0))
+            except (TypeError, ValueError):
+                schedule_buffer_days = 0
+
             if source_type == SOURCE_TYPE_MAKE:
-                if net_requirement > 0 and validation_passed:
-                    suggested_work_order_quantity = Decimal(str(net_requirement))
-                    planned_production = Decimal(str(net_requirement))
+                if planning_qty > 0 and validation_passed:
+                    suggested_work_order_quantity = Decimal(str(planning_qty))
+                    planned_production = Decimal(str(planning_qty))
                     production_lead_time = source_config.get("source_config", {}).get("production_lead_time", 3)
                     if delivery_date:
                         production_completion_date = delivery_date
-                        production_start_date = delivery_date - timedelta(days=production_lead_time)
+                        total_lt = int(production_lead_time) + schedule_buffer_days
+                        production_start_date = delivery_date - timedelta(days=total_lt)
             elif source_type == SOURCE_TYPE_BUY:
-                if net_requirement > 0:
-                    suggested_purchase_order_quantity = Decimal(str(net_requirement))
-                    planned_procurement = Decimal(str(net_requirement))
+                if planning_qty > 0:
+                    suggested_purchase_order_quantity = Decimal(str(planning_qty))
+                    planned_procurement = Decimal(str(planning_qty))
                     purchase_lead_time = source_config.get("source_config", {}).get("purchase_lead_time", 7)
                     if delivery_date:
                         procurement_completion_date = delivery_date
-                        procurement_start_date = delivery_date - timedelta(days=purchase_lead_time)
+                        total_lt = int(purchase_lead_time) + schedule_buffer_days
+                        procurement_start_date = delivery_date - timedelta(days=total_lt)
             elif source_type == SOURCE_TYPE_OUTSOURCE:
-                if net_requirement > 0:
-                    suggested_work_order_quantity = Decimal(str(net_requirement))
-                    planned_production = Decimal(str(net_requirement))
+                if planning_qty > 0:
+                    suggested_work_order_quantity = Decimal(str(planning_qty))
+                    planned_production = Decimal(str(planning_qty))
                     outsource_lead_time = source_config.get("source_config", {}).get("outsource_lead_time", 5)
                     if delivery_date:
                         production_completion_date = delivery_date
-                        production_start_date = delivery_date - timedelta(days=outsource_lead_time)
+                        total_lt = int(outsource_lead_time) + schedule_buffer_days
+                        production_start_date = delivery_date - timedelta(days=total_lt)
+
+            if computation_params.get("apply_lot_sizing", True):
+                min_l, max_l, mul_l = _extract_lot_rules(material, source_type, computation_params)
+                if source_type == SOURCE_TYPE_MAKE and suggested_work_order_quantity > 0:
+                    suggested_work_order_quantity = _apply_suggested_lot_rules(
+                        suggested_work_order_quantity, min_l, max_l, mul_l
+                    )
+                    planned_production = suggested_work_order_quantity
+                elif source_type == SOURCE_TYPE_BUY and suggested_purchase_order_quantity > 0:
+                    suggested_purchase_order_quantity = _apply_suggested_lot_rules(
+                        suggested_purchase_order_quantity, min_l, max_l, mul_l
+                    )
+                    planned_procurement = suggested_purchase_order_quantity
+                elif source_type == SOURCE_TYPE_OUTSOURCE and suggested_work_order_quantity > 0:
+                    suggested_work_order_quantity = _apply_suggested_lot_rules(
+                        suggested_work_order_quantity, min_l, max_l, mul_l
+                    )
+                    planned_production = suggested_work_order_quantity
+
+            supply_for_detail = dict(supply_calc_detail)
+            supply_for_detail["mrp_suggestion_basis"] = mrp_basis
+            supply_for_detail["planning_suggestion_quantity"] = float(planning_qty)
+            if mrp_basis == "gross":
+                _lines = list(supply_for_detail.get("lines_zh") or [])
+                _lines.append(
+                    "建议工单/采购/委外量按「毛需求」生成；「净需求」未套用安全库存、在途/在制、预留、再订货点等供需净算项，仅按在库与毛需求估算缺口供参考。"
+                )
+                supply_for_detail["lines_zh"] = _lines
 
             await DemandComputationItem.create(
                 tenant_id=tenant_id,
@@ -1303,8 +1593,12 @@ class DemandComputationService:
                 available_inventory=Decimal(str(available_inventory)),
                 net_requirement=Decimal(str(net_requirement)),
                 gross_requirement=Decimal(str(gross_requirement)),
-                safety_stock=Decimal(str(safety_stock)) if include_safety_stock else None,
-                reorder_point=Decimal(str(reorder_point)) if computation_params.get("include_reorder_point", False) else None,
+                safety_stock=Decimal(str(safety_stock))
+                if netting_params_for_supply.get("include_safety_stock", True)
+                else None,
+                reorder_point=Decimal(str(reorder_point))
+                if netting_params_for_supply.get("include_reorder_point", False)
+                else None,
                 delivery_date=delivery_date,
                 planned_production=planned_production if planned_production > 0 else None,
                 planned_procurement=planned_procurement if planned_procurement > 0 else None,
@@ -1319,7 +1613,13 @@ class DemandComputationService:
                 source_validation_passed=validation_passed,
                 source_validation_errors=validation_errors if not validation_passed else None,
                 demand_item_ids=req_info.get("demand_item_ids"),
-                detail_results={"in_transit_quantity": in_transit_qty, "reserved_quantity": reserved_qty},
+                detail_results={
+                    "in_transit_quantity": in_transit_qty,
+                    "reserved_quantity": reserved_qty,
+                    "on_hand": float(inventory_info.get("on_hand", 0)),
+                    "inventory_breakdown": inventory_info.get("breakdown") or {},
+                    "supply_calculation": supply_for_detail,
+                },
             )
     
     async def update_computation(

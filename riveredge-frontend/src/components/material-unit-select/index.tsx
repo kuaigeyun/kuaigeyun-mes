@@ -25,6 +25,79 @@ interface MaterialUnitSelectProps {
 // 实际生产中可考虑更完善的缓存机制。
 const materialCache: Record<string, Material> = {};
 
+/** 单位字典标签：全应用共享一次 in-flight 请求，避免表格每行各打一遍字典接口 */
+let materialUnitDisplayMapPromise: Promise<Record<string, string>> | null = null;
+
+function getMaterialUnitDisplayMapShared(): Promise<Record<string, string>> {
+  if (!materialUnitDisplayMapPromise) {
+    materialUnitDisplayMapPromise = loadMaterialUnitDisplayMap().catch(() => ({}));
+  }
+  return materialUnitDisplayMapPromise;
+}
+
+/**
+ * 拉取单条物料并写入缓存（与组件内逻辑一致，供批量预取复用）
+ */
+async function fetchMaterialForUnitSelectCache(materialId: number | string): Promise<Material | null> {
+  const cacheKey = String(materialId);
+  if (materialCache[cacheKey]) {
+    return materialCache[cacheKey];
+  }
+
+  const idStr = String(materialId);
+  let resp: Material | null = null;
+
+  if (idStr.includes('-') && idStr.length > 20) {
+    resp = await materialApi.get(idStr);
+  } else {
+    const list = await materialApi.list({ limit: 10, keyword: idStr });
+    resp = list.find((m) => String(m.id) === idStr) || null;
+
+    if (!resp) {
+      try {
+        resp = await materialApi.get(idStr);
+      } catch {
+        resp = null;
+      }
+    }
+  }
+
+  if (resp) {
+    materialCache[cacheKey] = resp;
+  }
+  return resp;
+}
+
+/**
+ * 批量预取物料档案（写入组件内部缓存），并预热单位字典。
+ * 大表格（如需求计算预览）在展示前调用，可避免每格单独请求、逐行闪烁。
+ */
+export async function prefetchMaterialsForUnitSelect(
+  materialIds: Array<number | string | null | undefined>
+): Promise<void> {
+  await getMaterialUnitDisplayMapShared();
+
+  const unique = [
+    ...new Set(
+      materialIds
+        .filter((x): x is number | string => x != null && x !== '')
+        .map((x) => String(x))
+    ),
+  ];
+  if (unique.length === 0) return;
+
+  await Promise.all(
+    unique.map(async (key) => {
+      if (materialCache[key]) return;
+      try {
+        await fetchMaterialForUnitSelectCache(key);
+      } catch {
+        /* 单条失败不影响其余行 */
+      }
+    })
+  );
+}
+
 function normUnitKey(s: string): string {
   return String(s).trim().toLowerCase();
 }
@@ -86,14 +159,9 @@ export const MaterialUnitSelect: React.FC<MaterialUnitSelectProps> = ({
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      try {
-        const map = await loadMaterialUnitDisplayMap();
-        if (!cancelled) setUnitDisplayByKey(map);
-      } catch (e) {
-        console.error('Failed to load unit dictionary labels:', e);
-      }
-    })();
+    getMaterialUnitDisplayMapShared().then((map) => {
+      if (!cancelled) setUnitDisplayByKey(map);
+    });
     return () => {
       cancelled = true;
     };
@@ -106,51 +174,29 @@ export const MaterialUnitSelect: React.FC<MaterialUnitSelectProps> = ({
     }
 
     const cacheKey = String(materialId);
-    
-    // 检查缓存
+
     if (materialCache[cacheKey]) {
       setMaterial(materialCache[cacheKey]);
       return;
     }
 
-    const fetchMaterial = async () => {
-      setLoading(true);
-      try {
-        const idStr = String(materialId);
-        let resp: Material | null = null;
-        
-        // 策略 1：如果看起来像 UUID (带有连字符且长度较长)，直接 GET
-        if (idStr.includes('-') && idStr.length > 20) {
-          resp = await materialApi.get(idStr);
-        } else {
-          // 策略 2：通过 list API 搜索（后端通常支持通过 ID/Code 在列表接口进行检索）
-          // 这里尝试精确匹配 ID
-          const list = await materialApi.list({ limit: 10, keyword: idStr });
-          resp = list.find(m => String(m.id) === idStr) || null;
-          
-          // 策略 3：如果搜索没结果（可能后端 keyword 不支持 ID 精确匹配），最后强制 GET 一次
-          if (!resp) {
-            try {
-              resp = await materialApi.get(idStr);
-            } catch (e) {
-              // 捕获可能由于格式不正确抛出的 400/404
-              console.warn('Direct GET failed for ID:', idStr);
-            }
-          }
-        }
-
-        if (resp) {
-          materialCache[cacheKey] = resp;
-          setMaterial(resp);
-        }
-      } catch (error) {
+    let cancelled = false;
+    setLoading(true);
+    fetchMaterialForUnitSelectCache(materialId)
+      .then((resp) => {
+        if (cancelled) return;
+        if (resp) setMaterial(resp);
+      })
+      .catch((error) => {
         console.error('Failed to load material units:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
 
-    fetchMaterial();
+    return () => {
+      cancelled = true;
+    };
   }, [materialId]);
 
   // 计算物料对应的合法单位列表

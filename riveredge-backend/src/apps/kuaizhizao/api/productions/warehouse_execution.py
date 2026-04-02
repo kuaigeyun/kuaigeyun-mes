@@ -492,6 +492,27 @@ async def create_other_inbound(
     )
 
 
+@router.post(
+    "/other-inbounds/{inbound_id}/repair-inventory",
+    response_model=OtherInboundResponse,
+    summary="修复库存（软删的已入库其他入库单）",
+)
+async def repair_deleted_other_inbound_inventory(
+    inbound_id: int = Path(..., description="其他入库单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OtherInboundResponse:
+    """
+    对已软删除且仍为「已入库」的单据，按明细冲减即时库存（与撤回确认一致）。
+    用于未先撤回即删除导致账实不一致的修复；成功后单据状态变为「已取消」，不可重复执行。
+    """
+    return await OtherInboundService().repair_deleted_other_inbound_inventory(
+        tenant_id=tenant_id,
+        inbound_id=inbound_id,
+        updated_by=current_user.id,
+    )
+
+
 @router.post("/other-inbounds/{inbound_id}/withdraw", response_model=OtherInboundResponse, summary="撤回其他入库单确认")
 async def withdraw_other_inbound(
     inbound_id: int = Path(..., description="其他入库单ID"),

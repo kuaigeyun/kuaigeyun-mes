@@ -321,6 +321,10 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   toolBarActions?: ReactNode[]
   /**
+   * 排在批量删除按钮之后的工具栏节点（如帮助说明、与选中行无关的操作）
+   */
+  toolBarActionsAfterDelete?: ReactNode[]
+  /**
    * 是否显示导入按钮（默认：true）
    */
   showImportButton?: boolean
@@ -638,6 +642,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   onRowEditSave,
   onRowEditDelete,
   toolBarActions = [],
+  toolBarActionsAfterDelete = [],
   showImportButton = true,
   onImport,
   importHeaders,
@@ -1403,6 +1408,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           </Button>
         </Popconfirm>
       )
+    }
+
+    if (toolBarActionsAfterDelete.length > 0) {
+      actions.push(...toolBarActionsAfterDelete)
     }
 
     // 修改按钮（需要选中一行）

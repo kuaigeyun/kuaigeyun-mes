@@ -19,6 +19,7 @@ import {
   ProFormSelect,
   ProFormTextArea,
   ProDescriptions,
+  ProFormDependency,
 } from '@ant-design/pro-components'
 import {
   App,
@@ -26,9 +27,9 @@ import {
   Tag,
   Space,
   Modal,
+  Popover,
   Drawer,
   Table,
-  Collapse,
   Switch,
   Input,
   Select,
@@ -38,6 +39,16 @@ import {
   Timeline,
   Badge,
   Empty,
+  Row,
+  Col,
+  InputNumber,
+  Dropdown,
+  Typography,
+  Descriptions,
+  Tooltip,
+  Spin,
+  Divider,
+  theme,
 } from 'antd'
 import {
   PlayCircleOutlined,
@@ -49,12 +60,23 @@ import {
   SyncOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
+  CopyOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { UniTable } from '../../../../../components/uni-table'
-import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle'
-import { MultiTabListPageTemplate, DetailDrawerSection, MODAL_CONFIG, type StatCard } from '../../../../../components/layout-templates'
-import DocumentTrackingPanel from '../../../../../components/document-tracking-panel'
+import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle'
+import {
+  MultiTabListPageTemplate,
+  DetailDrawerSection,
+  MODAL_CONFIG,
+  FormModalTemplate,
+  type StatCard,
+} from '../../../../../components/layout-templates'
+import {
+  DocumentTrackingRelationsBody,
+  DocumentTrackingTimelineBody,
+  useDocumentTracking,
+} from '../../../../../components/document-tracking-panel'
 import {
   listDemandComputations,
   getDemandComputation,
@@ -88,11 +110,18 @@ import { getDocumentLifecycleStageTagProps } from '../../../../../utils/document
 import { listDemands, getDemand, Demand, DemandStatus, ReviewStatus } from '../../../services/demand'
 import { getBusinessConfig } from '../../../../../services/businessConfig'
 import { bomApi } from '../../../../master-data/services/material'
+import { warehouseApi } from '../../../../master-data/services/warehouse'
 import { usePageMetrics } from '../../../../../hooks/usePageMetrics'
 import ComputationHistoryTab from './ComputationHistoryTab'
-import { formatDateTimeBySiteSetting } from '../../../../../utils/format'
+import { MrpParametersCustomerGuideTrigger } from './MrpParametersCustomerGuide'
+import { formatDateBySiteSetting, formatDateTimeBySiteSetting } from '../../../../../utils/format'
+import { MaterialUnitSelect, prefetchMaterialsForUnitSelect } from '../../../../../components/material-unit-select'
+import { ThemedSegmented } from '../../../../../components/themed-segmented'
 
-const { Panel } = Collapse
+const MRP_SUGGESTION_SEGMENTED_OPTIONS = [
+  { label: '净需求（推荐）', value: 'net' as const },
+  { label: '毛需求', value: 'gross' as const },
+]
 
 /** 物料 BOM 版本选项 */
 interface BomVersionOption {
@@ -108,21 +137,230 @@ interface MaterialInfo {
   bomVersions?: BomVersionOption[]
 }
 
-/** 库存参数开关表单（新建计算/执行计算时使用） */
+/** 操作列最多平铺 3 个，第 4 个起收入「更多」（与 UI_Standard / riveredge-detail-drawer-ui skill 一致） */
+const DEMAND_COMPUTATION_ROW_ACTIONS_INLINE_MAX = 3
+
+/** 详情明细表最小宽度（外层横滚） */
+const DEMAND_COMPUTATION_DETAIL_ITEMS_MIN_WIDTH = 1780
+
+function renderDemandComputationRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
+  const wrapped = nodes.map((node, i) => <span key={`${keyPrefix}-${i}`}>{node}</span>)
+  if (wrapped.length <= DEMAND_COMPUTATION_ROW_ACTIONS_INLINE_MAX) {
+    return <Space size="small" wrap>{wrapped}</Space>
+  }
+  const inline = wrapped.slice(0, DEMAND_COMPUTATION_ROW_ACTIONS_INLINE_MAX)
+  const overflow = wrapped.slice(DEMAND_COMPUTATION_ROW_ACTIONS_INLINE_MAX)
+  return (
+    <Space size="small" wrap>
+      {inline}
+      <Dropdown
+        menu={{
+          items: overflow.map((node, i) => ({
+            key: `${keyPrefix}-more-${i}`,
+            label: node,
+          })),
+        }}
+        trigger={['click']}
+      >
+        <Button type="link" size="small">
+          更多
+        </Button>
+      </Dropdown>
+    </Space>
+  )
+}
+
+/** 可用库存列：hover 展示分仓库构成与净需求计算说明（依赖 detail_results.inventory_breakdown） */
+function AvailableInventoryPopoverContent({ detail }: { detail?: Record<string, unknown> | null }) {
+  const bd = detail?.inventory_breakdown as Record<string, unknown> | undefined
+  const supply = detail?.supply_calculation as { lines_zh?: string[] } | undefined
+  const lines = supply?.lines_zh?.length ? supply.lines_zh : []
+
+  if (!bd && lines.length === 0) {
+    return (
+      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        暂无明细。请重新执行计算后查看；历史结果可能无仓库拆分数据。
+      </Typography.Text>
+    )
+  }
+
+  const mainBatch = bd?.main_batch as { label?: string; quantity?: number; note_zh?: string } | undefined
+  const lineRows = (bd?.line_side_rows as Array<Record<string, unknown>>) || []
+  const formulaZh = (bd?.formula_zh as string[]) || []
+  const scopeZh = bd?.line_side_scope_zh as string | undefined
+
+  return (
+    <div style={{ maxWidth: 440, fontSize: 12 }}>
+      {bd ? (
+        <>
+          <Typography.Text strong>库存构成（与「可用库存」列一致）</Typography.Text>
+          <div style={{ marginTop: 8 }}>
+            {mainBatch != null ? (
+              <div style={{ marginBottom: 8 }}>
+                <div>
+                  {mainBatch.label ?? '主仓批次'}：
+                  <strong>{Number(mainBatch.quantity ?? 0).toLocaleString()}</strong>
+                </div>
+                {mainBatch.note_zh ? (
+                  <Typography.Text type="secondary" style={{ fontSize: 11, display: 'block' }}>
+                    {mainBatch.note_zh}
+                  </Typography.Text>
+                ) : null}
+              </div>
+            ) : null}
+            {scopeZh ? (
+              <Typography.Paragraph type="secondary" style={{ marginBottom: 8, fontSize: 11 }}>
+                线边范围：{scopeZh}
+              </Typography.Paragraph>
+            ) : null}
+            {lineRows.length > 0 ? (
+              <Table
+                size="small"
+                pagination={false}
+                rowKey={(r) => String(r.warehouse_id)}
+                columns={[
+                  { title: '仓库', dataIndex: 'warehouse_name', width: 120, ellipsis: true },
+                  {
+                    title: '现存量',
+                    dataIndex: 'quantity',
+                    width: 72,
+                    align: 'right' as const,
+                    render: (n: unknown) => Number(n ?? 0).toLocaleString(),
+                  },
+                  {
+                    title: '预留',
+                    dataIndex: 'reserved',
+                    width: 60,
+                    align: 'right' as const,
+                    render: (n: unknown) => Number(n ?? 0).toLocaleString(),
+                  },
+                  {
+                    title: '可用',
+                    dataIndex: 'available',
+                    width: 72,
+                    align: 'right' as const,
+                    render: (n: unknown) => Number(n ?? 0).toLocaleString(),
+                  },
+                ]}
+                dataSource={lineRows}
+              />
+            ) : (
+              <Typography.Text type="secondary">无线边仓明细行（未纳入线边或数量为 0）</Typography.Text>
+            )}
+            {formulaZh.length > 0 ? (
+              <ul style={{ margin: '8px 0 0', paddingLeft: 18, color: 'rgba(0,0,0,0.55)' }}>
+                {formulaZh.map((t, i) => (
+                  <li key={i}>{t}</li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        </>
+      ) : null}
+
+      {lines.length > 0 ? (
+        <>
+          <Divider style={{ margin: '12px 0 8px' }} />
+          <Typography.Text strong>净需求如何算出</Typography.Text>
+          <ul style={{ margin: '8px 0 0', paddingLeft: 18, color: 'rgba(0,0,0,0.55)' }}>
+            {lines.map((t, i) => (
+              <li key={i}>{t}</li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+    </div>
+  )
+}
+
+function renderAvailableInventoryCell(
+  val: number | undefined,
+  detail: Record<string, unknown> | undefined | null
+) {
+  const text = val != null && val !== 0 ? Number(val).toLocaleString() : val === 0 ? '0' : '-'
+  const supply = detail?.supply_calculation as { lines_zh?: string[] } | undefined
+  const hasTip = detail?.inventory_breakdown != null || (supply?.lines_zh?.length ?? 0) > 0
+  if (!hasTip) {
+    return <span>{text}</span>
+  }
+  return (
+    <Popover
+      content={<AvailableInventoryPopoverContent detail={detail} />}
+      trigger="hover"
+      mouseEnterDelay={0.2}
+    >
+      <span style={{ cursor: 'help', borderBottom: '1px dashed rgba(0,0,0,0.22)' }}>{text}</span>
+    </Popover>
+  )
+}
+
+const PARAM_DEFAULTS: Record<string, any> = {
+  include_safety_stock: true,
+  include_in_transit: false,
+  include_reserved: false,
+  include_reorder_point: false,
+  /** 建议工单/采购/委外量：net=净需求 gross=毛需求 */
+  mrp_suggestion_basis: 'net' as 'net' | 'gross',
+  apply_lot_sizing: true,
+  bom_version: undefined,
+  material_bom_versions: {} as Record<number, string>,
+  planning_horizon: undefined as number | undefined,
+  /** BOM 展开最大层级（界面已隐藏，固定默认 10，与中小企业常见深度一致） */
+  bom_expand_level: 10,
+  /** 在物料来源提前期基础上，开工/请购日再整体前置的天数（中小企业排程缓冲） */
+  schedule_buffer_days: 0,
+}
+
+/** 净需求模式下的供需净算默认（与 PARAM_DEFAULTS 一致） */
+const NETTING_DEFAULTS_FOR_NET: Pick<
+  Record<string, any>,
+  'include_safety_stock' | 'include_in_transit' | 'include_reserved' | 'include_reorder_point'
+> = {
+  include_safety_stock: true,
+  include_in_transit: false,
+  include_reserved: false,
+  include_reorder_point: false,
+}
+
+/** 毛需求模式：建议量不按净缺口，供需净算四项关闭（与隐藏 UI 一致） */
+const NETTING_WHEN_GROSS: Pick<
+  Record<string, any>,
+  'include_safety_stock' | 'include_in_transit' | 'include_reserved' | 'include_reorder_point'
+> = {
+  include_safety_stock: false,
+  include_in_transit: false,
+  include_reserved: false,
+  include_reorder_point: false,
+}
+
+function mergeComputationParamsForSuggestionBasis(
+  prev: Record<string, any>,
+  basis: 'net' | 'gross'
+): Record<string, any> {
+  if (basis === 'gross') {
+    return { ...prev, mrp_suggestion_basis: 'gross', ...NETTING_WHEN_GROSS }
+  }
+  return { ...prev, mrp_suggestion_basis: 'net', ...NETTING_DEFAULTS_FOR_NET }
+}
+
+/** 库存参数表单（新建计算/执行计算；无 Collapse，双栏） */
 const InventoryParamsForm: React.FC<{
   value?: Record<string, any>
   onChange?: (v: Record<string, any>) => void
   bomMultiVersionAllowed?: boolean
   materials?: MaterialInfo[]
-}> = ({ value, onChange, bomMultiVersionAllowed = false, materials = [] }) => {
-  const params = value || {
-    include_safety_stock: true,
-    include_in_transit: false,
-    include_reserved: false,
-    include_reorder_point: false,
-    bom_version: undefined,
-    material_bom_versions: {} as Record<number, string>,
-  }
+  normalWarehouseIds?: number[]
+  warehouseOptions?: { label: string; value: number }[]
+}> = ({
+  value,
+  onChange,
+  bomMultiVersionAllowed = false,
+  materials = [],
+  normalWarehouseIds = [],
+  warehouseOptions = [],
+}) => {
+  const { token } = theme.useToken()
+  const params = { ...PARAM_DEFAULTS, ...value }
   const handleChange = (key: string, val: any) => {
     onChange?.({ ...params, [key]: val })
   }
@@ -137,112 +375,201 @@ const InventoryParamsForm: React.FC<{
   }
   const materialBomVersions = params.material_bom_versions || {}
 
+  React.useEffect(() => {
+    if (!onChange || !normalWarehouseIds.length) return
+    const v = value || {}
+    if (v && Object.prototype.hasOwnProperty.call(v, 'warehouse_ids')) return
+    onChange({ ...params, warehouse_ids: [...normalWarehouseIds] })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅在首次缺少 warehouse_ids 时补默认普通仓
+  }, [normalWarehouseIds.join(',')])
+
+  const whValue = Array.isArray(params.warehouse_ids) ? params.warehouse_ids : normalWarehouseIds
+  const useGrossSuggestion = params.mrp_suggestion_basis === 'gross'
+
+  const sectionBox: React.CSSProperties = {
+    background: token.colorFillAlter,
+    border: `1px solid ${token.colorBorderSecondary}`,
+    borderRadius: token.borderRadiusLG,
+    padding: token.paddingMD,
+    height: '100%',
+  }
+
+  const fieldLabel = (text: string) => (
+    <Typography.Text style={{ display: 'block', marginBottom: token.marginXXS }}>{text}</Typography.Text>
+  )
+
+  const switchRow = (label: string, key: string, checked: boolean) => (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: token.marginSM,
+        minHeight: 32,
+      }}
+    >
+      <Typography.Text style={{ flex: 1, minWidth: 0 }}>{label}</Typography.Text>
+      <Switch checked={checked} onChange={c => handleChange(key, c)} />
+    </div>
+  )
+
+  const bomByMaterialTable = bomMultiVersionAllowed && materials.length > 0 && (
+    <>
+      <Typography.Title level={5} style={{ marginTop: token.marginMD, marginBottom: token.marginSM }}>
+        按物料指定 BOM 版本
+      </Typography.Title>
+      <Typography.Text type="secondary" style={{ display: 'block', marginBottom: token.marginSM, fontSize: token.fontSizeSM }}>
+        留空则使用该物料默认版本
+      </Typography.Text>
+      <div style={{ overflowX: 'auto' }}>
+        <Table
+          size="small"
+          dataSource={materials}
+          rowKey="material_id"
+          pagination={false}
+          scroll={{ x: 'max-content' }}
+          columns={[
+            { title: '物料编号', dataIndex: 'material_code', width: 120 },
+            { title: '物料名称', dataIndex: 'material_name', width: 150 },
+            {
+              title: 'BOM 版本',
+              dataIndex: 'material_id',
+              render: (materialId: number, record: MaterialInfo) => {
+                const versions = record.bomVersions || []
+                const currentVal = materialBomVersions[materialId] ?? ''
+                if (versions.length > 1) {
+                  return (
+                    <Select
+                      placeholder="选择版本"
+                      value={currentVal || undefined}
+                      onChange={v => handleMaterialVersionChange(materialId, v || '')}
+                      allowClear
+                      style={{ width: 140 }}
+                      options={versions.map(v => ({
+                        value: v.version,
+                        label: v.isDefault ? `${v.version}（默认）` : v.version,
+                      }))}
+                    />
+                  )
+                }
+                return (
+                  <Input
+                    placeholder="如 1.0、1.1"
+                    value={currentVal}
+                    onChange={e =>
+                      handleMaterialVersionChange(materialId, e.target.value?.trim() || '')
+                    }
+                    allowClear
+                    style={{ width: 120 }}
+                  />
+                )
+              },
+            },
+          ]}
+        />
+      </div>
+    </>
+  )
+
   return (
-    <Collapse ghost>
-      <Panel header="库存计算选项" key="inventory">
-        <dl
-          style={{ margin: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px' }}
-        >
-          <dt style={{ margin: 0 }}>是否考虑安全库存</dt>
-          <dd style={{ margin: 0 }}>
-            <Switch
-              checked={params.include_safety_stock !== false}
-              onChange={c => handleChange('include_safety_stock', c)}
-            />
-          </dd>
-          <dt style={{ margin: 0 }}>是否考虑在途库存</dt>
-          <dd style={{ margin: 0 }}>
-            <Switch
-              checked={params.include_in_transit === true}
-              onChange={c => handleChange('include_in_transit', c)}
-            />
-          </dd>
-          <dt style={{ margin: 0 }}>是否考虑预留量</dt>
-          <dd style={{ margin: 0 }}>
-            <Switch
-              checked={params.include_reserved === true}
-              onChange={c => handleChange('include_reserved', c)}
-            />
-          </dd>
-          <dt style={{ margin: 0 }}>是否考虑再订货点</dt>
-          <dd style={{ margin: 0 }}>
-            <Switch
-              checked={params.include_reorder_point === true}
-              onChange={c => handleChange('include_reorder_point', c)}
-            />
-          </dd>
-          {bomMultiVersionAllowed && materials.length === 0 && (
-            <>
-              <dt style={{ margin: 0 }}>BOM 版本</dt>
-              <dd style={{ margin: 0 }}>
-                <Input
-                  placeholder="留空使用各物料默认版本，如 1.0、1.1"
-                  value={params.bom_version ?? ''}
-                  onChange={e => handleChange('bom_version', e.target.value || undefined)}
-                  allowClear
-                />
-              </dd>
-            </>
-          )}
-        </dl>
-        {bomMultiVersionAllowed && materials.length > 0 && (
-          <div style={{ marginTop: 16 }}>
-            <Collapse ghost defaultActiveKey={['materialBom']}>
-              <Panel header="按物料指定 BOM 版本（留空自动使用该物料 BOM 默认版本）" key="materialBom">
-                <Table
-                  size="small"
-                  dataSource={materials}
-                  rowKey="material_id"
-                  pagination={false}
-                  columns={[
-                    { title: '物料编号', dataIndex: 'material_code', width: 120 },
-                    { title: '物料名称', dataIndex: 'material_name', width: 150 },
-                    {
-                      title: 'BOM 版本',
-                      dataIndex: 'material_id',
-                      render: (materialId: number, record: MaterialInfo) => {
-                        const versions = record.bomVersions || []
-                        const currentVal = materialBomVersions[materialId] ?? ''
-                        if (versions.length > 1) {
-                          return (
-                            <Select
-                              placeholder="选择版本"
-                              value={currentVal || undefined}
-                              onChange={v => handleMaterialVersionChange(materialId, v || '')}
-                              allowClear
-                              style={{ width: 140 }}
-                              options={versions.map(v => ({
-                                value: v.version,
-                                label: v.isDefault ? `${v.version}（默认）` : v.version,
-                              }))}
-                            />
-                          )
-                        }
-                        return (
-                          <Input
-                            placeholder="如 1.0、1.1"
-                            value={currentVal}
-                            onChange={e =>
-                              handleMaterialVersionChange(materialId, e.target.value?.trim() || '')
-                            }
-                            allowClear
-                            style={{ width: 120 }}
-                          />
-                        )
-                      },
-                    },
-                  ]}
-                />
-              </Panel>
-            </Collapse>
+    <div>
+      <Row gutter={[16, 16]} align="stretch">
+        <Col xs={24} md={12}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: token.marginMD }}>
+            <div style={sectionBox}>
+              <Typography.Title level={5} style={{ marginTop: 0, marginBottom: token.marginSM }}>
+                {useGrossSuggestion ? '建议量规则' : '供需净算'}
+              </Typography.Title>
+              {!useGrossSuggestion ? (
+                <div style={{ display: 'grid', gap: token.marginXS }}>
+                  {switchRow('考虑安全库存', 'include_safety_stock', params.include_safety_stock !== false)}
+                  {switchRow('考虑在途/在制', 'include_in_transit', params.include_in_transit === true)}
+                  {switchRow('考虑预留量', 'include_reserved', params.include_reserved === true)}
+                  {switchRow('考虑再订货点', 'include_reorder_point', params.include_reorder_point === true)}
+                </div>
+              ) : (
+                <Typography.Paragraph
+                  type="secondary"
+                  style={{ marginBottom: token.marginSM, marginTop: 0, fontSize: token.fontSizeSM }}
+                >
+                  当前为「毛需求」：建议工单/采购/委外量按 BOM 汇总需求，不参与安全库存、在途、预留、再订货点等供需抵扣参数（本组开关已隐藏并关闭）。
+                </Typography.Paragraph>
+              )}
+              <div style={{ display: 'grid', gap: token.marginXS }}>
+                {switchRow('建议量按批量规则（最小/倍数/上限）', 'apply_lot_sizing', params.apply_lot_sizing !== false)}
+              </div>
+            </div>
+            <div style={sectionBox}>
+              <Typography.Title level={5} style={{ marginTop: 0, marginBottom: token.marginSM }}>
+                时间窗
+              </Typography.Title>
+              <Row gutter={[16, 16]}>
+                <Col xs={24} sm={12}>
+                  {fieldLabel('计划展望期')}
+                  <InputNumber
+                    min={1}
+                    max={3650}
+                    style={{ width: '100%' }}
+                    placeholder="不填表示纳入全部有交期的需求行"
+                    value={params.planning_horizon}
+                    onChange={v => handleChange('planning_horizon', v === null ? undefined : v)}
+                  />
+                </Col>
+                <Col xs={24} sm={12}>
+                  {fieldLabel('排程缓冲天数')}
+                  <InputNumber
+                    min={0}
+                    max={365}
+                    style={{ width: '100%' }}
+                    placeholder="0 表示仅用物料来源提前期"
+                    value={params.schedule_buffer_days ?? 0}
+                    onChange={v => handleChange('schedule_buffer_days', v === null ? 0 : v)}
+                  />
+                </Col>
+              </Row>
+            </div>
           </div>
-        )}
-      </Panel>
-    </Collapse>
+        </Col>
+        <Col xs={24} md={12}>
+          <div style={sectionBox}>
+            <Typography.Title level={5} style={{ marginTop: 0, marginBottom: token.marginSM }}>
+              仓库与 BOM
+            </Typography.Title>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: token.marginSM }}>
+              <div>
+                {fieldLabel('参与计算的仓库')}
+                <Select
+                  mode="multiple"
+                  allowClear
+                  placeholder="默认已选全部普通仓，可增选其他仓"
+                  style={{ width: '100%' }}
+                  options={warehouseOptions}
+                  value={whValue}
+                  onChange={ids => handleChange('warehouse_ids', ids)}
+                />
+              </div>
+              {bomMultiVersionAllowed && materials.length === 0 && (
+                <div>
+                  {fieldLabel('全局 BOM 版本')}
+                  <Input
+                    placeholder="留空使用各物料默认版本"
+                    value={params.bom_version ?? ''}
+                    onChange={e => handleChange('bom_version', e.target.value || undefined)}
+                    allowClear
+                  />
+                </div>
+              )}
+            </div>
+            {bomByMaterialTable}
+          </div>
+        </Col>
+      </Row>
+    </div>
   )
 }
 
 const DemandComputationPage: React.FC = () => {
+  const { token } = theme.useToken()
   const { message: messageApi, modal: modalApi } = App.useApp()
   const queryClient = useQueryClient()
   const location = useLocation()
@@ -260,8 +587,33 @@ const DemandComputationPage: React.FC = () => {
     enabled: !hasPageMetricConfig,
   })
 
+  const { data: warehouseRows = [] } = useQuery({
+    queryKey: ['warehouses', 'mrp-demand-computation'],
+    queryFn: async () => {
+      const r = await warehouseApi.list({ limit: 500, isActive: true })
+      return r?.items ?? []
+    },
+  })
+  const normalWarehouseIds = React.useMemo(
+    () =>
+      warehouseRows
+        .filter((w: any) => (w.warehouseType || w.warehouse_type) === 'normal')
+        .map((w: any) => Number(w.id))
+        .filter((id: number) => !Number.isNaN(id)),
+    [warehouseRows],
+  )
+  const warehouseSelectOptions = React.useMemo(
+    () =>
+      warehouseRows.map((w: any) => ({
+        value: Number(w.id),
+        label: `${w.code || ''} ${w.name || ''}`.trim() || String(w.id),
+      })),
+    [warehouseRows],
+  )
+
   // Modal 相关状态（新建计算）
   const [modalVisible, setModalVisible] = useState(false)
+  const [createSubmitting, setCreateSubmitting] = useState(false)
   const [selectedDemandIds, setSelectedDemandIds] = useState<number[]>([])
 
   // 执行计算 Modal 相关状态
@@ -277,6 +629,7 @@ const DemandComputationPage: React.FC = () => {
     computation_type: string
     item_count: number
     items: Array<{
+      material_id?: number
       material_code: string
       material_name: string
       material_unit: string
@@ -286,8 +639,12 @@ const DemandComputationPage: React.FC = () => {
       suggested_work_order_quantity: number
       suggested_purchase_order_quantity: number
       material_source_type?: string
+      detail_results?: Record<string, unknown>
     }>
   } | null>(null)
+  /** 预览表格分页（受控，否则固定 pageSize 会导致切换每页条数无效） */
+  const [previewTablePage, setPreviewTablePage] = useState(1)
+  const [previewTablePageSize, setPreviewTablePageSize] = useState(10)
 
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false)
@@ -301,6 +658,11 @@ const DemandComputationPage: React.FC = () => {
   const [dynamicMonitorLoading, setDynamicMonitorLoading] = useState(false)
   const [pushRecordsLoading, setPushRecordsLoading] = useState(false)
   const [detailTabKey, setDetailTabKey] = useState<string>('detail')
+
+  const computationTracking = useDocumentTracking(
+    drawerVisible && detailTabKey === 'detail' && currentComputation?.id != null ? 'demand_computation' : undefined,
+    drawerVisible && detailTabKey === 'detail' ? currentComputation?.id ?? undefined : undefined
+  )
 
   // 物料来源信息状态
   const [validationResults, setValidationResults] = useState<any>(null)
@@ -455,21 +817,20 @@ const DemandComputationPage: React.FC = () => {
         const data = await getDemandComputation(id, true)
         setCurrentComputation(data)
 
-        // 获取物料来源信息
-        try {
-          await getMaterialSources(id)
-        } catch (error) {
-          console.error('获取物料来源信息失败:', error)
-        }
-
-        // 获取验证结果
-        try {
-          const validation = await validateMaterialSources(id)
-          setValidationResults(validation)
-        } catch (error) {
-          console.error('获取验证结果失败:', error)
-          setValidationResults(null)
-        }
+        await Promise.all([
+          prefetchMaterialsForUnitSelect((data.items || []).map((i) => i.material_id)),
+          getMaterialSources(id).catch((error) => {
+            console.error('获取物料来源信息失败:', error)
+          }),
+          validateMaterialSources(id)
+            .then((validation) => {
+              setValidationResults(validation)
+            })
+            .catch((error) => {
+              console.error('获取验证结果失败:', error)
+              setValidationResults(null)
+            }),
+        ])
 
         setDrawerVisible(true)
       } catch (error: any) {
@@ -484,14 +845,15 @@ const DemandComputationPage: React.FC = () => {
   const handleExecute = async (record: DemandComputation) => {
     setExecuteRecord(record)
     const defaults = {
-      include_safety_stock: true,
-      include_in_transit: false,
-      include_reserved: false,
-      include_reorder_point: false,
+      ...PARAM_DEFAULTS,
       bom_version: undefined,
       material_bom_versions: {} as Record<number, string>,
     }
-    setExecuteParams({ ...defaults, ...(record.computation_params || {}) })
+    const execMerged: Record<string, any> = { ...defaults, ...(record.computation_params || {}) }
+    if (execMerged.mrp_suggestion_basis === 'gross') {
+      Object.assign(execMerged, NETTING_WHEN_GROSS)
+    }
+    setExecuteParams(execMerged)
     setExecuteModalVisible(true)
 
     // 获取需求明细中的物料列表（用于按物料指定 BOM 版本）
@@ -586,7 +948,12 @@ const DemandComputationPage: React.FC = () => {
     try {
       const params = getFilteredExecuteParams()
       const preview = await previewExecuteDemandComputation(executeRecord.id, params)
+      await prefetchMaterialsForUnitSelect(preview.items.map((i) => i.material_id))
+      setPreviewTablePage(1)
+      setPreviewTablePageSize(10)
       setPreviewData(preview)
+      // 先关参数弹窗再开预览，避免双 Modal 叠层时 z-index 竞态导致预览被挡在后面
+      setExecuteModalVisible(false)
       setPreviewModalVisible(true)
     } catch (error: any) {
       messageApi.error(error?.response?.data?.detail || '计算预览失败')
@@ -607,6 +974,8 @@ const DemandComputationPage: React.FC = () => {
       messageApi.success('计算执行成功')
       setPreviewModalVisible(false)
       setPreviewData(null)
+      setPreviewTablePage(1)
+      setPreviewTablePageSize(10)
       setExecuteModalVisible(false)
       setExecuteRecord(null)
       invalidateStatistics(); actionRef.current?.reload()
@@ -699,15 +1068,57 @@ const DemandComputationPage: React.FC = () => {
     {
       title: '计算编号',
       dataIndex: 'computation_code',
-      width: 150,
+      width: 168,
       fixed: 'left',
       hideInSearch: false,
+      render: (_: unknown, record: DemandComputation) => (
+        <Space size={4}>
+          <span>{record.computation_code ?? '-'}</span>
+          {record.computation_code ? (
+            <Tooltip title="复制">
+              <Button
+                type="link"
+                size="small"
+                icon={<CopyOutlined style={{ fontSize: 12 }} />}
+                onClick={e => {
+                  e.stopPropagation()
+                  void navigator.clipboard.writeText(record.computation_code!).then(
+                    () => messageApi.success('已复制'),
+                    () => messageApi.error('复制失败')
+                  )
+                }}
+              />
+            </Tooltip>
+          ) : null}
+        </Space>
+      ),
     },
     {
       title: '需求编号',
       dataIndex: 'demand_code',
-      width: 150,
+      width: 168,
       hideInSearch: false,
+      render: (_: unknown, record: DemandComputation) => (
+        <Space size={4}>
+          <span>{record.demand_code ?? '-'}</span>
+          {record.demand_code ? (
+            <Tooltip title="复制">
+              <Button
+                type="link"
+                size="small"
+                icon={<CopyOutlined style={{ fontSize: 12 }} />}
+                onClick={e => {
+                  e.stopPropagation()
+                  void navigator.clipboard.writeText(record.demand_code!).then(
+                    () => messageApi.success('已复制'),
+                    () => messageApi.error('复制失败')
+                  )
+                }}
+              />
+            </Tooltip>
+          ) : null}
+        </Space>
+      ),
     },
     {
       title: '物料概看',
@@ -754,24 +1165,6 @@ const DemandComputationPage: React.FC = () => {
       ),
     },
     {
-      title: '生命周期',
-      dataIndex: 'lifecycle',
-      width: 100,
-      valueType: 'select',
-      valueEnum: {
-        进行中: { text: '进行中' },
-        计算中: { text: '计算中' },
-        完成: { text: '完成' },
-        失败: { text: '失败' },
-      },
-      hideInSearch: false,
-      render: (_, record) => {
-        const lifecycle = getDemandComputationLifecycle(record)
-        const stageName = lifecycle.stageName ?? record.computation_status ?? '进行中'
-        return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>
-      },
-    },
-    {
       title: '业务模式',
       dataIndex: 'business_mode',
       width: 100,
@@ -804,39 +1197,79 @@ const DemandComputationPage: React.FC = () => {
       render: (_, record) => formatDateTimeBySiteSetting(record.computation_end_time),
     },
     {
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      width: 132,
+      fixed: 'right',
+      align: 'center',
+      hideInSearch: false,
+      valueType: 'select',
+      valueEnum: {
+        进行中: { text: '进行中' },
+        计算中: { text: '计算中' },
+        完成: { text: '完成' },
+        失败: { text: '失败' },
+      },
+      fieldProps: { allowClear: true },
+      render: (_, record) => {
+        const lifecycle = getDemandComputationLifecycle(record)
+        return (
+          <span style={{ display: 'inline-flex', justifyContent: 'center' }}>
+            <UniLifecycle
+              percent={lifecycle.percent}
+              stageName={lifecycle.stageName}
+              status={lifecycle.status}
+              subStages={lifecycle.subStages}
+              showLabel
+              size="small"
+              showCircleTooltip={false}
+            />
+          </span>
+        )
+      },
+    },
+    {
       title: '操作',
       valueType: 'option',
-      width: 320,
+      width: 200,
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) => {
         const canExecute = record.computation_status === '进行中'
         const canRecompute =
           record.computation_status === '完成' || record.computation_status === '失败'
-        return (
-          <Space size={4} wrap>
-            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail([record.id!])}>
-              详情
+        const parts: React.ReactNode[] = [
+          <Button key="d" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail([record.id!])}>
+            详情
+          </Button>,
+        ]
+        if (canExecute) {
+          parts.push(
+            <Button key="ex" type="link" size="small" icon={<PlayCircleOutlined />} onClick={() => handleExecute(record)}>
+              执行计算
             </Button>
-            {canExecute && (
-              <Button type="link" size="small" icon={<PlayCircleOutlined />} onClick={() => handleExecute(record)}>
-                执行计算
-              </Button>
-            )}
-            {canRecompute && (
-              <Button type="link" size="small" icon={<ReloadOutlined />} onClick={() => handleRecompute(record)}>
-                重新计算
-              </Button>
-            )}
-            {record.computation_status === '完成' && (
-              <Button type="link" size="small" icon={<ArrowDownOutlined />} onClick={() => handleOpenPushPanel(record)}>
-                下推
-              </Button>
-            )}
-            <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
-              删除
+          )
+        }
+        if (canRecompute) {
+          parts.push(
+            <Button key="rc" type="link" size="small" icon={<ReloadOutlined />} onClick={() => handleRecompute(record)}>
+              重新计算
             </Button>
-          </Space>
+          )
+        }
+        if (record.computation_status === '完成') {
+          parts.push(
+            <Button key="pu" type="link" size="small" icon={<ArrowDownOutlined />} onClick={() => handleOpenPushPanel(record)}>
+              下推
+            </Button>
+          )
+        }
+        parts.push(
+          <Button key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
+            删除
+          </Button>
         )
+        return renderDemandComputationRowActions(parts, `dc-${record.id ?? 'row'}`)
       },
     },
   ]
@@ -958,23 +1391,31 @@ const DemandComputationPage: React.FC = () => {
         showCreateButton={true}
         createButtonText="新建需求计算"
         onCreate={handleCreate}
+        toolBarActionsAfterDelete={[<MrpParametersCustomerGuideTrigger key="mrp-params-guide" size="small" />]}
       />
 
-      {/* 新建计算Modal */}
-      <Modal
-        open={modalVisible}
-        onCancel={() => setModalVisible(false)}
+      {/* 新建计算：FormModalTemplate（UI_Standard 新建/编辑 Modal） */}
+      <FormModalTemplate
         title="新建需求计算"
-        width={MODAL_CONFIG.STANDARD_WIDTH}
-        onOk={async () => {
+        open={modalVisible}
+        onClose={() => setModalVisible(false)}
+        width={MODAL_CONFIG.LARGE_WIDTH}
+        loading={createSubmitting}
+        formRef={formRef}
+        initialValues={{
+          demand_ids: [],
+          computation_params: {
+            ...PARAM_DEFAULTS,
+            material_bom_versions: {},
+          },
+        }}
+        onFinish={async (values: any) => {
+          if (!selectedDemandIds || selectedDemandIds.length === 0) {
+            messageApi.error('请至少选择一个需求')
+            return
+          }
+          setCreateSubmitting(true)
           try {
-            const values = await formRef.current?.validateFields()
-            if (!selectedDemandIds || selectedDemandIds.length === 0) {
-              messageApi.error('请至少选择一个需求')
-              return
-            }
-
-            // 过滤 material_bom_versions 中的空值
             const params = values.computation_params || {}
             const materialBomVersions = params.material_bom_versions || {}
             const filteredMaterialBomVersions = Object.fromEntries(
@@ -986,69 +1427,83 @@ const DemandComputationPage: React.FC = () => {
             } else {
               delete computationParams.material_bom_versions
             }
-            // 有按物料指定时，不传 bom_version，留空物料自动使用该物料 BOM 默认版本
             if (createModalMaterials.length > 0) {
               delete computationParams.bom_version
             }
-
-            // 多需求时使用 demand_ids，单需求时使用 demand_id（向后兼容）
             const createData: any = {
               computation_type: 'MRP',
               computation_params: computationParams,
               notes: values.notes,
             }
-
             if (selectedDemandIds.length === 1) {
               createData.demand_id = selectedDemandIds[0]
             } else {
               createData.demand_ids = selectedDemandIds
             }
-
             await createDemandComputation(createData)
-
             messageApi.success(`创建成功，已合并 ${selectedDemandIds.length} 个需求`)
             setModalVisible(false)
             invalidateStatistics(); actionRef.current?.reload()
           } catch (error: any) {
             messageApi.error(error?.response?.data?.detail || '创建失败')
+          } finally {
+            setCreateSubmitting(false)
           }
         }}
       >
-        <ProForm formRef={formRef} submitter={false} layout="vertical">
-          <ProFormSelect
-            name="demand_ids"
-            label="选择需求（可多选）"
-            mode="multiple"
-            options={demandList.map(d => ({
-              label: `${d.demand_code} - ${d.demand_name || ''} (${getDemandBusinessModeLabel(d.business_mode)})`,
-              value: d.id,
-            }))}
-            fieldProps={{
-              onChange: (value: number[]) => setSelectedDemandIds(value),
-              placeholder: '支持多选需求合并计算',
-            }}
-            rules={[{ required: true, message: '请至少选择一个需求' }]}
-            tooltip="多需求合并时，相同物料的需求数量会自动汇总；含 MTO 时计算头为 MTO，否则含 ATO 时为 ATO，否则为 MTS"
+        <ProFormSelect
+          name="demand_ids"
+          label="选择需求（可多选）"
+          mode="multiple"
+          options={demandList.map(d => ({
+            label: `${d.demand_code} - ${d.demand_name || ''} (${getDemandBusinessModeLabel(d.business_mode)})`,
+            value: d.id,
+          }))}
+          fieldProps={{
+            onChange: (value: number[]) => setSelectedDemandIds(value),
+            placeholder: '支持多选需求合并计算',
+          }}
+          rules={[{ required: true, message: '请至少选择一个需求' }]}
+          tooltip="多需求合并时，相同物料的需求数量会自动汇总；含 MTO 时计算头为 MTO，否则含 ATO 时为 ATO，否则为 MTS"
+        />
+        <ProForm.Item
+          name="computation_params"
+          label={
+            <Space align="center" wrap size={8}>
+              <span>计算参数</span>
+              <ProFormDependency name={['computation_params']}>
+                {({ computation_params: cp }) => {
+                  const cur = cp || {}
+                  const segVal = cur.mrp_suggestion_basis === 'gross' ? 'gross' : 'net'
+                  return (
+                    <ThemedSegmented
+                      size="small"
+                      options={MRP_SUGGESTION_SEGMENTED_OPTIONS}
+                      value={segVal}
+                      onChange={val =>
+                        formRef.current?.setFieldsValue({
+                          computation_params: mergeComputationParamsForSuggestionBasis(
+                            cur,
+                            val as 'net' | 'gross'
+                          ),
+                        })
+                      }
+                    />
+                  )
+                }}
+              </ProFormDependency>
+            </Space>
+          }
+        >
+          <InventoryParamsForm
+            bomMultiVersionAllowed={bomMultiVersionAllowed}
+            materials={createModalMaterials}
+            normalWarehouseIds={normalWarehouseIds}
+            warehouseOptions={warehouseSelectOptions}
           />
-          <ProForm.Item
-            name="computation_params"
-            label="计算参数"
-            initialValue={{
-              include_safety_stock: true,
-              include_in_transit: false,
-              include_reserved: false,
-              include_reorder_point: false,
-              material_bom_versions: {},
-            }}
-          >
-            <InventoryParamsForm
-              bomMultiVersionAllowed={bomMultiVersionAllowed}
-              materials={createModalMaterials}
-            />
-          </ProForm.Item>
-          <ProFormTextArea name="notes" label="备注" placeholder="请输入备注" />
-        </ProForm>
-      </Modal>
+        </ProForm.Item>
+        <ProFormTextArea name="notes" label="备注" placeholder="请输入备注" />
+      </FormModalTemplate>
 
       {/* 单一下推面板 Modal */}
       <Modal
@@ -1135,23 +1590,35 @@ const DemandComputationPage: React.FC = () => {
       {/* 执行计算 - 计算参数 Modal */}
       <Modal
         open={executeModalVisible}
+        destroyOnClose
         onCancel={() => {
           setExecuteModalVisible(false)
           setExecuteRecord(null)
         }}
-        title="计算参数 - 执行计算"
-        width={MODAL_CONFIG.SMALL_WIDTH}
+        title="执行计算"
+        width={MODAL_CONFIG.LARGE_WIDTH}
         okText="执行计算"
         confirmLoading={executeLoading}
         onOk={handleExecuteSubmit}
+        styles={{
+          body: {
+            maxHeight: MODAL_CONFIG.BODY_MAX_HEIGHT,
+            overflowY: 'auto',
+            paddingTop: token.paddingMD,
+            paddingBottom: token.paddingSM,
+          },
+        }}
       >
         {executeRecord && (
-          <>
-            <div style={{ marginBottom: 16 }}>
-              <h4 style={{ marginBottom: 8 }}>只读信息</h4>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: token.marginMD }}>
+            <div>
+              <Typography.Text type="secondary" style={{ display: 'block', marginBottom: token.marginSM, fontSize: token.fontSizeSM }}>
+                确认执行前请核对关联需求与计算编号。
+              </Typography.Text>
               <ProDescriptions<DemandComputation>
                 column={2}
                 size="small"
+                bordered
                 dataSource={executeRecord}
                 columns={[
                   { title: '计算编号', dataIndex: 'computation_code' },
@@ -1169,28 +1636,64 @@ const DemandComputationPage: React.FC = () => {
                 ]}
               />
             </div>
+
             <div>
-              <h4 style={{ marginBottom: 8 }}>可临时修改的参数</h4>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: token.marginSM,
+                  marginBottom: token.marginXXS,
+                }}
+              >
+                <Typography.Title level={5} style={{ margin: 0 }}>
+                  计算参数
+                </Typography.Title>
+                <ThemedSegmented
+                  size="small"
+                  options={MRP_SUGGESTION_SEGMENTED_OPTIONS}
+                  value={executeParams.mrp_suggestion_basis === 'gross' ? 'gross' : 'net'}
+                  onChange={val =>
+                    setExecuteParams(p => mergeComputationParamsForSuggestionBasis(p, val as 'net' | 'gross'))
+                  }
+                />
+              </div>
+              <Typography.Paragraph type="secondary" style={{ marginBottom: token.marginMD, fontSize: token.fontSizeSM }}>
+                以下设置仅作用于本次执行，不会写回需求计算单据的已保存参数。
+              </Typography.Paragraph>
               <InventoryParamsForm
                 value={executeParams}
                 onChange={setExecuteParams}
                 bomMultiVersionAllowed={bomMultiVersionAllowed}
                 materials={executeModalMaterials}
+                normalWarehouseIds={normalWarehouseIds}
+                warehouseOptions={warehouseSelectOptions}
               />
             </div>
-          </>
+          </div>
         )}
       </Modal>
 
       {/* 计算结果预览 Modal - 二次确认 */}
       <Modal
         open={previewModalVisible}
+        zIndex={token.zIndexPopupBase + 100}
         onCancel={() => {
           setPreviewModalVisible(false)
           setPreviewData(null)
+          setPreviewTablePage(1)
+          setPreviewTablePageSize(10)
+          setExecuteModalVisible(true)
         }}
         title="计算结果预览 - 请确认"
-        width={MODAL_CONFIG.LARGE_WIDTH}
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+        styles={{
+          container: {
+            width: MODAL_CONFIG.EXTRA_LARGE_WIDTH,
+            maxWidth: 'calc(100vw - 32px)',
+          },
+        }}
         okText="确认执行"
         cancelText="取消"
         confirmLoading={executeLoading}
@@ -1205,11 +1708,50 @@ const DemandComputationPage: React.FC = () => {
               size="small"
               dataSource={previewData.items}
               rowKey={(r, i) => `${r.material_code}-${i}`}
-              pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (t) => `共 ${t} 条` }}
+              pagination={{
+                current: previewTablePage,
+                pageSize: previewTablePageSize,
+                showSizeChanger: true,
+                pageSizeOptions: ['10', '20', '50', '100'],
+                showTotal: (t) => `共 ${t} 条`,
+                onChange: (page, size) => {
+                  setPreviewTablePage(page)
+                  if (size != null) setPreviewTablePageSize(size)
+                },
+                onShowSizeChange: (_page, size) => {
+                  setPreviewTablePage(1)
+                  setPreviewTablePageSize(size)
+                },
+              }}
               columns={[
                 { title: '物料编号', dataIndex: 'material_code', width: 120 },
                 { title: '物料名称', dataIndex: 'material_name', width: 150 },
-                { title: '单位', dataIndex: 'material_unit', width: 60 },
+                {
+                  title: '单位',
+                  dataIndex: 'material_unit',
+                  width: 100,
+                  render: (_: unknown, r) => (
+                    <MaterialUnitSelect
+                      materialId={r.material_id}
+                      value={r.material_unit}
+                      size="small"
+                      disabled
+                      noStyle
+                    />
+                  ),
+                },
+                {
+                  title: '需求时间',
+                  dataIndex: 'delivery_date',
+                  width: 110,
+                  render: (v: string | null | undefined) => formatDateBySiteSetting(v),
+                },
+                {
+                  title: '计划时间',
+                  dataIndex: 'planned_date',
+                  width: 110,
+                  render: (v: string | null | undefined) => formatDateBySiteSetting(v),
+                },
                 {
                   title: '需求数量',
                   dataIndex: 'required_quantity',
@@ -1220,7 +1762,9 @@ const DemandComputationPage: React.FC = () => {
                   title: '可用库存',
                   dataIndex: 'available_inventory',
                   width: 90,
-                  render: (v: number) => (v ? Number(v).toLocaleString() : '-'),
+                  align: 'right' as const,
+                  render: (v: number, r) =>
+                    renderAvailableInventoryCell(v, r.detail_results as Record<string, unknown> | undefined),
                 },
                 {
                   title: '净需求',
@@ -1318,96 +1862,239 @@ const DemandComputationPage: React.FC = () => {
                 label: '详情',
                 children: (
                   <>
-                    <ProDescriptions<DemandComputation>
-                      dataSource={currentComputation}
-                      columns={[
-                        { title: '计算编号', dataIndex: 'computation_code' },
-                        { title: '需求编号', dataIndex: 'demand_code' },
-                        {
-                          title: '计算类型',
-                          dataIndex: 'computation_type',
-                          render: () => '物料需求计划 (MRP)',
-                        },
-                        {
-                          title: '业务模式',
-                          dataIndex: 'business_mode',
-                          render: (t: any) => getDemandBusinessModeLabel(t),
-                        },
-                        { title: '计算状态', dataIndex: 'computation_status' },
-                        { title: '开始时间', dataIndex: 'computation_start_time', valueType: 'dateTime' },
-                        { title: '结束时间', dataIndex: 'computation_end_time', valueType: 'dateTime' },
-                      ]}
-                    />
+                    <DetailDrawerSection title="基本信息">
+                      <Descriptions
+                        column={3}
+                        size="small"
+                        items={[
+                          {
+                            key: 'code',
+                            label: '计算编号',
+                            children: (
+                              <Space size={4}>
+                                <span>{currentComputation.computation_code ?? '—'}</span>
+                                {currentComputation.computation_code ? (
+                                  <Tooltip title="复制">
+                                    <Button
+                                      type="link"
+                                      size="small"
+                                      icon={<CopyOutlined style={{ fontSize: 12 }} />}
+                                      onClick={() =>
+                                        void navigator.clipboard
+                                          .writeText(currentComputation.computation_code!)
+                                          .then(() => messageApi.success('已复制'), () => messageApi.error('复制失败'))
+                                      }
+                                    />
+                                  </Tooltip>
+                                ) : null}
+                              </Space>
+                            ),
+                          },
+                          {
+                            key: 'demand',
+                            label: '需求编号',
+                            children: (
+                              <Space size={4}>
+                                <span>{currentComputation.demand_code ?? '—'}</span>
+                                {currentComputation.demand_code ? (
+                                  <Tooltip title="复制">
+                                    <Button
+                                      type="link"
+                                      size="small"
+                                      icon={<CopyOutlined style={{ fontSize: 12 }} />}
+                                      onClick={() =>
+                                        void navigator.clipboard
+                                          .writeText(currentComputation.demand_code!)
+                                          .then(() => messageApi.success('已复制'), () => messageApi.error('复制失败'))
+                                      }
+                                    />
+                                  </Tooltip>
+                                ) : null}
+                              </Space>
+                            ),
+                          },
+                          {
+                            key: 'ctype',
+                            label: '计算类型',
+                            children: '物料需求计划 (MRP)',
+                          },
+                          {
+                            key: 'bm',
+                            label: '业务模式',
+                            children: getDemandBusinessModeLabel(currentComputation.business_mode),
+                          },
+                          {
+                            key: 'dtype',
+                            label: '需求类型',
+                            children: (
+                              <Tag {...getDemandTypeTagProps(currentComputation.demand_type)}>
+                                {getDemandTypeLabel(currentComputation.demand_type)}
+                              </Tag>
+                            ),
+                          },
+                          {
+                            key: 'st',
+                            label: '计算状态',
+                            children: (
+                              <Tag
+                                {...getDocumentLifecycleStageTagProps(
+                                  currentComputation.computation_status ?? '进行中'
+                                )}
+                              >
+                                {currentComputation.computation_status ?? '—'}
+                              </Tag>
+                            ),
+                          },
+                          {
+                            key: 't1',
+                            label: '开始时间',
+                            children: formatDateTimeBySiteSetting(currentComputation.computation_start_time) || '—',
+                          },
+                          {
+                            key: 't2',
+                            label: '结束时间',
+                            children: formatDateTimeBySiteSetting(currentComputation.computation_end_time) || '—',
+                          },
+                          ...(validationResults
+                            ? [
+                                {
+                                  key: 'v0',
+                                  label: '来源验证',
+                                  children: (
+                                    <Tag color={validationResults.all_passed ? 'success' : 'error'}>
+                                      {validationResults.all_passed ? '全部通过' : '存在失败'}
+                                    </Tag>
+                                  ),
+                                },
+                                {
+                                  key: 'v1',
+                                  label: '验证通过/失败/总数',
+                                  children: `${validationResults.passed_count ?? 0} / ${validationResults.failed_count ?? 0} / ${validationResults.total_count ?? 0}`,
+                                },
+                              ]
+                            : []),
+                          {
+                            key: 'notes',
+                            label: '备注',
+                            span: 3,
+                            children: currentComputation.notes?.trim() ? currentComputation.notes : '—',
+                          },
+                        ]}
+                      />
+                      {validationResults && validationResults.failed_count > 0 && (
+                        <div style={{ marginTop: 12 }}>
+                          <Typography.Text strong type="danger">
+                            验证失败的物料
+                          </Typography.Text>
+                          <ul style={{ marginTop: 8, marginBottom: 0, paddingLeft: 20 }}>
+                            {validationResults.validation_results
+                              .filter((r: any) => !r.validation_passed)
+                              .map((r: any, index: number) => (
+                                <li key={index} style={{ marginBottom: 4 }}>
+                                  <strong>{r.material_code}</strong> ({r.material_name}): {r.errors.join(', ')}
+                                </li>
+                              ))}
+                          </ul>
+                        </div>
+                      )}
+                    </DetailDrawerSection>
 
-                    {(() => {
-                      const lifecycle = getDemandComputationLifecycle(currentComputation)
-                      const mainStages = lifecycle.mainStages ?? []
-                      if (mainStages.length === 0) return null
-                      return (
-                        <DetailDrawerSection title="生命周期">
-                          <UniLifecycleStepper
-                            steps={mainStages}
-                            status={lifecycle.status}
-                            showLabels
-                            nextStepSuggestions={lifecycle.nextStepSuggestions}
-                          />
-                        </DetailDrawerSection>
-                      )
-                    })()}
+                    <DetailDrawerSection title="生命周期">
+                      {(() => {
+                        const lifecycle = getDemandComputationLifecycle(currentComputation)
+                        const mainStages = lifecycle.mainStages ?? []
+                        return (
+                          <>
+                            {mainStages.length > 0 ? (
+                              <UniLifecycleStepper
+                                steps={mainStages}
+                                status={lifecycle.status}
+                                showLabels
+                                nextStepSuggestions={lifecycle.nextStepSuggestions}
+                              />
+                            ) : (
+                              <Typography.Text type="secondary">暂无阶段节点数据</Typography.Text>
+                            )}
+                            <Divider style={{ margin: '16px 0' }} />
+                            <Typography.Title level={5} style={{ margin: '0 0 8px' }}>
+                              上下游关联
+                            </Typography.Title>
+                            {computationTracking.loading ? (
+                              <Spin />
+                            ) : computationTracking.error ? (
+                              <Typography.Text type="danger">{computationTracking.error}</Typography.Text>
+                            ) : computationTracking.data ? (
+                              <DocumentTrackingRelationsBody data={computationTracking.data} />
+                            ) : (
+                              <Typography.Text type="secondary">暂无关联数据</Typography.Text>
+                            )}
+                          </>
+                        )
+                      })()}
+                    </DetailDrawerSection>
 
-                    {validationResults && (
-                      <div style={{ marginTop: 24, marginBottom: 24 }}>
-                        <ProDescriptions
-                          title="物料来源验证结果"
-                          size="small"
-                          column={3}
-                          dataSource={{
-                            all_passed: validationResults.all_passed ? '全部通过' : '存在失败',
-                            passed_count: validationResults.passed_count,
-                            failed_count: validationResults.failed_count,
-                            total_count: validationResults.total_count,
-                          }}
-                          columns={[
+                    <DetailDrawerSection title="明细信息">
+                      {/*
+                        横滚仅在外层；内层表体覆盖 global.less 的 overflow，避免只读明细双滚动（与 quotation-detail-drawer-items 同思路）。
+                      */}
+                      <style>{`
+                        .demand-computation-detail-items .ant-table-wrapper .ant-table-body,
+                        .demand-computation-detail-items .ant-table-wrapper .ant-table-content {
+                          overflow: visible !important;
+                        }
+                      `}</style>
+                      {currentComputation.items && currentComputation.items.length > 0 ? (
+                        <div
+                          className="demand-computation-detail-items"
+                          style={{ width: '100%', maxWidth: '100%', overflowX: 'auto', overflowY: 'hidden' }}
+                        >
+                          <Table<DemandComputationItem>
+                            size="small"
+                            dataSource={currentComputation.items}
+                            rowKey="id"
+                            tableLayout="fixed"
+                            style={{ minWidth: DEMAND_COMPUTATION_DETAIL_ITEMS_MIN_WIDTH }}
+                            pagination={false}
+                            columns={[
                             {
-                              title: '验证状态',
-                              dataIndex: 'all_passed',
-                              render: (text: any) => (
-                                <Tag color={text === '全部通过' ? 'success' : 'error'}>{text}</Tag>
+                              title: '物料编号',
+                              dataIndex: 'material_code',
+                              width: 132,
+                              render: (code: string) => (
+                                <Space size={4}>
+                                  <span>{code ?? '—'}</span>
+                                  {code ? (
+                                    <Tooltip title="复制">
+                                      <Button
+                                        type="link"
+                                        size="small"
+                                        icon={<CopyOutlined style={{ fontSize: 12 }} />}
+                                        onClick={() =>
+                                          void navigator.clipboard
+                                            .writeText(code)
+                                            .then(() => messageApi.success('已复制'), () => messageApi.error('复制失败'))
+                                        }
+                                      />
+                                    </Tooltip>
+                                  ) : null}
+                                </Space>
                               ),
                             },
-                            { title: '通过数量', dataIndex: 'passed_count' },
-                            { title: '失败数量', dataIndex: 'failed_count' },
-                            { title: '总数量', dataIndex: 'total_count' },
-                          ]}
-                        />
-
-                        {validationResults.failed_count > 0 && (
-                          <div style={{ marginTop: 12 }}>
-                            <p style={{ fontWeight: 'bold', color: '#ff4d4f' }}>验证失败的物料：</p>
-                            <ul style={{ marginTop: 8 }}>
-                              {validationResults.validation_results
-                                .filter((r: any) => !r.validation_passed)
-                                .map((r: any, index: number) => (
-                                  <li key={index} style={{ marginBottom: 4 }}>
-                                    <strong>{r.material_code}</strong> ({r.material_name}):{' '}
-                                    {r.errors.join(', ')}
-                                  </li>
-                                ))}
-                            </ul>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {currentComputation.items && currentComputation.items.length > 0 && (
-                      <>
-                        <h3 style={{ marginTop: 24, marginBottom: 16 }}>计算结果明细</h3>
-                        <Table<DemandComputationItem>
-                          dataSource={currentComputation.items}
-                          rowKey="id"
-                          columns={[
-                            { title: '物料编号', dataIndex: 'material_code', width: 120, fixed: 'left' },
                             { title: '物料名称', dataIndex: 'material_name', width: 150, ellipsis: true },
+                            {
+                              title: '单位',
+                              dataIndex: 'material_unit',
+                              width: 100,
+                              render: (_: unknown, record: DemandComputationItem) => (
+                                <MaterialUnitSelect
+                                  materialId={record.material_id}
+                                  value={record.material_unit}
+                                  size="small"
+                                  disabled
+                                  noStyle
+                                />
+                              ),
+                            },
                             {
                               title: '就绪状态',
                               dataIndex: 'readiness_status',
@@ -1472,7 +2159,14 @@ const DemandComputationPage: React.FC = () => {
                               },
                             },
                             { title: '需求数量', dataIndex: 'required_quantity', width: 90, align: 'right' },
-                            { title: '可用库存', dataIndex: 'available_inventory', width: 90, align: 'right' },
+                            {
+                              title: '可用库存',
+                              dataIndex: 'available_inventory',
+                              width: 90,
+                              align: 'right' as const,
+                              render: (v: number, record: DemandComputationItem) =>
+                                renderAvailableInventoryCell(v, record.detail_results as Record<string, unknown> | undefined),
+                            },
                             { title: '净需求', dataIndex: 'net_requirement', width: 90, align: 'right', render: (v) => <span style={{ fontWeight: 'bold' }}>{v}</span> },
                             {
                               title: '建议工单',
@@ -1499,14 +2193,13 @@ const DemandComputationPage: React.FC = () => {
                             {
                               title: '溯源',
                               dataIndex: 'id',
-                              width: 60,
-                              fixed: 'right',
+                              width: 72,
                               render: (_, record) => {
                                 const ids = record.detail_results?.demand_item_ids || []
                                 return (
-                                  <Button 
-                                    type="link" 
-                                    size="small" 
+                                  <Button
+                                    type="link"
+                                    size="small"
                                     disabled={!ids.length}
                                     onClick={() => {
                                       modalApi.info({
@@ -1519,32 +2212,38 @@ const DemandComputationPage: React.FC = () => {
                                                 <li key={idx}>原始需求明细 ID: {id}</li>
                                               ))}
                                             </ul>
-                                            <p style={{ color: '#999', fontSize: 12 }}>提示：完整溯源功能开发中，将支持点击跳转至对应订单。</p>
+                                            <p style={{ color: '#999', fontSize: 12 }}>
+                                              提示：完整溯源功能开发中，将支持点击跳转至对应订单。
+                                            </p>
                                           </div>
-                                        )
+                                        ),
                                       })
                                     }}
                                   >
                                     溯源
                                   </Button>
                                 )
-                              }
-                            }
+                              },
+                            },
                           ]}
-                          pagination={false}
-                          scroll={{ x: 1200 }}
-                        />
-                      </>
-                    )}
+                          />
+                        </div>
+                      ) : (
+                        <Empty description="暂无计算明细" />
+                      )}
+                    </DetailDrawerSection>
 
-                    {currentComputation?.id && (
-                      <DetailDrawerSection title="操作记录" style={{ marginTop: 24 }}>
-                        <DocumentTrackingPanel
-                          documentType="demand_computation"
-                          documentId={currentComputation.id}
-                        />
-                      </DetailDrawerSection>
-                    )}
+                    <DetailDrawerSection title="操作记录">
+                      {computationTracking.loading ? (
+                        <Spin />
+                      ) : computationTracking.error ? (
+                        <Typography.Text type="danger">{computationTracking.error}</Typography.Text>
+                      ) : computationTracking.data ? (
+                        <DocumentTrackingTimelineBody data={computationTracking.data} />
+                      ) : (
+                        <Typography.Text type="secondary">暂无操作记录</Typography.Text>
+                      )}
+                    </DetailDrawerSection>
                   </>
                 ),
               },

@@ -201,15 +201,22 @@ export async function previewExecuteDemandComputation(
   computation_type: string
   item_count: number
   items: Array<{
+    material_id?: number
     material_code: string
     material_name: string
     material_unit: string
+    /** 需求时间（交期/需求日） */
+    delivery_date?: string | null
+    /** 计划时间：计划开工/请购优先（含提前期倒推），否则完成/到货日 */
+    planned_date?: string | null
     required_quantity: number
     available_inventory: number
     net_requirement: number
     suggested_work_order_quantity: number
     suggested_purchase_order_quantity: number
     material_source_type?: string
+    /** 含 inventory_breakdown / supply_calculation，供可用库存 Popover */
+    detail_results?: Record<string, unknown>
   }>
 }> {
   return apiRequest(`/apps/kuaizhizao/demand-computations/${id}/execute/preview`, {

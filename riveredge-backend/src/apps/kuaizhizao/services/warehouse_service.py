@@ -4093,6 +4093,72 @@ class OtherInboundService(AppBaseService[OtherInbound]):
         )
         return True
 
+    async def repair_deleted_other_inbound_inventory(
+        self,
+        tenant_id: int,
+        inbound_id: int,
+        updated_by: int,
+    ) -> OtherInboundResponse:
+        """
+        数据修复：其他入库单已软删除（deleted_at 有值）但仍为「已入库」时，库存曾加账未冲回。
+
+        按明细执行与「撤回确认」相同的扣减逻辑，并将头状态改为「已取消」、明细回到待入库，避免重复执行。
+        """
+        async with in_transaction():
+            inbound = await OtherInbound.get_or_none(tenant_id=tenant_id, id=inbound_id)
+            if not inbound:
+                raise NotFoundError(f"其他入库单不存在: {inbound_id}")
+            if inbound.deleted_at is None:
+                raise BusinessLogicError(
+                    "该单据未删除。若需冲减库存请先使用「撤回入库确认」；未确认入库的单据删除不会影响库存。"
+                )
+            if inbound.status != "已入库":
+                raise BusinessLogicError(
+                    f"单据状态为「{inbound.status}」，无需冲减库存（未确认入库或已执行过本修复）。"
+                )
+
+            from apps.kuaizhizao.services.inventory_service import InventoryService
+
+            inbound_obj = await OtherInbound.get(tenant_id=tenant_id, id=inbound_id)
+            wh_id = inbound_obj.warehouse_id if inbound_obj.warehouse_id else None
+            items = await OtherInboundItem.filter(tenant_id=tenant_id, inbound_id=inbound_id)
+
+            for item in items:
+                qty = Decimal(str(item.inbound_quantity or 0))
+                if qty <= 0:
+                    continue
+                await InventoryService.decrease_stock(
+                    tenant_id=tenant_id,
+                    material_id=item.material_id,
+                    quantity=qty,
+                    warehouse_id=wh_id,
+                    batch_no=item.batch_number or None,
+                    source_type="other_inbound_delete_cleanup",
+                    source_doc_id=inbound_id,
+                    source_doc_code=inbound_obj.inbound_code,
+                )
+
+            suffix = "\n[库存修复] 已对软删已入库单冲减即时库存"
+            notes = (inbound_obj.notes or "").rstrip()
+            new_notes = f"{notes}{suffix}" if notes else suffix.strip()
+
+            await OtherInbound.filter(tenant_id=tenant_id, id=inbound_id).update(
+                status="已取消",
+                receiver_id=None,
+                receiver_name=None,
+                receipt_time=None,
+                notes=new_notes,
+                updated_by=updated_by,
+            )
+            await OtherInboundItem.filter(tenant_id=tenant_id, inbound_id=inbound_id).update(
+                status="待入库",
+                receipt_time=None,
+            )
+
+            return OtherInboundResponse.model_validate(
+                await OtherInbound.get(tenant_id=tenant_id, id=inbound_id)
+            )
+
     async def confirm_inbound(
         self,
         tenant_id: int,

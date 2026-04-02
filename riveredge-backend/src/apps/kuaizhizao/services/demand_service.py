@@ -1712,6 +1712,7 @@ class DemandService(AppBaseService[Demand]):
             "include_in_transit": True,
             "include_reserved": True,
             "include_reorder_point": False,
+            "mrp_suggestion_basis": "net",
             "bom_expand_level": 10,
             "consider_capacity": True,
             "consider_material_readiness": True,

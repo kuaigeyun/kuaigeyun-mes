@@ -5,6 +5,23 @@
 
 Author: Luigi Lu
 Date: 2025-01-14
+
+computation_params（MRP）中小企业常用键白名单（JSON 存取，与前端表单一致）：
+
+- 净算与库存：include_safety_stock, include_in_transit, include_reserved, include_reorder_point；
+  safety_stock / reorder_point（全局覆盖物料主数据）。
+- 建议量依据：mrp_suggestion_basis: "net" | "gross"（默认 net）。
+  net=建议工单/采购/委外量按净需求，供需净算四项按参数参与；
+  gross=建议量按毛需求（BOM 汇总），服务端强制关闭安全库存/在途/预留/再订货点对净需求的参与，与前端隐藏供需净算一致。
+- 仓库范围：warehouse_ids: int[]；缺省时后端按全部启用且 warehouse_type=normal 的仓库汇总线边库存；
+  MaterialBatch 主仓批次不按仓过滤（全量计入）。
+- 时间窗：planning_horizon: int（天），有交期的需求行交期晚于「今天+horizon」则跳过；缺省或 <=0 不裁剪。
+- BOM：bom_version, material_bom_versions；bom_expand_level: int（1–100，展开最大层级，默认 10）。
+- 建议量：apply_lot_sizing: bool（默认 true）；suggested_qty_min / suggested_qty_max / suggested_qty_multiple（全局覆盖）；
+  物料级规则：defaults.purchase（Buy）与 defaults.production（Make/Outsource）中的 min/max/multiple 等别名键。
+- 排程缓冲：schedule_buffer_days: int（≥0，默认 0），在物料来源提前期基础上，将计划开工/请购日再整体向前多留若干天（中小企业应对波动）。
+- 4M（仅占位，供排产扩展）：consider_capacity, consider_material_readiness,
+  consider_equipment_availability, consider_mold_tool_availability；当前不参与净算与建议量，仅保留配置键。
 """
 
 from typing import List, Optional, Dict, Any
@@ -66,7 +83,10 @@ class DemandComputationBase(BaseModel):
     demand_id: Optional[int] = Field(None, description="需求ID（单需求时使用）")
     demand_ids: Optional[List[int]] = Field(None, description="需求ID列表（多需求合并时使用，与 demand_id 二选一）")
     computation_type: str = Field("MRP", max_length=20, description="计算类型（仅 MRP；传入 LRP 时归一为 MRP）")
-    computation_params: Dict[str, Any] = Field(..., description="计算参数（JSON格式）")
+    computation_params: Dict[str, Any] = Field(
+        ...,
+        description="计算参数 JSON；键说明见模块文档 computation_params 白名单",
+    )
     notes: Optional[str] = Field(None, description="备注")
     
     @field_validator("computation_type")

@@ -167,21 +167,88 @@ export const DocumentTrackingRelationsBody: React.FC<{
     </div>
   );
 
-  const chainNodes: React.ReactNode[] = [
-    ...up.map((r) => renderRelation(r, 'up')),
-    currentNode,
-    ...down.map((r) => renderRelation(r, 'down')),
-  ];
+  const arrow = (
+    <ArrowRightOutlined style={{ color: 'var(--ant-color-text-secondary)', flexShrink: 0 }} aria-hidden />
+  );
+
+  /** 多个下游时改为「主轴 + 并列分支」，避免误读成工单/采购单之间的串行顺序 */
+  const useBranchDownstream = down.length > 1;
+
+  if (!useBranchDownstream) {
+    const chainNodes: React.ReactNode[] = [
+      ...up.map((r) => renderRelation(r, 'up')),
+      currentNode,
+      ...down.map((r) => renderRelation(r, 'down')),
+    ];
+    return (
+      <div style={{ width: '100%', overflowX: 'auto', overflowY: 'hidden' }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap', minWidth: 'max-content' }}>
+          {chainNodes.map((node, index) => (
+            <React.Fragment key={`chain-${index}`}>
+              {index > 0 ? arrow : null}
+              {node}
+            </React.Fragment>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ width: '100%', overflowX: 'auto', overflowY: 'hidden' }}>
-      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap', minWidth: 'max-content' }}>
-        {chainNodes.map((node, index) => (
-          <React.Fragment key={`chain-${index}`}>
-            {index > 0 ? <ArrowRightOutlined style={{ color: 'var(--ant-color-text-secondary)' }} /> : null}
-            {node}
-          </React.Fragment>
-        ))}
+      {/* 上游→当前 与 下游列表同一行排在后面；窄屏时整块换行 */}
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'row',
+          flexWrap: 'wrap',
+          alignItems: 'flex-start',
+          gap: 12,
+          rowGap: 12,
+        }}
+      >
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            flexWrap: 'wrap',
+            minWidth: 'min-content',
+            flexShrink: 0,
+          }}
+        >
+          {up.map((r) => (
+            <React.Fragment key={`${r.type}-${r.id}-up`}>
+              {renderRelation(r, 'up')}
+              {arrow}
+            </React.Fragment>
+          ))}
+          {currentNode}
+        </div>
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'flex-start',
+            gap: 10,
+            minWidth: 0,
+            flex: '1 1 200px',
+            maxWidth: '100%',
+          }}
+        >
+          {/* 仅表示「由当前单下推」，下游彼此之间仍无箭头 */}
+          <span style={{ marginTop: 8, flexShrink: 0 }} aria-hidden>
+            {arrow}
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'stretch' }}>
+              {down.map((r) => (
+                <div key={`${r.type}-${r.id}-down`} style={{ display: 'flex', alignItems: 'center', maxWidth: '100%' }}>
+                  {renderRelation(r, 'down')}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

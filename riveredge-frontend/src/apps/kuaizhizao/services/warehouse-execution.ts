@@ -61,6 +61,9 @@ export const warehouseApi = {
       }),
     withdraw: async (id: string) =>
       apiRequest(`/apps/kuaizhizao/other-inbounds/${id}/withdraw`, { method: 'POST' }),
+    /** 软删且曾为已入库、库存未冲回时，按明细扣减即时库存（幂等，成功后状态变为已取消） */
+    repairInventoryAfterDelete: async (id: string) =>
+      apiRequest(`/apps/kuaizhizao/other-inbounds/${id}/repair-inventory`, { method: 'POST' }),
   },
   otherOutbound: {
     list: async (params?: any) => apiRequest('/apps/kuaizhizao/other-outbounds', { method: 'GET', params }),

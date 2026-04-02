@@ -224,7 +224,7 @@ class DocumentPushPullService:
 
         # 构建计算参数
         computation_params = push_params.get("computation_params", {}) if push_params else {}
-        computation_params.setdefault("planning_horizon", 3)
+        computation_params.setdefault("planning_horizon", 3)  # 天：仅纳入交期在此展望期内的需求行
         computation_params.setdefault("consider_capacity", False)
         
         # 创建需求计算
