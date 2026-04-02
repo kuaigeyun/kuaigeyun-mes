@@ -45,6 +45,16 @@ function isAudited(status: string | undefined): boolean {
   return s === 'AUDITED' || s === '已审核' || s === 'audited';
 }
 
+function isPushed(status: string | undefined): boolean {
+  const s = norm(status);
+  return s === '已下推' || s === 'PUSHED' || s === 'pushed';
+}
+
+function isCancelled(status: string | undefined): boolean {
+  const s = norm(status);
+  return s === '已取消' || s === 'CANCELLED' || s === 'cancelled';
+}
+
 const MAIN_STAGE_KEYS = ['draft', 'pending_review', 'audited', 'pushed'] as const;
 const MAIN_STAGE_LABELS: Record<(typeof MAIN_STAGE_KEYS)[number], string> = {
   draft: '草稿',
@@ -85,6 +95,24 @@ function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecyc
       next_step_suggestions: ['修改后重新提交审核'],
     };
   }
+  if (status === '已驳回' || status === 'REJECTED' || status === 'rejected') {
+    return {
+      current_stage_key: 'pending_review',
+      current_stage_name: '已驳回',
+      status: 'exception',
+      main_stages: buildMainStages('待审核'),
+      next_step_suggestions: ['修改后重新提交审核'],
+    };
+  }
+  if (isCancelled(status)) {
+    return {
+      current_stage_key: 'draft',
+      current_stage_name: '已取消',
+      status: 'exception',
+      main_stages: buildMainStages('草稿'),
+      next_step_suggestions: [],
+    };
+  }
   if (isDraft(status)) {
     return {
       current_stage_key: 'draft',
@@ -100,7 +128,25 @@ function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecyc
       current_stage_name: '待审核',
       status: 'normal',
       main_stages: buildMainStages('待审核'),
-      next_step_suggestions: ['审核通过', '驳回'],
+      next_step_suggestions: ['审核通过', '驳回', '撤回提交（回到草稿）'],
+    };
+  }
+  if (isPendingReview(status) && isApproved(reviewStatus)) {
+    return {
+      current_stage_key: 'audited',
+      current_stage_name: '已审核',
+      status: 'normal',
+      main_stages: buildMainStages('已审核'),
+      next_step_suggestions: ['下推需求', '撤回审核（回到待审核）'],
+    };
+  }
+  if (isPushed(status)) {
+    return {
+      current_stage_key: 'pushed',
+      current_stage_name: '已下推',
+      status: 'success',
+      main_stages: buildMainStages('已下推'),
+      next_step_suggestions: [],
     };
   }
   if (isAudited(status)) {
@@ -109,7 +155,7 @@ function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecyc
       current_stage_name: '已审核',
       status: 'normal',
       main_stages: buildMainStages('已审核'),
-      next_step_suggestions: ['下推需求计算'],
+      next_step_suggestions: ['下推需求', '撤回审核（回到待审核）'],
     };
   }
 

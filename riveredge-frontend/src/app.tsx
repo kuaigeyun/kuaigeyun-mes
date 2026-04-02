@@ -533,7 +533,7 @@ export default function App() {
   useEffect(() => {
     const unsub = useUserPreferenceStore.subscribe((state) => {
       if (state.preferences && Object.keys(state.preferences).length > 0) {
-        useThemeStore.getState().syncFromPreferences(state.preferences);
+        void useThemeStore.getState().syncFromPreferences(state.preferences);
       }
     });
     return unsub;

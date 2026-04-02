@@ -49,6 +49,8 @@ export interface DetailDrawerTemplateProps<T = any> {
   className?: string;
   /** Drawer 语义化结构的样式（如 styles.wrapper 用于百分比宽度） */
   styles?: Partial<Record<'root' | 'mask' | 'header' | 'title' | 'extra' | 'section' | 'body' | 'footer' | 'wrapper' | 'dragger' | 'close', CSSProperties>>;
+  /** 堆叠在其它 Drawer 之上时使用（如关联单据二层抽屉），默认不传 */
+  zIndex?: number;
 }
 
 /**
@@ -84,6 +86,7 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
   className,
   styles,
   children,
+  zIndex,
 }: DetailDrawerTemplateProps<T>) => {
   // Ant Design 5+ 推荐使用 size，width 已废弃
   const drawerSize = size ?? width;
@@ -99,6 +102,7 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
       className={className}
       extra={extra}
       styles={styles}
+      zIndex={zIndex}
     >
       {customContent || (columns && columns.length > 0 && (
         <Descriptions

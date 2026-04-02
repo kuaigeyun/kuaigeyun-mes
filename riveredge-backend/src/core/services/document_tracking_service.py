@@ -8,6 +8,7 @@ Author: Luigi Lu
 Date: 2026-02-20
 """
 
+from datetime import datetime
 from typing import Dict, Any, List, Optional
 
 # document_type -> (model, code_field) 用于解析 document_code，延迟导入避免循环依赖
@@ -30,6 +31,9 @@ def _get_model_registry() -> Dict[str, tuple]:
     from apps.kuaizhizao.models.production_return import ProductionReturn
     from apps.kuaizhizao.models.production_picking import ProductionPicking
     from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
+    from apps.kuaizhizao.models.sample_trial import SampleTrial
+    from apps.kuaizhizao.models.other_outbound import OtherOutbound
+    from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
     return {
         "demand": (Demand, "demand_code"),
         "sales_order": (SalesOrder, "order_code"),
@@ -49,13 +53,96 @@ def _get_model_registry() -> Dict[str, tuple]:
         "production_return": (ProductionReturn, "return_code"),
         "production_picking": (ProductionPicking, "picking_code"),
         "finished_goods_receipt": (FinishedGoodsReceipt, "receipt_code"),
+        "sample_trial": (SampleTrial, "trial_code"),
+        "other_outbound": (OtherOutbound, "outbound_code"),
+        "shipment_notice": (ShipmentNotice, "notice_code"),
     }
 
 DOCUMENT_MODEL_REGISTRY = _get_model_registry
 
+# 单据类型（API/库表 entity_type）→ 中文展示名，用于操作记录、上下游说明
+DOCUMENT_TYPE_LABEL_ZH: Dict[str, str] = {
+    "demand": "需求",
+    "sales_order": "销售订单",
+    "work_order": "工单",
+    "purchase_order": "采购订单",
+    "demand_computation": "需求计算",
+    "sales_forecast": "销售预测",
+    "production_plan": "生产计划",
+    "purchase_requisition": "采购申请",
+    "quotation": "报价单",
+    "rework_order": "返工单",
+    "purchase_receipt": "采购收货单",
+    "sales_delivery": "销售出库单",
+    "incoming_inspection": "来料检验单",
+    "process_inspection": "过程检验单",
+    "finished_goods_inspection": "成品检验单",
+    "production_return": "生产退料单",
+    "production_picking": "生产领料单",
+    "finished_goods_receipt": "成品入库单",
+    "sample_trial": "样品试用单",
+    "other_outbound": "其他出库单",
+    "shipment_notice": "发货通知单",
+}
+
+
+def _doc_type_label_zh(document_type: str) -> str:
+    if not document_type:
+        return "单据"
+    return DOCUMENT_TYPE_LABEL_ZH.get(document_type.strip(), document_type.strip())
+
 
 class DocumentTrackingService:
     """单据跟踪中心服务"""
+
+    @staticmethod
+    def _is_auto_relation(relation_mode: Optional[str], relation_desc: Optional[str]) -> bool:
+        """判断关联是否由系统自动生成。"""
+        mode = (relation_mode or "").strip().lower()
+        desc = (relation_desc or "").strip()
+        return mode in ("auto", "system") or ("自动" in desc)
+
+    async def _resolve_relation_flags(
+        self,
+        tenant_id: int,
+        relation_type: str,
+        relation_id: int,
+        relation_created_at: Optional[datetime],
+        relation_code: Optional[str] = None,
+    ) -> Dict[str, bool]:
+        """解析关联单据状态：是否删除、是否在关联后发生变更。"""
+        flags = {
+            "is_deleted": False,
+            "is_changed_after_link": False,
+        }
+        reg = DOCUMENT_MODEL_REGISTRY().get(relation_type)
+        if not reg:
+            return flags
+
+        model, code_field = reg
+        try:
+            # 不加 deleted_at 过滤，便于识别软删除状态
+            obj = await model.get_or_none(tenant_id=tenant_id, id=relation_id)
+            if not obj:
+                flags["is_deleted"] = True
+                return flags
+
+            deleted_at = getattr(obj, "deleted_at", None)
+            if deleted_at:
+                flags["is_deleted"] = True
+                return flags
+
+            if relation_created_at and getattr(obj, "updated_at", None):
+                flags["is_changed_after_link"] = obj.updated_at > relation_created_at
+
+            # 若编码发生变化，也视为下推后发生变更
+            current_code = getattr(obj, code_field, None)
+            if relation_code and current_code and str(relation_code).strip() != str(current_code).strip():
+                flags["is_changed_after_link"] = True
+        except Exception:
+            # 保底不阻断主流程
+            return flags
+        return flags
 
     async def get_document_tracking(
         self,
@@ -87,7 +174,7 @@ class DocumentTrackingService:
                 "at": doc_meta["created_at"],
                 "by": creator_name,
                 "by_id": doc_meta.get("created_by"),
-                "detail": "创建单据",
+                "detail": f"创建了{_doc_type_label_zh(document_type)}",
             })
 
         # 1. StateTransitionLog
@@ -215,17 +302,30 @@ class DocumentTrackingService:
             ).all()
 
             for rel in as_source:
+                rel_flags = await self._resolve_relation_flags(
+                    tenant_id=tenant_id,
+                    relation_type=rel.target_type,
+                    relation_id=rel.target_id,
+                    relation_created_at=rel.created_at,
+                    relation_code=rel.target_code,
+                )
                 relations["downstream"].append({
                     "type": rel.target_type,
                     "id": rel.target_id,
                     "code": rel.target_code,
                     "name": rel.target_name,
                     "mode": rel.relation_mode,
+                    "is_auto_created": self._is_auto_relation(rel.relation_mode, rel.relation_desc),
+                    "is_deleted": rel_flags["is_deleted"],
+                    "is_changed_after_link": rel_flags["is_changed_after_link"],
                 })
+                tgt_code = (rel.target_code or "").strip() or str(rel.target_id)
+                tgt_label = _doc_type_label_zh(rel.target_type or "")
                 timeline.append({
                     "type": "push",
                     "at": rel.created_at.isoformat() if rel.created_at else None,
-                    "detail": f"下推 → {rel.target_type} {rel.target_code or rel.target_id}",
+                    "detail": f"下推了{tgt_label}（{tgt_code}）",
+                    "is_auto_created": self._is_auto_relation(rel.relation_mode, rel.relation_desc),
                     "target_type": rel.target_type,
                     "target_id": rel.target_id,
                     "target_code": rel.target_code,
@@ -239,17 +339,29 @@ class DocumentTrackingService:
             ).all()
 
             for rel in as_target:
+                rel_flags = await self._resolve_relation_flags(
+                    tenant_id=tenant_id,
+                    relation_type=rel.source_type,
+                    relation_id=rel.source_id,
+                    relation_created_at=rel.created_at,
+                    relation_code=rel.source_code,
+                )
                 relations["upstream"].append({
                     "type": rel.source_type,
                     "id": rel.source_id,
                     "code": rel.source_code,
                     "name": rel.source_name,
                     "mode": rel.relation_mode,
+                    "is_auto_created": self._is_auto_relation(rel.relation_mode, rel.relation_desc),
+                    "is_deleted": rel_flags["is_deleted"],
+                    "is_changed_after_link": rel_flags["is_changed_after_link"],
                 })
+                src_code = (rel.source_code or "").strip() or str(rel.source_id)
+                src_label = _doc_type_label_zh(rel.source_type or "")
                 timeline.append({
                     "type": "pull" if rel.relation_mode == "pull" else "from",
                     "at": rel.created_at.isoformat() if rel.created_at else None,
-                    "detail": f"来自 {rel.source_type} {rel.source_code or rel.source_id}",
+                    "detail": f"来自{src_label}（{src_code}）",
                     "source_type": rel.source_type,
                     "source_id": rel.source_id,
                     "source_code": rel.source_code,

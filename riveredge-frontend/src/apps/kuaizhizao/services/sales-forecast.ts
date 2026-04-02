@@ -140,6 +140,15 @@ export async function approveSalesForecast(id: number, rejection_reason?: string
 }
 
 /**
+ * 撤回销售预测审核（已审核 -> 待审核）
+ */
+export async function withdrawSalesForecastApproval(id: number): Promise<SalesForecast> {
+  return apiRequest<SalesForecast>(`/apps/kuaizhizao/sales-forecasts/${id}/withdraw-approval`, {
+    method: 'POST',
+  });
+}
+
+/**
  * 获取销售预测明细
  */
 export async function getSalesForecastItems(id: number): Promise<SalesForecastItem[]> {

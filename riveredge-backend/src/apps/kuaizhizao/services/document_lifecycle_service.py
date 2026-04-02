@@ -8,7 +8,7 @@
 from typing import Any, Dict, List, Optional
 from decimal import Decimal
 
-from apps.kuaizhizao.constants import DemandStatus, ReviewStatus, LEGACY_AUDITED_VALUES
+from apps.kuaizhizao.constants import DemandStatus, ReviewStatus, LEGACY_AUDITED_VALUES, LEGACY_PENDING_VALUES
 
 
 # ---------------------------------------------------------------------------
@@ -575,7 +575,15 @@ def get_sales_forecast_lifecycle(
     status = _norm(getattr(forecast, "status", None))
     review_status = _norm(getattr(forecast, "review_status", None))
     milestones = milestones or []
-    pushed = bool(getattr(forecast, "pushed_to_demand", False) or getattr(forecast, "demand_synced", False))
+    actions = {m.get("action") for m in milestones}
+    # 销售预测「已下推」兼容判断：
+    # 1) 显式状态（已下推 / PUSHED）
+    # 2) 模型字段（pushed_to_demand / demand_synced）
+    # 3) 里程碑动作（下推需求 / 下推需求计算）
+    pushed_by_status = status in ("已下推", "PUSHED", "pushed")
+    pushed_by_flags = bool(getattr(forecast, "pushed_to_demand", False) or getattr(forecast, "demand_synced", False))
+    pushed_by_milestone = ("push_to_demand" in actions) or ("push_to_demand_computation" in actions)
+    pushed = pushed_by_status or pushed_by_flags or pushed_by_milestone
 
     if _is_rejected(review_status):
         return {
@@ -585,6 +593,26 @@ def get_sales_forecast_lifecycle(
             "main_stages": _build_main_stages(SALES_FORECAST_MAIN_STAGES, "pending_review", is_exception=True),
             "sub_stages": None,
             "next_step_suggestions": ["修改后重新提交审核"],
+            "milestones": milestones,
+        }
+    if status in ("已驳回", "REJECTED", "rejected"):
+        return {
+            "current_stage_key": "pending_review",
+            "current_stage_name": "已驳回",
+            "status": "exception",
+            "main_stages": _build_main_stages(SALES_FORECAST_MAIN_STAGES, "pending_review", is_exception=True),
+            "sub_stages": None,
+            "next_step_suggestions": ["修改后重新提交审核"],
+            "milestones": milestones,
+        }
+    if _is_cancelled(status):
+        return {
+            "current_stage_key": "draft",
+            "current_stage_name": "已取消",
+            "status": "exception",
+            "main_stages": _build_main_stages(SALES_FORECAST_MAIN_STAGES, "draft", is_exception=True),
+            "sub_stages": None,
+            "next_step_suggestions": [],
             "milestones": milestones,
         }
     if _is_draft(status):
@@ -604,7 +632,18 @@ def get_sales_forecast_lifecycle(
             "status": "normal",
             "main_stages": _build_main_stages(SALES_FORECAST_MAIN_STAGES, "pending_review"),
             "sub_stages": None,
-            "next_step_suggestions": ["审核通过", "驳回"],
+            "next_step_suggestions": ["审核通过", "驳回", "撤回提交（回到草稿）"],
+            "milestones": milestones,
+        }
+    # 审核通过后 status 可能仍为「待审核」但 review_status 已是通过，统一归为「已审核」
+    if _is_pending_review(status) and _is_approved(review_status):
+        return {
+            "current_stage_key": "audited",
+            "current_stage_name": "已审核",
+            "status": "normal",
+            "main_stages": _build_main_stages(SALES_FORECAST_MAIN_STAGES, "audited"),
+            "sub_stages": None,
+            "next_step_suggestions": ["下推需求", "撤回审核（回到待审核）"],
             "milestones": milestones,
         }
     if pushed:
@@ -623,7 +662,7 @@ def get_sales_forecast_lifecycle(
         "status": "normal",
         "main_stages": _build_main_stages(SALES_FORECAST_MAIN_STAGES, "audited"),
         "sub_stages": None,
-        "next_step_suggestions": ["下推需求"],
+        "next_step_suggestions": ["下推需求", "撤回审核（回到待审核）"],
         "milestones": milestones,
     }
 
@@ -923,14 +962,21 @@ def get_finished_goods_inspection_lifecycle(
 
 
 # ---------------------------------------------------------------------------
-# 报价单生命周期（草稿→已发送→已接受/已拒绝→已转订单）
+# 报价单生命周期（最佳实践：草稿 → 已提交 → 已审核 → 发送|下推 → 已下推）
+# 数据层仍用 status + review_status；展示层拆阶段。
 # ---------------------------------------------------------------------------
 QUOTATION_MAIN_STAGES = [
     {"key": "draft", "label": "草稿"},
-    {"key": "sent", "label": "已发送"},
-    {"key": "accepted", "label": "已接受"},
-    {"key": "converted", "label": "已转订单"},
+    {"key": "submitted", "label": "已提交"},
+    {"key": "reviewed", "label": "已审核"},
+    {"key": "send_or_push", "label": "发送/下推"},
+    {"key": "converted", "label": "已下推"},
 ]
+
+
+def _quotation_review_pending(review_status: Optional[str]) -> bool:
+    r = _norm(review_status)
+    return r in LEGACY_PENDING_VALUES or r in ("",)
 
 
 # ---------------------------------------------------------------------------
@@ -991,36 +1037,98 @@ def get_demand_computation_lifecycle(
 
 
 # ---------------------------------------------------------------------------
-# 报价单生命周期（草稿→已发送→已接受/已拒绝→已转订单）
+# 报价单生命周期（草稿 → 已提交 → 已审核 → 发送/下推 → 已下推）
 # ---------------------------------------------------------------------------
 def get_quotation_lifecycle(
     quotation: Any,
-    milestones: Optional[List[Dict[str, Any]]] = None
+    milestones: Optional[List[Dict[str, Any]]] = None,
+    *,
+    converted_sales_order_missing: bool = False,
 ) -> Dict[str, Any]:
-    """报价单生命周期计算"""
+    """报价单生命周期：结合 status 与 review_status 映射五阶段。"""
     status = _norm(getattr(quotation, "status", None))
+    review_status = _norm(getattr(quotation, "review_status", None))
     milestones = milestones or []
-    status_map = {
-        "草稿": "draft", "draft": "draft",
-        "已发送": "sent", "sent": "sent",
-        "已接受": "accepted", "accepted": "accepted",
-        "已拒绝": "sent", "rejected": "sent",
-        "已转订单": "converted", "converted": "converted",
-    }
-    key = status_map.get(status, "draft")
-    stage_name = {"draft": "草稿", "sent": "已发送", "accepted": "已接受",
-                  "converted": "已转订单"}.get(key, status or "草稿")
-    if status in ("已拒绝", "rejected"):
-        stage_name = "已拒绝"
-    return {
-        "current_stage_key": key,
-        "current_stage_name": stage_name,
-        "status": "exception" if stage_name == "已拒绝" else "success" if key == "converted" else "normal",
-        "main_stages": _build_main_stages(QUOTATION_MAIN_STAGES, key, is_exception=(stage_name == "已拒绝")),
-        "sub_stages": None,
-        "next_step_suggestions": [],
-        "milestones": milestones,
-    }
+
+    def _ret(
+        key: str,
+        stage_name: str,
+        st: str = "normal",
+        suggestions: Optional[List[str]] = None,
+        exc: bool = False,
+    ) -> Dict[str, Any]:
+        return {
+            "current_stage_key": key,
+            "current_stage_name": stage_name,
+            "status": st,
+            "main_stages": _build_main_stages(QUOTATION_MAIN_STAGES, key, is_exception=exc),
+            "sub_stages": None,
+            "next_step_suggestions": suggestions or [],
+            "milestones": milestones,
+        }
+
+    if converted_sales_order_missing and status == "已转订单":
+        return _ret(
+            "converted",
+            "已下推（下游销售订单已删除）",
+            "normal",
+            [
+                "可点击「撤回下推」解除与已删订单的关联并回到已接受",
+                "或直接重新下推转销售订单（系统将自动解除无效关联）",
+                "或删除本报价单",
+            ],
+        )
+
+    if status in ("已拒绝", "rejected") or _is_rejected(review_status):
+        return _ret(
+            "submitted",
+            "已驳回",
+            "exception",
+            ["修改报价单后点击「重新编辑」回到草稿，再提交审核"],
+            exc=True,
+        )
+
+    if status in ("草稿", "draft"):
+        return _ret("draft", "草稿", "normal", ["提交报价单（进入审核）"])
+
+    if status == "已转订单":
+        return _ret("converted", "已下推", "success", [])
+
+    if status == "已接受":
+        return _ret(
+            "send_or_push",
+            "客户已确认（待下推）",
+            "normal",
+            ["转销售订单（下推）"],
+        )
+
+    if status == "已发送":
+        if _quotation_review_pending(review_status):
+            return _ret(
+                "submitted",
+                "待审核",
+                "normal",
+                ["审核通过", "审核驳回", "撤回提交（整单回草稿）"],
+            )
+        if _is_approved(review_status):
+            return _ret(
+                "reviewed",
+                "已审核",
+                "normal",
+                [
+                    "客户确认（标记已接受，表示已发送/客户认可）",
+                    "转销售订单（下推，可直接下推不经客户确认）",
+                    "撤回审核（回到待审核）",
+                ],
+            )
+        return _ret(
+            "submitted",
+            "待审核",
+            "normal",
+            ["审核通过", "审核驳回", "撤回提交（整单回草稿）"],
+        )
+
+    return _ret("draft", status or "草稿", "normal", [])
 
 
 # ---------------------------------------------------------------------------

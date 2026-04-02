@@ -24,6 +24,10 @@ export interface BackendLifecycle {
 
 const STAGE_PERCENT: Record<string, number> = {
   draft: 0,
+  submitted: 25,
+  reviewed: 50,
+  send_or_push: 75,
+  converted: 100,
   released: 25,
   in_progress: 50,
   completed: 100,

@@ -959,7 +959,7 @@ const ApplicationListPage: React.FC = () => {
                     try {
                       setSubmitting(true);
                       // Call the new API
-                      const response = await fetch(`/api/apps/kuaizhizao/management/reset-data`, {
+                      const response = await fetch(`/api/v1/apps/kuaizhizao/management/reset-data`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                       });

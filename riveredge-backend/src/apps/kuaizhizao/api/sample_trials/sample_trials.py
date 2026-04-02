@@ -24,6 +24,7 @@ from apps.kuaizhizao.schemas.sample_trial import (
     SampleTrialResponse,
     SampleTrialListResponse,
     SampleTrialWithItemsResponse,
+    SampleTrialReviewAction,
 )
 
 sample_trial_service = SampleTrialService()
@@ -63,6 +64,10 @@ async def list_sample_trials(
     limit: int = Query(20, ge=1, le=100),
     status: Optional[str] = Query(None),
     customer_id: Optional[int] = Query(None),
+    customer_name: Optional[str] = Query(None),
+    trial_code: Optional[str] = Query(None),
+    trial_period_start: Optional[str] = Query(None),
+    trial_period_end: Optional[str] = Query(None),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -73,6 +78,10 @@ async def list_sample_trials(
         limit=limit,
         status=status,
         customer_id=customer_id,
+        customer_name=customer_name,
+        trial_code=trial_code,
+        trial_period_start=trial_period_start,
+        trial_period_end=trial_period_end,
     )
 
 
@@ -146,6 +155,86 @@ async def convert_to_sales_order(
             created_by=current_user.id,
         )
         return {"success": True, "sales_order": sales_order, "sample_trial": trial_updated}
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/{trial_id}/submit", response_model=SampleTrialResponse, summary="提交样品试用单")
+async def submit_sample_trial(
+    trial_id: int = Path(..., description="试用单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """草稿提交；蓝图 sample_trial.auditRequired=False 时自动审核通过。"""
+    try:
+        return await sample_trial_service.submit_sample_trial(
+            tenant_id=tenant_id,
+            trial_id=trial_id,
+            submitted_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/{trial_id}/withdraw", response_model=SampleTrialResponse, summary="撤回提交")
+async def withdraw_sample_trial(
+    trial_id: int = Path(..., description="试用单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """已提交撤回为草稿。"""
+    try:
+        return await sample_trial_service.withdraw_sample_trial(
+            tenant_id=tenant_id,
+            trial_id=trial_id,
+            withdrawn_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/{trial_id}/approve", response_model=SampleTrialResponse, summary="审核通过样品试用单")
+async def approve_sample_trial(
+    trial_id: int = Path(..., description="试用单ID"),
+    body: SampleTrialReviewAction = Body(default_factory=SampleTrialReviewAction),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """已提交审核通过为已审核。"""
+    try:
+        return await sample_trial_service.approve_sample_trial(
+            tenant_id=tenant_id,
+            trial_id=trial_id,
+            operator_id=current_user.id,
+            review_remarks=body.review_remarks,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/{trial_id}/reject", response_model=SampleTrialResponse, summary="驳回样品试用单")
+async def reject_sample_trial(
+    trial_id: int = Path(..., description="试用单ID"),
+    body: SampleTrialReviewAction = Body(default_factory=SampleTrialReviewAction),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """已提交审核驳回回草稿。"""
+    try:
+        return await sample_trial_service.reject_sample_trial(
+            tenant_id=tenant_id,
+            trial_id=trial_id,
+            operator_id=current_user.id,
+            review_remarks=body.review_remarks,
+        )
     except NotFoundError as e:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
     except BusinessLogicError as e:

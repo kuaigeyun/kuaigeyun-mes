@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Body
 from loguru import logger
-from core.models.user import User
-from core.services.authorization.auth_service import get_current_user, get_current_tenant
+from core.api.deps.deps import get_current_user, get_current_tenant
+from infra.models.user import User
 from apps.kuaizhizao.services.reset_data_service import ResetDataService
 
 router = APIRouter(prefix="/management", tags=["App Management"])

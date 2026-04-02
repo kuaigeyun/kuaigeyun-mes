@@ -898,6 +898,25 @@ async def approve_sales_forecast(
     )
 
 
+@router.post("/sales-forecasts/{forecast_id}/withdraw-approval", response_model=SalesForecastResponse, summary="撤回销售预测审核")
+async def withdraw_sales_forecast_approval(
+    forecast_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SalesForecastResponse:
+    """
+    撤回销售预测审核（已审核 -> 待审核）。
+
+    - **forecast_id**: 销售预测ID
+    """
+    service = SalesForecastService()
+    return await service.withdraw_forecast_approval(
+        tenant_id=tenant_id,
+        forecast_id=forecast_id,
+        withdrawn_by=current_user.id,
+    )
+
+
 @router.post("/sales-forecasts/{forecast_id}/items", response_model=SalesForecastItemResponse, summary="添加销售预测明细")
 async def add_sales_forecast_item(
     forecast_id: int,

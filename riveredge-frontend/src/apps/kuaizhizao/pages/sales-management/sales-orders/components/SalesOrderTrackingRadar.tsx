@@ -33,11 +33,9 @@ export const SalesOrderTrackingRadar: React.FC<SalesOrderTrackingRadarProps> = (
 
   if (loading) {
     return (
-      <Card title="360° 订单全息追踪" size="small" style={{ marginBottom: 24, borderRadius: 8 }}>
-        <div style={{ padding: '40px 0', textAlign: 'center' }}>
-          <Spin />
-        </div>
-      </Card>
+      <div style={{ padding: '16px 0', textAlign: 'center' }}>
+        <Spin />
+      </div>
     );
   }
 
@@ -71,9 +69,8 @@ export const SalesOrderTrackingRadar: React.FC<SalesOrderTrackingRadarProps> = (
   );
 
   return (
-    <Card title="360° 订单全息追踪 (Sales Enablement)" size="small" style={{ marginBottom: 24, borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
-      <Row gutter={[16, 16]}>
-        <Col span={8}>
+    <Row gutter={[16, 16]}>
+      <Col span={8}>
           {renderProgressCard(
             '备料与采购', 
             data.material_prep_progress, 
@@ -95,8 +92,8 @@ export const SalesOrderTrackingRadar: React.FC<SalesOrderTrackingRadarProps> = (
               <Text type="secondary" style={{ fontSize: 13 }}>所有物料已齐套或无需备料。</Text>
             )
           )}
-        </Col>
-        <Col span={8}>
+      </Col>
+      <Col span={8}>
           {renderProgressCard(
             '生产进度', 
             data.production_progress, 
@@ -121,8 +118,8 @@ export const SalesOrderTrackingRadar: React.FC<SalesOrderTrackingRadarProps> = (
               <Text type="secondary" style={{ fontSize: 13 }}>暂未下推工单。</Text>
             )
           )}
-        </Col>
-        <Col span={8}>
+      </Col>
+      <Col span={8}>
           {renderProgressCard(
             '发货与交付', 
             data.delivery_progress, 
@@ -144,8 +141,7 @@ export const SalesOrderTrackingRadar: React.FC<SalesOrderTrackingRadarProps> = (
               <Text type="secondary" style={{ fontSize: 13 }}>暂无发货记录。</Text>
             )
           )}
-        </Col>
-      </Row>
-    </Card>
+      </Col>
+    </Row>
   );
 };

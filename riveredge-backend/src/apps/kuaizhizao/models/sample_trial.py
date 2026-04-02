@@ -39,7 +39,7 @@ class SampleTrial(BaseModel):
     other_outbound_id = fields.IntField(null=True, description="关联其他出库单ID（样品出库）")
     other_outbound_code = fields.CharField(max_length=50, null=True, description="关联其他出库单编码")
 
-    # 状态：草稿/已审批/试用中/已归还/已转订单/已关闭
+    # 状态：草稿/已提交/已审核/试用中/已归还/已转订单/已关闭
     status = fields.CharField(max_length=20, default="草稿", description="试用状态")
 
     total_quantity = fields.DecimalField(max_digits=10, decimal_places=2, default=0, description="总数量")

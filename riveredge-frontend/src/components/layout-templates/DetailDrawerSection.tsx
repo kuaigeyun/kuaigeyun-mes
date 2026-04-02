@@ -8,7 +8,7 @@
  */
 
 import { ReactNode } from 'react';
-import { Card } from 'antd';
+import { Card, theme } from 'antd';
 
 export interface DetailDrawerSectionProps {
   /** 区块标题 */
@@ -33,13 +33,22 @@ export const DetailDrawerSection: React.FC<DetailDrawerSectionProps> = ({
   style,
   marginBottom = 16,
 }) => {
+  const { token } = theme.useToken();
   if (!visible) return null;
   return (
     <Card
       title={title}
       size="small"
+      variant="outlined"
       style={{ marginBottom, ...style }}
-      headStyle={{ background: 'var(--ant-color-fill-alter)', fontWeight: 600 }}
+      styles={{
+        root: { borderColor: token.colorBorder },
+        header: {
+          background: token.colorFillAlter,
+          fontWeight: 600,
+          borderBottom: `1px solid ${token.colorBorderSecondary}`,
+        },
+      }}
     >
       {children}
     </Card>

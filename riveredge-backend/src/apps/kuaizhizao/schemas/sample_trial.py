@@ -104,3 +104,8 @@ class SampleTrialItemResponse(SampleTrialItemBase):
 class SampleTrialWithItemsResponse(SampleTrialResponse):
     """样品试用单详情响应（含明细）"""
     items: List[SampleTrialItemResponse] = Field(default_factory=list, description="试用明细列表")
+
+
+class SampleTrialReviewAction(BaseSchema):
+    """样品试用单审核动作入参"""
+    review_remarks: Optional[str] = Field(None, description="审核备注")

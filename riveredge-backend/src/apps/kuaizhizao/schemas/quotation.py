@@ -154,6 +154,10 @@ class QuotationResponse(QuotationBase):
     updated_at: datetime
     items: Optional[List[QuotationItemResponse]] = Field(None, description="报价明细")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
+    conversion_downstream_missing: Optional[bool] = Field(
+        None,
+        description="已转单标记下，下游销售订单已不存在（如已删除）时为 True，可重新下推或删除本报价单",
+    )
 
     class Config:
         from_attributes = True
@@ -164,3 +168,8 @@ class QuotationListResponse(BaseSchema):
     data: List[QuotationResponse]
     total: int
     success: bool = True
+
+
+class QuotationReviewAction(BaseSchema):
+    """报价单审核类操作可选备注"""
+    review_remarks: Optional[str] = Field(None, max_length=500, description="审核意见/备注")

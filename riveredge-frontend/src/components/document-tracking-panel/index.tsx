@@ -4,9 +4,10 @@
  * 状态以徽标形式展示，支持多语言
  */
 
-import React, { useEffect, useState } from 'react';
-import { Timeline, Empty, Spin, Card, Tag } from 'antd';
+import React, { useMemo } from 'react';
+import { Timeline, Empty, Spin, Card, Tag, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { SwapOutlined, CheckCircleOutlined, ArrowRightOutlined, LinkOutlined, EditOutlined, PlusOutlined, FormOutlined } from '@ant-design/icons';
 import type {
   DocumentTrackingResponse,
@@ -14,7 +15,7 @@ import type {
   DocumentTrackingRelation,
   DocumentTrackingFieldChange,
 } from '../../services/documentTracking';
-import { getDocumentTracking } from '../../services/documentTracking';
+import { useDocumentTracking } from './useDocumentTracking';
 
 /**
  * 原始状态值 -> lifecycle 阶段 i18n key
@@ -74,68 +75,7 @@ const STATUS_COLOR: Record<string, string> = {
   reviewStatus_rejected: 'error',
 };
 
-interface DocumentTrackingPanelProps {
-  documentType: string;
-  documentId: number;
-  /** 变更时触发重新拉取，用于操作成功后刷新记录 */
-  refreshKey?: number;
-  onDocumentClick?: (type: string, id: number) => void;
-}
-
-export const DocumentTrackingPanel: React.FC<DocumentTrackingPanelProps> = ({
-  documentType,
-  documentId,
-  refreshKey,
-  onDocumentClick,
-}) => {
-  const { t } = useTranslation();
-  const [data, setData] = useState<DocumentTrackingResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const typeLabel: Record<string, string> = {
-    create: t('components.documentTrackingPanel.typeCreate'),
-    state_transition: t('components.documentTrackingPanel.typeStateTransition'),
-    edit: t('components.documentTrackingPanel.typeEdit'),
-    approve: t('components.documentTrackingPanel.typeApprove'),
-    push: t('components.documentTrackingPanel.typePush'),
-    pull: t('components.documentTrackingPanel.typePull'),
-    from: t('components.documentTrackingPanel.typeFrom'),
-    report: t('components.documentTrackingPanel.typeReport'),
-  };
-
-  useEffect(() => {
-    if (!documentType || !documentId) return;
-    setLoading(true);
-    setError(null);
-    getDocumentTracking(documentType, documentId)
-      .then(setData)
-      .catch((e) => setError(e?.message || t('components.documentTrackingPanel.loadFailed')))
-      .finally(() => setLoading(false));
-  }, [documentType, documentId, refreshKey, t]);
-
-  if (loading) {
-    return (
-      <div style={{ padding: 24, textAlign: 'center' }}>
-        <Spin tip={t('components.documentTrackingPanel.loadingTip')} />
-      </div>
-    );
-  }
-  if (error) {
-    return (
-      <Card size="small">
-        <Empty description={error} />
-      </Card>
-    );
-  }
-  if (!data) {
-    return (
-      <Card size="small">
-        <Empty description={t('components.documentTrackingPanel.noData')} />
-      </Card>
-    );
-  }
-
+function useTrackingStatusRender(t: TFunction) {
   const renderStatusBadge = (raw: string) => {
     if (!raw || raw === '空') return raw || '—';
     const i18nKey = STATUS_TO_I18N[raw] || STATUS_TO_I18N[raw.trim()];
@@ -153,6 +93,139 @@ export const DocumentTrackingPanel: React.FC<DocumentTrackingPanelProps> = ({
     }
     return val || '—';
   };
+
+  return { renderStatusBadge, renderFieldChangeValue };
+}
+
+/** 上下游单据（无外层 Card，用于详情抽屉与其它 Card 并列、避免框套框） */
+export const DocumentTrackingRelationsBody: React.FC<{
+  data: DocumentTrackingResponse;
+  onDocumentClick?: (type: string, id: number) => void;
+}> = ({ data, onDocumentClick }) => {
+  const { t } = useTranslation();
+  const up = data.relations.upstream;
+  const down = data.relations.downstream;
+  if (up.length === 0 && down.length === 0) {
+    return (
+      <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+        {t('components.documentTrackingPanel.noRelations')}
+      </Typography.Text>
+    );
+  }
+
+  const renderRelation = (rel: DocumentTrackingRelation, dir: 'up' | 'down') => {
+    const clickable = !!onDocumentClick && !(dir === 'down' && rel.is_deleted);
+    const code = (rel.code || '').trim() || `#${rel.id}`;
+    const typeLabel = t(`components.documentTrackingPanel.docType.${rel.type}`, { defaultValue: rel.type });
+    const primary = `${typeLabel}（${code}）`;
+    const nameTrim = (rel.name || '').trim();
+    const showExtraName = nameTrim && nameTrim !== code;
+    return (
+      <div
+        key={`${rel.type}-${rel.id}`}
+        style={{
+          padding: '6px 10px',
+          background: 'var(--ant-color-fill-alter)',
+          borderRadius: 6,
+          border: '1px solid var(--ant-color-border-secondary)',
+          cursor: clickable ? 'pointer' : 'default',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 4,
+          whiteSpace: 'nowrap',
+          flexShrink: 0,
+        }}
+        onClick={() => {
+          if (!clickable) return;
+          onDocumentClick?.(rel.type, rel.id);
+        }}
+        role={clickable ? 'button' : undefined}
+      >
+        <span>{primary}</span>
+        {showExtraName ? (
+          <span style={{ color: 'var(--ant-color-text-secondary)', marginLeft: 6 }}>{nameTrim}</span>
+        ) : null}
+        {dir === 'down' && rel.is_deleted ? (
+          <Tag color="error" style={{ marginLeft: 8 }}>
+            {t('components.documentTrackingPanel.relationDeleted')}
+          </Tag>
+        ) : null}
+        {dir === 'down' && !rel.is_deleted && rel.is_auto_created ? (
+          <Tag color="blue" style={{ marginLeft: 8 }}>
+            {t('components.documentTrackingPanel.autoGenerated')}
+          </Tag>
+        ) : null}
+        {dir === 'down' && !rel.is_deleted && rel.is_changed_after_link ? (
+          <Tag color="warning" style={{ marginLeft: 8 }}>
+            {t('components.documentTrackingPanel.relationChangedAfterLink')}
+          </Tag>
+        ) : null}
+      </div>
+    );
+  };
+
+  const currentTypeLabel = t(`components.documentTrackingPanel.docType.${data.document_type}`, {
+    defaultValue: data.document_type,
+  });
+  const currentCode = (data.document_code || '').trim() || `#${data.document_id}`;
+  const currentNode = (
+    <div
+      key={`current-${data.document_type}-${data.document_id}`}
+      style={{
+        padding: '6px 10px',
+        background: 'var(--ant-color-bg-container)',
+        borderRadius: 6,
+        border: '1px solid var(--ant-color-border)',
+        whiteSpace: 'nowrap',
+        flexShrink: 0,
+        display: 'inline-flex',
+        alignItems: 'center',
+      }}
+    >
+      <span style={{ fontWeight: 600 }}>{`${currentTypeLabel}（${currentCode}）`}</span>
+    </div>
+  );
+
+  const chainNodes: React.ReactNode[] = [
+    ...up.map((r) => renderRelation(r, 'up')),
+    currentNode,
+    ...down.map((r) => renderRelation(r, 'down')),
+  ];
+
+  return (
+    <div style={{ width: '100%', overflowX: 'auto', overflowY: 'hidden' }}>
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap', minWidth: 'max-content' }}>
+        {chainNodes.map((node, index) => (
+          <React.Fragment key={`chain-${index}`}>
+            {index > 0 ? <ArrowRightOutlined style={{ color: 'var(--ant-color-text-secondary)' }} /> : null}
+            {node}
+          </React.Fragment>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+/** 操作时间线（无外层 Card） */
+export const DocumentTrackingTimelineBody: React.FC<{
+  data: DocumentTrackingResponse;
+}> = ({ data }) => {
+  const { t } = useTranslation();
+  const { renderStatusBadge, renderFieldChangeValue } = useTrackingStatusRender(t);
+
+  const typeLabel: Record<string, string> = useMemo(
+    () => ({
+      create: t('components.documentTrackingPanel.typeCreate'),
+      state_transition: t('components.documentTrackingPanel.typeStateTransition'),
+      edit: t('components.documentTrackingPanel.typeEdit'),
+      approve: t('components.documentTrackingPanel.typeApprove'),
+      push: t('components.documentTrackingPanel.typePush'),
+      pull: t('components.documentTrackingPanel.typePull'),
+      from: t('components.documentTrackingPanel.typeFrom'),
+      report: t('components.documentTrackingPanel.typeReport'),
+    }),
+    [t]
+  );
 
   const renderTimelineItem = (item: DocumentTrackingTimelineItem) => {
     const icon =
@@ -180,14 +253,23 @@ export const DocumentTrackingPanel: React.FC<DocumentTrackingPanelProps> = ({
     const detailContent = isStateTransition && !isSameStateWithReason ? (
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         {renderStatusBadge(item.from_state!)}
-        <span style={{ color: '#1890ff' }}>→</span>
+        <span style={{ color: 'var(--ant-color-primary)' }}>→</span>
         {renderStatusBadge(item.to_state!)}
         {item.is_auto_approve && (
-          <Tag color="blue" style={{ marginLeft: 4 }}>{t('components.documentTrackingPanel.autoApprove')}</Tag>
+          <Tag color="blue" style={{ marginLeft: 4 }}>
+            {t('components.documentTrackingPanel.autoApprove')}
+          </Tag>
         )}
       </span>
     ) : (
-      item.detail
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span>{item.detail}</span>
+        {item.is_auto_created && (
+          <Tag color="blue" style={{ marginLeft: 4 }}>
+            {t('components.documentTrackingPanel.autoGenerated')}
+          </Tag>
+        )}
+      </span>
     );
 
     return {
@@ -195,26 +277,36 @@ export const DocumentTrackingPanel: React.FC<DocumentTrackingPanelProps> = ({
       children: (
         <div>
           <div style={{ fontWeight: 500 }}>{label}</div>
-          <div style={{ color: '#666', fontSize: 12 }}>{detailContent}</div>
+          <div style={{ color: 'var(--ant-color-text-secondary)', fontSize: 12 }}>{detailContent}</div>
           {fieldChanges && (
             <div style={{ marginTop: 8, fontSize: 12 }}>
               {item.field_changes!.map((c: DocumentTrackingFieldChange, i: number) => (
-                <div key={i} style={{ color: '#666', marginBottom: 4, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
-                  <span style={{ color: '#333' }}>{c.label}</span>
+                <div
+                  key={i}
+                  style={{
+                    color: 'var(--ant-color-text-secondary)',
+                    marginBottom: 4,
+                    display: 'flex',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: 4,
+                  }}
+                >
+                  <span style={{ color: 'var(--ant-color-text)' }}>{c.label}</span>
                   <span style={{ margin: '0 4px' }}>：</span>
-                  <span style={{ color: '#999', textDecoration: 'line-through' }}>
+                  <span style={{ color: 'var(--ant-color-text-tertiary)', textDecoration: 'line-through' }}>
                     {typeof (c.from || '空') === 'string' && (c.field === 'status' || c.field === 'review_status')
                       ? renderStatusBadge(c.from || '')
                       : (c.from || '空')}
                   </span>
-                  <span style={{ margin: '0 4px', color: '#1890ff' }}>→</span>
+                  <span style={{ margin: '0 4px', color: 'var(--ant-color-primary)' }}>→</span>
                   <span>{renderFieldChangeValue(c.to || '', c.field)}</span>
                 </div>
               ))}
             </div>
           )}
           {(item.by || time) && (
-            <div style={{ color: '#999', fontSize: 12, marginTop: 4 }}>
+            <div style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 12, marginTop: 4 }}>
               {item.by && <span>{item.by}</span>}
               {time && <span style={{ marginLeft: 8 }}>{time}</span>}
             </div>
@@ -224,51 +316,74 @@ export const DocumentTrackingPanel: React.FC<DocumentTrackingPanelProps> = ({
     };
   };
 
-  const renderRelation = (rel: DocumentTrackingRelation, dir: 'up' | 'down') => (
-    <div
-      key={`${rel.type}-${rel.id}`}
-      style={{
-        padding: '4px 8px',
-        marginBottom: 4,
-        background: '#fafafa',
-        borderRadius: 4,
-        cursor: onDocumentClick ? 'pointer' : 'default',
-      }}
-      onClick={() => onDocumentClick?.(rel.type, rel.id)}
-      role={onDocumentClick ? 'button' : undefined}
-    >
-      {dir === 'down' ? <ArrowRightOutlined style={{ marginRight: 4 }} /> : null}
-      <span>{rel.code || `${rel.type}#${rel.id}`}</span>
-      {rel.name && <span style={{ color: '#666', marginLeft: 4 }}>({rel.name})</span>}
-      {dir === 'up' ? <ArrowRightOutlined style={{ marginLeft: 4 }} /> : null}
-    </div>
-  );
+  if (data.timeline.length === 0) {
+    return <Empty description={t('components.documentTrackingPanel.noOperations')} />;
+  }
+  return <Timeline items={data.timeline.map(renderTimelineItem)} />;
+};
+
+export { useDocumentTracking } from './useDocumentTracking';
+
+interface DocumentTrackingPanelProps {
+  documentType: string;
+  documentId: number;
+  /** 变更时触发重新拉取，用于操作成功后刷新记录 */
+  refreshKey?: number;
+  onDocumentClick?: (type: string, id: number) => void;
+}
+
+export const DocumentTrackingPanel: React.FC<DocumentTrackingPanelProps> = ({
+  documentType,
+  documentId,
+  refreshKey,
+  onDocumentClick,
+}) => {
+  const { t } = useTranslation();
+  const { data, loading, error } = useDocumentTracking(documentType, documentId, refreshKey);
+
+  if (loading) {
+    return (
+      <div style={{ padding: 24, textAlign: 'center' }}>
+        <Spin tip={t('components.documentTrackingPanel.loadingTip')} />
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <Card size="small" styles={{ root: { borderColor: 'var(--ant-color-border)' } }}>
+        <Empty description={error} />
+      </Card>
+    );
+  }
+  if (!data) {
+    return (
+      <Card size="small" styles={{ root: { borderColor: 'var(--ant-color-border)' } }}>
+        <Empty description={t('components.documentTrackingPanel.noData')} />
+      </Card>
+    );
+  }
+
+  const hasRelations = data.relations.upstream.length > 0 || data.relations.downstream.length > 0;
 
   return (
     <div style={{ padding: 0 }}>
-      {(data.relations.upstream.length > 0 || data.relations.downstream.length > 0) && (
-        <Card size="small" title={t('components.documentTrackingPanel.relationsTitle')} style={{ marginBottom: 16 }}>
-          {data.relations.upstream.length > 0 && (
-            <div style={{ marginBottom: 8 }}>
-              <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>{t('components.documentTrackingPanel.upstream')}</div>
-              {data.relations.upstream.map((r) => renderRelation(r, 'up'))}
-            </div>
-          )}
-          {data.relations.downstream.length > 0 && (
-            <div>
-              <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>{t('components.documentTrackingPanel.downstream')}</div>
-              {data.relations.downstream.map((r) => renderRelation(r, 'down'))}
-            </div>
-          )}
+      {hasRelations && (
+        <Card
+          size="small"
+          title={t('components.documentTrackingPanel.relationsTitle')}
+          style={{ marginBottom: 16 }}
+          styles={{ root: { borderColor: 'var(--ant-color-border)' } }}
+        >
+          <DocumentTrackingRelationsBody data={data} onDocumentClick={onDocumentClick} />
         </Card>
       )}
 
-      <Card size="small" title={t('components.documentTrackingPanel.operationsTitle')}>
-        {data.timeline.length === 0 ? (
-          <Empty description={t('components.documentTrackingPanel.noOperations')} />
-        ) : (
-          <Timeline items={data.timeline.map(renderTimelineItem)} />
-        )}
+      <Card
+        size="small"
+        title={t('components.documentTrackingPanel.operationsTitle')}
+        styles={{ root: { borderColor: 'var(--ant-color-border)' } }}
+      >
+        <DocumentTrackingTimelineBody data={data} />
       </Card>
     </div>
   );

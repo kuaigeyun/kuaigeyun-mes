@@ -91,15 +91,37 @@ class SalesForecastService(AppBaseService[SalesForecast]):
                         forecast_id=forecast.id,
                         **item_data
                     )
-            
+
+            # 与提交流程一致：蓝图配置无需审核时，创建后自动审核通过并联动需求
+            from infra.services.business_config_service import BusinessConfigService
+            from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
+            config_service = BusinessConfigService()
+            audit_required = await config_service.check_audit_required(tenant_id, "sales_forecast")
+            if not audit_required and str(getattr(forecast, "status", "") or "").strip() in ("草稿", "DRAFT"):
+                await SalesForecast.filter(tenant_id=tenant_id, id=forecast.id).update(
+                    status=DocumentStatus.AUDITED.value,
+                    review_status=ReviewStatus.APPROVED.value,
+                    updated_by=created_by
+                )
+                demand = await self._get_linked_demand_for_forecast(tenant_id, forecast.id)
+                if not demand:
+                    await self._create_demand_from_sales_forecast(tenant_id, forecast.id, created_by)
+                forecast = await SalesForecast.get(tenant_id=tenant_id, id=forecast.id)
+
             return SalesForecastResponse.model_validate(forecast)
 
     async def get_sales_forecast_by_id(self, tenant_id: int, forecast_id: int) -> SalesForecastResponse:
-        """根据ID获取销售预测"""
-        forecast = await SalesForecast.get_or_none(tenant_id=tenant_id, id=forecast_id)
+        """根据ID获取销售预测（含明细，与列表 include_items 行为一致）"""
+        forecast = await SalesForecast.get_or_none(
+            tenant_id=tenant_id,
+            id=forecast_id,
+            deleted_at__isnull=True,
+        )
         if not forecast:
             raise NotFoundError(f"销售预测不存在: {forecast_id}")
         resp = SalesForecastResponse.model_validate(forecast)
+        item_rows = await SalesForecastItem.filter(tenant_id=tenant_id, forecast_id=forecast_id).order_by("forecast_date").all()
+        resp.items = [SalesForecastItemResponse.model_validate(it) for it in item_rows]
         from apps.kuaizhizao.services.document_lifecycle_service import get_sales_forecast_lifecycle, get_document_milestones
         milestones = await get_document_milestones(forecast.tenant_id, "sales_forecast", forecast.id)
         resp.lifecycle = get_sales_forecast_lifecycle(forecast, milestones=milestones)
@@ -107,7 +129,7 @@ class SalesForecastService(AppBaseService[SalesForecast]):
 
     async def list_sales_forecasts(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> Dict[str, Any]:
         """获取销售预测列表"""
-        query = SalesForecast.filter(tenant_id=tenant_id)
+        query = SalesForecast.filter(tenant_id=tenant_id, deleted_at__isnull=True)
 
         # 应用过滤条件
         if filters.get('status'):
@@ -338,6 +360,49 @@ class SalesForecastService(AppBaseService[SalesForecast]):
             out = updated_forecast.model_dump()
             out["demand_synced"] = demand_synced
             return SalesForecastResponse(**out)
+
+    async def withdraw_forecast_approval(
+        self,
+        tenant_id: int,
+        forecast_id: int,
+        withdrawn_by: int,
+    ) -> SalesForecastResponse:
+        """撤回审核：已审核 -> 待审核（若已存在下游则禁止撤回）。"""
+        from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
+        from apps.kuaizhizao.models.document_relation import DocumentRelation
+
+        async with in_transaction():
+            forecast = await self.get_sales_forecast_by_id(tenant_id, forecast_id)
+            review_ok = str(forecast.review_status or "").strip() in (
+                "APPROVED",
+                "审核通过",
+                "通过",
+                "已通过",
+                "已审核",
+            )
+            status_ok = str(forecast.status or "").strip() in ("AUDITED", "已审核", "audited")
+            if not (review_ok or status_ok):
+                raise BusinessLogicError("仅已审核的销售预测支持撤回审核")
+
+            # 已产生下游（需求/需求计算）时，不允许撤回审核，避免生命周期倒退造成数据不一致
+            has_downstream = await DocumentRelation.filter(
+                tenant_id=tenant_id,
+                source_type="sales_forecast",
+                source_id=forecast_id,
+                target_type__in=["demand", "demand_computation"],
+            ).exists()
+            if has_downstream:
+                raise BusinessLogicError("该销售预测已下推下游单据，不能撤回审核")
+
+            await SalesForecast.filter(tenant_id=tenant_id, id=forecast_id).update(
+                status=DocumentStatus.PENDING_REVIEW.value,
+                review_status=ReviewStatus.PENDING.value,
+                reviewer_id=None,
+                reviewer_name=None,
+                review_time=None,
+                updated_by=withdrawn_by,
+            )
+            return await self.get_sales_forecast_by_id(tenant_id, forecast_id)
 
     async def add_forecast_item(self, tenant_id: int, forecast_id: int, item_data: SalesForecastItemCreate) -> SalesForecastItemResponse:
         """添加销售预测明细"""

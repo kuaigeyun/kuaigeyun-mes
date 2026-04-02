@@ -53,13 +53,34 @@ export interface ResolvedTheme {
   tabsBgColor: string;
 }
 
-function mergeConfig(base: ThemeConfig, override: Partial<ThemeConfig> | null): ThemeConfig {
-  if (!override || typeof override !== 'object') return { ...DEFAULT_CONFIG, ...base };
+/** 接口/缓存可能返回字符串数字，Ant Design token 需要 number */
+function clampFinite(n: number, min: number, max: number, fallback: number): number {
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
+function normalizeThemeConfig(c: ThemeConfig): ThemeConfig {
+  const fs = typeof c.fontSize === 'number' ? c.fontSize : Number(c.fontSize);
+  const br = typeof c.borderRadius === 'number' ? c.borderRadius : Number(c.borderRadius);
   return {
-    ...DEFAULT_CONFIG,
-    ...base,
-    ...override,
+    ...c,
+    fontSize: clampFinite(fs, 10, 22, DEFAULT_CONFIG.fontSize),
+    borderRadius: clampFinite(br, 0, 24, DEFAULT_CONFIG.borderRadius),
   };
+}
+
+function mergeConfig(base: ThemeConfig, override: Partial<ThemeConfig> | null): ThemeConfig {
+  let merged: ThemeConfig;
+  if (!override || typeof override !== 'object') {
+    merged = { ...DEFAULT_CONFIG, ...base };
+  } else {
+    merged = {
+      ...DEFAULT_CONFIG,
+      ...base,
+      ...override,
+    };
+  }
+  return normalizeThemeConfig(merged);
 }
 
 function resolveTheme(mode: ThemeMode): 'light' | 'dark' {
@@ -99,12 +120,26 @@ interface ThemeState {
   initialized: boolean;
   initFromApi: () => Promise<void>;
   applyTheme: (themeMode: ThemeMode, config?: Partial<ThemeConfig>) => void;
-  syncFromPreferences: (preferences: Record<string, any>) => void;
+  /** 与 initFromApi 一致：站点 theme_config + 用户 theme_config 合并后整体写入（偏好订阅/主题编辑器打开时用） */
+  syncFromPreferences: (preferences: Record<string, any>) => Promise<void>;
   subscribeToSystemTheme: () => () => void;
   clearForLogout: () => void;
 }
 
 export const useThemeStore = create<ThemeState>((set, get) => {
+  const applyDocumentThemeAttrs = (resolved: ResolvedTheme) => {
+    document.documentElement.style.colorScheme = resolved.isDark ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', resolved.isDark ? 'dark' : 'light');
+  };
+
+  /** 用站点+用户合并结果整体覆盖 config（与 initFromApi 成功分支一致，不叠旧 store） */
+  const setThemeFromSiteAndUser = (themeMode: ThemeMode, site: Partial<ThemeConfig>, user: Partial<ThemeConfig>) => {
+    const merged = mergeConfig(site as ThemeConfig, user);
+    const resolved = computeResolved(themeMode, merged);
+    set({ theme: themeMode, config: merged, resolved });
+    applyDocumentThemeAttrs(resolved);
+  };
+
   const doApplyTheme = (themeMode: ThemeMode, configOverride?: Partial<ThemeConfig>) => {
     const { config } = get();
     const mergedConfig = mergeConfig(config, configOverride ?? null);
@@ -112,16 +147,33 @@ export const useThemeStore = create<ThemeState>((set, get) => {
 
     set({ theme: themeMode, config: mergedConfig, resolved });
 
-    document.documentElement.style.colorScheme = resolved.isDark ? 'dark' : 'light';
-    document.documentElement.setAttribute('data-theme', resolved.isDark ? 'dark' : 'light');
+    applyDocumentThemeAttrs(resolved);
   };
 
-  const syncFromPreferences = (preferences: Record<string, any>) => {
+  const syncFromPreferences = async (preferences: Record<string, any>) => {
     if (!preferences || typeof preferences !== 'object') return;
     const userTheme = (preferences.theme as ThemeMode) || 'light';
     const userConfig = (preferences.theme_config || {}) as Partial<ThemeConfig>;
-    const mergedConfig = mergeConfig({}, userConfig);
-    doApplyTheme(userTheme, mergedConfig);
+
+    if (!getToken()) {
+      const merged = mergeConfig({}, userConfig);
+      const resolved = computeResolved(userTheme, merged);
+      set({ theme: userTheme, config: merged, resolved });
+      applyDocumentThemeAttrs(resolved);
+      return;
+    }
+
+    try {
+      const siteSetting = await getSiteSetting().catch(() => null);
+      const siteConfig = (siteSetting?.settings?.theme_config || {}) as Partial<ThemeConfig>;
+      setThemeFromSiteAndUser(userTheme, siteConfig, userConfig);
+    } catch (e) {
+      console.warn('syncFromPreferences: site theme merge failed, fallback user-only', e);
+      const merged = mergeConfig({}, userConfig);
+      const resolved = computeResolved(userTheme, merged);
+      set({ theme: userTheme, config: merged, resolved });
+      applyDocumentThemeAttrs(resolved);
+    }
   };
 
   // 初始值：优先从 userPreferenceStore 缓存读取，否则用默认
@@ -129,7 +181,7 @@ export const useThemeStore = create<ThemeState>((set, get) => {
   const initialTheme = (cached?.theme as ThemeMode) || 'light';
   const initialConfig = cached?.theme_config
     ? mergeConfig({}, cached.theme_config as Partial<ThemeConfig>)
-    : { ...DEFAULT_CONFIG };
+    : normalizeThemeConfig({ ...DEFAULT_CONFIG });
   const initialResolved = computeResolved(initialTheme, initialConfig);
 
   // 初始化时同步设置 document 属性，确保首屏渲染时 data-theme 已正确
@@ -168,8 +220,7 @@ export const useThemeStore = create<ThemeState>((set, get) => {
         const userTheme = (prefs?.theme as ThemeMode) || 'light';
         const userConfig = (prefs?.theme_config || {}) as Partial<ThemeConfig>;
 
-        const mergedConfig = mergeConfig(siteConfig as ThemeConfig, userConfig);
-        doApplyTheme(userTheme, mergedConfig);
+        setThemeFromSiteAndUser(userTheme, siteConfig, userConfig);
 
         set({ initialized: true });
       } catch (e) {
@@ -186,16 +237,15 @@ export const useThemeStore = create<ThemeState>((set, get) => {
     },
 
     applyTheme: (themeMode: ThemeMode, configOverride?: Partial<ThemeConfig>) => {
-      const { config } = get();
-      const mergedConfig = mergeConfig(config, configOverride ?? null);
-      doApplyTheme(themeMode, mergedConfig);
+      doApplyTheme(themeMode, configOverride ?? null);
 
       if (getToken()) {
+        const persisted = get().config;
         useUserPreferenceStore
           .getState()
           .updatePreferences({
             theme: themeMode,
-            theme_config: mergedConfig,
+            theme_config: persisted,
           })
           .catch((err) => console.warn('Failed to persist theme:', err));
       }

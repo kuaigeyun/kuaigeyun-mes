@@ -287,66 +287,59 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         useUserPreferenceStore.getState().fetchPreferences(),
       ]);
 
-      const themeConfig = siteSetting?.settings?.theme_config || {};
       const legacyThemeColor = siteSetting?.settings?.theme_color;
-      const userPreference = { preferences: useUserPreferenceStore.getState().preferences };
+      const prefs = useUserPreferenceStore.getState().preferences || {};
+      /** 与 initFromApi / 偏好订阅相同：站点+用户合并后写入 themeStore，再以 store.config 填表，避免与界面脱节 */
+      await useThemeStore.getState().syncFromPreferences(prefs);
+      const applied = useThemeStore.getState().config;
 
-      // 获取用户颜色模式偏好（浅色/深色/跟随系统）
-      const userThemeMode = userPreference?.preferences?.theme || 'light';
+      const userThemeMode = (prefs.theme as 'light' | 'dark' | 'auto') || 'light';
       setColorMode(userThemeMode);
 
-      // 设置表单初始值
-      // 优先使用后端保存的颜色，如果没有则使用当前实际使用的主题颜色
-      let colorPrimaryValue = legacyThemeColor || themeConfig.colorPrimary;
+      const parseDim = (v: unknown, fallback: number): number => {
+        const n = typeof v === 'number' ? v : Number(v);
+        return Number.isFinite(n) ? n : fallback;
+      };
 
-      // 如果后端没有保存颜色，使用当前实际使用的主题颜色
+      // 主色：以当前已应用 config 为准，其次站点 legacy，再 token
+      let colorPrimaryValue = applied.colorPrimary || legacyThemeColor || token.colorPrimary || '#1890ff';
       if (!colorPrimaryValue) {
         colorPrimaryValue = token.colorPrimary || '#1890ff';
       }
-
-      // 确保 colorPrimary 是字符串格式
       if (typeof colorPrimaryValue !== 'string') {
-        // 如果是对象，尝试转换为字符串
-        if (colorPrimaryValue && typeof colorPrimaryValue.toHexString === 'function') {
-          colorPrimaryValue = colorPrimaryValue.toHexString();
+        if (colorPrimaryValue && typeof (colorPrimaryValue as any).toHexString === 'function') {
+          colorPrimaryValue = (colorPrimaryValue as any).toHexString();
         } else {
           colorPrimaryValue = token.colorPrimary || '#1890ff';
         }
       }
 
-      // 获取当前实际使用的其他主题值（如果没有保存的配置）
-      const currentBorderRadius = themeConfig.borderRadius ?? token.borderRadius ?? 6;
-      const currentFontSize = themeConfig.fontSize ?? token.fontSize ?? 14;
+      const currentBorderRadius = Math.min(16, Math.max(0, parseDim(applied.borderRadius, token.borderRadius ?? 6)));
+      const currentFontSize = Math.min(20, Math.max(12, parseDim(applied.fontSize, token.fontSize ?? 14)));
 
-      // 标签栏持久化配置：统一从用户偏好读取
-      const tabsPersistence = userPreference?.preferences && 'tabs_persistence' in userPreference.preferences
-        ? Boolean(userPreference.preferences.tabs_persistence)
-        : false;
+      const tabsPersistence = 'tabs_persistence' in prefs ? Boolean(prefs.tabs_persistence) : false;
 
-
-      // 设置表单初始值
       const formValues = {
         colorPrimary: colorPrimaryValue,
         borderRadius: currentBorderRadius,
         fontSize: currentFontSize,
-        compact: themeConfig.compact || false,
-        siderBgColor: themeConfig.siderBgColor || '',
-        headerBgColor: themeConfig.headerBgColor || '',
-        tabsBgColor: themeConfig.tabsBgColor || '',
+        compact: !!applied.compact,
+        siderBgColor: applied.siderBgColor || '',
+        headerBgColor: applied.headerBgColor || '',
+        tabsBgColor: applied.tabsBgColor || '',
         colorMode: userThemeMode,
-        tabsPersistence: tabsPersistence,
-        layoutMode: 'mix', // 固定使用 MIX 布局模式
+        tabsPersistence,
+        layoutMode: 'mix',
       };
 
       form.setFieldsValue(formValues);
 
-      // 初始化状态变量
       setColorPrimaryValue(colorPrimaryValue);
-      setSiderBgColorValue(themeConfig.siderBgColor || '');
-      setHeaderBgColorValue(themeConfig.headerBgColor || '');
-      setTabsBgColorValue(themeConfig.tabsBgColor || '');
+      setSiderBgColorValue(applied.siderBgColor || '');
+      setHeaderBgColorValue(applied.headerBgColor || '');
+      setTabsBgColorValue(applied.tabsBgColor || '');
       setTabsPersistenceValue(tabsPersistence);
-      setCompactValue(themeConfig.compact || false);
+      setCompactValue(!!applied.compact);
 
       // 应用预览主题
       applyPreviewTheme(form.getFieldsValue(), userThemeMode);

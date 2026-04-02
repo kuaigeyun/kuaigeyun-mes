@@ -7,11 +7,12 @@
  * @date 2026-02-19
  */
 
-import React, { useRef, useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, List, Typography } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, AppstoreAddOutlined, SendOutlined, CommentOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, List, Typography, Alert, theme as AntdTheme, Descriptions, Empty, Spin, Dropdown } from 'antd';
+import type { DescriptionsProps } from 'antd';
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, AppstoreAddOutlined, SendOutlined, CommentOutlined, RollbackOutlined, FileTextOutlined, CheckOutlined, CloseCircleOutlined, UndoOutlined, ArrowDownOutlined } from '@ant-design/icons';
 import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
@@ -23,6 +24,7 @@ import type { Material } from '../../../../master-data/types/material';
 import { CustomerFormModal } from '../../../../master-data/components/CustomerFormModal';
 import { customerApi } from '../../../../master-data/services/supply-chain';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DRAWER_CONFIG, FormModalTemplate } from '../../../../../components/layout-templates';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { AmountDisplay } from '../../../../../components/permission';
 import { DictionaryLabel } from '../../../../../components/dictionary-label';
 import {
@@ -33,11 +35,24 @@ import {
   deleteQuotation,
   convertQuotationToOrder,
   submitQuotation,
+  withdrawQuotation,
+  approveQuotation,
+  rejectQuotation,
+  revokeReviewQuotation,
+  confirmCustomerQuotation,
+  reopenQuotation,
+  revokePushQuotation,
   Quotation,
 } from '../../../services/quotation';
+import { getSalesOrder, type SalesOrder } from '../../../services/sales-order';
+import { SalesOrderDetailBody } from '../sales-orders/components/SalesOrderDetailBody';
 import { getQuotationLifecycle } from '../../../utils/quotationLifecycle';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
-import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
+import {
+  DocumentTrackingRelationsBody,
+  DocumentTrackingTimelineBody,
+  useDocumentTracking,
+} from '../../../../../components/document-tracking-panel';
 import { apiRequest } from '../../../../../services/api';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import dayjs from 'dayjs';
@@ -65,12 +80,136 @@ const STATUS_MAP: Record<string, { text: string; color: string }> = {
   已转订单: { text: '已转订单', color: 'success' },
 };
 
+/** 与后端 LEGACY_PENDING_VALUES 一致 */
+const PENDING_REVIEW_STATUSES = new Set(['待审核', 'PENDING', 'PENDING_REVIEW']);
+
+function isApprovedReview(rs: string | undefined): boolean {
+  const r = (rs || '').trim();
+  return ['已通过', 'APPROVED', '审核通过', '通过', '已审核'].includes(r);
+}
+
+function canWithdrawQuotation(q: Quotation): boolean {
+  return q.status === '已发送' && PENDING_REVIEW_STATUSES.has((q.review_status || '').trim());
+}
+
+function canApproveQuotation(q: Quotation): boolean {
+  if (q.status !== '已发送') return false;
+  const rs = (q.review_status || '').trim();
+  return PENDING_REVIEW_STATUSES.has(rs) || rs === '';
+}
+
+function canRejectQuotation(q: Quotation): boolean {
+  return canApproveQuotation(q);
+}
+
+function canRevokeReviewQuotation(q: Quotation): boolean {
+  return q.status === '已发送' && isApprovedReview(q.review_status);
+}
+
+function canConfirmCustomerQuotation(q: Quotation): boolean {
+  return q.status === '已发送' && isApprovedReview(q.review_status);
+}
+
+function canReopenQuotation(q: Quotation): boolean {
+  return q.status === '已拒绝';
+}
+
+function canRevokePushQuotation(q: Quotation): boolean {
+  return q.status === '已转订单' && q.conversion_downstream_missing === true;
+}
+
+function canDeleteQuotation(q: Quotation): boolean {
+  if (q.conversion_downstream_missing === true) return true;
+  if (q.status === '已转订单') return false;
+  if (q.sales_order_id != null && Number(q.sales_order_id) > 0) return false;
+  return true;
+}
+
+/** 允许「转订单」：已审核通过或已接受；或已转单但下游已删可重新下推 */
+function canConvertQuotation(q: Quotation): boolean {
+  if (q.status === '已拒绝') return false;
+  if (q.status === '已转订单') {
+    return q.conversion_downstream_missing === true;
+  }
+  if (q.status === '已接受') return true;
+  if (q.status === '已发送') return isApprovedReview(q.review_status);
+  return false;
+}
+
 /** ProForm 提交时日期可能是 dayjs、字符串或 Date，避免直接调用 .format 报错 */
 function toApiDateString(v: unknown): string | undefined {
   if (v == null || v === '') return undefined;
   if (dayjs.isDayjs(v)) return v.isValid() ? v.format('YYYY-MM-DD') : undefined;
   const d = dayjs(v as string | Date | number);
   return d.isValid() ? d.format('YYYY-MM-DD') : undefined;
+}
+
+/** 将 ProDescriptions 列配置转为 Ant Design Descriptions items（与 DetailDrawerTemplate 逻辑一致） */
+function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
+  dataSource: T,
+  cols: ProDescriptionsItemProps<T>[]
+): NonNullable<DescriptionsProps['items']> {
+  return cols.map((col, index) => {
+    const dataIndex = col.dataIndex as keyof T | undefined;
+    const value = dataIndex != null ? dataSource[dataIndex] : undefined;
+    let content: React.ReactNode = value as React.ReactNode;
+    if (col.valueType === 'dateTime' && value) {
+      content = dayjs(value as string).format('YYYY-MM-DD HH:mm:ss');
+    } else if (col.valueType === 'date' && value) {
+      content = dayjs(value as string).format('YYYY-MM-DD');
+    }
+    if (col.render && dataSource != null) {
+      content = col.render(content, dataSource, index, {}, col);
+    }
+    return {
+      key: String(col.key ?? col.dataIndex ?? index),
+      label: col.title as React.ReactNode,
+      children: content !== undefined && content !== null ? content : '-',
+      span: col.span ?? 1,
+    };
+  });
+}
+
+/** 报价明细表最小横向滚动宽度（避免列换行，以横向滚动为主） */
+const QUOTATION_DETAIL_ITEMS_SCROLL_X = 1060;
+
+/** 报价单详情内打开下游销售订单时：二层抽屉宽度与 zIndex（叠在报价单抽屉之上） */
+const LINKED_DOCUMENT_DRAWER_WIDTH = '45%';
+const LINKED_DOCUMENT_DRAWER_Z_INDEX = 1050;
+
+/** 操作列平铺按钮上限（最多 3 个），第 4 个起收入「更多」 */
+const QUOTATION_ROW_ACTIONS_INLINE_MAX = 4;
+
+function renderQuotationRowActions(
+  nodes: React.ReactNode[],
+  keyPrefix: string
+): React.ReactNode {
+  const wrapped = nodes.map((node, i) => (
+    <span key={`${keyPrefix}-${i}`}>{node}</span>
+  ));
+  if (wrapped.length <= QUOTATION_ROW_ACTIONS_INLINE_MAX) {
+    return <Space size="small" wrap>{wrapped}</Space>;
+  }
+  const inline = wrapped.slice(0, QUOTATION_ROW_ACTIONS_INLINE_MAX);
+  const overflow = wrapped.slice(QUOTATION_ROW_ACTIONS_INLINE_MAX);
+  return (
+    <Space size="small" wrap>
+      {inline}
+      <Dropdown
+        menu={{
+          items: overflow.map((node, i) => ({
+            key: `${keyPrefix}-more-${i}`,
+            label: node,
+          })),
+        }}
+        trigger={['click']}
+      >
+        <Button type="link" size="small">
+          更多
+        </Button>
+      </Dropdown>
+    </Space>
+  );
 }
 
 /** 与销售订单明细表同一套 Table + Form.List 用法；物料列样式见 .quotation-detail-table */
@@ -108,6 +247,7 @@ const QuotationMaterialSelectCell: React.FC<{ index: number }> = ({ index }) => 
             material_name: 'name',
             material_spec: 'specification',
             material_unit: 'baseUnit',
+            unit_price: 'defaults.defaultSalePrice' as any,
           }}
           fallbackOption={fallback}
           formItemProps={{ style: { margin: 0 } }}
@@ -125,13 +265,49 @@ const QuotationAmountCell: React.FC<{ index: number }> = ({ index }) => {
   return <AmountDisplay resource="sales_order" value={amt} />;
 };
 
+const QuotationFormSummary: React.FC = () => {
+  const items = Form.useWatch('items');
+  const totalQuantity = items?.reduce((sum: number, it: any) => sum + (Number(it?.quote_quantity) || 0), 0) || 0;
+  const totalAmount =
+    items?.reduce((sum: number, it: any) => sum + (Number(it?.quote_quantity) || 0) * (Number(it?.unit_price) || 0), 0) || 0;
+
+  return (
+    <div
+      style={{
+        marginTop: 12,
+        padding: '12px',
+        background: '#fafafa',
+        borderRadius: '4px',
+        display: 'flex',
+        justifyContent: 'flex-end',
+        gap: 24,
+      }}
+    >
+      <span>总数量: <Typography.Text strong>{totalQuantity}</Typography.Text></span>
+      <span>
+        总金额:{' '}
+        <Typography.Text strong type="danger">
+          <AmountDisplay resource="sales_order" value={totalAmount} />
+        </Typography.Text>
+      </span>
+    </div>
+  );
+};
+
 const QuotationsPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const tableSearchFormRef = useRef<any>(null);
+  const [listTotal, setListTotal] = useState(0);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [quotationDetail, setQuotationDetail] = useState<Quotation | null>(null);
+  const quotationTracking = useDocumentTracking(
+    detailDrawerVisible && quotationDetail ? 'quotation' : undefined,
+    quotationDetail?.id
+  );
   const [syncModalVisible, setSyncModalVisible] = useState(false);
 
   const [modalVisible, setModalVisible] = useState(false);
@@ -154,6 +330,13 @@ const QuotationsPage: React.FC = () => {
   const [paymentTermsOptions, setPaymentTermsOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [followUpModalOpen, setFollowUpModalOpen] = useState(false);
   const [followUpPreset, setFollowUpPreset] = useState<CustomerFollowUpPreset | null>(null);
+  /** 报价单详情内点击下游销售订单：二层只读抽屉 */
+  const [linkedSalesOrderDrawerOpen, setLinkedSalesOrderDrawerOpen] = useState(false);
+  const [linkedSalesOrder, setLinkedSalesOrder] = useState<SalesOrder | null>(null);
+  const [linkedSalesOrderLoading, setLinkedSalesOrderLoading] = useState(false);
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const [rejectingRecord, setRejectingRecord] = useState<Quotation | null>(null);
+  const [rejectRemarks, setRejectRemarks] = useState('');
 
   useEffect(() => {
     const load = async () => {
@@ -210,69 +393,227 @@ const QuotationsPage: React.FC = () => {
     loadPaymentTerms();
   }, []);
 
-  const columns: ProColumns<Quotation>[] = [
-    { title: '报价单编号', dataIndex: 'quotation_code', width: 150, ellipsis: true, fixed: 'left' },
-    { title: '客户', dataIndex: 'customer_name', width: 140, ellipsis: true },
+  /** 高级搜索：编号、客户、日期范围、状态（与 UI 标准一致） */
+  const quotationSearchColumns: ProColumns<Quotation>[] = [
+    {
+      title: '报价单编号',
+      dataIndex: 'quotation_code',
+      hideInTable: true,
+      fieldProps: { placeholder: '支持模糊匹配' },
+      order: 10,
+    },
+    {
+      title: '客户名称',
+      dataIndex: 'customer_name',
+      hideInTable: true,
+      fieldProps: { placeholder: '客户名称' },
+      order: 20,
+    },
+    {
+      title: '报价日期',
+      dataIndex: 'date_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      fieldProps: { placeholder: ['开始日期', '结束日期'] },
+      order: 30,
+    },
+    {
+      title: '状态',
+      dataIndex: 'status',
+      valueType: 'select',
+      hideInTable: true,
+      valueEnum: {
+        草稿: { text: '草稿' },
+        已发送: { text: '已发送' },
+        已接受: { text: '已接受' },
+        已拒绝: { text: '已拒绝' },
+        已转订单: { text: '已转订单' },
+      },
+      order: 40,
+    },
+  ];
+
+  /** 列表列顺序与表单头字段顺序对齐；生命周期固定倒数第二列，操作列最后 */
+  const quotationTableColumns: ProColumns<Quotation>[] = [
+    {
+      title: '报价单编号',
+      dataIndex: 'quotation_code',
+      width: 168,
+      fixed: 'left',
+      hideInSearch: true,
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.quotation_code ?? '') }} ellipsis>
+          {r.quotation_code ?? '-'}
+        </Typography.Text>
+      ),
+    },
+    {
+      title: '客户',
+      dataIndex: 'customer_name',
+      width: 140,
+      ellipsis: true,
+      hideInSearch: true,
+    },
     {
       title: '报价日期',
       dataIndex: 'quotation_date',
       width: 110,
       valueType: 'date',
+      hideInSearch: true,
+    },
+    {
+      title: '销售员',
+      dataIndex: 'salesman_name',
+      width: 100,
+      ellipsis: true,
+      hideInSearch: true,
     },
     {
       title: '总金额',
       dataIndex: 'total_amount',
       width: 110,
       align: 'right',
+      hideInSearch: true,
       render: (_, r) => <AmountDisplay resource="sales_order" value={r.total_amount} />,
+    },
+    {
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      valueType: 'dateTime',
+      width: 168,
+      hideInSearch: true,
+      defaultSortOrder: 'descend',
     },
     {
       title: '生命周期',
       dataIndex: 'lifecycle',
-      width: 100,
-      valueEnum: {
-        草稿: { text: '草稿', status: 'Default' },
-        已发送: { text: '已发送', status: 'Processing' },
-        已接受: { text: '已接受', status: 'Success' },
-        已拒绝: { text: '已拒绝', status: 'Error' },
-        已转订单: { text: '已转订单', status: 'Success' },
-      },
+      width: 132,
+      fixed: 'right',
+      align: 'center',
+      hideInSearch: true,
       render: (_, record) => {
         const lifecycle = getQuotationLifecycle(record);
-        const stageName = lifecycle.stageName ?? record.status ?? '草稿';
-        const c = STATUS_MAP[stageName] || { text: stageName || '-', color: 'default' };
-        return <Tag {...resolveStatusTagDisplayProps(c)}>{c.text}</Tag>;
+        return (
+          <span style={{ display: 'inline-flex' }}>
+            <UniLifecycle
+              percent={lifecycle.percent}
+              stageName={lifecycle.stageName}
+              status={lifecycle.status}
+              subStages={lifecycle.subStages}
+              showLabel
+              size="small"
+              showCircleTooltip={false}
+            />
+          </span>
+        );
       },
     },
-    { title: '销售员', dataIndex: 'salesman_name', width: 100 },
-    { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime', width: 160 },
     {
       title: '操作',
-      width: 420,
+      width: 400,
       fixed: 'right',
-      render: (_, record) => (
-        <Space size="small" wrap>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record.id!)}>详情</Button>
-          {record.status === '草稿' && (
-            <>
-              <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
-              <Button type="link" size="small" icon={<SendOutlined />} onClick={() => handleSubmit(record)}>提交</Button>
-              <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>删除</Button>
-            </>
-          )}
-          {record.customer_id != null && Number.isFinite(Number(record.customer_id)) && (
-            <Button type="link" size="small" icon={<CommentOutlined />} onClick={() => openFollowUpFromQuotation(record)}>
+      hideInSearch: true,
+      render: (_, record) => {
+        const parts: React.ReactNode[] = [
+          <Button key="d" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record.id!)}>
+            详情
+          </Button>,
+        ];
+        if (record.status === '草稿') {
+          parts.push(
+            <Button key="e" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+              编辑
+            </Button>
+          );
+        }
+        if (canDeleteQuotation(record)) {
+          parts.push(
+            <Button key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
+              删除
+            </Button>
+          );
+        }
+        if (record.status === '草稿') {
+          parts.push(
+            <Button key="sub" type="link" size="small" icon={<SendOutlined />} onClick={() => handleSubmit(record)}>
+              提交
+            </Button>
+          );
+        }
+        if (canWithdrawQuotation(record)) {
+          parts.push(
+            <Button key="w" type="link" size="small" icon={<RollbackOutlined />} onClick={() => handleWithdraw(record)}>
+              撤回
+            </Button>
+          );
+        }
+        if (canApproveQuotation(record)) {
+          parts.push(
+            <Button key="ap" type="link" size="small" icon={<CheckOutlined />} onClick={() => handleApprove(record)}>
+              审核通过
+            </Button>
+          );
+        }
+        if (canRejectQuotation(record)) {
+          parts.push(
+            <Button key="rj" type="link" size="small" icon={<CloseCircleOutlined />} onClick={() => openRejectModal(record)}>
+              驳回
+            </Button>
+          );
+        }
+        if (canRevokeReviewQuotation(record)) {
+          parts.push(
+            <Button key="rv" type="link" size="small" icon={<UndoOutlined />} onClick={() => handleRevokeReview(record)}>
+              撤回审核
+            </Button>
+          );
+        }
+        if (canConfirmCustomerQuotation(record)) {
+          parts.push(
+            <Button key="cc" type="link" size="small" icon={<SendOutlined />} onClick={() => handleConfirmCustomer(record)}>
+              客户确认
+            </Button>
+          );
+        }
+        if (canReopenQuotation(record)) {
+          parts.push(
+            <Button key="ro" type="link" size="small" icon={<EditOutlined />} onClick={() => handleReopen(record)}>
+              重新编辑
+            </Button>
+          );
+        }
+        if (canConvertQuotation(record)) {
+          parts.push(
+            <Button key="cv" type="link" size="small" icon={<SwapOutlined />} onClick={() => handleConvert(record)}>
+              转销售订单
+            </Button>
+          );
+        }
+        if (canRevokePushQuotation(record)) {
+          parts.push(
+            <Button key="rp" type="link" size="small" icon={<RollbackOutlined />} onClick={() => handleRevokePush(record)}>
+              撤回下推
+            </Button>
+          );
+        }
+        parts.push(
+          <Button key="pr" type="link" size="small" icon={<PrinterOutlined />} onClick={() => handlePrint(record)}>
+            打印
+          </Button>
+        );
+        if (record.customer_id != null && Number.isFinite(Number(record.customer_id))) {
+          parts.push(
+            <Button key="fu" type="link" size="small" icon={<CommentOutlined />} onClick={() => openFollowUpFromQuotation(record)}>
               {t('app.kuaizhizao.customerFollowUp.addFollowUpFromDocument')}
             </Button>
-          )}
-          {record.status !== '已转订单' && record.status !== '已拒绝' && (
-            <Button type="link" size="small" icon={<SwapOutlined />} onClick={() => handleConvert(record)}>转订单</Button>
-          )}
-          <Button type="link" size="small" icon={<PrinterOutlined />} onClick={() => handlePrint(record)}>打印</Button>
-        </Space>
-      ),
+          );
+        }
+        return renderQuotationRowActions(parts, `q-${record.id ?? 'row'}`);
+      },
     },
   ];
+
+  const columns: ProColumns<Quotation>[] = [...quotationSearchColumns, ...quotationTableColumns];
 
   const handleDetail = async (id: number) => {
     try {
@@ -381,7 +722,7 @@ const QuotationsPage: React.FC = () => {
           material_spec: material?.specification ?? material?.material_spec ?? spec,
           material_unit: material?.base_unit ?? material?.baseUnit ?? material?.material_unit ?? unit,
           quote_quantity: quantity,
-          unit_price: price,
+          unit_price: price || material?.defaults?.defaultSalePrice || material?.default_sale_price || 0,
           delivery_date: deliveryDate ? (dayjs(deliveryDate).isValid() ? dayjs(deliveryDate) : undefined) : undefined,
         };
       })
@@ -417,6 +758,46 @@ const QuotationsPage: React.FC = () => {
       },
     });
   };
+
+  const handleBatchOperation = async (
+    keys: React.Key[],
+    actionName: string,
+    action: (id: number) => Promise<any>
+  ) => {
+    if (keys.length === 0) return;
+    let successCount = 0;
+    let failedCount = 0;
+    const failedItems: Array<{ id: number; error: string }> = [];
+    for (const k of keys) {
+      const id = Number(k);
+      try {
+        await action(id);
+        successCount += 1;
+      } catch (error: any) {
+        failedCount += 1;
+        failedItems.push({ id, error: error?.message || `${actionName}失败` });
+      }
+    }
+    if (failedCount === 0) {
+      messageApi.success(`${actionName}成功：${successCount} 条`);
+    } else {
+      messageApi.warning(`${actionName}完成：成功 ${successCount} 条，失败 ${failedCount} 条`);
+      if (failedItems.length > 0) {
+        console.error(`${actionName}失败详情:`, failedItems);
+      }
+    }
+    actionRef.current?.reload();
+    setSelectedRowKeys([]);
+  };
+
+  const handleBatchSubmit = (keys: React.Key[]) =>
+    handleBatchOperation(keys, '批量提交', (id) => submitQuotation(id));
+  const handleBatchApprove = (keys: React.Key[]) =>
+    handleBatchOperation(keys, '批量审核通过', (id) => approveQuotation(id));
+  const handleBatchWithdraw = (keys: React.Key[]) =>
+    handleBatchOperation(keys, '批量撤回', (id) => withdrawQuotation(id));
+  const handleBatchReopen = (keys: React.Key[]) =>
+    handleBatchOperation(keys, '批量重新编辑', (id) => reopenQuotation(id));
 
   const handleSyncConfirm = async (rows: Record<string, any>[]) => {
     try {
@@ -644,6 +1025,131 @@ const QuotationsPage: React.FC = () => {
     });
   };
 
+  const handleWithdraw = (record: Quotation) => {
+    Modal.confirm({
+      title: '撤回报价单',
+      content: `确定撤回「${record.quotation_code || record.id}」？将恢复为草稿，可继续编辑或删除。`,
+      onOk: async () => {
+        try {
+          const updated = await withdrawQuotation(record.id!);
+          messageApi.success('已撤回');
+          actionRef.current?.reload();
+          setQuotationDetail((prev) => (prev?.id === record.id ? updated : prev));
+        } catch (error: any) {
+          messageApi.error(error?.message || error?.detail || '撤回失败');
+        }
+      },
+    });
+  };
+
+  const openRejectModal = (record: Quotation) => {
+    setRejectingRecord(record);
+    setRejectRemarks('');
+    setRejectModalOpen(true);
+  };
+
+  const submitReject = async () => {
+    if (!rejectingRecord?.id) return;
+    try {
+      const updated = await rejectQuotation(rejectingRecord.id, {
+        review_remarks: rejectRemarks.trim() || undefined,
+      });
+      messageApi.success('已驳回');
+      setRejectModalOpen(false);
+      setRejectingRecord(null);
+      setRejectRemarks('');
+      actionRef.current?.reload();
+      setQuotationDetail((prev) => (prev?.id === rejectingRecord.id ? updated : prev));
+    } catch (e: any) {
+      messageApi.error(e?.message || e?.detail || '驳回失败');
+    }
+  };
+
+  const handleApprove = (record: Quotation) => {
+    Modal.confirm({
+      title: '审核通过',
+      content: `确定审核通过报价单「${record.quotation_code || record.id}」？`,
+      onOk: async () => {
+        try {
+          const updated = await approveQuotation(record.id!);
+          messageApi.success('审核已通过');
+          actionRef.current?.reload();
+          setQuotationDetail((prev) => (prev?.id === record.id ? updated : prev));
+        } catch (e: any) {
+          messageApi.error(e?.message || e?.detail || '操作失败');
+        }
+      },
+    });
+  };
+
+  const handleRevokeReview = (record: Quotation) => {
+    Modal.confirm({
+      title: '撤回审核',
+      content: '确定撤回审核？将回到待审核，需重新审核。',
+      onOk: async () => {
+        try {
+          const updated = await revokeReviewQuotation(record.id!);
+          messageApi.success('已撤回审核');
+          actionRef.current?.reload();
+          setQuotationDetail((prev) => (prev?.id === record.id ? updated : prev));
+        } catch (e: any) {
+          messageApi.error(e?.message || e?.detail || '操作失败');
+        }
+      },
+    });
+  };
+
+  const handleConfirmCustomer = (record: Quotation) => {
+    Modal.confirm({
+      title: '客户确认',
+      content: '标记为「已接受」，表示报价已获客户认可，可继续下推销售订单。',
+      onOk: async () => {
+        try {
+          const updated = await confirmCustomerQuotation(record.id!);
+          messageApi.success('已标记客户确认');
+          actionRef.current?.reload();
+          setQuotationDetail((prev) => (prev?.id === record.id ? updated : prev));
+        } catch (e: any) {
+          messageApi.error(e?.message || e?.detail || '操作失败');
+        }
+      },
+    });
+  };
+
+  const handleReopen = (record: Quotation) => {
+    Modal.confirm({
+      title: '重新编辑',
+      content: '将报价单恢复为草稿，修改后可再次提交。',
+      onOk: async () => {
+        try {
+          const updated = await reopenQuotation(record.id!);
+          messageApi.success('已恢复草稿');
+          actionRef.current?.reload();
+          setQuotationDetail((prev) => (prev?.id === record.id ? updated : prev));
+        } catch (e: any) {
+          messageApi.error(e?.message || e?.detail || '操作失败');
+        }
+      },
+    });
+  };
+
+  const handleRevokePush = (record: Quotation) => {
+    Modal.confirm({
+      title: '撤回下推',
+      content: '解除与已删除销售订单的关联，恢复为「已接受」，可再次转销售订单。',
+      onOk: async () => {
+        try {
+          const updated = await revokePushQuotation(record.id!);
+          messageApi.success('已撤回下推');
+          actionRef.current?.reload();
+          setQuotationDetail((prev) => (prev?.id === record.id ? updated : prev));
+        } catch (e: any) {
+          messageApi.error(e?.message || e?.detail || '操作失败');
+        }
+      },
+    });
+  };
+
   const handlePrint = async (record: Quotation) => {
     try {
       const result = await apiRequest<{ content?: string }>(`/apps/kuaizhizao/quotations/${record.id}/print`, {
@@ -821,14 +1327,12 @@ const QuotationsPage: React.FC = () => {
     actionRef.current?.reload();
   };
 
-  const detailColumns: ProDescriptionsItemProps<Quotation>[] = [
+  /** 详情-基本信息（平铺，与抽屉四区块一致） */
+  const detailSummaryColumns: ProDescriptionsItemProps<Quotation>[] = [
     { title: '报价单编号', dataIndex: 'quotation_code' },
     { title: '客户', dataIndex: 'customer_name' },
-    { title: '联系人', dataIndex: 'customer_contact' },
-    { title: '电话', dataIndex: 'customer_phone' },
-    { title: '报价日期', dataIndex: 'quotation_date' },
-    { title: '有效期至', dataIndex: 'valid_until' },
-    { title: '预计交货日期', dataIndex: 'delivery_date' },
+    { title: '报价日期', dataIndex: 'quotation_date', valueType: 'date' },
+    { title: '销售员', dataIndex: 'salesman_name' },
     {
       title: '总金额',
       dataIndex: 'total_amount',
@@ -842,8 +1346,15 @@ const QuotationsPage: React.FC = () => {
         return <Tag {...resolveStatusTagDisplayProps(c)}>{c.text}</Tag>;
       },
     },
-    { title: '销售员', dataIndex: 'salesman_name' },
-    { title: '收货地址', dataIndex: 'shipping_address', span: 2 },
+    { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
+  ];
+
+  const detailCustomerDeliveryColumns: ProDescriptionsItemProps<Quotation>[] = [
+    { title: '联系人', dataIndex: 'customer_contact' },
+    { title: '电话', dataIndex: 'customer_phone' },
+    { title: '有效期至', dataIndex: 'valid_until', valueType: 'date' },
+    { title: '预计交货日期', dataIndex: 'delivery_date', valueType: 'date' },
+    { title: '收货地址', dataIndex: 'shipping_address', span: 3 },
     {
       title: '发货方式',
       dataIndex: 'shipping_method',
@@ -869,9 +1380,51 @@ const QuotationsPage: React.FC = () => {
         <DictionaryLabel dictionaryCode="CURRENCY" value={record.currency_code || DEFAULT_QUOTATION_CURRENCY} />
       ),
     },
-    { title: '关联销售订单', dataIndex: 'sales_order_code' },
-    { title: '备注', dataIndex: 'notes', span: 2 },
   ];
+
+  const detailLinkNotesColumns: ProDescriptionsItemProps<Quotation>[] = [
+    { title: '关联销售订单', dataIndex: 'sales_order_code' },
+    { title: '备注', dataIndex: 'notes', span: 3 },
+  ];
+
+  const detailBasicColumns: ProDescriptionsItemProps<Quotation>[] = [
+    ...detailSummaryColumns,
+    ...detailCustomerDeliveryColumns,
+    ...detailLinkNotesColumns,
+  ];
+
+  const openLinkedSalesOrderDrawer = useCallback(
+    async (id: number) => {
+      setLinkedSalesOrderDrawerOpen(true);
+      setLinkedSalesOrder(null);
+      setLinkedSalesOrderLoading(true);
+      try {
+        const data = await getSalesOrder(id, true, true);
+        setLinkedSalesOrder(data);
+      } catch (e: any) {
+        messageApi.error(e?.message || e?.detail || '加载销售订单失败');
+        setLinkedSalesOrderDrawerOpen(false);
+      } finally {
+        setLinkedSalesOrderLoading(false);
+      }
+    },
+    [messageApi]
+  );
+
+  const onQuotationTrackingDocClick = useCallback(
+    (type: string, id: number) => {
+      if (type === 'sales_order' && id) {
+        openLinkedSalesOrderDrawer(id);
+      }
+    },
+    [openLinkedSalesOrderDrawer]
+  );
+
+  const closeLinkedSalesOrderDrawer = useCallback(() => {
+    setLinkedSalesOrderDrawerOpen(false);
+    setLinkedSalesOrder(null);
+    setLinkedSalesOrderLoading(false);
+  }, []);
 
   const appendQuotationItemsFromMaterials = useCallback(
     (selected: Material[]) => {
@@ -885,7 +1438,7 @@ const QuotationsPage: React.FC = () => {
         material_spec: m.specification ?? '',
         material_unit: m.baseUnit ?? '',
         quote_quantity: 1,
-        unit_price: 0,
+        unit_price: (m as any).defaults?.defaultSalePrice ?? (m as any).default_sale_price ?? 0,
         delivery_date: defaultDelivery,
         notes: '',
       });
@@ -1321,6 +1874,7 @@ const QuotationsPage: React.FC = () => {
           </Form.List>
         </Form.Item>
       </div>
+      <QuotationFormSummary />
       <ProFormTextArea name="notes" label="备注" fieldProps={{ rows: 2 }} />
       <MaterialBatchPickerModal
         open={materialPickerOpen}
@@ -1334,17 +1888,59 @@ const QuotationsPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable
+          selectedRowKeys={selectedRowKeys}
+          onRowSelectionChange={setSelectedRowKeys}
           headerTitle="报价单"
+          formRef={tableSearchFormRef}
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
-          showAdvancedSearch={true}
+          showAdvancedSearch
+          toolBarButtonSize="middle"
           showCreateButton
           createButtonText="新建报价单"
           onCreate={handleCreate}
           enableRowSelection
-          showDeleteButton
-          onDelete={handleBatchDelete}
+          toolBarRender={() => [
+            <Dropdown.Button
+              key={`batch-btn-${selectedRowKeys.length}`}
+              disabled={selectedRowKeys.length === 0}
+              trigger={['click']}
+              danger
+              icon={<ArrowDownOutlined />}
+              onClick={() => handleBatchDelete(selectedRowKeys)}
+              menu={{
+                items: [
+                  {
+                    key: 'submit',
+                    label: '批量提交',
+                    icon: <SendOutlined />,
+                    onClick: () => handleBatchSubmit(selectedRowKeys),
+                  },
+                  {
+                    key: 'approve',
+                    label: '批量审核通过',
+                    icon: <CheckOutlined />,
+                    onClick: () => handleBatchApprove(selectedRowKeys),
+                  },
+                  {
+                    key: 'withdraw',
+                    label: '批量撤回',
+                    icon: <RollbackOutlined />,
+                    onClick: () => handleBatchWithdraw(selectedRowKeys),
+                  },
+                  {
+                    key: 'reopen',
+                    label: '批量重新编辑',
+                    icon: <EditOutlined />,
+                    onClick: () => handleBatchReopen(selectedRowKeys),
+                  },
+                ],
+              }}
+            >
+              <DeleteOutlined /> 批量删除
+            </Dropdown.Button>,
+          ]}
           showImportButton={true}
           onImport={handleListImport}
           importHeaders={['报价单编号', '客户名称', '报价日期', '物料编号', '数量', '单价', '交货日期', '备注']}
@@ -1393,16 +1989,26 @@ const QuotationsPage: React.FC = () => {
           }}
           showSyncButton
           onSync={() => setSyncModalVisible(true)}
-          request={async (params) => {
+          request={async (params, _sort, _filter, searchFormValues) => {
             try {
+              const dr = searchFormValues?.date_range as [unknown, unknown] | undefined;
+              let startDate: string | undefined;
+              let endDate: string | undefined;
+              if (dr && Array.isArray(dr) && dr[0]) {
+                startDate = dayjs(dr[0] as string | Date).format('YYYY-MM-DD');
+                endDate = dr[1] ? dayjs(dr[1] as string | Date).format('YYYY-MM-DD') : startDate;
+              }
               const response = await listQuotations({
                 skip: ((params.current || 1) - 1) * (params.pageSize || 20),
                 limit: params.pageSize || 20,
-                status: params.lifecycle ?? params.status,
-                salesman_id: params.salesman_id,
-                start_date: params.start_date,
-                end_date: params.end_date,
+                status: searchFormValues?.status,
+                keyword: searchFormValues?.keyword,
+                quotation_code: searchFormValues?.quotation_code,
+                customer_name: searchFormValues?.customer_name,
+                start_date: startDate,
+                end_date: endDate,
               });
+              setListTotal(response.total ?? 0);
               return {
                 data: response.data || [],
                 success: true,
@@ -1410,88 +2016,242 @@ const QuotationsPage: React.FC = () => {
               };
             } catch {
               messageApi.error('获取报价单列表失败');
+              setListTotal(0);
               return { data: [], success: false, total: 0 };
             }
           }}
-          scroll={{ x: 1100 }}
+          scroll={{ x: 1280 }}
         />
       </ListPageTemplate>
 
       <DetailDrawerTemplate
         title={`报价单详情${quotationDetail?.quotation_code ? ` - ${quotationDetail.quotation_code}` : ''}`}
         open={detailDrawerVisible}
-        onClose={() => { setDetailDrawerVisible(false); setQuotationDetail(null); }}
+        onClose={() => {
+          setDetailDrawerVisible(false);
+          setQuotationDetail(null);
+          closeLinkedSalesOrderDrawer();
+        }}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={detailColumns}
+        columns={[]}
         dataSource={quotationDetail || {}}
         extra={
           quotationDetail && (
-            <Space>
+            <Space wrap>
               {quotationDetail.status === '草稿' && (
                 <Button icon={<SendOutlined />} onClick={() => handleSubmit(quotationDetail)}>提交</Button>
               )}
-              {quotationDetail.status !== '已转订单' && quotationDetail.status !== '已拒绝' && (
-                <Button type="primary" icon={<SwapOutlined />} onClick={() => handleConvert(quotationDetail)}>转为销售订单</Button>
+              {canWithdrawQuotation(quotationDetail) && (
+                <Button icon={<RollbackOutlined />} onClick={() => handleWithdraw(quotationDetail)}>撤回</Button>
+              )}
+              {canApproveQuotation(quotationDetail) && (
+                <Button icon={<CheckOutlined />} onClick={() => handleApprove(quotationDetail)}>审核通过</Button>
+              )}
+              {canRejectQuotation(quotationDetail) && (
+                <Button icon={<CloseCircleOutlined />} onClick={() => openRejectModal(quotationDetail)}>驳回</Button>
+              )}
+              {canRevokeReviewQuotation(quotationDetail) && (
+                <Button icon={<UndoOutlined />} onClick={() => handleRevokeReview(quotationDetail)}>撤回审核</Button>
+              )}
+              {canConfirmCustomerQuotation(quotationDetail) && (
+                <Button icon={<SendOutlined />} onClick={() => handleConfirmCustomer(quotationDetail)}>客户确认</Button>
+              )}
+              {canReopenQuotation(quotationDetail) && (
+                <Button icon={<EditOutlined />} onClick={() => handleReopen(quotationDetail)}>重新编辑</Button>
+              )}
+              {canDeleteQuotation(quotationDetail) && (
+                <Button danger icon={<DeleteOutlined />} onClick={() => handleDelete(quotationDetail)}>删除</Button>
+              )}
+              {canConvertQuotation(quotationDetail) && (
+                <Button type="primary" icon={<SwapOutlined />} onClick={() => handleConvert(quotationDetail)}>转销售订单</Button>
+              )}
+              {canRevokePushQuotation(quotationDetail) && (
+                <Button icon={<RollbackOutlined />} onClick={() => handleRevokePush(quotationDetail)}>撤回下推</Button>
               )}
             </Space>
           )
         }
       >
-        {quotationDetail && (() => {
-          const lifecycle = getQuotationLifecycle(quotationDetail);
-          const mainStages = lifecycle.mainStages ?? [];
-          const subStages = lifecycle.subStages ?? [];
-          if (mainStages.length === 0 && subStages.length === 0) return null;
-          return (
+        {quotationDetail && (
+          <>
+            <DetailDrawerSection title="基本信息">
+              <Descriptions
+                column={3}
+                size="small"
+                items={buildDescriptionItemsFromColumns(quotationDetail, detailBasicColumns)}
+              />
+            </DetailDrawerSection>
+
             <DetailDrawerSection title="生命周期">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {mainStages.length > 0 && (
-                  <UniLifecycleStepper
-                    steps={mainStages}
-                    status={lifecycle.status}
-                    showLabels
-                    nextStepSuggestions={lifecycle.nextStepSuggestions}
-                  />
-                )}
-                {subStages.length > 0 && (
-                  <div>
-                    <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
-                      执行中 · 全链路
-                    </div>
-                    <UniLifecycleStepper steps={subStages} showLabels />
+                {(() => {
+                  const lifecycle = getQuotationLifecycle(quotationDetail);
+                  const mainStages = lifecycle.mainStages ?? [];
+                  const subStages = lifecycle.subStages ?? [];
+                  return (
+                    <>
+                      {quotationDetail.conversion_downstream_missing && lifecycle.nextStepSuggestions?.length ? (
+                        <Alert
+                          type="warning"
+                          showIcon
+                          message="下游销售订单已不存在"
+                          description={lifecycle.nextStepSuggestions.join('；')}
+                        />
+                      ) : null}
+                      {mainStages.length > 0 && (
+                        <UniLifecycleStepper
+                          steps={mainStages}
+                          status={lifecycle.status}
+                          showLabels
+                          nextStepSuggestions={lifecycle.nextStepSuggestions}
+                        />
+                      )}
+                      {subStages.length > 0 && (
+                        <div>
+                          <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
+                            执行中 · 全链路
+                          </div>
+                          <UniLifecycleStepper steps={subStages} showLabels />
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+                <div
+                  style={{
+                    paddingTop: 12,
+                    borderTop: '1px solid var(--ant-color-border-secondary)',
+                  }}
+                >
+                  <div style={{ marginBottom: 8, fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
+                    上下游单据
                   </div>
-                )}
+                  {quotationTracking.loading && (
+                    <div style={{ padding: '8px 0' }}>
+                      <Spin size="small" />
+                    </div>
+                  )}
+                  {quotationTracking.error && (
+                    <Typography.Text type="danger">{quotationTracking.error}</Typography.Text>
+                  )}
+                  {quotationTracking.data && (
+                    <DocumentTrackingRelationsBody
+                      data={quotationTracking.data}
+                      onDocumentClick={onQuotationTrackingDocClick}
+                    />
+                  )}
+                </div>
               </div>
             </DetailDrawerSection>
-          );
-        })()}
-        {quotationDetail?.items && quotationDetail.items.length > 0 && (
-          <DetailDrawerSection title="报价明细">
-          <Table
-            size="small"
-            rowKey="id"
-            columns={[
-              { title: '物料编号', dataIndex: 'material_code', width: 120 },
-              { title: '物料名称', dataIndex: 'material_name', width: 150 },
-              { title: '规格', dataIndex: 'material_spec', width: 100 },
-              { title: '单位', dataIndex: 'material_unit', width: 60, render: (v: string) => <DictionaryLabel dictionaryCode="MATERIAL_UNIT" value={v} /> },
-              { title: '报价数量', dataIndex: 'quote_quantity', width: 100, align: 'right' },
-              { title: '单价', dataIndex: 'unit_price', width: 100, align: 'right', render: (v: number) => <AmountDisplay resource="sales_order" value={v} /> },
-              { title: '金额', dataIndex: 'total_amount', width: 100, align: 'right', render: (v: number) => <AmountDisplay resource="sales_order" value={v} /> },
-              { title: '交货日期', dataIndex: 'delivery_date', width: 110 },
-              { title: '备注', dataIndex: 'notes' },
-            ]}
-            dataSource={quotationDetail.items}
-            pagination={false}
-          />
-          </DetailDrawerSection>
-        )}
-        {quotationDetail?.id && (
-          <DetailDrawerSection title="操作历史">
-            <DocumentTrackingPanel documentType="quotation" documentId={quotationDetail.id} />
-          </DetailDrawerSection>
+
+            <DetailDrawerSection title="明细信息">
+              {/*
+                横滚仅在外层；内层表体覆盖 global.less 的 overflow-x:auto 以免出现竖向滚动条。
+                外层 overflow-x:auto + overflow-y:hidden，避免同元素 visible/auto 配对问题。
+              */}
+              <style>{`
+                .quotation-detail-drawer-items .ant-table-wrapper .ant-table-body,
+                .quotation-detail-drawer-items .ant-table-wrapper .ant-table-content {
+                  overflow: visible !important;
+                }
+              `}</style>
+              {quotationDetail.items && quotationDetail.items.length > 0 ? (
+                <div
+                  className="quotation-detail-drawer-items"
+                  style={{ width: '100%', maxWidth: '100%', overflowX: 'auto', overflowY: 'hidden' }}
+                >
+                  <Table
+                    size="small"
+                    rowKey="id"
+                    tableLayout="fixed"
+                    style={{ minWidth: QUOTATION_DETAIL_ITEMS_SCROLL_X }}
+                    columns={[
+                      { title: '物料编号', dataIndex: 'material_code', width: 120, ellipsis: true },
+                      { title: '物料名称', dataIndex: 'material_name', width: 160, ellipsis: true },
+                      { title: '规格', dataIndex: 'material_spec', width: 120, ellipsis: true },
+                      {
+                        title: '单位',
+                        dataIndex: 'material_unit',
+                        width: 72,
+                        ellipsis: true,
+                        render: (v: string) => <DictionaryLabel dictionaryCode="MATERIAL_UNIT" value={v} />,
+                      },
+                      { title: '报价数量', dataIndex: 'quote_quantity', width: 100, align: 'right' },
+                      {
+                        title: '单价',
+                        dataIndex: 'unit_price',
+                        width: 100,
+                        align: 'right',
+                        render: (v: number) => <AmountDisplay resource="sales_order" value={v} />,
+                      },
+                      {
+                        title: '金额',
+                        dataIndex: 'total_amount',
+                        width: 100,
+                        align: 'right',
+                        render: (v: number) => <AmountDisplay resource="sales_order" value={v} />,
+                      },
+                      { title: '交货日期', dataIndex: 'delivery_date', width: 120, ellipsis: true },
+                      { title: '备注', dataIndex: 'notes', width: 160, ellipsis: true },
+                    ]}
+                    dataSource={quotationDetail.items}
+                    pagination={false}
+                  />
+                </div>
+              ) : (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无明细" />
+              )}
+            </DetailDrawerSection>
+
+            {quotationDetail.id != null && (
+              <DetailDrawerSection title="操作记录">
+                {quotationTracking.loading && (
+                  <div style={{ textAlign: 'center', padding: 24 }}>
+                    <Spin />
+                  </div>
+                )}
+                {quotationTracking.error && !quotationTracking.loading && (
+                  <Typography.Text type="danger">{quotationTracking.error}</Typography.Text>
+                )}
+                {quotationTracking.data && !quotationTracking.loading && (
+                  <DocumentTrackingTimelineBody data={quotationTracking.data} />
+                )}
+              </DetailDrawerSection>
+            )}
+          </>
         )}
       </DetailDrawerTemplate>
+
+      <DetailDrawerTemplate
+        title={`销售订单详情${linkedSalesOrder?.order_code ? ` - ${linkedSalesOrder.order_code}` : ''}`}
+        open={linkedSalesOrderDrawerOpen}
+        onClose={closeLinkedSalesOrderDrawer}
+        width={LINKED_DOCUMENT_DRAWER_WIDTH}
+        zIndex={LINKED_DOCUMENT_DRAWER_Z_INDEX}
+        columns={[]}
+        dataSource={{}}
+        extra={
+          <Button
+            type="link"
+            size="small"
+            onClick={() => {
+              closeLinkedSalesOrderDrawer();
+              navigate('/apps/kuaizhizao/sales-management/sales-orders');
+            }}
+          >
+            前往销售订单管理
+          </Button>
+        }
+        customContent={
+          linkedSalesOrder ? (
+            <SalesOrderDetailBody order={linkedSalesOrder} onTrackingDocumentClick={onQuotationTrackingDocClick} />
+          ) : linkedSalesOrderLoading ? (
+            <div style={{ textAlign: 'center', padding: 48 }}>
+              <Spin />
+            </div>
+          ) : null
+        }
+      />
 
       <FormModalTemplate
         title={editingId != null ? '编辑报价单' : '新建报价单'}
@@ -1575,6 +2335,32 @@ const QuotationsPage: React.FC = () => {
           setFollowUpPreset(null);
         }}
       />
+
+      <Modal
+        title="驳回报价单"
+        open={rejectModalOpen}
+        okText="确认驳回"
+        okButtonProps={{ danger: true }}
+        onOk={submitReject}
+        onCancel={() => {
+          setRejectModalOpen(false);
+          setRejectingRecord(null);
+          setRejectRemarks('');
+        }}
+        destroyOnClose
+      >
+        <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
+          报价单：{rejectingRecord?.quotation_code ?? rejectingRecord?.id ?? '-'}
+        </Typography.Paragraph>
+        <Input.TextArea
+          rows={3}
+          value={rejectRemarks}
+          onChange={(e) => setRejectRemarks(e.target.value)}
+          placeholder="可选：驳回原因"
+          maxLength={500}
+          showCount
+        />
+      </Modal>
     </>
   );
 };

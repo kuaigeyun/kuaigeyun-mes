@@ -22,6 +22,7 @@ from apps.kuaizhizao.schemas.quotation import (
     QuotationUpdate,
     QuotationResponse,
     QuotationListResponse,
+    QuotationReviewAction,
 )
 from apps.kuaizhizao.schemas.sales_order import SalesOrderResponse
 
@@ -58,6 +59,8 @@ async def list_quotations(
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
     keyword: Optional[str] = Query(None, description="关键词搜索（编码、客户）"),
+    quotation_code: Optional[str] = Query(None, description="报价单编号（模糊）"),
+    customer_name: Optional[str] = Query(None, description="客户名称（模糊）"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -71,6 +74,8 @@ async def list_quotations(
             start_date=start_date,
             end_date=end_date,
             keyword=keyword,
+            quotation_code=quotation_code,
+            customer_name=customer_name,
             current_user=current_user,
         )
     except Exception as e:
@@ -132,6 +137,31 @@ async def update_quotation(
         )
 
 
+@router.post("/{quotation_id}/withdraw", response_model=QuotationResponse, summary="撤回已提交的报价单")
+async def withdraw_quotation(
+    quotation_id: int = Path(..., description="报价单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """已发送且待审核的报价单撤回到草稿，可再编辑或删除。"""
+    try:
+        return await quotation_service.withdraw_quotation(
+            tenant_id=tenant_id,
+            quotation_id=quotation_id,
+            withdrawn_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error("撤回报价单失败: %s", e)
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="撤回报价单失败",
+        )
+
+
 @router.post("/{quotation_id}/submit", response_model=QuotationResponse, summary="提交报价单")
 async def submit_quotation(
     quotation_id: int = Path(..., description="报价单ID"),
@@ -154,6 +184,160 @@ async def submit_quotation(
         raise HTTPException(
             status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="提交报价单失败",
+        )
+
+
+@router.post("/{quotation_id}/approve", response_model=QuotationResponse, summary="审核通过报价单")
+async def approve_quotation(
+    quotation_id: int = Path(..., description="报价单ID"),
+    body: QuotationReviewAction = Body(default_factory=QuotationReviewAction),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """已发送且待审核 → 审核通过（保持已发送）。"""
+    try:
+        return await quotation_service.approve_quotation(
+            tenant_id=tenant_id,
+            quotation_id=quotation_id,
+            operator_id=current_user.id,
+            review_remarks=body.review_remarks,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error("报价单审核通过失败: %s", e)
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="报价单审核通过失败",
+        )
+
+
+@router.post("/{quotation_id}/reject", response_model=QuotationResponse, summary="驳回报价单")
+async def reject_quotation(
+    quotation_id: int = Path(..., description="报价单ID"),
+    body: QuotationReviewAction = Body(default_factory=QuotationReviewAction),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """已发送且待审核 → 已拒绝。"""
+    try:
+        return await quotation_service.reject_quotation(
+            tenant_id=tenant_id,
+            quotation_id=quotation_id,
+            operator_id=current_user.id,
+            review_remarks=body.review_remarks,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error("报价单驳回失败: %s", e)
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="报价单驳回失败",
+        )
+
+
+@router.post("/{quotation_id}/revoke-review", response_model=QuotationResponse, summary="撤回审核（回到待审核）")
+async def revoke_review_quotation(
+    quotation_id: int = Path(..., description="报价单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """已发送且已通过 → 回到待审核。"""
+    try:
+        return await quotation_service.revoke_review_quotation(
+            tenant_id=tenant_id,
+            quotation_id=quotation_id,
+            operator_id=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error("报价单撤回审核失败: %s", e)
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="报价单撤回审核失败",
+        )
+
+
+@router.post("/{quotation_id}/confirm-customer", response_model=QuotationResponse, summary="客户确认（标记已接受）")
+async def confirm_customer_quotation(
+    quotation_id: int = Path(..., description="报价单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """已发送且审核通过 → 已接受（发送/客户认可）。"""
+    try:
+        return await quotation_service.confirm_customer_quotation(
+            tenant_id=tenant_id,
+            quotation_id=quotation_id,
+            operator_id=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error("报价单客户确认失败: %s", e)
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="报价单客户确认失败",
+        )
+
+
+@router.post("/{quotation_id}/reopen", response_model=QuotationResponse, summary="驳回后重新编辑")
+async def reopen_quotation(
+    quotation_id: int = Path(..., description="报价单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """已拒绝 → 草稿，可修改后再次提交。"""
+    try:
+        return await quotation_service.reopen_quotation_after_reject(
+            tenant_id=tenant_id,
+            quotation_id=quotation_id,
+            operator_id=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error("报价单重新打开失败: %s", e)
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="报价单重新打开失败",
+        )
+
+
+@router.post("/{quotation_id}/revoke-push", response_model=QuotationResponse, summary="撤回下推")
+async def revoke_push_quotation(
+    quotation_id: int = Path(..., description="报价单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """已转订单但下游销售订单已不存在时，解除关联回到已接受。"""
+    try:
+        return await quotation_service.revoke_push_quotation(
+            tenant_id=tenant_id,
+            quotation_id=quotation_id,
+            operator_id=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error("报价单撤回下推失败: %s", e)
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="报价单撤回下推失败",
         )
 
 
@@ -189,7 +373,7 @@ async def delete_quotation(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """删除报价单（软删除），仅草稿状态可删除"""
+    """删除报价单（软删除）。未转销售订单前可删；已转订单或已关联销售订单的不可删。"""
     try:
         await quotation_service.delete_quotation(
             tenant_id=tenant_id,

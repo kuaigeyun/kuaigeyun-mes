@@ -46,6 +46,77 @@ class SampleTrialService(AppBaseService[SampleTrial]):
         super().__init__(SampleTrial)
         self.business_config_service = BusinessConfigService()
 
+    async def _log_sample_trial_state_transition(
+        self,
+        tenant_id: int,
+        trial_id: int,
+        from_state: str,
+        to_state: str,
+        operator_id: int,
+        operator_name: str,
+        reason: Optional[str] = None,
+        comment: Optional[str] = None,
+    ) -> None:
+        """写入样品试用单状态流转日志，供单据跟踪操作记录展示。"""
+        try:
+            from apps.kuaizhizao.models.state_transition import StateTransitionLog
+
+            await StateTransitionLog.create(
+                tenant_id=tenant_id,
+                entity_type="sample_trial",
+                entity_id=trial_id,
+                from_state=(from_state or "")[:50],
+                to_state=(to_state or "")[:50],
+                transition_reason=(reason[:200] if reason else None),
+                transition_comment=comment,
+                operator_id=operator_id,
+                operator_name=(operator_name or str(operator_id))[:100],
+                transition_time=datetime.now(),
+            )
+        except Exception as e:
+            logger.warning("样品试用单状态流转日志写入失败，跳过: %s", e)
+
+    async def _submit_sample_trial_from_draft(
+        self,
+        tenant_id: int,
+        trial_id: int,
+        operator_id: int,
+        *,
+        auto_approved: bool,
+    ) -> None:
+        """草稿提交：根据蓝图决定进入已提交或自动已审核。"""
+        op_name = await self.get_user_name(operator_id)
+        now = datetime.now()
+        if auto_approved:
+            await SampleTrial.filter(tenant_id=tenant_id, id=trial_id).update(
+                status="已审核",
+                updated_by=operator_id,
+            )
+            await self._log_sample_trial_state_transition(
+                tenant_id=tenant_id,
+                trial_id=trial_id,
+                from_state="草稿",
+                to_state="已审核",
+                operator_id=operator_id,
+                operator_name=op_name,
+                reason="自动审核",
+            )
+        else:
+            await SampleTrial.filter(tenant_id=tenant_id, id=trial_id).update(
+                status="已提交",
+                updated_by=operator_id,
+            )
+            await self._log_sample_trial_state_transition(
+                tenant_id=tenant_id,
+                trial_id=trial_id,
+                from_state="草稿",
+                to_state="已提交",
+                operator_id=operator_id,
+                operator_name=op_name,
+                reason="提交",
+                comment=f"submitted_at={now.isoformat()}",
+            )
+
     async def create_sample_trial(
         self,
         tenant_id: int,
@@ -115,6 +186,18 @@ class SampleTrialService(AppBaseService[SampleTrial]):
                 total_amount=total_amount
             )
             trial = await SampleTrial.get(tenant_id=tenant_id, id=trial.id)
+            # 与报价单一致：蓝图 nodes.sample_trial.auditRequired=False 时，创建后自动审核通过
+            audit_required = await self.business_config_service.check_audit_required(
+                tenant_id, "sample_trial"
+            )
+            if not audit_required and (trial.status or "").strip() == "草稿":
+                await self._submit_sample_trial_from_draft(
+                    tenant_id=tenant_id,
+                    trial_id=trial.id,
+                    operator_id=created_by,
+                    auto_approved=True,
+                )
+                trial = await SampleTrial.get(tenant_id=tenant_id, id=trial.id)
             return SampleTrialResponse.model_validate(trial)
 
     async def get_sample_trial_by_id(
@@ -145,6 +228,14 @@ class SampleTrialService(AppBaseService[SampleTrial]):
             query = query.filter(status=filters["status"])
         if filters.get("customer_id"):
             query = query.filter(customer_id=filters["customer_id"])
+        if filters.get("customer_name"):
+            query = query.filter(customer_name__icontains=filters["customer_name"])
+        if filters.get("trial_code"):
+            query = query.filter(trial_code__icontains=filters["trial_code"])
+        if filters.get("trial_period_start"):
+            query = query.filter(trial_period_start__gte=filters["trial_period_start"])
+        if filters.get("trial_period_end"):
+            query = query.filter(trial_period_end__lte=filters["trial_period_end"])
 
         trials = await query.offset(skip).limit(limit).order_by("-created_at")
         return [SampleTrialListResponse.model_validate(r) for r in trials]
@@ -218,6 +309,8 @@ class SampleTrialService(AppBaseService[SampleTrial]):
         )
         if not trial:
             raise NotFoundError(f"样品试用单不存在: {trial_id}")
+        if trial.status in ("草稿", "已提交"):
+            raise BusinessLogicError("样品试用单需审核通过后方可转订单")
         if trial.status == "已转订单":
             raise BusinessLogicError("该样品试用单已转为销售订单，无法重复转换")
         if trial.sales_order_id:
@@ -322,6 +415,8 @@ class SampleTrialService(AppBaseService[SampleTrial]):
         创建其他出库单，关联试用单，更新试用单的 other_outbound_id。
         """
         trial = await self.get_sample_trial_by_id(tenant_id, trial_id)
+        if trial.status in ("草稿", "已提交"):
+            raise BusinessLogicError("样品试用单需审核通过后方可创建样品出库")
         if trial.other_outbound_id:
             raise BusinessLogicError("该样品试用单已创建样品出库，无法重复创建")
         if not trial.items:
@@ -363,7 +458,7 @@ class SampleTrialService(AppBaseService[SampleTrial]):
             await SampleTrial.filter(tenant_id=tenant_id, id=trial_id).update(
                 other_outbound_id=outbound.id,
                 other_outbound_code=outbound.outbound_code,
-                status="试用中" if trial.status == "草稿" or trial.status == "已审批" else trial.status,
+                status="试用中" if trial.status in ("草稿", "已审核", "已审批") else trial.status,
                 updated_by=created_by,
             )
 
@@ -394,3 +489,116 @@ class SampleTrialService(AppBaseService[SampleTrial]):
             logger.warning("建立样品试用单-其他出库关联失败: %s", e)
 
         return outbound
+
+    async def submit_sample_trial(
+        self,
+        tenant_id: int,
+        trial_id: int,
+        submitted_by: int,
+    ) -> SampleTrialResponse:
+        """提交样品试用单（草稿 -> 已提交/已审核）。"""
+        trial = await SampleTrial.get_or_none(tenant_id=tenant_id, id=trial_id, deleted_at__isnull=True)
+        if not trial:
+            raise NotFoundError(f"样品试用单不存在: {trial_id}")
+        if trial.status != "草稿":
+            raise BusinessLogicError(f"仅草稿状态可提交，当前状态: {trial.status}")
+        audit_required = await self.business_config_service.check_audit_required(tenant_id, "sample_trial")
+        async with in_transaction():
+            await self._submit_sample_trial_from_draft(
+                tenant_id=tenant_id,
+                trial_id=trial_id,
+                operator_id=submitted_by,
+                auto_approved=not audit_required,
+            )
+        return SampleTrialResponse.model_validate(await SampleTrial.get(tenant_id=tenant_id, id=trial_id))
+
+    async def withdraw_sample_trial(
+        self,
+        tenant_id: int,
+        trial_id: int,
+        withdrawn_by: int,
+    ) -> SampleTrialResponse:
+        """撤回提交（已提交 -> 草稿）。"""
+        trial = await SampleTrial.get_or_none(tenant_id=tenant_id, id=trial_id, deleted_at__isnull=True)
+        if not trial:
+            raise NotFoundError(f"样品试用单不存在: {trial_id}")
+        if trial.status != "已提交":
+            raise BusinessLogicError(f"仅已提交状态可撤回，当前状态: {trial.status}")
+        op_name = await self.get_user_name(withdrawn_by)
+        async with in_transaction():
+            await SampleTrial.filter(tenant_id=tenant_id, id=trial_id).update(
+                status="草稿",
+                updated_by=withdrawn_by,
+            )
+            await self._log_sample_trial_state_transition(
+                tenant_id=tenant_id,
+                trial_id=trial_id,
+                from_state="已提交",
+                to_state="草稿",
+                operator_id=withdrawn_by,
+                operator_name=op_name,
+                reason="撤回提交",
+            )
+        return SampleTrialResponse.model_validate(await SampleTrial.get(tenant_id=tenant_id, id=trial_id))
+
+    async def approve_sample_trial(
+        self,
+        tenant_id: int,
+        trial_id: int,
+        operator_id: int,
+        review_remarks: Optional[str] = None,
+    ) -> SampleTrialResponse:
+        """审核通过（已提交 -> 已审核）。"""
+        trial = await SampleTrial.get_or_none(tenant_id=tenant_id, id=trial_id, deleted_at__isnull=True)
+        if not trial:
+            raise NotFoundError(f"样品试用单不存在: {trial_id}")
+        if trial.status != "已提交":
+            raise BusinessLogicError(f"仅已提交状态可审核通过，当前状态: {trial.status}")
+        op_name = await self.get_user_name(operator_id)
+        async with in_transaction():
+            await SampleTrial.filter(tenant_id=tenant_id, id=trial_id).update(
+                status="已审核",
+                updated_by=operator_id,
+            )
+            await self._log_sample_trial_state_transition(
+                tenant_id=tenant_id,
+                trial_id=trial_id,
+                from_state="已提交",
+                to_state="已审核",
+                operator_id=operator_id,
+                operator_name=op_name,
+                reason="审核通过",
+                comment=review_remarks,
+            )
+        return SampleTrialResponse.model_validate(await SampleTrial.get(tenant_id=tenant_id, id=trial_id))
+
+    async def reject_sample_trial(
+        self,
+        tenant_id: int,
+        trial_id: int,
+        operator_id: int,
+        review_remarks: Optional[str] = None,
+    ) -> SampleTrialResponse:
+        """审核驳回（已提交 -> 草稿）。"""
+        trial = await SampleTrial.get_or_none(tenant_id=tenant_id, id=trial_id, deleted_at__isnull=True)
+        if not trial:
+            raise NotFoundError(f"样品试用单不存在: {trial_id}")
+        if trial.status != "已提交":
+            raise BusinessLogicError(f"仅已提交状态可驳回，当前状态: {trial.status}")
+        op_name = await self.get_user_name(operator_id)
+        async with in_transaction():
+            await SampleTrial.filter(tenant_id=tenant_id, id=trial_id).update(
+                status="草稿",
+                updated_by=operator_id,
+            )
+            await self._log_sample_trial_state_transition(
+                tenant_id=tenant_id,
+                trial_id=trial_id,
+                from_state="已提交",
+                to_state="草稿",
+                operator_id=operator_id,
+                operator_name=op_name,
+                reason="审核驳回",
+                comment=review_remarks,
+            )
+        return SampleTrialResponse.model_validate(await SampleTrial.get(tenant_id=tenant_id, id=trial_id))

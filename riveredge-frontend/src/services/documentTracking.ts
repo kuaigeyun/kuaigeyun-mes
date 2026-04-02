@@ -22,6 +22,8 @@ export interface DocumentTrackingTimelineItem {
   reason?: string;
   /** 是否自动审核（状态变更为审核通过时） */
   is_auto_approve?: boolean;
+  /** 是否由系统自动生成（如下推关系自动产生） */
+  is_auto_created?: boolean;
   result?: string;
   comment?: string;
   changed_fields?: string[];
@@ -48,6 +50,9 @@ export interface DocumentTrackingRelation {
   code?: string;
   name?: string;
   mode?: string;
+  is_auto_created?: boolean;
+  is_deleted?: boolean;
+  is_changed_after_link?: boolean;
 }
 
 export interface DocumentTrackingResponse {

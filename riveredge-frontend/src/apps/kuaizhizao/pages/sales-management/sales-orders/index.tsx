@@ -10,9 +10,9 @@
 
 import { getBusinessConfig } from '../../../../../services/businessConfig';
 import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions, ProFormUploadButton } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Drawer, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Progress, Tooltip, Dropdown, Select, theme as AntdTheme } from 'antd';
-import { EyeOutlined, EditOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, ImportOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, ApartmentOutlined, AppstoreAddOutlined, CommentOutlined } from '@ant-design/icons';
+import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormUploadButton } from '@ant-design/pro-components';
+import { App, Button, Space, Modal, Drawer, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Progress, Tooltip, Dropdown, Select, theme as AntdTheme } from 'antd';
+import { EyeOutlined, EditOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, ImportOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, AppstoreAddOutlined, CommentOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
@@ -26,11 +26,11 @@ import { MaterialInventoryIndicator } from '../../../components/MaterialInventor
 import { MaterialBomIndicator } from '../../../components/MaterialBomIndicator';
 import { SalesOrderIndicatorsProvider } from '../../../components/SalesOrderIndicatorsProvider';
 import SalesOrderGanttChart from '../../../components/SalesOrderGanttChart';
-import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
-import { SalesOrderTrackingRadar } from './components/SalesOrderTrackingRadar';
+import { SalesOrderDetailBody } from './components/SalesOrderDetailBody';
 import { AgileQuotingDrawer } from './components/AgileQuotingDrawer';
 import { CalculatorOutlined } from '@ant-design/icons';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { getSalesOrderLifecycle } from '../../../utils/salesOrderLifecycle';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { ListPageTemplate, FormModalTemplate, type StatCard } from '../../../../../components/layout-templates';
@@ -70,8 +70,6 @@ import {
 /** 已审核状态值集合（与后端 document_lifecycle _is_approved 一致，用于按钮显示） */
 const APPROVED_STATUS_VALUES = ['已审核', SalesOrderStatus.AUDITED, ReviewStatus.APPROVED, '审核通过', '通过', '已通过'] as const;
 const isApprovedRecord = (r: SalesOrder) => APPROVED_STATUS_VALUES.some((v) => r.status === v || r.review_status === v);
-import { getSalesOrderChangeImpact, type ChangeImpactResponse } from '../../../services/document-relation';
-import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 import { materialApi } from '../../../../master-data/services/material';
 import type { Material } from '../../../../master-data/types/material';
 import { customerApi } from '../../../../master-data/services/supply-chain';
@@ -106,6 +104,35 @@ type SalesOrderItemRow = SalesOrderItem & {
   lifecycle?: Record<string, unknown>;
   /** 生命周期阶段名，用于卡片分组 */
   _lifecycleStage?: string;
+};
+
+const SALES_ORDER_ROW_ACTIONS_INLINE_MAX = 4;
+
+const renderSalesOrderRowActions = (
+  nodes: React.ReactNode[],
+  keyPrefix: string,
+  inlineMax: number = SALES_ORDER_ROW_ACTIONS_INLINE_MAX
+): React.ReactNode => {
+  const wrapped = nodes.map((node, i) => <span key={`${keyPrefix}-${i}`}>{node}</span>);
+  if (wrapped.length <= inlineMax) {
+    return <Space size="small" wrap>{wrapped}</Space>;
+  }
+  return (
+    <Space size="small" wrap>
+      {wrapped.slice(0, inlineMax)}
+      <Dropdown
+        trigger={['click']}
+        menu={{
+          items: wrapped.slice(inlineMax).map((node, i) => ({
+            key: `${keyPrefix}-more-${i}`,
+            label: node,
+          })),
+        }}
+      >
+        <Button type="link" size="small">更多</Button>
+      </Dropdown>
+    </Space>
+  );
 };
 
 function formatMoneyYuan(n: number): string {
@@ -426,9 +453,6 @@ const SalesOrdersPage: React.FC = () => {
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [currentSalesOrder, setCurrentSalesOrder] = useState<SalesOrder | null>(null);
-  const [changeImpactVisible, setChangeImpactVisible] = useState(false);
-  const [changeImpactData, setChangeImpactData] = useState<ChangeImpactResponse | null>(null);
-  const [changeImpactLoading, setChangeImpactLoading] = useState(false);
   const [trackingRefreshKey, setTrackingRefreshKey] = useState(0);
 
   // 提醒弹窗状态
@@ -1244,21 +1268,6 @@ const SalesOrdersPage: React.FC = () => {
     setReminderModalOpen(true);
   };
 
-  /** 打开变更影响（排程管理增强） */
-  const handleOpenChangeImpact = async () => {
-    if (!currentSalesOrder?.id) return;
-    setChangeImpactVisible(true);
-    setChangeImpactLoading(true);
-    setChangeImpactData(null);
-    try {
-      const data = await getSalesOrderChangeImpact(currentSalesOrder.id);
-      setChangeImpactData(data);
-    } catch (e) {
-      messageApi.error(t('common.loadFailed') ?? '加载失败');
-    } finally {
-      setChangeImpactLoading(false);
-    }
-  };
 
   /** 提交提醒 */
   const handleReminderSubmit = async () => {
@@ -1535,7 +1544,37 @@ const SalesOrdersPage: React.FC = () => {
 
   // 订单视图列（一行一单，可展开明细）
   const orderColumns: ProColumns<SalesOrder>[] = [
-    { title: t('app.kuaizhizao.salesOrder.orderCode'), dataIndex: 'order_code', width: 150, fixed: 'left' as const, ellipsis: true, sorter: true, hideInSearch: false },
+    {
+      title: t('app.kuaizhizao.salesOrder.orderCode'),
+      dataIndex: 'order_code',
+      width: 150,
+      fixed: 'left' as const,
+      ellipsis: true,
+      sorter: true,
+      hideInSearch: false,
+      render: (_: unknown, record: SalesOrder) => (
+        <Space size={4}>
+          <span>{record.order_code ?? '-'}</span>
+          <Tooltip title={t('field.invitationCode.copy')}>
+            <Button
+              type="link"
+              size="small"
+              icon={<CopyOutlined style={{ fontSize: 12 }} />}
+              onClick={(e) => {
+                e.stopPropagation();
+                const text = record.order_code ?? '';
+                if (text) {
+                  navigator.clipboard.writeText(text).then(
+                    () => messageApi.success(t('common.copySuccess')),
+                    () => messageApi.error(t('common.copyFailed'))
+                  );
+                }
+              }}
+            />
+          </Tooltip>
+        </Space>
+      ),
+    },
     { title: t('app.kuaizhizao.salesOrder.customerName'), dataIndex: 'customer_name', width: 150, ellipsis: true, sorter: true, hideInSearch: false },
     { title: t('app.kuaizhizao.salesOrder.orderDate'), dataIndex: 'order_date', valueType: 'date', width: 120, sorter: true, hideInSearch: true },
     // 订单日期范围（仅搜索）
@@ -1567,7 +1606,9 @@ const SalesOrdersPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.salesOrder.lifecycle'),
       dataIndex: 'lifecycle',
-      width: 100,
+      width: 132,
+      align: 'center' as const,
+      fixed: 'right' as const,
       valueType: 'select',
       valueEnum: {
         草稿: { text: t('app.kuaizhizao.salesOrder.lifecycleDraft') },
@@ -1582,19 +1623,16 @@ const SalesOrdersPage: React.FC = () => {
       },
       render: (_: unknown, record: SalesOrder) => {
         const lifecycle = getSalesOrderLifecycle(record);
-        const stageName = lifecycle.stageName ?? record.status ?? '草稿';
-        const colorMap: Record<string, string> = {
-          草稿: 'default',
-          待审核: 'warning',
-          已审核: 'green',
-          已生效: 'purple',
-          执行中: 'cyan',
-          已交货: 'orange',
-          已完成: 'gold',
-          已驳回: 'error',
-          已取消: 'default',
-        };
-        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
       },
     },
     {
@@ -1602,33 +1640,37 @@ const SalesOrdersPage: React.FC = () => {
       width: 260,
       fixed: 'right' as const,
       valueType: 'option',
-      render: (_: any, record: SalesOrder) => (
-        <Space>
+      render: (_: any, record: SalesOrder) => {
+        const lifecycle = getSalesOrderLifecycle(record);
+        const canEdit = ['草稿', '待审核', '已驳回'].includes(lifecycle.stageName ?? '');
+        const canDelete = ['草稿', '待审核'].includes(lifecycle.stageName ?? '') || record.status === SalesOrderStatus.DRAFT || record.status === 'PENDING_REVIEW';
+        const isDraft = record.status === SalesOrderStatus.DRAFT;
+        const isRejected = record.status === SalesOrderStatus.REJECTED || record.status === '已驳回';
+        const isPending = record.review_status === ReviewStatus.PENDING || record.review_status === '待审核';
+        const isApproved = APPROVED_STATUS_VALUES.some((v) => record.status === v || record.review_status === v);
+        const workflowButtonCount = isPending ? 2 : ((isDraft || isRejected || isApproved) ? 1 : 0);
+        const inlineLimitForNormalActions = Math.max(1, SALES_ORDER_ROW_ACTIONS_INLINE_MAX - workflowButtonCount);
+        const fixedInlineNodes: React.ReactNode[] = [];
+        const parts: React.ReactNode[] = [
           <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail([record.id!])}>
             {t('app.kuaizhizao.salesOrder.viewDetail')}
-          </Button>
-          <Button type="link" size="small" icon={<CommentOutlined />} onClick={() => openFollowUpFromSalesOrder(record)}>
-            {t('app.kuaizhizao.customerFollowUp.addFollowUpFromDocument')}
-          </Button>
-          {(() => {
-            const lifecycle = getSalesOrderLifecycle(record);
-            const canEdit = ['草稿', '待审核', '已驳回'].includes(lifecycle.stageName ?? '');
-            const canDelete = ['草稿', '待审核'].includes(lifecycle.stageName ?? '') || record.status === SalesOrderStatus.DRAFT || record.status === 'PENDING_REVIEW';
-            return (
-              <>
-                {canEdit && (
-                  <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit([record.id!])}>
-                    {t('app.kuaizhizao.salesOrder.editAction')}
-                  </Button>
-                )}
-                {canDelete && (
-                  <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => handleDeleteSingle(record.id!)}>
-                    {t('app.kuaizhizao.salesOrder.delete')}
-                  </Button>
-                )}
-              </>
-            );
-          })()}
+          </Button>,
+        ];
+        if (canEdit) {
+          parts.push(
+            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit([record.id!])}>
+              {t('app.kuaizhizao.salesOrder.editAction')}
+            </Button>
+          );
+        }
+        if (canDelete) {
+          parts.push(
+            <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => handleDeleteSingle(record.id!)}>
+              {t('app.kuaizhizao.salesOrder.delete')}
+            </Button>
+          );
+        }
+        fixedInlineNodes.push(
           <UniWorkflowActions
             record={record}
             entityName={t('app.kuaizhizao.salesOrder.entityName')}
@@ -1645,7 +1687,9 @@ const SalesOrdersPage: React.FC = () => {
             onSuccess={() => { invalidateOrdersCache(); invalidateMenuBadge(); invalidateStatistics(); actionRef.current?.reload(); }}
             confirmMessages={{ submit: auditEnabled ? t('app.kuaizhizao.salesOrder.submitConfirmAudit') : t('app.kuaizhizao.salesOrder.submitConfirmAuto') }}
           />
-          {isApprovedRecord(record) && (
+        );
+        if (isApprovedRecord(record)) {
+          parts.push(
             <Dropdown
               menu={{
                 items: [
@@ -1661,9 +1705,35 @@ const SalesOrdersPage: React.FC = () => {
             >
               <Button type="link" size="small" icon={<ArrowDownOutlined />}>{t('app.kuaizhizao.salesOrder.push')}</Button>
             </Dropdown>
-          )}
-        </Space>
-      ),
+          );
+        }
+        parts.push(
+          <Button type="link" size="small" icon={<CommentOutlined />} onClick={() => openFollowUpFromSalesOrder(record)}>
+            {t('app.kuaizhizao.customerFollowUp.addFollowUpFromDocument')}
+          </Button>
+        );
+        return (
+          <Space size="small" wrap>
+            {parts
+              .slice(0, inlineLimitForNormalActions)
+              .map((node, i) => <span key={`sales-order-${record.id ?? 'row'}-inline-${i}`}>{node}</span>)}
+            {fixedInlineNodes}
+            {parts.length > inlineLimitForNormalActions ? (
+              <Dropdown
+                trigger={['click']}
+                menu={{
+                  items: parts.slice(inlineLimitForNormalActions).map((node, i) => ({
+                    key: `sales-order-${record.id ?? 'row'}-more-${i}`,
+                    label: node,
+                  })),
+                }}
+              >
+                <Button type="link" size="small">更多</Button>
+              </Dropdown>
+            ) : null}
+          </Space>
+        );
+      },
     },
   ];
 
@@ -1680,7 +1750,7 @@ const SalesOrdersPage: React.FC = () => {
           <span>{record.order_code ?? '-'}</span>
           <Tooltip title={t('field.invitationCode.copy')}>
             <Button
-              type="text"
+              type="link"
               size="small"
               icon={<CopyOutlined style={{ fontSize: 12 }} />}
               onClick={(e) => {
@@ -3143,7 +3213,7 @@ const SalesOrdersPage: React.FC = () => {
                 </span>
                 <Tooltip title={t('field.invitationCode.copy')}>
                   <Button
-                    type="text"
+                    type="link"
                     size="small"
                     icon={<CopyOutlined style={{ fontSize: 12 }} />}
                     onClick={() => {
@@ -3164,9 +3234,6 @@ const SalesOrdersPage: React.FC = () => {
         extra={
           currentSalesOrder && (
             <Space size="small">
-              <Button icon={<ApartmentOutlined />} onClick={handleOpenChangeImpact}>
-                变更影响
-              </Button>
               <Button icon={<BellOutlined />} onClick={handleOpenReminder}>
                 {t('app.kuaizhizao.salesOrder.reminder')}
               </Button>
@@ -3241,230 +3308,13 @@ const SalesOrdersPage: React.FC = () => {
         }
       >
         {currentSalesOrder && (
-          <>
-            <ProDescriptions<SalesOrder>
-              dataSource={currentSalesOrder}
-              column={2}
-              columns={[
-                {
-                  title: t('app.kuaizhizao.salesOrder.orderCode'),
-                  dataIndex: 'order_code',
-                  render: (_, record) => (
-                    <Space size={4}>
-                      <span>{record.order_code ?? '-'}</span>
-                      <Tooltip title={t('field.invitationCode.copy')}>
-                        <Button
-                          type="text"
-                          size="small"
-                          icon={<CopyOutlined style={{ fontSize: 12 }} />}
-                          onClick={() => {
-                            const text = record.order_code ?? '';
-                            if (text) {
-                              navigator.clipboard.writeText(text).then(
-                                () => messageApi.success(t('common.copySuccess')),
-                                () => messageApi.error(t('common.copyFailed'))
-                              );
-                            }
-                          }}
-                        />
-                      </Tooltip>
-                    </Space>
-                  ),
-                },
-                {
-                  title: t('app.kuaizhizao.salesOrder.orderDate'),
-                  dataIndex: 'order_date',
-                  valueType: 'date',
-                },
-                {
-                  title: t('app.kuaizhizao.salesOrder.deliveryDate'),
-                  dataIndex: 'delivery_date',
-                  valueType: 'date',
-                },
-                {
-                  title: t('app.kuaizhizao.salesOrder.customerName'),
-                  dataIndex: 'customer_name',
-                },
-                {
-                  title: t('app.kuaizhizao.salesOrder.customerContact'),
-                  dataIndex: 'customer_contact',
-                },
-                {
-                  title: t('app.kuaizhizao.salesOrder.customerPhone'),
-                  dataIndex: 'customer_phone',
-                },
-                {
-                  title: t('app.kuaizhizao.salesOrder.salesman'),
-                  dataIndex: 'salesman_name',
-                },
-                {
-                  title: t('app.kuaizhizao.salesOrder.shippingAddress'),
-                  dataIndex: 'shipping_address',
-                  span: 2,
-                },
-                {
-                  title: t('app.kuaizhizao.salesOrder.shippingMethod'),
-                  dataIndex: 'shipping_method',
-                  render: (_, record) => {
-                    const val = record.shipping_method;
-                    const opt = shippingMethodOptions.find((o) => o.value === val);
-                    return opt?.label ?? val ?? '-';
-                  },
-                },
-                {
-                  title: t('app.kuaizhizao.salesOrder.paymentTerms'),
-                  dataIndex: 'payment_terms',
-                  render: (_, record) => {
-                    const val = record.payment_terms;
-                    const opt = paymentTermsOptions.find((o) => o.value === val);
-                    return opt?.label ?? val ?? '-';
-                  },
-                },
-                {
-                  title: t('app.kuaizhizao.salesOrder.priceType'),
-                  dataIndex: 'price_type',
-                  render: (_, record) => (record.price_type === 'tax_inclusive' ? t('app.kuaizhizao.salesOrder.taxInclusive') : t('app.kuaizhizao.salesOrder.taxExclusive')),
-                },
-                {
-                  title: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
-                  dataIndex: 'total_amount',
-                  render: (_, record) => <AmountDisplay resource="sales_order" value={record.total_amount ?? 0} />,
-                },
-                {
-                  title: '总费用金额',
-                  dataIndex: 'total_fee_amount',
-                  render: (_, record) => <AmountDisplay resource="sales_order" value={record.total_fee_amount ?? 0} />,
-                },
-                {
-                  title: t('app.kuaizhizao.salesOrder.notes'),
-                  dataIndex: 'notes',
-                  span: 2,
-                },
-              ]}
-            />
-
-            {/* 360度全息跟踪视图 */}
-            {currentSalesOrder.id && (
-              <div style={{ marginTop: 24, marginBottom: 24 }}>
-                <SalesOrderTrackingRadar salesOrderId={currentSalesOrder.id} />
-              </div>
-            )}
-
-            {/* 生命周期状态（与需求管理统一布局） */}
-            {(() => {
-              const lifecycle = getSalesOrderLifecycle(currentSalesOrder);
-              const mainStages = lifecycle.mainStages ?? [];
-              const subStages = lifecycle.subStages ?? [];
-              if (mainStages.length === 0 && subStages.length === 0) return null;
-              return (
-                <div style={{ marginTop: 24, marginBottom: 24 }}>
-                  <h4 style={{ marginBottom: 12 }}>{t('app.kuaizhizao.salesOrder.lifecycle')}</h4>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                    {mainStages.length > 0 && (
-                      <UniLifecycleStepper
-                        steps={mainStages}
-                        status={lifecycle.status}
-                        showLabels
-                        nextStepSuggestions={lifecycle.nextStepSuggestions}
-                      />
-                    )}
-                    {subStages.length > 0 && (
-                      <div>
-                        <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
-                          执行中 · 全链路
-                        </div>
-                        <UniLifecycleStepper steps={subStages} showLabels />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* 费用明细 */}
-            {currentSalesOrder.fee_details && currentSalesOrder.fee_details.length > 0 && (
-              <div style={{ marginTop: 24 }}>
-                <h4 style={{ marginBottom: 12 }}>费用明细</h4>
-                <Table
-                  size="small"
-                  columns={[
-                    { title: '费用类型', dataIndex: 'type', width: 120, render: (val) => {
-                      const opt = feeTypeOptions.find(o => o.value === val);
-                      return opt?.label ?? val;
-                    }},
-                    { title: '金额', dataIndex: 'amount', width: 120, align: 'right', render: (val) => <AmountDisplay resource="sales_order" value={val} /> },
-                    { title: '承担方', dataIndex: 'bearer', width: 100, render: (val) => val === 'our_side' ? '我方' : '对方' },
-                    { title: '备注', dataIndex: 'notes' },
-                  ]}
-                  dataSource={currentSalesOrder.fee_details}
-                  rowKey={(_: any, i?: number) => i ?? 0}
-                  pagination={false}
-                  bordered
-                />
-              </div>
-            )}
-
-            {/* 订单明细 */}
-            {currentSalesOrder.items && currentSalesOrder.items.length > 0 && (
-              <div style={{ marginTop: 24 }}>
-                <h3>{t('app.kuaizhizao.salesOrder.detailItems')}</h3>
-                <Table<SalesOrderItem>
-                  size="small"
-                  columns={[
-                    { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 120 },
-                    { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 200 },
-                    { title: t('app.kuaizhizao.salesOrder.materialSpec'), dataIndex: 'material_spec', width: 120 },
-                    { title: t('app.kuaizhizao.salesOrder.unit'), dataIndex: 'material_unit', width: 80 },
-                    {
-                      title: t('app.kuaizhizao.salesOrder.bomCheck'),
-                      key: 'bom_check',
-                      width: 80,
-                      render: (_: unknown, record: SalesOrderItem) => (
-                        <MaterialBomIndicator materialId={record.material_id} />
-                      ),
-                    },
-                    {
-                      title: t('app.kuaizhizao.salesOrder.quantity'),
-                      dataIndex: 'required_quantity',
-                      width: 100,
-                      align: 'right' as const,
-                      render: (val: number, record: SalesOrderItem) => (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
-                          <MaterialInventoryIndicator
-                            materialId={record.material_id}
-                            requiredQuantity={record.required_quantity}
-                          />
-                          {val ?? 0}
-                        </span>
-                      ),
-                    },
-                    { title: t('app.kuaizhizao.salesOrder.unitPrice'), dataIndex: 'unit_price', width: 100, align: 'right' as const, render: (val) => <AmountDisplay resource="sales_order" value={val} /> },
-                    { title: t('app.kuaizhizao.salesOrder.taxRate'), dataIndex: 'tax_rate', width: 80, align: 'right' as const, render: (val) => val ?? 0 },
-                    { title: t('app.kuaizhizao.salesOrder.inclAmount'), dataIndex: 'item_amount', width: 120, align: 'right' as const, render: (val) => <AmountDisplay resource="sales_order" value={val} /> },
-                    { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', width: 120 },
-                    { title: t('app.kuaizhizao.salesOrder.deliveredQty'), dataIndex: 'delivered_quantity', width: 100, align: 'right' as const, render: (text) => text || 0 },
-                    { title: t('app.kuaizhizao.salesOrder.remainingQty'), dataIndex: 'remaining_quantity', width: 100, align: 'right' as const, render: (text) => text || 0 },
-                  ]}
-                  dataSource={currentSalesOrder.items}
-                  rowKey="id"
-                  pagination={false}
-                  bordered
-                />
-              </div>
-            )}
-
-            {/* 操作记录（含上下游关联） */}
-            {currentSalesOrder?.id && (
-              <div style={{ marginTop: 24 }}>
-                <DocumentTrackingPanel
-                  documentType="sales_order"
-                  documentId={currentSalesOrder.id}
-                  refreshKey={trackingRefreshKey}
-                  onDocumentClick={(type, id) => messageApi.info(`跳转到${type}#${id}`)}
-                />
-              </div>
-            )}
-          </>
+          <SalesOrderDetailBody
+            order={currentSalesOrder}
+            trackingRefreshKey={trackingRefreshKey}
+            shippingMethodOptions={shippingMethodOptions}
+            paymentTermsOptions={paymentTermsOptions}
+            feeTypeOptions={feeTypeOptions}
+          />
         )}
       </Drawer>
 
@@ -3540,70 +3390,6 @@ const SalesOrdersPage: React.FC = () => {
             <Input.TextArea rows={3} placeholder={t('app.kuaizhizao.salesOrder.remarksPlaceholder')} maxLength={500} showCount />
           </AntForm.Item>
         </AntForm>
-      </Modal>
-
-      {/* 变更影响弹窗（排程管理增强） */}
-      <Modal
-        title="变更影响"
-        open={changeImpactVisible}
-        onCancel={() => { setChangeImpactVisible(false); setChangeImpactData(null); }}
-        footer={null}
-        width={560}
-      >
-        {changeImpactLoading ? (
-          <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Spin tip="加载中..." />
-          </div>
-        ) : changeImpactData ? (
-          <div>
-            <p style={{ marginBottom: 12, color: 'var(--ant-color-text-secondary)' }}>
-              上游变更：{changeImpactData.upstream_change.code ?? changeImpactData.upstream_change.name ?? '-'}
-              {changeImpactData.upstream_change.changed_at && `（${dayjs(changeImpactData.upstream_change.changed_at).format('YYYY-MM-DD HH:mm')}）`}
-            </p>
-            {(changeImpactData.affected_demands?.length ?? 0) > 0 && (
-              <div style={{ marginBottom: 12 }}>
-                <div style={{ fontWeight: 500, marginBottom: 4 }}>受影响的需求</div>
-                <Table size="small" dataSource={changeImpactData.affected_demands} rowKey="id" pagination={false}
-                  columns={[{ title: '编号', dataIndex: 'code', key: 'code' }, { title: '名称', dataIndex: 'name', key: 'name' }, { title: '状态', dataIndex: 'status', key: 'status' }]} />
-              </div>
-            )}
-            {(changeImpactData.affected_computations?.length ?? 0) > 0 && (
-              <div style={{ marginBottom: 12 }}>
-                <div style={{ fontWeight: 500, marginBottom: 4 }}>受影响的需求计算</div>
-                <Table size="small" dataSource={changeImpactData.affected_computations} rowKey="id" pagination={false}
-                  columns={[{ title: '编号', dataIndex: 'code', key: 'code' }, { title: '状态', dataIndex: 'status', key: 'status' }]} />
-              </div>
-            )}
-            {(changeImpactData.affected_plans?.length ?? 0) > 0 && (
-              <div style={{ marginBottom: 12 }}>
-                <div style={{ fontWeight: 500, marginBottom: 4 }}>受影响的生产计划</div>
-                <Table size="small" dataSource={changeImpactData.affected_plans} rowKey="id" pagination={false}
-                  columns={[{ title: '编号', dataIndex: 'code', key: 'code' }, { title: '名称', dataIndex: 'name', key: 'name' }, { title: '状态', dataIndex: 'status', key: 'status' }]} />
-              </div>
-            )}
-            {(changeImpactData.affected_work_orders?.length ?? 0) > 0 && (
-              <div style={{ marginBottom: 12 }}>
-                <div style={{ fontWeight: 500, marginBottom: 4 }}>受影响的工单</div>
-                <Table size="small" dataSource={changeImpactData.affected_work_orders} rowKey="id" pagination={false}
-                  columns={[{ title: '编号', dataIndex: 'code', key: 'code' }, { title: '名称', dataIndex: 'name', key: 'name' }, { title: '状态', dataIndex: 'status', key: 'status' }]} />
-              </div>
-            )}
-            {(changeImpactData.recommended_actions?.length ?? 0) > 0 && (
-              <div>
-                <div style={{ fontWeight: 500, marginBottom: 4 }}>建议操作</div>
-                <Space wrap>
-                  {changeImpactData.recommended_actions.map((a, i) => (
-                    <Tag key={i} color="blue">{a}</Tag>
-                  ))}
-                </Space>
-              </div>
-            )}
-            {!changeImpactData.affected_demands?.length && !changeImpactData.affected_computations?.length &&
-             !changeImpactData.affected_plans?.length && !changeImpactData.affected_work_orders?.length && (
-              <p style={{ color: 'var(--ant-color-text-secondary)' }}>暂无下游受影响单据</p>
-            )}
-          </div>
-        ) : null}
       </Modal>
 
       <Modal

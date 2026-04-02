@@ -17,6 +17,8 @@ export interface UniLifecycleProps extends LifecycleResult {
   size?: number | 'small';
   /** 是否在详情中展开显示全链路子阶段（Steps 列表），默认 false */
   expandSubStages?: boolean;
+  /** 为 false 时圆环 hover 不展示 Tooltip（如列表列已有阶段文案） */
+  showCircleTooltip?: boolean;
 }
 
 const CIRCLE_SIZE = 32;
@@ -69,6 +71,7 @@ export const UniLifecycle: React.FC<UniLifecycleProps> = ({
   showLabel = false,
   size = CIRCLE_SIZE,
   expandSubStages = false,
+  showCircleTooltip = true,
 }) => {
   const sizeNum = size === 'small' ? CIRCLE_SIZE : typeof size === 'number' ? size : CIRCLE_SIZE;
 
@@ -93,11 +96,11 @@ export const UniLifecycle: React.FC<UniLifecycleProps> = ({
     />
   );
 
-  const withTooltip = <Tooltip title={tip}>{circle}</Tooltip>;
+  const circleEl = showCircleTooltip ? <Tooltip title={tip}>{circle}</Tooltip> : circle;
 
   return (
     <span className="uni-lifecycle" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-      {withTooltip}
+      {circleEl}
       {showLabel && <span style={{ whiteSpace: 'nowrap' }}>{stageName}</span>}
       {expandSubStages && subStages && subStages.length > 0 && (
         <div style={{ marginTop: 8, marginLeft: 0 }}>
