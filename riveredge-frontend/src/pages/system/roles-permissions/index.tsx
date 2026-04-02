@@ -24,6 +24,7 @@ import {
   App,
   theme,
   Select,
+  Tabs,
   Flex,
 } from 'antd';
 import { useTranslation } from 'react-i18next';
@@ -38,10 +39,7 @@ import {
   SaveOutlined,
   ReloadOutlined,
   SearchOutlined,
-  LockOutlined,
-  EyeInvisibleOutlined,
-  SafetyCertificateOutlined,
-  DatabaseOutlined,
+  FolderOutlined,
   AppstoreOutlined,
   CopyOutlined,
   CheckSquareOutlined,
@@ -57,17 +55,246 @@ import {
   assignPermissions,
   getAllPermissions,
   loadPresetRoles,
+  cleanupLegacyRoles,
   Role,
   Permission,
 } from '../../../services/role';
 import { RoleFormModal } from '../roles/components/RoleFormModal';
 import { PAGE_SPACING } from '../../../components/layout-templates/constants';
+import { PERMISSION_TEMPLATES, getPermissionUuidsByTemplate } from '../../../config/permission-modules';
+import { getMenuTree, type MenuTree } from '../../../services/menu';
 import {
-  PERMISSION_MODULE_NAMES,
-  getModuleByResource,
-  PERMISSION_TEMPLATES,
-  getPermissionUuidsByTemplate,
-} from '../../../config/permission-modules';
+  extractAppCodeFromPath,
+  getAppDisplayName,
+  translateAppMenuItemName,
+  translateMenuName,
+} from '../../../utils/menuTranslation';
+import { KUAIZHIZAO_PRICING_VIEW } from '../../../utils/kuaizhizaoPricingPermission';
+
+/** 权限树叶子节点展示名：数据范围走 permission.scope，其余走 permission.action */
+function permissionLeafDisplayLabel(
+  permission: Permission,
+  t: (key: string, opts?: { defaultValue?: string }) => string
+): string {
+  const code = permission.code || '';
+  if (code === KUAIZHIZAO_PRICING_VIEW) {
+    return t('permission.kuaizhizao.pricingView', { defaultValue: '查看价格与金额' });
+  }
+  const parts = code.split(':').filter(Boolean);
+  const n = parts.length;
+  if (n === 0) return permission.name || '';
+
+  const lower = parts.map((x) => x.toLowerCase());
+  if (n >= 3 && lower[n - 2] === 'data') {
+    const scopeSeg = parts[n - 1] || '';
+    const scopeKey = `permission.scope.${scopeSeg.toLowerCase()}`;
+    const tr = t(scopeKey, { defaultValue: '' });
+    if (tr && tr !== scopeKey) return tr;
+    return scopeSeg;
+  }
+
+  const actionSeg = parts[n - 1] || permission.action || '';
+  const actionKey = `permission.action.${String(actionSeg).toLowerCase()}`;
+  const tr = t(actionKey, { defaultValue: '' });
+  if (tr && tr !== actionKey) return tr;
+  return actionSeg;
+}
+
+/**
+ * 菜单 permission_code 对应的资源前缀（含 app 段），兼容 meta.node 下划线与 manifest 连字符两种写法。
+ */
+function resourcePrefixesForMenuCode(menuCode: string): string[] {
+  const parts = menuCode.split(':').filter(Boolean);
+  if (parts.length < 2) return [];
+  const app = parts[0];
+  const resourceParts = parts.length >= 3 ? parts.slice(1, -1) : parts.slice(1);
+  const resourceJoined = resourceParts.join(':');
+  const asHyphen = resourceJoined.replace(/_/g, '-');
+  const asUnder = resourceJoined.replace(/-/g, '_');
+  const uniq = [...new Set([resourceJoined, asHyphen, asUnder])];
+  return uniq.map((r) => `${app}:${r}:`);
+}
+
+/** 路径型菜单资源（如 quality-management-incoming-inspection）对应到 manifest 短资源码（incoming-inspection） */
+const GENERIC_RESOURCE_SUFFIX = new Set(['dashboard', 'reports', 'statistics', 'terminal']);
+
+function resourceSuffixAliases(resource: string): string[] {
+  if (!resource || !resource.includes('-')) return [];
+  const parts = resource.split('-').filter(Boolean);
+  if (parts.length < 2) return [];
+  const out: string[] = [];
+  for (let i = 1; i < parts.length; i++) {
+    const cand = parts.slice(i).join('-');
+    const segCount = parts.length - i;
+    if (segCount === 1 && GENERIC_RESOURCE_SUFFIX.has(cand)) continue;
+    if (cand.split('-').length < 2) continue;
+    out.push(cand);
+  }
+  return out;
+}
+
+/** 与菜单 permission_code 同资源前缀下的所有权限（菜单下列为可勾选操作） */
+function permissionsMatchingMenuCode(menuCode: string, pool: Permission[]): Permission[] {
+  const c = menuCode.trim();
+  if (!c) return [];
+  const seen = new Set<string>();
+  const out: Permission[] = [];
+  const add = (p: Permission) => {
+    if (seen.has(p.uuid)) return;
+    seen.add(p.uuid);
+    out.push(p);
+  };
+
+  for (const p of pool) {
+    if (p.code === c) add(p);
+  }
+
+  for (const prefix of resourcePrefixesForMenuCode(c)) {
+    for (const p of pool) {
+      if (p.code.startsWith(prefix)) add(p);
+    }
+  }
+
+  const parts = c.split(':').filter(Boolean);
+  if (parts.length >= 3) {
+    const app = parts[0];
+    const resource = parts.slice(1, -1).join(':');
+    for (const alias of resourceSuffixAliases(resource)) {
+      const prefix = `${app}:${alias}:`;
+      for (const p of pool) {
+        if (p.code.startsWith(prefix)) add(p);
+      }
+    }
+  }
+
+  if (parts.length === 1) {
+    const rp = `${parts[0]}:`;
+    for (const p of pool) {
+      if (p.code.startsWith(rp)) add(p);
+    }
+  }
+
+  out.sort((a, b) => a.code.localeCompare(b.code));
+  return out;
+}
+
+/** 仅保留「子树内仍有可展示权限」的菜单分支 */
+function filterMenusForDisplay(menus: MenuTree[], pool: Permission[]): MenuTree[] {
+  const result: MenuTree[] = [];
+  const sorted = [...menus].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+  for (const m of sorted) {
+    const sub = m.children?.length ? filterMenusForDisplay(m.children, pool) : [];
+    const code = m.permission_code?.trim();
+    const myPerms = code ? permissionsMatchingMenuCode(code, pool) : [];
+    if (sub.length > 0 || myPerms.length > 0) {
+      result.push({ ...m, children: sub });
+    }
+  }
+  return result;
+}
+
+function menuTreeNodeTitle(menu: MenuTree, t: (key: string, opts?: { defaultValue?: string }) => string): string {
+  const path = menu.path;
+  const isAppMenu = (path || '').startsWith('/apps/');
+  if (isAppMenu) {
+    const normalized = (path || '').replace(/\/$/, '');
+    const isAppRoot = !path || /^\/apps\/[^/]+$/.test(normalized);
+    if (isAppRoot) {
+      const appCode = extractAppCodeFromPath(path);
+      if (appCode) {
+        const dn = getAppDisplayName(appCode, t, menu.name || appCode);
+        if (dn) return dn;
+      }
+    }
+    return translateAppMenuItemName(menu.name, path, t, menu.children);
+  }
+  return translateMenuName(menu.name, t, menu.path);
+}
+
+function buildMenuPermissionTreeData(
+  menus: MenuTree[],
+  pool: Permission[],
+  globallyUsed: Set<string>,
+  expandKeys: React.Key[],
+  t: (key: string, opts?: { defaultValue?: string }) => string,
+  token: { colorPrimary: string }
+): DataNode[] {
+  const sorted = [...menus].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+  const nodes: DataNode[] = [];
+
+  for (const m of sorted) {
+    const key = `menu-${m.uuid}`;
+    expandKeys.push(key);
+
+    const childMenus = m.children?.length
+      ? buildMenuPermissionTreeData(m.children, pool, globallyUsed, expandKeys, t, token)
+      : [];
+
+    const code = m.permission_code?.trim();
+    let opNodes: DataNode[] = [];
+    if (code) {
+      const matched = permissionsMatchingMenuCode(code, pool).filter((p) => !globallyUsed.has(p.uuid));
+      matched.forEach((p) => globallyUsed.add(p.uuid));
+      opNodes = matched.map((permission) => {
+        const actionLabel = permissionLeafDisplayLabel(permission, t);
+        return {
+          title: (
+            <Space size={4} wrap>
+              <span>{actionLabel}</span>
+              <Tag color="cyan" style={{ fontSize: 10 }}>
+                {permission.code}
+              </Tag>
+              {permission.permission_type === 'field' && (
+                <Tag color="orange" style={{ fontSize: '10px' }}>
+                  {t('pages.system.roles.permissionTypeField')}
+                </Tag>
+              )}
+              {permission.permission_type === 'data' && (
+                <Tag color="green" style={{ fontSize: '10px' }}>
+                  {t('pages.system.roles.permissionTypeData')}
+                </Tag>
+              )}
+            </Space>
+          ),
+          key: permission.uuid,
+          isLeaf: true,
+        };
+      });
+    }
+
+    const children = [...childMenus, ...opNodes];
+    if (children.length === 0) continue;
+
+    nodes.push({
+      title: (
+        <span style={{ fontWeight: childMenus.length ? 600 : undefined, color: token.colorPrimary }}>
+          {menuTreeNodeTitle(m, t)}
+        </span>
+      ),
+      key,
+      disableCheckbox: true,
+      icon: <AppstoreOutlined />,
+      children,
+    });
+  }
+  return nodes;
+}
+
+function isAssignablePermissionTreeKey(key: string): boolean {
+  return !key.startsWith('menu-');
+}
+
+/** 未挂载权限按 code 首段（应用 code）分组，便于看出自哪个应用 manifest / 同步 */
+function groupOrphanPermissionsByApp(orphans: Permission[]): [string, Permission[]][] {
+  const byApp = new Map<string, Permission[]>();
+  for (const p of orphans) {
+    const i = p.code.indexOf(':');
+    const app = i > 0 ? p.code.slice(0, i) : '_other';
+    if (!byApp.has(app)) byApp.set(app, []);
+    byApp.get(app)!.push(p);
+  }
+  return [...byApp.entries()].sort(([a], [b]) => a.localeCompare(b));
+}
 
 /**
  * 角色权限管理合并页面组件
@@ -111,6 +338,33 @@ const RolesPermissionsPage: React.FC = () => {
 
   // 加载初始相关状态
   const [loadPresetLoading, setLoadPresetLoading] = useState(false);
+  const [cleanupLegacyLoading, setCleanupLegacyLoading] = useState(false);
+
+  /** 与侧栏一致的菜单树（名称/顺序来自后端 + 菜单翻译） */
+  const [menuTree, setMenuTree] = useState<MenuTree[]>([]);
+
+  // 按快制造业务单据流排序：销售 -> 采购 -> 生产 -> 质量 -> 仓储 -> 财务 -> 行政 -> 通用
+  const ROLE_ORDER_BY_CODE: Record<string, number> = {
+    SALES_MANAGER: 100,
+    SALES_OPERATOR: 110,
+    SALES_PERSON: 120,
+    PURCHASE_MANAGER: 200,
+    PURCHASE_OPERATOR: 210,
+    PURCHASE_PERSON: 220,
+    PRODUCTION_MANAGER: 300,
+    PRODUCTION_TEAM_LEADER: 310,
+    PRODUCTION_CLERK: 320,
+    PRODUCTION_STAFF: 330,
+    PRODUCTION_OPERATOR: 330,
+    QUALITY_MANAGER: 400,
+    QUALITY_OPERATOR: 410,
+    WAREHOUSE_MANAGER: 500,
+    WAREHOUSE_OPERATOR: 510,
+    FINANCE_MANAGER: 600,
+    FINANCE_OPERATOR: 610,
+    ADMIN_OFFICE: 700,
+    EMPLOYEE: 800,
+  };
 
   /**
    * 加载角色列表
@@ -171,15 +425,22 @@ const RolesPermissionsPage: React.FC = () => {
   /**
    * 过滤角色列表
    */
-  const filteredRoles = roles.filter(role => {
-    if (!roleSearchKeyword) return true;
-    const keyword = roleSearchKeyword.toLowerCase();
-    return (
-      role.name.toLowerCase().includes(keyword) ||
-      role.code.toLowerCase().includes(keyword) ||
-      (role.description && role.description.toLowerCase().includes(keyword))
-    );
-  });
+  const filteredRoles = roles
+    .filter(role => {
+      if (!roleSearchKeyword) return true;
+      const keyword = roleSearchKeyword.toLowerCase();
+      return (
+        role.name.toLowerCase().includes(keyword) ||
+        role.code.toLowerCase().includes(keyword) ||
+        (role.description && role.description.toLowerCase().includes(keyword))
+      );
+    })
+    .sort((a, b) => {
+      const aOrder = ROLE_ORDER_BY_CODE[a.code] ?? 9999;
+      const bOrder = ROLE_ORDER_BY_CODE[b.code] ?? 9999;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+      return a.name.localeCompare(b.name, 'zh-CN');
+    });
 
   /**
    * 构建角色树形数据
@@ -282,14 +543,22 @@ const RolesPermissionsPage: React.FC = () => {
   const loadAllPermissions = async () => {
     try {
       setPermissionsLoading(true);
+      try {
+        const trees = await getMenuTree({ is_active: true });
+        setMenuTree(Array.isArray(trees) ? trees : []);
+      } catch {
+        setMenuTree([]);
+      }
+
       let allItems: Permission[] = [];
       let page = 1;
       let hasMore = true;
 
+      const pageSize = 500;
       while (hasMore) {
-        const response = await getAllPermissions({ page, page_size: 100 });
+        const response = await getAllPermissions({ page, page_size: pageSize });
         allItems = [...allItems, ...response.items];
-        if (response.items.length < 100 || allItems.length >= response.total) {
+        if (response.items.length < pageSize || allItems.length >= response.total) {
           hasMore = false;
         } else {
           page++;
@@ -305,7 +574,7 @@ const RolesPermissionsPage: React.FC = () => {
   };
 
   /**
-   * 根据权限列表、搜索关键词、类型筛选构建树形数据
+   * 按菜单树结构展示权限：菜单标题与侧栏翻译一致，带 permission_code 的节点下挂同资源前缀的操作权限
    */
   useEffect(() => {
     if (allPermissions.length === 0) {
@@ -326,123 +595,102 @@ const RolesPermissionsPage: React.FC = () => {
       return matchType && matchSearch;
     });
 
-    const groupedData: Record<string, Record<string, Permission[]>> = {};
-    filteredItems.forEach((permission) => {
-      const module = getModuleByResource(permission.resource);
-      if (!groupedData[module]) groupedData[module] = {};
-      if (!groupedData[module][permission.resource]) {
-        groupedData[module][permission.resource] = [];
-      }
-      groupedData[module][permission.resource].push(permission);
-    });
-
-    const getResourceName = (resource: string): string => {
-      const translationKey = `permission.resource.${resource}`;
-      const translated = t(translationKey);
-      return translated !== translationKey
-        ? translated
-        : resource.charAt(0).toUpperCase() + resource.slice(1).replace(/_/g, ' ');
-    };
-
-    const getActionName = (action?: string): string => {
-      if (!action) return '';
-      const key = `permission.action.${action.toLowerCase()}`;
-      const translated = t(key);
-      if (translated !== key) return translated;
-      return action;
-    };
-
-    const getScopeName = (scope?: string): string => {
-      if (!scope) return '';
-      const key = `permission.scope.${scope.toLowerCase()}`;
-      const translated = t(key);
-      if (translated !== key) return translated;
-      return scope;
-    };
-
-    const getPermissionDisplayName = (permission: Permission): string => {
-      const codeParts = (permission.code || '').split(':').filter(Boolean);
-      const resource = permission.resource || codeParts[0] || '';
-      const action = permission.action || codeParts[1] || '';
-      const resourceName = getResourceName(resource);
-      const actionName = getActionName(action);
-
-      if (permission.permission_type === 'function') {
-        if (actionName && resourceName) return `${actionName}${resourceName}`;
-        return permission.name;
-      }
-
-      if (permission.permission_type === 'data') {
-        const scope =
-          codeParts.find((part) => ['all', 'department', 'self'].includes(part.toLowerCase())) || '';
-        const scopeName = getScopeName(scope);
-        if (scopeName && resourceName) return `${resourceName}${scopeName}数据`;
-        return permission.name;
-      }
-
-      return permission.name;
-    };
-
-    const getModuleName = (module: string): string =>
-      PERMISSION_MODULE_NAMES[module] || module;
-
     const expandKeys: React.Key[] = [];
-    const treeData = Object.keys(groupedData).map((module) => {
-      expandKeys.push(`module-${module}`);
+    const globallyUsed = new Set<string>();
+
+    const orphanChildren = (list: Permission[]): DataNode[] =>
+      [...list].sort((a, b) => a.code.localeCompare(b.code)).map((permission) => {
+        const actionLabel = permissionLeafDisplayLabel(permission, t);
+        return {
+          title: (
+            <Space size={4} wrap>
+              <span>{actionLabel}</span>
+              <Tag color="cyan" style={{ fontSize: 10 }}>
+                {permission.code}
+              </Tag>
+              {permission.permission_type === 'field' && (
+                <Tag color="orange" style={{ fontSize: '10px' }}>
+                  {t('pages.system.roles.permissionTypeField')}
+                </Tag>
+              )}
+              {permission.permission_type === 'data' && (
+                <Tag color="green" style={{ fontSize: '10px' }}>
+                  {t('pages.system.roles.permissionTypeData')}
+                </Tag>
+              )}
+            </Space>
+          ),
+          key: permission.uuid,
+          isLeaf: true,
+        };
+      });
+
+    const buildOrphanRootNode = (list: Permission[]): DataNode | null => {
+      if (list.length === 0) return null;
+      expandKeys.push('menu-orphan-root');
+      const appFolders: DataNode[] = groupOrphanPermissionsByApp(list).map(([app, plist]) => {
+        const key = `menu-orphan-app-${app}`;
+        expandKeys.push(key);
+        const label =
+          app === '_other'
+            ? t('pages.system.roles.orphanNoAppPrefix')
+            : `${getAppDisplayName(app, t, app)} (${app}) · ${plist.length}`;
+        return {
+          title: <span style={{ fontWeight: 500 }}>{label}</span>,
+          key,
+          disableCheckbox: true,
+          icon: <FolderOutlined />,
+          children: orphanChildren(plist),
+        };
+      });
       return {
         title: (
-          <span style={{ fontWeight: 600, color: token.colorPrimary }}>
-            {getModuleName(module)}
-          </span>
+          <Tooltip title={t('pages.system.roles.orphanPermissionsTooltip')}>
+            <span style={{ fontWeight: 600, color: token.colorPrimary }}>
+              {t('pages.system.roles.permissionsNotInMenu')}
+            </span>
+          </Tooltip>
         ),
-        key: `module-${module}`,
-        icon: <AppstoreOutlined />,
-        children: Object.keys(groupedData[module]).map((resource) => {
-          expandKeys.push(`resource-${resource}`);
-          return {
-            title: (
-              <span>
-                <strong>{getResourceName(resource)}</strong>
-                <Tag color="blue" style={{ marginLeft: 8 }}>
-                  {groupedData[module][resource].length}
-                </Tag>
-              </span>
-            ),
-            key: `resource-${resource}`,
-            icon: <LockOutlined />,
-            children: groupedData[module][resource].map((permission) => ({
-              title: (
-                <Space>
-                  <span>{getPermissionDisplayName(permission)}</span>
-                  <Tag color="cyan" style={{ fontSize: '10px' }}>
-                    {permission.code}
-                  </Tag>
-                  {permission.permission_type === 'field' && (
-                    <Tag color="orange" style={{ fontSize: '10px' }}>{t('pages.system.roles.permissionTypeField')}</Tag>
-                  )}
-                  {permission.permission_type === 'data' && (
-                    <Tag color="green" style={{ fontSize: '10px' }}>{t('pages.system.roles.permissionTypeData')}</Tag>
-                  )}
-                </Space>
-              ),
-              key: permission.uuid,
-              icon:
-                permission.permission_type === 'field' ? (
-                  <EyeInvisibleOutlined />
-                ) : permission.permission_type === 'data' ? (
-                  <DatabaseOutlined />
-                ) : (
-                  <SafetyCertificateOutlined />
-                ),
-            })),
-          };
-        }),
+        key: 'menu-orphan-root',
+        disableCheckbox: true,
+        icon: <FolderOutlined />,
+        children: appFolders,
       };
-    });
+    };
+
+    if (!menuTree.length) {
+      const treeData: DataNode[] = [];
+      const orphanRoot = buildOrphanRootNode(filteredItems);
+      if (orphanRoot) treeData.push(orphanRoot);
+      setPermissionTreeData(treeData);
+      setPermissionTreeExpandedKeys(expandKeys);
+      return;
+    }
+
+    const menusForPool = filterMenusForDisplay(menuTree, filteredItems);
+    const treeData = buildMenuPermissionTreeData(
+      menusForPool,
+      filteredItems,
+      globallyUsed,
+      expandKeys,
+      t,
+      token
+    );
+
+    const orphans = filteredItems.filter((p) => !globallyUsed.has(p.uuid));
+    const orphanRoot = buildOrphanRootNode(orphans);
+    if (orphanRoot) treeData.push(orphanRoot);
 
     setPermissionTreeData(treeData);
     setPermissionTreeExpandedKeys(expandKeys);
-  }, [allPermissions, permissionSearchKeyword, permissionTypeFilter, t, token.colorPrimary]);
+  }, [
+    allPermissions,
+    permissionSearchKeyword,
+    permissionTypeFilter,
+    menuTree,
+    t,
+    token,
+  ]);
 
   /**
    * 当前树中展示的权限 UUID 列表（受搜索和类型筛选影响）
@@ -454,8 +702,10 @@ const RolesPermissionsPage: React.FC = () => {
       for (const node of nodes) {
         if (node.children && node.children.length > 0) {
           walk(node.children);
-        } else if (typeof node.key === 'string' && !node.key.startsWith('module-') && !node.key.startsWith('resource-')) {
-          collect.push(node.key);
+        }
+        const k = typeof node.key === 'string' ? node.key : '';
+        if (k && isAssignablePermissionTreeKey(k)) {
+          collect.push(k);
         }
       }
     };
@@ -468,7 +718,7 @@ const RolesPermissionsPage: React.FC = () => {
    */
   const handleSelectAll = useCallback(() => {
     const currentChecked = new Set(
-      checkedKeys.filter((k) => typeof k === 'string' && !String(k).startsWith('resource-') && !String(k).startsWith('module-'))
+      checkedKeys.filter((k) => typeof k === 'string' && isAssignablePermissionTreeKey(k))
     );
     displayedPermissionUuids.forEach((uuid) => currentChecked.add(uuid));
     setCheckedKeys(Array.from(currentChecked));
@@ -480,7 +730,10 @@ const RolesPermissionsPage: React.FC = () => {
   const handleSelectNone = useCallback(() => {
     const toRemove = new Set(displayedPermissionUuids);
     const kept = checkedKeys.filter(
-      (k) => typeof k === 'string' && !k.startsWith('resource-') && !k.startsWith('module-') && !toRemove.has(k)
+      (k) =>
+        typeof k !== 'string' ||
+        !isAssignablePermissionTreeKey(k) ||
+        !toRemove.has(k)
     );
     setCheckedKeys(kept);
   }, [checkedKeys, displayedPermissionUuids]);
@@ -491,14 +744,14 @@ const RolesPermissionsPage: React.FC = () => {
   const handleSelectInvert = useCallback(() => {
     const displayedSet = new Set(displayedPermissionUuids);
     const currentChecked = new Set(
-      checkedKeys.filter((k) => typeof k === 'string' && !String(k).startsWith('resource-') && !String(k).startsWith('module-'))
+      checkedKeys.filter((k) => typeof k === 'string' && isAssignablePermissionTreeKey(k))
     );
     const result: string[] = [];
     displayedSet.forEach((uuid) => {
       if (!currentChecked.has(uuid)) result.push(uuid);
     });
     checkedKeys.forEach((k) => {
-      if (typeof k === 'string' && !displayedSet.has(k) && !k.startsWith('resource-') && !k.startsWith('module-')) {
+      if (typeof k === 'string' && !displayedSet.has(k) && isAssignablePermissionTreeKey(k)) {
         result.push(k);
       }
     });
@@ -563,7 +816,7 @@ const RolesPermissionsPage: React.FC = () => {
     try {
       setSavingPermissions(true);
       const permissionUuids = checkedKeys.filter(
-        key => typeof key === 'string' && !key.startsWith('resource-') && !key.startsWith('module-')
+        (key) => typeof key === 'string' && isAssignablePermissionTreeKey(key)
       ) as string[];
 
       await assignPermissions(selectedRole.uuid, permissionUuids);
@@ -693,24 +946,46 @@ const RolesPermissionsPage: React.FC = () => {
             >
               {t('pages.system.roles.createRole') + NEW_SHORTCUT_HINT}
             </Button>
-            <Button
-              block
-              loading={loadPresetLoading}
-              onClick={async () => {
-                try {
-                  setLoadPresetLoading(true);
-                  const res = await loadPresetRoles();
-                  messageApi.success(res.message);
-                  await loadRoles();
-                } catch (e: any) {
-                  messageApi.error(e?.message || t('common.operationFailed'));
-                } finally {
-                  setLoadPresetLoading(false);
-                }
-              }}
-            >
-              {t('field.role.loadPreset')}
-            </Button>
+            <Flex gap="small" style={{ width: '100%' }}>
+              <Button
+                style={{ flex: 1, minWidth: 0 }}
+                loading={loadPresetLoading}
+                onClick={async () => {
+                  try {
+                    setLoadPresetLoading(true);
+                    const res = await loadPresetRoles();
+                    messageApi.success(res.message);
+                    await loadRoles();
+                  } catch (e: any) {
+                    messageApi.error(e?.message || t('common.operationFailed'));
+                  } finally {
+                    setLoadPresetLoading(false);
+                  }
+                }}
+              >
+                {t('field.role.loadPreset')}
+              </Button>
+              <Button
+                style={{ flex: 1, minWidth: 0 }}
+                loading={cleanupLegacyLoading}
+                onClick={async () => {
+                  try {
+                    setCleanupLegacyLoading(true);
+                    const res = await cleanupLegacyRoles();
+                    messageApi.success(
+                      `${res.message}（重命名${res.renamed}，合并${res.merged}，删除${res.soft_deleted}）`
+                    );
+                    await loadRoles();
+                  } catch (e: any) {
+                    messageApi.error(e?.message || t('common.operationFailed'));
+                  } finally {
+                    setCleanupLegacyLoading(false);
+                  }
+                }}
+              >
+                清理旧角色
+              </Button>
+            </Flex>
           </Space>
         </div>
 
@@ -820,34 +1095,37 @@ const RolesPermissionsPage: React.FC = () => {
                   </div>
                 </Space>
               </div>
-              <Divider />
-              {/* 权限树搜索、类型筛选与批量操作 */}
-              <Flex gap="middle" style={{ marginBottom: 16 }} wrap="wrap" align="center">
-                <Input
-                  placeholder={t('pages.system.roles.searchPermission')}
-                  prefix={<SearchOutlined />}
-                  value={permissionSearchKeyword}
-                  onChange={(e) => setPermissionSearchKeyword(e.target.value)}
-                  allowClear
-                  style={{ width: 240 }}
-                />
-                <Select
-                  value={permissionTypeFilter}
+              <div style={{ marginTop: 16 }}>
+                <Tabs
+                  activeKey={permissionTypeFilter}
                   onChange={setPermissionTypeFilter}
-                  style={{ width: 120 }}
-                  options={[
-                    { value: 'all', label: t('pages.system.roles.allTypes') },
-                    { value: 'function', label: t('pages.system.roles.functionPermission') },
-                    { value: 'data', label: t('pages.system.roles.dataPermission') },
-                    { value: 'field', label: t('pages.system.roles.fieldPermission') },
+                  items={[
+                    { key: 'all', label: t('pages.system.roles.allTypes') },
+                    { key: 'function', label: t('pages.system.roles.functionPermission') },
+                    { key: 'data', label: t('pages.system.roles.dataPermission') },
+                    { key: 'field', label: t('pages.system.roles.fieldPermission') },
                   ]}
+                  style={{ marginBottom: 0 }}
                 />
-                <Divider orientation="vertical" />
-                <Space size="small">
-                  <Tooltip title={t('pages.system.roles.selectAllTooltip')}>
-                    <Button size="small" icon={<CheckSquareOutlined />} onClick={handleSelectAll}>
-                      {t('pages.system.roles.selectAll')}
-                    </Button>
+              </div>
+
+              {/* 权限树搜索与批量操作 */}
+              <Flex gap="middle" style={{ margin: '16px 0' }} wrap="wrap" align="center" justify="space-between">
+                <Space>
+                  <Input
+                    placeholder={t('pages.system.roles.searchPermission')}
+                    prefix={<SearchOutlined />}
+                    value={permissionSearchKeyword}
+                    onChange={(e) => setPermissionSearchKeyword(e.target.value)}
+                    allowClear
+                    style={{ width: 240 }}
+                  />
+                  <Divider orientation="vertical" />
+                  <Space size="small">
+                    <Tooltip title={t('pages.system.roles.selectAllTooltip')}>
+                      <Button size="small" icon={<CheckSquareOutlined />} onClick={handleSelectAll}>
+                        {t('pages.system.roles.selectAll')}
+                      </Button>
                   </Tooltip>
                   <Tooltip title={t('pages.system.roles.selectNoneTooltip')}>
                     <Button size="small" icon={<BorderOutlined />} onClick={handleSelectNone}>
@@ -860,8 +1138,8 @@ const RolesPermissionsPage: React.FC = () => {
                     </Button>
                   </Tooltip>
                 </Space>
-                <Divider orientation="vertical" />
-                <Select
+              </Space>
+              <Select
                   placeholder={t('pages.system.roles.applyTemplate')}
                   style={{ width: 160 }}
                   allowClear
@@ -910,7 +1188,11 @@ const RolesPermissionsPage: React.FC = () => {
             }}
           >
             <span>
-              {t('pages.system.roles.selectedCount', { count: checkedKeys.filter(key => typeof key === 'string' && !key.startsWith('resource-') && !key.startsWith('module-')).length })}
+              {t('pages.system.roles.selectedCount', {
+                count: checkedKeys.filter(
+                  (key) => typeof key === 'string' && isAssignablePermissionTreeKey(key)
+                ).length,
+              })}
             </span>
             <span>
               {t('pages.system.roles.totalPermissions', { count: allPermissions.length })}

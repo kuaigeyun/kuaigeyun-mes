@@ -225,3 +225,19 @@ export async function loadPresetRoles(): Promise<{ created: number; message: str
   });
 }
 
+/**
+ * 手动清理旧预设角色（迁移/合并/去重）
+ */
+export async function cleanupLegacyRoles(): Promise<{
+  success: boolean;
+  message: string;
+  renamed: number;
+  merged: number;
+  soft_deleted: number;
+  permission_synced: number;
+}> {
+  return apiRequest('/core/roles/cleanup-legacy', {
+    method: 'POST',
+  });
+}
+

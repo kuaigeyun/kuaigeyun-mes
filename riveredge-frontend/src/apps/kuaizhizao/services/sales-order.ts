@@ -537,13 +537,62 @@ export async function bulkDeleteSalesOrders(ids: number[]): Promise<{
     failed_items: { id: number; reason: string }[];
   }>('/apps/kuaizhizao/sales-orders/batch-delete', {
     method: 'POST',
-    data: ids, // Pass ids simply as the body if List[int] is expected directly, or check if it needs { ids: [...] } wrapper. 
-    // Backend expects: ids: List[int]. But FastAPI with Pydantic often expects a JSON body matching the Pydantic model or just the list if the body is `List[int]`.
-    // The backend definition was: async def bulk_delete_sales_orders(ids: List[int], ...)
-    // In FastAPI, if the body is a list, you send a JSON list.
-    // wait, in my backend code: `ids: List[int]` was a query param or body? 
-    // `ids: List[int]` without `= Body(...)` usually defaults to query params or request body depending on context. 
-    // But usually, a Pydantic model is better. 
-    // Let's check my backend code again.
+    data: ids,
+  });
+}
+
+/**
+ * 批量提交销售订单
+ */
+export async function bulkSubmitSalesOrders(ids: number[]): Promise<{
+  success_count: number;
+  failed_count: number;
+  failed_items: { id: number; reason: string }[];
+}> {
+  return apiRequest('/apps/kuaizhizao/sales-orders/batch-submit', {
+    method: 'POST',
+    data: ids,
+  });
+}
+
+/**
+ * 批量审核通过销售订单
+ */
+export async function bulkApproveSalesOrders(ids: number[]): Promise<{
+  success_count: number;
+  failed_count: number;
+  failed_items: { id: number; reason: string }[];
+}> {
+  return apiRequest('/apps/kuaizhizao/sales-orders/batch-approve', {
+    method: 'POST',
+    data: ids,
+  });
+}
+
+/**
+ * 批量撤回销售订单
+ */
+export async function bulkWithdrawSalesOrders(ids: number[]): Promise<{
+  success_count: number;
+  failed_count: number;
+  failed_items: { id: number; reason: string }[];
+}> {
+  return apiRequest('/apps/kuaizhizao/sales-orders/batch-withdraw', {
+    method: 'POST',
+    data: ids,
+  });
+}
+
+/**
+ * 批量反审核销售订单
+ */
+export async function bulkUnapproveSalesOrders(ids: number[]): Promise<{
+  success_count: number;
+  failed_count: number;
+  failed_items: { id: number; reason: string }[];
+}> {
+  return apiRequest('/apps/kuaizhizao/sales-orders/batch-unapprove', {
+    method: 'POST',
+    data: ids,
   });
 }

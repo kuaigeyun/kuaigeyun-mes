@@ -59,6 +59,8 @@ export const warehouseApi = {
         method: 'GET',
         params: templateUuid ? { template_uuid: templateUuid } : undefined,
       }),
+    withdraw: async (id: string) =>
+      apiRequest(`/apps/kuaizhizao/other-inbounds/${id}/withdraw`, { method: 'POST' }),
   },
   otherOutbound: {
     list: async (params?: any) => apiRequest('/apps/kuaizhizao/other-outbounds', { method: 'GET', params }),

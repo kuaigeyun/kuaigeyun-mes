@@ -53,7 +53,7 @@ export default defineConfig({
       } as ProxyOptions,
       // 积木报表代理，使其感觉上是“融合”在同一个域名下
       '/jeecg-boot': {
-        target: 'http://localhost:8080', // 假设积木报表服务运行在 8080
+        target: 'http://localhost:8200', // 假设积木报表服务运行在 8080
         changeOrigin: true,
         secure: false,
       } as ProxyOptions,

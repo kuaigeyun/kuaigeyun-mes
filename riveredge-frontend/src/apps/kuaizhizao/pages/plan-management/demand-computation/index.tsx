@@ -851,8 +851,6 @@ const DemandComputationPage: React.FC = () => {
     : statistics
     ? [
         { title: '总计算数', value: statistics.total_count },
-        { title: '按库存(MTS)', value: statistics.mts_count ?? statistics.mrp_count },
-        { title: '按订单(MTO)', value: statistics.mto_count ?? statistics.lrp_count },
         { title: '进行中', value: statistics.pending_count, valueStyle: statistics.pending_count > 0 ? { color: '#faad14' } : undefined },
         { title: '已完成', value: statistics.completed_count },
         {
@@ -865,8 +863,6 @@ const DemandComputationPage: React.FC = () => {
       ]
     : [
         { title: '总计算数', value: 0 },
-        { title: '按库存(MTS)', value: 0 },
-        { title: '按订单(MTO)', value: 0 },
         { title: '进行中', value: 0 },
         { title: '已完成', value: 0 },
         {

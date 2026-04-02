@@ -9,7 +9,7 @@ import React, { useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { ActionType, ProColumns, ProFormInstance, ProFormText, ProFormTextArea, ProFormDigit, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Switch, Card, Dropdown } from 'antd';
+import { App, Button, Tag, Space, Switch, Card, Dropdown, Modal } from 'antd';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../components/layout-templates';
 import { UniTable } from '../../../../components/uni-table';
 import { theme } from 'antd';
@@ -132,6 +132,10 @@ const ApplicationListPage: React.FC = () => {
   const [upgradingApp, setUpgradingApp] = useState<Application | null>(null);
   const [scanning, setScanning] = useState(false);
   const [syncAllLoading, setSyncAllLoading] = useState(false);
+  const [resetModalVisible, setResetModalVisible] = useState(false);
+  const [resetTargetApp, setResetTargetApp] = useState<Application | null>(null);
+  const [resetConfirmText, setResetConfirmText] = useState('');
+  const [resetStage, setResetStage] = useState(1); // 1, 2, 3
 
   /**
    * 处理扫描应用（从 src/apps 发现并注册）
@@ -501,6 +505,18 @@ const ApplicationListPage: React.FC = () => {
           setUpgradeModalVisible(true);
         },
       },
+      application.code === "kuaizhizao" ? {
+        key: 'reset-data',
+        label: t('pages.system.applications.resetData', { defaultValue: '重置数据' }),
+        icon: <SyncOutlined />,
+        danger: true,
+        onClick: () => {
+          setResetTargetApp(application);
+          setResetStage(1);
+          setResetConfirmText('');
+          setResetModalVisible(true);
+        },
+      } : null,
       {
         type: 'divider' as const,
       },
@@ -857,6 +873,117 @@ const ApplicationListPage: React.FC = () => {
           }}
         />
       </ListPageTemplate>
+
+      <Modal
+        title={t('pages.system.applications.resetData', { defaultValue: '重置数据' })}
+        open={resetModalVisible}
+        onCancel={() => setResetModalVisible(false)}
+        footer={null}
+        width={480}
+        destroyOnClose
+      >
+        <div style={{ padding: '8px 0' }}>
+          {resetStage === 1 && (
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ marginBottom: 16, fontSize: 18, fontWeight: 500, color: '#ff4d4f' }}>
+                {t('pages.system.applications.resetWarnTitle', { defaultValue: '⚠️ 极大风险操作：数据重置' })}
+              </div>
+              <p style={{ color: '#666', marginBottom: 24, padding: '0 20px', lineHeight: '1.6' }}>
+                {t('pages.system.applications.resetWarn1', { defaultValue: '重置操作将物理抹除“快制造”应用下所有的销售订单、生产工单、库存流水、需求计划等业务数据。此操作不可撤销！' })}
+              </p>
+              <Button 
+                type="primary" 
+                danger 
+                size="large" 
+                block
+                onClick={() => setResetStage(2)}
+              >
+                {t('pages.system.applications.resetNext', { defaultValue: '我已了解风险，下一步' })}
+              </Button>
+            </div>
+          )}
+
+          {resetStage === 2 && (
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ marginBottom: 16, fontSize: 18, fontWeight: 600, color: '#f5222d' }}>
+                {t('pages.system.applications.resetWarnTitle2', { defaultValue: '再次确认：您确定要继续吗？' })}
+              </div>
+              <p style={{ color: '#333', marginBottom: 24, fontWeight: 500 }}>
+                {t('pages.system.applications.resetWarn2', { defaultValue: '一旦点击下一步，数据将无法通过常规手段恢复。建议您确保当前没有正在进行的业务，并告知相关团队成员。' })}
+              </p>
+              <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                <Button 
+                  type="primary" 
+                  danger 
+                  size="large" 
+                  block
+                  onClick={() => setResetStage(3)}
+                >
+                  {t('pages.system.applications.resetConfirmNext', { defaultValue: '我很确定，继续重置' })}
+                </Button>
+                <Button block onClick={() => setResetModalVisible(false)}>
+                  {t('pages.system.applications.resetCancel', { defaultValue: '我再想想，取消重置' })}
+                </Button>
+              </Space>
+            </div>
+          )}
+
+          {resetStage === 3 && (
+            <div>
+              <div style={{ marginBottom: 16, fontSize: 16, fontWeight: 500, color: '#262626' }}>
+                {t('pages.system.applications.resetFinalCheck', { defaultValue: '终极安全校验' })}
+              </div>
+              <p style={{ color: '#666', marginBottom: 12 }}>
+                {t('pages.system.applications.resetTypeConfirm', { defaultValue: '请在下方准确输入以下内容以确认操作：' })}
+              </p>
+              <div style={{ backgroundColor: '#fffbe6', border: '1px solid #ffe58f', padding: '8px 12px', borderRadius: 4, marginBottom: 16, fontWeight: 'bold', color: '#856404' }}>
+                我已知晓重置数据会造成的影响
+              </div>
+              <ProFormText
+                placeholder={t('pages.system.applications.resetInputPlaceholder', { defaultValue: '请输入确认文本' })}
+                fieldProps={{
+                  value: resetConfirmText,
+                  onChange: (e) => setResetConfirmText(e.target.value),
+                }}
+              />
+              <div style={{ marginTop: 24 }}>
+                <Button 
+                  type="primary" 
+                  danger 
+                  size="large" 
+                  block
+                  loading={submitting}
+                  disabled={resetConfirmText !== '我已知晓重置数据会造成的影响'}
+                  onClick={async () => {
+                    if (resetConfirmText !== '我已知晓重置数据会造成的影响') return;
+                    try {
+                      setSubmitting(true);
+                      // Call the new API
+                      const response = await fetch(`/api/apps/kuaizhizao/management/reset-data`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                      });
+                      const result = await response.json();
+                      if (result.success) {
+                        messageApi.success(result.message || '重置成功并已自动备份');
+                        setResetModalVisible(false);
+                      } else {
+                        messageApi.error(result.message || '重置失败');
+                      }
+                    } catch (error: any) {
+                      messageApi.error('通讯失败: ' + error.message);
+                    } finally {
+                      setSubmitting(false);
+                    }
+                  }}
+                >
+                  {t('pages.system.applications.resetStart', { defaultValue: '启动全量物理重置（且自动备份）' })}
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </Modal>
 
       {/* 查看详情 Drawer */}
       <DetailDrawerTemplate<Application>

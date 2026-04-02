@@ -28,6 +28,9 @@ import { supplierApi } from '../../../../master-data/services/supply-chain';
 import { materialApi } from '../../../../master-data/services/material';
 import { warehouseApi } from '../../../../master-data/services/warehouse';
 import dayjs from 'dayjs';
+import { AmountDisplay } from '../../../../../components/permission';
+import { useGlobalStore } from '../../../../../stores/globalStore';
+import { canViewKuaizhizaoPricing } from '../../../../../utils/kuaizhizaoPricingPermission';
 
 interface OutsourceWorkOrder {
   id?: number;
@@ -546,7 +549,11 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       width: 100,
       render: (_, record) => {
         const price = record.unitPrice || record.unit_price;
-        return price ? `¥${Number(price).toFixed(2)}` : '-';
+        return price != null && price !== '' ? (
+          <AmountDisplay resource="outsource_order" value={Number(price)} />
+        ) : (
+          '-'
+        );
       },
     },
     {
@@ -555,7 +562,11 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       width: 120,
       render: (_, record) => {
         const amount = record.totalAmount || record.total_amount;
-        return amount ? `¥${Number(amount).toFixed(2)}` : '-';
+        return amount != null && amount !== '' ? (
+          <AmountDisplay resource="outsource_order" value={Number(amount)} />
+        ) : (
+          '-'
+        );
       },
     },
     {
@@ -716,7 +727,11 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       dataIndex: ['unitPrice', 'unit_price'],
       render: (_, record) => {
         const price = record.unitPrice || record.unit_price;
-        return price ? `¥${Number(price).toFixed(2)}` : '-';
+        return price != null && price !== '' ? (
+          <AmountDisplay resource="outsource_order" value={Number(price)} />
+        ) : (
+          '-'
+        );
       },
     },
     {
@@ -724,7 +739,11 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       dataIndex: ['totalAmount', 'total_amount'],
       render: (_, record) => {
         const amount = record.totalAmount || record.total_amount;
-        return amount ? `¥${Number(amount).toFixed(2)}` : '-';
+        return amount != null && amount !== '' ? (
+          <AmountDisplay resource="outsource_order" value={Number(amount)} />
+        ) : (
+          '-'
+        );
       },
     },
     {
@@ -973,9 +992,10 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
                       委外工序：{selectedMaterialSourceInfo.outsourceOperation}
                     </span>
                   )}
-                  {selectedMaterialSourceInfo.unitPrice && (
+                  {selectedMaterialSourceInfo.unitPrice != null && (
                     <span style={{ marginLeft: 16 }}>
-                      委外单价：¥{selectedMaterialSourceInfo.unitPrice.toFixed(2)}
+                      委外单价：
+                      <AmountDisplay resource="outsource_order" value={Number(selectedMaterialSourceInfo.unitPrice)} />
                     </span>
                   )}
                 </div>
@@ -1056,7 +1076,11 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           disabled={true}
           colProps={{ span: 12 }}
           fieldProps={{
-            formatter: (value) => value ? `¥${Number(value).toFixed(2)}` : '¥0.00',
+            formatter: (value) => {
+              const u = useGlobalStore.getState().currentUser;
+              if (!canViewKuaizhizaoPricing(u)) return '***';
+              return value ? `¥${Number(value).toFixed(2)}` : '¥0.00';
+            },
           }}
         />
 

@@ -17,11 +17,16 @@ import dayjs from 'dayjs';
 import { mesDashboardService } from '../../../services/dashboard';
 import { listSalesOrders } from '../../../services/sales-order';
 import { customerFollowUpApi, type CustomerFollowUp } from '../../../services/customer-follow-up';
+import { AmountDisplay } from '../../../../../components/permission';
+import { useGlobalStore } from '../../../../../stores/globalStore';
+import { canViewKuaizhizaoPricing } from '../../../../../utils/kuaizhizaoPricingPermission';
 
 const { Text } = Typography;
 
 const SalesDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const currentUser = useGlobalStore((s) => s.currentUser);
+  const showMoney = canViewKuaizhizaoPricing(currentUser);
   
   // 1. 获取汇总数据
   const { data: summary, loading: summaryLoading } = useRequest(mesDashboardService.getSalesSummary);
@@ -206,7 +211,13 @@ const SalesDashboard: React.FC = () => {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 14, fontWeight: 500, color: 'rgba(255, 255, 255, 0.9)' }}>本月销售额 (元)</div>
                       <div style={{ fontSize: 24, fontWeight: 700, color: '#fff', lineHeight: 1.2, marginTop: 6 }}>
-                        {s?.total_amount?.toLocaleString() ?? '0'}
+                        <AmountDisplay
+                          resource="sales_order"
+                          value={s?.total_amount != null ? Number(s.total_amount) : null}
+                          prefix=""
+                          suffix=""
+                          style={{ fontSize: 24, fontWeight: 700, color: '#fff' }}
+                        />
                       </div>
                       <div style={{ marginTop: 8 }}>
                         <Progress
@@ -219,7 +230,12 @@ const SalesDashboard: React.FC = () => {
                       </div>
                     </div>
                     {kpiSideBlock([
-                      { label: '上月完成', value: (s?.total_amount_last_month / 10000).toFixed(1) + 'w' },
+                      {
+                        label: '上月完成',
+                        value: showMoney
+                          ? `${((s?.total_amount_last_month ?? 0) / 10000).toFixed(1)}w`
+                          : '***',
+                      },
                       { label: '达成率', value: (s?.achievement_rate ?? 0) + '%' },
                     ])}
                   </div>
@@ -279,7 +295,11 @@ const SalesDashboard: React.FC = () => {
                     title: '金额',
                     dataIndex: 'total_amount',
                     align: 'right',
-                    render: (val) => <Text strong>¥{Number(val).toLocaleString()}</Text>
+                    render: (val) => (
+                      <Text strong>
+                        <AmountDisplay resource="sales_order" value={val != null ? Number(val) : null} />
+                      </Text>
+                    )
                   },
                   {
                     title: '状态',

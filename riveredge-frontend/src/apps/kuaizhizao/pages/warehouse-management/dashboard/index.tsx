@@ -15,6 +15,7 @@ import { useRequest } from 'ahooks';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { getWarehouseDashboardSummary, type WarehouseDashboardSummary } from '../../../services/warehouse-dashboard';
+import { AmountDisplay } from '../../../../../components/permission';
 
 const { Text } = Typography;
 
@@ -132,7 +133,12 @@ const WarehouseDashboard: React.FC = () => {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 14, fontWeight: 500, color: 'rgba(255, 255, 255, 0.9)' }}>总库存金额 (元)</div>
                       <div style={{ fontSize: 26, fontWeight: 700, color: '#fff', lineHeight: 1.2, marginTop: 6 }}>
-                        {s?.total_inventory_value?.toLocaleString(undefined, { minimumFractionDigits: 2 }) ?? '0.00'}
+                        <AmountDisplay
+                          resource="inventory"
+                          value={s?.total_inventory_value != null ? Number(s.total_inventory_value) : null}
+                          prefix=""
+                          style={{ fontSize: 26, fontWeight: 700, color: '#fff' }}
+                        />
                       </div>
                       <div style={{ fontSize: 12, color: 'rgba(255, 255, 255, 0.72)', marginTop: 8 }}>
                         按物料标准成本/均价估算

@@ -54,6 +54,10 @@ import {
   withdrawSalesOrderFromComputation,
   createSalesOrderReminder,
   bulkDeleteSalesOrders,
+  bulkSubmitSalesOrders,
+  bulkApproveSalesOrders,
+  bulkWithdrawSalesOrders,
+  bulkUnapproveSalesOrders,
   deleteSalesOrder,
   getSalesOrderStatistics,
   SalesOrder,
@@ -324,6 +328,8 @@ const SalesOrdersPage: React.FC = () => {
   /** 表格搜索表单 ref，用于 statCard 点击时设置筛选并刷新 */
   const tableSearchFormRef = useRef<any>(null);
   const rowKeyToOrderIdRef = useRef<Map<string, number>>(new Map());
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
   /** 视图切换缓存：始终请求 include_items=true，切换视图时从缓存转换，避免重复请求 */
   const lastOrdersCacheRef = useRef<{ orders: SalesOrder[]; total: number; paramsKey: string } | null>(null);
   const invalidateOrdersCache = () => { lastOrdersCacheRef.current = null; };
@@ -765,6 +771,50 @@ const SalesOrdersPage: React.FC = () => {
       },
     });
   };
+
+  /**
+   * 通用批量操作处理器
+   */
+  const handleBatchOperation = async (
+    keys: React.Key[],
+    actionName: string,
+    operationApi: (ids: number[]) => Promise<any>,
+  ) => {
+    const orderIds = [...new Set(keys.map((k) => rowKeyToOrderIdRef.current.get(String(k))).filter((id): id is number => id != null))];
+    const count = orderIds.length;
+    console.log(`[BatchAction] ${actionName} keys:`, keys, 'orderIds:', orderIds);
+    if (count === 0) {
+      messageApi.warning(t('common.noRecordsSelected', '未找到对应的单据ID'));
+      return;
+    }
+
+    try {
+      const res = await operationApi(orderIds);
+      if (res.failed_count === 0) {
+        messageApi.success(`${actionName}${t('common.success', '成功')}: ${res.success_count}${t('common.records', '条')}`);
+      } else {
+        messageApi.warning(`${actionName}${t('common.partialSuccess', '部分成功')}: ${res.success_count}${t('common.success', '成功')}, ${res.failed_count}${t('common.failed', '失败')}`);
+        // 打印具体失败原因，供排查
+        if (res.failed_items?.length > 0) {
+          console.error(`${actionName}失败详情:`, res.failed_items);
+        }
+      }
+      invalidateOrdersCache();
+      invalidateMenuBadge();
+      invalidateStatistics();
+      actionRef.current?.reload();
+      if (actionRef.current?.clearSelected) actionRef.current.clearSelected();
+      // ⚠️ 关键：受控模式下手动清空选中状态，确保下拉按钮状态刷新
+      setSelectedRowKeys([]);
+    } catch (error: any) {
+      messageApi.error(error.message || `${actionName}${t('common.failed', '失败')}`);
+    }
+  };
+
+  const handleBatchSubmit = (keys: React.Key[]) => handleBatchOperation(keys, t('app.kuaizhizao.salesOrder.batchSubmit', '批量提交'), bulkSubmitSalesOrders);
+  const handleBatchApprove = (keys: React.Key[]) => handleBatchOperation(keys, t('app.kuaizhizao.salesOrder.batchApprove', '批量审核'), bulkApproveSalesOrders);
+  const handleBatchWithdraw = (keys: React.Key[]) => handleBatchOperation(keys, t('app.kuaizhizao.salesOrder.batchWithdraw', '批量撤回'), bulkWithdrawSalesOrders);
+  const handleBatchUnapprove = (keys: React.Key[]) => handleBatchOperation(keys, t('app.kuaizhizao.salesOrder.batchUnapprove', '批量反审核'), bulkUnapproveSalesOrders);
 
   /**
    * 处理删除销售订单（单条，草稿或待审核）
@@ -1968,6 +2018,8 @@ const SalesOrdersPage: React.FC = () => {
       <ListPageTemplate statCards={statCards}>
         <SalesOrderIndicatorsProvider>
         <UniTable
+          selectedRowKeys={selectedRowKeys}
+          onRowSelectionChange={setSelectedRowKeys}
           formRef={tableSearchFormRef}
           headerTitle={t('app.kuaizhizao.salesOrder.title')}
           viewTypes={['table', 'detailTable', 'card', 'gantt', 'help']}
@@ -2157,6 +2209,11 @@ const SalesOrdersPage: React.FC = () => {
 
               const mode = dataViewModeRef.current;
               if (mode === 'order') {
+                const map = new Map<string, number>();
+                orders.forEach(o => {
+                  if (o.id) map.set(String(o.id), o.id);
+                });
+                rowKeyToOrderIdRef.current = map;
                 return { data: orders, success: true, total };
               }
               return { data: toFlatRows(orders), success: true, total };
@@ -2170,10 +2227,46 @@ const SalesOrdersPage: React.FC = () => {
           showCreateButton={true}
           createButtonText={t('app.kuaizhizao.salesOrder.create')}
           onCreate={handleCreate}
-          showEditButton={false}
-          showDeleteButton={viewTypeState !== 'detailTable'}
-          deleteButtonText={t('app.kuaizhizao.salesOrder.batchDelete')}
-          onDelete={handleDeleteResolved}
+          toolBarRender={() => [
+            <Dropdown.Button
+              key={`batch-btn-${selectedRowKeys.length}`}
+              disabled={selectedRowKeys.length === 0}
+              trigger={['click']}
+              danger
+              icon={<ArrowDownOutlined />}
+              onClick={() => handleDeleteResolved(selectedRowKeys)}
+              menu={{
+                items: [
+                  {
+                    key: 'submit',
+                    label: t('app.kuaizhizao.salesOrder.batchSubmit', '批量提交'),
+                    icon: <SendOutlined />,
+                    onClick: () => handleBatchSubmit(selectedRowKeys),
+                  },
+                  {
+                    key: 'approve',
+                    label: t('app.kuaizhizao.salesOrder.batchApprove', '批量审核'),
+                    icon: <FileTextOutlined />,
+                    onClick: () => handleBatchApprove(selectedRowKeys),
+                  },
+                  {
+                    key: 'withdraw',
+                    label: t('app.kuaizhizao.salesOrder.batchWithdraw', '批量撤回'),
+                    icon: <RollbackOutlined />,
+                    onClick: () => handleBatchWithdraw(selectedRowKeys),
+                  },
+                  {
+                    key: 'unapprove',
+                    label: t('app.kuaizhizao.salesOrder.batchUnapprove', '批量反审核'),
+                    icon: <RollbackOutlined />,
+                    onClick: () => handleBatchUnapprove(selectedRowKeys),
+                  },
+                ],
+              }}
+            >
+              <DeleteOutlined /> {t('app.kuaizhizao.salesOrder.batchDelete', '批量删除')}
+            </Dropdown.Button>,
+          ]}
           showImportButton={true}
           onImport={handleImport}
           showExportButton

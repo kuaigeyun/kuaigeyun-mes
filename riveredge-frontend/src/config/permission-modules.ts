@@ -53,6 +53,19 @@ export const PERMISSION_MODULE_NAMES: Record<string, string> = {
   other: '其他',
 };
 
+/**
+ * 菜单未覆盖到任何权限码时的模块展示顺序（与业务流一致，作二级排序）
+ */
+export const PERMISSION_MODULE_ORDER: string[] = [
+  'system',
+  'master_data',
+  'sales',
+  'purchase',
+  'finance',
+  'manufacturing',
+  'other',
+];
+
 export const PERMISSION_TEMPLATES: Array<{
   key: string;
   name: string;

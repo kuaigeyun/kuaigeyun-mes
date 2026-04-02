@@ -17,6 +17,7 @@ import dayjs from 'dayjs';
 import { mesDashboardService } from '../../../services/dashboard';
 import { listPurchaseOrders } from '../../../services/purchase';
 import { listPurchaseRequisitions } from '../../../services/purchase-requisition';
+import { AmountDisplay } from '../../../../../components/permission';
 
 const { Text } = Typography;
 
@@ -323,7 +324,11 @@ const PurchaseDashboard: React.FC = () => {
                     title: '金额',
                     dataIndex: 'total_amount',
                     align: 'right',
-                    render: (val) => <Text strong>¥{Number(val).toLocaleString()}</Text>
+                    render: (val) => (
+                      <Text strong>
+                        <AmountDisplay resource="purchase_order" value={val != null ? Number(val) : null} />
+                      </Text>
+                    )
                   },
                   {
                     title: '状态',

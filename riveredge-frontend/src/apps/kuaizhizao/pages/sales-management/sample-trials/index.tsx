@@ -32,6 +32,7 @@ import { batchImport } from '../../../../../utils/batchOperations';
 import { CustomerFormModal } from '../../../../master-data/components/CustomerFormModal';
 import { useTranslation } from 'react-i18next';
 import { RE_STATUS_BADGE_DRAFT, resolveStatusTagDisplayProps } from '../../../../../constants/statusBadges';
+import { AmountDisplay } from '../../../../../components/permission';
 
 interface SampleTrial {
   id?: number;
@@ -78,7 +79,12 @@ const SampleTrialFormSummary: React.FC = () => {
   return (
     <div style={{ marginTop: 12, padding: '12px', background: '#fafafa', borderRadius: '4px', display: 'flex', justifyContent: 'flex-end', gap: 24 }}>
       <span>总数量: <Typography.Text strong>{totalQuantity}</Typography.Text></span>
-      <span>总金额: <Typography.Text strong type="danger">¥{totalAmount.toFixed(2)}</Typography.Text></span>
+      <span>
+        总金额:{' '}
+        <Typography.Text strong type="danger">
+          <AmountDisplay resource="sample_trial" value={totalAmount} />
+        </Typography.Text>
+      </span>
     </div>
   );
 };
@@ -939,8 +945,20 @@ const SampleTrialsPage: React.FC = () => {
               { title: '物料名称', dataIndex: 'material_name', width: 150 },
               { title: '单位', dataIndex: 'material_unit', width: 60 },
               { title: '数量', dataIndex: 'trial_quantity', width: 90, align: 'right' },
-              { title: '单价', dataIndex: 'unit_price', width: 90, align: 'right' },
-              { title: '金额', dataIndex: 'total_amount', width: 100, align: 'right' },
+              {
+                title: '单价',
+                dataIndex: 'unit_price',
+                width: 90,
+                align: 'right',
+                render: (v: number) => <AmountDisplay resource="sample_trial" value={v} />,
+              },
+              {
+                title: '金额',
+                dataIndex: 'total_amount',
+                width: 100,
+                align: 'right',
+                render: (v: number) => <AmountDisplay resource="sample_trial" value={v} />,
+              },
             ]}
             dataSource={trialDetail.items}
             pagination={false}

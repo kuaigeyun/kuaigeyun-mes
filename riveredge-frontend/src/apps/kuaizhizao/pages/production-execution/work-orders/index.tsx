@@ -3242,58 +3242,84 @@ const WorkOrdersPage: React.FC = () => {
     },
     {
       title: '操作',
-      width: 200,
+      width: 180,
       fixed: 'right',
       render: (_, record) => {
-        const canDelete = ['draft', '草稿'].includes(record.status || '') ||
-          (['released', '已下达'].includes(record.status || '') &&
-            !record.actual_start_date &&
-            !Number(record.completed_quantity))
-        const canRevoke = (record.status === '已下达' || record.status === 'released') ||
-          ((record.status === '已完成' || record.status === 'completed') && record.manually_completed)
-        const canComplete = record.status !== '已完成' &&
-          record.status !== 'completed' &&
-          record.status !== '已取消' &&
-          record.status !== 'cancelled'
-        const moreItems = [
+        const rawStatus = record.status || ''
+        const isDraft = ['draft', '草稿'].includes(rawStatus)
+        const isReleased = ['released', '已下达'].includes(rawStatus)
+        const isInProgress = ['in_progress', '执行中'].includes(rawStatus)
+        const isCompleted = ['completed', '已完成'].includes(rawStatus)
+        const isCancelled = ['cancelled', '已取消'].includes(rawStatus)
+
+        const hasWork = Number(record.completed_quantity || 0) > 0
+        
+        // 撤回条件：已下达、执行中或手动结束，且无实际报工完成
+        const canRevoke = (isReleased || isInProgress || (isCompleted && record.manually_completed)) && !hasWork
+        
+        // 删除条件：草稿；或者已下达且无开工无完工
+        const canDelete = isDraft || (isReleased && !record.actual_start_date && !hasWork)
+        
+        // 指定结束条件：非已完成且非已取消
+        const canComplete = !isCompleted && !isCancelled
+
+        const moreItems: MenuProps['items'] = [
           { key: 'print', label: '打印', icon: <PrinterOutlined />, onClick: () => handlePrint(record) },
-          ...(canComplete ? [{ key: 'complete', label: '指定结束', icon: <StopOutlined />, onClick: () => handleComplete(record) }] : []),
-        ]
-        return (
-          <Space>
-            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>详情</Button>
-            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
-            {canDelete && (
-              <Popconfirm
-                title="确定要删除吗？"
-                description="删除后无法恢复"
-                onConfirm={async () => {
+          { type: 'divider' },
+          ...(canRevoke ? [{ 
+            key: 'revoke', 
+            label: '撤回', 
+            icon: <CloseCircleOutlined />, 
+            danger: true, 
+            onClick: () => handleRevoke(record) 
+          }] : []),
+          ...(canComplete ? [{ 
+            key: 'complete', 
+            label: '指定结束', 
+            icon: <StopOutlined />, 
+            onClick: () => handleComplete(record) 
+          }] : []),
+          ...(canDelete ? [{
+            key: 'delete',
+            label: '删除',
+            icon: <DeleteOutlined />,
+            danger: true,
+            onClick: () => {
+              Modal.confirm({
+                title: '确定要删除吗？',
+                content: '删除后无法恢复',
+                onOk: async () => {
                   try {
                     await workOrderApi.delete(record.id!.toString())
                     messageApi.success('删除成功')
-                    invalidateStatistics(); actionRef.current?.reload()
+                    invalidateStatistics()
+                    actionRef.current?.reload()
                   } catch (error: any) {
                     messageApi.error(error.message || '删除失败')
                   }
-                }}
-              >
-                <Button type="link" size="small" danger icon={<DeleteOutlined />}>删除</Button>
-              </Popconfirm>
+                },
+              })
+            },
+          }] : []),
+        ].filter(Boolean) as MenuProps['items']
+
+        return (
+          <Space size={0}>
+            <Button type="link" size="small" onClick={() => handleDetail(record)}>
+              详情
+            </Button>
+            {isDraft ? (
+              <Button type="link" size="small" onClick={() => handleRelease(record)}>
+                下达
+              </Button>
+            ) : (
+              <Button type="link" size="small" onClick={() => handleEdit(record)}>
+                编辑
+              </Button>
             )}
-            {record.status === 'draft' && (
-              <Button type="link" size="small" onClick={() => handleRelease(record)}>下达</Button>
-            )}
-            {canRevoke && (
-              <Button type="link" size="small" danger onClick={() => handleRevoke(record)}>撤回</Button>
-            )}
-            {moreItems.length > 0 && (
-              <Dropdown
-                menu={{ items: moreItems }}
-                trigger={['click']}
-              >
-                <Button type="link" size="small" icon={<MoreOutlined />}>更多</Button>
-              </Dropdown>
-            )}
+            <Dropdown menu={{ items: moreItems }} trigger={['click']}>
+              <Button type="link" size="small" icon={<MoreOutlined />} />
+            </Dropdown>
           </Space>
         )
       },
@@ -4231,6 +4257,20 @@ const WorkOrdersPage: React.FC = () => {
         extra={
           workOrderDetail && (
             <Space wrap>
+              {['draft', '草稿'].includes(workOrderDetail.status || '') && (
+                <Button type="primary" onClick={() => handleRelease(workOrderDetail!)}>
+                  下达工单
+                </Button>
+              )}
+              {(['released', '已下达', 'in_progress', '执行中'].includes(workOrderDetail.status || '') ||
+                (['completed', '已完成'].includes(workOrderDetail.status || '') &&
+                  workOrderDetail.manually_completed)) &&
+                !Number(workOrderDetail.completed_quantity || 0) && (
+                  <Button type="default" danger onClick={() => handleRevoke(workOrderDetail!)}>
+                    撤回
+                  </Button>
+                )}
+              <Divider orientation="vertical" />
               {availableTransitions.length > 0 && (
                 <Button
                   type="link"

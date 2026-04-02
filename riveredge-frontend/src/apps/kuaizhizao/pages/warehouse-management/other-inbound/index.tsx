@@ -184,6 +184,9 @@ const OtherInboundPage: React.FC = () => {
               <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>删除</Button>
             </>
           )}
+          {record.status === '已入库' && (
+            <Button type="link" size="small" icon={<ThunderboltOutlined />} onClick={() => handleWithdraw(record)} style={{ color: '#fa8c16' }}>撤销确认</Button>
+          )}
         </Space>
       ),
     },
@@ -226,6 +229,22 @@ const OtherInboundPage: React.FC = () => {
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '删除失败');
+        }
+      },
+    });
+  };
+
+  const handleWithdraw = async (record: OtherInbound) => {
+    Modal.confirm({
+      title: '确认撤销入库',
+      content: `确定要撤销入库单 "${record.inbound_code}" 的确认状态吗？撤销后将物理回滚已增加的库存数量。`,
+      onOk: async () => {
+        try {
+          await warehouseApi.otherInbound.withdraw(record.id!.toString());
+          messageApi.success('已成功撤销并扣减库存');
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '撤销失败');
         }
       },
     });

@@ -11,12 +11,12 @@ import React from 'react'
 import { Tooltip } from 'antd'
 import { useGlobalStore } from '../../stores/globalStore'
 import { LockOutlined } from '@ant-design/icons'
-import { hasPermission } from '../../utils/permission'
+import { canViewKuaizhizaoPricing } from '../../utils/kuaizhizaoPricingPermission'
 import { formatNumber } from '../../utils/format'
 
 export interface AmountDisplayProps {
-  /** 资源名称（如：sales_order, purchase_order） */
-  resource: string
+  /** 资源名称（如：sales_order）；可选，用于兼容历史权限 {resource}:view:amount */
+  resource?: string
   /** 金额数值 */
   value: number | null | undefined
   /** 小数位数（默认 2） */
@@ -51,9 +51,7 @@ export const AmountDisplay: React.FC<AmountDisplayProps> = ({
 }) => {
   const currentUser = useGlobalStore((s) => s.currentUser)
 
-  // 检查对应的字段级权限
-  const permissionCode = `${resource}:view:amount`
-  const hasAccess = hasPermission(currentUser, permissionCode)
+  const hasAccess = canViewKuaizhizaoPricing(currentUser, resource)
 
   if (!hasAccess) {
     return (
