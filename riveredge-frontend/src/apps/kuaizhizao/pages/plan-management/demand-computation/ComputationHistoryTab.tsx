@@ -15,6 +15,8 @@ import {
   type DemandComputation,
   type ComputationCompareResult,
 } from '../../../services/demand-computation';
+import { getDemandBusinessModeLabel, getDemandBusinessModeTagColor } from '../../../utils/businessMode';
+import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
 
 const ComputationHistoryTab: React.FC = () => {
   const { message: messageApi } = App.useApp();
@@ -80,10 +82,10 @@ const ComputationHistoryTab: React.FC = () => {
       title: '业务模式',
       dataIndex: 'business_mode',
       width: 110,
-      valueEnum: { MTS: { text: 'MTS' }, MTO: { text: 'MTO' } },
+      valueEnum: { MTS: { text: 'MTS' }, MTO: { text: 'MTO' }, ATO: { text: 'ATO' } },
       render: (_, record) => (
-        <Tag color={record.business_mode === 'MTS' ? 'cyan' : 'purple'}>
-          {record.business_mode === 'MTS' ? '按库存(MTS)' : '按订单(MTO)'}
+        <Tag color={getDemandBusinessModeTagColor(record.business_mode)}>
+          {getDemandBusinessModeLabel(record.business_mode)}
         </Tag>
       ),
     },
@@ -108,9 +110,27 @@ const ComputationHistoryTab: React.FC = () => {
         return <Tag color={status.color}>{status.text}</Tag>;
       },
     },
-    { title: '计算开始时间', dataIndex: 'computation_start_time', width: 180, valueType: 'dateTime', sorter: true },
-    { title: '计算结束时间', dataIndex: 'computation_end_time', width: 180, valueType: 'dateTime', hideInSearch: true },
-    { title: '创建时间', dataIndex: 'created_at', width: 180, valueType: 'dateTime', hideInSearch: true },
+    {
+      title: '计算开始时间',
+      dataIndex: 'computation_start_time',
+      width: 180,
+      render: (_, record) => formatDateTimeBySiteSetting(record.computation_start_time),
+      sorter: true,
+    },
+    {
+      title: '计算结束时间',
+      dataIndex: 'computation_end_time',
+      width: 180,
+      render: (_, record) => formatDateTimeBySiteSetting(record.computation_end_time),
+      hideInSearch: true,
+    },
+    {
+      title: '创建时间',
+      dataIndex: 'created_at',
+      width: 180,
+      render: (_, record) => formatDateTimeBySiteSetting(record.created_at),
+      hideInSearch: true,
+    },
   ];
 
   const compareColumns = [
@@ -279,8 +299,8 @@ const ComputationHistoryTab: React.FC = () => {
                       }}
                     />
                     <Divider />
-                    <div><strong>计算开始时间:</strong> {compareResult.computation1.computation_start_time || '-'}</div>
-                    <div><strong>计算结束时间:</strong> {compareResult.computation1.computation_end_time || '-'}</div>
+                    <div><strong>计算开始时间:</strong> {formatDateTimeBySiteSetting(compareResult.computation1.computation_start_time)}</div>
+                    <div><strong>计算结束时间:</strong> {formatDateTimeBySiteSetting(compareResult.computation1.computation_end_time)}</div>
                   </Card>
                 </Col>
                 <Col span={12}>
@@ -297,8 +317,8 @@ const ComputationHistoryTab: React.FC = () => {
                       }}
                     />
                     <Divider />
-                    <div><strong>计算开始时间:</strong> {compareResult.computation2.computation_start_time || '-'}</div>
-                    <div><strong>计算结束时间:</strong> {compareResult.computation2.computation_end_time || '-'}</div>
+                    <div><strong>计算开始时间:</strong> {formatDateTimeBySiteSetting(compareResult.computation2.computation_start_time)}</div>
+                    <div><strong>计算结束时间:</strong> {formatDateTimeBySiteSetting(compareResult.computation2.computation_end_time)}</div>
                   </Card>
                 </Col>
               </Row>

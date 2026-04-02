@@ -13,13 +13,18 @@ function getDateFormatFromSiteSetting(): string {
   return useConfigStore.getState().getConfig('date_format', 'YYYY-MM-DD');
 }
 
+/** 从站点设置获取时区 */
+function getTimezoneFromSiteSetting(): string {
+  return useConfigStore.getState().configs?.timezone || 'Asia/Shanghai';
+}
+
 /** 从站点设置获取日期时间格式 */
 function getDatetimeFormatFromSiteSetting(): string {
   return `${getDateFormatFromSiteSetting()} HH:mm:ss`;
 }
 
 /**
- * 格式化日期（使用站点设置中的日期格式）
+ * 格式化日期（使用站点设置中的日期格式和时区）
  * 用于单据、表格等业务展示场景
  *
  * @param date - 日期（字符串、Date 对象、Dayjs 或时间戳）
@@ -31,13 +36,14 @@ export function formatDateBySiteSetting(
   fallback: string = '-'
 ): string {
   if (date == null || date === '') return fallback;
-  const d = dayjs(date);
+  const tz = getTimezoneFromSiteSetting();
+  const d = dayjs(date).tz(tz);
   if (!d.isValid()) return fallback;
   return d.format(getDateFormatFromSiteSetting());
 }
 
 /**
- * 格式化日期时间（使用站点设置中的日期格式 + 时间）
+ * 格式化日期时间（使用站点设置中的日期格式 + 时间 + 时区）
  *
  * @param date - 日期时间
  * @param fallback - 空值时的占位（默认 '-'）
@@ -48,7 +54,8 @@ export function formatDateTimeBySiteSetting(
   fallback: string = '-'
 ): string {
   if (date == null || date === '') return fallback;
-  const d = dayjs(date);
+  const tz = getTimezoneFromSiteSetting();
+  const d = dayjs(date).tz(tz);
   if (!d.isValid()) return fallback;
   return d.format(getDatetimeFormatFromSiteSetting());
 }
@@ -75,7 +82,8 @@ export function formatDateTime(
   format?: string
 ): string {
   if (!date) return '-';
-  return dayjs(date).format(format ?? getDatetimeFormatFromSiteSetting());
+  const tz = getTimezoneFromSiteSetting();
+  return dayjs(date).tz(tz).format(format ?? getDatetimeFormatFromSiteSetting());
 }
 
 /**
@@ -90,7 +98,8 @@ export function formatDate(
   format?: string
 ): string {
   if (!date) return '-';
-  return dayjs(date).format(format ?? getDateFormatFromSiteSetting());
+  const tz = getTimezoneFromSiteSetting();
+  return dayjs(date).tz(tz).format(format ?? getDateFormatFromSiteSetting());
 }
 
 /**

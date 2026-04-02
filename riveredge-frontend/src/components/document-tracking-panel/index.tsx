@@ -16,6 +16,7 @@ import type {
   DocumentTrackingFieldChange,
 } from '../../services/documentTracking';
 import { useDocumentTracking } from './useDocumentTracking';
+import { getDocumentLifecycleStageTagProps } from '../../utils/documentLifecycleStatusTag';
 
 /**
  * 原始状态值 -> lifecycle 阶段 i18n key
@@ -56,33 +57,13 @@ const STATUS_TO_LIFECYCLE_I18N: Record<string, string> = {
 /** 兼容旧逻辑：STATUS_TO_I18N 别名，统一使用 lifecycle 映射 */
 const STATUS_TO_I18N = STATUS_TO_LIFECYCLE_I18N;
 
-const STATUS_COLOR: Record<string, string> = {
-  documentStatus_draft: 'default',
-  documentStatus_pending_review: 'warning',
-  documentStatus_audited: 'green',
-  documentStatus_rejected: 'error',
-  documentStatus_approved: 'green',
-  documentStatus_confirmed: 'blue',
-  documentStatus_cancelled: 'default',
-  documentStatus_effective: 'purple',
-  documentStatus_in_progress: 'cyan',
-  documentStatus_delivered: 'orange',
-  documentStatus_completed: 'gold',
-  documentStatus_pending: 'warning',
-  documentStatus_submitted: 'warning',
-  reviewStatus_pending: 'warning',
-  reviewStatus_approved: 'green',
-  reviewStatus_rejected: 'error',
-};
-
 function useTrackingStatusRender(t: TFunction) {
   const renderStatusBadge = (raw: string) => {
     if (!raw || raw === '空') return raw || '—';
     const i18nKey = STATUS_TO_I18N[raw] || STATUS_TO_I18N[raw.trim()];
-    const colorKey = i18nKey ? i18nKey.replace('.', '_') : '';
-    const color = colorKey ? (STATUS_COLOR[colorKey] ?? 'default') : 'default';
     const text = i18nKey ? t(i18nKey) : raw;
-    return <Tag color={color}>{text}</Tag>;
+    const tagProps = getDocumentLifecycleStageTagProps(raw);
+    return <Tag {...tagProps}>{text}</Tag>;
   };
 
   const renderFieldChangeValue = (val: string, field: string) => {

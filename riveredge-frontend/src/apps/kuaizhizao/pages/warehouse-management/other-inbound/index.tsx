@@ -26,6 +26,7 @@ import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../s
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { getOtherInboundLifecycle } from '../../../utils/otherInboundLifecycle';
+import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import { useTranslation } from 'react-i18next';
 import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
 import { materialApi, materialBatchApi, materialSerialApi } from '../../../../master-data/services/material';
@@ -164,8 +165,7 @@ const OtherInboundPage: React.FC = () => {
       render: (_, record) => {
         const lifecycle = getOtherInboundLifecycle(record);
         const stageName = lifecycle.stageName ?? record.status ?? '待入库';
-        const colorMap: Record<string, string> = { 待入库: 'default', 已入库: 'success', 已取消: 'error' };
-        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
+        return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>;
       },
     },
     { title: '入库人', dataIndex: 'receiver_name', width: 100 },

@@ -1646,7 +1646,6 @@ export default {
   'app.kuaizhizao.menu.plan-management.production-control-tower': 'Planning Center',
   'app.kuaizhizao.menu.plan-management.production-plans': 'Production Plans',
   'app.kuaizhizao.menu.plan-management.scheduling': 'Scheduling',
-  'app.kuaizhizao.menu.plan-management.computation-config': 'Computation Config',
   'app.kuaizhizao.menu.plan-management.computation-history': 'Computation History',
   'app.kuaizhizao.menu.production-execution': 'Production Execution',
   'app.kuaizhizao.menu.production-execution.dashboard': 'Manufacturing Center',
@@ -2042,6 +2041,10 @@ export default {
   'app.kuaizhizao.salesOrder.demandComputation': 'Demand Computation',
   'app.kuaizhizao.salesOrder.pushToProductionPlan': 'Push to Production Plan',
   'app.kuaizhizao.salesOrder.pushToWorkOrder': 'Push to Work Order',
+  'app.kuaizhizao.salesOrder.pushMutualExclusiveComputationBlocked':
+    'Work orders were created via direct push; demand computation is no longer available',
+  'app.kuaizhizao.salesOrder.pushMutualExclusiveWorkOrderBlocked':
+    'Demand computation was pushed; create work orders from the computation document, not direct push',
   'app.kuaizhizao.salesOrder.shipmentNotice': 'Shipment Notice',
   'app.kuaizhizao.salesOrder.salesInvoice': 'Sales Invoice',
   'app.kuaizhizao.salesOrder.withdrawComputation': 'Withdraw Computation',

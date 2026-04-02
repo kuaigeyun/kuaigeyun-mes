@@ -177,6 +177,12 @@ class SalesOrderResponse(SalesOrderBase):
     pushed_to_computation: bool = Field(False, description="是否已下推到需求计算")
     computation_id: Optional[int] = Field(None, description="需求计算ID")
     computation_code: Optional[str] = Field(None, max_length=50, description="需求计算编码")
+    planning_pushed_to_computation: bool = Field(
+        False, description="计划侧已下推需求计算（与统一需求下推同进同退）"
+    )
+    planning_computation_id: Optional[int] = Field(None, description="计划侧关联需求计算ID")
+    planning_computation_code: Optional[str] = Field(None, max_length=50, description="计划侧关联需求计算编码")
+    planning_computation_pushed_at: Optional[datetime] = Field(None, description="计划侧下推需求计算时间")
     is_active: bool = Field(True, description="是否启用")
     created_by: Optional[int] = None
     updated_by: Optional[int] = None

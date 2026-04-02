@@ -33,7 +33,7 @@ export interface Demand {
   demand_code?: string;
   demand_type?: 'sales_forecast' | 'sales_order' | 'demand_plan';
   demand_name?: string;
-  business_mode?: 'MTS' | 'MTO';
+  business_mode?: 'MTS' | 'MTO' | 'ATO';
   start_date?: string;
   end_date?: string;
   customer_id?: number;
@@ -78,7 +78,11 @@ export interface Demand {
     status?: 'success' | 'exception' | 'normal' | 'active';
     main_stages?: { key: string; label: string; status: 'done' | 'active' | 'pending' }[];
     sub_stages?: { key: string; label: string; status: 'done' | 'active' | 'pending' }[];
+    next_step_suggestions?: string[];
   };
+  /** 最近一次上游触发的同步/重算（详情接口） */
+  last_upstream_sync_at?: string;
+  last_upstream_sync_trigger?: string;
   duration_info?: {
     created_at?: string;
     submit_time?: string;
@@ -133,7 +137,7 @@ export interface DemandListParams {
   demand_type?: 'sales_forecast' | 'sales_order' | 'demand_plan';
   status?: string;
   pushed_to_computation?: boolean;
-  business_mode?: 'MTS' | 'MTO';
+  business_mode?: 'MTS' | 'MTO' | 'ATO';
   review_status?: string;
   start_date?: string;
   end_date?: string;
@@ -313,6 +317,17 @@ export interface PushToComputationResponse {
 export async function pushDemandToComputation(demandId: number): Promise<PushToComputationResponse> {
   return apiRequest<PushToComputationResponse>(`/apps/kuaizhizao/demands/${demandId}/push-to-computation`, {
     method: 'POST',
+    data: {},
+  });
+}
+
+/**
+ * 撤回需求计算
+ */
+export async function withdrawDemandFromComputation(demandId: number): Promise<Demand> {
+  return apiRequest<Demand>(`/apps/kuaizhizao/demands/${demandId}/withdraw-from-computation`, {
+    method: 'POST',
+    data: {},
   });
 }
 

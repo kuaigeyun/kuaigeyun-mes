@@ -41,6 +41,7 @@ const STAGE_PERCENT: Record<string, number> = {
   effective: 50,
   executing: 50,
   delivered: 75,
+  completed: 100,
 };
 
 /**

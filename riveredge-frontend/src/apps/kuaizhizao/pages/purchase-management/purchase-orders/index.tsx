@@ -87,6 +87,7 @@ const PO_STAT_SPARKLINE_SUPPLIER = [92, 95, 88, 96, 94, 98, 95];
 const PO_STAT_SPARKLINE_OVERDUE = [5, 8, 3, 12, 7, 15, 10];
 
 import { getPurchaseOrderLifecycle } from '../../../utils/purchaseOrderLifecycle';
+import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { SupplierFormModal } from '../../../../master-data/components/SupplierFormModal';
 import { batchImport } from '../../../../../utils/batchOperations';
@@ -507,16 +508,7 @@ const PurchaseOrdersPage: React.FC = () => {
       render: (_: any, record: PurchaseOrder) => {
         const lifecycle = getPurchaseOrderLifecycle(record);
         const stageName = lifecycle.stageName ?? record.status ?? '草稿';
-        const colorMap: Record<string, string> = {
-          草稿: 'default',
-          待审核: 'warning',
-          已审核: 'green',
-          已下推入库: 'blue',
-          已完成: 'gold',
-          已驳回: 'error',
-          已取消: 'default',
-        };
-        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
+        return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>;
       },
     },
     {

@@ -15,6 +15,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { disassemblyOrderApi } from '../../../services/disassembly-order';
 import { getDisassemblyOrderLifecycle } from '../../../utils/disassemblyOrderLifecycle';
+import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 
 interface DisassemblyOrder {
   id?: number;
@@ -87,8 +88,7 @@ const DisassemblyOrdersPage: React.FC = () => {
       render: (_, record) => {
         const lifecycle = getDisassemblyOrderLifecycle(record);
         const stageName = lifecycle.stageName ?? record.status ?? '草稿';
-        const colorMap: Record<string, string> = { 草稿: 'default', 拆卸中: 'processing', 已完成: 'success', 已取消: 'error' };
-        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
+        return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>;
       },
     },
     {

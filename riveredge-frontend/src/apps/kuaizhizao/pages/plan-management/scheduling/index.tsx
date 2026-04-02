@@ -9,7 +9,7 @@
 
 import React, { useRef, useState, useCallback, lazy, Suspense } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Card, Modal, Drawer, Switch, Spin } from 'antd';
+import { App, Button, Tag, Space, Card, Modal, Switch, Spin } from 'antd';
 import { ScheduleOutlined, ReloadOutlined, SettingOutlined } from '@ant-design/icons';
 import { useRequest } from 'ahooks';
 import { UniTable } from '../../../../../components/uni-table';
@@ -344,13 +344,12 @@ const SchedulingPage: React.FC = () => {
         </Suspense>
       </Card>
 
-      {/* 排程配置 Drawer - 4M 人机料法可配置 */}
-      <Drawer
+      {/* 排程配置 Modal - 4M 人机料法可配置 */}
+      <Modal
         title="排程配置"
-        placement="right"
-        width={360}
+        width={400}
         open={configDrawerOpen}
-        onClose={() => setConfigDrawerOpen(false)}
+        onCancel={() => setConfigDrawerOpen(false)}
         footer={
           <Space>
             <Button onClick={() => setSchedulingConstraints(DEFAULT_SCHEDULING_CONSTRAINTS)}>
@@ -362,12 +361,12 @@ const SchedulingPage: React.FC = () => {
           </Space>
         }
       >
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ padding: '12px 0' }}>
           <div style={{ marginBottom: 8, fontWeight: 500 }}>人机料法约束（4M）</div>
-          <div style={{ color: '#8c8c8c', fontSize: 12, marginBottom: 12 }}>
+          <div style={{ color: '#8c8c8c', fontSize: 12, marginBottom: 16 }}>
             勾选表示排程时考虑该约束，取消勾选则忽略（适合资源有限的中小企业按实情选择）
           </div>
-          <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Space direction="vertical" size={16} style={{ width: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>人：考虑人员约束</span>
               <Switch
@@ -398,7 +397,7 @@ const SchedulingPage: React.FC = () => {
             </div>
           </Space>
         </div>
-      </Drawer>
+      </Modal>
     </ListPageTemplate>
   );
 };

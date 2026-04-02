@@ -49,6 +49,11 @@ class SalesForecastResponse(SalesForecastBase):
     """销售预测响应schema"""
     id: int = Field(..., description="预测ID")
     tenant_id: int = Field(..., description="租户ID")
+    planning_pushed_to_computation: bool = Field(
+        False, description="计划侧已下推需求计算（与统一需求下推同进同退）"
+    )
+    planning_computation_id: Optional[int] = Field(None, description="计划侧关联需求计算ID")
+    planning_computation_code: Optional[str] = Field(None, max_length=50, description="计划侧关联需求计算编码")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     demand_synced: Optional[bool] = Field(None, description="本次操作是否已同步至关联需求")

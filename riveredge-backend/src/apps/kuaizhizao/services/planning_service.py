@@ -199,7 +199,7 @@ class ProductionPlanningService(BaseService):
         mts_from_comp = 0
         if id_list:
             mto_from_comp = await DemandComputation.filter(
-                tenant_id=tenant_id, id__in=id_list, business_mode='MTO'
+                tenant_id=tenant_id, id__in=id_list, business_mode__in=('MTO', 'ATO')
             ).count()
             mts_from_comp = await DemandComputation.filter(
                 tenant_id=tenant_id, id__in=id_list, business_mode='MTS'

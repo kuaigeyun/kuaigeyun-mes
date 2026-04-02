@@ -10,10 +10,10 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Table, Row, Col, Form as AntForm, InputNumber, Input } from 'antd';
-import { EyeOutlined, CheckCircleOutlined, PlusOutlined, AppstoreAddOutlined, ImportOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { App, Button, Space, Modal, Table, Row, Col, Form as AntForm, InputNumber, Input, Dropdown, Tag, Card, Typography, Spin, Empty } from 'antd';
+import { EyeOutlined, CheckCircleOutlined, PlusOutlined, AppstoreAddOutlined, ImportOutlined, MoreOutlined, CopyOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, DetailDrawerSection } from '../../../../../components/layout-templates';
 import { UniImport } from '../../../../../components/uni-import';
 import { getDictionaryOptions } from '../../../../master-data/services/supply-chain';
 import { initializeSystemDictionaries } from '../../../../../services/dataDictionary';
@@ -21,9 +21,13 @@ import { UniMaterialSelect } from '../../../../../components/uni-material-select
 import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
 import type { Material } from '../../../../master-data/types/material';
 import { warehouseApi } from '../../../services/production';
-import { getDocumentRelations } from '../../../services/document-relation';
-import type { DocumentRelationData } from '../../../../../components/document-relation-display';
+import { customerApi } from '../../../../master-data/services/supply-chain';
+import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import dayjs from 'dayjs';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { getSalesReturnLifecycle } from '../../../utils/salesReturnLifecycle';
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { DocumentTrackingRelationsBody, DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 
 // 销售退货单接口定义
 interface SalesReturn {
@@ -113,7 +117,17 @@ const SalesReturnsPage: React.FC = () => {
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [returnDetail, setReturnDetail] = useState<SalesReturnDetail | null>(null);
-  const [documentRelations, setDocumentRelations] = useState<DocumentRelationData | null>(null);
+  const salesReturnTracking = useDocumentTracking('sales_return', returnDetail?.id, detailDrawerVisible ? 1 : 0);
+  const handleCopy = async (text?: string) => {
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      messageApi.success('复制成功');
+    } catch {
+      messageApi.error('复制失败');
+    }
+  };
+
   
   // 创建/编辑相关状态
   const [modalVisible, setModalVisible] = useState(false);
@@ -125,6 +139,7 @@ const SalesReturnsPage: React.FC = () => {
   const [returnTypeOptions, setReturnTypeOptions] = useState(FALLBACK_RETURN_TYPE);
   const [shippingMethodOptions, setShippingMethodOptions] = useState(FALLBACK_SHIPPING_METHOD);
   const [dictOptionsLoading, setDictOptionsLoading] = useState(false);
+  const SALES_RETURN_ROW_ACTIONS_INLINE_MAX = 3;
 
   /** 打开表单时拉取字典；若租户未初始化则尝试同步系统字典（与 core 配置一致） */
   useEffect(() => {
@@ -164,6 +179,28 @@ const SalesReturnsPage: React.FC = () => {
     };
   }, [modalVisible]);
 
+  const renderSalesReturnRowActions = (actions: React.ReactNode[]) => {
+    const valid = actions.filter(Boolean);
+    if (valid.length <= SALES_RETURN_ROW_ACTIONS_INLINE_MAX) {
+      return <Space size={4}>{valid}</Space>;
+    }
+    const inline = valid.slice(0, SALES_RETURN_ROW_ACTIONS_INLINE_MAX - 1);
+    const folded = valid.slice(SALES_RETURN_ROW_ACTIONS_INLINE_MAX - 1);
+    return (
+      <Space size={4}>
+        {inline}
+        <Dropdown
+          trigger={['click']}
+          menu={{
+            items: folded.map((node, index) => ({ key: `more-${index}`, label: node as React.ReactNode })),
+          }}
+        >
+          <Button type="link" size="small" icon={<MoreOutlined />}>更多</Button>
+        </Dropdown>
+      </Space>
+    );
+  };
+
   // 表格列定义
   const columns: ProColumns<SalesReturn>[] = [
     {
@@ -172,6 +209,22 @@ const SalesReturnsPage: React.FC = () => {
       width: 140,
       ellipsis: true,
       fixed: 'left',
+      render: (_, record) => (
+        <Space size={4}>
+          <span>{record.return_code || '-'}</span>
+          {record.return_code ? (
+            <Button
+              type="link"
+              size="small"
+              icon={<CopyOutlined style={{ fontSize: 12 }} />}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCopy(record.return_code);
+              }}
+            />
+          ) : null}
+        </Space>
+      ),
     },
     {
       title: '销售出库单编号',
@@ -196,34 +249,6 @@ const SalesReturnsPage: React.FC = () => {
       dataIndex: 'warehouse_name',
       width: 120,
       ellipsis: true,
-    },
-    {
-      title: '退货状态',
-      dataIndex: 'status',
-      width: 100,
-      render: (status: any) => {
-        const statusMap = {
-          '待退货': { text: '待退货', color: 'default' },
-          '已退货': { text: '已退货', color: 'success' },
-          '已取消': { text: '已取消', color: 'error' },
-        };
-        const config = statusMap[status as keyof typeof statusMap] || statusMap['待退货'];
-        return <Tag color={config.color}>{config.text}</Tag>;
-      },
-    },
-    {
-      title: '审核状态',
-      dataIndex: 'review_status',
-      width: 100,
-      render: (status: any) => {
-        const statusMap = {
-          '待审核': { text: '待审核', color: 'default' },
-          '审核通过': { text: '审核通过', color: 'success' },
-          '审核驳回': { text: '审核驳回', color: 'error' },
-        };
-        const config = statusMap[status as keyof typeof statusMap] || statusMap['待审核'];
-        return <Tag color={config.color}>{config.text}</Tag>;
-      },
     },
     {
       title: t('app.kuaizhizao.salesReturn.totalQuantity') || '总数量',
@@ -251,32 +276,33 @@ const SalesReturnsPage: React.FC = () => {
       width: 160,
     },
     {
-      title: '操作',
-      width: 120,
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      width: 132,
+      align: 'center',
       fixed: 'right',
       render: (_, record) => (
-        <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleDetail(record)}
-          >
-            详情
-          </Button>
-          {record.status === '待退货' && (
-            <Button
-              type="link"
-              size="small"
-              icon={<CheckCircleOutlined />}
-              onClick={() => handleConfirm(record)}
-              style={{ color: '#52c41a' }}
-            >
-              确认退货
-            </Button>
-          )}
-        </Space>
+        <UniLifecycle
+          value={getSalesReturnLifecycle(record as any)}
+          showLabel
+          showCircleTooltip={false}
+          size="small"
+        />
       ),
+    },
+    {
+      title: '操作',
+      width: 220,
+      fixed: 'right',
+      render: (_, record) => renderSalesReturnRowActions([
+        <Button key="detail" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>详情</Button>,
+        ...(record.status === '待退货' ? [
+          <Button key="confirm" type="link" size="small" icon={<CheckCircleOutlined />} onClick={() => handleConfirm(record)}>确认退货</Button>,
+        ] : []),
+        ...(record.status === '已退货' ? [
+          <Button key="withdraw" type="link" size="small" onClick={() => handleWithdraw(record)}>撤回确认</Button>,
+        ] : []),
+      ]),
     },
   ];
 
@@ -285,16 +311,6 @@ const SalesReturnsPage: React.FC = () => {
     try {
       const detail = await warehouseApi.salesReturn.get(record.id!.toString());
       setReturnDetail(detail as SalesReturnDetail);
-
-      // 获取单据关联关系
-      try {
-        const relations = await getDocumentRelations('sales_return', record.id!);
-        setDocumentRelations(relations);
-      } catch (error) {
-        console.error('获取单据关联关系失败:', error);
-        setDocumentRelations(null);
-      }
-
       setDetailDrawerVisible(true);
     } catch (error) {
       messageApi.error('获取销售退货单详情失败');
@@ -319,6 +335,22 @@ const SalesReturnsPage: React.FC = () => {
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '销售退货确认失败');
+        }
+      },
+    });
+  };
+
+  const handleWithdraw = async (record: SalesReturn) => {
+    Modal.confirm({
+      title: '撤回退货确认',
+      content: `确定要撤回销售退货单 "${record.return_code}" 的确认状态吗？`,
+      onOk: async () => {
+        try {
+          await warehouseApi.salesReturn.withdraw(record.id!.toString());
+          messageApi.success('已撤回到待退货');
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '撤回失败');
         }
       },
     });
@@ -467,28 +499,7 @@ const SalesReturnsPage: React.FC = () => {
 
   return (
     <>
-      <ListPageTemplate
-        statCards={[
-          {
-            title: '总退货单数',
-            value: 0,
-            prefix: <CheckCircleOutlined />,
-            valueStyle: { color: '#1890ff' },
-          },
-          {
-            title: '待退货',
-            value: 0,
-            suffix: '个',
-            valueStyle: { color: '#faad14' },
-          },
-          {
-            title: '已退货',
-            value: 0,
-            suffix: '个',
-            valueStyle: { color: '#52c41a' },
-          },
-        ]}
-      >
+      <ListPageTemplate>
         <UniTable
           headerTitle="销售退货"
           actionRef={actionRef}
@@ -496,6 +507,7 @@ const SalesReturnsPage: React.FC = () => {
           columns={columns}
           showAdvancedSearch={true}
           showCreateButton={true}
+          createButtonText="新建销售退货单"
           onCreate={handleCreate}
           request={async (params) => {
             try {
@@ -530,7 +542,7 @@ const SalesReturnsPage: React.FC = () => {
       <FormModalTemplate
         title={editingId ? '编辑销售退货单' : '新增销售退货单'}
         open={modalVisible}
-        onCancel={() => setModalVisible(false)}
+        onClose={() => setModalVisible(false)}
         onFinish={onFinish}
         formRef={formRef}
       >
@@ -542,24 +554,34 @@ const SalesReturnsPage: React.FC = () => {
               placeholder="请选择客户"
               required
               request={async () => {
-                // mock request - should use real service in production
-                return [];
+                const res = await customerApi.list({ limit: 1000, isActive: true });
+                const list = Array.isArray(res) ? res : (res as any)?.data || (res as any)?.items || [];
+                return list.map((c: any) => ({
+                  label: c.name || c.customer_name || c.code || `客户${c.id}`,
+                  value: c.id ?? c.customer_id,
+                }));
+              }}
+              fieldProps={{
+                showSearch: true,
+                optionFilterProp: 'label',
+                onChange: (_, option) => {
+                  formRef.current?.setFieldsValue({ customer_name: (option as any)?.label ?? '' });
+                },
               }}
               rules={[{ required: true, message: '请选择客户' }]}
             />
+            <ProFormText name="customer_name" hidden />
           </Col>
           <Col span={8}>
-            <ProFormSelect
+            <UniWarehouseSelect
               name="warehouse_id"
               label="退入仓库"
               placeholder="请选择仓库"
               required
-              request={async () => {
-                // mock request - should use real service in production
-                return [];
-              }}
+              onChange={(_, wh) => formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
               rules={[{ required: true, message: '请选择仓库' }]}
             />
+            <ProFormText name="warehouse_name" hidden />
           </Col>
           <Col span={8}>
             <ProFormDatePicker
@@ -725,96 +747,113 @@ const SalesReturnsPage: React.FC = () => {
         onClose={() => {
           setDetailDrawerVisible(false);
           setReturnDetail(null);
-          setDocumentRelations(null);
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={detailColumns}
+        columns={[]}
         dataSource={returnDetail || undefined}
         customContent={
           returnDetail ? (
             <div style={{ padding: '16px 0' }}>
-              {/* 明细表格 */}
-              {returnDetail.items && returnDetail.items.length > 0 && (
-                <Card title="退货明细" style={{ marginBottom: 16 }}>
-                  <Table
-                    size="small"
-                    columns={[
-                      { title: '物料编号', dataIndex: 'material_code', width: 120 },
-                      { title: '物料名称', dataIndex: 'material_name', width: 150 },
-                      { title: '退货数量', dataIndex: 'return_quantity', width: 100, align: 'right' },
-                      { title: '单价', dataIndex: 'unit_price', width: 100, align: 'right', render: (text) => `¥${text || 0}` },
-                      { title: '金额', dataIndex: 'total_amount', width: 100, align: 'right', render: (text) => `¥${text || 0}` },
-                      { title: '批次号', dataIndex: 'batch_number', width: 120 },
-                      { title: '库位', dataIndex: 'location_code', width: 100 },
-                    ]}
-                    dataSource={returnDetail.items}
-                    pagination={false}
-                    rowKey="id"
-                    bordered
-                  />
-                </Card>
-              )}
+              <DetailDrawerSection title="基本信息">
+                <Table
+                  size="small"
+                  pagination={false}
+                  columns={[
+                    { title: '字段', dataIndex: 'k', width: 120 },
+                    { title: '值', dataIndex: 'v' },
+                  ]}
+                  dataSource={[
+                    {
+                      key: 'return_code',
+                      k: '退货单编号',
+                      v: (
+                        <Space size={4}>
+                          <span>{returnDetail.return_code || '-'}</span>
+                          {returnDetail.return_code ? <Button type="link" size="small" icon={<CopyOutlined style={{ fontSize: 12 }} />} onClick={() => handleCopy(returnDetail.return_code)} /> : null}
+                        </Space>
+                      ),
+                    },
+                    { key: 'sales_delivery_code', k: '销售出库单编号', v: returnDetail.sales_delivery_code || '-' },
+                    { key: 'sales_order_code', k: '销售订单编号', v: returnDetail.sales_order_code || '-' },
+                    { key: 'customer_name', k: '客户', v: returnDetail.customer_name || '-' },
+                    { key: 'warehouse_name', k: '仓库', v: returnDetail.warehouse_name || '-' },
+                    { key: 'status', k: '状态', v: returnDetail.status || '-' },
+                    { key: 'return_reason', k: '退货原因', v: returnDetail.return_reason || '-' },
+                    { key: 'return_type', k: '退货类型', v: returnDetail.return_type || '-' },
+                    { key: 'return_time', k: '退货时间', v: returnDetail.return_time || '-' },
+                    { key: 'notes', k: '备注', v: returnDetail.notes || '-' },
+                  ]}
+                  rowKey="key"
+                />
+              </DetailDrawerSection>
 
-              {/* 单据关联 */}
-              {documentRelations && (
-                <Card title="单据关联">
-                  {documentRelations.upstream_documents && documentRelations.upstream_documents.length > 0 && (
-                    <div style={{ marginBottom: 16 }}>
-                      <div style={{ marginBottom: 8, fontWeight: 'bold' }}>
-                        上游单据 ({documentRelations.upstream_count ?? 0})
-                      </div>
-                      <Table
-                        size="small"
-                        columns={[
-                          { title: '单据类型', dataIndex: 'document_type', width: 120 },
-                          { title: '单据编号', dataIndex: 'document_code', width: 150 },
-                          { title: '单据名称', dataIndex: 'document_name', width: 150 },
-                          {
-                            title: '状态',
-                            dataIndex: 'status',
-                            width: 100,
-                            render: (status: string) => <Tag>{status}</Tag>
-                          },
-                        ]}
-                        dataSource={documentRelations.upstream_documents}
-                        pagination={false}
-                        rowKey={(record: any) => `${record.document_type}-${record.document_id}`}
-                        bordered
-                      />
-                    </div>
-                  )}
-                  {documentRelations.downstream_documents && documentRelations.downstream_documents.length > 0 && (
-                    <div>
-                      <div style={{ marginBottom: 8, fontWeight: 'bold' }}>
-                        下游单据 ({documentRelations.downstream_count ?? 0})
-                      </div>
-                      <Table
-                        size="small"
-                        columns={[
-                          { title: '单据类型', dataIndex: 'document_type', width: 120 },
-                          { title: '单据编号', dataIndex: 'document_code', width: 150 },
-                          { title: '单据名称', dataIndex: 'document_name', width: 150 },
-                          {
-                            title: '状态',
-                            dataIndex: 'status',
-                            width: 100,
-                            render: (status: string) => <Tag>{status}</Tag>
-                          },
-                        ]}
-                        dataSource={documentRelations.downstream_documents}
-                        pagination={false}
-                        rowKey={(record: any) => `${record.document_type}-${record.document_id}`}
-                        bordered
-                      />
-                    </div>
-                  )}
-                  {documentRelations.upstream_count === 0 && documentRelations.downstream_count === 0 && (
-                    <div style={{ color: '#999', textAlign: 'center', padding: '20px' }}>
-                      暂无关联单据
-                    </div>
-                  )}
-                </Card>
-              )}
+              <DetailDrawerSection title="生命周期">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {(() => {
+                    const lifecycle = getSalesReturnLifecycle(returnDetail as any);
+                    return (
+                      <>
+                        {(lifecycle.mainStages ?? []).length > 0 && (
+                          <UniLifecycleStepper
+                            steps={lifecycle.mainStages ?? []}
+                            status={lifecycle.status}
+                            showLabels
+                            nextStepSuggestions={lifecycle.nextStepSuggestions}
+                          />
+                        )}
+                        {(lifecycle.subStages ?? []).length > 0 && <UniLifecycleStepper steps={lifecycle.subStages ?? []} showLabels />}
+                      </>
+                    );
+                  })()}
+                  <div style={{ paddingTop: 12, borderTop: '1px solid var(--ant-color-border-secondary)' }}>
+                    <div style={{ marginBottom: 8, fontWeight: 600, fontSize: 13 }}>上下游单据</div>
+                    {salesReturnTracking.loading && <Spin size="small" />}
+                    {salesReturnTracking.error && <Typography.Text type="danger">{salesReturnTracking.error}</Typography.Text>}
+                    {salesReturnTracking.data && <DocumentTrackingRelationsBody data={salesReturnTracking.data} />}
+                  </div>
+                </div>
+              </DetailDrawerSection>
+
+              <DetailDrawerSection title="明细信息">
+                <style>{`
+                  .sales-return-detail-items .ant-table-wrapper .ant-table-body,
+                  .sales-return-detail-items .ant-table-wrapper .ant-table-content {
+                    overflow: visible !important;
+                  }
+                  .sales-return-detail-items .ant-table-thead > tr > th {
+                    white-space: nowrap !important;
+                  }
+                `}</style>
+                {returnDetail.items && returnDetail.items.length > 0 ? (
+                  <div className="sales-return-detail-items" style={{ width: '100%', maxWidth: '100%', overflowX: 'auto', overflowY: 'hidden' }}>
+                    <Table
+                      size="small"
+                      pagination={false}
+                      tableLayout="fixed"
+                      style={{ minWidth: 860 }}
+                      columns={[
+                        { title: '物料编号', dataIndex: 'material_code', width: 120 },
+                        { title: '物料名称', dataIndex: 'material_name', width: 150 },
+                        { title: '退货数量', dataIndex: 'return_quantity', width: 100, align: 'right' },
+                        { title: '单价', dataIndex: 'unit_price', width: 100, align: 'right', render: (text) => `¥${text || 0}` },
+                        { title: '金额', dataIndex: 'total_amount', width: 100, align: 'right', render: (text) => `¥${text || 0}` },
+                        { title: '批次号', dataIndex: 'batch_number', width: 120 },
+                        { title: '库位', dataIndex: 'location_code', width: 100 },
+                      ]}
+                      dataSource={returnDetail.items}
+                      rowKey="id"
+                    />
+                  </div>
+                ) : (
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无明细" />
+                )}
+              </DetailDrawerSection>
+
+              <DetailDrawerSection title="操作记录">
+                {salesReturnTracking.loading && <Spin />}
+                {salesReturnTracking.error && <Typography.Text type="danger">{salesReturnTracking.error}</Typography.Text>}
+                {salesReturnTracking.data && <DocumentTrackingTimelineBody data={salesReturnTracking.data} />}
+              </DetailDrawerSection>
             </div>
           ) : null
         }

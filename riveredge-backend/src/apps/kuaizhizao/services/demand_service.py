@@ -45,6 +45,64 @@ class DemandService(AppBaseService[Demand]):
     def __init__(self):
         super().__init__(Demand)
 
+    async def sync_upstream_planning_on_push(
+        self,
+        tenant_id: int,
+        demand: Demand,
+        computation_id: int,
+        computation_code: str,
+    ) -> None:
+        """下推需求计算成功后，与销售订单/销售预测的计划维度字段同进（不改主状态）。"""
+        now = datetime.now()
+        st = (getattr(demand, "source_type", None) or "").strip()
+        sid = getattr(demand, "source_id", None)
+        if st == "sales_order" and sid:
+            await SalesOrder.filter(
+                tenant_id=tenant_id, id=sid, deleted_at__isnull=True
+            ).update(
+                planning_pushed_to_computation=True,
+                planning_computation_id=computation_id,
+                planning_computation_code=computation_code,
+                planning_computation_pushed_at=now,
+                updated_at=now,
+            )
+        elif st == "sales_forecast" and sid:
+            await SalesForecast.filter(
+                tenant_id=tenant_id, id=sid, deleted_at__isnull=True
+            ).update(
+                planning_pushed_to_computation=True,
+                planning_computation_id=computation_id,
+                planning_computation_code=computation_code,
+                planning_computation_pushed_at=now,
+                updated_at=now,
+            )
+
+    async def sync_upstream_planning_on_withdraw(self, tenant_id: int, demand: Demand) -> None:
+        """撤回需求计算后，清除上游计划维度下推标记（与 Demand 同退）。"""
+        now = datetime.now()
+        st = (getattr(demand, "source_type", None) or "").strip()
+        sid = getattr(demand, "source_id", None)
+        if st == "sales_order" and sid:
+            await SalesOrder.filter(
+                tenant_id=tenant_id, id=sid, deleted_at__isnull=True
+            ).update(
+                planning_pushed_to_computation=False,
+                planning_computation_id=None,
+                planning_computation_code=None,
+                planning_computation_pushed_at=None,
+                updated_at=now,
+            )
+        elif st == "sales_forecast" and sid:
+            await SalesForecast.filter(
+                tenant_id=tenant_id, id=sid, deleted_at__isnull=True
+            ).update(
+                planning_pushed_to_computation=False,
+                planning_computation_id=None,
+                planning_computation_code=None,
+                planning_computation_pushed_at=None,
+                updated_at=now,
+            )
+
     async def create_demand(
         self, 
         tenant_id: int, 
@@ -194,8 +252,18 @@ class DemandService(AppBaseService[Demand]):
             "status": response.status,
             "review_status": response.review_status,
             "pushed_to_computation": getattr(demand, "pushed_to_computation", False),
+            "demand_type": getattr(demand, "demand_type", None),
         })()
         response.lifecycle = get_demand_lifecycle(demand_for_lifecycle, items=items)
+
+        last_recalc = await DemandRecalcHistory.filter(
+            tenant_id=tenant_id, demand_id=demand_id
+        ).order_by("-recalc_at").first()
+        if last_recalc:
+            response.last_upstream_sync_at = last_recalc.recalc_at
+            response.last_upstream_sync_trigger = (
+                last_recalc.trigger_reason or last_recalc.trigger_type or ""
+            ) or None
         
         # 如果需要耗时统计
         if include_duration:
@@ -278,7 +346,12 @@ class DemandService(AppBaseService[Demand]):
                 status, review_status = f.status, f.review_status
                 item.status = status
                 item.review_status = review_status
-            demand_view = type("DemandView", (), {"status": status, "review_status": review_status, "pushed_to_computation": getattr(demand, "pushed_to_computation", False)})()
+            demand_view = type("DemandView", (), {
+                "status": status,
+                "review_status": review_status,
+                "pushed_to_computation": getattr(demand, "pushed_to_computation", False),
+                "demand_type": getattr(demand, "demand_type", None),
+            })()
             item.lifecycle = get_demand_lifecycle(demand_view, items=None)
             data.append(item.model_dump())
         
@@ -753,6 +826,11 @@ class DemandService(AppBaseService[Demand]):
                         computation_code=None,
                         updated_at=datetime.now()
                     )
+                    d_clear = await Demand.get_or_none(
+                        tenant_id=tenant_id, id=rel_demand_id, deleted_at__isnull=True
+                    )
+                    if d_clear:
+                        await self.sync_upstream_planning_on_withdraw(tenant_id, d_clear)
             else:
                 await Demand.filter(tenant_id=tenant_id, id=demand_id).update(
                     pushed_to_computation=False,
@@ -760,6 +838,11 @@ class DemandService(AppBaseService[Demand]):
                     computation_code=None,
                     updated_at=datetime.now()
                 )
+                d_one = await Demand.get_or_none(
+                    tenant_id=tenant_id, id=demand_id, deleted_at__isnull=True
+                )
+                if d_one:
+                    await self.sync_upstream_planning_on_withdraw(tenant_id, d_one)
 
             logger.info(f"需求 {demand_id} 已撤回需求计算")
             return await self.get_demand_by_id(tenant_id, demand_id)
@@ -1048,37 +1131,18 @@ class DemandService(AppBaseService[Demand]):
             BusinessLogicError: 需求状态不允许删除
         """
         async with in_transaction():
-            logger.info(f"DEBUG: delete_demand call with demand_id={demand_id} (type={type(demand_id)}), tenant_id={tenant_id}")
-            logger.info(f"DEBUG: Demand model table name: {Demand._meta.db_table}")
-            
-            # 查询时需要排除已软删除的记录
-            demand = await Demand.get_or_none(id=demand_id, deleted_at__isnull=True)
-            
+            demand = await Demand.get_or_none(
+                tenant_id=tenant_id, id=demand_id, deleted_at__isnull=True
+            )
             if not demand:
-                # 再次尝试通过 filter 查找，看看是不是 get_or_none 的问题
-                filter_res = await Demand.filter(id=demand_id).first()
-                logger.info(f"DEBUG: get_or_none failed. filter(...).first() result: {filter_res}")
-                
-                # 打印所有存在的ID（仅调试用，生产环境慎用，但在当前问题场景下需要）
-                all_ids = await Demand.all().values_list('id', flat=True)
-                logger.info(f"DEBUG: All existing demand IDs in DB: {all_ids[:20]}... (Total: {len(all_ids)})")
-                
-                # 尝试查询特定租户的所有记录
-                tenant_demands = await Demand.filter(tenant_id=tenant_id).values_list('id', flat=True)
-                logger.info(f"DEBUG: Demand IDs for tenant_id={tenant_id}: {tenant_demands[:20]}... (Total: {len(tenant_demands)})")
-                
-                # 尝试原始SQL查询来验证
-                from tortoise import Tortoise
-                conn = Tortoise.get_connection("default")
-                raw_result = await conn.execute_query_dict(f"SELECT id FROM {Demand._meta.db_table} WHERE id = {demand_id}")
-                logger.info(f"DEBUG: Raw SQL query result for id={demand_id}: {raw_result}")
-                
                 raise NotFoundError("需求", str(demand_id))
-            
-            if demand.tenant_id != tenant_id:
-                logger.warning(f"删除需求失败：租户ID不匹配。请求租户ID: {tenant_id}, 需求ID: {demand_id}, 需求所属租户ID: {demand.tenant_id}")
-                raise NotFoundError("需求", str(demand_id))
-            
+
+            dt = (getattr(demand, "demand_type", None) or "").strip()
+            if dt in ("sales_forecast", "sales_order"):
+                raise BusinessLogicError(
+                    "由销售预测或销售订单自动同步的需求不可删除，请在对应上游单据中处理。"
+                )
+
             # 只能删除草稿或待审核状态的需求
             deletable = (
                 demand.status == DemandStatus.DRAFT
@@ -1622,91 +1686,71 @@ class DemandService(AppBaseService[Demand]):
             NotFoundError: 需求不存在
             ValidationError: 需求状态不符合下推条件
         """
-        async with in_transaction():
-            # 获取需求
-            demand = await Demand.get_or_none(tenant_id=tenant_id, id=demand_id, deleted_at__isnull=True)
-            if not demand:
-                raise NotFoundError("需求", str(demand_id))
-            
-            # 验证需求状态：只能下推已审核的需求
-            if demand.status != DemandStatus.AUDITED:
-                raise ValidationError(f"只能下推已审核的需求，当前状态：{demand.status}")
-            
-            if demand.review_status != ReviewStatus.APPROVED:
-                raise ValidationError(f"只能下推审核通过的需求，当前审核状态：{demand.review_status}")
-            
-            # 检查是否已经下推过
-            if demand.pushed_to_computation:
-                # 检查是否真的存在计算记录
-                from apps.kuaizhizao.models.demand_computation import DemandComputation
-                exists = await DemandComputation.filter(tenant_id=tenant_id, demand_id=demand_id).exists()
-                if exists:
-                    raise ValidationError("该需求已经下推到需求计算，不能重复下推")
-                else:
-                    logger.warning(f"需求 {demand.demand_code} 标记为已下推但未找到计算记录，允许重新下推")
-            
-            # 统一需求计算类型恒为 MRP；按单/按预测由需求的 business_mode 写入计算头
-            computation_type = "MRP"
+        # 不在此层包 in_transaction：create_computation 内部已有事务，并会更新 Demand、sync 上游；
+        # 外层再包事务会导致嵌套事务内对同一 Demand 行更新，在 PostgreSQL 上易死锁/长时间等待（Modal 一直转圈）。
+        demand = await Demand.get_or_none(tenant_id=tenant_id, id=demand_id, deleted_at__isnull=True)
+        if not demand:
+            raise NotFoundError("需求", str(demand_id))
 
-            # 设置默认计算参数（含 4M 人机料法开关）
-            default_params = {
-                "include_safety_stock": True,
-                "include_in_transit": True,
-                "include_reserved": True,
-                "include_reorder_point": False,
-                "bom_expand_level": 10,
-                "consider_capacity": True,
-                "consider_material_readiness": True,
-                "consider_equipment_availability": False,
-                "consider_mold_tool_availability": False,
-            }
-            
-            # 创建需求计算任务
-            try:
-                from apps.kuaizhizao.services.demand_computation_service import DemandComputationService
-                from apps.kuaizhizao.schemas.demand_computation import DemandComputationCreate
-                
-                comp_service = DemandComputationService()
-                comp_data = DemandComputationCreate(
-                    demand_id=demand_id,
-                    computation_type=computation_type,
-                    computation_params=default_params,
-                    notes=f"从需求 {demand.demand_code} 下推创建"
-                )
-                
-                computation = await comp_service.create_computation(
-                    tenant_id=tenant_id,
-                    computation_data=comp_data,
-                    created_by=created_by
-                )
-                
-                computation_code = computation.computation_code
-                computation_id = computation.id
-                
-                # 更新需求状态
-                await Demand.filter(
-                    tenant_id=tenant_id,
-                    id=demand_id
-                ).update(
-                    pushed_to_computation=True,
-                    computation_id=computation_id,
-                    computation_code=computation_code,
-                    updated_by=created_by,
-                    updated_at=datetime.now()
-                )
-                
-                logger.info(f"需求 {demand.demand_code} 已下推到需求计算，计算编码：{computation_code}")
-                
-                return {
-                    "success": True,
-                    "message": "需求下推成功",
-                    "demand_code": demand.demand_code,
-                    "computation_code": computation_code,
-                    "computation_id": computation_id
-                }
-            except Exception as e:
-                logger.error(f"创建需求计算任务失败: {e}")
-                raise BusinessLogicError(f"下推失败：创建计算任务出错 - {str(e)}")
+        if demand.status != DemandStatus.AUDITED:
+            raise ValidationError(f"只能下推已审核的需求，当前状态：{demand.status}")
+
+        if demand.review_status != ReviewStatus.APPROVED:
+            raise ValidationError(f"只能下推审核通过的需求，当前审核状态：{demand.review_status}")
+
+        if demand.pushed_to_computation:
+            from apps.kuaizhizao.models.demand_computation import DemandComputation
+
+            exists = await DemandComputation.filter(tenant_id=tenant_id, demand_id=demand_id).exists()
+            if exists:
+                raise ValidationError("该需求已经下推到需求计算，不能重复下推")
+            logger.warning(f"需求 {demand.demand_code} 标记为已下推但未找到计算记录，允许重新下推")
+
+        computation_type = "MRP"
+        default_params = {
+            "include_safety_stock": True,
+            "include_in_transit": True,
+            "include_reserved": True,
+            "include_reorder_point": False,
+            "bom_expand_level": 10,
+            "consider_capacity": True,
+            "consider_material_readiness": True,
+            "consider_equipment_availability": False,
+            "consider_mold_tool_availability": False,
+        }
+
+        from apps.kuaizhizao.services.demand_computation_service import DemandComputationService
+        from apps.kuaizhizao.schemas.demand_computation import DemandComputationCreate
+
+        comp_service = DemandComputationService()
+        comp_data = DemandComputationCreate(
+            demand_id=demand_id,
+            computation_type=computation_type,
+            computation_params=default_params,
+            notes=f"从需求 {demand.demand_code} 下推创建",
+        )
+
+        try:
+            computation = await comp_service.create_computation(
+                tenant_id=tenant_id,
+                computation_data=comp_data,
+                created_by=created_by,
+            )
+        except Exception as e:
+            logger.error(f"创建需求计算任务失败: {e}")
+            raise BusinessLogicError(f"下推失败：创建计算任务出错 - {str(e)}") from e
+
+        computation_code = computation.computation_code
+        computation_id = computation.id
+        logger.info(f"需求 {demand.demand_code} 已下推到需求计算，计算编码：{computation_code}")
+
+        return {
+            "success": True,
+            "message": "需求下推成功",
+            "demand_code": demand.demand_code,
+            "computation_code": computation_code,
+            "computation_id": computation_id,
+        }
 
     async def withdraw_demand(
         self, 

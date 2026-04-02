@@ -11,8 +11,8 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form as AntForm, Select, InputNumber, Input, Row, Col, Typography } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, ShoppingOutlined, ImportOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, Modal, Table, Form as AntForm, Select, InputNumber, Input, Row, Col, Typography, Dropdown } from 'antd';
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, ShoppingOutlined, ImportOutlined, MoreOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
@@ -23,6 +23,7 @@ import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-sele
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { shipmentNoticeApi } from '../../../services/shipment-notice';
 import { getShipmentNoticeLifecycle } from '../../../utils/shipmentNoticeLifecycle';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { customerApi } from '../../../../master-data/services/supply-chain';
 import { listSalesOrders, getSalesOrder } from '../../../services/sales-order';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
@@ -63,6 +64,7 @@ const STATUS_MAP: Record<string, { text: string; color: string }> = {
 };
 
 const defaultNoticeItem = { material_id: undefined, material_code: '', material_name: '', material_spec: '', material_unit: '件', notice_quantity: 1, unit_price: 0 };
+const SHIPMENT_NOTICE_ROW_ACTIONS_INLINE_MAX = 3;
 
 const ShipmentNoticesPage: React.FC = () => {
   const { t } = useTranslation();
@@ -138,41 +140,70 @@ const ShipmentNoticesPage: React.FC = () => {
     );
   };
 
+  const renderShipmentNoticeRowActions = (actions: React.ReactNode[]) => {
+    const valid = actions.filter(Boolean);
+    if (valid.length <= SHIPMENT_NOTICE_ROW_ACTIONS_INLINE_MAX) {
+      return <Space size={4}>{valid}</Space>;
+    }
+    const inline = valid.slice(0, SHIPMENT_NOTICE_ROW_ACTIONS_INLINE_MAX - 1);
+    const folded = valid.slice(SHIPMENT_NOTICE_ROW_ACTIONS_INLINE_MAX - 1);
+    return (
+      <Space size={4}>
+        {inline}
+        <Dropdown
+          trigger={['click']}
+          menu={{
+            items: folded.map((node, index) => ({ key: `more-${index}`, label: node as React.ReactNode })),
+          }}
+        >
+          <Button type="link" size="small" icon={<MoreOutlined />}>更多</Button>
+        </Dropdown>
+      </Space>
+    );
+  };
+
   const columns: ProColumns<ShipmentNotice>[] = [
     { title: '通知单号', dataIndex: 'notice_code', width: 140, ellipsis: true, fixed: 'left' },
     { title: '销售订单号', dataIndex: 'sales_order_code', width: 140, ellipsis: true },
     { title: '客户', dataIndex: 'customer_name', width: 140, ellipsis: true },
     { title: '出库仓库', dataIndex: 'warehouse_name', width: 120 },
-    {
-      title: '生命周期',
-      dataIndex: 'lifecycle',
-      width: 100,
-      render: (_, record) => {
-        const lifecycle = getShipmentNoticeLifecycle(record as any);
-        const stageName = lifecycle.stageName ?? record.status ?? '待发货';
-        const c = STATUS_MAP[stageName] || { text: stageName || '-', color: 'default' };
-        return <Tag color={c.color}>{c.text}</Tag>;
-      },
-    },
     { title: '计划发货日期', dataIndex: 'planned_ship_date', valueType: 'date', width: 120 },
     { title: '通知时间', dataIndex: 'notified_at', valueType: 'dateTime', width: 160 },
     { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime', width: 160 },
     {
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      width: 132,
+      align: 'center',
+      fixed: 'right',
+      render: (_, record) => (
+        <UniLifecycle
+          value={getShipmentNoticeLifecycle(record as any)}
+          showLabel
+          showCircleTooltip={false}
+          size="small"
+        />
+      ),
+    },
+    {
       title: '操作',
       width: 200,
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>详情</Button>
-          {record.status === '待发货' && (
-            <>
-              <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
-              <Button type="link" size="small" icon={<SendOutlined />} onClick={() => handleNotify(record as any)} style={{ color: '#1890ff' }}>通知仓库</Button>
-              <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record as any)}>删除</Button>
-            </>
-          )}
-        </Space>
-      ),
+      render: (_, record) => renderShipmentNoticeRowActions([
+        <Button key="detail" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>详情</Button>,
+        ...(record.status === '待发货'
+          ? [
+              <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>,
+              <Button key="notify" type="link" size="small" icon={<SendOutlined />} onClick={() => handleNotify(record as any)}>通知仓库</Button>,
+              <Button key="delete" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record as any)}>删除</Button>,
+            ]
+          : []),
+        ...(record.status === '已通知'
+          ? [
+              <Button key="withdraw" type="link" size="small" onClick={() => handleWithdraw(record as any)}>撤回通知</Button>,
+            ]
+          : []),
+      ]),
     },
   ];
 
@@ -230,6 +261,22 @@ const ShipmentNoticesPage: React.FC = () => {
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '通知失败');
+        }
+      },
+    });
+  };
+
+  const handleWithdraw = (record: ShipmentNotice) => {
+    Modal.confirm({
+      title: '撤回通知',
+      content: `确定将 "${record.notice_code}" 撤回到待发货吗？`,
+      onOk: async () => {
+        try {
+          await shipmentNoticeApi.withdraw(record.id!.toString());
+          messageApi.success('已撤回到待发货');
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '撤回失败');
         }
       },
     });

@@ -279,7 +279,6 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.demand_recalc_history",
                 f"apps.{module_code}.models.demand_computation_snapshot",
                 f"apps.{module_code}.models.demand_computation_recalc_history",
-                f"apps.{module_code}.models.computation_config",  # 需求计算参数配置
                 f"apps.{module_code}.models.scheduling_config",  # 排程配置
                 f"apps.{module_code}.models.document_relation",  # 单据关联关系
                 f"apps.{module_code}.models.document_node_timing",  # 单据节点耗时记录
@@ -478,7 +477,6 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.demand_recalc_history",
                 f"apps.{module_code}.models.demand_computation_snapshot",
                 f"apps.{module_code}.models.demand_computation_recalc_history",
-                f"apps.{module_code}.models.computation_config",  # 需求计算参数配置
                 f"apps.{module_code}.models.scheduling_config",  # 排程配置
                 f"apps.{module_code}.models.document_relation",  # 单据关联关系
                 f"apps.{module_code}.models.document_node_timing",  # 单据节点耗时记录

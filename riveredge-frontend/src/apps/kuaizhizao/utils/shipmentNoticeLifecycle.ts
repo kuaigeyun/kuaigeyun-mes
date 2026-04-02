@@ -16,8 +16,8 @@ export const getShipmentNoticeLifecycle = createLifecycleResolver({
     已出库: 'shipped',
   },
   nextStepSuggestions: {
-    pending: ['通知仓库'],
-    notified: ['出库'],
+    pending: ['通知仓库', '编辑通知明细'],
+    notified: ['撤回通知（回到待发货）', '执行出库'],
     shipped: [],
   },
   successKeys: ['shipped'],

@@ -124,7 +124,7 @@ async def list_computations(
         description="兼容筛选：MRP≈MTS、LRP≈MTO（新数据 computation_type 均为 MRP）",
     ),
     computation_status: Optional[str] = Query(None, description="计算状态"),
-    business_mode: Optional[str] = Query(None, description="业务模式（MTS/MTO）"),
+    business_mode: Optional[str] = Query(None, description="业务模式（MTS/MTO/ATO）"),
     start_date: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
     end_date: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
     skip: int = Query(0, ge=0, description="跳过数量"),

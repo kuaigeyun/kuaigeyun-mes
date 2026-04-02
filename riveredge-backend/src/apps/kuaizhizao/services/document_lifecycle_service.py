@@ -7,6 +7,7 @@
 
 from typing import Any, Dict, List, Optional
 from decimal import Decimal
+from loguru import logger
 
 from apps.kuaizhizao.constants import DemandStatus, ReviewStatus, LEGACY_AUDITED_VALUES, LEGACY_PENDING_VALUES
 
@@ -54,6 +55,7 @@ WORK_ORDER_MAIN_STAGES = [
 # 需求生命周期节点（按业务含义独立：需求由上游审核通过自动生成，无草稿；审核 + 是否下推计算）
 # ---------------------------------------------------------------------------
 DEMAND_MAIN_STAGES = [
+    {"key": "draft", "label": "草稿"},
     {"key": "pending_review", "label": "待审核"},
     {"key": "rejected", "label": "已驳回"},
     {"key": "audited", "label": "已审核"},
@@ -63,6 +65,27 @@ DEMAND_MAIN_STAGES = [
 
 def _norm(s: Optional[str]) -> str:
     return (s or "").strip()
+
+
+def _demand_origin_sub_stages(demand_type: Optional[str]) -> Optional[List[Dict[str, Any]]]:
+    """需求来源子轨（与主线审核/下推正交），供 UniLifecycle 子 Stepper 展示。"""
+    dt = _norm(demand_type)
+    if dt == "sales_forecast":
+        return [{"key": "from_forecast", "label": "从预测同步（自动）", "status": "done"}]
+    if dt == "sales_order":
+        return [{"key": "from_order", "label": "从订单同步（自动）", "status": "done"}]
+    if dt == "demand_plan":
+        return [{"key": "manual_plan", "label": "手工需求计划", "status": "done"}]
+    return None
+
+
+def _demand_next_suggestions_extra(pushed: bool, demand_type: Optional[str]) -> List[str]:
+    """在主线建议基础上追加与上游/下推相关的提示。"""
+    extra: List[str] = []
+    dt = _norm(demand_type)
+    if pushed and dt in ("sales_forecast", "sales_order"):
+        extra.append("上游变更后请到需求计算重新执行计算")
+    return extra
 
 
 def _is_rejected(review_status: Optional[str]) -> bool:
@@ -145,7 +168,7 @@ def get_sales_order_lifecycle(
     review_status = _norm(getattr(order, "review_status", None))
     delivery = delivery_progress if delivery_progress is not None else 0.0
     invoice = invoice_progress if invoice_progress is not None else 0.0
-    pushed = pushed_to_computation
+    pushed = pushed_to_computation or getattr(order, "planning_pushed_to_computation", False)
 
     if _is_rejected(review_status):
         return {
@@ -298,54 +321,75 @@ def get_demand_lifecycle(
     status = _norm(getattr(demand, "status", None))
     review_status = _norm(getattr(demand, "review_status", None))
     pushed = bool(getattr(demand, "pushed_to_computation", False))
+    demand_type = getattr(demand, "demand_type", None)
+    origin_sub = _demand_origin_sub_stages(demand_type if isinstance(demand_type, str) else None)
 
+    # 1. 异常分支：驳回
     if _is_rejected(review_status):
         return {
             "current_stage_key": "rejected",
             "current_stage_name": "已驳回",
             "status": "exception",
             "main_stages": _build_main_stages(DEMAND_MAIN_STAGES, "rejected", is_exception=True),
-            "sub_stages": None,
+            "sub_stages": origin_sub,
             "next_step_suggestions": ["修改后重新提交上游审核"],
         }
 
-    # 需求由上游审核通过自动生成，无草稿阶段；若数据为草稿（极少手工创建），展示为待审核
-    if _is_draft(status) or _is_pending_review(status):
+    # 2. 草稿
+    if _is_draft(status):
+        return {
+            "current_stage_key": "draft",
+            "current_stage_name": "草稿",
+            "status": "normal",
+            "main_stages": _build_main_stages(DEMAND_MAIN_STAGES, "draft"),
+            "sub_stages": origin_sub,
+            "next_step_suggestions": ["提交审核"],
+        }
+
+    # 3. 待审核
+    if _is_pending_review(status) and not _is_approved(review_status):
         return {
             "current_stage_key": "pending_review",
             "current_stage_name": "待审核",
             "status": "normal",
             "main_stages": _build_main_stages(DEMAND_MAIN_STAGES, "pending_review"),
-            "sub_stages": None,
-            "next_step_suggestions": ["等待上游审核"],
+            "sub_stages": origin_sub,
+            "next_step_suggestions": ["审核通过", "驳回"],
         }
 
-    if _is_audited(status) and pushed:
+    # 4. 已审核与下推判断
+    # 兼容性判断：只要是已生效、已审核、已通过，都视为已进入审核通过态（audited）
+    audited = _is_approved(review_status) or _is_audited(status) or _is_confirmed(status)
+    
+    if pushed:
+        extra = _demand_next_suggestions_extra(True, demand_type if isinstance(demand_type, str) else None)
         return {
             "current_stage_key": "pushed",
             "current_stage_name": "已下推计算",
             "status": "success",
             "main_stages": _build_main_stages(DEMAND_MAIN_STAGES, "pushed"),
-            "sub_stages": None,
-            "next_step_suggestions": [],
+            "sub_stages": origin_sub,
+            "next_step_suggestions": extra,
         }
-    if _is_audited(status):
+    
+    if audited:
         return {
             "current_stage_key": "audited",
             "current_stage_name": "已审核",
             "status": "normal",
             "main_stages": _build_main_stages(DEMAND_MAIN_STAGES, "audited"),
-            "sub_stages": None,
+            "sub_stages": origin_sub,
             "next_step_suggestions": ["下推需求计算"],
         }
 
+    # 默认兜底
     return {
-        "current_stage_key": "audited",
-        "current_stage_name": "已审核",
+        "current_stage_key": "audited" if audited else "draft",
+        "current_stage_name": "已审核" if audited else "草稿",
         "status": "normal",
-        "main_stages": _build_main_stages(DEMAND_MAIN_STAGES, "audited"),
-        "sub_stages": None,
-        "next_step_suggestions": ["下推需求计算"],
+        "main_stages": _build_main_stages(DEMAND_MAIN_STAGES, "audited" if audited else "draft"),
+        "sub_stages": origin_sub,
+        "next_step_suggestions": ["下推需求计算"] if audited else ["提交审核"],
     }
 
 
@@ -557,112 +601,162 @@ def get_purchase_order_lifecycle(
 
 
 # ---------------------------------------------------------------------------
-# 销售预测生命周期节点（与需求类似：草稿→待审核→已审核→已下推）
+# 销售预测生命周期（主轴与执行子阶段与销售订单对齐：草稿→…→已生效→执行中→已交货→已完成）
+# pushed_to_computation 由调用方根据关联 Demand.pushed_to_computation 传入（与订单一致）
 # ---------------------------------------------------------------------------
-SALES_FORECAST_MAIN_STAGES = [
-    {"key": "draft", "label": "草稿"},
-    {"key": "pending_review", "label": "待审核"},
-    {"key": "audited", "label": "已审核"},
-    {"key": "pushed", "label": "已下推"},
-]
-
-
 def get_sales_forecast_lifecycle(
     forecast: Any,
-    milestones: Optional[List[Dict[str, Any]]] = None
+    *,
+    items: Optional[List[Any]] = None,
+    delivery_progress: Optional[float] = None,
+    invoice_progress: Optional[float] = None,
+    pushed_to_computation: bool = False,
+    milestones: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
-    """销售预测生命周期计算"""
+    """
+    销售预测生命周期：审核/生效/执行逻辑对齐销售订单；交货/开票进度默认 0（MTS 预测无订单级交货时可不传）。
+    """
     status = _norm(getattr(forecast, "status", None))
     review_status = _norm(getattr(forecast, "review_status", None))
+    delivery = delivery_progress if delivery_progress is not None else 0.0
+    invoice = invoice_progress if invoice_progress is not None else 0.0
+    pushed = pushed_to_computation or getattr(forecast, "planning_pushed_to_computation", False)
     milestones = milestones or []
-    actions = {m.get("action") for m in milestones}
-    # 销售预测「已下推」兼容判断：
-    # 1) 显式状态（已下推 / PUSHED）
-    # 2) 模型字段（pushed_to_demand / demand_synced）
-    # 3) 里程碑动作（下推需求 / 下推需求计算）
-    pushed_by_status = status in ("已下推", "PUSHED", "pushed")
-    pushed_by_flags = bool(getattr(forecast, "pushed_to_demand", False) or getattr(forecast, "demand_synced", False))
-    pushed_by_milestone = ("push_to_demand" in actions) or ("push_to_demand_computation" in actions)
-    pushed = pushed_by_status or pushed_by_flags or pushed_by_milestone
 
     if _is_rejected(review_status):
         return {
             "current_stage_key": "pending_review",
             "current_stage_name": "已驳回",
             "status": "exception",
-            "main_stages": _build_main_stages(SALES_FORECAST_MAIN_STAGES, "pending_review", is_exception=True),
+            "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "pending_review", is_exception=True),
             "sub_stages": None,
-            "next_step_suggestions": ["修改后重新提交审核"],
-            "milestones": milestones,
+            "next_step_suggestions": ["修改预测后重新提交审核"],
         }
     if status in ("已驳回", "REJECTED", "rejected"):
         return {
             "current_stage_key": "pending_review",
             "current_stage_name": "已驳回",
             "status": "exception",
-            "main_stages": _build_main_stages(SALES_FORECAST_MAIN_STAGES, "pending_review", is_exception=True),
+            "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "pending_review", is_exception=True),
             "sub_stages": None,
-            "next_step_suggestions": ["修改后重新提交审核"],
-            "milestones": milestones,
+            "next_step_suggestions": ["修改预测后重新提交审核"],
         }
     if _is_cancelled(status):
         return {
             "current_stage_key": "draft",
             "current_stage_name": "已取消",
             "status": "exception",
-            "main_stages": _build_main_stages(SALES_FORECAST_MAIN_STAGES, "draft", is_exception=True),
+            "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "draft", is_exception=True),
             "sub_stages": None,
             "next_step_suggestions": [],
-            "milestones": milestones,
         }
+
     if _is_draft(status):
         return {
             "current_stage_key": "draft",
             "current_stage_name": "草稿",
             "status": "normal",
-            "main_stages": _build_main_stages(SALES_FORECAST_MAIN_STAGES, "draft"),
+            "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "draft"),
             "sub_stages": None,
             "next_step_suggestions": ["提交审核"],
-            "milestones": milestones,
         }
     if _is_pending_review(status) and not _is_approved(review_status):
         return {
             "current_stage_key": "pending_review",
             "current_stage_name": "待审核",
             "status": "normal",
-            "main_stages": _build_main_stages(SALES_FORECAST_MAIN_STAGES, "pending_review"),
+            "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "pending_review"),
             "sub_stages": None,
             "next_step_suggestions": ["审核通过", "驳回", "撤回提交（回到草稿）"],
-            "milestones": milestones,
         }
-    # 审核通过后 status 可能仍为「待审核」但 review_status 已是通过，统一归为「已审核」
-    if _is_pending_review(status) and _is_approved(review_status):
+
+    effective = _is_approved(review_status) and (_is_confirmed(status) or pushed)
+    if _is_audited(status) and not effective:
         return {
             "current_stage_key": "audited",
             "current_stage_name": "已审核",
             "status": "normal",
-            "main_stages": _build_main_stages(SALES_FORECAST_MAIN_STAGES, "audited"),
+            "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "audited"),
             "sub_stages": None,
-            "next_step_suggestions": ["下推需求", "撤回审核（回到待审核）"],
-            "milestones": milestones,
+            "next_step_suggestions": ["下推需求计算"],
         }
-    if pushed:
+
+    if effective and delivery >= 100 and invoice >= 100:
         return {
-            "current_stage_key": "pushed",
-            "current_stage_name": "已下推",
+            "current_stage_key": "completed",
+            "current_stage_name": "已完成",
             "status": "success",
-            "main_stages": _build_main_stages(SALES_FORECAST_MAIN_STAGES, "pushed"),
+            "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "completed"),
             "sub_stages": None,
             "next_step_suggestions": [],
+        }
+    if effective and delivery >= 100 and invoice < 100:
+        return {
+            "current_stage_key": "delivered",
+            "current_stage_name": "已交货",
+            "status": "normal",
+            "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "delivered"),
+            "sub_stages": None,
+            "next_step_suggestions": ["下推销售发票"],
+        }
+    if effective and delivery <= 0:
+        has_wo = False
+        if items:
+            has_wo = any(getattr(it, "work_order_id", None) for it in items)
+        if not pushed and not has_wo:
+            return {
+                "current_stage_key": "effective",
+                "current_stage_name": "已生效",
+                "status": "normal",
+                "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "effective"),
+                "sub_stages": None,
+                "next_step_suggestions": ["前往需求计算执行 MRP", "建立工单"],
+            }
+    if effective and delivery < 100:
+        actions = {m.get("action") for m in milestones}
+
+        sub_stages = [
+            {"key": "bom_check", "label": "BOM检查", "status": "done"},
+            {"key": "demand_compute", "label": "需求计算", "status": "done" if pushed or "push_to_demand_computation" in actions else "active"},
+            {"key": "production_plan", "label": "生产计划", "status": "done" if "push_to_production_plan" in actions else "pending"},
+            {"key": "work_order_released", "label": "工单下达", "status": "done" if "push_to_work_order" in actions else "pending"},
+            {"key": "shipment_waiting", "label": "待出库", "status": "done" if "push_to_shipment_notice" in actions else "pending"},
+            {"key": "delivered", "label": "已送货", "status": "done" if delivery >= 100 or "push_to_sales_delivery" in actions else "active" if delivery > 0 else "pending"},
+        ]
+
+        if not any(ss["status"] == "active" for ss in sub_stages) and any(ss["status"] == "pending" for ss in sub_stages):
+            for ss in sub_stages:
+                if ss["status"] == "pending":
+                    ss["status"] = "active"
+                    break
+
+        exec_suggestions = {
+            "bom_check": ["完成 BOM 检查"],
+            "demand_compute": ["执行需求计算（MRP）"],
+            "production_plan": ["制定生产计划"],
+            "work_order_released": ["下达工单"],
+            "shipment_waiting": ["准备出库"],
+            "delivered": ["销售交货"],
+        }
+        active_key = next((s["key"] for s in sub_stages if s["status"] == "active"), None)
+        suggestions = exec_suggestions.get(active_key, ["推进执行进度"])
+        return {
+            "current_stage_key": "executing",
+            "current_stage_name": "执行中",
+            "status": "normal",
+            "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "executing"),
+            "sub_stages": sub_stages,
+            "next_step_suggestions": suggestions,
             "milestones": milestones,
         }
+
     return {
         "current_stage_key": "audited",
         "current_stage_name": "已审核",
         "status": "normal",
-        "main_stages": _build_main_stages(SALES_FORECAST_MAIN_STAGES, "audited"),
+        "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "audited"),
         "sub_stages": None,
-        "next_step_suggestions": ["下推需求", "撤回审核（回到待审核）"],
+        "next_step_suggestions": ["下推需求计算"],
         "milestones": milestones,
     }
 
@@ -867,6 +961,84 @@ def get_sales_delivery_lifecycle(
         "main_stages": _build_main_stages(SALES_DELIVERY_MAIN_STAGES, key),
         "sub_stages": sub_stages,
         "next_step_suggestions": ["确认出库"] if key == "pending" else [],
+        "milestones": milestones,
+    }
+
+
+# ---------------------------------------------------------------------------
+# 发货通知单生命周期（待发货→已通知→已出库）
+# ---------------------------------------------------------------------------
+SHIPMENT_NOTICE_MAIN_STAGES = [
+    {"key": "pending", "label": "待发货"},
+    {"key": "notified", "label": "已通知"},
+    {"key": "shipped", "label": "已出库"},
+]
+
+
+def get_shipment_notice_lifecycle(
+    notice: Any,
+    milestones: Optional[List[Dict[str, Any]]] = None
+) -> Dict[str, Any]:
+    """发货通知单生命周期计算（参考销售出库最佳实践补全通知/执行子阶段）。"""
+    status = _norm(getattr(notice, "status", None))
+    milestones = milestones or []
+
+    is_shipped = status in ("已出库", "completed", "已完成") or bool(getattr(notice, "sales_delivery_id", None))
+    is_notified = status in ("已通知", "notified") or is_shipped
+
+    key = "shipped" if is_shipped else ("notified" if is_notified else "pending")
+    stage_name = "已出库" if key == "shipped" else ("已通知" if key == "notified" else "待发货")
+
+    sub_stages = [
+        {"key": "notify", "label": "通知仓库", "status": "done" if is_notified else "active"},
+        {"key": "picking", "label": "拣货理货", "status": "done" if is_shipped else ("active" if is_notified else "pending")},
+        {"key": "checking", "label": "出库复核", "status": "done" if is_shipped else ("active" if is_notified else "pending")},
+    ]
+
+    return {
+        "current_stage_key": key,
+        "current_stage_name": stage_name,
+        "status": "success" if key == "shipped" else "normal",
+        "main_stages": _build_main_stages(SHIPMENT_NOTICE_MAIN_STAGES, key),
+        "sub_stages": sub_stages,
+        "next_step_suggestions": ["通知仓库", "编辑通知明细"] if key == "pending" else (["撤回通知（回到待发货）", "执行出库"] if key == "notified" else []),
+        "milestones": milestones,
+    }
+
+
+# ---------------------------------------------------------------------------
+# 销售退货单生命周期（待退货→已退货）
+# ---------------------------------------------------------------------------
+SALES_RETURN_MAIN_STAGES = [
+    {"key": "pending", "label": "待退货"},
+    {"key": "completed", "label": "已退货"},
+]
+
+
+def get_sales_return_lifecycle(
+    sales_return: Any,
+    milestones: Optional[List[Dict[str, Any]]] = None
+) -> Dict[str, Any]:
+    """销售退货单生命周期计算（支持撤回确认建议）。"""
+    status = _norm(getattr(sales_return, "status", None))
+    milestones = milestones or []
+
+    is_completed = status in ("已退货", "completed", "已完成")
+    key = "completed" if is_completed else "pending"
+    stage_name = "已退货" if is_completed else "待退货"
+
+    sub_stages = [
+        {"key": "quality_check", "label": "退货验收", "status": "done" if is_completed else "active"},
+        {"key": "stock_in", "label": "退货入库", "status": "done" if is_completed else "pending"},
+    ]
+
+    return {
+        "current_stage_key": key,
+        "current_stage_name": stage_name,
+        "status": "success" if is_completed else "normal",
+        "main_stages": _build_main_stages(SALES_RETURN_MAIN_STAGES, key),
+        "sub_stages": sub_stages,
+        "next_step_suggestions": ["确认退货"] if key == "pending" else ["撤回确认（回到待退货）"],
         "milestones": milestones,
     }
 

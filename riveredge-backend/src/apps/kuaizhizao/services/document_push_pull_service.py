@@ -44,8 +44,9 @@ class DocumentPushPullService:
             sid = getattr(plan, "source_id", None)
             if sid:
                 comp = await DemandComputation.get_or_none(tenant_id=tenant_id, id=sid)
-                if comp and getattr(comp, "business_mode", None) in ("MTS", "MTO"):
-                    return comp.business_mode
+                if comp and getattr(comp, "business_mode", None) in ("MTS", "MTO", "ATO"):
+                    bm = comp.business_mode
+                    return "MTO" if bm in ("MTO", "ATO") else "MTS"
         if st == "SalesOrder":
             return "MTO"
         if getattr(plan, "plan_type", None) == "LRP":
@@ -333,7 +334,7 @@ class DocumentPushPullService:
         sales_order_id: Optional[int] = None
         sales_order_code: Optional[str] = None
         sales_order_name: Optional[str] = None
-        if computation.business_mode == "MTO":
+        if computation.business_mode in ("MTO", "ATO"):
             demand_ids_to_check = [computation.demand_id] if computation.demand_id else (computation.demand_ids or [])
             for did in demand_ids_to_check:
                 demand = await Demand.get_or_none(tenant_id=tenant_id, id=did)

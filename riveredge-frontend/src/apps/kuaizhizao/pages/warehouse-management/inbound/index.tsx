@@ -22,6 +22,7 @@ import DocumentTrackingPanel from '../../../../../components/document-tracking-p
 import CodeField from '../../../../../components/code-field';
 import { warehouseApi, workOrderApi } from '../../../services/production';
 import { getInboundLifecycle } from '../../../utils/inboundLifecycle';
+import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
 import { getPurchaseOrder, listPurchaseOrders, pushPurchaseOrderToReceipt } from '../../../services/purchase';
@@ -588,16 +589,7 @@ const InboundPage: React.FC = () => {
       render: (_, record) => {
         const lifecycle = getInboundLifecycle(record);
         const stageName = lifecycle.stageName ?? record.status ?? '草稿';
-        const colorMap: Record<string, string> = {
-          草稿: 'default',
-          待入库: 'processing',
-          已确认: 'processing',
-          已完成: 'success',
-          已取消: 'error',
-          待退料: 'default',
-          已退料: 'success',
-        };
-        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
+        return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>;
       },
     },
     {

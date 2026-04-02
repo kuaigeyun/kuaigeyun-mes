@@ -32,6 +32,7 @@ import { CalculatorOutlined } from '@ant-design/icons';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { getSalesOrderLifecycle } from '../../../utils/salesOrderLifecycle';
+import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { ListPageTemplate, FormModalTemplate, type StatCard } from '../../../../../components/layout-templates';
 import { AmountDisplay } from '../../../../../components/permission';
@@ -104,7 +105,26 @@ type SalesOrderItemRow = SalesOrderItem & {
   lifecycle?: Record<string, unknown>;
   /** 生命周期阶段名，用于卡片分组 */
   _lifecycleStage?: string;
+  items?: { work_order_id?: number | null }[];
 };
+
+/** 明细行是否已挂工单（直推工单路径与需求计算路径互斥） */
+function orderHasLineWorkOrders(order: SalesOrderLite | null | undefined): boolean {
+  return !!(order?.items?.some((it) => it?.work_order_id != null && Number(it.work_order_id) > 0));
+}
+
+function canOpenDemandComputationPush(order: SalesOrderLite | null | undefined, nodeEnabled: boolean): boolean {
+  if (!nodeEnabled) return false;
+  if (order?.pushed_to_computation) return false;
+  if (orderHasLineWorkOrders(order)) return false;
+  return true;
+}
+
+function canOpenDirectWorkOrderPush(order: SalesOrderLite | null | undefined, nodeEnabled: boolean): boolean {
+  if (!nodeEnabled) return false;
+  if (order?.pushed_to_computation) return false;
+  return true;
+}
 
 const SALES_ORDER_ROW_ACTIONS_INLINE_MAX = 4;
 
@@ -1132,9 +1152,14 @@ const SalesOrdersPage: React.FC = () => {
   /**
    * 处理下推到需求计算（含预览）
    */
-  const handlePushToComputation = async (id: number) => {
+  const handlePushToComputation = async (id: number, order?: SalesOrderLite | null) => {
     if (!salesNodeEnabled.demand_computation) {
       messageApi.warning('需求计算节点未启用，无法下推');
+      return;
+    }
+    if (order?.pushed_to_computation) return;
+    if (orderHasLineWorkOrders(order)) {
+      messageApi.warning(t('app.kuaizhizao.salesOrder.pushMutualExclusiveComputationBlocked'));
       return;
     }
     showPushPreviewModal(
@@ -1249,9 +1274,13 @@ const SalesOrdersPage: React.FC = () => {
   };
 
   /** 直推工单（含预览） */
-  const handlePushToWorkOrder = async (id: number) => {
+  const handlePushToWorkOrder = async (id: number, order?: SalesOrderLite | null) => {
     if (!salesNodeEnabled.work_order) {
       messageApi.warning('工单节点未启用，无法下推');
+      return;
+    }
+    if (order?.pushed_to_computation) {
+      messageApi.warning(t('app.kuaizhizao.salesOrder.pushMutualExclusiveWorkOrderBlocked'));
       return;
     }
     showPushPreviewModal(
@@ -1693,8 +1722,24 @@ const SalesOrdersPage: React.FC = () => {
             <Dropdown
               menu={{
                 items: [
-                  { key: 'computation', label: t('app.kuaizhizao.salesOrder.demandComputation'), icon: <ArrowDownOutlined />, disabled: !!record.pushed_to_computation || !salesNodeEnabled.demand_computation, onClick: () => !record.pushed_to_computation && handlePushToComputation(record.id!) },
-                  { key: 'workorder', label: t('app.kuaizhizao.salesOrder.pushToWorkOrder'), icon: <ArrowDownOutlined />, disabled: !salesNodeEnabled.work_order, onClick: () => handlePushToWorkOrder(record.id!) },
+                  {
+                    key: 'computation',
+                    label: t('app.kuaizhizao.salesOrder.demandComputation'),
+                    icon: <ArrowDownOutlined />,
+                    disabled: !canOpenDemandComputationPush(record, salesNodeEnabled.demand_computation),
+                    onClick: () =>
+                      canOpenDemandComputationPush(record, salesNodeEnabled.demand_computation) &&
+                      handlePushToComputation(record.id!, record),
+                  },
+                  {
+                    key: 'workorder',
+                    label: t('app.kuaizhizao.salesOrder.pushToWorkOrder'),
+                    icon: <ArrowDownOutlined />,
+                    disabled: !canOpenDirectWorkOrderPush(record, salesNodeEnabled.work_order),
+                    onClick: () =>
+                      canOpenDirectWorkOrderPush(record, salesNodeEnabled.work_order) &&
+                      handlePushToWorkOrder(record.id!, record),
+                  },
                   { type: 'divider' },
                   { key: 'shipment', label: t('app.kuaizhizao.salesOrder.shipmentNotice'), icon: <SendOutlined />, disabled: !salesNodeEnabled.shipment_notice, onClick: () => handlePushToShipmentNotice(record.id!) },
                   { key: 'invoice', label: t('app.kuaizhizao.salesOrder.salesInvoice'), icon: <FileTextOutlined />, disabled: !salesNodeEnabled.invoice, onClick: () => handlePushToInvoice(record.id!) },
@@ -1818,18 +1863,7 @@ const SalesOrdersPage: React.FC = () => {
         const orderRecord = { id: record.sales_order_id, status: record.status, review_status: record.review_status } as SalesOrder;
         const lifecycle = getSalesOrderLifecycle(orderRecord);
         const stageName = lifecycle.stageName ?? record.status ?? '草稿';
-        const colorMap: Record<string, string> = {
-          草稿: 'default',
-          待审核: 'warning',
-          已审核: 'green',
-          已生效: 'purple',
-          执行中: 'cyan',
-          已交货: 'orange',
-          已完成: 'gold',
-          已驳回: 'error',
-          已取消: 'default',
-        };
-        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
+        return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>;
       },
     },
     // 明细表格视图以每行订单明细为展示维度，纯查看用途，不提供操作按钮
@@ -3284,8 +3318,24 @@ const SalesOrdersPage: React.FC = () => {
                 <Dropdown
                   menu={{
                     items: [
-                      { key: 'computation', label: t('app.kuaizhizao.salesOrder.demandComputation'), icon: <ArrowDownOutlined />, disabled: !!currentSalesOrder.pushed_to_computation || !salesNodeEnabled.demand_computation, onClick: () => !currentSalesOrder.pushed_to_computation && handlePushToComputation(currentSalesOrder.id!) },
-                      { key: 'workorder', label: t('app.kuaizhizao.salesOrder.pushToWorkOrder'), icon: <ArrowDownOutlined />, disabled: !salesNodeEnabled.work_order, onClick: () => handlePushToWorkOrder(currentSalesOrder.id!) },
+                      {
+                        key: 'computation',
+                        label: t('app.kuaizhizao.salesOrder.demandComputation'),
+                        icon: <ArrowDownOutlined />,
+                        disabled: !canOpenDemandComputationPush(currentSalesOrder as SalesOrderLite, salesNodeEnabled.demand_computation),
+                        onClick: () =>
+                          canOpenDemandComputationPush(currentSalesOrder as SalesOrderLite, salesNodeEnabled.demand_computation) &&
+                          handlePushToComputation(currentSalesOrder.id!, currentSalesOrder as SalesOrderLite),
+                      },
+                      {
+                        key: 'workorder',
+                        label: t('app.kuaizhizao.salesOrder.pushToWorkOrder'),
+                        icon: <ArrowDownOutlined />,
+                        disabled: !canOpenDirectWorkOrderPush(currentSalesOrder as SalesOrderLite, salesNodeEnabled.work_order),
+                        onClick: () =>
+                          canOpenDirectWorkOrderPush(currentSalesOrder as SalesOrderLite, salesNodeEnabled.work_order) &&
+                          handlePushToWorkOrder(currentSalesOrder.id!, currentSalesOrder as SalesOrderLite),
+                      },
                       { type: 'divider' },
                       { key: 'shipment', label: t('app.kuaizhizao.salesOrder.shipmentNotice'), icon: <SendOutlined />, disabled: !salesNodeEnabled.shipment_notice, onClick: () => handlePushToShipmentNotice(currentSalesOrder.id!) },
                       { key: 'invoice', label: t('app.kuaizhizao.salesOrder.salesInvoice'), icon: <FileTextOutlined />, disabled: !salesNodeEnabled.invoice, onClick: () => handlePushToInvoice(currentSalesOrder.id!) },

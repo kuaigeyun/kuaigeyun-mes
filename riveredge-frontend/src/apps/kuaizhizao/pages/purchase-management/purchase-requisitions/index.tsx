@@ -31,6 +31,7 @@ import {
 } from '../../../services/purchase-requisition';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { getPurchaseRequisitionLifecycle } from '../../../utils/purchaseRequisitionLifecycle';
+import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
@@ -100,15 +101,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
       render: (_, record) => {
         const lifecycle = getPurchaseRequisitionLifecycle(record);
         const stageName = lifecycle.stageName ?? record.status ?? '草稿';
-        const colorMap: Record<string, string> = {
-          草稿: 'default',
-          待审核: 'processing',
-          已驳回: 'error',
-          已通过: 'success',
-          部分转单: 'warning',
-          全部转单: 'success',
-        };
-        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
+        return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>;
       },
     },
     { title: '来源', dataIndex: 'source_code', width: 140 },

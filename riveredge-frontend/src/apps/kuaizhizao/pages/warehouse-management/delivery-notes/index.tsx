@@ -19,6 +19,7 @@ import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFI
 import { deliveryNoticeApi } from '../../../services/delivery-notice';
 import { getDeliveryNoticeLifecycle } from '../../../utils/deliveryNoticeLifecycle';
 import { useTranslation } from 'react-i18next';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { customerApi } from '../../../../master-data/services/supply-chain';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
@@ -109,20 +110,24 @@ const DeliveryNotesPage: React.FC = () => {
     { title: '客户', dataIndex: 'customer_name', width: 140, ellipsis: true },
     { title: '承运商', dataIndex: 'carrier', width: 100 },
     { title: '运单号', dataIndex: 'tracking_number', width: 120, ellipsis: true },
-    {
-      title: '生命周期',
-      dataIndex: 'lifecycle',
-      width: 100,
-      render: (_, record) => {
-        const lifecycle = getDeliveryNoticeLifecycle(record);
-        const stageName = lifecycle.stageName ?? record.status ?? '待发送';
-        const c = STATUS_MAP[stageName] || { text: stageName || '-', color: 'default' };
-        return <Tag color={c.color}>{c.text}</Tag>;
-      },
-    },
     { title: '预计送达', dataIndex: 'planned_delivery_date', valueType: 'date', width: 110 },
     { title: '发送时间', dataIndex: 'sent_at', valueType: 'dateTime', width: 160 },
     { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime', width: 160 },
+    {
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      width: 132,
+      align: 'center',
+      fixed: 'right',
+      render: (_, record) => (
+        <UniLifecycle
+          value={getDeliveryNoticeLifecycle(record as any)}
+          showLabel
+          showCircleTooltip={false}
+          size="small"
+        />
+      ),
+    },
     {
       title: '操作',
       width: 200,

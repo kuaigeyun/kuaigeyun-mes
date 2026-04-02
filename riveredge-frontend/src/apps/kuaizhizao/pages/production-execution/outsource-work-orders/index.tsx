@@ -24,6 +24,7 @@ import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../s
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { outsourceWorkOrderApi, outsourceMaterialIssueApi, outsourceMaterialReceiptApi } from '../../../services/production';
 import { getOutsourceWorkOrderLifecycle } from '../../../utils/outsourceWorkOrderLifecycle';
+import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
 import { materialApi } from '../../../../master-data/services/material';
 import { warehouseApi } from '../../../../master-data/services/warehouse';
@@ -576,8 +577,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       render: (_, record) => {
         const lifecycle = getOutsourceWorkOrderLifecycle(record);
         const stageName = lifecycle.stageName ?? record.status ?? '草稿';
-        const colorMap: Record<string, string> = { 草稿: 'default', 已下达: 'processing', 执行中: 'processing', 已完成: 'success', 已取消: 'error' };
-        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
+        return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>;
       },
     },
     {

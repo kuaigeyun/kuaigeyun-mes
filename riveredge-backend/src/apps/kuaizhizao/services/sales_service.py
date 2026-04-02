@@ -124,7 +124,16 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         resp.items = [SalesForecastItemResponse.model_validate(it) for it in item_rows]
         from apps.kuaizhizao.services.document_lifecycle_service import get_sales_forecast_lifecycle, get_document_milestones
         milestones = await get_document_milestones(forecast.tenant_id, "sales_forecast", forecast.id)
-        resp.lifecycle = get_sales_forecast_lifecycle(forecast, milestones=milestones)
+        demand = await self._get_linked_demand_for_forecast(tenant_id, forecast_id)
+        pushed = bool(demand and getattr(demand, "pushed_to_computation", False))
+        resp.lifecycle = get_sales_forecast_lifecycle(
+            forecast,
+            milestones=milestones,
+            pushed_to_computation=pushed,
+            delivery_progress=0.0,
+            invoice_progress=0.0,
+            items=None,
+        )
         return resp
 
     async def list_sales_forecasts(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> Dict[str, Any]:
@@ -148,7 +157,18 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         
         # 获取分页数据
         forecasts = await query.offset(skip).limit(limit).order_by('-created_at')
-        
+
+        forecast_ids = [f.id for f in forecasts]
+        demand_by_fid: Dict[int, Demand] = {}
+        if forecast_ids:
+            demands = await Demand.filter(
+                tenant_id=tenant_id,
+                source_type="sales_forecast",
+                source_id__in=forecast_ids,
+                deleted_at__isnull=True,
+            ).all()
+            demand_by_fid = {d.source_id: d for d in demands}
+
         include_items = filters.get('include_items', False)
         items_by_forecast: Dict[int, List[SalesForecastItem]] = {}
         if include_items:
@@ -163,7 +183,11 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         result = []
         for forecast in forecasts:
             resp = SalesForecastListResponse.model_validate(forecast)
-            resp.lifecycle = get_sales_forecast_lifecycle(forecast)
+            d = demand_by_fid.get(forecast.id)
+            resp.lifecycle = get_sales_forecast_lifecycle(
+                forecast,
+                pushed_to_computation=bool(d and getattr(d, "pushed_to_computation", False)),
+            )
             if include_items:
                 f_items = items_by_forecast.get(forecast.id, [])
                 resp.items = [SalesForecastItemResponse.model_validate(it) for it in f_items]

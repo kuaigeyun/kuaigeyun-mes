@@ -26,7 +26,7 @@ class DemandBase(BaseSchema):
     demand_code: str = Field(..., max_length=50, description="需求编码")
     demand_type: Literal["sales_forecast", "sales_order", "demand_plan"] = Field(..., description="需求类型")
     demand_name: str = Field(..., max_length=200, description="需求名称")
-    business_mode: Literal["MTS", "MTO"] = Field(..., description="业务模式（MTS/MTO）")
+    business_mode: Literal["MTS", "MTO", "ATO"] = Field(..., description="业务模式（MTS/MTO/ATO）")
     start_date: date = Field(..., description="开始日期")
     end_date: Optional[date] = Field(None, description="结束日期（销售订单可为空）")
     
@@ -199,6 +199,10 @@ class DemandResponse(DemandBase):
     # 生命周期（后端计算，供前端 UniLifecycleStepper 展示）
     lifecycle: Optional[dict] = Field(None, description="生命周期节点与当前阶段")
 
+    # 最近一次上游触发的同步/重算记录（来自 DemandRecalcHistory，便于基本信息展示）
+    last_upstream_sync_at: Optional[datetime] = Field(None, description="最近上游同步时间")
+    last_upstream_sync_trigger: Optional[str] = Field(None, description="最近同步触发说明")
+
     class Config:
         from_attributes = True
 
@@ -228,6 +232,9 @@ class DemandListResponse(BaseSchema):
     created_by: Optional[int] = Field(None, description="创建人ID")
     updated_by: Optional[int] = Field(None, description="更新人ID")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算）")
+    # 下推信息
+    pushed_to_computation: bool = Field(False, description="是否已下推到需求计算")
+    computation_code: Optional[str] = Field(None, description="关联的需求计算编码")
     # 来源：上游单据类型与编码（销售订单/销售预测审核通过后下推生成需求时填充）
     source_type: Optional[str] = Field(None, description="来源类型（sales_order/sales_forecast）")
     source_id: Optional[int] = Field(None, description="来源ID")

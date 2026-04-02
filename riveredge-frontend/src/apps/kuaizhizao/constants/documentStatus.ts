@@ -56,20 +56,20 @@ const FALLBACK_REVIEW_ALIASES: Record<string, string> = {
 
 const FALLBACK_STATUS_DISPLAY: Record<string, { text: string; color: string }> = {
   [DocumentStatus.DRAFT]: { text: '草稿', color: RE_STATUS_BADGE_DRAFT },
-  [DocumentStatus.PENDING_REVIEW]: { text: '待审核', color: 'processing' },
-  [DocumentStatus.AUDITED]: { text: '已审核', color: 'processing' },
+  [DocumentStatus.PENDING_REVIEW]: { text: '待审核', color: 'warning' },
+  [DocumentStatus.AUDITED]: { text: '已审核', color: 'success' },
   [DocumentStatus.REJECTED]: { text: '已驳回', color: 'error' },
   [DocumentStatus.CONFIRMED]: { text: '已确认', color: 'success' },
   [DocumentStatus.CANCELLED]: { text: '已取消', color: 'error' },
   [DocumentStatus.RELEASED]: { text: '已下达', color: 'processing' },
-  [DocumentStatus.IN_PROGRESS]: { text: '执行中', color: 'processing' },
-  [DocumentStatus.COMPLETED]: { text: '已完成', color: 'success' },
+  [DocumentStatus.IN_PROGRESS]: { text: '执行中', color: 'cyan' },
+  [DocumentStatus.COMPLETED]: { text: '已完成', color: 'gold' },
   [DocumentStatus.PARTIAL_CONVERTED]: { text: '部分转单', color: 'warning' },
   [DocumentStatus.FULL_CONVERTED]: { text: '全部转单', color: 'success' },
 };
 
 const FALLBACK_REVIEW_DISPLAY: Record<string, { text: string; color: string }> = {
-  [ReviewStatusEnum.PENDING]: { text: '待审核', color: 'default' },
+  [ReviewStatusEnum.PENDING]: { text: '待审核', color: 'warning' },
   [ReviewStatusEnum.APPROVED]: { text: '审核通过', color: 'success' },
   [ReviewStatusEnum.REJECTED]: { text: '审核驳回', color: 'error' },
 };

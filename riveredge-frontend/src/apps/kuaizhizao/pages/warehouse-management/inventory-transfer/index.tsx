@@ -16,6 +16,7 @@ import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-sele
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { inventoryTransferApi } from '../../../services/inventory-transfer';
 import { getInventoryTransferLifecycle } from '../../../utils/inventoryTransferLifecycle';
+import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
 
@@ -273,13 +274,7 @@ const InventoryTransferPage: React.FC = () => {
       render: (_, record) => {
         const lifecycle = getInventoryTransferLifecycle(record);
         const stageName = lifecycle.stageName ?? record.status ?? '草稿';
-        const colorMap: Record<string, string> = {
-          草稿: 'default',
-          调拨中: 'processing',
-          已完成: 'success',
-          已取消: 'error',
-        };
-        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
+        return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>;
       },
     },
     {

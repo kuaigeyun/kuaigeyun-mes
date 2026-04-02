@@ -16,7 +16,7 @@ import {
   ProFormInstance,
   ProTableProps,
 } from '@ant-design/pro-components'
-import { Button, Space, Radio, App, Input, theme, Empty, ConfigProvider, Dropdown, Popconfirm } from 'antd'
+import { Button, Space, Radio, Input, theme, Empty, ConfigProvider, Dropdown, Popconfirm } from 'antd'
 import type { MenuProps } from 'antd'
 import {
   PlusOutlined,
@@ -33,7 +33,6 @@ import {
   ImportOutlined,
   DownloadOutlined,
   SyncOutlined,
-  ReloadOutlined,
 } from '@ant-design/icons'
 import { isPinyinKeyword, matchPinyinInitialsAsync } from '../../utils/pinyin'
 
@@ -273,6 +272,10 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    * 行主键字段名（默认：'id'）
    */
   rowKey?: string | ((record: T, index?: number) => string)
+  /**
+   * 是否显示基础模糊搜索框（默认：true）
+   */
+  showFuzzySearch?: boolean
   /**
    * 是否显示高级搜索按钮（默认：true）
    */
@@ -623,6 +626,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   headerTitle,
   headerActions,
   rowKey = 'id',
+  showFuzzySearch = true, // 默认显示模糊搜索
   showAdvancedSearch = true, // 默认显示高级搜索
   beforeSearchButtons,
   afterSearchButtons,
@@ -681,7 +685,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   ...restProps
 }: UniTableProps<T>) {
   const { t } = useTranslation()
-  const { message } = App.useApp()
   const { token } = theme.useToken()
   const queryClient = useQueryClient()
   const getConfig = useConfigStore((s) => s.getConfig);
@@ -1764,19 +1767,21 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               >
                 {beforeSearchButtons}
                 {/* 模糊搜索框 - 去掉放大镜按钮，高度与高级搜索按钮一致（32px） */}
-                <Input
-                  className="uni-table-fuzzy-search"
-                  placeholder={t('components.uniTable.fuzzySearch')}
-                  allowClear
-                  value={fuzzySearchKeyword}
-                  onFocus={warmupPinyinIfNeeded}
-                  onChange={e => handleFuzzySearch(e.target.value)}
-                  onPressEnter={e => handleFuzzySearch((e.target as HTMLInputElement).value)}
-                  style={{
-                    width: 160,
-                    height: '32px',
-                  }}
-                />
+                {showFuzzySearch && (
+                  <Input
+                    className="uni-table-fuzzy-search"
+                    placeholder={t('components.uniTable.fuzzySearch')}
+                    allowClear
+                    value={fuzzySearchKeyword}
+                    onFocus={warmupPinyinIfNeeded}
+                    onChange={e => handleFuzzySearch(e.target.value)}
+                    onPressEnter={e => handleFuzzySearch((e.target as HTMLInputElement).value)}
+                    style={{
+                      width: 160,
+                      height: '32px',
+                    }}
+                  />
+                )}
                 {showAdvancedSearch && (
                   <ErrorBoundary fallback={<span style={{ color: 'red', fontSize: '12px' }}>{t('components.uniTable.searchError')}</span>}>
                     <Suspense fallback={<span style={{ opacity: 0.6 }}>…</span>}>

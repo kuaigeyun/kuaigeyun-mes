@@ -14,4 +14,6 @@ export const shipmentNoticeApi = {
   get: async (id: string) => apiRequest(`/apps/kuaizhizao/shipment-notices/${id}`, { method: 'GET' }),
   notify: async (id: string) =>
     apiRequest(`/apps/kuaizhizao/shipment-notices/${id}/notify`, { method: 'POST' }),
+  withdraw: async (id: string) =>
+    apiRequest(`/apps/kuaizhizao/shipment-notices/${id}/withdraw`, { method: 'POST' }),
 };

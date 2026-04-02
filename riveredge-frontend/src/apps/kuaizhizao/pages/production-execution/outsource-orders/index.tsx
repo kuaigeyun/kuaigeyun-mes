@@ -20,6 +20,7 @@ import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG
 import CodeField from '../../../../../components/code-field';
 import { outsourceOrderApi } from '../../../services/production';
 import { getOutsourceOrderLifecycle } from '../../../utils/outsourceOrderLifecycle';
+import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
 import dayjs from 'dayjs';
 
@@ -151,8 +152,7 @@ export const OutsourceOrdersTable: React.FC = () => {
       render: (_, record) => {
         const lifecycle = getOutsourceOrderLifecycle(record);
         const stageName = lifecycle.stageName ?? record.status ?? '草稿';
-        const colorMap: Record<string, string> = { 草稿: 'default', 已下达: 'processing', 执行中: 'blue', 已完成: 'success', 已取消: 'error' };
-        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
+        return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>;
       },
     },
     {
@@ -256,8 +256,7 @@ export const OutsourceOrdersTable: React.FC = () => {
       render: (_, record) => {
         const lifecycle = getOutsourceOrderLifecycle(record);
         const stageName = lifecycle.stageName ?? record.status ?? '草稿';
-        const colorMap: Record<string, string> = { 草稿: 'default', 已下达: 'processing', 执行中: 'blue', 已完成: 'success', 已取消: 'error' };
-        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
+        return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>;
       },
     },
     {

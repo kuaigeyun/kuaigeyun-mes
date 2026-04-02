@@ -23,7 +23,6 @@ const withPageSuspense = (LazyComponent: React.LazyExoticComponent<React.Compone
 // 计划管理页面
 const DemandManagementPage = lazy(() => import('./pages/plan-management/demand-management'));
 const DemandComputationPage = lazy(() => import('./pages/plan-management/demand-computation'));
-const ComputationConfigPage = lazy(() => import('./pages/plan-management/computation-config'));
 const SchedulingPage = lazy(() => import('./pages/plan-management/scheduling'));
 const ProductionControlTower = lazy(() => import('./pages/plan-management/production-plans/ProductionControlTower'));
 const MESDashboard = lazy(() => import('./pages/dashboard'));
@@ -234,7 +233,6 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="plan-management/demand-computation" element={withPageSuspense(DemandComputationPage)} />
       <Route path="plan-management/dashboard" element={withPageSuspense(ProductionControlTower)} />
       <Route path="plan-management/production-control-tower" element={withPageSuspense(ProductionControlTower)} />
-      <Route path="plan-management/computation-config" element={withPageSuspense(ComputationConfigPage)} />
       <Route path="plan-management/scheduling" element={withPageSuspense(SchedulingPage)} />
 
       {/* 采购管理路由 */}

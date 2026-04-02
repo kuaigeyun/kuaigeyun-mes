@@ -225,7 +225,7 @@ async def list_demands(
     demand_type: Optional[str] = Query(None, description="需求类型（sales_forecast 或 sales_order）"),
     demand_status: Optional[str] = Query(None, description="需求状态", alias="status"),
     pushed_to_computation: Optional[bool] = Query(None, description="是否已下推计算"),
-    business_mode: Optional[str] = Query(None, description="业务模式（MTS 或 MTO）"),
+    business_mode: Optional[str] = Query(None, description="业务模式（MTS / MTO / ATO）"),
     review_status: Optional[str] = Query(None, description="审核状态"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -256,7 +256,7 @@ async def list_demands(
         )
         return result
     except Exception as e:
-        logger.error(f"获取需求列表失败: {e}")
+        logger.exception("获取需求列表失败: %s", e)
         raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "获取需求列表失败", "/demands", tenant_id)
 
 

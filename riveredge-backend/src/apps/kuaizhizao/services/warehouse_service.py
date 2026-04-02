@@ -3425,7 +3425,11 @@ class SalesReturnService(AppBaseService[SalesReturn]):
         return_obj = await SalesReturn.get_or_none(tenant_id=tenant_id, id=return_id)
         if not return_obj:
             raise NotFoundError(f"销售退货单不存在: {return_id}")
-        return SalesReturnResponse.model_validate(return_obj)
+        response = SalesReturnResponse.model_validate(return_obj)
+        from apps.kuaizhizao.services.document_lifecycle_service import get_sales_return_lifecycle, get_document_milestones
+        milestones = await get_document_milestones(tenant_id, "sales_return", return_id)
+        response.lifecycle = get_sales_return_lifecycle(return_obj, milestones=milestones)
+        return response
 
     async def list_sales_returns(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[SalesReturnResponse]:
         """获取销售退货单列表"""
@@ -3440,7 +3444,13 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             query = query.filter(customer_id=filters['customer_id'])
 
         returns = await query.offset(skip).limit(limit).order_by('-created_at')
-        return [SalesReturnResponse.model_validate(return_obj) for return_obj in returns]
+        from apps.kuaizhizao.services.document_lifecycle_service import get_sales_return_lifecycle
+        out: List[SalesReturnResponse] = []
+        for return_obj in returns:
+            resp = SalesReturnResponse.model_validate(return_obj)
+            resp.lifecycle = get_sales_return_lifecycle(return_obj)
+            out.append(resp)
+        return out
 
     async def confirm_return(self, tenant_id: int, return_id: int, confirmed_by: int) -> SalesReturnResponse:
         """确认退货"""
@@ -3532,6 +3542,41 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             deleted_at=datetime.now()
         )
         return True
+
+    async def withdraw_confirmation(self, tenant_id: int, return_id: int, updated_by: int) -> SalesReturnResponse:
+        """撤回退货确认（已退货 -> 待退货），并回滚库存增加。"""
+        async with in_transaction():
+            return_obj = await SalesReturn.get_or_none(tenant_id=tenant_id, id=return_id, deleted_at__isnull=True)
+            if not return_obj:
+                raise NotFoundError(f"销售退货单不存在: {return_id}")
+            if return_obj.status != "已退货":
+                raise BusinessLogicError("只有已退货状态的销售退货单才能撤回")
+
+            from apps.kuaizhizao.services.inventory_service import InventoryService
+            items = await SalesReturnItem.filter(tenant_id=tenant_id, return_id=return_id).all()
+            for item in items:
+                qty = item.return_quantity or Decimal(0)
+                if qty <= 0:
+                    continue
+                await InventoryService.decrease_stock(
+                    tenant_id=tenant_id,
+                    material_id=item.material_id,
+                    quantity=qty,
+                    warehouse_id=return_obj.warehouse_id if return_obj.warehouse_id else None,
+                    batch_no=item.batch_number or None,
+                    source_type="sales_return_withdraw",
+                    source_doc_id=return_id,
+                    source_doc_code=return_obj.return_code,
+                )
+
+            await SalesReturn.filter(tenant_id=tenant_id, id=return_id).update(
+                status="待退货",
+                return_time=None,
+                returner_id=None,
+                returner_name=None,
+                updated_by=updated_by,
+            )
+            return await self.get_sales_return_by_id(tenant_id, return_id)
 
 
 class PurchaseReturnService(AppBaseService[PurchaseReturn]):

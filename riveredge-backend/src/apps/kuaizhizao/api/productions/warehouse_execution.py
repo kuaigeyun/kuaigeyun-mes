@@ -2313,6 +2313,20 @@ async def confirm_sales_return(
     )
 
 
+@router.post("/sales-returns/{return_id}/withdraw", response_model=SalesReturnResponse, summary="撤回销售退货确认")
+async def withdraw_sales_return(
+    return_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SalesReturnResponse:
+    """撤回销售退货确认（已退货 -> 待退货）"""
+    return await SalesReturnService().withdraw_confirmation(
+        tenant_id=tenant_id,
+        return_id=return_id,
+        updated_by=current_user.id,
+    )
+
+
 @router.delete("/sales-returns/{return_id}", status_code=http_status.HTTP_204_NO_CONTENT, summary="删除销售退货单")
 async def delete_sales_return(
     return_id: int,

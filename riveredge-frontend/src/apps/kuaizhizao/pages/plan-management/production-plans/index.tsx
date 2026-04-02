@@ -18,6 +18,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerActions, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { planningApi } from '../../../services/production';
 import { getProductionPlanLifecycle } from '../../../utils/productionPlanLifecycle';
+import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { apiRequest } from '../../../../../services/api';
@@ -186,14 +187,7 @@ const ProductionPlansPage: React.FC = () => {
       render: (_: unknown, record: ProductionPlan) => {
         const lifecycle = getProductionPlanLifecycle(record);
         const stageName = lifecycle.stageName ?? record.status ?? '草稿';
-        const colorMap: Record<string, string> = {
-          草稿: 'default',
-          已审核: 'processing',
-          已执行: 'success',
-          已取消: 'error',
-          已驳回: 'error',
-        };
-        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
+        return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>;
       },
     },
     {

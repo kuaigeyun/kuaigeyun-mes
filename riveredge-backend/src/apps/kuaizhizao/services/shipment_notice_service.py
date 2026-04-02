@@ -271,6 +271,9 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
         items = await ShipmentNoticeItem.filter(tenant_id=tenant_id, notice_id=notice_id).all()
         response = ShipmentNoticeWithItemsResponse.model_validate(notice)
         response.items = [ShipmentNoticeItemResponse.model_validate(i) for i in items]
+        from apps.kuaizhizao.services.document_lifecycle_service import get_shipment_notice_lifecycle, get_document_milestones
+        milestones = await get_document_milestones(tenant_id, "shipment_notice", notice_id)
+        response.lifecycle = get_shipment_notice_lifecycle(notice, milestones=milestones)
         return response
 
     async def list_shipment_notices(
@@ -290,7 +293,13 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             query = query.filter(customer_id=filters["customer_id"])
 
         notices = await query.offset(skip).limit(limit).order_by("-created_at")
-        return [ShipmentNoticeListResponse.model_validate(r) for r in notices]
+        from apps.kuaizhizao.services.document_lifecycle_service import get_shipment_notice_lifecycle
+        out: List[ShipmentNoticeListResponse] = []
+        for r in notices:
+            resp = ShipmentNoticeListResponse.model_validate(r)
+            resp.lifecycle = get_shipment_notice_lifecycle(r)
+            out.append(resp)
+        return out
 
     async def update_shipment_notice(
         self,
@@ -353,3 +362,27 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
         return ShipmentNoticeResponse.model_validate(
             await ShipmentNotice.get(tenant_id=tenant_id, id=notice_id)
         )
+
+    async def withdraw_notice(
+        self,
+        tenant_id: int,
+        notice_id: int,
+        withdrawn_by: int,
+    ) -> ShipmentNoticeResponse:
+        """撤回通知（已通知 -> 待发货）。已出库/已关联出库单不允许撤回。"""
+        notice = await ShipmentNotice.get_or_none(tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True)
+        if not notice:
+            raise NotFoundError(f"发货通知单不存在: {notice_id}")
+
+        if notice.status != "已通知":
+            raise BusinessLogicError("只有已通知状态的发货通知单才能撤回")
+        if getattr(notice, "sales_delivery_id", None):
+            raise BusinessLogicError("该通知单已关联销售出库单，不能撤回")
+
+        await ShipmentNotice.filter(tenant_id=tenant_id, id=notice_id).update(
+            status="待发货",
+            notified_at=None,
+            updated_by=withdrawn_by,
+        )
+        updated = await ShipmentNotice.get(tenant_id=tenant_id, id=notice_id)
+        return ShipmentNoticeResponse.model_validate(updated)

@@ -21,6 +21,7 @@ import CodeField from '../../../../../components/code-field';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { reworkOrderApi, workOrderApi } from '../../../services/production';
 import { getReworkOrderLifecycle } from '../../../utils/reworkOrderLifecycle';
+import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 
@@ -264,14 +265,7 @@ const ReworkOrdersPage: React.FC = () => {
       render: (_, record) => {
         const lifecycle = getReworkOrderLifecycle(record);
         const stageName = lifecycle.stageName ?? record.status ?? '草稿';
-        const statusMap: Record<string, string> = {
-          草稿: 'default',
-          已下达: 'processing',
-          执行中: 'blue',
-          已完成: 'success',
-          已取消: 'error',
-        };
-        return <Tag color={statusMap[stageName] ?? 'default'}>{stageName}</Tag>;
+        return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>;
       },
     },
     {

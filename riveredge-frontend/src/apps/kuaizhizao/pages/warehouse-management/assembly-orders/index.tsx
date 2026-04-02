@@ -15,6 +15,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { assemblyOrderApi } from '../../../services/assembly-order';
 import { getAssemblyOrderLifecycle } from '../../../utils/assemblyOrderLifecycle';
+import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 
 interface AssemblyOrder {
   id?: number;
@@ -87,8 +88,7 @@ const AssemblyOrdersPage: React.FC = () => {
       render: (_, record) => {
         const lifecycle = getAssemblyOrderLifecycle(record);
         const stageName = lifecycle.stageName ?? record.status ?? '草稿';
-        const colorMap: Record<string, string> = { 草稿: 'default', 组装中: 'processing', 已完成: 'success', 已取消: 'error' };
-        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
+        return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>;
       },
     },
     {

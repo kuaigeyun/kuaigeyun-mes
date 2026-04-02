@@ -66,87 +66,17 @@ class _PreviewResultCarrier(Exception):
         self.preview_data = preview_data
 
 
-async def _fetch_config_via_raw_conn(
-    conn: Any,
-    tenant_id: int,
-    material_id: Optional[int],
-    warehouse_id: Optional[int],
-) -> Dict[str, Any]:
-    """在独立连接上查询 ComputationConfig，表不存在时由调用方捕获。"""
-    import json
-    merged: Dict[str, Any] = {}
-    tbl = "apps_kuaizhizao_computation_configs"
-    # 按优先级查询：global, warehouse, material, material_warehouse
-    scopes = [
-        ("global", None, None),
-        ("warehouse", None, warehouse_id),
-        ("material", material_id, None),
-        ("material_warehouse", material_id, warehouse_id),
-    ]
-    for scope, mid, wid in scopes:
-        if scope == "material_warehouse" and (not mid or not wid):
-            continue
-        if scope == "material" and not mid:
-            continue
-        if scope == "warehouse" and not wid:
-            continue
-        if scope == "global":
-            row = await conn.fetchrow(
-                f"SELECT computation_params FROM {tbl} WHERE tenant_id=$1 AND config_scope=$2 AND is_active=true ORDER BY priority DESC LIMIT 1",
-                tenant_id, scope
-            )
-        elif scope == "material":
-            row = await conn.fetchrow(
-                f"SELECT computation_params FROM {tbl} WHERE tenant_id=$1 AND config_scope=$2 AND material_id=$3 AND is_active=true ORDER BY priority DESC LIMIT 1",
-                tenant_id, scope, mid
-            )
-        elif scope == "warehouse":
-            row = await conn.fetchrow(
-                f"SELECT computation_params FROM {tbl} WHERE tenant_id=$1 AND config_scope=$2 AND warehouse_id=$3 AND is_active=true ORDER BY priority DESC LIMIT 1",
-                tenant_id, scope, wid
-            )
-        else:
-            row = await conn.fetchrow(
-                f"SELECT computation_params FROM {tbl} WHERE tenant_id=$1 AND config_scope=$2 AND material_id=$3 AND warehouse_id=$4 AND is_active=true ORDER BY priority DESC LIMIT 1",
-                tenant_id, scope, mid, wid
-            )
-        if row and row.get("computation_params"):
-            params = row["computation_params"]
-            merged.update(params if isinstance(params, dict) else (json.loads(params) if params else {}))
-    return merged
-
-
 async def _get_material_safety_reorder(
-    tenant_id: int,
     material: Any,
-    material_id: int,
     computation_params: Dict[str, Any],
 ) -> tuple[float, float]:
     """
-    从物料主数据、ComputationConfig 或计算参数获取安全库存、再订货点。
-    优先级：computation_params > material.defaults > ComputationConfig > 0
+    从物料主数据与本次计算的 computation_params 获取安全库存、再订货点。
+    优先级：computation_params > material.defaults > 0
     """
     safety = 0.0
     reorder = 0.0
 
-    # 1. 从 ComputationConfig 获取（物料/全局），表不存在时跳过
-    # 使用独立连接查询，表不存在时失败不影响主事务，避免 TransactionManagementError
-    try:
-        from infra.infrastructure.database.database import get_db_connection
-        conn = await get_db_connection()
-        try:
-            config_params = await _fetch_config_via_raw_conn(
-                conn, tenant_id, material_id, warehouse_id=None
-            )
-            if config_params:
-                safety = float(config_params.get("safety_stock", 0))
-                reorder = float(config_params.get("reorder_point", 0))
-        finally:
-            await conn.close()
-    except Exception:
-        pass  # 表不存在或查询失败时跳过，使用 material.defaults / computation_params
-
-    # 2. 从物料 defaults 覆盖
     if material.defaults:
         inv = material.defaults.get("inventory") or material.defaults
         if isinstance(inv, dict):
@@ -155,7 +85,6 @@ async def _get_material_safety_reorder(
             if inv.get("reorder_point") is not None:
                 reorder = float(inv.get("reorder_point", 0))
 
-    # 3. 从本次计算的 computation_params 覆盖
     if computation_params:
         if "safety_stock" in computation_params:
             safety = float(computation_params.get("safety_stock", safety))
@@ -226,40 +155,55 @@ class DemandComputationService:
         Returns:
             DemandComputationResponse: 创建的计算响应
         """
-        async with in_transaction():
-            # 解析需求列表（支持 demand_id 或 demand_ids）
-            demand_id_list = (
-                computation_data.demand_ids
-                if computation_data.demand_ids
-                else ([computation_data.demand_id] if computation_data.demand_id else [])
-            )
-            if not demand_id_list:
-                raise BusinessLogicError("必须提供 demand_id 或 demand_ids")
+        # 解析需求列表（支持 demand_id 或 demand_ids）
+        demand_id_list = (
+            computation_data.demand_ids
+            if computation_data.demand_ids
+            else ([computation_data.demand_id] if computation_data.demand_id else [])
+        )
+        if not demand_id_list:
+            raise BusinessLogicError("必须提供 demand_id 或 demand_ids")
 
-            # 验证需求存在且已审核
-            demands = []
+        # 先只读校验 + 生成编码，避免编码服务（CodeSequence 等）与 Demand 更新同一大事务内长时间持锁
+        demands_preview: List[Demand] = []
+        for did in demand_id_list:
+            d = await Demand.get_or_none(tenant_id=tenant_id, id=did, deleted_at__isnull=True)
+            if not d:
+                raise NotFoundError(f"需求不存在: {did}")
+            if d.status != DemandStatus.AUDITED or d.review_status != ReviewStatus.APPROVED:
+                raise BusinessLogicError(
+                    f"只能对已审核通过的需求进行计算，需求 {d.demand_code} 状态: {d.status}"
+                )
+            demands_preview.append(d)
+
+        modes = {getattr(d, "business_mode", None) for d in demands_preview}
+        if "MTO" in modes:
+            merged_business_mode = "MTO"
+        elif "ATO" in modes:
+            merged_business_mode = "ATO"
+        else:
+            merged_business_mode = "MTS"
+        persist_computation_type = "MRP"
+
+        computation_code = await self._generate_computation_code(tenant_id, persist_computation_type)
+
+        async with in_transaction():
+            # 事务内再取一次需求，避免与校验之间状态变化；并保持 demand_id_list 顺序
+            demands: List[Demand] = []
             for did in demand_id_list:
-                d = await Demand.get_or_none(tenant_id=tenant_id, id=did)
+                d = await Demand.get_or_none(tenant_id=tenant_id, id=did, deleted_at__isnull=True)
                 if not d:
                     raise NotFoundError(f"需求不存在: {did}")
                 if d.status != DemandStatus.AUDITED or d.review_status != ReviewStatus.APPROVED:
-                    raise BusinessLogicError(f"只能对已审核通过的需求进行计算，需求 {d.demand_code} 状态: {d.status}")
+                    raise BusinessLogicError(
+                        f"只能对已审核通过的需求进行计算，需求 {d.demand_code} 状态: {d.status}"
+                    )
                 demands.append(d)
 
-            # 使用第一个需求作为主需求（向后兼容）
             demand = demands[0]
-            demand_codes = ",".join(d.demand_code for d in demands[:3])
+            demand_codes = ",".join(x.demand_code for x in demands[:3])
             if len(demands) > 3:
                 demand_codes += f"等{len(demands)}个"
-
-            # 业务模式：多需求时任一为 MTO 则整体为 MTO（与下推工单语义一致）
-            merged_business_mode = (
-                "MTO" if any(getattr(d, "business_mode", None) == "MTO" for d in demands) else "MTS"
-            )
-            # 对外统一为 MRP；MTS/MTO 由 business_mode 表达
-            persist_computation_type = "MRP"
-
-            computation_code = await self._generate_computation_code(tenant_id, persist_computation_type)
 
             computation = await DemandComputation.create(
                 tenant_id=tenant_id,
@@ -277,7 +221,7 @@ class DemandComputationService:
                 created_by=created_by,
             )
             
-            # 创建计算结果明细
+            # 2. 创建需求计算结果明细 (若创建时带了已计算好的明细)
             items = []
             for item_data in computation_data.items or []:
                 item = await DemandComputationItem.create(
@@ -286,7 +230,44 @@ class DemandComputationService:
                     **item_data.model_dump()
                 )
                 items.append(item)
-            
+
+            # 3. 更新需求状态并建立关联
+            from apps.kuaizhizao.models.document_relation import DocumentRelation
+            from apps.kuaizhizao.services.demand_service import DemandService
+
+            # 3.1 批量更新下推标记 (确保所有参与工作的需求都被标记)
+            await Demand.filter(tenant_id=tenant_id, id__in=demand_id_list).update(
+                pushed_to_computation=True,
+                computation_id=computation.id,
+                computation_code=computation_code,
+                updated_by=created_by,
+                updated_at=datetime.now()
+            )
+
+            demand_svc = DemandService()
+            for d in demands:
+                await demand_svc.sync_upstream_planning_on_push(
+                    tenant_id, d, computation.id, computation_code
+                )
+
+                # 建立单据关联记录（需求 -> 需求计算）
+                await DocumentRelation.get_or_create(
+                    tenant_id=tenant_id,
+                    source_type="demand",
+                    source_id=d.id,
+                    target_type="demand_computation",
+                    target_id=computation.id,
+                    defaults={
+                        "relation_type": "source",
+                        "relation_mode": "push",
+                        "relation_desc": f"下推到需求计算 {computation_code}",
+                        "source_code": d.demand_code,
+                        "target_code": computation_code,
+                        "demand_id": d.id,
+                        "created_by": created_by,
+                    },
+                )
+
             return await self._build_computation_response(computation, items)
     
     async def _generate_computation_code(
@@ -1259,9 +1240,7 @@ class DemandComputationService:
                 warehouse_id=None,
             )
             safety_stock, reorder_point = await _get_material_safety_reorder(
-                tenant_id=tenant_id,
                 material=material,
-                material_id=material_id,
                 computation_params=computation_params,
             )
             _, net_requirement = _compute_supply_and_net(
@@ -1462,14 +1441,18 @@ class DemandComputationService:
                 target_id=computation_id
             ).delete()
 
-            # 更新关联需求的 pushed_to_computation 状态
+            # 更新关联需求的 pushed_to_computation 状态并同步上游
             for rel_demand_id in demand_ids_in_comp:
-                await Demand.filter(tenant_id=tenant_id, id=rel_demand_id).update(
-                    pushed_to_computation=False,
-                    computation_id=None,
-                    computation_code=None,
-                    updated_at=datetime.now()
-                )
+                d_obj = await Demand.get_or_none(tenant_id=tenant_id, id=rel_demand_id)
+                if d_obj:
+                    await Demand.filter(tenant_id=tenant_id, id=rel_demand_id).update(
+                        pushed_to_computation=False,
+                        computation_id=None,
+                        computation_code=None,
+                        updated_at=datetime.now()
+                    )
+                    # 同步上游（销售订单/销售预测）
+                    await demand_svc.sync_upstream_planning_on_withdraw(tenant_id, d_obj)
 
             # 删除需求计算主记录
             await DemandComputation.filter(tenant_id=tenant_id, id=computation_id).delete()
@@ -2252,7 +2235,9 @@ class DemandComputationService:
             work_order_service = WorkOrderService()
             
             # 确定生产模式
-            production_mode = "MTO" if computation.business_mode == "MTO" else "MTS"
+            production_mode = (
+                "MTO" if computation.business_mode in ("MTO", "ATO") else "MTS"
+            )
             
             # MTO 时解析销售订单ID：工单表外键指向 sales_orders，需用需求的 source_id（销售订单ID），而非 demand_id（需求ID）
             sales_order_id = None

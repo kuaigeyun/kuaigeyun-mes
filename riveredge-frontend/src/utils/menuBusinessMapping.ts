@@ -20,7 +20,6 @@ const PATH_SEGMENT_TO_BUSINESS: Record<string, MenuBusinessMeta> = {
   'demand-computation': { module: 'demand' },
   'production-plans': { node: 'production_plan', module: 'demand' },
   'scheduling': { module: 'production' },
-  'computation-config': { module: 'demand' },
   'computation-history': { module: 'demand' },
   // 销售管理
   'quotations': { node: 'quotation', module: 'sales' },

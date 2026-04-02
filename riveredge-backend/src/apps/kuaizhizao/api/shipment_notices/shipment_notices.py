@@ -171,3 +171,22 @@ async def notify_warehouse(
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
     except BusinessLogicError as e:
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/{notice_id}/withdraw", response_model=ShipmentNoticeResponse, summary="撤回通知")
+async def withdraw_shipment_notice(
+    notice_id: int = Path(..., description="通知单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """撤回通知（已通知 -> 待发货）"""
+    try:
+        return await shipment_notice_service.withdraw_notice(
+            tenant_id=tenant_id,
+            notice_id=notice_id,
+            withdrawn_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))

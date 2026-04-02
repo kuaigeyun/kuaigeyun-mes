@@ -25,6 +25,7 @@ import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../s
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { getOtherOutboundLifecycle } from '../../../utils/otherOutboundLifecycle';
+import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
 import { useTranslation } from 'react-i18next';
 
@@ -134,8 +135,7 @@ const OtherOutboundPage: React.FC = () => {
       render: (_, record) => {
         const lifecycle = getOtherOutboundLifecycle(record);
         const stageName = lifecycle.stageName ?? record.status ?? '待出库';
-        const colorMap: Record<string, string> = { 待出库: 'default', 已出库: 'success', 已取消: 'error' };
-        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
+        return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>;
       },
     },
     { title: '出库人', dataIndex: 'deliverer_name', width: 100 },

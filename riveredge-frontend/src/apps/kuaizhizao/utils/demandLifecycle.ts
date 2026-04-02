@@ -9,7 +9,7 @@ import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';
 
 /** 需求专用阶段 key 集合（与后端 document_lifecycle_service.DEMAND_MAIN_STAGES 一致） */
-const DEMAND_STAGE_KEYS = new Set(['pending_review', 'rejected', 'audited', 'pushed']);
+const DEMAND_STAGE_KEYS = new Set(['draft', 'pending_review', 'rejected', 'audited', 'pushed']);
 
 /** 判断是否为需求专用 lifecycle（4 阶段），避免误用销售订单的 7 阶段 */
 function isDemandLifecycle(backend: BackendLifecycle): boolean {

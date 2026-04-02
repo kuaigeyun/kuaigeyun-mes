@@ -21,6 +21,7 @@ import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-sele
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { batchingOrderApi } from '../../../services/batching-order';
 import { getBatchingOrderStageName, getBatchingOrderLifecycle } from '../../../utils/batchingOrderLifecycle';
+import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import { workOrderApi } from '../../../services/production';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
@@ -219,13 +220,7 @@ const BatchingCenterPage: React.FC = () => {
       width: 100,
       render: (_, record) => {
         const stageName = getBatchingOrderStageName(record.status);
-        const colorMap: Record<string, string> = {
-          草稿: 'default',
-          配料中: 'processing',
-          已完成: 'success',
-          已取消: 'error',
-        };
-        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
+        return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>;
       },
     },
     {

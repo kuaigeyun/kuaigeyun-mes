@@ -18,6 +18,7 @@ import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG, type StatCard } from
 import { SimpleSparkline } from '../../../../../components';
 import { reportingApi, workOrderApi, materialBindingApi, getReportingStatistics } from '../../../services/production';
 import { getReportingLifecycle } from '../../../utils/reportingLifecycle';
+import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import { materialApi } from '../../../../master-data/services/material';
 import { sopApi } from '../../../../master-data/services/process';
 import { getUserInfo } from '../../../../../utils/auth';
@@ -1278,8 +1279,7 @@ const ReportingPage: React.FC = () => {
       render: (_, record) => {
         const lifecycle = getReportingLifecycle(record);
         const stageName = lifecycle.stageName ?? record.status ?? '待审核';
-        const colorMap: Record<string, string> = { 待审核: 'default', 已审核: 'success', 已驳回: 'error' };
-        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
+        return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>;
       },
     },
     {

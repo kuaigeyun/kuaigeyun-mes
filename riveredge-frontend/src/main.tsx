@@ -10,6 +10,7 @@ import './global.less'
 // ⚠️ 关键修复：同步导入i18n配置，确保应用启动前语言包已加载
 // 这解决了菜单标题显示英文的问题
 import './config/i18n'
+import './config/dayjs'
 
 // 性能监控：延后加载，不阻塞首屏（requestIdleCallback 后动态 import）
 if (typeof window !== 'undefined') {

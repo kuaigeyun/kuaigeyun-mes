@@ -7,12 +7,12 @@
  * Date: 2026-02-27
  */
 
-import { ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { Card, theme } from 'antd';
 
 export interface DetailDrawerSectionProps {
-  /** 区块标题 */
-  title: string;
+  /** 区块标题（可为字符串或自定义节点，如标题 + 辅助说明） */
+  title: ReactNode;
   /** 区块内容 */
   children: ReactNode;
   /** 是否显示（默认 true） */

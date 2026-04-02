@@ -41,6 +41,15 @@ class SalesForecast(BaseModel):
     review_remarks = fields.TextField(null=True, description="审核备注")
 
     notes = fields.TextField(null=True, description="备注")
+
+    # 计划/MRP 维度：与关联 Demand 下推需求计算同进同退（不改预测主状态机）
+    planning_pushed_to_computation = fields.BooleanField(
+        default=False, description="计划侧已下推需求计算"
+    )
+    planning_computation_id = fields.IntField(null=True, description="关联需求计算ID")
+    planning_computation_code = fields.CharField(max_length=50, null=True, description="关联需求计算编码")
+    planning_computation_pushed_at = fields.DatetimeField(null=True, description="下推需求计算时间")
+
     is_active = fields.BooleanField(default=True, description="是否有效")
     created_by = fields.IntField(null=True, description="创建人ID")
     updated_by = fields.IntField(null=True, description="更新人ID")

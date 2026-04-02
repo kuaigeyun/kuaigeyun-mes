@@ -21,7 +21,7 @@ export interface DemandComputation {
   demand_ids?: number[];  // 多需求合并支持
   demand_code?: string;
   demand_type?: 'sales_forecast' | 'sales_order';
-  business_mode?: 'MTS' | 'MTO';
+  business_mode?: 'MTS' | 'MTO' | 'ATO';
   /** 恒为 MRP；业务模式见 business_mode */
   computation_type?: 'MRP';
   computation_params?: Record<string, any>;
@@ -91,7 +91,7 @@ export interface DemandComputationListParams {
   /** 兼容后端筛选：MRP≈MTS、LRP≈MTO（列表请优先用 business_mode） */
   computation_type?: 'MRP' | 'LRP';
   computation_status?: string;
-  business_mode?: 'MTS' | 'MTO';
+  business_mode?: 'MTS' | 'MTO' | 'ATO';
   start_date?: string;
   end_date?: string;
 }

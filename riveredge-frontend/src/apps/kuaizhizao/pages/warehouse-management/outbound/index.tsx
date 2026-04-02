@@ -16,6 +16,7 @@ import DocumentTrackingPanel from '../../../../../components/document-tracking-p
 import CodeField from '../../../../../components/code-field';
 import { warehouseApi, workOrderApi } from '../../../services/production';
 import { getOutboundLifecycle } from '../../../utils/outboundLifecycle';
+import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import { listSalesOrders } from '../../../services/sales-order';
 import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
@@ -305,17 +306,7 @@ const OutboundPage: React.FC = () => {
       render: (_, record) => {
         const lifecycle = getOutboundLifecycle(record);
         const stageName = lifecycle.stageName ?? record.status ?? '草稿';
-        const colorMap: Record<string, string> = {
-          草稿: 'default',
-          待领料: 'processing',
-          待出库: 'processing',
-          已确认: 'processing',
-          已领料: 'success',
-          已出库: 'success',
-          已完成: 'success',
-          已取消: 'error',
-        };
-        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
+        return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>;
       },
     },
     {

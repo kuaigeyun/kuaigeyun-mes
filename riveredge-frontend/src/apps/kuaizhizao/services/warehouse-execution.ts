@@ -153,6 +153,7 @@ export const warehouseApi = {
     delete: async (id: string) => apiRequest(`/apps/kuaizhizao/sales-returns/${id}`, { method: 'DELETE' }),
     get: async (id: string) => apiRequest(`/apps/kuaizhizao/sales-returns/${id}`, { method: 'GET' }),
     confirm: async (id: string) => apiRequest(`/apps/kuaizhizao/sales-returns/${id}/confirm`, { method: 'POST' }),
+    withdraw: async (id: string) => apiRequest(`/apps/kuaizhizao/sales-returns/${id}/withdraw`, { method: 'POST' }),
     pullFromSalesOrder: async (data: {
       sales_order_id: number;
       warehouse_id: number;

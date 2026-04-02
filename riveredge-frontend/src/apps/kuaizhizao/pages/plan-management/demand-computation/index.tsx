@@ -11,7 +11,7 @@
 
 import React, { useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import {
   ActionType,
   ProColumns,
@@ -38,7 +38,6 @@ import {
   Timeline,
   Badge,
   Empty,
-  Typography,
 } from 'antd'
 import {
   PlayCircleOutlined,
@@ -46,7 +45,6 @@ import {
   ReloadOutlined,
   ArrowDownOutlined,
   DeleteOutlined,
-  SettingOutlined,
   WarningOutlined,
   SyncOutlined,
   CheckCircleOutlined,
@@ -84,11 +82,15 @@ import {
   type PushRecordItem,
 } from '../../../services/demand-computation'
 import { getDemandComputationLifecycle } from '../../../utils/demandComputationLifecycle'
+import { getDemandBusinessModeLabel, getDemandBusinessModeTagColor } from '../../../utils/businessMode'
+import { getDemandTypeLabel, getDemandTypeTagProps } from '../../../utils/demandType'
+import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag'
 import { listDemands, getDemand, Demand, DemandStatus, ReviewStatus } from '../../../services/demand'
 import { getBusinessConfig } from '../../../../../services/businessConfig'
 import { bomApi } from '../../../../master-data/services/material'
 import { usePageMetrics } from '../../../../../hooks/usePageMetrics'
 import ComputationHistoryTab from './ComputationHistoryTab'
+import { formatDateTimeBySiteSetting } from '../../../../../utils/format'
 
 const { Panel } = Collapse
 
@@ -244,7 +246,6 @@ const DemandComputationPage: React.FC = () => {
   const { message: messageApi, modal: modalApi } = App.useApp()
   const queryClient = useQueryClient()
   const location = useLocation()
-  const navigate = useNavigate()
   const actionRef = useRef<ActionType>(null)
   const formRef = useRef<any>(null)
 
@@ -741,15 +742,16 @@ const DemandComputationPage: React.FC = () => {
       width: 110,
       valueType: 'select',
       valueEnum: {
-        sales_forecast: { text: '销售预测' },
-        sales_order: { text: '销售订单' },
+        sales_forecast: { text: '销售预测', status: 'Processing' },
+        sales_order: { text: '销售订单', status: 'Success' },
+        demand_plan: { text: '需求计划', status: 'Warning' },
       },
-      hideInSearch: true,
-      render: (_, record) => {
-        const t = record.demand_type
-        const label = t === 'sales_order' ? '销售订单' : t === 'sales_forecast' ? '销售预测' : t || '-'
-        return <Tag color={t === 'sales_order' ? 'green' : 'blue'}>{label}</Tag>
-      },
+      hideInSearch: false,
+      render: (_, record) => (
+        <Tag {...getDemandTypeTagProps(record.demand_type)}>
+          {getDemandTypeLabel(record.demand_type)}
+        </Tag>
+      ),
     },
     {
       title: '生命周期',
@@ -766,13 +768,7 @@ const DemandComputationPage: React.FC = () => {
       render: (_, record) => {
         const lifecycle = getDemandComputationLifecycle(record)
         const stageName = lifecycle.stageName ?? record.computation_status ?? '进行中'
-        const colorMap: Record<string, string> = {
-          进行中: 'processing',
-          计算中: 'processing',
-          完成: 'success',
-          失败: 'error',
-        }
-        return <Tag color={colorMap[stageName] || 'default'}>{stageName}</Tag>
+        return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>
       },
     },
     {
@@ -781,13 +777,14 @@ const DemandComputationPage: React.FC = () => {
       width: 100,
       valueType: 'select',
       valueEnum: {
-        MTS: { text: '按库存生产' },
-        MTO: { text: '按订单生产' },
+        MTS: { text: '按库存生产', status: 'Processing' },
+        MTO: { text: '按订单生产', status: 'Success' },
+        ATO: { text: '按订单组装 (ATO)', status: 'Warning' },
       },
       hideInSearch: false,
       render: (_, record) => (
-        <Tag color={record.business_mode === 'MTS' ? 'cyan' : 'purple'}>
-          {record.business_mode === 'MTS' ? '按库存生产' : '按订单生产'}
+        <Tag color={getDemandBusinessModeTagColor(record.business_mode)}>
+          {getDemandBusinessModeLabel(record.business_mode)}
         </Tag>
       ),
     },
@@ -795,18 +792,16 @@ const DemandComputationPage: React.FC = () => {
       title: '开始时间',
       dataIndex: 'computation_start_time',
       width: 160,
-      valueType: 'dateTime',
       hideInSearch: false,
-      // search: false explicitly handled if needed, or remove search if no special config
-      search: undefined,
+      render: (_, record) => formatDateTimeBySiteSetting(record.computation_start_time),
     },
     {
       title: '结束时间',
       dataIndex: 'computation_end_time',
       width: 160,
-      valueType: 'dateTime',
       hideInTable: false,
       hideInSearch: true,
+      render: (_, record) => formatDateTimeBySiteSetting(record.computation_end_time),
     },
     {
       title: '操作',
@@ -963,16 +958,6 @@ const DemandComputationPage: React.FC = () => {
         showCreateButton={true}
         createButtonText="新建需求计算"
         onCreate={handleCreate}
-        toolBarActions={[
-          <Button
-            key="computation-config"
-            type="default"
-            icon={<SettingOutlined />}
-            onClick={() => navigate('/apps/kuaizhizao/plan-management/computation-config')}
-          >
-            计算配置
-          </Button>,
-        ]}
       />
 
       {/* 新建计算Modal */}
@@ -1035,7 +1020,7 @@ const DemandComputationPage: React.FC = () => {
             label="选择需求（可多选）"
             mode="multiple"
             options={demandList.map(d => ({
-              label: `${d.demand_code} - ${d.demand_name || ''} (${d.business_mode === 'MTS' ? '按库存' : '按订单'})`,
+              label: `${d.demand_code} - ${d.demand_name || ''} (${getDemandBusinessModeLabel(d.business_mode)})`,
               value: d.id,
             }))}
             fieldProps={{
@@ -1043,7 +1028,7 @@ const DemandComputationPage: React.FC = () => {
               placeholder: '支持多选需求合并计算',
             }}
             rules={[{ required: true, message: '请至少选择一个需求' }]}
-            tooltip="多需求合并时，相同物料的需求数量会自动汇总；任一为按订单(MTO)时，计算头业务模式为 MTO"
+            tooltip="多需求合并时，相同物料的需求数量会自动汇总；含 MTO 时计算头为 MTO，否则含 ATO 时为 ATO，否则为 MTS"
           />
           <ProForm.Item
             name="computation_params"
@@ -1179,7 +1164,7 @@ const DemandComputationPage: React.FC = () => {
                   {
                     title: '业务模式',
                     dataIndex: 'business_mode',
-                    render: (dom: any) => (dom === 'MTS' ? '按库存生产' : '按订单生产'),
+                    render: (dom: any) => getDemandBusinessModeLabel(dom),
                   },
                 ]}
               />
@@ -1346,7 +1331,7 @@ const DemandComputationPage: React.FC = () => {
                         {
                           title: '业务模式',
                           dataIndex: 'business_mode',
-                          render: (t: any) => (t === 'MTS' ? '按库存生产' : '按订单生产'),
+                          render: (t: any) => getDemandBusinessModeLabel(t),
                         },
                         { title: '计算状态', dataIndex: 'computation_status' },
                         { title: '开始时间', dataIndex: 'computation_start_time', valueType: 'dateTime' },
@@ -1750,6 +1735,7 @@ const DemandComputationPage: React.FC = () => {
           />
         )}
       </Drawer>
+
       </>
   )
 

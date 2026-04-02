@@ -253,7 +253,6 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.assembly_material_binding",  # 装配物料绑定模型
                 "apps.kuaizhizao.models.backflush_record",  # 物料倒冲记录模型
                 "apps.kuaizhizao.models.batching_order",  # 备料单模型
-                "apps.kuaizhizao.models.computation_config",  # 需求计算参数配置模型
                 "apps.kuaizhizao.models.customer_material_registration",  # 客户来料登记模型
                 "apps.kuaizhizao.models.delivery_delay_exception",  # 延期异常模型
                 "apps.kuaizhizao.models.delivery_notice",  # 送货通知模型

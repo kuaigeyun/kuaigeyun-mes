@@ -35,6 +35,11 @@ export interface SalesForecast {
   items?: SalesForecastItemCreatePayload[];
   /** 本次操作是否已同步至关联需求（更新/审核接口返回） */
   demand_synced?: boolean;
+  /** 与关联需求下推需求计算同进同退（列表/详情接口） */
+  planning_pushed_to_computation?: boolean;
+  planning_computation_id?: number;
+  planning_computation_code?: string;
+  lifecycle?: Record<string, unknown>;
 }
 
 /** 销售预测明细创建/更新单条 payload（与后端 SalesForecastItemCreate 一致） */

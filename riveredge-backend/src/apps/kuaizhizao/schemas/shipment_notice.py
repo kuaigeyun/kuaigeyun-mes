@@ -51,6 +51,7 @@ class ShipmentNoticeResponse(ShipmentNoticeBase):
     sales_delivery_code: Optional[str] = Field(None, max_length=50, description="销售出库单编码")
     total_quantity: float = Field(0, description="总数量")
     total_amount: float = Field(0, description="总金额")
+    lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycle/Stepper 展示）")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
 

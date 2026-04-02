@@ -127,7 +127,6 @@ from .state_transition import StateTransitionRule, StateTransitionLog
 
 # 单据关联逻辑
 from .document_relation import DocumentRelation
-from .computation_config import ComputationConfig
 from .scheduling_config import SchedulingConfig
 
 __all__ = [
@@ -264,6 +263,5 @@ __all__ = [
     
     # 单据关联
     'DocumentRelation',
-    'ComputationConfig',
     'SchedulingConfig',
 ]

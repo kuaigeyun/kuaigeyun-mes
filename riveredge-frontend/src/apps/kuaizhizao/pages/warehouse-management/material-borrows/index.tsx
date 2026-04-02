@@ -22,6 +22,7 @@ import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-mo
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { getMaterialBorrowLifecycle } from '../../../utils/materialBorrowLifecycle';
+import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
 import { useTranslation } from 'react-i18next';
 
@@ -98,8 +99,7 @@ const MaterialBorrowsPage: React.FC = () => {
       render: (_, record) => {
         const lifecycle = getMaterialBorrowLifecycle(record);
         const stageName = lifecycle.stageName ?? record.status ?? '待借出';
-        const colorMap: Record<string, string> = { 待借出: 'default', 已借出: 'success', 已取消: 'error' };
-        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
+        return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>;
       },
     },
     { title: '预计归还日期', dataIndex: 'expected_return_date', valueType: 'date', width: 120 },

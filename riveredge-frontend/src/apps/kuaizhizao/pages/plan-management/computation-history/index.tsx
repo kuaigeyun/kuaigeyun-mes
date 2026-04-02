@@ -20,6 +20,7 @@ import {
   DemandComputation,
   ComputationCompareResult
 } from '../../../services/demand-computation';
+import { getDemandBusinessModeLabel, getDemandBusinessModeTagColor } from '../../../utils/businessMode';
 
 const ComputationHistoryPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
@@ -113,10 +114,10 @@ const ComputationHistoryPage: React.FC = () => {
       title: '业务模式',
       dataIndex: 'business_mode',
       width: 110,
-      valueEnum: { MTS: { text: 'MTS' }, MTO: { text: 'MTO' } },
+      valueEnum: { MTS: { text: 'MTS' }, MTO: { text: 'MTO' }, ATO: { text: 'ATO' } },
       render: (_, record) => (
-        <Tag color={record.business_mode === 'MTS' ? 'cyan' : 'purple'}>
-          {record.business_mode === 'MTS' ? '按库存(MTS)' : '按订单(MTO)'}
+        <Tag color={getDemandBusinessModeTagColor(record.business_mode)}>
+          {getDemandBusinessModeLabel(record.business_mode)}
         </Tag>
       ),
     },
