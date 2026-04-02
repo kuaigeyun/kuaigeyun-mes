@@ -385,7 +385,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
 
     async def list_production_pickings(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[ProductionPickingListResponse]:
         """获取生产领料单列表"""
-        query = ProductionPicking.filter(tenant_id=tenant_id)
+        query = ProductionPicking.filter(tenant_id=tenant_id, deleted_at__isnull=True)
 
         # 应用过滤条件
         if filters.get('status'):
@@ -1118,7 +1118,7 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
 
     async def list_finished_goods_receipts(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[FinishedGoodsReceiptResponse]:
         """获取成品入库单列表"""
-        query = FinishedGoodsReceipt.filter(tenant_id=tenant_id)
+        query = FinishedGoodsReceipt.filter(tenant_id=tenant_id, deleted_at__isnull=True)
 
         # 应用过滤条件
         if filters.get('status'):
@@ -1641,7 +1641,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
 
     async def list_sales_deliveries(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[SalesDeliveryResponse]:
         """获取销售出库单列表"""
-        query = SalesDelivery.filter(tenant_id=tenant_id)
+        query = SalesDelivery.filter(tenant_id=tenant_id, deleted_at__isnull=True)
 
         # 应用过滤条件
         if filters.get('status'):
@@ -1651,6 +1651,279 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
 
         deliveries = await query.offset(skip).limit(limit).order_by('-created_at')
         return [SalesDeliveryResponse.model_validate(delivery) for delivery in deliveries]
+
+    async def pull_from_sales_order(
+        self,
+        tenant_id: int,
+        sales_order_id: int,
+        created_by: int,
+        delivery_quantities: Optional[Dict[int, float]] = None,
+        warehouse_id: Optional[int] = None,
+        warehouse_name: Optional[str] = None
+    ) -> SalesDeliveryResponse:
+        """
+        从销售订单上拉生成销售出库单（销售出库单上拉功能）
+        
+        从销售订单上拉，自动生成销售出库单
+        
+        Args:
+            tenant_id: 租户ID
+            sales_order_id: 销售订单ID
+            created_by: 创建人ID
+            delivery_quantities: 出库数量字典 {item_id: quantity}，如果不提供则使用订单剩余数量
+            warehouse_id: 出库仓库ID（可选）
+            warehouse_name: 出库仓库名称（可选）
+            
+        Returns:
+            SalesDeliveryResponse: 创建的销售出库单信息
+            
+        Raises:
+            NotFoundError: 销售订单不存在
+            BusinessLogicError: 销售订单未审核或已全部出库
+        """
+        from apps.kuaizhizao.models.sales_order import SalesOrder
+        from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+        from apps.kuaizhizao.schemas.warehouse import SalesDeliveryItemCreate
+        from decimal import Decimal
+        
+        # 获取销售订单
+        sales_order = await SalesOrder.get_or_none(tenant_id=tenant_id, id=sales_order_id)
+        if not sales_order:
+            raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+        
+        # 检查订单状态（只有已审核或已确认的订单才能上拉生成出库单，兼容中英文状态）
+        audited_ok = ("已审核", "已确认", "AUDITED", "CONFIRMED")
+        if sales_order.status not in audited_ok:
+            raise BusinessLogicError("只有已审核或已确认的销售订单才能上拉生成销售出库单")
+        
+        # 获取订单明细
+        order_items = await SalesOrderItem.filter(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id
+        ).all()
+        
+        if not order_items:
+            raise BusinessLogicError("销售订单没有明细，无法生成销售出库单")
+        
+        # 如果没有指定仓库，需要从订单或其他地方获取默认仓库
+        if not warehouse_id:
+            # TODO: 从配置或其他地方获取默认仓库
+            raise ValidationError("必须指定出库仓库")
+        
+        # 如果没有指定仓库名称，尝试从仓库服务获取
+        if not warehouse_name:
+            # TODO: 从仓库服务获取仓库名称
+            warehouse_name = f"仓库{warehouse_id}"
+        
+        # 准备出库单明细
+        delivery_items = []
+        total_quantity = Decimal("0")
+        total_amount = Decimal("0")
+        
+        for item in order_items:
+            # 计算出库数量
+            if delivery_quantities and item.id in delivery_quantities:
+                delivery_qty = Decimal(str(delivery_quantities[item.id]))
+            else:
+                # 使用剩余数量
+                delivery_qty = item.remaining_quantity or item.order_quantity
+            
+            if delivery_qty <= 0:
+                continue  # 跳过数量为0或负数的情况
+            
+            # 检查是否超出剩余数量
+            if delivery_qty > (item.remaining_quantity or item.order_quantity):
+                raise BusinessLogicError(f"物料 {item.material_code} 的出库数量 {delivery_qty} 超过剩余数量 {item.remaining_quantity}")
+            
+            # 计算金额
+            item_total_amount = delivery_qty * item.unit_price
+            
+            delivery_items.append(
+                SalesDeliveryItemCreate(
+                    material_id=item.material_id,
+                    material_code=item.material_code,
+                    material_name=item.material_name,
+                    material_spec=item.material_spec,
+                    material_unit=item.material_unit,
+                    delivery_quantity=float(delivery_qty),
+                    unit_price=float(item.unit_price),
+                    total_amount=float(item_total_amount),
+                    demand_id=None,  # 可以后续关联到统一需求表
+                    demand_item_id=None,  # 可以后续关联到需求明细
+                )
+            )
+            
+            total_quantity += delivery_qty
+            total_amount += item_total_amount
+        
+        if not delivery_items:
+            raise BusinessLogicError("没有可出库的物料")
+        
+        # 创建销售出库单
+        delivery_data = SalesDeliveryCreate(
+            sales_order_id=sales_order_id,
+            sales_order_code=sales_order.order_code,
+            demand_type="sales_order",  # 销售出库与需求关联功能增强
+            customer_id=sales_order.customer_id,
+            customer_name=sales_order.customer_name,
+            warehouse_id=warehouse_id,
+            warehouse_name=warehouse_name,
+            status="待出库",
+            total_quantity=float(total_quantity),
+            total_amount=float(total_amount),
+            shipping_address=sales_order.shipping_address,
+            shipping_method=sales_order.shipping_method,
+            notes=f"从销售订单 {sales_order.order_code} 上拉生成",
+            items=delivery_items
+        )
+        
+        # 创建出库单
+        delivery = await self.create_sales_delivery(
+            tenant_id=tenant_id,
+            delivery_data=delivery_data,
+            created_by=created_by
+        )
+        
+        # TODO: 更新销售订单明细的已交货数量和剩余数量
+        # 注意：这里暂时不更新，等确认出库后再更新
+        
+        return delivery
+
+    async def pull_from_sales_forecast(
+        self,
+        tenant_id: int,
+        sales_forecast_id: int,
+        created_by: int,
+        delivery_quantities: Optional[Dict[int, float]] = None,
+        warehouse_id: Optional[int] = None,
+        warehouse_name: Optional[str] = None
+    ) -> SalesDeliveryResponse:
+        """
+        从销售预测上拉生成销售出库单（销售出库单上拉功能）
+        
+        从销售预测上拉，自动生成销售出库单（MTS模式）
+        
+        Args:
+            tenant_id: 租户ID
+            sales_forecast_id: 销售预测ID
+            created_by: 创建人ID
+            delivery_quantities: 出库数量字典 {item_id: quantity}，如果不提供则使用预测数量
+            warehouse_id: 出库仓库ID（可选）
+            warehouse_name: 出库仓库名称（可选）
+            
+        Returns:
+            SalesDeliveryResponse: 创建的销售出库单信息
+            
+        Raises:
+            NotFoundError: 销售预测不存在
+            BusinessLogicError: 销售预测未审核
+        """
+        from apps.kuaizhizao.models.sales_forecast import SalesForecast
+        from apps.kuaizhizao.models.sales_forecast_item import SalesForecastItem
+        from apps.kuaizhizao.schemas.warehouse import SalesDeliveryItemCreate
+        from decimal import Decimal
+        
+        # 获取销售预测
+        sales_forecast = await SalesForecast.get_or_none(tenant_id=tenant_id, id=sales_forecast_id)
+        if not sales_forecast:
+            raise NotFoundError(f"销售预测不存在: {sales_forecast_id}")
+        
+        # 检查预测状态（只有已审核的预测才能上拉生成出库单）
+        if sales_forecast.status != "已审核":
+            raise BusinessLogicError("只有已审核的销售预测才能上拉生成销售出库单")
+        
+        # 获取预测明细
+        forecast_items = await SalesForecastItem.filter(
+            tenant_id=tenant_id,
+            forecast_id=sales_forecast_id
+        ).all()
+        
+        if not forecast_items:
+            raise BusinessLogicError("销售预测没有明细，无法生成销售出库单")
+        
+        # 如果没有指定仓库，需要从订单或其他地方获取默认仓库
+        if not warehouse_id:
+            # TODO: 从配置或其他地方获取默认仓库
+            raise ValidationError("必须指定出库仓库")
+        
+        # 如果没有指定仓库名称，尝试从仓库服务获取
+        if not warehouse_name:
+            # TODO: 从仓库服务获取仓库名称
+            warehouse_name = f"仓库{warehouse_id}"
+        
+        # 准备出库单明细
+        delivery_items = []
+        total_quantity = Decimal("0")
+        total_amount = Decimal("0")
+        
+        # MTS模式下，没有客户信息，需要从其他配置获取默认客户或设置为空
+        # 这里暂时使用一个默认客户ID（实际应该从配置获取）
+        default_customer_id = None  # TODO: 从配置获取默认客户
+        default_customer_name = "MTS默认客户"  # TODO: 从配置获取默认客户名称
+        
+        for item in forecast_items:
+            # 计算出库数量
+            if delivery_quantities and item.id in delivery_quantities:
+                delivery_qty = Decimal(str(delivery_quantities[item.id]))
+            else:
+                # 使用预测数量
+                delivery_qty = item.forecast_quantity
+            
+            if delivery_qty <= 0:
+                continue  # 跳过数量为0或负数的情况
+            
+            # MTS模式下，没有单价，需要从物料默认价格获取
+            # TODO: 从物料默认价格获取单价
+            unit_price = Decimal("0")  # 默认价格为0
+            
+            # 计算金额
+            item_total_amount = delivery_qty * unit_price
+            
+            delivery_items.append(
+                SalesDeliveryItemCreate(
+                    material_id=item.material_id,
+                    material_code=item.material_code,
+                    material_name=item.material_name,
+                    material_spec=item.material_spec,
+                    material_unit=item.material_unit,
+                    delivery_quantity=float(delivery_qty),
+                    unit_price=float(unit_price),
+                    total_amount=float(item_total_amount),
+                    demand_id=None,  # 可以后续关联到统一需求表
+                    demand_item_id=None,  # 可以后续关联到需求明细
+                )
+            )
+            
+            total_quantity += delivery_qty
+            total_amount += item_total_amount
+        
+        if not delivery_items:
+            raise BusinessLogicError("没有可出库的物料")
+        
+        # 创建销售出库单
+        delivery_data = SalesDeliveryCreate(
+            sales_forecast_id=sales_forecast_id,
+            sales_forecast_code=sales_forecast.forecast_code,
+            demand_type="sales_forecast",  # 销售出库与需求关联功能增强
+            customer_id=default_customer_id or 0,
+            customer_name=default_customer_name,
+            warehouse_id=warehouse_id,
+            warehouse_name=warehouse_name,
+            status="待出库",
+            total_quantity=float(total_quantity),
+            total_amount=float(total_amount),
+            notes=f"从销售预测 {sales_forecast.forecast_code} 上拉生成",
+            items=delivery_items
+        )
+        
+        # 创建出库单
+        delivery = await self.create_sales_delivery(
+            tenant_id=tenant_id,
+            delivery_data=delivery_data,
+            created_by=created_by
+        )
+        
+        return delivery
 
     async def _consume_shipment_notice_reservation_after_delivery(
         self,
@@ -2463,7 +2736,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
 
     async def list_purchase_receipts(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[PurchaseReceiptResponse]:
         """获取采购入库单列表"""
-        query = PurchaseReceipt.filter(tenant_id=tenant_id)
+        query = PurchaseReceipt.filter(tenant_id=tenant_id, deleted_at__isnull=True)
 
         # 应用过滤条件
         if filters.get('status'):
@@ -2880,281 +3153,6 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 ])
         
         return file_path
-
-    async def pull_from_sales_order(
-        self,
-        tenant_id: int,
-        sales_order_id: int,
-        created_by: int,
-        delivery_quantities: Optional[Dict[int, float]] = None,
-        warehouse_id: Optional[int] = None,
-        warehouse_name: Optional[str] = None
-    ) -> SalesDeliveryResponse:
-        """
-        从销售订单上拉生成销售出库单（销售出库单上拉功能）
-        
-        从销售订单上拉，自动生成销售出库单
-        
-        Args:
-            tenant_id: 租户ID
-            sales_order_id: 销售订单ID
-            created_by: 创建人ID
-            delivery_quantities: 出库数量字典 {item_id: quantity}，如果不提供则使用订单剩余数量
-            warehouse_id: 出库仓库ID（可选）
-            warehouse_name: 出库仓库名称（可选）
-            
-        Returns:
-            SalesDeliveryResponse: 创建的销售出库单信息
-            
-        Raises:
-            NotFoundError: 销售订单不存在
-            BusinessLogicError: 销售订单未审核或已全部出库
-        """
-        from apps.kuaizhizao.models.sales_order import SalesOrder
-        from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
-        from apps.kuaizhizao.schemas.warehouse import SalesDeliveryItemCreate
-        from decimal import Decimal
-        
-        # 获取销售订单
-        sales_order = await SalesOrder.get_or_none(tenant_id=tenant_id, id=sales_order_id)
-        if not sales_order:
-            raise NotFoundError(f"销售订单不存在: {sales_order_id}")
-        
-        # 检查订单状态（只有已审核或已确认的订单才能上拉生成出库单，兼容中英文状态）
-        audited_ok = ("已审核", "已确认", "AUDITED", "CONFIRMED")
-        if sales_order.status not in audited_ok:
-            raise BusinessLogicError("只有已审核或已确认的销售订单才能上拉生成销售出库单")
-        
-        # 获取订单明细
-        order_items = await SalesOrderItem.filter(
-            tenant_id=tenant_id,
-            sales_order_id=sales_order_id
-        ).all()
-        
-        if not order_items:
-            raise BusinessLogicError("销售订单没有明细，无法生成销售出库单")
-        
-        # 如果没有指定仓库，需要从订单或其他地方获取默认仓库
-        if not warehouse_id:
-            # TODO: 从配置或其他地方获取默认仓库
-            raise ValidationError("必须指定出库仓库")
-        
-        # 如果没有指定仓库名称，尝试从仓库服务获取
-        if not warehouse_name:
-            # TODO: 从仓库服务获取仓库名称
-            warehouse_name = f"仓库{warehouse_id}"
-        
-        # 准备出库单明细
-        delivery_items = []
-        total_quantity = Decimal("0")
-        total_amount = Decimal("0")
-        
-        for item in order_items:
-            # 计算出库数量
-            if delivery_quantities and item.id in delivery_quantities:
-                delivery_qty = Decimal(str(delivery_quantities[item.id]))
-            else:
-                # 使用剩余数量
-                delivery_qty = item.remaining_quantity or item.order_quantity
-            
-            if delivery_qty <= 0:
-                continue  # 跳过数量为0或负数的情况
-            
-            # 检查是否超出剩余数量
-            if delivery_qty > (item.remaining_quantity or item.order_quantity):
-                raise BusinessLogicError(f"物料 {item.material_code} 的出库数量 {delivery_qty} 超过剩余数量 {item.remaining_quantity}")
-            
-            # 计算金额
-            item_total_amount = delivery_qty * item.unit_price
-            
-            delivery_items.append(
-                SalesDeliveryItemCreate(
-                    material_id=item.material_id,
-                    material_code=item.material_code,
-                    material_name=item.material_name,
-                    material_spec=item.material_spec,
-                    material_unit=item.material_unit,
-                    delivery_quantity=float(delivery_qty),
-                    unit_price=float(item.unit_price),
-                    total_amount=float(item_total_amount),
-                    demand_id=None,  # 可以后续关联到统一需求表
-                    demand_item_id=None,  # 可以后续关联到需求明细
-                )
-            )
-            
-            total_quantity += delivery_qty
-            total_amount += item_total_amount
-        
-        if not delivery_items:
-            raise BusinessLogicError("没有可出库的物料")
-        
-        # 创建销售出库单
-        delivery_data = SalesDeliveryCreate(
-            sales_order_id=sales_order_id,
-            sales_order_code=sales_order.order_code,
-            demand_type="sales_order",  # 销售出库与需求关联功能增强
-            customer_id=sales_order.customer_id,
-            customer_name=sales_order.customer_name,
-            warehouse_id=warehouse_id,
-            warehouse_name=warehouse_name,
-            status="待出库",
-            total_quantity=float(total_quantity),
-            total_amount=float(total_amount),
-            shipping_address=sales_order.shipping_address,
-            shipping_method=sales_order.shipping_method,
-            notes=f"从销售订单 {sales_order.order_code} 上拉生成",
-            items=delivery_items
-        )
-        
-        # 创建出库单
-        delivery = await self.create_sales_delivery(
-            tenant_id=tenant_id,
-            delivery_data=delivery_data,
-            created_by=created_by
-        )
-        
-        # TODO: 更新销售订单明细的已交货数量和剩余数量
-        # 注意：这里暂时不更新，等确认出库后再更新
-        
-        return delivery
-
-    async def pull_from_sales_forecast(
-        self,
-        tenant_id: int,
-        sales_forecast_id: int,
-        created_by: int,
-        delivery_quantities: Optional[Dict[int, float]] = None,
-        warehouse_id: Optional[int] = None,
-        warehouse_name: Optional[str] = None
-    ) -> SalesDeliveryResponse:
-        """
-        从销售预测上拉生成销售出库单（销售出库单上拉功能）
-        
-        从销售预测上拉，自动生成销售出库单（MTS模式）
-        
-        Args:
-            tenant_id: 租户ID
-            sales_forecast_id: 销售预测ID
-            created_by: 创建人ID
-            delivery_quantities: 出库数量字典 {item_id: quantity}，如果不提供则使用预测数量
-            warehouse_id: 出库仓库ID（可选）
-            warehouse_name: 出库仓库名称（可选）
-            
-        Returns:
-            SalesDeliveryResponse: 创建的销售出库单信息
-            
-        Raises:
-            NotFoundError: 销售预测不存在
-            BusinessLogicError: 销售预测未审核
-        """
-        from apps.kuaizhizao.models.sales_forecast import SalesForecast
-        from apps.kuaizhizao.models.sales_forecast_item import SalesForecastItem
-        from apps.kuaizhizao.schemas.warehouse import SalesDeliveryItemCreate
-        from decimal import Decimal
-        
-        # 获取销售预测
-        sales_forecast = await SalesForecast.get_or_none(tenant_id=tenant_id, id=sales_forecast_id)
-        if not sales_forecast:
-            raise NotFoundError(f"销售预测不存在: {sales_forecast_id}")
-        
-        # 检查预测状态（只有已审核的预测才能上拉生成出库单）
-        if sales_forecast.status != "已审核":
-            raise BusinessLogicError("只有已审核的销售预测才能上拉生成销售出库单")
-        
-        # 获取预测明细
-        forecast_items = await SalesForecastItem.filter(
-            tenant_id=tenant_id,
-            forecast_id=sales_forecast_id
-        ).all()
-        
-        if not forecast_items:
-            raise BusinessLogicError("销售预测没有明细，无法生成销售出库单")
-        
-        # 如果没有指定仓库，需要从配置或其他地方获取默认仓库
-        if not warehouse_id:
-            # TODO: 从配置或其他地方获取默认仓库
-            raise ValidationError("必须指定出库仓库")
-        
-        # 如果没有指定仓库名称，尝试从仓库服务获取
-        if not warehouse_name:
-            # TODO: 从仓库服务获取仓库名称
-            warehouse_name = f"仓库{warehouse_id}"
-        
-        # 准备出库单明细
-        delivery_items = []
-        total_quantity = Decimal("0")
-        total_amount = Decimal("0")
-        
-        # MTS模式下，没有客户信息，需要从其他配置获取默认客户或设置为空
-        # 这里暂时使用一个默认客户ID（实际应该从配置获取）
-        default_customer_id = None  # TODO: 从配置获取默认客户
-        default_customer_name = "MTS默认客户"  # TODO: 从配置获取默认客户名称
-        
-        for item in forecast_items:
-            # 计算出库数量
-            if delivery_quantities and item.id in delivery_quantities:
-                delivery_qty = Decimal(str(delivery_quantities[item.id]))
-            else:
-                # 使用预测数量
-                delivery_qty = item.forecast_quantity
-            
-            if delivery_qty <= 0:
-                continue  # 跳过数量为0或负数的情况
-            
-            # MTS模式下，没有单价，需要从物料默认价格获取
-            # TODO: 从物料默认价格获取单价
-            unit_price = Decimal("0")  # 默认价格为0
-            
-            # 计算金额
-            item_total_amount = delivery_qty * unit_price
-            
-            delivery_items.append(
-                SalesDeliveryItemCreate(
-                    material_id=item.material_id,
-                    material_code=item.material_code,
-                    material_name=item.material_name,
-                    material_spec=item.material_spec,
-                    material_unit=item.material_unit,
-                    delivery_quantity=float(delivery_qty),
-                    unit_price=float(unit_price),
-                    total_amount=float(item_total_amount),
-                    demand_id=None,  # 可以后续关联到统一需求表
-                    demand_item_id=None,  # 可以后续关联到需求明细
-                )
-            )
-            
-            total_quantity += delivery_qty
-            total_amount += item_total_amount
-        
-        if not delivery_items:
-            raise BusinessLogicError("没有可出库的物料")
-        
-        # 创建销售出库单
-        delivery_data = SalesDeliveryCreate(
-            sales_forecast_id=sales_forecast_id,
-            sales_forecast_code=sales_forecast.forecast_code,
-            demand_type="sales_forecast",  # 销售出库与需求关联功能增强
-            customer_id=default_customer_id or 0,
-            customer_name=default_customer_name,
-            warehouse_id=warehouse_id,
-            warehouse_name=warehouse_name,
-            status="待出库",
-            total_quantity=float(total_quantity),
-            total_amount=float(total_amount),
-            notes=f"从销售预测 {sales_forecast.forecast_code} 上拉生成",
-            items=delivery_items
-        )
-        
-        # 创建出库单
-        delivery = await self.create_sales_delivery(
-            tenant_id=tenant_id,
-            delivery_data=delivery_data,
-            created_by=created_by
-        )
-        
-        return delivery
-
-
 class SalesReturnService(AppBaseService[SalesReturn]):
     """销售退货单服务"""
 
@@ -4007,7 +4005,8 @@ class OtherInboundService(AppBaseService[OtherInbound]):
         **filters
     ) -> List[OtherInboundListResponse]:
         """获取其他入库单列表"""
-        query = OtherInbound.filter(tenant_id=tenant_id)
+        query = OtherInbound.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+
         if filters.get("status"):
             query = query.filter(status=filters["status"])
         if filters.get("reason_type"):
@@ -4084,7 +4083,7 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                 inbound_obj = await OtherInbound.get(tenant_id=tenant_id, id=inbound_id)
                 wh_id = inbound_obj.warehouse_id if inbound_obj.warehouse_id else None
                 for item in inbound.items:
-                    qty = item.inbound_quantity or Decimal(0)
+                    qty = Decimal(str(item.inbound_quantity or 0))
                     if qty <= 0:
                         continue
                     await InventoryService.increase_stock(
@@ -4100,6 +4099,68 @@ class OtherInboundService(AppBaseService[OtherInbound]):
             except Exception as inv_e:
                 logger.error("其他入库确认-更新库存失败: %s", inv_e)
                 raise
+
+            return OtherInboundResponse.model_validate(
+                await OtherInbound.get(tenant_id=tenant_id, id=inbound_id)
+            )
+
+
+    async def withdraw_confirmation(
+        self,
+        tenant_id: int,
+        inbound_id: int,
+        updated_by: int
+    ) -> OtherInboundResponse:
+        """撤回确认入库"""
+        async with in_transaction():
+            inbound = await self.get_other_inbound_by_id(tenant_id, inbound_id)
+            if inbound.status != "已入库":
+                raise BusinessLogicError("只有已入库状态的其他入库单才能撤回确认")
+
+            # 校验并反转库存
+            try:
+                from apps.kuaizhizao.services.inventory_service import InventoryService
+                
+                # 手动获取明细（模型定义中没有外键关系，只能用 filter）
+                inbound_obj = await OtherInbound.get(tenant_id=tenant_id, id=inbound_id)
+                wh_id = inbound_obj.warehouse_id if inbound_obj.warehouse_id else None
+                items = await OtherInboundItem.filter(tenant_id=tenant_id, inbound_id=inbound_id)
+                
+                for item in items:
+                    qty = Decimal(str(item.inbound_quantity or 0))
+                    if qty <= 0:
+                        continue
+                    
+                    # 反向扣减库存（decrease_stock 内部会校验余量，如果已被领用，这里会报错拦截）
+                    await InventoryService.decrease_stock(
+                        tenant_id=tenant_id,
+                        material_id=item.material_id,
+                        quantity=qty,
+                        warehouse_id=wh_id,
+                        batch_no=item.batch_number or None,
+                        source_type="other_inbound_revoke", 
+                        source_doc_id=inbound_id,
+                        source_doc_code=inbound_obj.inbound_code,
+                    )
+                
+                # 状态回归并清空接收人和接收时间
+                await OtherInbound.filter(tenant_id=tenant_id, id=inbound_id).update(
+                    status="待入库",
+                    receiver_id=None,
+                    receiver_name=None,
+                    receipt_time=None,
+                    updated_by=updated_by
+                )
+                await OtherInboundItem.filter(
+                    tenant_id=tenant_id,
+                    inbound_id=inbound_id
+                ).update(status="待入库", receipt_time=None)
+                
+            except BusinessLogicError:
+                raise
+            except Exception as e:
+                logger.error("撤回其他入库确认-未知错误: %s", e)
+                raise BusinessLogicError(f"系统错误: {str(e)}")
 
             return OtherInboundResponse.model_validate(
                 await OtherInbound.get(tenant_id=tenant_id, id=inbound_id)
@@ -4293,7 +4354,7 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
                 )
                 wh_id = outbound_obj.warehouse_id if outbound_obj.warehouse_id else None
                 for item in outbound.items:
-                    qty = item.outbound_quantity or Decimal(0)
+                    qty = Decimal(str(item.outbound_quantity or 0))
                     if qty <= 0:
                         continue
                     await InventoryService.decrease_stock(

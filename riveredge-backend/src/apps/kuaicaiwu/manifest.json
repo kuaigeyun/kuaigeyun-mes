@@ -12,6 +12,7 @@
     "title": "app.kuaicaiwu.name",
     "icon": "wallet",
     "path": "/apps/kuaicaiwu",
+    "permission": "kuaicaiwu:pricing:view",
     "children": [
       {
         "title": "app.kuaicaiwu.menu.finance-management",
@@ -32,9 +33,9 @@
         "icon": "calculator",
         "sort_order": 2,
         "children": [
-          {"title": "app.kuaicaiwu.menu.cost-management.cost-calculations", "path": "/apps/kuaicaiwu/cost-management/cost-calculations", "sort_order": 1},
-          {"title": "app.kuaicaiwu.menu.cost-management.cost-rules", "path": "/apps/kuaicaiwu/cost-management/cost-rules", "sort_order": 2},
-          {"title": "app.kuaicaiwu.menu.cost-management.cost-report", "path": "/apps/kuaicaiwu/cost-management/cost-report", "sort_order": 3}
+          {"title": "app.kuaicaiwu.menu.cost-management.cost-calculations", "path": "/apps/kuaicaiwu/cost-management/cost-calculations", "permission": "kuaicaiwu:cost:view", "sort_order": 1},
+          {"title": "app.kuaicaiwu.menu.cost-management.cost-rules", "path": "/apps/kuaicaiwu/cost-management/cost-rules", "permission": "kuaicaiwu:cost:view", "sort_order": 2},
+          {"title": "app.kuaicaiwu.menu.cost-management.cost-report", "path": "/apps/kuaicaiwu/cost-management/cost-report", "permission": "kuaicaiwu:cost:view", "sort_order": 3}
         ]
       }
     ]
@@ -52,7 +53,8 @@
     "kuaicaiwu:invoice:create",
     "kuaicaiwu:cost:view",
     "kuaicaiwu:cost:create",
-    "kuaicaiwu:cost:update"
+    "kuaicaiwu:cost:update",
+    "kuaicaiwu:pricing:view"
   ],
   "dependencies": {
     "riveredge-backend": ">=1.0.0",

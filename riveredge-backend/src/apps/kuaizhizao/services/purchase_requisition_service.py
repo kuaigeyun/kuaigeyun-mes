@@ -12,6 +12,10 @@ from typing import List, Optional, Dict, Any, Tuple
 from decimal import Decimal
 
 from tortoise.transactions import in_transaction
+from apps.kuaizhizao.constants import (
+    DocumentStatus, ReviewStatus, normalize_status, 
+    is_draft_status, is_pending_review_status, LEGACY_AUDITED_VALUES
+)
 
 from apps.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
@@ -131,7 +135,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             tenant_id=tenant_id, requisition_id=requisition_id
         ).all()
 
-        from apps.kuaizhizao.constants import is_draft_status, LEGACY_AUDITED_VALUES
+
 
         async def _build_item_resps(items_list, clear_orphan: bool = False):
             resps = []
@@ -177,24 +181,30 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             item_resps, _ = await _build_item_resps(items, clear_orphan=False)
 
         # 若清除了孤儿引用，需重新计算采购申请状态
-        all_items = await PurchaseRequisitionItem.filter(
-            tenant_id=tenant_id, requisition_id=requisition_id
-        ).all()
-        has_any = any(i.purchase_order_id for i in all_items)
-        all_converted = (
-            len(all_items) > 0 and all(i.purchase_order_id for i in all_items)
-        )
-        from apps.kuaizhizao.constants import DocumentStatus
-        new_status = (
+        # ⚠️ 注意：仅当单据处于已通过或转单类状态时才允许自动纠错，防止撤回审核后被刷回已通过
+        current_norm = normalize_status(req.status)
+        if current_norm in (
+            DocumentStatus.AUDITED.value, 
+            DocumentStatus.PARTIAL_CONVERTED.value, 
             DocumentStatus.FULL_CONVERTED.value
-            if all_converted
-            else DocumentStatus.PARTIAL_CONVERTED.value
-            if has_any
-            else "已通过"
-        )
-        if req.status != new_status:
-            req.status = new_status
-            await req.save()
+        ):
+            all_items = await PurchaseRequisitionItem.filter(
+                tenant_id=tenant_id, requisition_id=requisition_id
+            ).all()
+            has_any = any(i.purchase_order_id for i in all_items)
+            all_converted = (
+                len(all_items) > 0 and all(i.purchase_order_id for i in all_items)
+            )
+            new_status = (
+                DocumentStatus.FULL_CONVERTED.value
+                if all_converted
+                else DocumentStatus.PARTIAL_CONVERTED.value
+                if has_any
+                else "已通过"
+            )
+            if req.status != new_status:
+                req.status = new_status
+                await req.save()
 
         req_dict = {k: getattr(req, k) for k in req._meta.fields_map if hasattr(req, k)}
         req_dict.pop("items", None)
@@ -283,7 +293,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         )
         if not req:
             raise NotFoundError(f"采购申请不存在: {requisition_id}")
-        from apps.kuaizhizao.constants import DocumentStatus
+
 
         all_items = await PurchaseRequisitionItem.filter(
             tenant_id=tenant_id, requisition_id=requisition_id
@@ -330,8 +340,9 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         )
         if not req:
             raise NotFoundError(f"采购申请不存在: {requisition_id}")
-        if req.status != "草稿":
-            raise BusinessLogicError("只有草稿状态的采购申请可删除")
+        logger.info("kuaizhizao_purchase_requisition_delete attempt: tenant_id={} req_id={} status={}", tenant_id, requisition_id, req.status)
+        if not is_draft_status(req.status) and not is_pending_review_status(req.status):
+            raise BusinessLogicError("只有草稿状态或待审核的采购申请可删除")
         await PurchaseRequisition.filter(tenant_id=tenant_id, id=requisition_id).update(
             deleted_at=datetime.now()
         )
@@ -350,7 +361,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         )
         if not req:
             raise NotFoundError(f"采购申请不存在: {requisition_id}")
-        if req.status != "草稿":
+        if not is_draft_status(req.status):
             raise BusinessLogicError("只有草稿状态的采购申请可修改")
 
         update_data = data.model_dump(exclude_unset=True, exclude={"items"})
@@ -389,7 +400,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         )
         if not req:
             raise NotFoundError(f"采购申请不存在: {requisition_id}")
-        from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, is_draft_status
+
 
         if not is_draft_status(req.status):
             raise BusinessLogicError("只有草稿状态可提交")
@@ -471,7 +482,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         ):
             raise BusinessLogicError("只有已通过、部分转单或全部转单状态的采购申请可撤回审核")
 
-        req.status = DocumentStatus.PENDING_REVIEW.value
+        req.status = "草稿"  # 撤回后回到草稿状态，允许修改或删除
         req.review_status = ReviewStatus.PENDING.value
         req.reviewer_id = None
         req.reviewer_name = None
@@ -529,7 +540,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         )
         if not req:
             raise NotFoundError(f"采购申请不存在: {requisition_id}")
-        from apps.kuaizhizao.constants import DocumentStatus, normalize_status
+
 
         normalized = normalize_status(req.status)
         if normalized not in (DocumentStatus.AUDITED.value, DocumentStatus.PARTIAL_CONVERTED.value):
@@ -739,7 +750,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         )
         if not req:
             raise NotFoundError(f"采购申请不存在: {requisition_id}")
-        from apps.kuaizhizao.constants import is_draft_status, is_pending_review_status
+
 
         if not is_draft_status(req.status) and not is_pending_review_status(req.status):
             raise BusinessLogicError("只有草稿或待审核状态可执行紧急采购")

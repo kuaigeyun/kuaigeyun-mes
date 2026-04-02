@@ -13,6 +13,7 @@
     "title": "app.kuaipdm.name",
     "icon": "layers",
     "path": "/apps/kuaipdm",
+    "permission": "kuaipdm:view",
     "children": []
   },
   "permissions": ["kuaipdm:view"],

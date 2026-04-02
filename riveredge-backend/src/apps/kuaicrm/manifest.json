@@ -12,6 +12,7 @@
     "title": "app.kuaicrm.name",
     "icon": "users",
     "path": "/apps/kuaicrm",
+    "permission": "kuaicrm:view",
     "children": []
   },
   "is_placeholder": true,

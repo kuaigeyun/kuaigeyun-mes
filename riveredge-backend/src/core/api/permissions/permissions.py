@@ -27,7 +27,7 @@ router = APIRouter(prefix="/permissions", tags=["Core Permissions"])
 @router.get("", response_model=PermissionListResponse)
 async def get_permission_list(
     page: int = Query(1, ge=1, description="页码"),
-    page_size: int = Query(20, ge=1, le=100, description="每页数量"),
+    page_size: int = Query(20, ge=1, le=1000, description="每页数量"),
     keyword: Optional[str] = Query(None, description="关键词搜索"),
     name: Optional[str] = Query(None, description="权限名称筛选"),
     code: Optional[str] = Query(None, description="权限代码筛选"),
@@ -54,8 +54,8 @@ async def get_permission_list(
     Returns:
         PermissionListResponse: 权限列表响应
     """
-    # 先同步权限定义（强制同步），保证列表含应用级菜单权限，避免角色「全选」后仍看不到应用菜单
-    await PermissionSyncService.ensure_permissions(tenant_id=tenant_id, force=True)
+    # 同步权限定义（非强制同步），利用缓存机制减少性能开销
+    await PermissionSyncService.ensure_permissions(tenant_id=tenant_id, force=False)
 
     result = await PermissionService.get_permission_list(
         tenant_id=tenant_id,

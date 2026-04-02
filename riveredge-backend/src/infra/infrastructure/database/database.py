@@ -272,12 +272,16 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.maintenance_plan",  # 维护计划模型
                 "apps.kuaizhizao.models.maintenance_reminder",  # 维护提醒模型
                 "apps.kuaizhizao.models.material_borrow",  # 物料借出模型
+                "apps.kuaizhizao.models.material_borrow_item",  # 物料借出明细模型
                 "apps.kuaizhizao.models.material_call_request",  # 叫料请求模型
                 "apps.kuaizhizao.models.material_return",  # 物料退回（非生产）模型
+                "apps.kuaizhizao.models.material_return_item",  # 物料退回明细模型
                 "apps.kuaizhizao.models.material_shortage_exception",  # 缺料异常模型
                 "apps.kuaizhizao.models.mold",  # 模具模型
                 "apps.kuaizhizao.models.other_inbound",  # 其他入库模型
+                "apps.kuaizhizao.models.other_inbound_item",  # 其他入库明细模型
                 "apps.kuaizhizao.models.other_outbound",  # 其他出库模型
+                "apps.kuaizhizao.models.other_outbound_item",  # 其他出库明细模型
                 "apps.kuaizhizao.models.quality_exception",  # 质量异常模型
                 "apps.kuaizhizao.models.quality_standard",  # 质量标准模型
                 "apps.kuaizhizao.models.quotation",  # 报价单模型

@@ -965,6 +965,77 @@ async def delete_sales_order(
         logger.error(f"删除销售订单失败: {e}")
         raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "删除销售订单失败", "/sales-orders/{sales_order_id}", tenant_id)
 
+@router.post("/batch-submit", response_model=Dict[str, Any], summary="批量提交销售订单")
+async def bulk_submit_sales_orders(
+    ids: List[int] = Body(..., description="订单ID列表"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """批量提交销售订单 (草稿 -> 待审核)"""
+    try:
+        return await sales_order_service.bulk_submit_sales_orders(
+            tenant_id=tenant_id,
+            sales_order_ids=ids,
+            submitted_by=current_user.id
+        )
+    except Exception as e:
+        logger.error(f"批量提交失败: {e}")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "批量提交失败", "/sales-orders/batch-submit", tenant_id)
+
+
+@router.post("/batch-approve", response_model=Dict[str, Any], summary="批量审核通过销售订单")
+async def bulk_approve_sales_orders(
+    ids: List[int] = Body(..., description="订单ID列表"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """批量审核通过销售订单 (待审核 -> 已审核)"""
+    try:
+        return await sales_order_service.bulk_approve_sales_orders(
+            tenant_id=tenant_id,
+            sales_order_ids=ids,
+            approved_by=current_user.id
+        )
+    except Exception as e:
+        logger.error(f"批量审核失败: {e}")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "批量审核失败", "/sales-orders/batch-approve", tenant_id)
+
+
+@router.post("/batch-withdraw", response_model=Dict[str, Any], summary="批量撤回销售订单")
+async def bulk_withdraw_sales_orders(
+    ids: List[int] = Body(..., description="订单ID列表"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """批量撤回销售订单 (待审核 -> 草稿)"""
+    try:
+        return await sales_order_service.bulk_withdraw_sales_orders(
+            tenant_id=tenant_id,
+            sales_order_ids=ids,
+            withdrawn_by=current_user.id
+        )
+    except Exception as e:
+        logger.error(f"批量撤回失败: {e}")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "批量撤回失败", "/sales-orders/batch-withdraw", tenant_id)
+
+
+@router.post("/batch-unapprove", response_model=Dict[str, Any], summary="批量反审核销售订单")
+async def bulk_unapprove_sales_orders(
+    ids: List[int] = Body(..., description="订单ID列表"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """批量反审核销售订单 (已审核 -> 待审核)"""
+    try:
+        return await sales_order_service.bulk_unapprove_sales_orders(
+            tenant_id=tenant_id,
+            sales_order_ids=ids,
+            unapproved_by=current_user.id
+        )
+    except Exception as e:
+        logger.error(f"批量反审核失败: {e}")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "批量反审核失败", "/sales-orders/batch-unapprove", tenant_id)
+
 
 @router.post("/batch-delete", response_model=Dict[str, Any], summary="批量删除销售订单")
 async def bulk_delete_sales_orders(

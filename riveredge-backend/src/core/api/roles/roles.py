@@ -74,6 +74,26 @@ async def load_preset_roles(
     return {"created": count, "message": f"已加载 {count} 个角色"}
 
 
+@router.post("/cleanup-legacy")
+async def cleanup_legacy_roles(
+    _auth: object = Depends(require_access("system.role", "update")),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    手动清理旧预设角色数据（不会在加载预设时自动触发）：
+    - 迁移旧名称/旧编码到新编码
+    - 合并重复角色关系
+    - 软删除被合并的旧角色
+    """
+    result = await RoleService.cleanup_legacy_preset_roles(tenant_id=tenant_id)
+    return {
+        "success": True,
+        "message": "旧预设角色清理完成",
+        **result,
+    }
+
+
 @router.post("", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
 async def create_role(
     data: RoleCreate,

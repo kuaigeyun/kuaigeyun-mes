@@ -179,10 +179,18 @@ class MaterialBatchService:
         
         items = []
         for batch in batches:
-            response = MaterialBatchResponse.model_validate(batch)
-            if batch.material:
+            try:
+                # 检查关联的物料是否存在，如果不存在则跳过该批号（处理孤立数据）
+                if not batch.material:
+                    logger.warning(f"跳过孤立的物料批号: id={batch.id}, material_id={batch.material_id} (物料不存在)")
+                    continue
+                
+                response = MaterialBatchResponse.model_validate(batch)
                 response.material_name = batch.material.name
-            items.append(response)
+                items.append(response)
+            except Exception as e:
+                logger.error(f"序列化物料批号 {batch.id} 失败: {str(e)}")
+                continue
         
         return MaterialBatchListResponse(items=items, total=total)
     

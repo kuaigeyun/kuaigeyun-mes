@@ -5,6 +5,8 @@
 销售出库/退货、采购入库/退货、补货建议等API接口。
 """
 
+
+
 from datetime import datetime
 import uuid
 from typing import List, Optional, Dict, Any
@@ -452,6 +454,30 @@ async def print_production_return(
 
 # ============ 其他入库单 API ============
 
+@router.get("/other-inbounds", summary="获取其他入库单列表")
+async def list_other_inbounds(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    status: Optional[str] = Query(None, description="状态筛选"),
+    reason_type: Optional[str] = Query(None, description="原因类型筛选"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID筛选"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取其他入库单列表"""
+    logger.info(f"FINAL-DEBUG: 执行 list_other_inbounds, tenant_id={tenant_id}")
+    result = await OtherInboundService().list_other_inbounds(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        status=status,
+        reason_type=reason_type,
+        warehouse_id=warehouse_id,
+    )
+    logger.info(f"FINAL-DEBUG: 模块 {__file__} 返回了 {len(result)} 条数据")
+    return result
+
+
 @router.post("/other-inbounds", response_model=OtherInboundResponse, summary="创建其他入库单")
 async def create_other_inbound(
     inbound_data: OtherInboundCreate,
@@ -466,24 +492,18 @@ async def create_other_inbound(
     )
 
 
-@router.get("/other-inbounds", response_model=List[OtherInboundListResponse], summary="获取其他入库单列表")
-async def list_other_inbounds(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
-    status: Optional[str] = Query(None, description="状态筛选"),
-    reason_type: Optional[str] = Query(None, description="原因类型筛选"),
-    warehouse_id: Optional[int] = Query(None, description="仓库ID筛选"),
+@router.post("/other-inbounds/{inbound_id}/withdraw", response_model=OtherInboundResponse, summary="撤回其他入库单确认")
+async def withdraw_other_inbound(
+    inbound_id: int = Path(..., description="其他入库单ID"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-):
-    """获取其他入库单列表"""
-    return await OtherInboundService().list_other_inbounds(
+) -> OtherInboundResponse:
+    """撤回确认"""
+    logger.info(f"🎯 捅到 withdraw 接口了！inbound_id={inbound_id}")
+    return await OtherInboundService().withdraw_confirmation(
         tenant_id=tenant_id,
-        skip=skip,
-        limit=limit,
-        status=status,
-        reason_type=reason_type,
-        warehouse_id=warehouse_id,
+        inbound_id=inbound_id,
+        updated_by=current_user.id
     )
 
 

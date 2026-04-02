@@ -84,12 +84,13 @@ async def get_material_inventory_info(
         batch_query = batch_query.filter(
             Q(expiry_date__isnull=True) | Q(expiry_date__gte=today)
         )
-        agg = await batch_query.aggregate(total=Sum("quantity"))
-        batch_qty = agg.get("total") or Decimal("0")
+        
+        # 使用 manual loop 替代 aggregate，绕过某些环境下 'QuerySet' object has no attribute 'aggregate' 的异常
+        batch_items = await batch_query.all()
+        batch_qty = sum((item.quantity or Decimal("0")) for item in batch_items)
         on_hand += batch_qty
     except Exception as e:
         logger.warning(f"MaterialBatch 查询失败: {e}")
-        batch_qty = Decimal("0")
 
     # 2. LineSideInventory：线边仓库存（status=available）
     try:
@@ -110,7 +111,7 @@ async def get_material_inventory_info(
             for item in line_items
         )
         line_reserved = sum(item.reserved_quantity or Decimal("0") for item in line_items)
-        on_hand += line_qty + line_reserved  # on_hand 包含全部
+        on_hand += (line_qty + line_reserved)  # on_hand 包含全部
         reserved += line_reserved
     except Exception as e:
         logger.warning(f"LineSideInventory 查询失败: {e}")
@@ -228,10 +229,9 @@ async def batch_get_material_inventory(
     # 1. 批量查询 MaterialBatch
     try:
         from apps.master_data.models.material_batch import MaterialBatch
-        from tortoise.functions import Sum
 
         today = date.today()
-        batch_rows = await MaterialBatch.filter(
+        batch_items = await MaterialBatch.filter(
             tenant_id=tenant_id,
             material_id__in=material_ids,
             deleted_at__isnull=True,
@@ -239,12 +239,11 @@ async def batch_get_material_inventory(
             quantity__gt=0,
         ).filter(
             Q(expiry_date__isnull=True) | Q(expiry_date__gte=today)
-        ).group_by("material_id").values("material_id", total=Sum("quantity"))
+        ).all()
 
-        for row in batch_rows:
-            mid = row["material_id"]
-            qty = row["total"] or Decimal("0")
-            inventory_map[mid] += qty
+        for item in batch_items:
+            mid = item.material_id
+            inventory_map[mid] += (item.quantity or Decimal("0"))
     except Exception as e:
         logger.warning(f"MaterialBatch 批量查询失败: {e}")
 
@@ -276,4 +275,3 @@ async def batch_get_material_inventory(
             inventory_map[mid] = Decimal("0")
 
     return inventory_map
-

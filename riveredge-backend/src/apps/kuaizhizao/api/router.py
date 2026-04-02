@@ -54,6 +54,8 @@ from .equipment_inspections.spare_parts import router as spare_parts_router
 from .initial_data.initial_data import router as initial_data_router
 # 导入线边仓与倒冲记录路由
 from .line_side_warehouses.line_side_warehouses import router as line_side_warehouse_router, backflush_router
+# 导入应用中心管理路由
+from .management import router as management_router
 
 # 创建主路由
 router = APIRouter(tags=["Kuaige Zhizao MES"])
@@ -102,6 +104,7 @@ router.include_router(initial_data_router)
 # 注册线边仓与倒冲记录路由
 router.include_router(line_side_warehouse_router)
 router.include_router(backflush_router)
+router.include_router(management_router)
 
 # 注册追溯管理路由
 from .traceability.traceability import router as traceability_router

@@ -97,3 +97,6 @@ class ReportingRecord(BaseModel):
     
     # SOP参数数据（核心功能，新增）
     sop_parameters = fields.JSONField(null=True, description="SOP参数数据（JSON格式，存储报工时收集的SOP参数）")
+    
+    # 软删除字段
+    deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")

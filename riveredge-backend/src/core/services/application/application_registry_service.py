@@ -84,7 +84,7 @@ class ApplicationRegistryService:
 
             # 查询所有已安装且启用的应用（使用首个租户的应用配置，避免硬编码 tenant_id）
             tenant_row = await conn.fetchrow(
-                "SELECT id FROM infra_tenants WHERE deleted_at IS NULL ORDER BY id ASC LIMIT 1"
+                "SELECT id FROM infra_tenants ORDER BY id ASC LIMIT 1"
             )
             default_tenant_id = tenant_row["id"] if tenant_row else 1
 

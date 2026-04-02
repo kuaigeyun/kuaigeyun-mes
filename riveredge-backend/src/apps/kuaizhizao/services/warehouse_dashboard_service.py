@@ -13,6 +13,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from loguru import logger
 
 from apps.kuaizhizao.models.inventory_alert import InventoryAlert
+from apps.kuaizhizao.models.other_inbound import OtherInbound
+from apps.kuaizhizao.models.other_inbound_item import OtherInboundItem
 from apps.kuaizhizao.models.other_outbound import OtherOutbound
 from apps.kuaizhizao.models.other_outbound_item import OtherOutboundItem
 from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
@@ -239,26 +241,52 @@ class WarehouseDashboardService:
         async def fetch_recent_in(limit):
             rb = []
             fetch_n = max(limit * 4, 32)
-            cand = await PurchaseReceipt.filter(
+            pr_task = PurchaseReceipt.filter(
                 tenant_id=tenant_id, deleted_at__isnull=True, status="已入库"
             ).order_by("-updated_at").limit(fetch_n).all()
             
-            cand = list(cand)
-            cand.sort(key=lambda r: (r.receipt_time or r.updated_at or datetime.min), reverse=True)
-            cand = cand[:limit]
-            rids = [r.id for r in cand]
-            labels = await _first_purchase_item_labels(tenant_id, rids)
-            for r in cand:
-                name, nlines = labels.get(r.id, ("", 0))
-                mat_label = f"{name} 等{nlines}项" if nlines > 1 and name else (f"共{nlines}项" if nlines > 1 else name)
-                ts = r.receipt_time or r.updated_at
-                rb.append({
-                    "doc_code": r.receipt_code,
-                    "material_name": mat_label,
-                    "quantity": float(r.total_quantity or 0),
-                    "time": _iso(ts),
-                    "doc_type": "purchase_receipt",
-                })
+            oi_task = OtherInbound.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True, status="已入库"
+            ).order_by("-updated_at").limit(fetch_n).all()
+
+            pr_list, oi_list = await asyncio.gather(pr_task, oi_task)
+            
+            merged = []
+            for r in pr_list:
+                merged.append((r.receipt_time or r.updated_at or datetime.min, "purchase", {
+                    "receipt_id": r.id, "receipt_code": r.receipt_code, "total_quantity": float(r.total_quantity or 0)
+                }))
+            for r in oi_list:
+                merged.append((r.receipt_time or r.updated_at or datetime.min, "other", {
+                    "inbound_id": r.id, "inbound_code": r.inbound_code, "total_quantity": float(r.total_quantity or 0)
+                }))
+
+            merged.sort(key=lambda x: x[0], reverse=True)
+            merged = merged[:limit]
+            
+            pr_ids = [m[2]["receipt_id"] for m in merged if m[1] == "purchase"]
+            labels = await _first_purchase_item_labels(tenant_id, pr_ids)
+            
+            for ts, kind, payload in merged:
+                if kind == "purchase":
+                    rid = payload["receipt_id"]
+                    name, nlines = labels.get(rid, ("", 0))
+                    mat_label = f"{name} 等{nlines}项" if nlines > 1 and name else (f"共{nlines}项" if nlines > 1 else name)
+                    rb.append({
+                        "doc_code": payload["receipt_code"],
+                        "material_name": mat_label,
+                        "quantity": payload["total_quantity"],
+                        "time": _iso(ts if ts != datetime.min else None),
+                        "doc_type": "purchase_receipt",
+                    })
+                else:
+                    rb.append({
+                        "doc_code": payload["inbound_code"],
+                        "material_name": "其他入库", # OtherInbound doesn't have a helper yet, let's keep it simple
+                        "quantity": payload["total_quantity"],
+                        "time": _iso(ts if ts != datetime.min else None),
+                        "doc_type": "other_inbound",
+                    })
             return rb
 
         async def fetch_recent_out(limit):

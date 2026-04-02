@@ -69,26 +69,26 @@ class PermissionService:
         if code:
             query = query.filter(code__icontains=code)
         
-        # 分页
+        # 分页（不在 annotate 里跨 role_permissions→role 过滤：Tortoise 会生成缺失 JOIN 的 SQL）
         total = await query.count()
         permissions = await query.offset((page - 1) * page_size).limit(page_size).all()
-        
-        # 获取关联的角色数量（通过 RolePermission 中间表）
+        perm_ids = [p.id for p in permissions]
+        role_count_map: dict[int, int] = {pid: 0 for pid in perm_ids}
+        if perm_ids:
+            links = await RolePermission.filter(permission_id__in=perm_ids).select_related("role")
+            for rp in links:
+                rel_role = getattr(rp, "role", None)
+                if rel_role is None or rel_role.deleted_at is not None:
+                    continue
+                if rel_role.tenant_id != tenant_id:
+                    continue
+                pid = rp.permission_id
+                if pid in role_count_map:
+                    role_count_map[pid] += 1
+
+        # 构建返回结果
         result = []
         for permission in permissions:
-            rp_role_ids = await RolePermission.filter(
-                permission_id=permission.id
-            ).values_list("role_id", flat=True)
-            role_count = (
-                await Role.filter(
-                    id__in=rp_role_ids,
-                    tenant_id=tenant_id,
-                    deleted_at__isnull=True,
-                ).count()
-                if rp_role_ids
-                else 0
-            )
-
             result.append({
                 "uuid": permission.uuid,
                 "name": permission.name,
@@ -97,7 +97,7 @@ class PermissionService:
                 "action": permission.action,
                 "description": permission.description,
                 "permission_type": permission.permission_type,
-                "role_count": role_count,
+                "role_count": role_count_map.get(permission.id, 0),
                 "created_at": permission.created_at,
             })
         

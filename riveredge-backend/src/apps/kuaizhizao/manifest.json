@@ -26,8 +26,10 @@
             "path": "/apps/kuaizhizao/sales-management/dashboard",
             "sort_order": 0,
             "meta": {
-              "module": "sales"
-            }
+              "module": "sales",
+              "node": "sales_order"
+            },
+            "permission": "kuaizhizao:sales-order:view"
           },
           {
             "title": "app.kuaizhizao.menu.sales-management.quotations",
@@ -36,7 +38,8 @@
             "meta": {
               "node": "quotation",
               "module": "sales"
-            }
+            },
+            "permission": "kuaizhizao:quotation:view"
           },
           {
             "title": "app.kuaizhizao.menu.sales-management.customer-follow-ups",
@@ -55,7 +58,8 @@
             "meta": {
               "node": "sample_trial",
               "module": "sales"
-            }
+            },
+            "permission": "kuaizhizao:sample-trial:view"
           },
           {
             "title": "app.kuaizhizao.menu.sales-management.sales-forecasts",
@@ -64,7 +68,8 @@
             "meta": {
               "node": "sales_forecast",
               "module": "sales"
-            }
+            },
+            "permission": "kuaizhizao:sales-forecast:view"
           },
           {
             "title": "app.kuaizhizao.menu.sales-management.sales-orders",
@@ -73,23 +78,28 @@
             "meta": {
               "node": "sales_order",
               "module": "sales"
-            }
+            },
+            "permission": "kuaizhizao:sales-order:view"
           },
           {
             "title": "app.kuaizhizao.menu.sales-management.shipment-notices",
             "path": "/apps/kuaizhizao/sales-management/shipment-notices",
             "sort_order": 6,
             "meta": {
-              "module": "sales"
-            }
+              "module": "sales",
+              "node": "shipment_notice"
+            },
+            "permission": "kuaizhizao:shipment-notice:view"
           },
           {
             "title": "app.kuaizhizao.menu.sales-management.sales-returns",
             "path": "/apps/kuaizhizao/sales-management/sales-returns",
             "sort_order": 7,
             "meta": {
-              "module": "sales"
-            }
+              "module": "sales",
+              "node": "sales_return"
+            },
+            "permission": "kuaizhizao:sales-return:view"
           },
           {
             "title": "app.kuaizhizao.menu.sales-management.reports",
@@ -99,57 +109,68 @@
               {
                 "title": "app.kuaizhizao.menu.reports.sales-order-query",
                 "path": "/apps/kuaizhizao/sales-management/reports/sales-order-query",
-                "sort_order": 1
+                "sort_order": 1,
+                "permission": "kuaizhizao:sales-management-reports-sales-order-query:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.order-execution-tracking",
                 "path": "/apps/kuaizhizao/sales-management/reports/order-execution-tracking",
-                "sort_order": 2
+                "sort_order": 2,
+                "permission": "kuaizhizao:sales-management-reports-order-execution-tracking:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.customer-sales-summary",
                 "path": "/apps/kuaizhizao/sales-management/reports/customer-sales-summary",
-                "sort_order": 3
+                "sort_order": 3,
+                "permission": "kuaizhizao:sales-management-reports-customer-sales-summary:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.customer-sales-reconciliation",
                 "path": "/apps/kuaizhizao/sales-management/reports/customer-sales-reconciliation",
-                "sort_order": 4
+                "sort_order": 4,
+                "permission": "kuaizhizao:sales-management-reports-customer-sales-reconciliation:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.product-sales-ranking",
                 "path": "/apps/kuaizhizao/sales-management/reports/product-sales-ranking",
-                "sort_order": 5
+                "sort_order": 5,
+                "permission": "kuaizhizao:sales-management-reports-product-sales-ranking:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.forecast-vs-actual",
                 "path": "/apps/kuaizhizao/sales-management/reports/forecast-vs-actual",
-                "sort_order": 6
+                "sort_order": 6,
+                "permission": "kuaizhizao:sales-management-reports-forecast-vs-actual:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.quotation-query",
                 "path": "/apps/kuaizhizao/sales-management/reports/quotation-query",
-                "sort_order": 7
+                "sort_order": 7,
+                "permission": "kuaizhizao:sales-management-reports-quotation-query:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.sample-trial-query",
                 "path": "/apps/kuaizhizao/sales-management/reports/sample-trial-query",
-                "sort_order": 8
+                "sort_order": 8,
+                "permission": "kuaizhizao:sales-management-reports-sample-trial-query:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.sales-trend-analysis",
                 "path": "/apps/kuaizhizao/sales-management/reports/sales-trend-analysis",
-                "sort_order": 9
+                "sort_order": 9,
+                "permission": "kuaizhizao:sales-management-reports-sales-trend-analysis:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.sales-return-analysis",
                 "path": "/apps/kuaizhizao/sales-management/reports/sales-return-analysis",
-                "sort_order": 10
+                "sort_order": 10,
+                "permission": "kuaizhizao:sales-management-reports-sales-return-analysis:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.salesperson-performance",
                 "path": "/apps/kuaizhizao/sales-management/reports/salesperson-performance",
-                "sort_order": 11
+                "sort_order": 11,
+                "permission": "kuaizhizao:sales-management-reports-salesperson-performance:view"
               }
             ]
           }
@@ -165,8 +186,10 @@
             "path": "/apps/kuaizhizao/plan-management/dashboard",
             "sort_order": 0,
             "meta": {
-              "module": "demand"
-            }
+              "module": "demand",
+              "node": "demand"
+            },
+            "permission": "kuaizhizao:demand:view"
           },
           {
             "title": "app.kuaizhizao.menu.plan-management.demand-management",
@@ -174,7 +197,8 @@
             "sort_order": 2,
             "meta": {
               "module": "demand"
-            }
+            },
+            "permission": "kuaizhizao:plan-management-demand-management:view"
           },
           {
             "title": "app.kuaizhizao.menu.plan-management.demand-computation",
@@ -182,7 +206,8 @@
             "sort_order": 3,
             "meta": {
               "module": "demand"
-            }
+            },
+            "permission": "kuaizhizao:plan-management-demand-computation:view"
           },
           {
             "title": "app.kuaizhizao.menu.plan-management.scheduling",
@@ -190,7 +215,8 @@
             "sort_order": 4,
             "meta": {
               "module": "demand"
-            }
+            },
+            "permission": "kuaizhizao:plan-management-scheduling:view"
           },
           {
             "title": "app.kuaizhizao.menu.plan-management.reports",
@@ -200,37 +226,44 @@
               {
                 "title": "app.kuaizhizao.menu.reports.demand-plan-detail",
                 "path": "/apps/kuaizhizao/plan-management/reports/demand-plan-detail",
-                "sort_order": 1
+                "sort_order": 1,
+                "permission": "kuaizhizao:plan-management-reports-demand-plan-detail:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.production-plan-comparison",
                 "path": "/apps/kuaizhizao/plan-management/reports/production-plan-comparison",
-                "sort_order": 2
+                "sort_order": 2,
+                "permission": "kuaizhizao:plan-management-reports-production-plan-comparison:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.purchase-plan-comparison",
                 "path": "/apps/kuaizhizao/plan-management/reports/purchase-plan-comparison",
-                "sort_order": 3
+                "sort_order": 3,
+                "permission": "kuaizhizao:plan-management-reports-purchase-plan-comparison:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.capacity-load-analysis",
                 "path": "/apps/kuaizhizao/plan-management/reports/capacity-load-analysis",
-                "sort_order": 4
+                "sort_order": 4,
+                "permission": "kuaizhizao:plan-management-reports-capacity-load-analysis:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.material-shortage-alert",
                 "path": "/apps/kuaizhizao/plan-management/reports/material-shortage-alert",
-                "sort_order": 5
+                "sort_order": 5,
+                "permission": "kuaizhizao:plan-management-reports-material-shortage-alert:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.plan-fulfillment-rate",
                 "path": "/apps/kuaizhizao/plan-management/reports/plan-fulfillment-rate",
-                "sort_order": 6
+                "sort_order": 6,
+                "permission": "kuaizhizao:plan-management-reports-plan-fulfillment-rate:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.production-delay-analysis",
                 "path": "/apps/kuaizhizao/plan-management/reports/production-delay-analysis",
-                "sort_order": 7
+                "sort_order": 7,
+                "permission": "kuaizhizao:plan-management-reports-production-delay-analysis:view"
               }
             ]
           }
@@ -249,8 +282,10 @@
             "path": "/apps/kuaizhizao/purchase-management/dashboard",
             "sort_order": 0,
             "meta": {
-              "module": "purchase"
-            }
+              "module": "purchase",
+              "node": "purchase_order"
+            },
+            "permission": "kuaizhizao:purchase-order:view"
           },
           {
             "title": "app.kuaizhizao.menu.purchase-management.purchase-requisitions",
@@ -259,7 +294,8 @@
             "meta": {
               "node": "purchase_request",
               "module": "purchase"
-            }
+            },
+            "permission": "kuaizhizao:purchase-request:view"
           },
           {
             "title": "app.kuaizhizao.menu.purchase-management.purchase-orders",
@@ -268,31 +304,38 @@
             "meta": {
               "node": "purchase_order",
               "module": "purchase"
-            }
+            },
+            "permission": "kuaizhizao:purchase-order:view"
           },
           {
             "title": "app.kuaizhizao.menu.purchase-management.logistics-tracking",
             "path": "/apps/kuaizhizao/purchase-management/logistics-tracking",
             "sort_order": 3,
             "meta": {
-              "module": "purchase"
-            }
+              "module": "purchase",
+              "node": "logistics_tracking"
+            },
+            "permission": "kuaizhizao:logistics-tracking:view"
           },
           {
             "title": "app.kuaizhizao.menu.purchase-management.receipt-notices",
             "path": "/apps/kuaizhizao/purchase-management/receipt-notices",
             "sort_order": 4,
             "meta": {
-              "module": "purchase"
-            }
+              "module": "purchase",
+              "node": "receipt_notice"
+            },
+            "permission": "kuaizhizao:receipt-notice:view"
           },
           {
             "title": "app.kuaizhizao.menu.purchase-management.purchase-returns",
             "path": "/apps/kuaizhizao/purchase-management/purchase-returns",
             "sort_order": 5,
             "meta": {
-              "module": "purchase"
-            }
+              "module": "purchase",
+              "node": "purchase_return"
+            },
+            "permission": "kuaizhizao:purchase-return:view"
           },
           {
             "title": "app.kuaizhizao.menu.purchase-management.reports",
@@ -302,47 +345,56 @@
               {
                 "title": "app.kuaizhizao.menu.reports.purchase-requisition-tracking",
                 "path": "/apps/kuaizhizao/purchase-management/reports/purchase-requisition-tracking",
-                "sort_order": 1
+                "sort_order": 1,
+                "permission": "kuaizhizao:purchase-management-reports-purchase-requisition-tracking:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.purchase-order-query",
                 "path": "/apps/kuaizhizao/purchase-management/reports/purchase-order-query",
-                "sort_order": 2
+                "sort_order": 2,
+                "permission": "kuaizhizao:purchase-management-reports-purchase-order-query:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.purchase-order-progress",
                 "path": "/apps/kuaizhizao/purchase-management/reports/purchase-order-progress",
-                "sort_order": 3
+                "sort_order": 3,
+                "permission": "kuaizhizao:purchase-management-reports-purchase-order-progress:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.supplier-delivery-summary",
                 "path": "/apps/kuaizhizao/purchase-management/reports/supplier-delivery-summary",
-                "sort_order": 4
+                "sort_order": 4,
+                "permission": "kuaizhizao:purchase-management-reports-supplier-delivery-summary:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.supplier-price-comparison",
                 "path": "/apps/kuaizhizao/purchase-management/reports/supplier-price-comparison",
-                "sort_order": 5
+                "sort_order": 5,
+                "permission": "kuaizhizao:purchase-management-reports-supplier-price-comparison:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.purchase-reconciliation",
                 "path": "/apps/kuaizhizao/purchase-management/reports/purchase-reconciliation",
-                "sort_order": 6
+                "sort_order": 6,
+                "permission": "kuaizhizao:purchase-management-reports-purchase-reconciliation:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.supplier-quality-rate",
                 "path": "/apps/kuaizhizao/purchase-management/reports/supplier-quality-rate",
-                "sort_order": 7
+                "sort_order": 7,
+                "permission": "kuaizhizao:purchase-management-reports-supplier-quality-rate:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.purchase-cost-trend",
                 "path": "/apps/kuaizhizao/purchase-management/reports/purchase-cost-trend",
-                "sort_order": 8
+                "sort_order": 8,
+                "permission": "kuaizhizao:purchase-management-reports-purchase-cost-trend:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.supplier-lead-time",
                 "path": "/apps/kuaizhizao/purchase-management/reports/supplier-lead-time",
-                "sort_order": 9
+                "sort_order": 9,
+                "permission": "kuaizhizao:purchase-management-reports-supplier-lead-time:view"
               }
             ]
           }
@@ -361,8 +413,10 @@
             "path": "/apps/kuaizhizao/production-execution/dashboard",
             "sort_order": 0,
             "meta": {
-              "module": "production"
-            }
+              "module": "production",
+              "node": "work_order"
+            },
+            "permission": "kuaizhizao:work-order:view"
           },
           {
             "title": "app.kuaizhizao.menu.production-execution.work-orders",
@@ -371,15 +425,18 @@
             "meta": {
               "node": "work_order",
               "module": "production"
-            }
+            },
+            "permission": "kuaizhizao:work-order:view"
           },
           {
             "title": "app.kuaizhizao.menu.production-execution.terminal",
             "path": "/apps/kuaizhizao/production-execution/terminal",
             "sort_order": 2,
             "meta": {
-              "module": "production"
-            }
+              "module": "production",
+              "node": "work_order"
+            },
+            "permission": "kuaizhizao:work-order:view"
           },
           {
             "title": "app.kuaizhizao.menu.production-execution.reporting",
@@ -387,31 +444,38 @@
             "sort_order": 3,
             "meta": {
               "module": "production"
-            }
+            },
+            "permission": "kuaizhizao:production-execution-reporting:view"
           },
           {
             "title": "app.kuaizhizao.menu.production-execution.rework-orders",
             "path": "/apps/kuaizhizao/production-execution/rework-orders",
             "sort_order": 4,
             "meta": {
-              "module": "production"
-            }
+              "module": "production",
+              "node": "rework_order"
+            },
+            "permission": "kuaizhizao:rework-order:view"
           },
           {
             "title": "app.kuaizhizao.menu.production-execution.outsource-management",
             "path": "/apps/kuaizhizao/production-execution/outsource-management",
             "sort_order": 5,
             "meta": {
-              "module": "production"
-            }
+              "module": "production",
+              "node": "outsource_order"
+            },
+            "permission": "kuaizhizao:outsource-order:view"
           },
           {
             "title": "app.kuaizhizao.menu.production-execution.packing-binding",
             "path": "/apps/kuaizhizao/production-execution/packing-binding",
             "sort_order": 6,
             "meta": {
-              "module": "production"
-            }
+              "module": "production",
+              "node": "work_order"
+            },
+            "permission": "kuaizhizao:work-order:view"
           },
           {
             "title": "app.kuaizhizao.menu.production-execution.reporting.statistics",
@@ -419,7 +483,8 @@
             "sort_order": 7,
             "meta": {
               "module": "production"
-            }
+            },
+            "permission": "kuaizhizao:production-execution-reporting-statistics:view"
           },
           {
             "title": "app.kuaizhizao.menu.production-execution.exception-management",
@@ -434,40 +499,50 @@
                 "path": "/apps/kuaizhizao/production-execution/material-shortage-exceptions",
                 "sort_order": 1,
                 "meta": {
-                  "module": "production"
-                }
+                  "module": "production",
+                  "node": "work_order"
+                },
+                "permission": "kuaizhizao:work-order:view"
               },
               {
                 "title": "app.kuaizhizao.menu.production-execution.delivery-delay-exceptions",
                 "path": "/apps/kuaizhizao/production-execution/delivery-delay-exceptions",
                 "sort_order": 2,
                 "meta": {
-                  "module": "production"
-                }
+                  "module": "production",
+                  "node": "work_order"
+                },
+                "permission": "kuaizhizao:work-order:view"
               },
               {
                 "title": "app.kuaizhizao.menu.production-execution.quality-exceptions",
                 "path": "/apps/kuaizhizao/production-execution/quality-exceptions",
                 "sort_order": 3,
                 "meta": {
-                  "module": "production"
-                }
+                  "module": "production",
+                  "node": "work_order"
+                },
+                "permission": "kuaizhizao:work-order:view"
               },
               {
                 "title": "app.kuaizhizao.menu.production-execution.exception-process",
                 "path": "/apps/kuaizhizao/production-execution/exception-process",
                 "sort_order": 4,
                 "meta": {
-                  "module": "production"
-                }
+                  "module": "production",
+                  "node": "work_order"
+                },
+                "permission": "kuaizhizao:work-order:view"
               },
               {
                 "title": "app.kuaizhizao.menu.production-execution.exception-statistics",
                 "path": "/apps/kuaizhizao/production-execution/exception-statistics",
                 "sort_order": 5,
                 "meta": {
-                  "module": "production"
-                }
+                  "module": "production",
+                  "node": "work_order"
+                },
+                "permission": "kuaizhizao:work-order:view"
               }
             ]
           },
@@ -479,62 +554,74 @@
               {
                 "title": "app.kuaizhizao.menu.reports.work-order-query",
                 "path": "/apps/kuaizhizao/production-execution/reports/work-order-query",
-                "sort_order": 1
+                "sort_order": 1,
+                "permission": "kuaizhizao:production-execution-reports-work-order-query:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.work-order-tracking",
                 "path": "/apps/kuaizhizao/production-execution/reports/work-order-tracking",
-                "sort_order": 2
+                "sort_order": 2,
+                "permission": "kuaizhizao:production-execution-reports-work-order-tracking:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.work-order-material-usage",
                 "path": "/apps/kuaizhizao/production-execution/reports/work-order-material-usage",
-                "sort_order": 3
+                "sort_order": 3,
+                "permission": "kuaizhizao:production-execution-reports-work-order-material-usage:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.work-order-labor-detail",
                 "path": "/apps/kuaizhizao/production-execution/reports/work-order-labor-detail",
-                "sort_order": 4
+                "sort_order": 4,
+                "permission": "kuaizhizao:production-execution-reports-work-order-labor-detail:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.production-efficiency",
                 "path": "/apps/kuaizhizao/production-execution/reports/production-efficiency",
-                "sort_order": 5
+                "sort_order": 5,
+                "permission": "kuaizhizao:production-execution-reports-production-efficiency:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.process-progress-detail",
                 "path": "/apps/kuaizhizao/production-execution/reports/process-progress-detail",
-                "sort_order": 6
+                "sort_order": 6,
+                "permission": "kuaizhizao:production-execution-reports-process-progress-detail:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.rework-order-analysis",
                 "path": "/apps/kuaizhizao/production-execution/reports/rework-order-analysis",
-                "sort_order": 7
+                "sort_order": 7,
+                "permission": "kuaizhizao:production-execution-reports-rework-order-analysis:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.outsource-order-query",
                 "path": "/apps/kuaizhizao/production-execution/reports/outsource-order-query",
-                "sort_order": 8
+                "sort_order": 8,
+                "permission": "kuaizhizao:production-execution-reports-outsource-order-query:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.outsource-material-reconciliation",
                 "path": "/apps/kuaizhizao/production-execution/reports/outsource-material-reconciliation",
-                "sort_order": 9
+                "sort_order": 9,
+                "permission": "kuaizhizao:production-execution-reports-outsource-material-reconciliation:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.wip-inventory",
                 "path": "/apps/kuaizhizao/production-execution/reports/wip-inventory",
-                "sort_order": 10
+                "sort_order": 10,
+                "permission": "kuaizhizao:production-execution-reports-wip-inventory:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.scrap-defect-analysis",
                 "path": "/apps/kuaizhizao/production-execution/reports/scrap-defect-analysis",
-                "sort_order": 11
+                "sort_order": 11,
+                "permission": "kuaizhizao:production-execution-reports-scrap-defect-analysis:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.production-lead-time",
                 "path": "/apps/kuaizhizao/production-execution/reports/production-lead-time",
-                "sort_order": 12
+                "sort_order": 12,
+                "permission": "kuaizhizao:production-execution-reports-production-lead-time:view"
               }
             ]
           }
@@ -553,45 +640,45 @@
             "path": "/apps/kuaizhizao/quality-management/dashboard",
             "sort_order": 0,
             "meta": {
-              "node": "quality_inspection",
               "module": "quality"
-            }
+            },
+            "permission": "kuaizhizao:quality-management-dashboard:view"
           },
           {
             "title": "app.kuaizhizao.menu.quality-management.incoming-inspection",
             "path": "/apps/kuaizhizao/quality-management/incoming-inspection",
             "sort_order": 1,
             "meta": {
-              "node": "quality_inspection",
               "module": "quality"
-            }
+            },
+            "permission": "kuaizhizao:quality-management-incoming-inspection:view"
           },
           {
             "title": "app.kuaizhizao.menu.quality-management.process-inspection",
             "path": "/apps/kuaizhizao/quality-management/process-inspection",
             "sort_order": 2,
             "meta": {
-              "node": "quality_inspection",
               "module": "quality"
-            }
+            },
+            "permission": "kuaizhizao:quality-management-process-inspection:view"
           },
           {
             "title": "app.kuaizhizao.menu.quality-management.finished-goods-inspection",
             "path": "/apps/kuaizhizao/quality-management/finished-goods-inspection",
             "sort_order": 3,
             "meta": {
-              "node": "quality_inspection",
               "module": "quality"
-            }
+            },
+            "permission": "kuaizhizao:quality-management-finished-goods-inspection:view"
           },
           {
             "title": "app.kuaizhizao.menu.quality-management.traceability",
             "path": "/apps/kuaizhizao/quality-management/traceability",
             "sort_order": 4,
             "meta": {
-              "node": "quality_inspection",
               "module": "quality"
-            }
+            },
+            "permission": "kuaizhizao:quality-management-traceability:view"
           },
           {
             "title": "app.kuaizhizao.menu.quality-management.inspection-plans",
@@ -599,7 +686,8 @@
             "sort_order": 5,
             "meta": {
               "module": "quality"
-            }
+            },
+            "permission": "kuaizhizao:quality-management-inspection-plans:view"
           },
           {
             "title": "app.kuaizhizao.menu.quality-management.reports",
@@ -609,37 +697,44 @@
               {
                 "title": "app.kuaizhizao.menu.reports.incoming-inspection-report",
                 "path": "/apps/kuaizhizao/quality-management/reports/incoming-inspection-report",
-                "sort_order": 1
+                "sort_order": 1,
+                "permission": "kuaizhizao:quality-management-reports-incoming-inspection-report:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.process-inspection-report",
                 "path": "/apps/kuaizhizao/quality-management/reports/process-inspection-report",
-                "sort_order": 2
+                "sort_order": 2,
+                "permission": "kuaizhizao:quality-management-reports-process-inspection-report:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.finished-inspection-report",
                 "path": "/apps/kuaizhizao/quality-management/reports/finished-inspection-report",
-                "sort_order": 3
+                "sort_order": 3,
+                "permission": "kuaizhizao:quality-management-reports-finished-inspection-report:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.quality-exception-tracking",
                 "path": "/apps/kuaizhizao/quality-management/reports/quality-exception-tracking",
-                "sort_order": 4
+                "sort_order": 4,
+                "permission": "kuaizhizao:quality-management-reports-quality-exception-tracking:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.nonconforming-summary",
                 "path": "/apps/kuaizhizao/quality-management/reports/nonconforming-summary",
-                "sort_order": 5
+                "sort_order": 5,
+                "permission": "kuaizhizao:quality-management-reports-nonconforming-summary:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.quality-rate-trend",
                 "path": "/apps/kuaizhizao/quality-management/reports/quality-rate-trend",
-                "sort_order": 6
+                "sort_order": 6,
+                "permission": "kuaizhizao:quality-management-reports-quality-rate-trend:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.defect-pareto-analysis",
                 "path": "/apps/kuaizhizao/quality-management/reports/defect-pareto-analysis",
-                "sort_order": 7
+                "sort_order": 7,
+                "permission": "kuaizhizao:quality-management-reports-defect-pareto-analysis:view"
               }
             ]
           }
@@ -655,8 +750,10 @@
             "path": "/apps/kuaizhizao/equipment-management/dashboard",
             "sort_order": 0,
             "meta": {
-              "module": "equipment"
-            }
+              "module": "equipment",
+              "node": "equipment"
+            },
+            "permission": "kuaizhizao:equipment:view"
           },
           {
             "title": "app.kuaizhizao.menu.equipment-management.asset-ledger",
@@ -664,7 +761,7 @@
               {
                 "title": "app.kuaizhizao.menu.equipment-management.equipment",
                 "path": "/apps/kuaizhizao/equipment-management/equipment",
-                "permission": "kuaizhizao:equipment:view",
+                "permission": "kuaizhizao:equipment-management-equipment:view",
                 "sort_order": 1,
                 "meta": {
                   "module": "equipment"
@@ -673,7 +770,7 @@
               {
                 "title": "app.kuaizhizao.menu.equipment-management.molds",
                 "path": "/apps/kuaizhizao/equipment-management/molds",
-                "permission": "kuaizhizao:mold:view",
+                "permission": "kuaizhizao:equipment-management-molds:view",
                 "sort_order": 2,
                 "meta": {
                   "module": "equipment"
@@ -682,7 +779,7 @@
               {
                 "title": "app.kuaizhizao.menu.tooling-management.ledger",
                 "path": "/apps/kuaizhizao/equipment-management/tool-ledger",
-                "permission": "kuaizhizao:tool:view",
+                "permission": "kuaizhizao:equipment-management-tool-ledger:view",
                 "sort_order": 3,
                 "meta": {
                   "module": "equipment"
@@ -744,7 +841,7 @@
               {
                 "title": "app.kuaizhizao.menu.equipment-management.mold-usages",
                 "path": "/apps/kuaizhizao/equipment-management/mold-usages",
-                "permission": "kuaizhizao:mold:view",
+                "permission": "kuaizhizao:mold-usage:view",
                 "sort_order": 1,
                 "meta": {
                   "node": "mold_usage",
@@ -754,7 +851,7 @@
               {
                 "title": "app.kuaizhizao.menu.equipment-management.mold-calibrations",
                 "path": "/apps/kuaizhizao/equipment-management/mold-calibrations",
-                "permission": "kuaizhizao:mold:view",
+                "permission": "kuaizhizao:mold-calibration:view",
                 "sort_order": 2,
                 "meta": {
                   "node": "mold_calibration",
@@ -764,7 +861,7 @@
               {
                 "title": "app.kuaizhizao.menu.equipment-management.mold-maintenance-reminders",
                 "path": "/apps/kuaizhizao/equipment-management/mold-maintenance-reminders",
-                "permission": "kuaizhizao:mold:view",
+                "permission": "kuaizhizao:mold-maintenance-reminder:view",
                 "sort_order": 3,
                 "meta": {
                   "node": "mold_maintenance_reminder",
@@ -780,7 +877,7 @@
               {
                 "title": "app.kuaizhizao.menu.equipment-management.tool-usages",
                 "path": "/apps/kuaizhizao/equipment-management/tool-usages",
-                "permission": "kuaizhizao:tool:view",
+                "permission": "kuaizhizao:tool-usage:view",
                 "sort_order": 1,
                 "meta": {
                   "node": "tool_usage",
@@ -790,7 +887,7 @@
               {
                 "title": "app.kuaizhizao.menu.equipment-management.tool-maintenances",
                 "path": "/apps/kuaizhizao/equipment-management/tool-maintenances",
-                "permission": "kuaizhizao:tool:view",
+                "permission": "kuaizhizao:tool-maintenance:view",
                 "sort_order": 2,
                 "meta": {
                   "node": "tool_maintenance",
@@ -800,7 +897,7 @@
               {
                 "title": "app.kuaizhizao.menu.equipment-management.tool-calibrations",
                 "path": "/apps/kuaizhizao/equipment-management/tool-calibrations",
-                "permission": "kuaizhizao:tool:view",
+                "permission": "kuaizhizao:tool-calibration:view",
                 "sort_order": 3,
                 "meta": {
                   "node": "tool_calibration",
@@ -810,7 +907,7 @@
               {
                 "title": "app.kuaizhizao.menu.equipment-management.tool-maintenance-reminders",
                 "path": "/apps/kuaizhizao/equipment-management/tool-maintenance-reminders",
-                "permission": "kuaizhizao:tool:view",
+                "permission": "kuaizhizao:tool-maintenance-reminder:view",
                 "sort_order": 4,
                 "meta": {
                   "node": "tool_maintenance_reminder",
@@ -827,27 +924,32 @@
               {
                 "title": "app.kuaizhizao.menu.reports.equipment-maintenance-detail",
                 "path": "/apps/kuaizhizao/equipment-management/reports/equipment-maintenance-detail",
-                "sort_order": 1
+                "sort_order": 1,
+                "permission": "kuaizhizao:equipment-management-reports-equipment-maintenance-detail:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.equipment-maintenance-plan",
                 "path": "/apps/kuaizhizao/equipment-management/reports/equipment-maintenance-plan",
-                "sort_order": 2
+                "sort_order": 2,
+                "permission": "kuaizhizao:equipment-management-reports-equipment-maintenance-plan:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.equipment-fault-analysis",
                 "path": "/apps/kuaizhizao/equipment-management/reports/equipment-fault-analysis",
-                "sort_order": 3
+                "sort_order": 3,
+                "permission": "kuaizhizao:equipment-management-reports-equipment-fault-analysis:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.equipment-status-log",
                 "path": "/apps/kuaizhizao/equipment-management/reports/equipment-status-log",
-                "sort_order": 4
+                "sort_order": 4,
+                "permission": "kuaizhizao:equipment-management-reports-equipment-status-log:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.equipment-oee-analysis",
                 "path": "/apps/kuaizhizao/equipment-management/reports/equipment-oee-analysis",
-                "sort_order": 5
+                "sort_order": 5,
+                "permission": "kuaizhizao:equipment-management-reports-equipment-oee-analysis:view"
               }
             ]
           }
@@ -866,8 +968,10 @@
             "path": "/apps/kuaizhizao/warehouse-management/dashboard",
             "sort_order": 0,
             "meta": {
-              "module": "warehouse"
-            }
+              "module": "warehouse",
+              "node": "inventory"
+            },
+            "permission": "kuaizhizao:inventory:view"
           },
           {
             "title": "app.kuaizhizao.menu.warehouse-management.inbound-group",
@@ -905,7 +1009,7 @@
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.customer-material-registration",
                 "path": "/apps/kuaizhizao/warehouse-management/customer-material-registration",
-                "permission": "kuaizhizao:customer-material-registration:view",
+                "permission": "kuaizhizao:warehouse-management-customer-material-registration:view",
                 "sort_order": 4
               }
             ],
@@ -963,37 +1067,37 @@
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.batching-center",
                 "path": "/apps/kuaizhizao/warehouse-management/batching-center",
-                "permission": "kuaizhizao:inventory:view",
+                "permission": "kuaizhizao:warehouse-management-batching-center:view",
                 "sort_order": 1
               },
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.material-calls",
                 "path": "/apps/kuaizhizao/warehouse-management/material-calls",
-                "permission": "kuaizhizao:inventory:view",
+                "permission": "kuaizhizao:warehouse-management-material-calls:view",
                 "sort_order": 2
               },
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.stocktaking",
                 "path": "/apps/kuaizhizao/warehouse-management/stocktaking",
-                "permission": "kuaizhizao:stocktaking:view",
+                "permission": "kuaizhizao:warehouse-management-stocktaking:view",
                 "sort_order": 3
               },
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.inventory-transfer",
                 "path": "/apps/kuaizhizao/warehouse-management/inventory-transfer",
-                "permission": "kuaizhizao:inventory-transfer:view",
+                "permission": "kuaizhizao:warehouse-management-inventory-transfer:view",
                 "sort_order": 4
               },
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.assembly-orders",
                 "path": "/apps/kuaizhizao/warehouse-management/assembly-orders",
-                "permission": "kuaizhizao:assembly-order:view",
+                "permission": "kuaizhizao:warehouse-management-assembly-orders:view",
                 "sort_order": 5
               },
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.disassembly-orders",
                 "path": "/apps/kuaizhizao/warehouse-management/disassembly-orders",
-                "permission": "kuaizhizao:disassembly-order:view",
+                "permission": "kuaizhizao:warehouse-management-disassembly-orders:view",
                 "sort_order": 6
               }
             ],
@@ -1006,49 +1110,49 @@
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.inventory",
                 "path": "/apps/kuaizhizao/warehouse-management/inventory",
-                "permission": "kuaizhizao:inventory:view",
+                "permission": "kuaizhizao:warehouse-management-inventory:view",
                 "sort_order": 1
               },
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.batch-inventory-query",
                 "path": "/apps/kuaizhizao/warehouse-management/batch-inventory-query",
-                "permission": "kuaizhizao:batch-inventory-query:view",
+                "permission": "kuaizhizao:warehouse-management-batch-inventory-query:view",
                 "sort_order": 2
               },
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.line-side-warehouse",
                 "path": "/apps/kuaizhizao/warehouse-management/line-side-warehouse",
-                "permission": "kuaizhizao:line-side-warehouse:view",
+                "permission": "kuaizhizao:warehouse-management-line-side-warehouse:view",
                 "sort_order": 3
               },
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.backflush-records",
                 "path": "/apps/kuaizhizao/warehouse-management/backflush-records",
-                "permission": "kuaizhizao:backflush-record:view",
+                "permission": "kuaizhizao:warehouse-management-backflush-records:view",
                 "sort_order": 4
               },
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.replenishment-suggestions",
                 "path": "/apps/kuaizhizao/warehouse-management/replenishment-suggestions",
-                "permission": "kuaizhizao:replenishment-suggestion:view",
+                "permission": "kuaizhizao:warehouse-management-replenishment-suggestions:view",
                 "sort_order": 5
               },
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.inventory-alert",
                 "path": "/apps/kuaizhizao/warehouse-management/inventory-alert",
-                "permission": "kuaizhizao:inventory:view",
+                "permission": "kuaizhizao:warehouse-management-inventory-alert:view",
                 "sort_order": 6
               },
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.barcode-mapping-rules",
                 "path": "/apps/kuaizhizao/warehouse-management/barcode-mapping-rules",
-                "permission": "kuaizhizao:barcode-mapping-rule:view",
+                "permission": "kuaizhizao:warehouse-management-barcode-mapping-rules:view",
                 "sort_order": 7
               },
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.initial-data",
                 "path": "/apps/kuaizhizao/warehouse-management/initial-data",
-                "permission": "kuaizhizao:initial-data:view",
+                "permission": "kuaizhizao:warehouse-management-initial-data:view",
                 "sort_order": 8
               }
             ]
@@ -1061,47 +1165,56 @@
               {
                 "title": "app.kuaizhizao.menu.reports.inventory-summary",
                 "path": "/apps/kuaizhizao/warehouse-management/reports/inventory-summary",
-                "sort_order": 1
+                "sort_order": 1,
+                "permission": "kuaizhizao:warehouse-management-reports-inventory-summary:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.inventory-ledger",
                 "path": "/apps/kuaizhizao/warehouse-management/reports/inventory-ledger",
-                "sort_order": 2
+                "sort_order": 2,
+                "permission": "kuaizhizao:warehouse-management-reports-inventory-ledger:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.inventory-age-analysis",
                 "path": "/apps/kuaizhizao/warehouse-management/reports/inventory-age-analysis",
-                "sort_order": 3
+                "sort_order": 3,
+                "permission": "kuaizhizao:warehouse-management-reports-inventory-age-analysis:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.slow-moving-inventory",
                 "path": "/apps/kuaizhizao/warehouse-management/reports/slow-moving-inventory",
-                "sort_order": 4
+                "sort_order": 4,
+                "permission": "kuaizhizao:warehouse-management-reports-slow-moving-inventory:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.inbound-summary",
                 "path": "/apps/kuaizhizao/warehouse-management/reports/inbound-summary",
-                "sort_order": 5
+                "sort_order": 5,
+                "permission": "kuaizhizao:warehouse-management-reports-inbound-summary:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.outbound-summary",
                 "path": "/apps/kuaizhizao/warehouse-management/reports/outbound-summary",
-                "sort_order": 6
+                "sort_order": 6,
+                "permission": "kuaizhizao:warehouse-management-reports-outbound-summary:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.stocktaking-history",
                 "path": "/apps/kuaizhizao/warehouse-management/reports/stocktaking-history",
-                "sort_order": 7
+                "sort_order": 7,
+                "permission": "kuaizhizao:warehouse-management-reports-stocktaking-history:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.transfer-tracking",
                 "path": "/apps/kuaizhizao/warehouse-management/reports/transfer-tracking",
-                "sort_order": 8
+                "sort_order": 8,
+                "permission": "kuaizhizao:warehouse-management-reports-transfer-tracking:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.inventory-turnover-analysis",
                 "path": "/apps/kuaizhizao/warehouse-management/reports/inventory-turnover-analysis",
-                "sort_order": 9
+                "sort_order": 9,
+                "permission": "kuaizhizao:warehouse-management-reports-inventory-turnover-analysis:view"
               }
             ]
           }
@@ -1118,43 +1231,43 @@
           {
             "title": "app.kuaizhizao.menu.performance-management.holidays",
             "path": "/apps/kuaizhizao/performance/holidays",
-            "permission": "kuaizhizao:performance:holiday:view",
+            "permission": "kuaizhizao:performance-holidays:view",
             "sort_order": 1
           },
           {
             "title": "app.kuaizhizao.menu.performance-management.skills",
             "path": "/apps/kuaizhizao/performance/skills",
-            "permission": "kuaizhizao:performance:skill:view",
+            "permission": "kuaizhizao:performance-skills:view",
             "sort_order": 2
           },
           {
             "title": "app.kuaizhizao.menu.performance-management.employee-configs",
             "path": "/apps/kuaizhizao/performance/employee-configs",
-            "permission": "kuaizhizao:performance:view",
+            "permission": "kuaizhizao:performance-employee-configs:view",
             "sort_order": 3
           },
           {
             "title": "app.kuaizhizao.menu.performance-management.piece-rates",
             "path": "/apps/kuaizhizao/performance/piece-rates",
-            "permission": "kuaizhizao:performance:view",
+            "permission": "kuaizhizao:performance-piece-rates:view",
             "sort_order": 4
           },
           {
             "title": "app.kuaizhizao.menu.performance-management.hourly-rates",
             "path": "/apps/kuaizhizao/performance/hourly-rates",
-            "permission": "kuaizhizao:performance:view",
+            "permission": "kuaizhizao:performance-hourly-rates:view",
             "sort_order": 5
           },
           {
             "title": "app.kuaizhizao.menu.performance-management.kpi-definitions",
             "path": "/apps/kuaizhizao/performance/kpi-definitions",
-            "permission": "kuaizhizao:performance:view",
+            "permission": "kuaizhizao:performance-kpi-definitions:view",
             "sort_order": 6
           },
           {
             "title": "app.kuaizhizao.menu.performance-management.summaries",
             "path": "/apps/kuaizhizao/performance/summaries",
-            "permission": "kuaizhizao:performance:view",
+            "permission": "kuaizhizao:performance-summaries:view",
             "sort_order": 7
           },
           {
@@ -1165,165 +1278,311 @@
               {
                 "title": "app.kuaizhizao.menu.reports.employee-efficiency-ranking",
                 "path": "/apps/kuaizhizao/performance/reports/employee-efficiency-ranking",
-                "sort_order": 1
+                "sort_order": 1,
+                "permission": "kuaizhizao:performance-reports-employee-efficiency-ranking:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.piece-rate-salary-summary",
                 "path": "/apps/kuaizhizao/performance/reports/piece-rate-salary-summary",
-                "sort_order": 2
+                "sort_order": 2,
+                "permission": "kuaizhizao:performance-reports-piece-rate-salary-summary:view"
               }
             ]
           }
         ]
       }
-    ]
+    ],
+    "permission": "kuaizhizao:pricing:view"
   },
   "permissions": [
-    "kuaizhizao:demand:view",
-    "kuaizhizao:demand:create",
-    "kuaizhizao:demand:update",
-    "kuaizhizao:demand:delete",
-    "kuaizhizao:scheduling:view",
-    "kuaizhizao:scheduling:create",
-    "kuaizhizao:scheduling:update",
-    "kuaizhizao:scheduling:delete",
-    "kuaizhizao:mrp:compute",
-    "kuaizhizao:lrp:compute",
-    "kuaizhizao:production-plan:view",
-    "kuaizhizao:production-plan:create",
-    "kuaizhizao:production-plan:update",
-    "kuaizhizao:production-plan:delete",
-    "kuaizhizao:production-plan:execute",
-    "kuaizhizao:purchase-order:view",
-    "kuaizhizao:purchase-order:create",
-    "kuaizhizao:purchase-order:update",
-    "kuaizhizao:purchase-order:delete",
-    "kuaizhizao:purchase-order:approve",
-    "kuaizhizao:purchase-order:confirm",
-    "kuaizhizao:sales-forecast:view",
-    "kuaizhizao:sales-forecast:create",
-    "kuaizhizao:sales-forecast:update",
-    "kuaizhizao:sales-forecast:delete",
-    "kuaizhizao:sales-forecast:approve",
-    "kuaizhizao:sales-order:view",
-    "kuaizhizao:sales-order:create",
-    "kuaizhizao:sales-order:update",
-    "kuaizhizao:sales-order:delete",
-    "kuaizhizao:sales-order:approve",
-    "kuaizhizao:sales-order:confirm",
-    "kuaizhizao:delivery-notice:view",
+    "kuaizhizao:assembly-order:view",
+    "kuaizhizao:backflush-record:view",
+    "kuaizhizao:barcode-mapping-rule:view",
+    "kuaizhizao:batch-inventory-query:view",
+    "kuaizhizao:customer-follow-up:create",
+    "kuaizhizao:customer-follow-up:delete",
+    "kuaizhizao:customer-follow-up:update",
+    "kuaizhizao:customer-follow-up:view",
+    "kuaizhizao:customer-material-registration:view",
     "kuaizhizao:delivery-notice:create",
-    "kuaizhizao:delivery-notice:update",
     "kuaizhizao:delivery-notice:send",
-    "kuaizhizao:sample-trial:view",
-    "kuaizhizao:sample-trial:create",
-    "kuaizhizao:sample-trial:update",
-    "kuaizhizao:sample-trial:delete",
-    "kuaizhizao:sample-trial:convert-to-order",
-    "kuaizhizao:sample-trial:create-outbound",
-    "kuaizhizao:incoming-inspection:view",
-    "kuaizhizao:incoming-inspection:create",
-    "kuaizhizao:incoming-inspection:update",
-    "kuaizhizao:incoming-inspection:delete",
-    "kuaizhizao:incoming-inspection:conduct",
-    "kuaizhizao:incoming-inspection:approve",
-    "kuaizhizao:process-inspection:view",
-    "kuaizhizao:process-inspection:create",
-    "kuaizhizao:process-inspection:update",
-    "kuaizhizao:process-inspection:delete",
-    "kuaizhizao:process-inspection:conduct",
-    "kuaizhizao:finished-goods-inspection:view",
-    "kuaizhizao:finished-goods-inspection:create",
-    "kuaizhizao:finished-goods-inspection:update",
-    "kuaizhizao:finished-goods-inspection:delete",
-    "kuaizhizao:finished-goods-inspection:conduct",
+    "kuaizhizao:delivery-notice:update",
+    "kuaizhizao:delivery-notice:view",
+    "kuaizhizao:demand:create",
+    "kuaizhizao:demand:delete",
+    "kuaizhizao:demand:update",
+    "kuaizhizao:demand:view",
+    "kuaizhizao:disassembly-order:view",
+    "kuaizhizao:equipment-fault:view",
+    "kuaizhizao:equipment-management-equipment:view",
+    "kuaizhizao:equipment-management-molds:view",
+    "kuaizhizao:equipment-management-reports-equipment-fault-analysis:view",
+    "kuaizhizao:equipment-management-reports-equipment-maintenance-detail:view",
+    "kuaizhizao:equipment-management-reports-equipment-maintenance-plan:view",
+    "kuaizhizao:equipment-management-reports-equipment-oee-analysis:view",
+    "kuaizhizao:equipment-management-reports-equipment-status-log:view",
+    "kuaizhizao:equipment-management-tool-ledger:view",
+    "kuaizhizao:equipment-status:view",
+    "kuaizhizao:equipment:view",
     "kuaizhizao:finished-goods-inspection:certificate",
-    "kuaizhizao:traceability:view",
-    "kuaizhizao:accounts-payable:view",
-    "kuaizhizao:accounts-payable:create",
-    "kuaizhizao:accounts-payable:update",
-    "kuaizhizao:accounts-payable:delete",
-    "kuaizhizao:accounts-payable:payment",
-    "kuaizhizao:accounts-payable:approve",
-    "kuaizhizao:purchase-invoice:view",
-    "kuaizhizao:purchase-invoice:create",
-    "kuaizhizao:purchase-invoice:update",
-    "kuaizhizao:purchase-invoice:delete",
-    "kuaizhizao:purchase-invoice:approve",
-    "kuaizhizao:accounts-receivable:view",
-    "kuaizhizao:accounts-receivable:create",
-    "kuaizhizao:accounts-receivable:update",
-    "kuaizhizao:accounts-receivable:delete",
-    "kuaizhizao:accounts-receivable:receipt",
-    "kuaizhizao:accounts-receivable:approve",
-    "kuaizhizao:receipt:view",
-    "kuaizhizao:payment:view",
-    "kuaizhizao:inventory-report:view",
-    "kuaizhizao:inventory-report:create",
-    "kuaizhizao:inventory-report:update",
-    "kuaizhizao:inventory-report:delete",
-    "kuaizhizao:production-report:view",
-    "kuaizhizao:production-report:create",
-    "kuaizhizao:production-report:update",
-    "kuaizhizao:production-report:delete",
-    "kuaizhizao:quality-report:view",
-    "kuaizhizao:quality-report:create",
-    "kuaizhizao:quality-report:update",
-    "kuaizhizao:quality-report:delete",
-    "kuaizhizao:work-order:view",
-    "kuaizhizao:work-order:create",
-    "kuaizhizao:work-order:update",
-    "kuaizhizao:work-order:delete",
-    "kuaizhizao:reporting:view",
-    "kuaizhizao:reporting:create",
-    "kuaizhizao:reporting:update",
-    "kuaizhizao:reporting:delete",
-    "kuaizhizao:inventory:view",
-    "kuaizhizao:initial-data:view",
-    "kuaizhizao:inbound:view",
-    "kuaizhizao:inbound:create",
-    "kuaizhizao:inbound:update",
-    "kuaizhizao:finished-goods-inventory:view",
+    "kuaizhizao:finished-goods-inspection:conduct",
+    "kuaizhizao:finished-goods-inspection:create",
+    "kuaizhizao:finished-goods-inspection:delete",
+    "kuaizhizao:finished-goods-inspection:update",
+    "kuaizhizao:finished-goods-inspection:view",
     "kuaizhizao:finished-goods-inventory:create",
     "kuaizhizao:finished-goods-inventory:update",
-    "kuaizhizao:sales-outbound:view",
-    "kuaizhizao:sales-outbound:create",
-    "kuaizhizao:sales-outbound:update",
-    "kuaizhizao:outbound:view",
-    "kuaizhizao:outbound:create",
-    "kuaizhizao:outbound:update",
-    "kuaizhizao:production-picking:view",
-    "kuaizhizao:production-picking:create",
-    "kuaizhizao:production-picking:update",
-    "kuaizhizao:production-picking:confirm",
-    "kuaizhizao:production-return:view",
-    "kuaizhizao:production-return:create",
-    "kuaizhizao:production-return:update",
-    "kuaizhizao:production-return:confirm",
-    "kuaizhizao:other-inbound:view",
-    "kuaizhizao:other-inbound:create",
-    "kuaizhizao:other-inbound:update",
-    "kuaizhizao:other-inbound:confirm",
-    "kuaizhizao:other-outbound:view",
-    "kuaizhizao:other-outbound:create",
-    "kuaizhizao:other-outbound:update",
-    "kuaizhizao:other-outbound:confirm",
-    "kuaizhizao:material-borrow:view",
+    "kuaizhizao:finished-goods-inventory:view",
+    "kuaizhizao:inbound:create",
+    "kuaizhizao:inbound:update",
+    "kuaizhizao:inbound:view",
+    "kuaizhizao:incoming-inspection:approve",
+    "kuaizhizao:incoming-inspection:conduct",
+    "kuaizhizao:incoming-inspection:create",
+    "kuaizhizao:incoming-inspection:delete",
+    "kuaizhizao:incoming-inspection:update",
+    "kuaizhizao:incoming-inspection:view",
+    "kuaizhizao:initial-data:view",
+    "kuaizhizao:inventory-report:create",
+    "kuaizhizao:inventory-report:delete",
+    "kuaizhizao:inventory-report:update",
+    "kuaizhizao:inventory-report:view",
+    "kuaizhizao:inventory-transfer:view",
+    "kuaizhizao:inventory:view",
+    "kuaizhizao:line-side-warehouse:view",
+    "kuaizhizao:logistics-tracking:view",
+    "kuaizhizao:lrp:compute",
+    "kuaizhizao:maintenance-plan:view",
+    "kuaizhizao:maintenance-reminder:view",
+    "kuaizhizao:material-borrow:confirm",
     "kuaizhizao:material-borrow:create",
     "kuaizhizao:material-borrow:update",
-    "kuaizhizao:material-borrow:confirm",
-    "kuaizhizao:material-return:view",
+    "kuaizhizao:material-borrow:view",
+    "kuaizhizao:material-return:confirm",
     "kuaizhizao:material-return:create",
     "kuaizhizao:material-return:update",
-    "kuaizhizao:material-return:confirm",
-    "kuaizhizao:purchase-receipt:view",
+    "kuaizhizao:material-return:view",
+    "kuaizhizao:mold-calibration:view",
+    "kuaizhizao:mold-maintenance-reminder:view",
+    "kuaizhizao:mold-usage:view",
+    "kuaizhizao:mold:view",
+    "kuaizhizao:mrp:compute",
+    "kuaizhizao:other-inbound:confirm",
+    "kuaizhizao:other-inbound:create",
+    "kuaizhizao:other-inbound:update",
+    "kuaizhizao:other-inbound:view",
+    "kuaizhizao:other-outbound:confirm",
+    "kuaizhizao:other-outbound:create",
+    "kuaizhizao:other-outbound:update",
+    "kuaizhizao:other-outbound:view",
+    "kuaizhizao:outbound:create",
+    "kuaizhizao:outbound:update",
+    "kuaizhizao:outbound:view",
+    "kuaizhizao:outsource-order:view",
+    "kuaizhizao:performance-employee-configs:view",
+    "kuaizhizao:performance-holidays:view",
+    "kuaizhizao:performance-hourly-rates:view",
+    "kuaizhizao:performance-kpi-definitions:view",
+    "kuaizhizao:performance-piece-rates:view",
+    "kuaizhizao:performance-reports-employee-efficiency-ranking:view",
+    "kuaizhizao:performance-reports-piece-rate-salary-summary:view",
+    "kuaizhizao:performance-skills:view",
+    "kuaizhizao:performance-summaries:view",
+    "kuaizhizao:performance:holiday:view",
+    "kuaizhizao:performance:skill:view",
+    "kuaizhizao:performance:view",
+    "kuaizhizao:plan-management-demand-computation:view",
+    "kuaizhizao:plan-management-demand-management:view",
+    "kuaizhizao:plan-management-reports-capacity-load-analysis:view",
+    "kuaizhizao:plan-management-reports-demand-plan-detail:view",
+    "kuaizhizao:plan-management-reports-material-shortage-alert:view",
+    "kuaizhizao:plan-management-reports-plan-fulfillment-rate:view",
+    "kuaizhizao:plan-management-reports-production-delay-analysis:view",
+    "kuaizhizao:plan-management-reports-production-plan-comparison:view",
+    "kuaizhizao:plan-management-reports-purchase-plan-comparison:view",
+    "kuaizhizao:plan-management-scheduling:view",
+    "kuaizhizao:pricing:view",
+    "kuaizhizao:process-inspection:conduct",
+    "kuaizhizao:process-inspection:create",
+    "kuaizhizao:process-inspection:delete",
+    "kuaizhizao:process-inspection:update",
+    "kuaizhizao:process-inspection:view",
+    "kuaizhizao:production-execution-reporting-statistics:view",
+    "kuaizhizao:production-execution-reporting:view",
+    "kuaizhizao:production-execution-reports-outsource-material-reconciliation:view",
+    "kuaizhizao:production-execution-reports-outsource-order-query:view",
+    "kuaizhizao:production-execution-reports-process-progress-detail:view",
+    "kuaizhizao:production-execution-reports-production-efficiency:view",
+    "kuaizhizao:production-execution-reports-production-lead-time:view",
+    "kuaizhizao:production-execution-reports-rework-order-analysis:view",
+    "kuaizhizao:production-execution-reports-scrap-defect-analysis:view",
+    "kuaizhizao:production-execution-reports-wip-inventory:view",
+    "kuaizhizao:production-execution-reports-work-order-labor-detail:view",
+    "kuaizhizao:production-execution-reports-work-order-material-usage:view",
+    "kuaizhizao:production-execution-reports-work-order-query:view",
+    "kuaizhizao:production-execution-reports-work-order-tracking:view",
+    "kuaizhizao:production-picking:confirm",
+    "kuaizhizao:production-picking:create",
+    "kuaizhizao:production-picking:update",
+    "kuaizhizao:production-picking:view",
+    "kuaizhizao:production-plan:create",
+    "kuaizhizao:production-plan:delete",
+    "kuaizhizao:production-plan:execute",
+    "kuaizhizao:production-plan:update",
+    "kuaizhizao:production-plan:view",
+    "kuaizhizao:production-report:create",
+    "kuaizhizao:production-report:delete",
+    "kuaizhizao:production-report:update",
+    "kuaizhizao:production-report:view",
+    "kuaizhizao:production-return:confirm",
+    "kuaizhizao:production-return:create",
+    "kuaizhizao:production-return:update",
+    "kuaizhizao:production-return:view",
+    "kuaizhizao:purchase-invoice:approve",
+    "kuaizhizao:purchase-invoice:create",
+    "kuaizhizao:purchase-invoice:delete",
+    "kuaizhizao:purchase-invoice:update",
+    "kuaizhizao:purchase-invoice:view",
+    "kuaizhizao:purchase-management-reports-purchase-cost-trend:view",
+    "kuaizhizao:purchase-management-reports-purchase-order-progress:view",
+    "kuaizhizao:purchase-management-reports-purchase-order-query:view",
+    "kuaizhizao:purchase-management-reports-purchase-reconciliation:view",
+    "kuaizhizao:purchase-management-reports-purchase-requisition-tracking:view",
+    "kuaizhizao:purchase-management-reports-supplier-delivery-summary:view",
+    "kuaizhizao:purchase-management-reports-supplier-lead-time:view",
+    "kuaizhizao:purchase-management-reports-supplier-price-comparison:view",
+    "kuaizhizao:purchase-management-reports-supplier-quality-rate:view",
+    "kuaizhizao:purchase-order:approve",
+    "kuaizhizao:purchase-order:confirm",
+    "kuaizhizao:purchase-order:create",
+    "kuaizhizao:purchase-order:delete",
+    "kuaizhizao:purchase-order:update",
+    "kuaizhizao:purchase-order:view",
+    "kuaizhizao:purchase-receipt:confirm",
     "kuaizhizao:purchase-receipt:create",
     "kuaizhizao:purchase-receipt:update",
-    "kuaizhizao:purchase-receipt:confirm",
-    "kuaizhizao:customer-follow-up:view",
-    "kuaizhizao:customer-follow-up:create",
-    "kuaizhizao:customer-follow-up:update",
-    "kuaizhizao:customer-follow-up:delete"
+    "kuaizhizao:purchase-receipt:view",
+    "kuaizhizao:purchase-request:view",
+    "kuaizhizao:purchase-requisition:create",
+    "kuaizhizao:purchase-requisition:delete",
+    "kuaizhizao:purchase-requisition:update",
+    "kuaizhizao:purchase-requisition:view",
+    "kuaizhizao:purchase-return:confirm",
+    "kuaizhizao:purchase-return:create",
+    "kuaizhizao:purchase-return:delete",
+    "kuaizhizao:purchase-return:update",
+    "kuaizhizao:purchase-return:view",
+    "kuaizhizao:quality-management-dashboard:view",
+    "kuaizhizao:quality-management-finished-goods-inspection:view",
+    "kuaizhizao:quality-management-incoming-inspection:view",
+    "kuaizhizao:quality-management-inspection-plans:view",
+    "kuaizhizao:quality-management-process-inspection:view",
+    "kuaizhizao:quality-management-reports-defect-pareto-analysis:view",
+    "kuaizhizao:quality-management-reports-finished-inspection-report:view",
+    "kuaizhizao:quality-management-reports-incoming-inspection-report:view",
+    "kuaizhizao:quality-management-reports-nonconforming-summary:view",
+    "kuaizhizao:quality-management-reports-process-inspection-report:view",
+    "kuaizhizao:quality-management-reports-quality-exception-tracking:view",
+    "kuaizhizao:quality-management-reports-quality-rate-trend:view",
+    "kuaizhizao:quality-management-traceability:view",
+    "kuaizhizao:quality-report:create",
+    "kuaizhizao:quality-report:delete",
+    "kuaizhizao:quality-report:update",
+    "kuaizhizao:quality-report:view",
+    "kuaizhizao:quotation:create",
+    "kuaizhizao:quotation:delete",
+    "kuaizhizao:quotation:update",
+    "kuaizhizao:quotation:view",
+    "kuaizhizao:receipt-notice:create",
+    "kuaizhizao:receipt-notice:delete",
+    "kuaizhizao:receipt-notice:notify",
+    "kuaizhizao:receipt-notice:update",
+    "kuaizhizao:receipt-notice:view",
+    "kuaizhizao:replenishment-suggestion:view",
+    "kuaizhizao:reporting:create",
+    "kuaizhizao:reporting:delete",
+    "kuaizhizao:reporting:update",
+    "kuaizhizao:reporting:view",
+    "kuaizhizao:rework-order:view",
+    "kuaizhizao:sales-forecast:approve",
+    "kuaizhizao:sales-forecast:create",
+    "kuaizhizao:sales-forecast:delete",
+    "kuaizhizao:sales-forecast:update",
+    "kuaizhizao:sales-forecast:view",
+    "kuaizhizao:sales-management-reports-customer-sales-reconciliation:view",
+    "kuaizhizao:sales-management-reports-customer-sales-summary:view",
+    "kuaizhizao:sales-management-reports-forecast-vs-actual:view",
+    "kuaizhizao:sales-management-reports-order-execution-tracking:view",
+    "kuaizhizao:sales-management-reports-product-sales-ranking:view",
+    "kuaizhizao:sales-management-reports-quotation-query:view",
+    "kuaizhizao:sales-management-reports-sales-order-query:view",
+    "kuaizhizao:sales-management-reports-sales-return-analysis:view",
+    "kuaizhizao:sales-management-reports-sales-trend-analysis:view",
+    "kuaizhizao:sales-management-reports-salesperson-performance:view",
+    "kuaizhizao:sales-management-reports-sample-trial-query:view",
+    "kuaizhizao:sales-order:approve",
+    "kuaizhizao:sales-order:confirm",
+    "kuaizhizao:sales-order:create",
+    "kuaizhizao:sales-order:delete",
+    "kuaizhizao:sales-order:update",
+    "kuaizhizao:sales-order:view",
+    "kuaizhizao:sales-outbound:create",
+    "kuaizhizao:sales-outbound:update",
+    "kuaizhizao:sales-outbound:view",
+    "kuaizhizao:sales-return:confirm",
+    "kuaizhizao:sales-return:create",
+    "kuaizhizao:sales-return:delete",
+    "kuaizhizao:sales-return:view",
+    "kuaizhizao:sample-trial:convert-to-order",
+    "kuaizhizao:sample-trial:create",
+    "kuaizhizao:sample-trial:create-outbound",
+    "kuaizhizao:sample-trial:delete",
+    "kuaizhizao:sample-trial:update",
+    "kuaizhizao:sample-trial:view",
+    "kuaizhizao:scheduling:create",
+    "kuaizhizao:scheduling:delete",
+    "kuaizhizao:scheduling:update",
+    "kuaizhizao:scheduling:view",
+    "kuaizhizao:shipment-notice:create",
+    "kuaizhizao:shipment-notice:delete",
+    "kuaizhizao:shipment-notice:send",
+    "kuaizhizao:shipment-notice:update",
+    "kuaizhizao:shipment-notice:view",
+    "kuaizhizao:stocktaking:view",
+    "kuaizhizao:tool-calibration:view",
+    "kuaizhizao:tool-maintenance-reminder:view",
+    "kuaizhizao:tool-maintenance:view",
+    "kuaizhizao:tool-usage:view",
+    "kuaizhizao:tool:view",
+    "kuaizhizao:traceability:view",
+    "kuaizhizao:warehouse-management-assembly-orders:view",
+    "kuaizhizao:warehouse-management-backflush-records:view",
+    "kuaizhizao:warehouse-management-barcode-mapping-rules:view",
+    "kuaizhizao:warehouse-management-batch-inventory-query:view",
+    "kuaizhizao:warehouse-management-batching-center:view",
+    "kuaizhizao:warehouse-management-customer-material-registration:view",
+    "kuaizhizao:warehouse-management-disassembly-orders:view",
+    "kuaizhizao:warehouse-management-initial-data:view",
+    "kuaizhizao:warehouse-management-inventory-alert:view",
+    "kuaizhizao:warehouse-management-inventory-transfer:view",
+    "kuaizhizao:warehouse-management-inventory:view",
+    "kuaizhizao:warehouse-management-line-side-warehouse:view",
+    "kuaizhizao:warehouse-management-material-calls:view",
+    "kuaizhizao:warehouse-management-replenishment-suggestions:view",
+    "kuaizhizao:warehouse-management-reports-inbound-summary:view",
+    "kuaizhizao:warehouse-management-reports-inventory-age-analysis:view",
+    "kuaizhizao:warehouse-management-reports-inventory-ledger:view",
+    "kuaizhizao:warehouse-management-reports-inventory-summary:view",
+    "kuaizhizao:warehouse-management-reports-inventory-turnover-analysis:view",
+    "kuaizhizao:warehouse-management-reports-outbound-summary:view",
+    "kuaizhizao:warehouse-management-reports-slow-moving-inventory:view",
+    "kuaizhizao:warehouse-management-reports-stocktaking-history:view",
+    "kuaizhizao:warehouse-management-reports-transfer-tracking:view",
+    "kuaizhizao:warehouse-management-stocktaking:view",
+    "kuaizhizao:work-order:create",
+    "kuaizhizao:work-order:delete",
+    "kuaizhizao:work-order:update",
+    "kuaizhizao:work-order:view"
   ],
   "dependencies": {
     "riveredge-backend": ">=1.0.0",

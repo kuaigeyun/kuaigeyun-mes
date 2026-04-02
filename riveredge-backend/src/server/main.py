@@ -251,6 +251,24 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
+@app.get("/api/debug/batches")
+async def debug_batches():
+    try:
+        from apps.master_data.models.material_batch import MaterialBatch
+        batches = await MaterialBatch.all().values("id", "material_id", "batch_no", "quantity", "status", "deleted_at")
+        return {"batches": batches}
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get("/api/debug/materials")
+async def debug_materials():
+    try:
+        from apps.master_data.models.material import Material
+        mats = await Material.all().values("id", "uuid", "name", "code", "deleted_at")
+        return {"materials": mats}
+    except Exception as e:
+        return {"error": str(e)}
+
 # 配置CORS（从配置文件读取）
 from infra.config.infra_config import infra_settings
 app.add_middleware(
@@ -429,6 +447,10 @@ if _is_debug_allowed():
             }
         except Exception as e:
             return {"status": "error", "message": f"应用初始化失败: {str(e)}"}
+
+
+
+
 
 # 测试路由注册（调试用）
 @app.post("/debug/test-route-registration")

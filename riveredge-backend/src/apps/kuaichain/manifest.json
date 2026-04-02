@@ -13,6 +13,7 @@
     "title": "app.kuaichain.name",
     "icon": "gitBranch",
     "path": "/apps/kuaichain",
+    "permission": "kuaichain:view",
     "children": []
   },
   "permissions": ["kuaichain:view"],

@@ -2182,6 +2182,79 @@ class SalesOrderService:
                 deleted_at=datetime.now()
             )
 
+    async def _bulk_operation_wrapper(
+        self,
+        tenant_id: int,
+        sales_order_ids: List[int],
+        operator_id: int,
+        operation_func,
+        **kwargs,
+    ) -> Dict[str, Any]:
+        """通用批量操作包装器"""
+        success_count = 0
+        failed_count = 0
+        failed_items = []
+
+        for oid in sales_order_ids:
+            try:
+                await operation_func(tenant_id, oid, operator_id, **kwargs)
+                success_count += 1
+            except Exception as e:
+                failed_count += 1
+                failed_items.append({"id": oid, "reason": str(e)})
+
+        return {
+            "success_count": success_count,
+            "failed_count": failed_count,
+            "failed_items": failed_items,
+            "total": len(sales_order_ids),
+            "success": True,
+        }
+
+    async def bulk_submit_sales_orders(
+        self,
+        tenant_id: int,
+        sales_order_ids: List[int],
+        submitted_by: int,
+    ) -> Dict[str, Any]:
+        """批量提交销售订单"""
+        return await self._bulk_operation_wrapper(
+            tenant_id, sales_order_ids, submitted_by, self.submit_sales_order
+        )
+
+    async def bulk_approve_sales_orders(
+        self,
+        tenant_id: int,
+        sales_order_ids: List[int],
+        approved_by: int,
+    ) -> Dict[str, Any]:
+        """批量审核通过销售订单"""
+        return await self._bulk_operation_wrapper(
+            tenant_id, sales_order_ids, approved_by, self.approve_sales_order
+        )
+
+    async def bulk_withdraw_sales_orders(
+        self,
+        tenant_id: int,
+        sales_order_ids: List[int],
+        withdrawn_by: int,
+    ) -> Dict[str, Any]:
+        """批量撤回销售订单"""
+        return await self._bulk_operation_wrapper(
+            tenant_id, sales_order_ids, withdrawn_by, self.withdraw_sales_order
+        )
+
+    async def bulk_unapprove_sales_orders(
+        self,
+        tenant_id: int,
+        sales_order_ids: List[int],
+        unapproved_by: int,
+    ) -> Dict[str, Any]:
+        """批量反审核销售订单"""
+        return await self._bulk_operation_wrapper(
+            tenant_id, sales_order_ids, unapproved_by, self.unapprove_sales_order
+        )
+
     async def bulk_delete_sales_orders(
         self,
         tenant_id: int,

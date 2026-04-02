@@ -481,15 +481,392 @@ class RoleService:
         
         return list(permissions)
 
+    # 预设角色默认权限模板（按权限 code 前缀匹配）
+    PRESET_ROLE_PERMISSION_PREFIXES = {
+        # kuaizhizao:pricing 匹配 kuaizhizao:pricing:view，控制快制造内价格/金额是否可见
+        "SALES_MANAGER": [
+            "sales_",
+            "customer",
+            "quotation",
+            "receivable",
+            "kuaizhizao:pricing",
+            "kuaizhizao:sales",
+            "kuaizhizao:shipment",
+        ],
+        "SALES_PERSON": [
+            "sales_",
+            "customer",
+            "quotation",
+            "kuaizhizao:pricing",
+            "kuaizhizao:sales",
+            "kuaizhizao:shipment",
+        ],
+        "SALES_OPERATOR": [
+            "sales_",
+            "customer",
+            "quotation",
+            "kuaizhizao:pricing",
+            "kuaizhizao:sales",
+            "kuaizhizao:shipment",
+        ],
+        "PURCHASE_MANAGER": [
+            "purchase_",
+            "supplier",
+            "payable",
+            "kuaizhizao:pricing",
+            "kuaizhizao:purchase",
+            "kuaizhizao:receipt-notice",
+            "kuaizhizao:purchase-return",
+            "kuaizhizao:logistics",
+        ],
+        "PURCHASE_PERSON": [
+            "purchase_",
+            "supplier",
+            "kuaizhizao:pricing",
+            "kuaizhizao:purchase",
+            "kuaizhizao:receipt-notice",
+            "kuaizhizao:purchase-return",
+            "kuaizhizao:logistics",
+        ],
+        "PURCHASE_OPERATOR": [
+            "purchase_",
+            "supplier",
+            "kuaizhizao:pricing",
+            "kuaizhizao:purchase",
+            "kuaizhizao:receipt-notice",
+            "kuaizhizao:purchase-return",
+            "kuaizhizao:logistics",
+        ],
+        "PRODUCTION_MANAGER": [
+            "work_order",
+            "production_plan",
+            "mrp",
+            "lrp",
+            "routing",
+            "process",
+            "kuaizhizao:pricing",
+            "kuaizhizao:work-order",
+            "kuaizhizao:reporting",
+            "kuaizhizao:rework",
+            "kuaizhizao:outsource",
+            "kuaizhizao:production-execution",
+        ],
+        "PRODUCTION_TEAM_LEADER": [
+            "work_order",
+            "production_plan",
+            "process_inspection",
+            "kuaizhizao:pricing",
+            "kuaizhizao:work-order",
+            "kuaizhizao:reporting",
+            "kuaizhizao:rework",
+            "kuaizhizao:outsource",
+            "kuaizhizao:production-execution",
+        ],
+        "PRODUCTION_CLERK": [
+            "work_order",
+            "production_plan",
+            "routing",
+            "process",
+            "kuaizhizao:pricing",
+            "kuaizhizao:work-order",
+            "kuaizhizao:reporting",
+            "kuaizhizao:rework",
+            "kuaizhizao:outsource",
+            "kuaizhizao:production-execution",
+        ],
+        "PRODUCTION_STAFF": [
+            "work_order",
+            "process_inspection",
+            "kuaizhizao:work-order",
+            "kuaizhizao:production-execution",
+        ],
+        "WAREHOUSE_MANAGER": [
+            "warehouse",
+            "inventory",
+            "location",
+            "inbound",
+            "outbound",
+            "kuaizhizao:pricing",
+            "kuaizhizao:warehouse",
+        ],
+        "WAREHOUSE_OPERATOR": [
+            "warehouse",
+            "inventory",
+            "location",
+            "inbound",
+            "outbound",
+            "kuaizhizao:pricing",
+            "kuaizhizao:warehouse",
+        ],
+        "FINANCE_MANAGER": ["receivable", "payable", "receipt", "payment", "invoice", "cost_", "kuaizhizao:pricing"],
+        "FINANCE_OPERATOR": ["receivable", "payable", "receipt", "payment", "invoice", "kuaizhizao:pricing"],
+        "QUALITY_MANAGER": [
+            "quality",
+            "inspection",
+            "defect",
+            "kuaizhizao:quality",
+            "kuaizhizao:incoming-inspection",
+            "kuaizhizao:process-inspection",
+            "kuaizhizao:finished-goods-inspection",
+            "kuaizhizao:traceability",
+        ],
+        "QUALITY_OPERATOR": [
+            "quality",
+            "inspection",
+            "defect",
+            "kuaizhizao:quality",
+            "kuaizhizao:incoming-inspection",
+            "kuaizhizao:process-inspection",
+            "kuaizhizao:finished-goods-inspection",
+            "kuaizhizao:traceability",
+        ],
+        "ADMIN_OFFICE": ["system.user:read", "system.role:read", "system.menu:read"],
+        "EMPLOYEE": [],
+    }
+    LEGACY_ROLE_CODE_MAPPINGS = {
+        # 旧生产角色编码迁移到新编码
+        "PRODUCTION_OPERATOR": "PRODUCTION_STAFF",
+    }
+    LEGACY_ROLE_NAME_MAPPINGS = {
+        # 销售
+        "销售员": "SALES_PERSON",
+        "销售助理": "SALES_OPERATOR",
+        # 采购
+        "采购员": "PURCHASE_PERSON",
+        "采购助理": "PURCHASE_OPERATOR",
+        # 生产
+        "生产部经理": "PRODUCTION_MANAGER",
+        "生产执行员": "PRODUCTION_STAFF",
+        # 质量
+        "质检员": "QUALITY_OPERATOR",
+        # 仓储
+        "仓库员": "WAREHOUSE_OPERATOR",
+        # 财务
+        "会计专员": "FINANCE_OPERATOR",
+    }
+
     # 中国中小制造业极简角色预设（不含系统管理员，避免与已有系统角色冲突）
     PRESET_ROLES = [
-        {"name": "部门经理", "code": "DEPT_MANAGER", "description": "部门负责人"},
-        {"name": "普通员工", "code": "EMPLOYEE", "description": "普通员工"},
-        {"name": "生产人员", "code": "PRODUCTION_WORKER", "description": "生产相关执行人员"},
-        {"name": "财务", "code": "FINANCE", "description": "财务相关"},
-        {"name": "采购员", "code": "BUYER", "description": "采购相关"},
-        {"name": "销售员", "code": "SALES", "description": "销售相关"},
+        # 销售部
+        {"name": "销售经理", "code": "SALES_MANAGER", "description": "销售部门负责人，负责订单终审、销售计划与价格策略"},
+        {"name": "销售人员", "code": "SALES_PERSON", "description": "标准业务人员，负责客户维护、报价与订单跟进"},
+        {"name": "销售文员", "code": "SALES_OPERATOR", "description": "文员辅助角色，负责订单录入、单据归档与流程跟催"},
+        
+        # 采购部
+        {"name": "采购经理", "code": "PURCHASE_MANAGER", "description": "采购部门负责人，负责采购寻源、成本管控与结算审核"},
+        {"name": "采购人员", "code": "PURCHASE_PERSON", "description": "标准采购人员，负责寻比价、下达采购计划与供应商跟进"},
+        {"name": "采购文员", "code": "PURCHASE_OPERATOR", "description": "文员辅助角色，负责采购单录入、到货跟催与资料整理"},
+        
+        # 生产部
+        {"name": "车间主任", "code": "PRODUCTION_MANAGER", "description": "车间负责人，负责排产组织、质量与交付协同"},
+        {"name": "班组长", "code": "PRODUCTION_TEAM_LEADER", "description": "班组负责人，负责班组任务分配、进度跟踪与异常反馈"},
+        {"name": "生产文员", "code": "PRODUCTION_CLERK", "description": "生产文员，负责工单资料维护、单据录入与报表汇总"},
+        {"name": "生产人员", "code": "PRODUCTION_STAFF", "description": "一线生产人员，负责按工艺执行生产和过程反馈"},
+        
+        # 仓库部
+        {"name": "仓库主管", "code": "WAREHOUSE_MANAGER", "description": "仓库部门负责人，负责库存策略与实物安全"},
+        {"name": "仓库员", "code": "WAREHOUSE_OPERATOR", "description": "仓储执行人员，负责出入库盘点与收发货"},
+        
+        # 财务部
+        {"name": "财务主管", "code": "FINANCE_MANAGER", "description": "财务部门负责人，负责资金统筹与成本核算"},
+        {"name": "会计专员", "code": "FINANCE_OPERATOR", "description": "财务执行人员，负责核销、开票及凭证录入"},
+        
+        # 质量部
+        {"name": "质量主管", "code": "QUALITY_MANAGER", "description": "质量部门负责人，负责质量标准与仲裁决策"},
+        {"name": "质检员", "code": "QUALITY_OPERATOR", "description": "质检执行人员，负责进料、制程、成品检验"},
+        
+        # 通用
+        {"name": "行政办公", "code": "ADMIN_OFFICE", "description": "负责行政文秘及通用办公功能"},
+        {"name": "普通员工", "code": "EMPLOYEE", "description": "职能通用权限，仅包含基础查询"},
     ]
+
+    @staticmethod
+    async def _assign_preset_permissions(tenant_id: int, role: Role) -> None:
+        """为预设角色分配默认权限（按 code 前缀匹配，幂等）。"""
+        from core.models.role_permission import RolePermission
+
+        prefixes = RoleService.PRESET_ROLE_PERMISSION_PREFIXES.get(role.code, [])
+        if prefixes:
+            permissions = await Permission.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            ).all()
+            selected_ids = {
+                p.id
+                for p in permissions
+                if any(p.code == prefix or p.code.startswith(prefix) for prefix in prefixes)
+            }
+        else:
+            # 无前缀配置时至少授予只读权限，避免空角色不可用
+            read_perms = await Permission.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            ).filter(
+                Q(code__endswith=":read") | Q(code__endswith=":view")
+            ).all()
+            selected_ids = {p.id for p in read_perms}
+
+        if not selected_ids:
+            return
+
+        existing = await RolePermission.filter(role_id=role.id).all()
+        existing_ids = {rp.permission_id for rp in existing}
+        to_add = selected_ids - existing_ids
+        if not to_add:
+            return
+
+        await RolePermission.bulk_create(
+            [RolePermission(role_id=role.id, permission_id=pid, created_at=now_utc()) for pid in to_add],
+            ignore_conflicts=True,
+        )
+
+    @staticmethod
+    async def _merge_role_relations(source_role_id: int, target_role_id: int) -> None:
+        """迁移 source 角色的用户/权限关系到 target 角色。"""
+        from core.models.role_permission import RolePermission
+
+        user_roles = await UserRole.filter(role_id=source_role_id).all()
+        target_user_ids = {
+            ur.user_id for ur in await UserRole.filter(role_id=target_role_id).all()
+        }
+        to_add_user_roles = [
+            UserRole(user_id=ur.user_id, role_id=target_role_id, created_at=now_utc())
+            for ur in user_roles
+            if ur.user_id not in target_user_ids
+        ]
+        if to_add_user_roles:
+            await UserRole.bulk_create(to_add_user_roles, ignore_conflicts=True)
+        await UserRole.filter(role_id=source_role_id).delete()
+
+        role_permissions = await RolePermission.filter(role_id=source_role_id).all()
+        target_permission_ids = {
+            rp.permission_id for rp in await RolePermission.filter(role_id=target_role_id).all()
+        }
+        to_add_role_permissions = [
+            RolePermission(role_id=target_role_id, permission_id=rp.permission_id, created_at=now_utc())
+            for rp in role_permissions
+            if rp.permission_id not in target_permission_ids
+        ]
+        if to_add_role_permissions:
+            await RolePermission.bulk_create(to_add_role_permissions, ignore_conflicts=True)
+        await RolePermission.filter(role_id=source_role_id).delete()
+
+    @staticmethod
+    async def cleanup_legacy_preset_roles(tenant_id: int) -> dict:
+        """
+        对齐旧预设角色数据：
+        1) 旧编码迁移到新编码；
+        2) 已存在预设角色名称/描述自动更新为最新文案；
+        3) 迁移后删除旧角色数据（软删除）。
+        """
+        preset_by_code = {item["code"]: item for item in RoleService.PRESET_ROLES}
+        renamed_count = 0
+        merged_count = 0
+        soft_deleted_count = 0
+        permission_synced_count = 0
+
+        for old_code, new_code in RoleService.LEGACY_ROLE_CODE_MAPPINGS.items():
+            old_role = await Role.filter(
+                tenant_id=tenant_id,
+                code=old_code,
+                deleted_at__isnull=True,
+            ).first()
+            if not old_role:
+                continue
+
+            target_role = await Role.filter(
+                tenant_id=tenant_id,
+                code=new_code,
+                deleted_at__isnull=True,
+            ).first()
+            target_preset = preset_by_code.get(new_code)
+
+            if target_role:
+                await RoleService._merge_role_relations(old_role.id, target_role.id)
+                old_role.deleted_at = now_utc()
+                await old_role.save()
+                merged_count += 1
+                soft_deleted_count += 1
+            else:
+                old_role.code = new_code
+                if target_preset:
+                    old_role.name = target_preset["name"]
+                    old_role.description = target_preset.get("description")
+                await old_role.save()
+                renamed_count += 1
+
+        # 按旧名称迁移（兼容历史上 code 不规范但名称一致的数据）
+        for old_name, new_code in RoleService.LEGACY_ROLE_NAME_MAPPINGS.items():
+            legacy_roles = await Role.filter(
+                tenant_id=tenant_id,
+                name=old_name,
+                deleted_at__isnull=True,
+            ).all()
+            if not legacy_roles:
+                continue
+
+            target_preset = preset_by_code.get(new_code)
+            for legacy_role in legacy_roles:
+                target_role = await Role.filter(
+                    tenant_id=tenant_id,
+                    code=new_code,
+                    deleted_at__isnull=True,
+                ).exclude(id=legacy_role.id).first()
+
+                if target_role:
+                    await RoleService._merge_role_relations(legacy_role.id, target_role.id)
+                    legacy_role.deleted_at = now_utc()
+                    await legacy_role.save()
+                    merged_count += 1
+                    soft_deleted_count += 1
+                else:
+                    legacy_role.code = new_code
+                    if target_preset:
+                        legacy_role.name = target_preset["name"]
+                        legacy_role.description = target_preset.get("description")
+                    await legacy_role.save()
+                    renamed_count += 1
+
+        # 对预设角色按 code 去重（保留最早一条，其余并入后软删除）
+        for code in preset_by_code.keys():
+            dup_roles = await Role.filter(
+                tenant_id=tenant_id,
+                code=code,
+                deleted_at__isnull=True,
+            ).order_by("created_at", "id").all()
+            if len(dup_roles) <= 1:
+                continue
+
+            keeper = dup_roles[0]
+            for duplicate in dup_roles[1:]:
+                await RoleService._merge_role_relations(duplicate.id, keeper.id)
+                duplicate.deleted_at = now_utc()
+                await duplicate.save()
+                merged_count += 1
+                soft_deleted_count += 1
+
+        # 同步已存在预设角色的文案，确保历史数据与当前预设一致
+        for item in RoleService.PRESET_ROLES:
+            role = await Role.filter(
+                tenant_id=tenant_id,
+                code=item["code"],
+                deleted_at__isnull=True,
+            ).first()
+            if role and (role.name != item["name"] or role.description != item.get("description")):
+                role.name = item["name"]
+                role.description = item.get("description")
+                await role.save()
+                renamed_count += 1
+            if role:
+                await RoleService._assign_preset_permissions(tenant_id=tenant_id, role=role)
+                permission_synced_count += 1
+
+        return {
+            "renamed": renamed_count,
+            "merged": merged_count,
+            "soft_deleted": soft_deleted_count,
+            "permission_synced": permission_synced_count,
+        }
 
     @staticmethod
     async def load_preset_sme(tenant_id: int, current_user_id: int) -> int:
@@ -506,7 +883,7 @@ class RoleService:
             ).exists()
             if not exists:
                 now = now_utc()
-                await Role.create(
+                role = await Role.create(
                     tenant_id=tenant_id,
                     name=item["name"],
                     code=item["code"],
@@ -516,5 +893,6 @@ class RoleService:
                     created_at=now,
                     updated_at=now,
                 )
+                await RoleService._assign_preset_permissions(tenant_id=tenant_id, role=role)
                 created += 1
         return created

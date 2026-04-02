@@ -3076,9 +3076,9 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         async with in_transaction():
             work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
 
-            # 检查工单状态：只能撤回已下达或指定结束的工单
-            if work_order.status not in ['released', 'completed']:
-                raise ValidationError(f"只能撤回已下达或指定结束的工单，当前状态：{work_order.status}")
+            # 检查工单状态：只能撤回已下达、执行中或已完成（且为指定结束）的工单
+            if work_order.status not in ['released', 'in_progress', 'completed']:
+                raise ValidationError(f"当前工单状态不支持撤回，当前状态：{work_order.status}")
 
             # 如果是已完成状态，必须是指定结束的工单才能撤回
             if work_order.status == 'completed' and not work_order.manually_completed:
@@ -3087,28 +3087,42 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             # 检查是否有报工记录
             reporting_records = await ReportingRecord.filter(
                 tenant_id=tenant_id,
-                work_order_id=work_order_id,
-                deleted_at__isnull=True
+                work_order_id=work_order_id
             ).all()
 
             if reporting_records:
                 raise BusinessLogicError("工单已有报工记录，不允许撤回。只能撤回未报工的工单。")
 
-            # 兜底保护：即便报工记录缺失，也不允许撤回已有执行痕迹的工单
+            # 兜底保护：检查是否有产出（即便报工记录缺失）
             completed_qty = work_order.completed_quantity or Decimal("0")
-            if (getattr(work_order, "actual_start_date", None) is not None) or completed_qty > 0:
-                raise BusinessLogicError("工单已有执行痕迹（已开工或有产出），不允许撤回。")
+            if completed_qty > 0:
+                raise BusinessLogicError("工单已有完工数量，不允许撤回。")
 
             # 保存原始状态用于节点时间记录
             original_status = work_order.status
 
-            # 更新状态为草稿
+            # 更新状态为草稿，并重置实际执行时间
             work_order = await self.update_with_user(
                 tenant_id=tenant_id,
                 record_id=work_order_id,
                 updated_by=revoked_by,
                 status='draft',
-                manually_completed=False  # 清除指定结束标记
+                manually_completed=False,  # 清除指定结束标记
+                actual_start_date=None,
+                actual_end_date=None
+            )
+
+            # 同步重置所有工序的状态和时间
+            await WorkOrderOperation.filter(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id
+            ).update(
+                status='pending',
+                actual_start_date=None,
+                actual_end_date=None,
+                completed_quantity=0,
+                qualified_quantity=0,
+                unqualified_quantity=0
             )
 
             # 记录节点时间

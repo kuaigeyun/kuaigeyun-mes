@@ -96,6 +96,7 @@ class InventoryService:
                             f"物料 {material.name}（{material_code}）启用了批号管理，入库必须提供批号"
                         )
 
+                logger.info(f"Adding stock for material_id={material_id}, batch_no={batch_no}, qty={quantity}")
                 batch_no = batch_no or "DEFAULT"
                 batch = await MaterialBatch.filter(
                     tenant_id=tenant_id,
@@ -103,6 +104,7 @@ class InventoryService:
                     batch_no=batch_no,
                     deleted_at__isnull=True,
                 ).select_for_update().first()
+                logger.debug(f"Types: quantity={type(quantity)}, batch_qty={type(batch.quantity if batch else None)}")
                 if batch:
                     batch.quantity = (batch.quantity or Decimal(0)) + quantity
                     await batch.save()

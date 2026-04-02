@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import re
 import time
+from datetime import datetime
 from pathlib import Path
 
 from core.timezone_utils import now_utc
@@ -64,15 +65,22 @@ class PermissionSyncService:
             {"created": 新增数量, "scanned": 扫描到的权限码数量}
         """
         now = time.time()
+
+        conn_repair = await get_db_connection()
+        try:
+            type_repaired = await cls._repair_permission_types(conn_repair, tenant_id=tenant_id)
+        finally:
+            await conn_repair.close()
+
         if not force:
             last_ts = cls._last_sync_ts.get(tenant_id, 0)
             if now - last_ts < cls._sync_interval_seconds:
-                return {"created": 0, "scanned": 0}
+                return {"created": 0, "scanned": 0, "type_repaired": type_repaired}
 
         candidate_codes = await cls._collect_candidate_codes(tenant_id)
         if not candidate_codes:
             cls._last_sync_ts[tenant_id] = now
-            return {"created": 0, "scanned": 0}
+            return {"created": 0, "scanned": 0, "type_repaired": type_repaired}
 
         conn = await get_db_connection()
         try:
@@ -87,41 +95,45 @@ class PermissionSyncService:
             existing_codes = {str(r["code"]) for r in existing_rows}
 
             to_create = sorted(code for code in candidate_codes if code not in existing_codes)
-            if not to_create:
-                cls._last_sync_ts[tenant_id] = now
-                return {"created": 0, "scanned": len(candidate_codes)}
 
-            created_at = now_utc()
-            rows: list[tuple[Any, ...]] = []
-            for code in to_create:
-                resource, action = cls._split_code(code)
-                permission_type = cls._infer_permission_type(code)
-                rows.append(
-                    (
-                        str(uuid4()),
-                        tenant_id,
-                        cls._build_permission_name(resource, action, permission_type),
-                        code,
-                        resource[:50],
-                        action[:50],
-                        f"自动同步权限: {code}",
-                        permission_type,
-                        created_at,
-                        created_at,
+            created = 0
+            if to_create:
+                created_at = now_utc()
+                rows: list[tuple[Any, ...]] = []
+                for code in to_create:
+                    resource, action = cls._split_code(code)
+                    permission_type = cls._infer_permission_type(code)
+                    rows.append(
+                        (
+                            str(uuid4()),
+                            tenant_id,
+                            cls._build_permission_name(resource, action, permission_type),
+                            code,
+                            resource[:50],
+                            action[:50],
+                            f"自动同步权限: {code}",
+                            permission_type,
+                            created_at,
+                            created_at,
+                        )
                     )
-                )
 
-            await conn.executemany(
-                """
-                INSERT INTO core_permissions
-                (uuid, tenant_id, name, code, resource, action, description, permission_type, created_at, updated_at)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-                """,
-                rows,
-            )
+                await conn.executemany(
+                    """
+                    INSERT INTO core_permissions
+                    (uuid, tenant_id, name, code, resource, action, description, permission_type, created_at, updated_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                    """,
+                    rows,
+                )
+                created = len(rows)
 
             cls._last_sync_ts[tenant_id] = now
-            return {"created": len(rows), "scanned": len(candidate_codes)}
+            return {
+                "created": created,
+                "scanned": len(candidate_codes),
+                "type_repaired": type_repaired,
+            }
         finally:
             await conn.close()
 
@@ -291,12 +303,22 @@ class PermissionSyncService:
 
         node_code = PermissionSyncService._extract_node_code(meta)
         if node_code:
-            return f"{app_code}:{node_code}:view"
+            # 与 manifest 权限码一致：资源段使用连字符（meta.node 常为 sales_order 类下划线）
+            resource_segment = node_code.replace("_", "-")
+            return f"{app_code}:{resource_segment}:view"
 
-        leaf = path.rstrip("/").split("/")[-1].strip().lower()
-        if not leaf or leaf.startswith(":"):
+        # 无 meta.node 时：用应用根路径后的全段拼成资源段（如 sales-management/dashboard），避免多模块下
+        # 多个 dashboard 都推导成 kuaizhizao:dashboard:view 冲突；与 manifest 菜单 permission 规则一致。
+        parts = [p for p in path.strip().split("/") if p]
+        try:
+            idx = parts.index(app_code)
+        except ValueError:
             return None
-        resource = re.sub(r"[^a-z0-9\\-]+", "-", leaf).strip("-")
+        tail = parts[idx + 1 :]
+        if not tail:
+            return f"{app_code}:pricing:view"
+        resource = "-".join(tail)
+        resource = re.sub(r"[^a-z0-9\\-]+", "-", resource.lower()).strip("-")
         if not resource:
             return None
         return f"{app_code}:{resource}:view"
@@ -344,11 +366,46 @@ class PermissionSyncService:
     @staticmethod
     def _infer_permission_type(code: str) -> str:
         lower = code.lower()
-        if lower.endswith(":amount") or ":view:amount" in lower:
+        # 金额/单价类字段权限（含快制造统一价格可见）
+        if lower.endswith(":pricing:view") or lower.endswith(":amount") or ":view:amount" in lower:
             return "field"
         if ":data:" in lower or ":scope:" in lower or lower.endswith(":scope"):
             return "data"
         return "function"
+
+    @classmethod
+    async def _repair_permission_types(cls, conn, tenant_id: int) -> int:
+        """将已有 core_permissions 行的 permission_type 与 _infer 对齐（修复历史错标）。"""
+        rows = await conn.fetch(
+            """
+            SELECT id, code, permission_type
+            FROM core_permissions
+            WHERE tenant_id = $1 AND deleted_at IS NULL
+            """,
+            tenant_id,
+        )
+        if not rows:
+            return 0
+        now = now_utc()
+        fixed = 0
+        for r in rows:
+            code = str(r["code"])
+            inferred = cls._infer_permission_type(code)
+            if inferred == str(r["permission_type"]):
+                continue
+            await conn.execute(
+                """
+                UPDATE core_permissions
+                SET permission_type = $1, updated_at = $2
+                WHERE id = $3 AND tenant_id = $4
+                """,
+                inferred,
+                now,
+                int(r["id"]),
+                tenant_id,
+            )
+            fixed += 1
+        return fixed
 
     @staticmethod
     def _build_permission_name(resource: str, action: str, permission_type: str) -> str:
@@ -360,8 +417,18 @@ class PermissionSyncService:
             "delete": "删除",
             "assign": "分配",
             "approve": "审批",
+            "audit": "审核",
+            "submit": "提交",
+            "confirm": "确认",
+            "close": "关闭/结案",
+            "cancel": "取消/作废",
             "export": "导出",
             "import": "导入",
+            "print": "打印",
+            "download": "下载",
+            "upload": "上传",
+            "execute": "执行",
+            "sync": "同步",
         }.get(action.lower(), action)
         type_text = {"function": "功能", "data": "数据", "field": "字段"}.get(permission_type, "权限")
         return f"{action_text}{resource}（{type_text}）"
