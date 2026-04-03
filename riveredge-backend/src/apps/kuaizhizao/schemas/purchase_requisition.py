@@ -80,6 +80,7 @@ class PurchaseRequisitionCreate(BaseModel):
     """采购申请创建"""
     requisition_code: Optional[str] = None
     requisition_name: Optional[str] = None
+    requisition_date: Optional[date] = Field(None, description="申请日期，未传则默认当天")
     required_date: Optional[date] = None
     source_type: Optional[str] = None
     source_id: Optional[int] = None
@@ -91,6 +92,7 @@ class PurchaseRequisitionCreate(BaseModel):
 class PurchaseRequisitionUpdate(BaseModel):
     """采购申请更新"""
     requisition_name: Optional[str] = None
+    requisition_date: Optional[date] = None
     required_date: Optional[date] = None
     notes: Optional[str] = None
     items: Optional[List[PurchaseRequisitionItemCreate]] = None

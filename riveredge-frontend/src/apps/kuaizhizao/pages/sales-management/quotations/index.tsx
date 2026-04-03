@@ -494,17 +494,15 @@ const QuotationsPage: React.FC = () => {
       render: (_, record) => {
         const lifecycle = getQuotationLifecycle(record);
         return (
-          <span style={{ display: 'inline-flex' }}>
-            <UniLifecycle
-              percent={lifecycle.percent}
-              stageName={lifecycle.stageName}
-              status={lifecycle.status}
-              subStages={lifecycle.subStages}
-              showLabel
-              size="small"
-              showCircleTooltip={false}
-            />
-          </span>
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
         );
       },
     },

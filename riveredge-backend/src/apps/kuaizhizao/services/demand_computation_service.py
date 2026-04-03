@@ -11,7 +11,7 @@ Date: 2025-01-14
 
 import asyncio
 from typing import List, Optional, Dict, Any
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 from decimal import Decimal, ROUND_CEILING
 from tortoise.transactions import in_transaction
 from loguru import logger
@@ -46,6 +46,16 @@ from apps.kuaizhizao.utils.inventory_helper import (
 from core.services.business.code_generation_service import CodeGenerationService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
+from core.timezone_utils import make_aware, now_utc
+
+
+def _to_utc_aware(dt: Optional[datetime]) -> Optional[datetime]:
+    """统一为 UTC timezone-aware，避免 naive/aware datetime 比较报错。"""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return make_aware(dt, "UTC")
+    return dt.astimezone(timezone.utc)
 
 
 def _safe_configurable_selections(cfg: Any) -> Optional[Dict[str, int]]:
@@ -824,20 +834,22 @@ class DemandComputationService:
         from apps.kuaizhizao.models.document_relation import DocumentRelation
         from apps.kuaizhizao.models.work_order import WorkOrder
         from apps.kuaizhizao.models.purchase_order import PurchaseOrder
-        from datetime import datetime
-        
+
         computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
         if not computation:
             raise NotFoundError(f"需求计算不存在: {computation_id}")
-            
+
         comp_time = computation.computation_end_time or computation.updated_at
-        
+        comp_time_cmp = _to_utc_aware(comp_time)
+        now = now_utc()
+
         # 1. 监控上游需求变动
         upstream_alerts = []
         demand_id_list = computation.demand_ids if computation.demand_ids else [computation.demand_id]
         demands = await Demand.filter(tenant_id=tenant_id, id__in=demand_id_list).all()
         for d in demands:
-            if d.updated_at > comp_time:
+            du = _to_utc_aware(d.updated_at)
+            if comp_time_cmp is not None and du is not None and du > comp_time_cmp:
                 upstream_alerts.append({
                     "type": "demand_updated",
                     "id": d.id,
@@ -849,8 +861,7 @@ class DemandComputationService:
         
         # 2. 监控下游执行风险 (延期)
         downstream_alerts = []
-        now = datetime.now()
-        
+
         # 获取所有下推关系
         relations = await DocumentRelation.filter(
             tenant_id=tenant_id,
@@ -863,7 +874,8 @@ class DemandComputationService:
             if rel.target_type == "work_order":
                 wo = await WorkOrder.get_or_none(tenant_id=tenant_id, id=rel.target_id)
                 if wo and wo.status not in ("completed", "cancelled", "完成", "已取消"):
-                    if wo.planned_end_date and wo.planned_end_date < now:
+                    end_cmp = _to_utc_aware(wo.planned_end_date)
+                    if end_cmp is not None and end_cmp < now:
                         downstream_alerts.append({
                             "type": "work_order_overdue",
                             "id": wo.id,
@@ -877,9 +889,9 @@ class DemandComputationService:
                 po = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=rel.target_id)
                 if po and po.status not in ("已完成", "已取消", "completed", "cancelled"):
                     if po.delivery_date:
-                        # DateField 转换为 datetime 比较
                         delivery_dt = datetime.combine(po.delivery_date, datetime.min.time())
-                        if delivery_dt < now:
+                        delivery_cmp = _to_utc_aware(delivery_dt)
+                        if delivery_cmp is not None and delivery_cmp < now:
                             downstream_alerts.append({
                                 "type": "purchase_order_overdue",
                                 "id": po.id,

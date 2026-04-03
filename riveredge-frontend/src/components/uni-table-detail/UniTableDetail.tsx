@@ -36,6 +36,8 @@ export interface UniTableDetailProps<RecordType = any> {
   tableProps?: Partial<TableProps<RecordType>>;
   /** 是否隐藏操作列（删除） */
   hideOperation?: boolean;
+  /** 至少保留行数；达到下限时禁用行删除（默认不限制） */
+  minRows?: number;
   /** 导入按钮点击事件 */
   onImport?: () => void;
   /** 容器自定义样式 */
@@ -62,6 +64,7 @@ export const UniTableDetail: React.FC<UniTableDetailProps> = ({
   summary,
   tableProps,
   hideOperation,
+  minRows,
   onImport,
   onBatchSelect,
   batchSelectText,
@@ -113,17 +116,21 @@ export const UniTableDetail: React.FC<UniTableDetailProps> = ({
               width: 70,
               align: 'center',
               fixed: 'right',
-              render: (_, __, index) => (
-                <Button
-                  type="link"
-                  danger
-                  size="small"
-                  icon={<DeleteOutlined />}
-                  onClick={() => remove(index)}
-                >
-                  {t('common.delete') ?? '删除'}
-                </Button>
-              ),
+              render: (_, __, index) => {
+                const deleteDisabled = minRows != null && fields.length <= minRows;
+                return (
+                  <Button
+                    type="link"
+                    danger
+                    size="small"
+                    icon={<DeleteOutlined />}
+                    disabled={deleteDisabled}
+                    onClick={() => remove(index)}
+                  >
+                    {t('common.delete') ?? '删除'}
+                  </Button>
+                );
+              },
             });
           }
 

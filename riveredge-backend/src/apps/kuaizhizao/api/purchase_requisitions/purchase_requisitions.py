@@ -6,6 +6,7 @@ Date: 2025-02-01
 """
 
 import uuid
+from datetime import date
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query, Path, HTTPException as FastAPIHTTPException, status
@@ -70,6 +71,11 @@ async def list_requisitions(
     limit: int = Query(20, ge=1, le=100),
     status: Optional[str] = Query(None),
     source_type: Optional[str] = Query(None),
+    keyword: Optional[str] = Query(None, description="模糊：编号/名称/来源编码"),
+    requisition_code: Optional[str] = Query(None),
+    requisition_name: Optional[str] = Query(None),
+    required_date_from: Optional[date] = Query(None),
+    required_date_to: Optional[date] = Query(None),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """获取采购申请列表"""
@@ -79,6 +85,11 @@ async def list_requisitions(
         limit=limit,
         status=status,
         source_type=source_type,
+        keyword=keyword,
+        requisition_code=requisition_code,
+        requisition_name=requisition_name,
+        required_date_from=required_date_from,
+        required_date_to=required_date_to,
     )
 
 

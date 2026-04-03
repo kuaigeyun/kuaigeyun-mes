@@ -9,6 +9,8 @@ Date: 2025-02-01
 
 from datetime import datetime, date
 from typing import List, Optional, Dict, Any, Tuple
+
+from tortoise.expressions import Q
 from decimal import Decimal
 
 from tortoise.transactions import in_transaction
@@ -87,12 +89,16 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                     import uuid
                     data.requisition_code = f"CGSQ{datetime.now().strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
 
+            req_date = data.requisition_date or date.today()
+            applicant_name = await self.get_user_name(created_by)
             req = await PurchaseRequisition.create(
                 tenant_id=tenant_id,
                 requisition_code=data.requisition_code,
                 requisition_name=data.requisition_name or f"采购申请-{data.requisition_code}",
                 status="草稿",
-                requisition_date=date.today(),
+                requisition_date=req_date,
+                applicant_id=created_by,
+                applicant_name=applicant_name,
                 required_date=data.required_date,
                 source_type=data.source_type,
                 source_id=data.source_id,
@@ -221,6 +227,11 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         limit: int = 20,
         status: Optional[str] = None,
         source_type: Optional[str] = None,
+        keyword: Optional[str] = None,
+        requisition_code: Optional[str] = None,
+        requisition_name: Optional[str] = None,
+        required_date_from: Optional[date] = None,
+        required_date_to: Optional[date] = None,
     ) -> Dict[str, Any]:
         """列表查询，返回 { data, total, success }"""
         query = PurchaseRequisition.filter(
@@ -230,9 +241,30 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             query = query.filter(status=status)
         if source_type:
             query = query.filter(source_type=source_type)
+        kw = (keyword or "").strip()
+        if kw:
+            query = query.filter(
+                Q(requisition_code__icontains=kw)
+                | Q(requisition_name__icontains=kw)
+                | Q(source_code__icontains=kw)
+            )
+        rc = (requisition_code or "").strip()
+        if rc:
+            query = query.filter(requisition_code__icontains=rc)
+        rn = (requisition_name or "").strip()
+        if rn:
+            query = query.filter(requisition_name__icontains=rn)
+        if required_date_from is not None:
+            query = query.filter(
+                required_date__isnull=False, required_date__gte=required_date_from
+            )
+        if required_date_to is not None:
+            query = query.filter(
+                required_date__isnull=False, required_date__lte=required_date_to
+            )
 
         total = await query.count()
-        reqs = await query.offset(skip).limit(limit).order_by("-created_at")
+        reqs = await query.offset(skip).limit(limit).order_by("-updated_at", "-id")
 
         result = []
         for req in reqs:

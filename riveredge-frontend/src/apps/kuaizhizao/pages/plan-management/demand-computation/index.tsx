@@ -9,7 +9,7 @@
  * @date 2025-01-14
  */
 
-import React, { useRef, useState } from 'react'
+import React, { useRef, useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation } from 'react-router-dom'
 import {
@@ -41,6 +41,7 @@ import {
   Empty,
   Row,
   Col,
+  Card,
   InputNumber,
   Dropdown,
   Typography,
@@ -57,7 +58,6 @@ import {
   ArrowDownOutlined,
   DeleteOutlined,
   WarningOutlined,
-  SyncOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
   CopyOutlined,
@@ -141,7 +141,8 @@ interface MaterialInfo {
 const DEMAND_COMPUTATION_ROW_ACTIONS_INLINE_MAX = 3
 
 /** 详情明细表最小宽度（外层横滚） */
-const DEMAND_COMPUTATION_DETAIL_ITEMS_MIN_WIDTH = 1780
+/** 明细表列宽合计下限，保证横滚与「尽量不换行」 */
+const DEMAND_COMPUTATION_DETAIL_ITEMS_MIN_WIDTH = 1920
 
 function renderDemandComputationRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
   const wrapped = nodes.map((node, i) => <span key={`${keyPrefix}-${i}`}>{node}</span>)
@@ -664,6 +665,16 @@ const DemandComputationPage: React.FC = () => {
     drawerVisible && detailTabKey === 'detail' ? currentComputation?.id ?? undefined : undefined
   )
 
+  /** 详情内生命周期区展示协同监控：进入「详情」Tab 时拉取 */
+  useEffect(() => {
+    if (!drawerVisible || !currentComputation?.id || detailTabKey !== 'detail') return
+    setDynamicMonitorLoading(true)
+    getComputationDynamicMonitor(currentComputation.id)
+      .then(setDynamicMonitorData)
+      .catch(() => messageApi.error('获取协同监控失败'))
+      .finally(() => setDynamicMonitorLoading(false))
+  }, [drawerVisible, currentComputation?.id, detailTabKey])
+
   // 物料来源信息状态
   const [validationResults, setValidationResults] = useState<any>(null)
 
@@ -998,6 +1009,9 @@ const DemandComputationPage: React.FC = () => {
           await recomputeDemandComputation(record.id!)
           messageApi.success('重新计算已提交，请稍后刷新查看结果')
           invalidateStatistics(); actionRef.current?.reload()
+          if (drawerVisible && detailTabKey === 'detail' && currentComputation?.id === record.id) {
+            getComputationDynamicMonitor(record.id!).then(setDynamicMonitorData).catch(() => {})
+          }
         } catch (error: any) {
           messageApi.error(error?.response?.data?.detail || '重新计算失败')
         }
@@ -1214,22 +1228,21 @@ const DemandComputationPage: React.FC = () => {
       render: (_, record) => {
         const lifecycle = getDemandComputationLifecycle(record)
         return (
-          <span style={{ display: 'inline-flex', justifyContent: 'center' }}>
-            <UniLifecycle
-              percent={lifecycle.percent}
-              stageName={lifecycle.stageName}
-              status={lifecycle.status}
-              subStages={lifecycle.subStages}
-              showLabel
-              size="small"
-              showCircleTooltip={false}
-            />
-          </span>
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
         )
       },
     },
     {
       title: '操作',
+      key: 'option',
       valueType: 'option',
       width: 200,
       fixed: 'right',
@@ -1816,11 +1829,18 @@ const DemandComputationPage: React.FC = () => {
       {/* 详情Drawer - 使用 styles.wrapper 设置宽度，因 antd 6 的 size 可能被全局样式覆盖 */}
       <Drawer
         open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
+        onClose={() => {
+          setDrawerVisible(false)
+          setDynamicMonitorData(null)
+        }}
         title="计算详情"
         rootClassName="demand-computation-drawer"
         width="50%"
-        styles={{ wrapper: { width: '50%' } }}
+        styles={{
+          wrapper: { width: '50%' },
+          /** 仅本页详情抽屉：内容区去掉上下 padding，左右保持主题默认 */
+          body: { paddingTop: 8, paddingBottom: 8 },
+        }}
       >
         {currentComputation && (
           <Tabs
@@ -1848,18 +1868,19 @@ const DemandComputationPage: React.FC = () => {
                   .catch(() => messageApi.error('获取下推记录失败'))
                   .finally(() => setPushRecordsLoading(false))
               }
-              if (key === 'monitor' && currentComputation.id) {
-                setDynamicMonitorLoading(true)
-                getComputationDynamicMonitor(currentComputation.id)
-                  .then(setDynamicMonitorData)
-                  .catch(() => messageApi.error('获取同步监控失败'))
-                  .finally(() => setDynamicMonitorLoading(false))
-              }
             }}
             items={[
               {
                 key: 'detail',
-                label: '详情',
+                label: (
+                  <Badge
+                    dot={
+                      !!(dynamicMonitorData?.has_upstream_change || dynamicMonitorData?.has_downstream_risk)
+                    }
+                  >
+                    详情
+                  </Badge>
+                ),
                 children: (
                   <>
                     <DetailDrawerSection title="基本信息">
@@ -2016,6 +2037,157 @@ const DemandComputationPage: React.FC = () => {
                               <Typography.Text type="secondary">暂无阶段节点数据</Typography.Text>
                             )}
                             <Divider style={{ margin: '16px 0' }} />
+                            {dynamicMonitorLoading ? (
+                              <div style={{ textAlign: 'center', padding: 24 }}>
+                                <Spin />
+                              </div>
+                            ) : dynamicMonitorData ? (
+                              <>
+                                <Row gutter={[16, 16]} align="stretch" wrap>
+                                  <Col xs={24} lg={12} style={{ display: 'flex' }}>
+                                    <Card
+                                      size="small"
+                                      title="上游需求变动"
+                                      variant="outlined"
+                                      style={{
+                                        flex: 1,
+                                        width: '100%',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        minHeight: 200,
+                                        backgroundColor: 'var(--ant-color-info-bg)',
+                                        borderColor: 'var(--ant-color-info-border)',
+                                      }}
+                                      styles={{
+                                        header: {
+                                          background: 'var(--ant-color-info-bg)',
+                                          borderBottomColor: 'var(--ant-color-info-border)',
+                                        },
+                                        body: {
+                                          flex: 1,
+                                          display: 'flex',
+                                          flexDirection: 'column',
+                                          justifyContent:
+                                            dynamicMonitorData.upstream_alerts.length > 0 ? 'flex-start' : 'center',
+                                        },
+                                      }}
+                                    >
+                                      {dynamicMonitorData.upstream_alerts.length > 0 ? (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                          {dynamicMonitorData.upstream_alerts.map((alert: any, i: number) => (
+                                            <Alert
+                                              key={i}
+                                              message="原始需求已变更"
+                                              description={alert.message}
+                                              type="warning"
+                                              showIcon
+                                              action={
+                                                <Button
+                                                  size="small"
+                                                  type="primary"
+                                                  ghost
+                                                  onClick={() => handleRecompute(currentComputation)}
+                                                >
+                                                  重新计算
+                                                </Button>
+                                              }
+                                            />
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <Empty
+                                          description="源需求数据稳定，暂无变动"
+                                          image={Empty.PRESENTED_IMAGE_SIMPLE}
+                                        />
+                                      )}
+                                    </Card>
+                                  </Col>
+                                  <Col xs={24} lg={12} style={{ display: 'flex' }}>
+                                    <Card
+                                      size="small"
+                                      title="下游执行追踪"
+                                      variant="outlined"
+                                      style={{
+                                        flex: 1,
+                                        width: '100%',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        minHeight: 200,
+                                        backgroundColor: 'var(--ant-color-success-bg)',
+                                        borderColor: 'var(--ant-color-success-border)',
+                                      }}
+                                      styles={{
+                                        header: {
+                                          background: 'var(--ant-color-success-bg)',
+                                          borderBottomColor: 'var(--ant-color-success-border)',
+                                        },
+                                        body: {
+                                          flex: 1,
+                                          display: 'flex',
+                                          flexDirection: 'column',
+                                          justifyContent:
+                                            dynamicMonitorData.downstream_alerts.length > 0 ? 'flex-start' : 'center',
+                                        },
+                                      }}
+                                    >
+                                      {dynamicMonitorData.downstream_alerts.length > 0 ? (
+                                        <Timeline
+                                          mode="left"
+                                          items={dynamicMonitorData.downstream_alerts.map(
+                                            (alert: any, i: number) => ({
+                                              key: i,
+                                              label: alert.planned_end_date || alert.delivery_date,
+                                              children: (
+                                                <div>
+                                                  <div style={{ fontWeight: 'bold' }}>
+                                                    {alert.code} ({alert.name})
+                                                  </div>
+                                                  <div style={{ color: '#ff4d4f', fontSize: 13 }}>
+                                                    {alert.message}
+                                                  </div>
+                                                  <div style={{ fontSize: 12, color: '#999' }}>
+                                                    当前状态: {alert.status}
+                                                  </div>
+                                                </div>
+                                              ),
+                                              color: 'red',
+                                              dot: <ClockCircleOutlined style={{ fontSize: 16 }} />,
+                                            })
+                                          )}
+                                        />
+                                      ) : (
+                                        <div
+                                          style={{
+                                            textAlign: 'center',
+                                            padding: '20px 0',
+                                            color: 'var(--ant-color-success)',
+                                          }}
+                                        >
+                                          <CheckCircleOutlined style={{ fontSize: 24, marginBottom: 8 }} />
+                                          <div>所有下推单据均在计划时间内，执行正常</div>
+                                        </div>
+                                      )}
+                                    </Card>
+                                  </Col>
+                                </Row>
+                                {dynamicMonitorData.monitor_time ? (
+                                  <div
+                                    style={{
+                                      textAlign: 'right',
+                                      color: 'var(--ant-color-text-quaternary)',
+                                      fontSize: 12,
+                                      marginTop: 8,
+                                    }}
+                                  >
+                                    最近监控时间:{' '}
+                                    {dayjs(dynamicMonitorData.monitor_time).format('YYYY-MM-DD HH:mm:ss')}
+                                  </div>
+                                ) : null}
+                              </>
+                            ) : (
+                              <Typography.Text type="secondary">暂无协同监控数据</Typography.Text>
+                            )}
+                            <Divider style={{ margin: '16px 0' }} />
                             <Typography.Title level={5} style={{ margin: '0 0 8px' }}>
                               上下游关联
                             </Typography.Title>
@@ -2042,6 +2214,9 @@ const DemandComputationPage: React.FC = () => {
                         .demand-computation-detail-items .ant-table-wrapper .ant-table-content {
                           overflow: visible !important;
                         }
+                        .demand-computation-detail-items .ant-table-cell {
+                          white-space: nowrap;
+                        }
                       `}</style>
                       {currentComputation.items && currentComputation.items.length > 0 ? (
                         <div
@@ -2053,13 +2228,14 @@ const DemandComputationPage: React.FC = () => {
                             dataSource={currentComputation.items}
                             rowKey="id"
                             tableLayout="fixed"
+                            scroll={{ x: DEMAND_COMPUTATION_DETAIL_ITEMS_MIN_WIDTH }}
                             style={{ minWidth: DEMAND_COMPUTATION_DETAIL_ITEMS_MIN_WIDTH }}
                             pagination={false}
                             columns={[
                             {
                               title: '物料编号',
                               dataIndex: 'material_code',
-                              width: 132,
+                              width: 140,
                               render: (code: string) => (
                                 <Space size={4}>
                                   <span>{code ?? '—'}</span>
@@ -2080,11 +2256,11 @@ const DemandComputationPage: React.FC = () => {
                                 </Space>
                               ),
                             },
-                            { title: '物料名称', dataIndex: 'material_name', width: 150, ellipsis: true },
+                            { title: '物料名称', dataIndex: 'material_name', width: 200, ellipsis: true },
                             {
                               title: '单位',
                               dataIndex: 'material_unit',
-                              width: 100,
+                              width: 88,
                               render: (_: unknown, record: DemandComputationItem) => (
                                 <MaterialUnitSelect
                                   materialId={record.material_id}
@@ -2098,7 +2274,7 @@ const DemandComputationPage: React.FC = () => {
                             {
                               title: '就绪状态',
                               dataIndex: 'readiness_status',
-                              width: 100,
+                              width: 148,
                               render: (status: string, record: DemandComputationItem) => {
                                 const map: Record<string, { label: string; color: string }> = {
                                   Ready: { label: '就绪', color: 'success' },
@@ -2107,23 +2283,30 @@ const DemandComputationPage: React.FC = () => {
                                 }
                                 const info = map[status || 'Shortage'] || { label: '未知', color: 'default' }
                                 return (
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                    <Tag color={info.color} style={{ margin: 0, textAlign: 'center' }}>
+                                  <span
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: 6,
+                                      whiteSpace: 'nowrap',
+                                    }}
+                                  >
+                                    <Tag color={info.color} style={{ margin: 0, flexShrink: 0 }}>
                                       {info.label}
                                     </Tag>
-                                    {record.readiness_rate != null && record.readiness_rate < 1 && (
-                                      <div style={{ fontSize: 10, color: '#999', textAlign: 'center' }}>
+                                    {record.readiness_rate != null && record.readiness_rate < 1 ? (
+                                      <span style={{ fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
                                         {Math.round(record.readiness_rate * 100)}%
-                                      </div>
-                                    )}
-                                  </div>
+                                      </span>
+                                    ) : null}
+                                  </span>
                                 )
                               },
                             },
                             {
                               title: '物料来源',
                               dataIndex: 'material_source_type',
-                              width: 90,
+                              width: 96,
                               render: (type: string) => {
                                 const typeMap: Record<string, { label: string; color: string }> = {
                                   Make: { label: '自制', color: 'blue' },
@@ -2139,30 +2322,45 @@ const DemandComputationPage: React.FC = () => {
                             {
                               title: '交期要求',
                               dataIndex: 'delivery_date',
-                              width: 160,
+                              width: 300,
                               render: (date: string, record: DemandComputationItem) => {
                                 const startDate = record.production_start_date || record.procurement_start_date
                                 const isRisk = record.is_overdue_risk
                                 return (
-                                  <div style={{ fontSize: 13 }}>
-                                    <div style={{ color: isRisk ? '#ff4d4f' : 'inherit', fontWeight: isRisk ? 'bold' : 'normal' }}>
-                                      {date || '-'}
-                                      {isRisk && <Tag color="error" style={{ marginLeft: 8, fontSize: 10 }}>交期风险</Tag>}
-                                    </div>
-                                    {startDate && (
-                                      <div style={{ fontSize: 11, color: '#999', marginTop: 2 }}>
-                                        计划开始: {startDate}
-                                      </div>
-                                    )}
+                                  <div style={{ fontSize: 13, whiteSpace: 'nowrap' }}>
+                                    <span
+                                      style={{
+                                        color: isRisk ? '#ff4d4f' : 'inherit',
+                                        fontWeight: isRisk ? 'bold' : 'normal',
+                                      }}
+                                    >
+                                      {date || '—'}
+                                    </span>
+                                    {isRisk ? (
+                                      <Tag color="error" style={{ marginLeft: 6, fontSize: 10 }}>
+                                        交期风险
+                                      </Tag>
+                                    ) : null}
+                                    {startDate ? (
+                                      <span
+                                        style={{
+                                          marginLeft: 8,
+                                          fontSize: 12,
+                                          color: 'var(--ant-color-text-secondary)',
+                                        }}
+                                      >
+                                        · 计划开始 {startDate}
+                                      </span>
+                                    ) : null}
                                   </div>
                                 )
                               },
                             },
-                            { title: '需求数量', dataIndex: 'required_quantity', width: 90, align: 'right' },
+                            { title: '需求数量', dataIndex: 'required_quantity', width: 96, align: 'right' },
                             {
                               title: '可用库存',
                               dataIndex: 'available_inventory',
-                              width: 90,
+                              width: 96,
                               align: 'right' as const,
                               render: (v: number, record: DemandComputationItem) =>
                                 renderAvailableInventoryCell(v, record.detail_results as Record<string, unknown> | undefined),
@@ -2256,11 +2454,15 @@ const DemandComputationPage: React.FC = () => {
                     loading={pushRecordsLoading}
                     dataSource={pushRecords}
                     rowKey={(r) => `${r.target_type}-${r.target_id}`}
+                    scroll={{ x: 'max-content' }}
+                    tableLayout="fixed"
+                    style={{ minWidth: '100%' }}
                     columns={[
                       {
                         title: '单据类型',
                         dataIndex: 'target_type',
-                        width: 120,
+                        width: 112,
+                        ellipsis: true,
                         render: (t: string) => {
                           const map: Record<string, string> = {
                             work_order: '工单',
@@ -2271,18 +2473,29 @@ const DemandComputationPage: React.FC = () => {
                           return map[t] || t || '-'
                         },
                       },
-                      { title: '单据编号', dataIndex: 'target_code', width: 140 },
-                      { title: '单据名称', dataIndex: 'target_name', ellipsis: true },
+                      {
+                        title: '单据编号',
+                        dataIndex: 'target_code',
+                        width: 220,
+                        ellipsis: true,
+                      },
+                      {
+                        title: '单据名称',
+                        dataIndex: 'target_name',
+                        width: 280,
+                        ellipsis: true,
+                      },
                       {
                         title: '下推时间',
                         dataIndex: 'created_at',
-                        width: 180,
-                        render: (t: string) => (t ? dayjs(t).format('YYYY-MM-DD HH:mm:ss') : '-'),
+                        width: 176,
+                        ellipsis: true,
+                        render: (t: string) => (t ? dayjs(t).format('YYYY-MM-DD HH:mm:ss') : '—'),
                       },
                       {
                         title: '状态',
                         dataIndex: 'target_exists',
-                        width: 90,
+                        width: 88,
                         render: (exists: boolean) =>
                           exists ? (
                             <Tag color="success">正常</Tag>
@@ -2312,80 +2525,6 @@ const DemandComputationPage: React.FC = () => {
                     ]}
                     pagination={false}
                   />
-                ),
-              },
-              {
-                key: 'monitor',
-                label: (
-                  <Badge dot={dynamicMonitorData?.has_upstream_change || dynamicMonitorData?.has_downstream_risk}>
-                    协同监控
-                  </Badge>
-                ),
-                children: (
-                  <div style={{ padding: '16px 0' }}>
-                    {dynamicMonitorLoading ? (
-                      <div style={{ textAlign: 'center', padding: 40 }}>
-                        <SyncOutlined spin style={{ fontSize: 24, color: '#1890ff' }} />
-                        <div style={{ marginTop: 12, color: '#666' }}>正在分析协同状态...</div>
-                      </div>
-                    ) : dynamicMonitorData ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-                        <DetailDrawerSection title="上游需求变动感应 (Upstream Change Detection)">
-                          {dynamicMonitorData.upstream_alerts.length > 0 ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                              {dynamicMonitorData.upstream_alerts.map((alert: any, i: number) => (
-                                <Alert
-                                  key={i}
-                                  message="原始需求已变更"
-                                  description={alert.message}
-                                  type="warning"
-                                  showIcon
-                                  action={
-                                    <Button size="small" type="primary" ghost onClick={() => handleRecompute(currentComputation)}>
-                                      重新计算
-                                    </Button>
-                                  }
-                                />
-                              ))}
-                            </div>
-                          ) : (
-                            <Empty description="源需求数据稳定，暂无变动" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-                          )}
-                        </DetailDrawerSection>
-
-                        <DetailDrawerSection title="下游执行进度追踪 (Downstream Execution Tracking)">
-                          {dynamicMonitorData.downstream_alerts.length > 0 ? (
-                            <Timeline
-                              mode="left"
-                              items={dynamicMonitorData.downstream_alerts.map((alert: any, i: number) => ({
-                                key: i,
-                                label: alert.planned_end_date || alert.delivery_date,
-                                children: (
-                                  <div>
-                                    <div style={{ fontWeight: 'bold' }}>{alert.code} ({alert.name})</div>
-                                    <div style={{ color: '#ff4d4f', fontSize: 13 }}>{alert.message}</div>
-                                    <div style={{ fontSize: 12, color: '#999' }}>当前状态: {alert.status}</div>
-                                  </div>
-                                ),
-                                color: 'red',
-                                dot: <ClockCircleOutlined style={{ fontSize: '16px' }} />,
-                              }))}
-                            />
-                          ) : (
-                            <div style={{ textAlign: 'center', padding: '20px 0', color: '#52c41a' }}>
-                              <CheckCircleOutlined style={{ fontSize: 24, marginBottom: 8 }} />
-                              <div>所有下推单据均在计划时间内，执行正常</div>
-                            </div>
-                          )}
-                        </DetailDrawerSection>
-                        <div style={{ textAlign: 'right', color: '#ccc', fontSize: 12 }}>
-                          最近监控时间: {dayjs(dynamicMonitorData.monitor_time).format('YYYY-MM-DD HH:mm:ss')}
-                        </div>
-                      </div>
-                    ) : (
-                      <Empty description="暂无监控数据" />
-                    )}
-                  </div>
                 ),
               },
               {

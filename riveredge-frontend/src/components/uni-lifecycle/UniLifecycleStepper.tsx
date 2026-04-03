@@ -23,7 +23,6 @@ import {
   FileOutlined,
   SwapOutlined,
   SearchOutlined,
-  LoadingOutlined,
   DollarOutlined,
   BellOutlined,
   ExportOutlined,
@@ -69,7 +68,8 @@ const STAGE_KEY_ICONS: Record<string, React.ReactNode> = {
   cancelled: <CloseCircleOutlined />,
   completed: <CheckCircleOutlined />,
   executed: <PlayCircleOutlined />,
-  running: <LoadingOutlined />,
+  /** 不用 LoadingOutlined：antd 对 loading 图标强制 anticon-spin，已完成链路仍显示「进行中」时会误转 */
+  running: <PlayCircleOutlined />,
   failed: <CloseCircleOutlined />,
   // 审核类
   pending_review: <ClockCircleOutlined />,

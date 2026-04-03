@@ -4,12 +4,23 @@
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Table, Form as AntForm, Input, InputNumber, Select, Dropdown, Row, Col, Checkbox } from 'antd';
-import { EyeOutlined, SwapOutlined, ThunderboltOutlined, MoreOutlined, PlusOutlined, DeleteOutlined, ShoppingOutlined } from '@ant-design/icons';
+import { ActionType, ProColumns, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Table, Form as AntForm, Input, InputNumber, Select, Dropdown, Row, Col, Checkbox, Descriptions, Empty, Spin, Typography, DatePicker } from 'antd';
+import {
+  EyeOutlined,
+  EditOutlined,
+  SwapOutlined,
+  ThunderboltOutlined,
+  DeleteOutlined,
+  CopyOutlined,
+  PlusOutlined,
+  AppstoreAddOutlined,
+} from '@ant-design/icons';
+import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerActions, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { MaterialUnitSelect, prefetchMaterialsForUnitSelect } from '../../../../../components/material-unit-select';
 import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
 import type { Material } from '../../../../master-data/types/material';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
@@ -19,6 +30,7 @@ import {
   listPurchaseRequisitions,
   getPurchaseRequisition,
   createPurchaseRequisition,
+  updatePurchaseRequisition,
   deletePurchaseRequisition,
   submitPurchaseRequisition,
   approvePurchaseRequisition,
@@ -31,16 +43,73 @@ import {
 } from '../../../services/purchase-requisition';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { getPurchaseRequisitionLifecycle } from '../../../utils/purchaseRequisitionLifecycle';
+import { formatPurchaseRequisitionSourceType } from '../../../utils/purchaseRequisitionSourceType';
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
-import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
-import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
+import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import {
+  useDocumentTracking,
+  DocumentTrackingRelationsBody,
+  DocumentTrackingTimelineBody,
+} from '../../../../../components/document-tracking-panel';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
 import { ROUTES } from '../../../constants/routes';
 import { PriceHistoryInsight, SupplierPerformanceTag, MultiSupplierPriceComparison } from '../purchase-orders/ProcurementEmpowermentComponents';
 import { useTranslation } from 'react-i18next';
+import { useGlobalStore } from '../../../../../stores';
+
+/** 采购申请详情只读明细表最小横向宽度 */
+const PURCHASE_REQUISITION_DETAIL_ITEMS_MIN_WIDTH = 980;
+
+/** 操作列平铺上限（最多 3 个），第 4 个起收入「更多」 */
+const PURCHASE_REQUISITION_ROW_ACTIONS_INLINE_MAX = 3;
+
+const INITIAL_PR_FORM_ITEM_ROW = {
+  material_id: undefined,
+  material_code: '',
+  material_name: '',
+  material_spec: '',
+  unit: '件',
+  quantity: 1,
+  suggested_unit_price: 0,
+  required_date: undefined,
+  demand_computation_item_id: undefined,
+  supplier_id: undefined,
+  notes: undefined,
+};
+
+function renderPurchaseRequisitionRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
+  const wrapped = nodes.map((node, i) => (
+    <span key={`${keyPrefix}-${i}`}>{node}</span>
+  ));
+  if (wrapped.length <= PURCHASE_REQUISITION_ROW_ACTIONS_INLINE_MAX) {
+    return <Space size={4} wrap>{wrapped}</Space>;
+  }
+  const inline = wrapped.slice(0, PURCHASE_REQUISITION_ROW_ACTIONS_INLINE_MAX);
+  const overflow = wrapped.slice(PURCHASE_REQUISITION_ROW_ACTIONS_INLINE_MAX);
+  return (
+    <Space size={4} wrap>
+      {inline}
+      <Dropdown
+        menu={{
+          items: overflow.map((node, i) => ({
+            key: `${keyPrefix}-more-${i}`,
+            label: node,
+          })),
+        }}
+        trigger={['click']}
+        placement="bottomRight"
+      >
+        <Button type="link" size="small">
+          更多
+        </Button>
+      </Dropdown>
+    </Space>
+  );
+}
 
 const PurchaseRequisitionsPage: React.FC = () => {
   const { t } = useTranslation();
+  const currentUser = useGlobalStore((s) => s.currentUser);
   const navigate = useNavigate();
   const { message: messageApi, modal: modalApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
@@ -48,15 +117,29 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const [currentReq, setCurrentReq] = useState<PurchaseRequisition | null>(null);
   const [supplierList, setSupplierList] = useState<Array<{ id: number; code?: string; name: string }>>([]);
   const [createModalVisible, setCreateModalVisible] = useState(false);
+  /** 非空表示编辑该 id 的草稿采购申请 */
+  const [editingId, setEditingId] = useState<number | null>(null);
   const createFormRef = useRef<any>(null);
   const [previewCode, setPreviewCode] = useState<string | null>(null);
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
   const [effectiveAutoGen, setEffectiveAutoGen] = useState<boolean | null>(null);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
 
-  const initialCreateItems = [
-    { material_id: undefined, material_code: '', material_name: '', material_spec: '', unit: '件', quantity: 1, suggested_unit_price: 0 },
-  ];
+  const prTracking = useDocumentTracking(
+    detailVisible ? 'purchase_requisition' : undefined,
+    detailVisible ? currentReq?.id : undefined,
+  );
+
+  const onPrTrackingDocClick = useCallback(
+    (type: string, _id: number) => {
+      if (type === 'purchase_order') {
+        navigate(ROUTES.PURCHASE_ORDERS);
+      }
+    },
+    [navigate],
+  );
+
+  const initialCreateItems = [{ ...INITIAL_PR_FORM_ITEM_ROW }];
 
   useEffect(() => {
     supplierApi.list?.({ isActive: true } as any).then((res: any) => {
@@ -67,8 +150,13 @@ const PurchaseRequisitionsPage: React.FC = () => {
 
   const appendRequisitionItemsFromMaterials = useCallback(
     (selected: Material[]) => {
-      const current = createFormRef.current?.getFieldValue('items') ?? [];
-      const newRows = selected.map((m) => ({
+      const isEmptyItemRow = (row: any) => {
+        if (row == null) return true;
+        if (row.material_id != null && row.material_id !== '') return false;
+        const code = row.material_code;
+        return code == null || String(code).trim() === '';
+      };
+      const rowFromMaterial = (m: Material) => ({
         material_id: m.id,
         material_code: m.mainCode ?? m.code ?? '',
         material_name: m.name ?? '',
@@ -76,67 +164,225 @@ const PurchaseRequisitionsPage: React.FC = () => {
         unit: m.baseUnit ?? '件',
         quantity: 1,
         suggested_unit_price: 0,
-      }));
-      createFormRef.current?.setFieldsValue({ items: [...current, ...newRows] });
+        required_date: undefined,
+        demand_computation_item_id: undefined,
+        supplier_id: undefined,
+        notes: undefined,
+      });
+      const queue = selected.map(rowFromMaterial);
+      const items = [...(createFormRef.current?.getFieldValue('items') ?? [])].map((row: any) => ({ ...row }));
+      for (let i = 0; i < items.length && queue.length > 0; i++) {
+        if (isEmptyItemRow(items[i])) {
+          items[i] = queue.shift()!;
+        }
+      }
+      while (queue.length > 0) {
+        items.push(queue.shift()!);
+      }
+      createFormRef.current?.setFieldsValue({ items });
       messageApi.success(t('app.kuaizhizao.common.materialBatchAdded', { count: selected.length }));
     },
     [messageApi, t]
   );
 
+  const handleCopyRequisitionCode = useCallback(
+    (code: string) => {
+      if (!code) return;
+      void navigator.clipboard
+        .writeText(code)
+        .then(() => messageApi.success('已复制'))
+        .catch(() => messageApi.error('复制失败'));
+    },
+    [messageApi]
+  );
+
+  const handleEdit = useCallback(
+    async (record: PurchaseRequisition) => {
+      const s = (record.status ?? '').toString().trim();
+      if (!['草稿', 'draft', 'DRAFT'].includes(s) || record.id == null) return;
+      setEditingId(record.id);
+      setPreviewCode(null);
+      setEffectiveRuleCode(null);
+      setEffectiveAutoGen(null);
+      setCreateModalVisible(true);
+      try {
+        const detail = await getPurchaseRequisition(record.id);
+          setTimeout(() => {
+          createFormRef.current?.setFieldsValue({
+            requisition_code: detail.requisition_code ?? '',
+            requisition_name: detail.requisition_name,
+            requisition_date: detail.requisition_date ? dayjs(detail.requisition_date) : dayjs(),
+            applicant_name: detail.applicant_name ?? '',
+            required_date: detail.required_date ? dayjs(detail.required_date) : undefined,
+            notes: detail.notes,
+            items:
+              detail.items && detail.items.length > 0
+                ? detail.items.map((it) => ({
+                    material_id: it.material_id,
+                    material_code: it.material_code ?? '',
+                    material_name: it.material_name ?? '',
+                    material_spec: it.material_spec ?? '',
+                    unit: it.unit ?? '件',
+                    quantity: Number(it.quantity ?? 1),
+                    suggested_unit_price: Number(it.suggested_unit_price ?? 0),
+                    required_date: it.required_date ? dayjs(it.required_date) : undefined,
+                    demand_computation_item_id: it.demand_computation_item_id,
+                    supplier_id: it.supplier_id,
+                    notes: it.notes,
+                  }))
+                : [{ ...INITIAL_PR_FORM_ITEM_ROW }],
+          });
+        }, 0);
+      } catch {
+        messageApi.error('加载采购申请失败');
+        setCreateModalVisible(false);
+        setEditingId(null);
+      }
+    },
+    [messageApi]
+  );
+
+  const lifecycleValueEnum = {
+    草稿: { text: '草稿', status: 'Default' as const },
+    待审核: { text: '待审核', status: 'Processing' as const },
+    已驳回: { text: '已驳回', status: 'Error' as const },
+    已通过: { text: '已通过', status: 'Success' as const },
+    部分转单: { text: '部分转单', status: 'Warning' as const },
+    全部转单: { text: '全部转单', status: 'Success' as const },
+  };
+
   const columns: ProColumns<PurchaseRequisition>[] = [
-    { title: '申请编号', dataIndex: 'requisition_code', width: 150, fixed: 'left' },
-    { title: '申请名称', dataIndex: 'requisition_name', width: 180 },
+    // 仅高级搜索、不在表身展示；必须放在最前，避免夹在可滚动列与右侧 fixed 列之间导致固定列顺序异常
     {
-      title: '生命周期',
-      dataIndex: 'lifecycle',
-      width: 100,
-      valueEnum: {
-        '草稿': { text: '草稿', status: 'Default' },
-        '待审核': { text: '待审核', status: 'Processing' },
-        '已驳回': { text: '已驳回', status: 'Error' },
-        '已通过': { text: '已通过', status: 'Success' },
-        '部分转单': { text: '部分转单', status: 'Warning' },
-        '全部转单': { text: '全部转单', status: 'Success' },
-      },
-      render: (_, record) => {
-        const lifecycle = getPurchaseRequisitionLifecycle(record);
-        const stageName = lifecycle.stageName ?? record.status ?? '草稿';
-        return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>;
+      title: '要求到货',
+      dataIndex: 'required_date_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      hideInSearch: false,
+      search: {
+        transform: (value: any) => {
+          if (!value || !Array.isArray(value)) return {};
+          const [a, b] = value;
+          return {
+            required_date_from: a ? dayjs(a).format('YYYY-MM-DD') : undefined,
+            required_date_to: b ? dayjs(b).format('YYYY-MM-DD') : undefined,
+          };
+        },
       },
     },
-    { title: '来源', dataIndex: 'source_code', width: 140 },
-    { title: '要求到货日期', dataIndex: 'required_date', valueType: 'date', width: 120 },
-    { title: '明细数', dataIndex: 'items_count', width: 80, align: 'center' },
+    {
+      title: '申请编号',
+      dataIndex: 'requisition_code',
+      width: 176,
+      fixed: 'left',
+      hideInSearch: false,
+      render: (_, record) => {
+        const code = record.requisition_code ?? '';
+        return (
+          <Space size={4}>
+            <span>{code}</span>
+            {code ? (
+              <Button
+                type="link"
+                size="small"
+                icon={<CopyOutlined style={{ fontSize: 12 }} />}
+                onClick={() => handleCopyRequisitionCode(code)}
+                aria-label="复制申请编号"
+              />
+            ) : null}
+          </Space>
+        );
+      },
+    },
+    { title: '申请名称', dataIndex: 'requisition_name', width: 180, hideInSearch: false, ellipsis: true },
+    { title: '来源编码', dataIndex: 'source_code', width: 132, hideInSearch: false, ellipsis: true },
+    {
+      title: '来源类型',
+      dataIndex: 'source_type',
+      width: 120,
+      hideInSearch: false,
+      ellipsis: true,
+      valueEnum: {
+        DemandComputation: {
+          text: formatPurchaseRequisitionSourceType('DemandComputation', t),
+        },
+      },
+      render: (_, record) => formatPurchaseRequisitionSourceType(record.source_type, t),
+    },
+    {
+      title: '要求到货日期',
+      dataIndex: 'required_date',
+      valueType: 'date',
+      width: 120,
+      hideInSearch: true,
+    },
+    { title: '明细数', dataIndex: 'items_count', width: 80, align: 'center', hideInSearch: true },
     {
       title: '紧急',
       dataIndex: 'is_urgent',
       width: 70,
+      hideInSearch: true,
       render: (v) => (v ? <Tag color="red">紧急</Tag> : '-'),
     },
-    { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime', width: 160 },
+    { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime', width: 160, hideInSearch: true },
+    {
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      valueType: 'dateTime',
+      width: 168,
+      hideInSearch: true,
+      defaultSortOrder: 'descend',
+    },
+    {
+      title: '生命周期',
+      key: 'lifecycle',
+      dataIndex: 'lifecycle',
+      width: 132,
+      fixed: 'right',
+      align: 'center',
+      hideInSearch: false,
+      valueEnum: lifecycleValueEnum,
+      render: (_, record) => {
+        const lifecycle = getPurchaseRequisitionLifecycle(record);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
+      },
+    },
     {
       title: '操作',
+      key: 'option',
       valueType: 'option',
-      width: 320,
+      width: 280,
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) => {
         const s = (record.status ?? '').toString().trim();
         const isDraft = ['草稿', 'draft', 'DRAFT'].includes(s);
         const isPending = ['待审核', 'pending_review', 'PENDING_REVIEW'].includes(s);
         const isApprovedOrPartial = ['已通过', '部分转单', 'audited', 'approved', 'AUDITED', 'PARTIAL_CONVERTED'].includes(s);
-        const moreItems = [
-          ...(isDraft || isPending
-            ? [{ key: 'urgent', label: '紧急采购', icon: <ThunderboltOutlined />, onClick: () => handleUrgent(record) }]
-            : []),
-          ...(isDraft
-            ? [{ key: 'delete', label: '删除', icon: <DeleteOutlined />, danger: true, onClick: () => handleDeleteOne(record) }]
-            : []),
+        const parts: React.ReactNode[] = [
+          <Button key="d" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
+            详情
+          </Button>,
         ];
-        return (
-          <Space size={4} wrap>
-            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
-              详情
+        if (isDraft) {
+          parts.push(
+            <Button key="e" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+              编辑
             </Button>
+          );
+        }
+        parts.push(
+          <span key="wf">
             <UniWorkflowActions
               record={record}
               entityName="采购申请"
@@ -157,30 +403,42 @@ const PurchaseRequisitionsPage: React.FC = () => {
               }}
               onSuccess={() => actionRef.current?.reload()}
             />
-            {isApprovedOrPartial && (
-              <Button type="link" size="small" icon={<SwapOutlined />} onClick={() => handleConvert(record)}>
-                下推采购单
-              </Button>
-            )}
-            {moreItems.length > 0 && (
-              <Dropdown menu={{ items: moreItems }} trigger={['click']} placement="bottomRight">
-                <Button type="link" size="small" icon={<MoreOutlined />}>
-                  更多
-                </Button>
-              </Dropdown>
-            )}
-          </Space>
+          </span>
         );
+        if (isApprovedOrPartial) {
+          parts.push(
+            <Button key="cv" type="link" size="small" icon={<SwapOutlined />} onClick={() => handleConvert(record)}>
+              下推采购单
+            </Button>
+          );
+        }
+        if (isDraft || isPending) {
+          parts.push(
+            <Button key="urgent" type="link" size="small" icon={<ThunderboltOutlined />} onClick={() => handleUrgent(record)}>
+              紧急采购
+            </Button>
+          );
+        }
+        if (isDraft) {
+          parts.push(
+            <Button key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteOne(record)}>
+              删除
+            </Button>
+          );
+        }
+        return renderPurchaseRequisitionRowActions(parts, `pr-${record.id ?? 'row'}`);
       },
     },
   ];
 
   /** 参考销售订单：先打开弹窗，再请求 getCodeRulePageConfig + testGenerateCode 预填编号 */
   const handleCreate = async () => {
+    setEditingId(null);
     setPreviewCode(null);
     setEffectiveRuleCode(null);
     setEffectiveAutoGen(null);
     setCreateModalVisible(true);
+    createFormRef.current?.resetFields();
     try {
       const config = await getCodeRulePageConfig('kuaizhizao-purchase-requisition');
       const autoGen = config?.autoGenerate ?? isAutoGenerateEnabled('kuaizhizao-purchase-requisition');
@@ -195,15 +453,28 @@ const PurchaseRequisitionsPage: React.FC = () => {
           setTimeout(() => {
             createFormRef.current?.setFieldsValue({
               requisition_code: preview ?? '',
+              requisition_date: dayjs(),
               items: initialCreateItems,
             });
           }, 100);
         } catch (e) {
           console.warn('采购申请编号预生成失败:', e);
           setPreviewCode(null);
+          setTimeout(() => {
+            createFormRef.current?.setFieldsValue({
+              requisition_date: dayjs(),
+              items: initialCreateItems,
+            });
+          }, 100);
         }
       } else {
         setPreviewCode(null);
+        setTimeout(() => {
+          createFormRef.current?.setFieldsValue({
+            requisition_date: dayjs(),
+            items: initialCreateItems,
+          });
+        }, 100);
       }
     } catch {
       const ruleCode = getPageRuleCode('kuaizhizao-purchase-requisition');
@@ -217,6 +488,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
             setTimeout(() => {
               createFormRef.current?.setFieldsValue({
                 requisition_code: preview ?? '',
+                requisition_date: dayjs(),
                 items: initialCreateItems,
               });
             }, 100);
@@ -224,18 +496,103 @@ const PurchaseRequisitionsPage: React.FC = () => {
           .catch((e) => {
             console.warn('采购申请编号预生成失败:', e);
             setPreviewCode(null);
+            setTimeout(() => {
+              createFormRef.current?.setFieldsValue({
+                requisition_date: dayjs(),
+                items: initialCreateItems,
+              });
+            }, 100);
           });
       } else {
         setPreviewCode(null);
+        setTimeout(() => {
+          createFormRef.current?.setFieldsValue({
+            requisition_date: dayjs(),
+            items: initialCreateItems,
+          });
+        }, 100);
       }
     }
   };
 
-  const handleCreateSubmit = async (values: { requisition_code?: string; requisition_name?: string; required_date?: any; notes?: string; items?: Array<{ material_id?: number; material_code?: string; material_name?: string; material_spec?: string; unit?: string; quantity?: number; suggested_unit_price?: number }> }) => {
+  const mapItemsForApi = (
+    validItems: Array<{
+      material_id?: number;
+      material_code?: string;
+      material_name?: string;
+      material_spec?: string;
+      unit?: string;
+      quantity?: number;
+      suggested_unit_price?: number;
+      required_date?: any;
+      demand_computation_item_id?: number;
+      supplier_id?: number;
+      notes?: string;
+    }>
+  ) =>
+    validItems.map((i) => ({
+      material_id: i.material_id!,
+      material_code: i.material_code || '',
+      material_name: i.material_name || '',
+      material_spec: i.material_spec,
+      unit: i.unit || '件',
+      quantity: Number(i.quantity) || 0,
+      suggested_unit_price: Number(i.suggested_unit_price) || 0,
+      required_date: i.required_date?.format?.('YYYY-MM-DD') ?? i.required_date ?? undefined,
+      demand_computation_item_id: i.demand_computation_item_id,
+      supplier_id: i.supplier_id ?? undefined,
+      notes: typeof i.notes === 'string' && i.notes.trim() ? i.notes.trim() : undefined,
+    }));
+
+  const handleModalSubmit = async (values: {
+    requisition_code?: string;
+    requisition_name?: string;
+    requisition_date?: any;
+    required_date?: any;
+    notes?: string;
+    items?: Array<{
+      material_id?: number;
+      material_code?: string;
+      material_name?: string;
+      material_spec?: string;
+      unit?: string;
+      quantity?: number;
+      suggested_unit_price?: number;
+      required_date?: any;
+      demand_computation_item_id?: number;
+      supplier_id?: number;
+      notes?: string;
+    }>;
+  }) => {
+    const requisitionDate =
+      values.requisition_date?.format?.('YYYY-MM-DD') ?? values.requisition_date ?? undefined;
     const requiredDate = values.required_date?.format?.('YYYY-MM-DD') ?? values.required_date;
     const validItems = (values.items ?? []).filter((i) => i.material_id && (Number(i.quantity) || 0) > 0);
     if (validItems.length === 0) {
       messageApi.error('请至少添加一条有效的申请明细');
+      return;
+    }
+    if (editingId != null) {
+      try {
+        await updatePurchaseRequisition(editingId, {
+          requisition_name: values.requisition_name,
+          requisition_date: requisitionDate,
+          required_date: requiredDate,
+          notes: values.notes,
+          items: mapItemsForApi(validItems),
+        });
+        messageApi.success('保存成功');
+        setCreateModalVisible(false);
+        setEditingId(null);
+        setEffectiveRuleCode(null);
+        setEffectiveAutoGen(null);
+        createFormRef.current?.resetFields();
+        actionRef.current?.reload();
+      } catch (e: any) {
+        const d = e?.response?.data?.detail;
+        messageApi.error(typeof d === 'string' ? d : d?.message || '保存失败');
+        throw e;
+      }
       return;
     }
     let requisitionCode = values.requisition_code;
@@ -253,17 +610,10 @@ const PurchaseRequisitionsPage: React.FC = () => {
       await createPurchaseRequisition({
         requisition_code: requisitionCode || undefined,
         requisition_name: values.requisition_name,
+        requisition_date: requisitionDate,
         required_date: requiredDate,
         notes: values.notes,
-        items: validItems.map((i) => ({
-          material_id: i.material_id,
-          material_code: i.material_code,
-          material_name: i.material_name,
-          material_spec: i.material_spec,
-          unit: i.unit || '件',
-          quantity: Number(i.quantity) || 0,
-          suggested_unit_price: Number(i.suggested_unit_price) || 0,
-        })),
+        items: mapItemsForApi(validItems),
       });
       messageApi.success('创建成功');
       setCreateModalVisible(false);
@@ -272,7 +622,8 @@ const PurchaseRequisitionsPage: React.FC = () => {
       createFormRef.current?.resetFields();
       actionRef.current?.reload();
     } catch (e: any) {
-      messageApi.error(e?.response?.data?.detail || '创建失败');
+      const d = e?.response?.data?.detail;
+      messageApi.error(typeof d === 'string' ? d : d?.message || '创建失败');
       throw e;
     }
   };
@@ -280,6 +631,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const handleDetail = async (record: PurchaseRequisition) => {
     try {
       const detail = await getPurchaseRequisition(record.id!);
+      void prefetchMaterialsForUnitSelect((detail.items ?? []).map((i) => i.material_id));
       setCurrentReq(detail);
       setDetailVisible(true);
     } catch {
@@ -335,7 +687,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
       modalApi.confirm({
         title: '下推采购单',
         icon: null,
-        width: MODAL_CONFIG.LARGE_WIDTH,
+        width: MODAL_CONFIG.EXTRA_LARGE_WIDTH,
         content: (
           <ConvertForm
             items={allItems}
@@ -454,28 +806,25 @@ const PurchaseRequisitionsPage: React.FC = () => {
     });
   };
 
-  const detailColumns: ProDescriptionsItemProps<PurchaseRequisition>[] = [
-    { title: '申请编号', dataIndex: 'requisition_code' },
-    { title: '申请名称', dataIndex: 'requisition_name' },
-    { title: '状态', dataIndex: 'status', render: (v: any) => <Tag>{v}</Tag> },
-    { title: '来源', dataIndex: 'source_code' },
-    { title: '要求到货日期', dataIndex: 'required_date' },
-    { title: '是否紧急', dataIndex: 'is_urgent', render: (v: any) => (v ? '是' : '否') },
-    { title: '紧急原因', dataIndex: 'urgent_reason', span: 2 },
-  ];
-
   return (
     <>
       <ListPageTemplate>
         <UniTable
           headerTitle="采购申请"
+          columnPersistenceId="kuaizhizao-purchase-requisition"
           actionRef={actionRef}
-          request={async (params: any) => {
+          request={async (params: any, _sort: any, _filter: any, searchFormValues?: Record<string, any>) => {
+            const s = searchFormValues || {};
             const res = await listPurchaseRequisitions({
               skip: ((params.current || 1) - 1) * (params.pageSize || 20),
               limit: params.pageSize || 20,
-              status: params.lifecycle ?? params.status,
-              source_type: params.source_type,
+              status: s.lifecycle ?? s.status ?? params.lifecycle ?? params.status,
+              source_type: s.source_type,
+              keyword: s.keyword,
+              requisition_code: s.requisition_code,
+              requisition_name: s.requisition_name,
+              required_date_from: s.required_date_from,
+              required_date_to: s.required_date_to,
             });
             return {
               data: res.data || [],
@@ -534,12 +883,18 @@ const PurchaseRequisitionsPage: React.FC = () => {
       </ListPageTemplate>
 
       <FormModalTemplate
-        title="新建采购申请"
+        title={editingId != null ? '编辑采购申请' : '新建采购申请'}
         open={createModalVisible}
-        onClose={() => { setCreateModalVisible(false); setEffectiveRuleCode(null); setEffectiveAutoGen(null); }}
-        onFinish={handleCreateSubmit}
+        isEdit={editingId != null}
+        onClose={() => {
+          setCreateModalVisible(false);
+          setEditingId(null);
+          setEffectiveRuleCode(null);
+          setEffectiveAutoGen(null);
+        }}
+        onFinish={handleModalSubmit}
         formRef={createFormRef}
-        width={MODAL_CONFIG.LARGE_WIDTH}
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
         grid={false}
         initialValues={{ items: initialCreateItems }}
       >
@@ -548,7 +903,14 @@ const PurchaseRequisitionsPage: React.FC = () => {
             <ProFormText
               name="requisition_code"
               label="采购申请编号"
-              placeholder={isAutoGenerateEnabled('kuaizhizao-purchase-requisition') ? '编号将根据编号规则自动生成，可修改' : '请输入采购申请编号'}
+              disabled={editingId != null}
+              placeholder={
+                editingId != null
+                  ? '草稿保存后不可修改编号'
+                  : isAutoGenerateEnabled('kuaizhizao-purchase-requisition')
+                    ? '编号将根据编号规则自动生成，可修改'
+                    : '请输入采购申请编号'
+              }
               rules={[{ required: true, message: '请输入采购申请编号' }]}
             />
           </Col>
@@ -558,47 +920,114 @@ const PurchaseRequisitionsPage: React.FC = () => {
         </Row>
         <Row gutter={16}>
           <Col span={12}>
-            <ProFormDatePicker name="required_date" label="要求到货日期" />
+            <ProFormDatePicker
+              name="requisition_date"
+              label="申请日期"
+              fieldProps={{ style: { width: '100%' } }}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormDatePicker
+              name="required_date"
+              label="要求到货日期"
+              fieldProps={{ style: { width: '100%' } }}
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            {editingId != null ? (
+              <ProFormText name="applicant_name" label="申请人" disabled />
+            ) : (
+              <AntForm.Item label="申请人">
+                <Typography.Text>{currentUser?.full_name || currentUser?.username || '—'}</Typography.Text>
+                <div>
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    保存后写入为当前登录用户
+                  </Typography.Text>
+                </div>
+              </AntForm.Item>
+            )}
           </Col>
           <Col span={12} />
         </Row>
-        <ProFormItem label="申请明细" required style={{ width: '100%' }}>
-          <ProForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: '请至少添加一条申请明细' }]}>
+        {/* 申请明细：与销售订单 Modal 同款 — AntForm.List + Table + 内联样式 + 操作列 fixed right */}
+        <div style={{ marginBottom: 24, width: '100%' }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: 8,
+              flexWrap: 'wrap',
+              gap: 12,
+            }}
+          >
+            <span style={{ fontWeight: 600, color: 'rgba(0, 0, 0, 0.88)' }}>
+              <span style={{ color: '#ff4d4f', marginRight: 4, fontFamily: 'SimSun, sans-serif' }}>*</span>
+              申请明细
+            </span>
+          </div>
+          <AntForm.Item
+            name="items"
+            noStyle
+            rules={[{ type: 'array', min: 1, message: '请至少添加一条申请明细' }]}
+          >
             <AntForm.List name="items">
               {(fields, { add, remove }) => {
-                const reqDetailColumns = [
+                const prDetailColumns = [
                   {
                     title: '物料',
                     dataIndex: 'material_id',
                     width: 220,
                     render: (_: any, __: any, index: number) => (
-                      <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index] !== curr?.items?.[index]}>
+                      <AntForm.Item
+                        noStyle
+                        shouldUpdate={(prev: any, curr: any) => prev?.items?.[index] !== curr?.items?.[index]}
+                      >
                         {({ getFieldValue }: any) => {
                           const row = getFieldValue('items')?.[index];
                           const mid = row?.material_id ? Number(row.material_id) : null;
-                          const fallback = mid && (row?.material_code || row?.material_name)
-                            ? { value: mid, label: `${row.material_code || ''} - ${row.material_name || ''}`.trim() || String(mid) }
-                            : undefined;
+                          const fallback =
+                            mid && (row?.material_code || row?.material_name)
+                              ? {
+                                  value: mid,
+                                  label:
+                                    `${row.material_code || ''} - ${row.material_name || ''}`.trim() || String(mid),
+                                }
+                              : undefined;
                           return (
-                            <UniMaterialSelect
-                              name={[index, 'material_id']}
-                              label=""
-                              placeholder="请选择物料"
-                              required
-                              size="small"
-                              listFieldKey={index}
-                              listFieldName="items"
-                              fillMapping={{
-                                material_code: 'mainCode',
-                                material_name: 'name',
-                                material_spec: 'specification',
-                                unit: 'baseUnit',
-                              }}
-                              fallbackOption={fallback}
-                              formItemProps={{ style: { margin: 0, flex: 1 } }}
-                              showQuickCreate
-                              showAdvancedSearch
-                            />
+                            <>
+                              <div
+                                className="purchase-requisition-material-cell"
+                                style={{ display: 'flex', alignItems: 'center', width: '100%', gap: 8 }}
+                              >
+                                <div style={{ flex: 1, minWidth: 200 }}>
+                                  <UniMaterialSelect
+                                    name={[index, 'material_id']}
+                                    label=""
+                                    placeholder="请选择物料"
+                                    required
+                                    size="small"
+                                    listFieldKey={index}
+                                    listFieldName="items"
+                                    fillMapping={{
+                                      material_code: 'mainCode',
+                                      material_name: 'name',
+                                      material_spec: 'specification',
+                                      unit: 'baseUnit',
+                                    }}
+                                    fallbackOption={fallback}
+                                    formItemProps={{ style: { margin: 0 } }}
+                                    showQuickCreate
+                                    showAdvancedSearch
+                                  />
+                                </div>
+                              </div>
+                              <AntForm.Item name={[index, 'demand_computation_item_id']} hidden>
+                                <Input type="hidden" />
+                              </AntForm.Item>
+                            </>
                           );
                         }}
                       </AntForm.Item>
@@ -617,10 +1046,22 @@ const PurchaseRequisitionsPage: React.FC = () => {
                   {
                     title: '单位',
                     dataIndex: 'unit',
-                    width: 80,
+                    width: 100,
                     render: (_: any, __: any, index: number) => (
-                      <AntForm.Item name={[index, 'unit']} style={{ margin: 0 }}>
-                        <Input placeholder="单位" size="small" />
+                      <AntForm.Item
+                        noStyle
+                        shouldUpdate={(prev: any, curr: any) =>
+                          prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id
+                        }
+                      >
+                        {({ getFieldValue }) => {
+                          const materialId = getFieldValue(['items', index, 'material_id']);
+                          return (
+                            <AntForm.Item name={[index, 'unit']} style={{ margin: 0 }}>
+                              <MaterialUnitSelect materialId={materialId} size="small" noStyle />
+                            </AntForm.Item>
+                          );
+                        }}
                       </AntForm.Item>
                     ),
                   },
@@ -630,7 +1071,14 @@ const PurchaseRequisitionsPage: React.FC = () => {
                     width: 100,
                     align: 'right' as const,
                     render: (_: any, __: any, index: number) => (
-                      <AntForm.Item name={[index, 'quantity']} rules={[{ required: true, message: '必填' }, { type: 'number', min: 0.01, message: '>0' }]} style={{ margin: 0 }}>
+                      <AntForm.Item
+                        name={[index, 'quantity']}
+                        rules={[
+                          { required: true, message: '必填' },
+                          { type: 'number', min: 0.01, message: '>0' },
+                        ]}
+                        style={{ margin: 0 }}
+                      >
                         <InputNumber placeholder="数量" min={0} precision={2} style={{ width: '100%' }} size="small" />
                       </AntForm.Item>
                     ),
@@ -641,7 +1089,12 @@ const PurchaseRequisitionsPage: React.FC = () => {
                     width: 130,
                     align: 'right' as const,
                     render: (_: any, __: any, index: number) => (
-                      <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id}>
+                      <AntForm.Item
+                        noStyle
+                        shouldUpdate={(prev: any, curr: any) =>
+                          prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id
+                        }
+                      >
                         {({ getFieldValue }: any) => {
                           const materialId = getFieldValue(['items', index, 'material_id']);
                           const price = getFieldValue(['items', index, 'suggested_unit_price']);
@@ -658,58 +1111,145 @@ const PurchaseRequisitionsPage: React.FC = () => {
                     ),
                   },
                   {
-                    title: '操作',
-                    width: 60,
+                    title: '建议供应商',
+                    dataIndex: 'supplier_id',
+                    width: 160,
                     render: (_: any, __: any, index: number) => (
-                      <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)} disabled={fields.length <= 1} />
+                      <AntForm.Item name={[index, 'supplier_id']} style={{ margin: 0 }}>
+                        <Select
+                          allowClear
+                          placeholder="可选"
+                          size="small"
+                          style={{ width: '100%' }}
+                          options={supplierList.map((s) => ({ label: s.name, value: s.id }))}
+                        />
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: '行到货日',
+                    dataIndex: 'required_date',
+                    width: 118,
+                    render: (_: any, __: any, index: number) => (
+                      <AntForm.Item name={[index, 'required_date']} style={{ margin: 0 }}>
+                        <DatePicker size="small" style={{ width: '100%' }} placeholder="可选" />
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: '行备注',
+                    dataIndex: 'notes',
+                    width: 120,
+                    render: (_: any, __: any, index: number) => (
+                      <AntForm.Item name={[index, 'notes']} style={{ margin: 0 }}>
+                        <Input placeholder="备注" size="small" />
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: '操作',
+                    width: 70,
+                    fixed: 'right' as const,
+                    onHeaderCell: () => ({ className: 'purchase-requisition-fixed-op-header' }),
+                    render: (_: any, __: any, index: number) => (
+                      <Button
+                        type="link"
+                        danger
+                        size="small"
+                        icon={<DeleteOutlined />}
+                        disabled={fields.length <= 1}
+                        onClick={() => remove(index)}
+                      >
+                        删除
+                      </Button>
                     ),
                   },
                 ];
+                const totalWidth = prDetailColumns.reduce((s, c) => s + (Number(c.width) || 0), 0);
                 return (
-                  <div style={{ width: '100%', overflowX: 'auto' }}>
-                    <Table
-                      size="small"
-                      dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
-                      rowKey="key"
-                      pagination={false}
-                      columns={reqDetailColumns}
-                      footer={() => (
-                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
-                          <Button
-                            type="dashed"
-                            icon={<PlusOutlined />}
-                            style={{ flex: 1, minWidth: 120 }}
-                            onClick={() =>
-                              add({
-                                material_id: undefined,
-                                material_code: '',
-                                material_name: '',
-                                material_spec: '',
-                                unit: '件',
-                                quantity: 1,
-                                suggested_unit_price: 0,
-                              })
-                            }
+                  <div style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
+                    <style>{`
+                      .purchase-requisition-detail-table .ant-table-thead > tr > th {
+                        background-color: var(--ant-color-fill-alter) !important;
+                        font-weight: 600;
+                      }
+                      .purchase-requisition-detail-table .ant-table-thead > tr > th.purchase-requisition-fixed-op-header {
+                        background: var(--ant-color-fill-alter) !important;
+                      }
+                      .purchase-requisition-detail-table .ant-table-cell-fix-right {
+                        background: var(--ant-color-bg-container) !important;
+                      }
+                      .purchase-requisition-detail-table .ant-table {
+                        border-top: 1px solid var(--ant-color-border);
+                      }
+                      .purchase-requisition-detail-table .ant-table-tbody > tr > td {
+                        border-bottom: 1px solid var(--ant-color-border);
+                        overflow: visible !important;
+                      }
+                      .purchase-requisition-detail-table .purchase-requisition-material-cell .ant-form-item,
+                      .purchase-requisition-detail-table .purchase-requisition-material-cell .ant-form-item-control,
+                      .purchase-requisition-detail-table .purchase-requisition-material-cell .ant-form-item-control-input,
+                      .purchase-requisition-detail-table .purchase-requisition-material-cell .ant-select {
+                        width: 100% !important;
+                        min-width: 0;
+                      }
+                      .purchase-requisition-detail-table .ant-form-item-explain,
+                      .purchase-requisition-detail-table .ant-form-item-explain-error {
+                        display: none !important;
+                      }
+                      .purchase-requisition-detail-table .ant-input-number-input::selection,
+                      .purchase-requisition-detail-table .ant-input::selection {
+                        background-color: var(--ant-color-primary);
+                        color: #fff;
+                        border-radius: 0;
+                      }
+                    `}</style>
+                    <div style={{ width: '100%', overflowX: 'auto' }}>
+                      <Table
+                        className="purchase-requisition-detail-table"
+                        size="small"
+                        dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
+                        rowKey="key"
+                        pagination={false}
+                        columns={prDetailColumns}
+                        scroll={fields.length > 0 ? { x: totalWidth } : undefined}
+                        style={{ width: '100%', margin: 0 }}
+                        footer={() => (
+                          <div
+                            style={{
+                              display: 'flex',
+                              gap: 8,
+                              width: '100%',
+                              flexWrap: 'wrap',
+                              boxSizing: 'border-box',
+                            }}
                           >
-                            添加明细
-                          </Button>
-                          <Button
-                            type="default"
-                            icon={<ShoppingOutlined />}
-                            style={{ flex: 1, minWidth: 120 }}
-                            onClick={() => setMaterialPickerOpen(true)}
-                          >
-                            {t('app.kuaizhizao.common.materialBatchSelect')}
-                          </Button>
-                        </div>
-                      )}
-                    />
+                            <Button
+                              type="dashed"
+                              icon={<PlusOutlined />}
+                              style={{ flex: 1, minWidth: 120 }}
+                              onClick={() => add({ ...INITIAL_PR_FORM_ITEM_ROW })}
+                            >
+                              添加明细
+                            </Button>
+                            <Button
+                              type="default"
+                              icon={<AppstoreAddOutlined />}
+                              style={{ flex: 1, minWidth: 120 }}
+                              onClick={() => setMaterialPickerOpen(true)}
+                            >
+                              {t('app.kuaizhizao.common.materialBatchSelect')}
+                            </Button>
+                          </div>
+                        )}
+                      />
+                    </div>
                   </div>
                 );
               }}
             </AntForm.List>
-          </ProForm.Item>
-        </ProFormItem>
+          </AntForm.Item>
+        </div>
         <ProFormTextArea name="notes" label="备注" placeholder="备注" />
         <MaterialBatchPickerModal
           open={materialPickerOpen}
@@ -726,12 +1266,30 @@ const PurchaseRequisitionsPage: React.FC = () => {
           setCurrentReq(null);
         }}
         dataSource={currentReq || undefined}
-        columns={detailColumns}
+        columns={[]}
         width={DRAWER_CONFIG.HALF_WIDTH}
         extra={
           currentReq && (
             <DetailDrawerActions
               items={[
+                {
+                  key: 'edit',
+                  visible: ['草稿', 'draft', 'DRAFT'].includes((currentReq.status ?? '').toString().trim()),
+                  render: () => (
+                    <Button
+                      type="link"
+                      size="small"
+                      icon={<EditOutlined />}
+                      onClick={() => {
+                        const r = currentReq;
+                        setDetailVisible(false);
+                        if (r) void handleEdit(r);
+                      }}
+                    >
+                      编辑
+                    </Button>
+                  ),
+                },
                 { key: 'workflow', visible: true, render: () => (
                   <UniWorkflowActions
                     record={currentReq}
@@ -794,84 +1352,210 @@ const PurchaseRequisitionsPage: React.FC = () => {
           currentReq && (
             <>
               <DetailDrawerSection title="基本信息">
-                <Row gutter={16}>
-                  <Col span={8}><strong>申请编号：</strong>{currentReq.requisition_code}</Col>
-                  <Col span={8}><strong>申请名称：</strong>{currentReq.requisition_name}</Col>
-                  <Col span={8}><strong>状态：</strong><Tag>{currentReq.status}</Tag></Col>
-                </Row>
-                <Row gutter={16} style={{ marginTop: 8 }}>
-                  <Col span={8}><strong>来源：</strong>{currentReq.source_code || '-'}</Col>
-                  <Col span={8}><strong>要求到货日期：</strong>{currentReq.required_date || '-'}</Col>
-                  <Col span={8}><strong>是否紧急：</strong>{currentReq.is_urgent ? '是' : '否'}</Col>
-                </Row>
+                <Descriptions
+                  column={3}
+                  size="small"
+                  items={(() => {
+                    const lc = getPurchaseRequisitionLifecycle(currentReq);
+                    const stageName = lc.stageName ?? currentReq.status ?? '草稿';
+                    const fmtDate = (v: string | undefined) => (v ? dayjs(v).format('YYYY-MM-DD') : '-');
+                    const fmtDt = (v: string | undefined) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-');
+                    return [
+                      {
+                        key: 'code',
+                        label: '申请编号',
+                        children: (
+                          <Space size={4}>
+                            <span>{currentReq.requisition_code ?? '-'}</span>
+                            {currentReq.requisition_code ? (
+                              <Button
+                                type="link"
+                                size="small"
+                                icon={<CopyOutlined style={{ fontSize: 12 }} />}
+                                onClick={() => handleCopyRequisitionCode(currentReq.requisition_code!)}
+                                aria-label="复制申请编号"
+                              />
+                            ) : null}
+                          </Space>
+                        ),
+                      },
+                      { key: 'name', label: '申请名称', children: currentReq.requisition_name ?? '-' },
+                      {
+                        key: 'status',
+                        label: '状态',
+                        children: <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>,
+                      },
+                      { key: 'src', label: '来源编码', children: currentReq.source_code ?? '-' },
+                      {
+                        key: 'stype',
+                        label: '来源类型',
+                        children: formatPurchaseRequisitionSourceType(currentReq.source_type, t),
+                      },
+                      { key: 'reqd', label: '要求到货日期', children: fmtDate(currentReq.required_date) },
+                      {
+                        key: 'urgent',
+                        label: '是否紧急',
+                        children: currentReq.is_urgent ? <Tag color="red">是</Tag> : '否',
+                      },
+                      {
+                        key: 'urgent_reason',
+                        label: '紧急原因',
+                        span: 3,
+                        children: currentReq.urgent_reason?.trim() ? currentReq.urgent_reason : '-',
+                      },
+                      {
+                        key: 'notes',
+                        label: '备注',
+                        span: 3,
+                        children: currentReq.notes?.trim() ? currentReq.notes : '-',
+                      },
+                      { key: 'rd', label: '申请日期', children: fmtDate(currentReq.requisition_date) },
+                      { key: 'applicant', label: '申请人', children: currentReq.applicant_name ?? '-' },
+                      { key: 'cat', label: '创建时间', children: fmtDt(currentReq.created_at) },
+                      { key: 'uat', label: '更新时间', children: fmtDt(currentReq.updated_at) },
+                    ];
+                  })()}
+                />
               </DetailDrawerSection>
-              {(() => {
-                const lifecycle = getPurchaseRequisitionLifecycle(currentReq);
-                const mainStages = lifecycle.mainStages ?? [];
-                const subStages = lifecycle.subStages ?? [];
-                if (mainStages.length === 0 && subStages.length === 0) return null;
-                return (
-                  <DetailDrawerSection title="生命周期">
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                      {mainStages.length > 0 && (
-                        <UniLifecycleStepper
-                          steps={mainStages}
-                          status={lifecycle.status}
-                          showLabels
-                          nextStepSuggestions={lifecycle.nextStepSuggestions}
-                        />
-                      )}
-                      {subStages.length > 0 && (
-                        <div>
-                          <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
-                            执行中 · 全链路
+
+              <DetailDrawerSection title="生命周期">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {(() => {
+                    const lifecycle = getPurchaseRequisitionLifecycle(currentReq);
+                    const mainStages = lifecycle.mainStages ?? [];
+                    const subStages = lifecycle.subStages ?? [];
+                    return (
+                      <>
+                        {mainStages.length > 0 && (
+                          <UniLifecycleStepper
+                            steps={mainStages}
+                            status={lifecycle.status}
+                            showLabels
+                            nextStepSuggestions={lifecycle.nextStepSuggestions}
+                          />
+                        )}
+                        {subStages.length > 0 && (
+                          <div>
+                            <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
+                              执行中 · 全链路
+                            </div>
+                            <UniLifecycleStepper steps={subStages} showLabels />
                           </div>
-                          <UniLifecycleStepper steps={subStages} showLabels />
-                        </div>
-                      )}
+                        )}
+                      </>
+                    );
+                  })()}
+                  <div
+                    style={{
+                      paddingTop: 12,
+                      borderTop: '1px solid var(--ant-color-border-secondary)',
+                    }}
+                  >
+                    <div style={{ marginBottom: 8, fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
+                      上下游单据
                     </div>
-                  </DetailDrawerSection>
-                );
-              })()}
-              {currentReq.items && currentReq.items.length > 0 && (
-            <DetailDrawerSection title="申请明细">
-              <Table
-                size="small"
-                columns={[
-                  { title: '物料编号', dataIndex: 'material_code', width: 120 },
-                  { title: '物料名称', dataIndex: 'material_name', width: 150 },
-                  { title: '数量', dataIndex: 'quantity', width: 90, align: 'right' },
-                   { title: '单位', dataIndex: 'unit', width: 60 },
-                  { 
-                    title: '建议单价', 
-                    dataIndex: 'suggested_unit_price', 
-                    width: 130, 
-                    align: 'right',
-                    render: (v, record) => (
-                      <Space size={4}>
-                        ¥{Number(v || 0).toFixed(2)}
-                        {record.material_id && <PriceHistoryInsight materialId={record.material_id} currentPrice={v} />}
-                      </Space>
-                    )
-                  },
-                  { title: '要求到货日期', dataIndex: 'required_date', width: 120 },
-                  {
-                    title: '已转单',
-                    dataIndex: 'purchase_order_id',
-                    width: 80,
-                    render: (v) => (v ? <Tag color="success">是</Tag> : <Tag>否</Tag>),
-                  },
-                ]}
-                dataSource={currentReq.items}
-                pagination={false}
-                rowKey="id"
-                bordered
-              />
-            </DetailDrawerSection>
-              )}
-              {currentReq?.id && (
-                <DetailDrawerSection title="操作历史">
-                  <DocumentTrackingPanel documentType="purchase_requisition" documentId={currentReq.id} />
+                    {prTracking.loading && (
+                      <div style={{ padding: '8px 0' }}>
+                        <Spin size="small" />
+                      </div>
+                    )}
+                    {prTracking.error && (
+                      <Typography.Text type="danger">{prTracking.error}</Typography.Text>
+                    )}
+                    {prTracking.data && (
+                      <DocumentTrackingRelationsBody data={prTracking.data} onDocumentClick={onPrTrackingDocClick} />
+                    )}
+                  </div>
+                </div>
+              </DetailDrawerSection>
+
+              <DetailDrawerSection title="明细信息">
+                <style>{`
+                  .purchase-requisition-detail-drawer-items .ant-table-wrapper .ant-table-body,
+                  .purchase-requisition-detail-drawer-items .ant-table-wrapper .ant-table-content {
+                    overflow: visible !important;
+                  }
+                `}</style>
+                {currentReq.items && currentReq.items.length > 0 ? (
+                  <div
+                    className="purchase-requisition-detail-drawer-items"
+                    style={{ width: '100%', maxWidth: '100%', overflowX: 'auto', overflowY: 'hidden' }}
+                  >
+                    <Table
+                      size="small"
+                      rowKey="id"
+                      tableLayout="fixed"
+                      style={{ minWidth: PURCHASE_REQUISITION_DETAIL_ITEMS_MIN_WIDTH }}
+                      pagination={false}
+                      dataSource={currentReq.items}
+                      columns={[
+                        { title: '物料编号', dataIndex: 'material_code', width: 120, ellipsis: true },
+                        { title: '物料名称', dataIndex: 'material_name', width: 160, ellipsis: true },
+                        { title: '规格', dataIndex: 'material_spec', width: 120, ellipsis: true },
+                        { title: '数量', dataIndex: 'quantity', width: 88, align: 'right' },
+                        {
+                          title: '单位',
+                          dataIndex: 'unit',
+                          width: 100,
+                          ellipsis: true,
+                          render: (_: unknown, record: PurchaseRequisitionItem) => (
+                            <MaterialUnitSelect
+                              materialId={record.material_id}
+                              value={record.unit}
+                              disabled
+                              size="small"
+                              noStyle
+                            />
+                          ),
+                        },
+                        {
+                          title: '建议单价',
+                          dataIndex: 'suggested_unit_price',
+                          width: 140,
+                          align: 'right',
+                          render: (v: number, record: PurchaseRequisitionItem) => (
+                            <Space size={4}>
+                              ¥{Number(v || 0).toFixed(2)}
+                              {record.material_id ? (
+                                <PriceHistoryInsight materialId={record.material_id} currentPrice={v} />
+                              ) : null}
+                            </Space>
+                          ),
+                        },
+                        {
+                          title: '要求到货日期',
+                          dataIndex: 'required_date',
+                          width: 120,
+                          ellipsis: true,
+                          render: (v: string | undefined) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+                        },
+                        {
+                          title: '已转单',
+                          dataIndex: 'purchase_order_id',
+                          width: 80,
+                          render: (v: number | undefined) => (v ? <Tag color="success">是</Tag> : <Tag>否</Tag>),
+                        },
+                      ]}
+                    />
+                  </div>
+                ) : (
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无明细" />
+                )}
+              </DetailDrawerSection>
+
+              {currentReq.id != null && (
+                <DetailDrawerSection title="操作记录">
+                  {prTracking.loading && (
+                    <div style={{ textAlign: 'center', padding: 24 }}>
+                      <Spin />
+                    </div>
+                  )}
+                  {prTracking.error && !prTracking.loading && (
+                    <Typography.Text type="danger">{prTracking.error}</Typography.Text>
+                  )}
+                  {prTracking.data && !prTracking.loading && (
+                    <DocumentTrackingTimelineBody data={prTracking.data} />
+                  )}
                 </DetailDrawerSection>
               )}
             </>

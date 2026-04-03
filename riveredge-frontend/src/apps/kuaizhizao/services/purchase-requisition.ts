@@ -50,6 +50,11 @@ export async function listPurchaseRequisitions(params: {
   limit?: number;
   status?: string;
   source_type?: string;
+  keyword?: string;
+  requisition_code?: string;
+  requisition_name?: string;
+  required_date_from?: string;
+  required_date_to?: string;
 } = {}): Promise<{ data: PurchaseRequisition[]; total: number; success: boolean }> {
   return apiRequest('/apps/kuaizhizao/purchase-requisitions', { method: 'GET', params });
 }

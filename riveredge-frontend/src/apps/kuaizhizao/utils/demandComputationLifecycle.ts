@@ -35,7 +35,10 @@ function buildMainStages(currentKey: string): SubStage[] {
   return MAIN_STAGE_KEYS.map((key, idx) => {
     let status: SubStage['status'] = 'pending';
     if (isFailed) status = idx === 0 ? 'active' : 'pending';
-    else if (idx < currentIdx) status = 'done';
+    else if (currentKey === '完成') {
+      // 整段主链已结束：两节点均应为已完成，避免末节点仍占「进行中」态
+      status = 'done';
+    } else if (idx < currentIdx) status = 'done';
     else if (idx === currentIdx) status = 'active';
     return { key, label: MAIN_STAGE_LABELS[key] ?? key, status };
   });

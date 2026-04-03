@@ -5,7 +5,7 @@
  * 后续完善时，只需修改此组件，所有表格都会同步更新。
  */
 
-import React, { useRef, ReactNode, useState, useEffect, useCallback, useMemo, Suspense, lazy } from 'react'
+import React, { useRef, ReactNode, useState, useEffect, useLayoutEffect, useCallback, useMemo, Suspense, lazy } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import {
@@ -65,6 +65,119 @@ import { useNewShortcut } from '../../hooks/useNewShortcut'
 import { NEW_SHORTCUT_HINT } from '../../utils/globalNewShortcut'
 import { DictionaryLabel } from '../dictionary-label'
 import { stableJsonForQueryKey } from '../../utils/tableQueryKey'
+
+/**
+ * 与表内 isOperationColumn 判定一致：用于右侧固定列排序，避免「仅 render、无 dataIndex」的操作列被当成普通列，
+ * 导致生命周期（rank 1）被排到其后面成为最后一列。
+ */
+function isUniTableOperationColumn(col: any): boolean {
+  const dataIndex = col?.dataIndex
+  const fieldName = Array.isArray(dataIndex) ? dataIndex.join('.') : String(dataIndex || '')
+  const key = col?.key ?? fieldName
+  return (
+    col?.valueType === 'option' ||
+    key === 'action' ||
+    key === 'operation' ||
+    key === 'option' ||
+    fieldName === 'action' ||
+    fieldName === 'operation' ||
+    fieldName === 'option' ||
+    (!dataIndex && col?.render && typeof col.render === 'function')
+  )
+}
+
+/**
+ * 右侧固定列必须连续排在列定义末尾；规范顺序：其它 right 固定列 → 生命周期（key/dataIndex=lifecycle）→ 操作列。
+ * 避免列设置持久化 order 与拖拽把生命周期挤到操作列右侧或中间。
+ */
+function normalizeFixedRightColumnOrder<T extends Record<string, any>>(columns: T[]): T[] {
+  if (!columns?.length) return columns
+  const rest: T[] = []
+  const fixedRight: T[] = []
+  for (const col of columns) {
+    if ((col as any).fixed === 'right') fixedRight.push(col)
+    else rest.push(col)
+  }
+  if (fixedRight.length <= 1) return columns
+
+  const isLifecycle = (c: any) =>
+    String(c.key ?? c.dataIndex ?? '') === 'lifecycle' || c.dataIndex === 'lifecycle'
+
+  fixedRight.sort((a: any, b: any) => {
+    const rank = (c: any) => (isUniTableOperationColumn(c) ? 2 : isLifecycle(c) ? 1 : 0)
+    return rank(a) - rank(b)
+  })
+  return [...rest, ...fixedRight]
+}
+
+function isUniTableLifecycleColumn(col: any): boolean {
+  const key = String(col?.key ?? col?.dataIndex ?? '')
+  return key === 'lifecycle' || col?.dataIndex === 'lifecycle'
+}
+
+/** 规范：生命周期列表头与单元格左对齐（统一覆盖各页面残留的 align: center） */
+function applyLifecycleColumnAlignLeft<T extends Record<string, any>>(columns: T[]): T[] {
+  if (!columns?.length) return columns
+  return columns.map((col: any) => {
+    if (!isUniTableLifecycleColumn(col)) return col
+    return { ...col, align: 'left' as const }
+  })
+}
+
+/** 与 ProTable genColumnKey / 列设置持久化 key 一致（无 key 且无 dataIndex 时用列下标） */
+function getProColumnStateKey(col: any, columnIndex: number): string {
+  const key = col?.key ?? col?.dataIndex
+  if (key != null && key !== '') {
+    return Array.isArray(key) ? key.join('-') : String(key)
+  }
+  return String(columnIndex)
+}
+
+/**
+ * 按当前列定义中「规范化后的右侧固定列」顺序写入 order，用于覆盖 localStorage 里错误的相对顺序。
+ * ProTable 合并规则为 merge(defaultValue, storage)，storage 会盖住 default，故必须在持久化层纠偏。
+ */
+function buildFixedRightColumnOrderOverlay(columns: any[]): Record<string, { order: number }> {
+  if (!columns?.length) return {}
+  const normalized = normalizeFixedRightColumnOrder(columns)
+  const out: Record<string, { order: number }> = {}
+  let o = 1_000_000
+  for (let i = 0; i < normalized.length; i++) {
+    const col = normalized[i]
+    if (col?.fixed !== 'right') continue
+    const k = getProColumnStateKey(col, i)
+    out[k] = { order: o++ }
+  }
+  return out
+}
+
+/**
+ * ProTable：若存在 columnsState.defaultValue，会用它整段替代「从 columns 推导的 defaultColumnKeyMap」，
+ * 故必须给出**完整**列 key 映射，再为右侧固定列写入递增 order（生命周期在操作列左侧）。
+ */
+function buildDefaultColumnsStateMap(columns: any[]): Record<string, any> {
+  const map: Record<string, any> = {}
+  columns.forEach((col: any, index: number) => {
+    const columnKey = getProColumnStateKey(col, index)
+    map[columnKey] = {
+      show: true,
+      fixed: col.fixed,
+      disable: col.disable,
+    }
+  })
+  let order = 900_000
+  columns.forEach((col: any, index: number) => {
+    if (col?.fixed !== 'right') return
+    const columnKey = getProColumnStateKey(col, index)
+    map[columnKey] = {
+      ...map[columnKey],
+      order: order++,
+      fixed: 'right',
+      show: true,
+    }
+  })
+  return map
+}
 
 /** 列展示重置按钮：同时恢复列显示和列宽到系统默认（需在 ProTable 内部渲染以访问 TableContext） */
 function TableColumnResetButton({
@@ -619,6 +732,11 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
      */
     staleWhileRevalidate?: boolean
   }
+  /**
+   * 列展示/列宽 localStorage 的 stable key（默认用 headerTitle）。
+   * 建议 ASCII；需强制重置用户列顺序时可改版本后缀（如 xxx-v2）。
+   */
+  columnPersistenceId?: string
 }
 
 /**
@@ -687,6 +805,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   actionRef: externalActionRef,
   formRef: externalFormRef,
   tanstackQuery,
+  columnPersistenceId,
+  columnsState: userColumnsState,
   ...restProps
 }: UniTableProps<T>) {
   const { t } = useTranslation()
@@ -807,22 +927,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     return columns
   }, [currentViewType, columns, detailTableColumns])
 
-  // 检测是否为操作列（用于操作列样式与宽度处理）
-  const isOperationColumn = (col: any) => {
-    const dataIndex = col.dataIndex
-    const fieldName = Array.isArray(dataIndex) ? dataIndex.join('.') : String(dataIndex || '')
-    const key = col.key || fieldName
-    return (
-      key === 'action' ||
-      key === 'operation' ||
-      key === 'option' ||
-      fieldName === 'action' ||
-      fieldName === 'operation' ||
-      fieldName === 'option' ||
-      col.valueType === 'option' ||
-      (!dataIndex && col.render && typeof col.render === 'function')
-    )
-  }
+  // 检测是否为操作列（用于操作列样式与宽度处理；与 normalizeFixedRightColumnOrder 共用判定）
+  const isOperationColumn = (col: any) => isUniTableOperationColumn(col)
 
   // 为 date/dateTime 列注入站点格式的展示，使站点设置中的日期格式在单据表格中生效
   // 操作列：自适应宽度、不换行（whiteSpace: nowrap，移除固定 width）
@@ -897,7 +1003,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   }, [processedColumns])
 
   // 列宽拖拽 hook（仅表格视图时生效，与 ProTable 列设置共存）
-  const tableId = headerTitle
+  const tableId = columnPersistenceId ?? headerTitle
   const { components: resizableComponents, resizableColumns, tableWidth, resetColumns, refresh } = useAntdResizableHeader({
     columns: columnsForResize,
     columnsState: tableId
@@ -961,7 +1067,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         result.push(baseCols[baseIdx++] ?? processedColumns[i])
       }
     }
-    return result
+    return applyLifecycleColumnAlignLeft(normalizeFixedRightColumnOrder(result))
   }, [resizableColumns, processedColumns])
 
   // 导入配置：优先使用传入的 importHeaders/importExampleRow，否则从 columns 自动生成
@@ -999,6 +1105,86 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   // 有操作列时：scroll.x 用 max-content 让表格自适应内容宽度，操作列不换行
   const effectiveTableWidth =
     hasActionColumn ? 'max-content' : resizableColumns.length > 0 ? (tableWidth ?? 'max-content') : undefined
+
+  /** 合并列状态：为右侧固定列写入默认 order，保证生命周期在操作列左侧（与 normalizeFixedRightColumnOrder 一致） */
+  const mergedColumnsStateProp = React.useMemo(() => {
+    const columnDefaults = buildDefaultColumnsStateMap(effectiveTableColumns)
+    const user = userColumnsState || {}
+    return {
+      ...user,
+      persistenceType: 'localStorage' as const,
+      persistenceKey:
+        user.persistenceKey ?? (tableId ? `ui.tables.${tableId}.columns` : undefined),
+      defaultValue: {
+        ...columnDefaults,
+        ...(user.defaultValue || {}),
+      },
+      onChange: (map: Record<string, any> | undefined) => {
+        user.onChange?.(map)
+        if (!tableId || !map) return
+        if (columnsSyncDebounceRef.current) clearTimeout(columnsSyncDebounceRef.current)
+        columnsSyncDebounceRef.current = setTimeout(() => {
+          columnsSyncDebounceRef.current = null
+          syncTablePreference(tableId, { columns: map }).catch(() => {})
+        }, 800)
+      },
+    }
+  }, [tableId, effectiveTableColumns, userColumnsState, syncTablePreference])
+
+  /** 与 mergedColumnsStateProp.persistenceKey 一致，用于纠偏 localStorage 中的列 order */
+  const columnsPersistenceFullKey =
+    (userColumnsState as any)?.persistenceKey ??
+    (tableId != null && tableId !== '' ? `ui.tables.${tableId}.columns` : undefined)
+
+  /** 列结构签名：内容不变时避免因 columns 引用抖动重复打补丁 */
+  const columnStructureSig = React.useMemo(
+    () =>
+      JSON.stringify(
+        (effectiveTableColumns || []).map((c: any, i: number) => [
+          i,
+          c?.fixed ?? null,
+          c?.dataIndex ?? null,
+          c?.key ?? null,
+          c?.valueType ?? null,
+        ])
+      ),
+    [effectiveTableColumns],
+  )
+
+  const [columnsStatePatchEpoch, setColumnsStatePatchEpoch] = React.useState(0)
+
+  /**
+   * ProTable 对列设置的合并为 merge(defaultValue, localStorage)，用户历史持久化会盖住默认 order，
+   * 仅靠 normalize 列顺序无法纠正展示。此处按规范重写右侧固定列的 order 并触发一次重挂载以重新读 storage。
+   */
+  React.useLayoutEffect(() => {
+    if (typeof window === 'undefined' || !columnsPersistenceFullKey || !effectiveTableColumns?.length) return
+    try {
+      const raw = window.localStorage.getItem(columnsPersistenceFullKey)
+      if (!raw) return
+      const m = JSON.parse(raw) as Record<string, any>
+      const overlay = buildFixedRightColumnOrderOverlay(effectiveTableColumns)
+      const keys = Object.keys(overlay)
+      if (keys.length === 0) return
+      const next = { ...m }
+      let changed = false
+      for (const k of keys) {
+        const want = overlay[k]?.order
+        if (want == null) continue
+        const cur = next[k]?.order
+        if (cur !== want) {
+          next[k] = { ...(next[k] || {}), order: want }
+          changed = true
+        }
+      }
+      if (changed) {
+        window.localStorage.setItem(columnsPersistenceFullKey, JSON.stringify(next))
+        setColumnsStatePatchEpoch((e) => e + 1)
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [columnsPersistenceFullKey, columnStructureSig, effectiveTableColumns])
 
   /**
    * 将按钮容器移动到 ant-pro-table 内部
@@ -1698,6 +1884,24 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           height: 32px !important;
           line-height: 30px !important;
         }
+        /* 表体/表头垂直居中：生命周期（圆环+文案）与操作列链接等同列对齐 */
+        .uni-table-container .ant-table-thead > tr > th,
+        .uni-table-container .ant-table-tbody > tr > td,
+        .uni-table-container td.ant-table-cell,
+        .uni-table-container th.ant-table-cell {
+          vertical-align: middle !important;
+        }
+        /* ProTable 部分版本在 td 上挂 .ant-table-cell，与上一行叠加提高命中率 */
+        .uni-table-container .ant-table-cell {
+          vertical-align: middle !important;
+        }
+        .uni-table-container .uni-lifecycle {
+          vertical-align: middle;
+        }
+        .uni-table-container .uni-lifecycle .ant-progress.ant-progress-circle,
+        .uni-table-container .uni-lifecycle .ant-progress-circle .ant-progress-inner {
+          margin: 0 !important;
+        }
         /* 操作列：强制不换行，所有子元素（含 ProTable 的 flex 布局）均不换行 */
         .uni-table-container .uni-table-operation-cell {
           white-space: nowrap !important;
@@ -1824,6 +2028,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               }}
             >
               <ProTable<T>
+              key={`uni-pt-cols-${String(columnsPersistenceFullKey ?? 'np')}-${columnsStatePatchEpoch}`}
               headerTitle={buildHeaderActions() || headerTitle || undefined}
               actionRef={actionRef}
               formRef={formRef}
@@ -1843,19 +2048,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                 updatePreferences({ 'ui.default_table_density': size })
               }}
               // 支持列设置持久化：本地 localStorage + 同步到用户偏好（跨设备生效）
-              columnsState={{
-                persistenceKey: tableId ? `ui.tables.${tableId}.columns` : undefined,
-                persistenceType: 'localStorage',
-                onChange: (map) => {
-                  if (!tableId || !map) return
-                  // 防抖同步到后端偏好设置，避免频繁请求
-                  if (columnsSyncDebounceRef.current) clearTimeout(columnsSyncDebounceRef.current)
-                  columnsSyncDebounceRef.current = setTimeout(() => {
-                    columnsSyncDebounceRef.current = null
-                    syncTablePreference(tableId, { columns: map }).catch(() => {})
-                  }, 800)
-                },
-              }}
+              columnsState={mergedColumnsStateProp}
               options={{
                 density: true,
                 setting: {

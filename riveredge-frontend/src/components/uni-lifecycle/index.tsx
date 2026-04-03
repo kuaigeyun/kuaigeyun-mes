@@ -7,7 +7,7 @@
 
 import React from 'react';
 import { Progress, Tooltip } from 'antd';
-import { CheckCircleOutlined, LoadingOutlined, MinusCircleOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, MinusCircleOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import type { LifecycleResult, SubStage } from './types';
 
 export interface UniLifecycleProps extends LifecycleResult {
@@ -25,7 +25,8 @@ const CIRCLE_SIZE = 32;
 
 function SubStageIcon({ status }: { status: SubStage['status'] }) {
   if (status === 'done') return <CheckCircleOutlined style={{ color: 'var(--ant-color-success)' }} />;
-  if (status === 'active') return <LoadingOutlined style={{ color: 'var(--ant-color-primary)' }} spin />;
+  if (status === 'active')
+    return <PlayCircleOutlined style={{ color: 'var(--ant-color-primary)' }} />;
   return <MinusCircleOutlined style={{ color: 'var(--ant-color-text-tertiary)' }} />;
 }
 
@@ -99,7 +100,16 @@ export const UniLifecycle: React.FC<UniLifecycleProps> = ({
   const circleEl = showCircleTooltip ? <Tooltip title={tip}>{circle}</Tooltip> : circle;
 
   return (
-    <span className="uni-lifecycle" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+    <span
+      className="uni-lifecycle"
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 8,
+        verticalAlign: 'middle',
+        lineHeight: 1,
+      }}
+    >
       {circleEl}
       {showLabel && <span style={{ whiteSpace: 'nowrap' }}>{stageName}</span>}
       {expandSubStages && subStages && subStages.length > 0 && (
