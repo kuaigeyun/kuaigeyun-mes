@@ -8,6 +8,13 @@ import {
 
 const INVOICE_API = '/apps/kuaicaiwu/invoices';
 
+export interface InvoiceStatistics {
+  total_count: number;
+  in_total_amount: number;
+  out_total_amount: number;
+  pending_verification_count: number;
+}
+
 export const invoiceService = {
   createInvoice: (data: InvoiceCreateData) => {
     return apiRequest<Invoice>(INVOICE_API, {
@@ -22,6 +29,11 @@ export const invoiceService = {
       params,
     });
   },
+
+  getStatistics: () =>
+    apiRequest<InvoiceStatistics>(`${INVOICE_API}/statistics`, {
+      method: 'GET',
+    }),
 
   getInvoice: (code: string) => {
     return apiRequest<Invoice>(`${INVOICE_API}/${code}`, {

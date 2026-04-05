@@ -34,6 +34,7 @@ import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { getSalesOrderLifecycle } from '../../../utils/salesOrderLifecycle';
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
+import { strokeColorWithAlpha } from '../../../../../components/common/StatCardTrendArea';
 import { ListPageTemplate, FormModalTemplate, type StatCard } from '../../../../../components/layout-templates';
 import { AmountDisplay } from '../../../../../components/permission';
 import { Area } from '@ant-design/charts';
@@ -1908,9 +1909,9 @@ const SalesOrdersPage: React.FC = () => {
         shapeField="smooth"
         style={{
           fill: `linear-gradient(-90deg, transparent 0%, ${color} 100%)`,
-          fillOpacity: 0.2,
-          stroke: color,
-          lineWidth: 2,
+          fillOpacity: 0.1,
+          stroke: strokeColorWithAlpha(color),
+          lineWidth: 1,
         }}
         autoFit
       />

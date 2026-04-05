@@ -9,7 +9,7 @@
  * Date: 2026-01-05
  */
 
-import React, { useRef, useState, useEffect, useLayoutEffect, useMemo, useCallback, lazy, Suspense, type ComponentProps } from 'react'
+import React, { useRef, useState, useEffect, useLayoutEffect, useMemo, useCallback, lazy, Suspense } from 'react'
 import { DatePicker } from 'antd'
 const { RangePicker } = DatePicker
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -121,7 +121,7 @@ import { toolApi } from '../../../services/equipment'
 const WorkOrderPrintModal = lazy(() => import('./components/WorkOrderPrintModal'))
 /** 指标卡趋势图：首屏不拉 @ant-design/charts，减少工单页 JS 解析与主线程占用 */
 const LazyStatTrendArea = lazy(() =>
-  import('@ant-design/charts').then(m => ({ default: m.Area }))
+  import('../../../../../components/common/StatCardTrendArea').then((m) => ({ default: m.StatCardTrendArea }))
 )
 const LazySmartSuggestionFloatPanel = lazy(() => import('../../../../../components/smart-suggestion-float-panel'))
 const LazyCreateWorkOrderOperationsList = lazy(() => import('./components/WorkOrderCreateDndList'))
@@ -3340,28 +3340,12 @@ const WorkOrdersPage: React.FC = () => {
     );
   };
 
-  /** 折线图渲染（参考操作日志样式：Area 面积图 + 渐变填充） */
+  /** 折线图渲染（与 StatCardTrendArea / 销售订单指标卡一致） */
   const renderTrendChart = (data: { date: string; value: number }[] = [], color: string) => {
     if (!data || data.length === 0) return null
-    const areaProps = {
-      data,
-      xField: 'date' as const,
-      yField: 'value' as const,
-      padding: 0,
-      axis: false,
-      colorField: () => color,
-      shapeField: 'smooth' as const,
-      style: {
-        fill: `linear-gradient(-90deg, transparent 0%, ${color} 100%)`,
-        fillOpacity: 0.2,
-        stroke: color,
-        lineWidth: 2,
-      },
-      autoFit: true,
-    } satisfies ComponentProps<typeof LazyStatTrendArea>
     return (
       <Suspense fallback={null}>
-        <LazyStatTrendArea {...areaProps} />
+        <LazyStatTrendArea data={data} color={color} />
       </Suspense>
     )
   }

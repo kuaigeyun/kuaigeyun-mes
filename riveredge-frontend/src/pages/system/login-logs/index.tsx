@@ -14,7 +14,7 @@ import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { Tag, Space, Drawer, Typography, Descriptions, App, Button } from 'antd';
 import { EyeOutlined, BarChartOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
-import { Area } from '@ant-design/charts';
+import { StatCardTrendArea } from '../../../components/common/StatCardTrendArea';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../components/layout-templates';
 import {
   getLoginLogs,
@@ -159,28 +159,6 @@ const LoginLogsPage: React.FC = () => {
     );
   };
 
-  const renderTrendChart = (data: any[] = [], color: string) => {
-    if (!data || data.length === 0) return null;
-    return (
-      <Area
-        data={data}
-        xField="date"
-        yField="value"
-        padding={0}
-        axis={false}
-        colorField={() => color}
-        shapeField="smooth"
-        style={{
-          fill: `linear-gradient(-90deg, transparent 0%, ${color} 100%)`,
-          fillOpacity: 0.2, // increased opacity since gradient fades it out
-          stroke: color,
-          lineWidth: 2,
-        }}
-        autoFit
-      />
-    );
-  };
-
   // 构建统计卡片数据，始终返回卡片结构，避免数据加载前后产生的布局抖动
   const statCards = [
     {
@@ -192,7 +170,10 @@ const LoginLogsPage: React.FC = () => {
         </div>
       ) : undefined,
       valueStyle: { color: '#1890ff' },
-      backgroundChart: renderTrendChart(stats?.trend_data || [], '#1890ff'),
+      backgroundChart:
+        stats?.trend_data?.length ? (
+          <StatCardTrendArea data={stats.trend_data} color="#1890ff" />
+        ) : undefined,
     },
     {
       title: t('pages.system.loginLogs.statSuccess'),

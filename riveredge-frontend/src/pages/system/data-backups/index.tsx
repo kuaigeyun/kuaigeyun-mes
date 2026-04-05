@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../components/safe-pro-form-select';
 import { App, Card, Tag, Space, message, Modal, Descriptions, Popconfirm, Button, Badge, Typography, Alert, Progress, Tooltip, theme, Upload, InputNumber, Form } from 'antd';
-import { Area } from '@ant-design/charts';
+import { StatCardTrendArea } from '../../../components/common/StatCardTrendArea';
 import { EyeOutlined, PlusOutlined, ReloadOutlined, DeleteOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
@@ -230,28 +230,6 @@ const DataBackupsPage: React.FC = () => {
       );
     };
 
-    const renderTrendChart = (data: any[] = [], color: string) => {
-      if (!data || data.length === 0) return null;
-      return (
-        <Area
-          data={data}
-          xField="date"
-          yField="value"
-          padding={0}
-          axis={false}
-          colorField={() => color}
-          shapeField="smooth"
-          style={{
-            fill: `linear-gradient(-90deg, transparent 0%, ${color} 100%)`,
-            fillOpacity: 0.2, // increased opacity since gradient fades it out
-            stroke: color,
-            lineWidth: 2,
-          }}
-          autoFit
-        />
-      );
-    };
-
     const todayStr = dayjs().format('YYYY-MM-DD');
     const yesterdayStr = dayjs().subtract(1, 'day').format('YYYY-MM-DD');
     let today_backups = 0;
@@ -286,7 +264,7 @@ const DataBackupsPage: React.FC = () => {
             今日备份: {today_backups} {renderDOD(today_backups, yesterday_backups)}
           </div>
         ),
-        backgroundChart: renderTrendChart(trend_data, '#1890ff'),
+        backgroundChart: trend_data.length ? <StatCardTrendArea data={trend_data} color="#1890ff" /> : undefined,
       },
       { title: t('pages.system.dataBackups.statSuccess'), value: stats.success, valueStyle: { color: '#52c41a' } },
       { title: t('pages.system.dataBackups.statFailed'), value: stats.failed, valueStyle: { color: '#ff4d4f' } },

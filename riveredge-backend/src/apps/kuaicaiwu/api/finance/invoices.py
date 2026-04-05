@@ -10,7 +10,11 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from loguru import logger
 
 from apps.kuaicaiwu.schemas.invoice import (
-    InvoiceCreate, InvoiceUpdate, InvoiceResponse, InvoiceListResponse
+    InvoiceCreate,
+    InvoiceUpdate,
+    InvoiceResponse,
+    InvoiceListResponse,
+    InvoiceStatisticsResponse,
 )
 from apps.kuaicaiwu.services.invoice_service import InvoiceService
 from core.api.deps.access import require_access
@@ -90,6 +94,22 @@ async def list_invoices(
         skip=skip,
         limit=limit
     )
+
+
+@router.get("/statistics", response_model=InvoiceStatisticsResponse, summary="发票列表统计（指标卡）")
+async def get_invoice_statistics(
+    _auth: object = Depends(
+        require_access(
+            "finance.invoice",
+            "read",
+            required_permissions=["kuaicaiwu:invoice:view"],
+        )
+    ),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """须在 `/{code}` 之前注册。"""
+    data = await invoice_service.get_invoice_statistics(tenant_id)
+    return InvoiceStatisticsResponse.model_validate(data)
 
 
 @router.get("/{code}", response_model=InvoiceResponse)

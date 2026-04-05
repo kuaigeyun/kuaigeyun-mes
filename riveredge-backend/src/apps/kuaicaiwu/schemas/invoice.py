@@ -104,3 +104,12 @@ class InvoiceListResponse(BaseModel):
     total: int
     skip: int
     limit: int
+
+
+class InvoiceStatisticsResponse(BaseModel):
+    """发票列表页指标卡"""
+
+    total_count: int = Field(..., description="发票总张数")
+    in_total_amount: float = Field(..., description="进项价税合计汇总")
+    out_total_amount: float = Field(..., description="销项价税合计汇总")
+    pending_verification_count: int = Field(..., description="待认证进项（已确认未认证）张数")

@@ -15,7 +15,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { theme as AntdTheme } from 'antd'
-import { Area } from '@ant-design/charts'
+import { StatCardTrendArea } from '../../../../../components/common/StatCardTrendArea'
 import { usePageMetrics } from '../../../../../hooks/usePageMetrics'
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DRAWER_CONFIG, type StatCard } from '../../../../../components/layout-templates'
 import { getBusinessConfig } from '../../../../../services/businessConfig'
@@ -907,27 +907,10 @@ export default function SalesForecastsPage() {
     );
   };
 
-  /** 折线图渲染 */
+  /** 折线图渲染（与 StatCardTrendArea / 销售订单指标卡一致） */
   const renderTrendChart = (data: { date: string; value: number }[] = [], chartColor: string) => {
     if (!data || data.length === 0) return null;
-    return (
-      <Area
-        data={data}
-        xField="date"
-        yField="value"
-        padding={0}
-        axis={false}
-        colorField={() => chartColor}
-        shapeField="smooth"
-        style={{
-          fill: `linear-gradient(-90deg, transparent 0%, ${chartColor} 100%)`,
-          fillOpacity: 0.2,
-          stroke: chartColor,
-          lineWidth: 2,
-        }}
-        autoFit
-      />
-    );
+    return <StatCardTrendArea data={data} color={chartColor} />;
   };
 
   const statCards: StatCard[] = hasPageMetricConfig

@@ -869,10 +869,10 @@ class AuthService:
         Raises:
             HTTPException: 当 Token 无效时抛出
         """
-        from infra.domain.security.security import get_token_payload
+        from infra.domain.security.security import get_token_payload_for_refresh
         
-        # 验证 Token
-        payload = get_token_payload(token)
+        # 验证 Token（允许短时过期后的静默续期，避免前端定时器与请求竞态导致误踢出）
+        payload = get_token_payload_for_refresh(token)
         if not payload:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,

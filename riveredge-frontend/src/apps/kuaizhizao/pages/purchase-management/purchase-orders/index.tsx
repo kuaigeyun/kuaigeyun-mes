@@ -1479,11 +1479,7 @@ const PurchaseOrdersPage: React.FC = () => {
           suffix: '%',
           valueStyle: { color: '#52c41a' },
           backgroundChart: (
-            <SimpleSparkline
-              data={PO_STAT_SPARKLINE_SUPPLIER}
-              type="column"
-              color="#52c41a"
-            />
+            <SimpleSparkline data={PO_STAT_SPARKLINE_SUPPLIER} color="#52c41a" />
           ),
         },
         {

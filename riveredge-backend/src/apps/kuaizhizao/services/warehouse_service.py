@@ -3834,6 +3834,42 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
             raise NotFoundError(f"采购退货单不存在: {return_id}")
         return PurchaseReturnResponse.model_validate(return_obj)
 
+    async def get_purchase_return_statistics(self, tenant_id: int) -> Dict[str, Any]:
+        """采购退货列表页指标：状态计数 + 近 7 日按创建日分布（用于趋势图）"""
+        from datetime import date, timedelta
+
+        base = PurchaseReturn.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        total_count = await base.count()
+        pending_count = await base.filter(status="待退货").count()
+        done_count = await base.filter(status="已退货").count()
+        cancelled_count = await base.filter(status="已取消").count()
+
+        today = date.today()
+        trend_total: List[int] = []
+        trend_pending: List[int] = []
+        trend_done: List[int] = []
+        trend_cancelled: List[int] = []
+        for offset in range(6, -1, -1):
+            d = today - timedelta(days=offset)
+            day_start = datetime.combine(d, datetime.min.time())
+            day_end = datetime.combine(d, datetime.max.time())
+            day_q = base.filter(created_at__gte=day_start, created_at__lte=day_end)
+            trend_total.append(await day_q.count())
+            trend_pending.append(await day_q.filter(status="待退货").count())
+            trend_done.append(await day_q.filter(status="已退货").count())
+            trend_cancelled.append(await day_q.filter(status="已取消").count())
+
+        return {
+            "total_count": total_count,
+            "pending_count": pending_count,
+            "done_count": done_count,
+            "cancelled_count": cancelled_count,
+            "trend_total": trend_total,
+            "trend_pending": trend_pending,
+            "trend_done": trend_done,
+            "trend_cancelled": trend_cancelled,
+        }
+
     async def list_purchase_returns(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[PurchaseReturnResponse]:
         """获取采购退货单列表"""
         query = PurchaseReturn.filter(tenant_id=tenant_id, deleted_at__isnull=True)

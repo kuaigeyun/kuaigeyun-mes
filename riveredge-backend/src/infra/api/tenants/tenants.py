@@ -9,6 +9,7 @@ Date: 2025-12-27
 
 from typing import Optional
 from datetime import datetime
+from pydantic import BaseModel, Field
 from fastapi import APIRouter, HTTPException, Query, Depends, status
 from loguru import logger
 
@@ -24,6 +25,18 @@ from typing import Any
 
 # 创建路由
 router = APIRouter(prefix="/tenants", tags=["Infra Tenants"])
+
+
+class BulkInactivityTimeoutBody(BaseModel):
+    """批量设置所有租户的「用户不活动超时」（秒）；0 表示禁用无操作自动退出。"""
+
+    inactivity_timeout: int = Field(0, ge=0, le=86400 * 7, description="秒，0=禁用")
+
+
+class BulkInactivityTimeoutResponse(BaseModel):
+    tenant_count: int
+    updated: int
+    inactivity_timeout: int
 
 
 @router.get("", response_model=TenantListResponse)
@@ -409,4 +422,31 @@ async def delete_tenant_by_superadmin(
         )
     
     logger.info(f"平台超级管理员 {current_admin.username} 删除组织: ID {tenant_id}")
+
+
+@router.post(
+    "/bulk-inactivity-timeout",
+    response_model=BulkInactivityTimeoutResponse,
+    summary="批量设置所有租户的站点「不活动超时」",
+)
+async def bulk_set_inactivity_timeout_for_all_tenants(
+    body: BulkInactivityTimeoutBody,
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+):
+    """
+    将 **所有组织** 的站点设置 `security.inactivity_timeout` 更新为指定值（默认 0）。
+    0 表示前端不启用「长时间无操作自动退出」；不影响 JWT 有效期（见基础设施环境变量）。
+
+    需要平台超级管理员 Token。
+    """
+    from core.services.system.site_setting_service import SiteSettingService
+
+    result = await SiteSettingService.set_inactivity_timeout_for_all_tenants(
+        inactivity_timeout=body.inactivity_timeout
+    )
+    logger.info(
+        f"平台超级管理员 {current_admin.username} 批量设置不活动超时: "
+        f"{result['inactivity_timeout']}s, tenants={result['tenant_count']}"
+    )
+    return BulkInactivityTimeoutResponse(**result)
 

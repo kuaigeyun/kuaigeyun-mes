@@ -1,8 +1,15 @@
 /**
- * 按页面路径获取指标卡
+ * 按页面路径获取指标卡（列表页指标「三层模式」之一）
  *
- * 调用 GET /core/datasets/metrics/by-page，返回与 ListPageTemplate 兼容的 statCards。
- * 无配置时返回 null，保持与现有 getXxxStatistics 的兼容。
+ * **标准做法（与快制造销售订单页一致）：**
+ * 1. **数据集层**：`usePageMetrics()` → `GET /core/datasets/metrics/by-page`，租户在「页面指标」中配置时
+ *    `hasConfig` 为 true，`stat_cards` 来自配置。
+ * 2. **领域统计层**：`useQuery` + `getXxxStatistics` → 后端 `GET .../statistics` 聚合（趋势、金额等）。
+ * 3. **合并**：`hasConfig` 为 true 时，用业务 `statistics` 按 `card.key` 补 `backgroundChart` / `description` / `onClick`；
+ *    为 false 时完全用 `statistics` 构建卡片；无数据时回退占位零值。
+ * 4. **失效**：变更单据后 `invalidateQueries` 同时失效 `['xxxStatistics']` 与 `['pageMetrics', pathname]`。
+ *
+ * 本 Hook 只负责第 1 层；无配置时 `statCards` 为空、`hasConfig` 为 false，由页面与统计 API 组合展示。
  */
 
 import { useQuery } from '@tanstack/react-query';

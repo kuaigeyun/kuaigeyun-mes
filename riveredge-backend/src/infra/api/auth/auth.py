@@ -7,7 +7,7 @@ Author: Luigi Lu
 Date: 2025-12-27
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from starlette.requests import Request
 from loguru import logger
 
@@ -94,23 +94,31 @@ async def register(
 
 
 @router.post("/refresh", response_model=dict)
-async def refresh_token(token: str):
+async def refresh_token(
+    request: Request,
+    token: str | None = Query(None, description="当前 JWT（Query，兼容旧客户端）"),
+):
     """
     刷新 Token 接口
     
     验证当前 Token 并生成新的 Token。
-    
-    Args:
-        token: 当前 JWT Token
-        
-    Returns:
-        dict: 包含新的 access_token 的响应数据
-        
-    Raises:
-        HTTPException: 当 Token 无效时抛出
+    支持：Query ?token=、JSON body {\"token\"} 或 {\"refresh_token\"}（与前端一致）。
     """
+    raw = token
+    if not raw:
+        try:
+            body = await request.json()
+        except Exception:
+            body = None
+        if isinstance(body, dict):
+            raw = body.get("token") or body.get("refresh_token")
+    if not raw or not isinstance(raw, str) or not raw.strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="token required",
+        )
     service = AuthService()
-    result = await service.refresh_token(token)
+    result = await service.refresh_token(raw.strip())
     return result
 
 

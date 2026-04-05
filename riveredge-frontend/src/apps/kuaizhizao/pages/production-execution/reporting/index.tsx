@@ -1727,7 +1727,6 @@ const ReportingPage: React.FC = () => {
           backgroundChart: (
             <SimpleSparkline 
               data={[2, 4, 1, 0, 3, 1, 2]} 
-              type="column"
               color={token.colorError} 
             />
           ),

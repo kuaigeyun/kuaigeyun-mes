@@ -166,6 +166,17 @@ export const warehouseApi = {
   },
   purchaseReturn: {
     list: async (params?: any) => apiRequest('/apps/kuaizhizao/purchase-returns', { method: 'GET', params }),
+    statistics: async () =>
+      apiRequest<{
+        total_count: number;
+        pending_count: number;
+        done_count: number;
+        cancelled_count: number;
+        trend_total: number[];
+        trend_pending: number[];
+        trend_done: number[];
+        trend_cancelled: number[];
+      }>('/apps/kuaizhizao/purchase-returns/statistics', { method: 'GET' }),
     create: async (data: any) => apiRequest('/apps/kuaizhizao/purchase-returns', { method: 'POST', data }),
     delete: async (id: string) => apiRequest(`/apps/kuaizhizao/purchase-returns/${id}`, { method: 'DELETE' }),
     get: async (id: string) => apiRequest(`/apps/kuaizhizao/purchase-returns/${id}`, { method: 'GET' }),

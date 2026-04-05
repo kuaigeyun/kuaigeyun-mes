@@ -2639,6 +2639,15 @@ async def list_purchase_returns(
     )
 
 
+@router.get("/purchase-returns/statistics", summary="采购退货单统计（列表页指标卡）")
+async def get_purchase_return_statistics(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    """必须在 `/purchase-returns/{return_id}` 之前注册，避免 `statistics` 被解析为 id。"""
+    return await PurchaseReturnService().get_purchase_return_statistics(tenant_id)
+
+
 @router.get("/purchase-returns/{return_id}", response_model=PurchaseReturnResponse, summary="获取采购退货单详情")
 async def get_purchase_return(
     return_id: int = Path(..., description="退货单ID"),

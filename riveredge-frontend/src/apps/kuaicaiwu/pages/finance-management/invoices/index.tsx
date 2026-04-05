@@ -6,11 +6,13 @@
  * - /finance-management/sales-invoices   -> 销项发票(销售)
  * - /finance-management/purchase-invoices -> 进项发票(采购)
  */
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Modal, Popconfirm, Typography } from 'antd';
 import { FileTextOutlined, AccountBookOutlined, PayCircleOutlined, EyeOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { invoiceService } from '../../../services/finance/invoice';
+import { usePageMetrics } from '../../../../../hooks/usePageMetrics';
 import { Invoice, InvoiceCreateData } from '../../../types/finance/invoice';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { apiRequest } from '../../../../../services/api';
@@ -18,7 +20,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { ListPageTemplate, type StatCard } from '../../../../../components/layout-templates';
 import { getUnifiedInvoiceLifecycle } from '../../../utils/financeLifecycle';
 import { renderRowActionsMax3 } from '../../../utils/renderRowActionsMax3';
 import dayjs from 'dayjs';
@@ -29,6 +31,19 @@ const InvoiceList: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
+  const { statCards: pageMetricCards, hasConfig: hasPageMetricConfig } = usePageMetrics(location.pathname);
+
+  const invalidateInvoiceStatistics = () => {
+    queryClient.invalidateQueries({ queryKey: ['invoiceStatistics'] });
+    queryClient.invalidateQueries({ queryKey: ['pageMetrics', location.pathname] });
+  };
+
+  const { data: invoiceStatistics } = useQuery({
+    queryKey: ['invoiceStatistics'],
+    queryFn: () => invoiceService.getStatistics(),
+  });
+
   const initialTab = location.pathname.includes('sales-invoices') ? 'OUT' : location.pathname.includes('purchase-invoices') ? 'IN' : 'all';
   const [activeTabKey, setActiveTabKey] = useState<string>(initialTab);
   const headerTitle = location.pathname.includes('sales-invoices') ? '销售发票' : location.pathname.includes('purchase-invoices') ? '采购发票' : '发票列表';
@@ -155,6 +170,7 @@ const InvoiceList: React.FC = () => {
               onConfirm={async () => {
                 await invoiceService.deleteInvoice(record.invoice_code);
                 messageApi.success('删除成功');
+                invalidateInvoiceStatistics();
                 actionRef.current?.reload();
               }}
             >
@@ -168,15 +184,58 @@ const InvoiceList: React.FC = () => {
     },
   ];
 
+  const statCards: StatCard[] = useMemo(() => {
+    const s = invoiceStatistics;
+    if (hasPageMetricConfig && pageMetricCards.length > 0) {
+      return pageMetricCards.map((card) => {
+        if (!s || !card.key) return card;
+        const valueMap: Record<string, number | undefined> = {
+          total_count: s.total_count,
+          in_total_amount: s.in_total_amount,
+          out_total_amount: s.out_total_amount,
+          pending_verification_count: s.pending_verification_count,
+        };
+        const v = valueMap[card.key];
+        if (v === undefined) return card;
+        return { ...card, value: v };
+      });
+    }
+    if (!s) {
+      return [
+        { title: '总发票数', value: 0, prefix: <FileTextOutlined />, valueStyle: { color: '#1890ff' } },
+        { title: '进项金额', value: 0, prefix: <AccountBookOutlined />, valueStyle: { color: '#52c41a' }, precision: 2 },
+        { title: '销项金额', value: 0, prefix: <AccountBookOutlined />, valueStyle: { color: '#faad14' }, precision: 2 },
+        { title: '待认证', value: 0, prefix: <PayCircleOutlined />, suffix: '张', valueStyle: { color: '#f5222d' } },
+      ];
+    }
+    return [
+      { title: '总发票数', value: s.total_count, prefix: <FileTextOutlined />, valueStyle: { color: '#1890ff' } },
+      {
+        title: '进项金额',
+        value: s.in_total_amount,
+        prefix: <AccountBookOutlined />,
+        valueStyle: { color: '#52c41a' },
+        precision: 2,
+      },
+      {
+        title: '销项金额',
+        value: s.out_total_amount,
+        prefix: <AccountBookOutlined />,
+        valueStyle: { color: '#faad14' },
+        precision: 2,
+      },
+      {
+        title: '待认证',
+        value: s.pending_verification_count,
+        prefix: <PayCircleOutlined />,
+        suffix: '张',
+        valueStyle: { color: '#f5222d' },
+      },
+    ];
+  }, [hasPageMetricConfig, pageMetricCards, invoiceStatistics]);
+
   return (
-    <ListPageTemplate
-      statCards={[
-        { title: '总发票数', value: 125, prefix: <FileTextOutlined />, valueStyle: { color: '#1890ff' } },
-        { title: '进项金额', value: 45678.9, prefix: <AccountBookOutlined />, valueStyle: { color: '#52c41a' }, precision: 2 },
-        { title: '销项金额', value: 89012.34, prefix: <AccountBookOutlined />, valueStyle: { color: '#faad14' }, precision: 2 },
-        { title: '待认证', value: 8, prefix: <PayCircleOutlined />, suffix: '张', valueStyle: { color: '#f5222d' } },
-      ]}
-    >
+    <ListPageTemplate statCards={statCards}>
       <UniTable<Invoice>
         headerTitle={headerTitle}
         actionRef={actionRef}
@@ -201,6 +260,7 @@ const InvoiceList: React.FC = () => {
                   await invoiceService.deleteInvoice(String(code));
                 }
                 messageApi.success(`成功删除 ${keys.length} 张发票`);
+                invalidateInvoiceStatistics();
                 actionRef.current?.reload();
               } catch (error: any) {
                 messageApi.error(error?.message || '删除失败');
@@ -293,6 +353,7 @@ const InvoiceList: React.FC = () => {
           });
           if (result.successCount > 0) {
             messageApi.success(`成功导入 ${result.successCount} 张发票`);
+            invalidateInvoiceStatistics();
             actionRef.current?.reload();
           }
           if (result.failureCount > 0) {

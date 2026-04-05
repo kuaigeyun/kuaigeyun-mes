@@ -16,7 +16,8 @@ import zhCN from 'antd/locale/zh_CN';
 import enUS from 'antd/locale/en_US';
 import { useQuery } from '@tanstack/react-query';
 import { getCurrentUser } from './services/auth';
-import { getToken, clearAuth, getUserInfo, setUserInfo, setTenantId, getTenantId, isTokenExpired } from './utils/auth';
+import { getToken, clearAuth, getUserInfo, setUserInfo, setTenantId, getTenantId, isTokenExpired, getTokenRemainingTime } from './utils/auth';
+import { refreshAccessTokenSilently } from './utils/tokenRefresh';
 import { prefetchAvatarUrl } from './utils/avatar';
 import { useGlobalStore } from './stores';
 import i18n, { loadUserLanguage } from './config/i18n';
@@ -293,27 +294,35 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
       inactivityTimeoutSec !== undefined ? inactivityTimeoutSec : getConfig('security.inactivity_timeout', 1800),
     );
 
+    const proactiveRefreshMs = 5 * 60 * 1000;
+
     // 定时器 ref 需在 handleLogout 之前声明，避免 handleLogout 被首次检查调用时访问未初始化变量
     const checkTimerRef = { current: null as NodeJS.Timeout | null };
 
-    // 检查 TOKEN 是否过期
-    const checkAuthStatus = () => {
+    // 检查 TOKEN：先主动续期（临近过期），已过期则尝试静默刷新（与后端 grace 对齐），失败再登出
+    const checkAuthStatus = async (): Promise<boolean> => {
       const currentToken = getToken();
       if (!currentToken) {
         return false;
       }
 
-      // 1. 检查 Token 过期
-      if (isTokenExpired(currentToken)) {
-        console.warn('⚠️ TOKEN 已过期，清除认证信息并跳转到登录页');
-        handleLogout();
-        return false;
+      const remaining = getTokenRemainingTime(currentToken);
+      if (remaining > 0 && remaining < proactiveRefreshMs) {
+        await refreshAccessTokenSilently();
       }
 
-      // 2. 检查用户不活动超时 (0表示禁用)，仅当完全无操作且无进行中请求时才超时
+      const tokenAfterProactive = getToken() || currentToken;
+      if (isTokenExpired(tokenAfterProactive)) {
+        const ok = await refreshAccessTokenSilently();
+        if (!ok) {
+          console.warn('⚠️ TOKEN 已过期且无法续期，清除认证信息并跳转到登录页');
+          handleLogout();
+          return false;
+        }
+      }
+
       if (inactivityTimeout > 0) {
         if (hasPendingRequests()) {
-          // 有进行中的 API 请求，视为用户正在操作，不触发超时
           return true;
         }
         const lastActivityTime = getLastActivityTime();
@@ -347,24 +356,50 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
       }
     };
 
-    // 立即执行一次检查
-    if (!checkAuthStatus()) {
-      return;
-    }
+    let cancelled = false;
 
-    // 设置定时器
-    checkTimerRef.current = setInterval(() => {
-      if (!checkAuthStatus()) {
-        if (checkTimerRef.current) {
-          clearInterval(checkTimerRef.current);
-        }
+    const onTokenVisibility = () => {
+      if (document.visibilityState !== 'visible') {
+        return;
       }
-    }, checkInterval);
+      void (async () => {
+        if (cancelled) {
+          return;
+        }
+        const tok = getToken();
+        if (!tok) {
+          return;
+        }
+        const r = getTokenRemainingTime(tok);
+        if (r > 0 && r < proactiveRefreshMs) {
+          await refreshAccessTokenSilently();
+        }
+      })();
+    };
+    document.addEventListener('visibilitychange', onTokenVisibility);
 
-    // 清理定时器
+    void (async () => {
+      const ok = await checkAuthStatus();
+      if (cancelled || !ok) {
+        return;
+      }
+      checkTimerRef.current = setInterval(() => {
+        void (async () => {
+          const stillOk = await checkAuthStatus();
+          if (!stillOk && checkTimerRef.current) {
+            clearInterval(checkTimerRef.current);
+            checkTimerRef.current = null;
+          }
+        })();
+      }, checkInterval);
+    })();
+
     return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onTokenVisibility);
       if (checkTimerRef.current) {
         clearInterval(checkTimerRef.current);
+        checkTimerRef.current = null;
       }
     };
   }, [

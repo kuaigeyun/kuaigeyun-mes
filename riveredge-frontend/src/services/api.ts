@@ -349,11 +349,21 @@ export async function apiRequest<T = any>(
           error.response = { data, status: response.status };
           throw error;
         } else {
-          // 其他接口返回 401，可能是 Token 过期或无效
-          // 清除过期的 Token，并跳转到登录页（静默处理，不展示错误提示，避免登录页短暂闪烁）
+          // 其他接口返回 401：先尝试静默刷新并重试一次，避免仅因过期/竞态就踢出登录
+          if (!options?.__skipAuthRefresh) {
+            try {
+              const { refreshAccessTokenSilently } = await import('../utils/tokenRefresh');
+              const refreshed = await refreshAccessTokenSilently();
+              if (refreshed) {
+                return apiRequest<T>(url, { ...options, __skipAuthRefresh: true });
+              }
+            } catch {
+              // 刷新失败则走下方登出
+            }
+          }
+
           clearAuth();
-          
-          // 清除全局状态中的用户信息
+
           try {
             const { useGlobalStore } = await import('../stores/globalStore');
             const store = useGlobalStore.getState();
@@ -361,8 +371,7 @@ export async function apiRequest<T = any>(
           } catch (e) {
             // 忽略导入错误
           }
-          
-          // 跳转到登录页（若已在登录页则不重定向，避免 401 导致无限刷新循环）
+
           const currentPath = window.location.pathname;
           if (currentPath !== '/login' && currentPath !== '/infra/login') {
             if (currentPath.startsWith('/infra')) {
@@ -371,7 +380,7 @@ export async function apiRequest<T = any>(
               window.location.href = '/login';
             }
           }
-          
+
           const error = new Error('认证已过期，请重新登录') as any;
           error.response = { data, status: response.status };
           throw error;

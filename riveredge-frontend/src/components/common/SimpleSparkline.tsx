@@ -1,105 +1,17 @@
-import React, { useMemo } from 'react';
-import { Tiny } from '@ant-design/charts';
+import React from 'react';
+import { StatCardTrendArea } from './StatCardTrendArea';
 
 export interface SimpleSparklineProps {
   data: number[];
+  /** @deprecated 指标卡已统一为与销售订单一致的光滑面积折线，柱状不再使用 */
   type?: 'area' | 'line' | 'column';
   color?: string;
   height?: number;
 }
 
-/** 用序列化结果做依赖，避免父组件每次 render 传入新数组引用时反复触发图表 update/render（会导致 G2 interval 报错） */
-function useStableNumericSeries(data: unknown): number[] {
-  const key = JSON.stringify(Array.isArray(data) ? data : []);
-  return useMemo(() => {
-    let raw: unknown[] = [];
-    try {
-      raw = JSON.parse(key) as unknown[];
-      if (!Array.isArray(raw)) raw = [];
-    } catch {
-      raw = [];
-    }
-    return raw
-      .map((d) => Number(d))
-      .filter((n) => Number.isFinite(n));
-  }, [key]);
-}
-
-/** G2 5 / @ant-design/plots 2 需表格数据 + x/y 通道，纯 number[] 会报 Missing encoding for channel: x */
-function toTinyChartData(values: number[]): { x: number; y: number }[] {
-  return values.map((y, i) => ({ x: i, y }));
-}
-
-export const SimpleSparkline: React.FC<SimpleSparklineProps> = ({
-  data,
-  type = 'area',
-  color = '#1890ff',
-  height = 60,
-}) => {
-  const safeData = useStableNumericSeries(data);
-  const chartData = useMemo(() => toTinyChartData(safeData), [safeData]);
-
-  const baseConfig = useMemo(
-    () => ({
-      height,
-      autoFit: true,
-      data: chartData,
-      xField: 'x',
-      yField: 'y',
-      smooth: true,
-      padding: 0,
-      axis: false,
-      tooltip: false,
-      // 关闭动画，减少异步渲染与快速 update 叠加时的未处理 Promise / 中间态错误
-      animation: false,
-    }),
-    [height, chartData],
-  );
-
-  const areaProps = useMemo(
-    () => ({
-      ...baseConfig,
-      style: {
-        fill: `l(90) 0:${color} 1:rgba(255,255,255,0)`,
-        fillOpacity: 1,
-        stroke: 'none',
-      },
-      line: {
-        style: {
-          stroke: color,
-          lineWidth: 2,
-        },
-      },
-    }),
-    [baseConfig, color],
-  );
-
-  const columnProps = useMemo(
-    () => ({
-      ...baseConfig,
-      style: { fill: color },
-    }),
-    [baseConfig, color],
-  );
-
-  const lineProps = useMemo(
-    () => ({
-      ...baseConfig,
-      style: {
-        stroke: color,
-        lineWidth: 2,
-      },
-    }),
-    [baseConfig, color],
-  );
-
-  if (safeData.length === 0) return null;
-
-  if (type === 'area') {
-    return <Tiny.Area {...areaProps} />;
-  }
-  if (type === 'column') {
-    return <Tiny.Column {...columnProps} />;
-  }
-  return <Tiny.Line {...lineProps} />;
+/**
+ * 指标卡迷你趋势图（底层已统一为 {@link StatCardTrendArea}，与销售订单一致）
+ */
+export const SimpleSparkline: React.FC<SimpleSparklineProps> = ({ data, color, height }) => {
+  return <StatCardTrendArea data={data} color={color} height={height} />;
 };

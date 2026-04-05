@@ -39,7 +39,7 @@ interface ConfigState {
 // 默认配置
 const DEFAULT_CONFIGS = {
   'security.token_check_interval': 60,
-  'security.inactivity_timeout': 1800, // 30分钟
+  'security.inactivity_timeout': 0, // 0=禁用无操作自动退出（与站点默认一致；仍以服务端站点设置为准）
   'security.user_cache_time': 300, // 5分钟
   
   'ui.max_tabs': 20,

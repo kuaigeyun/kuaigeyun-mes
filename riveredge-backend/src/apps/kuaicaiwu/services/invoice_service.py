@@ -4,8 +4,9 @@
 提供发票的业务逻辑处理。
 """
 
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from tortoise.transactions import in_transaction
+from tortoise.functions import Sum
 
 from apps.kuaicaiwu.models.invoice import Invoice, InvoiceItem
 from apps.kuaicaiwu.services.accounting_event_service import AccountingEventService
@@ -75,6 +76,27 @@ class InvoiceService(AppBaseService[Invoice]):
         if not invoice:
             raise NotFoundError(f"发票不存在: {invoice_id}")
         return invoice
+
+    async def get_invoice_statistics(self, tenant_id: int) -> Dict[str, Any]:
+        """发票列表页指标：总张数、进/销项价税合计合计、待认证进项张数"""
+        total_count = await Invoice.filter(tenant_id=tenant_id).count()
+        agg_in = await Invoice.filter(tenant_id=tenant_id, category="IN").aggregate(in_total=Sum("total_amount"))
+        agg_out = await Invoice.filter(tenant_id=tenant_id, category="OUT").aggregate(out_total=Sum("total_amount"))
+        in_total = float(agg_in.get("in_total") or 0)
+        out_total = float(agg_out.get("out_total") or 0)
+        # 进项已确认、尚未税务认证
+        pending_verification_count = await Invoice.filter(
+            tenant_id=tenant_id,
+            category="IN",
+            status="CONFIRMED",
+            verification_date__isnull=True,
+        ).count()
+        return {
+            "total_count": total_count,
+            "in_total_amount": round(in_total, 2),
+            "out_total_amount": round(out_total, 2),
+            "pending_verification_count": pending_verification_count,
+        }
 
     async def list_invoices(
         self,

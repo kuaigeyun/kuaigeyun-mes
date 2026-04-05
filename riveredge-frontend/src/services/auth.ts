@@ -110,10 +110,14 @@ export async function getCurrentUser(): Promise<CurrentUser> {
  * @param refreshToken - 刷新令牌
  * @returns 新的 Token
  */
-export async function refreshToken(refreshToken: string): Promise<{ token: string }> {
-  return apiRequest<{ token: string }>('/auth/refresh', {
+export async function refreshToken(accessOrRefreshToken: string): Promise<{
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+}> {
+  return apiRequest('/auth/refresh', {
     method: 'POST',
-    data: { refresh_token: refreshToken },
+    data: { token: accessOrRefreshToken },
   });
 }
 

@@ -42,3 +42,5 @@ export type { DocumentRelationDisplayProps, DocumentRelationData, RelatedDocumen
 export { SchemaFormRenderer } from './schema-form';
 export type { SchemaFormRendererProps, FieldConfig, FieldType, RuleConfig } from './schema-form';
 export { SimpleSparkline } from './common/SimpleSparkline';
+export { StatCardTrendArea, strokeColorWithAlpha } from './common/StatCardTrendArea';
+export type { StatCardTrendData, StatCardTrendPoint, StatCardTrendAreaProps } from './common/StatCardTrendArea';

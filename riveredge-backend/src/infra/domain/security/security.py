@@ -4,6 +4,7 @@
 提供 JWT Token 生成、验证和密码加密功能
 """
 
+import time
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 
@@ -12,6 +13,8 @@ from passlib.context import CryptContext
 
 from infra.config.infra_config import infra_settings as settings
 
+# 访问令牌过期后，仍允许在多少秒内通过 /auth/refresh 换发新令牌（签名仍须有效）
+JWT_REFRESH_GRACE_SECONDS = 300
 
 # 密码加密上下文（使用 pbkdf2_sha256，更好的跨平台兼容性）
 pwd_context = CryptContext(
@@ -215,4 +218,30 @@ def get_token_payload(token: str) -> Optional[Dict[str, Any]]:
         如果验证失败则返回 None
     """
     return verify_token(token)
+
+
+def get_token_payload_for_refresh(token: str) -> Optional[Dict[str, Any]]:
+    """
+    用于刷新接口：校验签名与结构，但允许在 grace 窗口内已过期的访问令牌换发新令牌。
+
+    超过 JWT_REFRESH_GRACE_SECONDS 的过期令牌仍拒绝，避免长期有效的被盗令牌无限续期。
+    """
+    try:
+        payload = jwt.decode(
+            token,
+            settings.JWT_SECRET_KEY,
+            algorithms=[settings.JWT_ALGORITHM],
+            options={"verify_exp": False},
+        )
+    except JWTError:
+        return None
+    except Exception:
+        return None
+
+    exp = payload.get("exp")
+    if exp is not None:
+        now = time.time()
+        if now > float(exp) + JWT_REFRESH_GRACE_SECONDS:
+            return None
+    return payload
 

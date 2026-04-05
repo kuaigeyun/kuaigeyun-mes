@@ -7,15 +7,35 @@
  * @date 2025-12-30
  */
 
-import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActionType, ProColumns, ModalForm, ProFormText, ProFormDateRangePicker, ProFormList, ProFormGroup, ProFormDigit, ProFormDatePicker, ProFormItem, ProFormInstance } from '@ant-design/pro-components';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { App, Button, Tag, Space, Modal, Card, Row, Col, Table, theme } from 'antd';
-import { EyeOutlined, EditOutlined, DeleteOutlined, PlayCircleOutlined, ShoppingOutlined } from '@ant-design/icons';
+import {
+  EyeOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  PlayCircleOutlined,
+  ShoppingOutlined,
+  AppstoreOutlined,
+  ClockCircleOutlined,
+  CheckCircleOutlined,
+  ExclamationCircleOutlined,
+} from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerActions, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import {
+  ListPageTemplate,
+  DetailDrawerTemplate,
+  DetailDrawerSection,
+  DetailDrawerActions,
+  DRAWER_CONFIG,
+  MODAL_CONFIG,
+  type StatCard,
+} from '../../../../../components/layout-templates';
+import { usePageMetrics } from '../../../../../hooks/usePageMetrics';
 import { planningApi } from '../../../services/production';
 import { getProductionPlanLifecycle } from '../../../utils/productionPlanLifecycle';
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
@@ -90,6 +110,8 @@ const PLAN_TYPE_FALLBACK = [
 const ProductionPlansPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
+  const queryClient = useQueryClient();
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
   const actionRef = useRef<ActionType>(null);
@@ -112,6 +134,58 @@ const ProductionPlansPage: React.FC = () => {
     };
     load();
   }, []);
+
+  const { statCards: pageMetricCards, hasConfig: hasPageMetricConfig } = usePageMetrics(location.pathname);
+
+  const invalidatePlanStatistics = () => {
+    queryClient.invalidateQueries({ queryKey: ['productionPlanStatistics'] });
+    queryClient.invalidateQueries({ queryKey: ['pageMetrics', location.pathname] });
+  };
+
+  const { data: planStatistics } = useQuery({
+    queryKey: ['productionPlanStatistics'],
+    queryFn: () =>
+      planningApi.productionPlan.getStatistics() as Promise<{
+        total_count?: number;
+        pending_execution_count?: number;
+        executed_count?: number;
+        overdue_plans_count?: number;
+        pending_review_count?: number;
+      }>,
+  });
+
+  const statCards: StatCard[] = useMemo(() => {
+    if (hasPageMetricConfig && pageMetricCards.length > 0) {
+      return pageMetricCards;
+    }
+    const s = planStatistics;
+    return [
+      {
+        title: '计划总数',
+        value: s?.total_count ?? 0,
+        prefix: <AppstoreOutlined />,
+        valueStyle: { color: '#1890ff' },
+      },
+      {
+        title: '待执行',
+        value: s?.pending_execution_count ?? 0,
+        prefix: <ClockCircleOutlined />,
+        valueStyle: { color: '#faad14' },
+      },
+      {
+        title: '已执行',
+        value: s?.executed_count ?? 0,
+        prefix: <CheckCircleOutlined />,
+        valueStyle: { color: '#52c41a' },
+      },
+      {
+        title: '逾期未执行',
+        value: s?.overdue_plans_count ?? 0,
+        prefix: <ExclamationCircleOutlined />,
+        valueStyle: { color: '#ff4d4f' },
+      },
+    ];
+  }, [hasPageMetricConfig, pageMetricCards, planStatistics]);
 
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState<boolean>(false);
@@ -237,6 +311,7 @@ const ProductionPlansPage: React.FC = () => {
                 }),
             }}
             onSuccess={() => {
+              invalidatePlanStatistics();
               actionRef.current?.reload();
               if (currentPlan?.id === record.id) {
                 planningApi.productionPlan.get(record.id!.toString()).then(setCurrentPlan).catch(() => {});
@@ -298,6 +373,7 @@ const ProductionPlansPage: React.FC = () => {
         try {
           await planningApi.productionPlan.execute(record.id!.toString());
           messageApi.success('生产计划执行成功，已生成工单');
+          invalidatePlanStatistics();
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error?.response?.data?.detail || '生产计划执行失败');
@@ -321,6 +397,7 @@ const ProductionPlansPage: React.FC = () => {
         try {
           await planningApi.productionPlan.delete(record.id!.toString());
           messageApi.success('删除成功');
+          invalidatePlanStatistics();
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error?.response?.data?.detail || '删除失败');
@@ -342,6 +419,7 @@ const ProductionPlansPage: React.FC = () => {
           }
           messageApi.success(`已删除 ${keys.length} 条生产计划`);
           setSelectedRowKeys([]);
+          invalidatePlanStatistics();
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error?.response?.data?.detail || '批量删除失败');
@@ -453,6 +531,7 @@ const ProductionPlansPage: React.FC = () => {
     });
     if (result.successCount > 0) {
       messageApi.success(`成功导入 ${result.successCount} 条生产计划`);
+      invalidatePlanStatistics();
       actionRef.current?.reload();
     }
     if (result.failureCount > 0) {
@@ -461,9 +540,7 @@ const ProductionPlansPage: React.FC = () => {
   };
 
   return (
-    <ListPageTemplate
-      statCards={[]}
-    >
+    <ListPageTemplate statCards={statCards}>
       <div style={{ marginBottom: 16 }}>
         <ProductionControlTower />
       </div>
@@ -547,6 +624,7 @@ const ProductionPlansPage: React.FC = () => {
             };
             await planningApi.productionPlan.create(payload);
             messageApi.success('创建生产计划成功');
+            invalidatePlanStatistics();
             actionRef.current?.reload();
             return true;
           } catch (error) {
@@ -628,6 +706,7 @@ const ProductionPlansPage: React.FC = () => {
                     }),
                 }}
                 onSuccess={() => {
+                  invalidatePlanStatistics();
                   actionRef.current?.reload();
                   if (currentPlan?.id) {
                     planningApi.productionPlan.get(currentPlan.id.toString()).then(setCurrentPlan).catch(() => {});
@@ -802,6 +881,7 @@ const ProductionPlansPage: React.FC = () => {
             }
             messageApi.success(`已同步 ${successCount} 条生产计划`);
             setSyncModalVisible(false);
+            invalidatePlanStatistics();
             actionRef.current?.reload();
           } catch (error: any) {
             messageApi.error(error?.message || '同步失败');

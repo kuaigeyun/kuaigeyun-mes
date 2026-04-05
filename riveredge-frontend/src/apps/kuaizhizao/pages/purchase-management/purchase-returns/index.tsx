@@ -7,7 +7,7 @@
  * @date 2026-01-17
  */
 
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import type { DescriptionsProps } from 'antd';
@@ -43,6 +43,7 @@ import {
   DocumentTrackingTimelineBody,
   useDocumentTracking,
 } from '../../../../../components/document-tracking-panel';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { warehouseApi } from '../../../services/production';
 import { usePageMetrics } from '../../../../../hooks/usePageMetrics';
 import { getPurchaseReturnLifecycle } from '../../../utils/purchaseReturnLifecycle';
@@ -97,10 +98,6 @@ interface PurchaseReturnItem {
   serial_numbers?: string[];
   notes?: string;
 }
-
-const PR_STAT_SPARK_1 = [5, 6, 8, 7, 9, 10, 11];
-const PR_STAT_SPARK_2 = [12, 10, 11, 9, 8, 7, 6];
-const PR_STAT_SPARK_3 = [20, 22, 25, 28, 30, 32, 35];
 
 const PR_DETAIL_ITEMS_MIN_WIDTH = 1000;
 
@@ -163,33 +160,21 @@ const PurchaseReturnsPage: React.FC = () => {
   const { token } = theme.useToken();
   const location = useLocation();
   const actionRef = useRef<ActionType>(null);
-  const [statsVersion, setStatsVersion] = useState(0);
-  const [localStats, setLocalStats] = useState({ total: 0, pending: 0, done: 0, cancelled: 0 });
+  const queryClient = useQueryClient();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const { statCards: pageMetricCards, hasConfig: hasPageMetricConfig } = usePageMetrics(location.pathname);
 
-  const refreshLocalStats = useCallback(async () => {
-    try {
-      const response = await warehouseApi.purchaseReturn.list({ skip: 0, limit: 5000 });
-      const data = Array.isArray(response) ? response : (response as any)?.data || [];
-      const arr = Array.isArray(data) ? data : [];
-      setLocalStats({
-        total: (response as any)?.total ?? arr.length,
-        pending: arr.filter((x: PurchaseReturn) => (x.status || '').trim() === '待退货').length,
-        done: arr.filter((x: PurchaseReturn) => (x.status || '').trim() === '已退货').length,
-        cancelled: arr.filter((x: PurchaseReturn) => (x.status || '').trim() === '已取消').length,
-      });
-    } catch {
-      setLocalStats({ total: 0, pending: 0, done: 0, cancelled: 0 });
-    }
-  }, []);
+  const invalidatePurchaseReturnStatistics = () => {
+    queryClient.invalidateQueries({ queryKey: ['purchaseReturnStatistics'] });
+    queryClient.invalidateQueries({ queryKey: ['pageMetrics', location.pathname] });
+  };
 
-  useEffect(() => {
-    if (!hasPageMetricConfig) {
-      refreshLocalStats();
-    }
-  }, [hasPageMetricConfig, statsVersion, refreshLocalStats]);
+  const { data: prStats } = useQuery({
+    queryKey: ['purchaseReturnStatistics'],
+    queryFn: () => warehouseApi.purchaseReturn.statistics(),
+    enabled: !hasPageMetricConfig,
+  });
 
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [returnDetail, setReturnDetail] = useState<PurchaseReturnDetail | null>(null);
@@ -216,7 +201,7 @@ const PurchaseReturnsPage: React.FC = () => {
         try {
           await warehouseApi.purchaseReturn.confirm(record.id!.toString());
           messageApi.success('采购退货确认成功');
-          setStatsVersion((v) => v + 1);
+          invalidatePurchaseReturnStatistics();
           if (returnDetail?.id === record.id) {
             const fresh = await warehouseApi.purchaseReturn.get(record.id!.toString());
             setReturnDetail(fresh as PurchaseReturnDetail);
@@ -437,34 +422,39 @@ const PurchaseReturnsPage: React.FC = () => {
     },
   ];
 
-  const statCards: StatCard[] =
-    hasPageMetricConfig && pageMetricCards.length > 0
-      ? pageMetricCards
-      : [
-          {
-            title: '退货单总数',
-            value: localStats.total,
-            valueStyle: { color: token.colorPrimary },
-            backgroundChart: <SimpleSparkline data={PR_STAT_SPARK_1} color={token.colorPrimary} />,
-          },
-          {
-            title: '待退货',
-            value: localStats.pending,
-            valueStyle: { color: token.colorWarning },
-            backgroundChart: <SimpleSparkline data={PR_STAT_SPARK_2} color={token.colorWarning} />,
-          },
-          {
-            title: '已退货',
-            value: localStats.done,
-            valueStyle: { color: token.colorSuccess },
-            backgroundChart: <SimpleSparkline data={PR_STAT_SPARK_3} color={token.colorSuccess} />,
-          },
-          {
-            title: '已取消',
-            value: localStats.cancelled,
-            valueStyle: { color: token.colorError },
-          },
-        ];
+  const statCards: StatCard[] = useMemo(() => {
+    if (hasPageMetricConfig && pageMetricCards.length > 0) {
+      return pageMetricCards;
+    }
+    const s = prStats;
+    const z = [0, 0, 0, 0, 0, 0, 0];
+    return [
+      {
+        title: '退货单总数',
+        value: s?.total_count ?? 0,
+        valueStyle: { color: token.colorPrimary },
+        backgroundChart: <SimpleSparkline data={s?.trend_total?.length ? s.trend_total : z} color={token.colorPrimary} />,
+      },
+      {
+        title: '待退货',
+        value: s?.pending_count ?? 0,
+        valueStyle: { color: token.colorWarning },
+        backgroundChart: <SimpleSparkline data={s?.trend_pending?.length ? s.trend_pending : z} color={token.colorWarning} />,
+      },
+      {
+        title: '已退货',
+        value: s?.done_count ?? 0,
+        valueStyle: { color: token.colorSuccess },
+        backgroundChart: <SimpleSparkline data={s?.trend_done?.length ? s.trend_done : z} color={token.colorSuccess} />,
+      },
+      {
+        title: '已取消',
+        value: s?.cancelled_count ?? 0,
+        valueStyle: { color: token.colorError },
+        backgroundChart: <SimpleSparkline data={s?.trend_cancelled?.length ? s.trend_cancelled : z} color={token.colorError} />,
+      },
+    ];
+  }, [hasPageMetricConfig, pageMetricCards, prStats, token]);
 
   return (
     <>
@@ -514,7 +504,7 @@ const PurchaseReturnsPage: React.FC = () => {
                   }
                   messageApi.success(`成功删除 ${keys.length} 条记录`);
                   setSelectedRowKeys([]);
-                  setStatsVersion((v) => v + 1);
+                  invalidatePurchaseReturnStatistics();
                   if (returnDetail?.id != null && keys.includes(returnDetail.id)) {
                     setReturnDetail(null);
                     setDetailDrawerVisible(false);
