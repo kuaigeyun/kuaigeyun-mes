@@ -34,7 +34,6 @@ async function fetchMaterialInventory(materialId: number): Promise<number> {
           material_ids: [materialId],
           include_expired: false,
           summary_only: true,
-          include_sales_commitment: true,
         },
       }
     );

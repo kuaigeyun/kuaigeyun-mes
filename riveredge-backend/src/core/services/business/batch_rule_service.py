@@ -150,6 +150,9 @@ class BatchRuleService:
         rule: BatchRule,
         context: Dict[str, Any],
         scope_key: str = "",
+        *,
+        preview: bool = False,
+        preview_offset: int = 0,
     ) -> str:
         """
         根据批号规则生成批号
@@ -159,16 +162,23 @@ class BatchRuleService:
             rule: 批号规则
             context: 上下文变量（如 material_code, supplier_code 等）
             scope_key: 作用域Key（如物料ID，用于按物料隔离序号）
+            preview: 为 True 时不占用流水号（不写 BatchRuleSequence），仅用于界面预览
+            preview_offset: 预览时同一单据内多行同规则递增值（0,1,2…），仅 preview=True 时有效
 
         Returns:
             str: 生成的批号
         """
+        off = max(0, int(preview_offset or 0))
         components = rule.get_rule_components()
         if not components:
             # 无组件时使用默认：{YYYYMMDD}-{序号}
             today = datetime.now().strftime("%Y%m%d")
             context.setdefault("material_code", "")
-            seq = await BatchRuleService._get_next_seq(tenant_id, rule.id, scope_key)
+            if preview:
+                base = await BatchRuleService._peek_next_seq(tenant_id, rule.id, scope_key)
+                seq = base + off
+            else:
+                seq = await BatchRuleService._get_next_seq(tenant_id, rule.id, scope_key)
             return f"{today}-{str(seq).zfill(3)}"
 
         counter_config = CodeRuleComponentService.get_counter_component_config(components)
@@ -179,11 +189,16 @@ class BatchRuleService:
         seq_start = counter_config.get("initial_value", 1)
         seq_step = 1
         seq_reset_rule = counter_config.get("reset_cycle", "never")
-        digits = counter_config.get("digits", 3)
 
-        seq = await BatchRuleService._get_next_seq_with_reset(
-            tenant_id, rule.id, scope_key, seq_start, seq_step, seq_reset_rule
-        )
+        if preview:
+            base = await BatchRuleService._peek_next_seq_with_reset(
+                tenant_id, rule.id, scope_key, seq_start, seq_step, seq_reset_rule
+            )
+            seq = base + off * seq_step
+        else:
+            seq = await BatchRuleService._get_next_seq_with_reset(
+                tenant_id, rule.id, scope_key, seq_start, seq_step, seq_reset_rule
+            )
 
         return CodeRuleComponentService.render_components(components, seq, context)
 
@@ -238,3 +253,49 @@ class BatchRuleService:
         seq_rec.current_seq += seq_step
         await seq_rec.save()
         return seq_rec.current_seq
+
+    @staticmethod
+    async def _peek_next_seq(
+        tenant_id: int,
+        rule_id: int,
+        scope_key: str,
+    ) -> int:
+        """预览：计算下一个序号（无重置逻辑分支），不写入 DB。与 _get_next_seq 首次及递增语义一致。"""
+        seq_rec = await BatchRuleSequence.filter(
+            batch_rule_id=rule_id,
+            tenant_id=tenant_id,
+            scope_key=scope_key or "",
+        ).first()
+        if not seq_rec:
+            return 1
+        return seq_rec.current_seq + 1
+
+    @staticmethod
+    async def _peek_next_seq_with_reset(
+        tenant_id: int,
+        rule_id: int,
+        scope_key: str,
+        seq_start: int,
+        seq_step: int,
+        seq_reset_rule: str,
+    ) -> int:
+        """预览：计算下一个序号（支持按日/月/年重置），不写入 DB。与 _get_next_seq_with_reset 一致。"""
+        seq_rec = await BatchRuleSequence.filter(
+            batch_rule_id=rule_id,
+            tenant_id=tenant_id,
+            scope_key=scope_key or "",
+        ).first()
+        now = date.today()
+        if not seq_rec:
+            return seq_start
+        current = seq_rec.current_seq
+        if seq_rec.reset_date:
+            if seq_reset_rule == "daily" and seq_rec.reset_date != now:
+                current = seq_start - seq_step
+            elif seq_reset_rule == "monthly" and (
+                seq_rec.reset_date.month != now.month or seq_rec.reset_date.year != now.year
+            ):
+                current = seq_start - seq_step
+            elif seq_reset_rule == "yearly" and seq_rec.reset_date.year != now.year:
+                current = seq_start - seq_step
+        return current + seq_step

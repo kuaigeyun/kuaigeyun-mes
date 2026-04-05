@@ -62,7 +62,7 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   });
 }
 
-const PLAN_ROW_ACTIONS_MAX = 3;
+const PLAN_ROW_ACTIONS_MAX = 4;
 
 function renderPlanRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
   const wrapped = nodes.map((node, i) => <span key={`${keyPrefix}-${i}`}>{node}</span>);

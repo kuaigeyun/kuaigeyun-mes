@@ -25,6 +25,7 @@ from apps.master_data.services.material_source_service import (
 from apps.master_data.schemas.material_schemas import (
     MaterialGroupCreate, MaterialGroupUpdate, MaterialGroupResponse,
     MaterialCreate, MaterialUpdate, MaterialResponse,
+    MaterialBulkTrackingRequest, MaterialBulkTrackingResponse,
     BOMCreate, BOMUpdate, BOMResponse, BOMBatchCreate,
     BOMBatchImport, BOMVersionCreate, BOMVersionCompare,
     BOMGroupSummary, BOMBatchItemsRequest,
@@ -32,6 +33,7 @@ from apps.master_data.schemas.material_schemas import (
     MaterialCodeMappingCreate, MaterialCodeMappingUpdate, MaterialCodeMappingResponse,
     MaterialCodeMappingListResponse, MaterialCodeConvertRequest, MaterialCodeConvertResponse,
     MaterialBatchCreate, MaterialBatchUpdate, MaterialBatchResponse, MaterialBatchListResponse,
+    GenerateBatchNoRequest,
     MaterialSerialCreate, MaterialSerialUpdate, MaterialSerialResponse, MaterialSerialListResponse
 )
 from apps.master_data.services.ai.material_ai_service import MaterialAIService
@@ -1207,22 +1209,27 @@ async def delete_material_batch(
 
 @router.post("/batches/generate", summary="生成批号")
 async def generate_batch_no(
-    material_uuid: str = Query(..., description="物料UUID"),
-    rule_id: Optional[int] = Query(None, description="批号规则ID（可选，优先于物料默认规则）"),
-    rule_uuid: Optional[str] = Query(None, description="批号规则UUID（可选）"),
-    supplier_code: Optional[str] = Query(None, description="供应商编码（可选，用于规则变量）"),
-    current_user: Annotated[User, Depends(get_current_user)] = None,
-    tenant_id: Annotated[int, Depends(get_current_tenant)] = None
+    payload: GenerateBatchNoRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
 ):
     """
     生成批号
 
     优先使用：rule_id/rule_uuid > 物料默认批号规则 > 系统默认(YYYYMMDD-序号)
+
+    请求体使用 JSON（含 preview / preview_offset），避免仅依赖 Query 时 preview 在部分环境下丢失导致误占用流水号。
+    入库单「确认预览」等场景请传 preview=true；保存入库时 preview=false 正式占用。
     """
     try:
         batch_no = await MaterialBatchService.generate_batch_no(
-            tenant_id, material_uuid,
-            rule_id=rule_id, rule_uuid=rule_uuid, supplier_code=supplier_code
+            tenant_id,
+            payload.material_uuid,
+            rule_id=payload.rule_id,
+            rule_uuid=payload.rule_uuid,
+            supplier_code=payload.supplier_code,
+            preview=payload.preview,
+            preview_offset=payload.preview_offset,
         )
         return {"batch_no": batch_no}
     except NotFoundError as e:
@@ -1471,6 +1478,28 @@ async def list_materials(
         tenant_id, skip, limit, group_id, is_active, keyword, code, name,
         source_type, specification, brand, model, base_unit
     )
+
+
+@router.post(
+    "/batch-tracking",
+    response_model=MaterialBulkTrackingResponse,
+    summary="批量更新批号/序列号管理",
+)
+async def bulk_update_material_tracking(
+    data: MaterialBulkTrackingRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    """
+    批量开启或关闭批号/序列号管理，并可指定默认批号规则、默认序列号规则（单次数据库更新，非 N 次单条接口）。
+
+    - **batch_managed** / **serial_managed**：传 `true` 为开启，`false` 为关闭；未传则不改该项。
+    - 关闭时自动清空对应的默认规则外键。
+    """
+    try:
+        return await MaterialService.bulk_update_material_tracking(tenant_id, data)
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/{material_uuid}", response_model=MaterialResponse, summary="获取物料详情")

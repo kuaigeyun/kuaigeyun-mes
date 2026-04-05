@@ -80,6 +80,9 @@ export const useConfigStore = create<ConfigState>()(
       initialized: false,
       
       fetchConfigs: async () => {
+        const { initialized, loading } = get();
+        if (initialized || loading) return;
+        
         set({ loading: true });
         try {
           const response = await getSiteSetting();

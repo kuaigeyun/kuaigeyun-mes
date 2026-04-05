@@ -102,7 +102,7 @@ interface ReportingRecord {
   [key: string]: any; // 支持索引访问
 }
 
-const REPORTING_ROW_ACTIONS_INLINE_MAX = 3;
+const REPORTING_ROW_ACTIONS_INLINE_MAX = 4;
 const REPORTING_DETAIL_BINDINGS_MIN_WIDTH = 1100;
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(

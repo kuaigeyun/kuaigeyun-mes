@@ -137,7 +137,7 @@ function isDemandRejected(d: Demand): boolean {
 }
 
 /** 列表操作列：非工作流按钮最多平铺数（工作流按钮单独占位，与「更多」规则一致） */
-const DEMAND_ROW_ACTIONS_INLINE_MAX = 3;
+const DEMAND_ROW_ACTIONS_INLINE_MAX = 4;
 
 const DemandManagementPage: React.FC = () => {
   const { t } = useTranslation();

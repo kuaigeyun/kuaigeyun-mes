@@ -14,6 +14,8 @@ import type {
   MaterialCreate,
   MaterialUpdate,
   MaterialListParams,
+  MaterialBulkTrackingPayload,
+  MaterialBulkTrackingResult,
   BOM,
   BOMCreate,
   BOMUpdate,
@@ -215,6 +217,18 @@ export const materialApi = {
    */
   delete: async (uuid: string): Promise<void> => {
     return api.delete(`/apps/master-data/materials/${uuid}`);
+  },
+
+  /**
+   * 批量更新批号/序列号管理（单请求，后端批量 SQL）
+   */
+  bulkUpdateTracking: async (data: MaterialBulkTrackingPayload): Promise<MaterialBulkTrackingResult> => {
+    const body: Record<string, unknown> = { material_uuids: data.material_uuids };
+    if (data.batch_managed !== undefined) body.batch_managed = data.batch_managed;
+    if (data.default_batch_rule_id !== undefined) body.default_batch_rule_id = data.default_batch_rule_id;
+    if (data.serial_managed !== undefined) body.serial_managed = data.serial_managed;
+    if (data.default_serial_rule_id !== undefined) body.default_serial_rule_id = data.default_serial_rule_id;
+    return api.post('/apps/master-data/materials/batch-tracking', body);
   },
 
   /**
@@ -667,13 +681,25 @@ export const materialBatchApi = {
    */
   generate: async (
     materialUuid: string,
-    options?: { ruleId?: number; ruleUuid?: string; supplierCode?: string }
+    options?: {
+      ruleId?: number;
+      ruleUuid?: string;
+      supplierCode?: string;
+      /** 为 true 时不占用流水号，仅预览（入库确认预览等未保存场景） */
+      preview?: boolean;
+      /** 预览时同一单据内同物料多行递增值 0,1,2… */
+      previewOffset?: number;
+    }
   ): Promise<{ batch_no: string }> => {
-    const params: Record<string, string | number | undefined> = { material_uuid: materialUuid };
-    if (options?.ruleId != null) params.rule_id = options.ruleId;
-    if (options?.ruleUuid) params.rule_uuid = options.ruleUuid;
-    if (options?.supplierCode) params.supplier_code = options.supplierCode;
-    return api.post('/apps/master-data/materials/batches/generate', null, { params });
+    /** JSON Body，确保 preview 不被 POST 查询串丢失 */
+    return api.post('/apps/master-data/materials/batches/generate', {
+      material_uuid: materialUuid,
+      ...(options?.ruleId != null ? { rule_id: options.ruleId } : {}),
+      ...(options?.ruleUuid ? { rule_uuid: options.ruleUuid } : {}),
+      ...(options?.supplierCode ? { supplier_code: options.supplierCode } : {}),
+      preview: options?.preview === true,
+      preview_offset: options?.previewOffset ?? 0,
+    });
   },
 
   /**

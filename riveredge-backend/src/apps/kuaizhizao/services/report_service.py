@@ -408,6 +408,7 @@ class ReportService:
         include_sales_commitment: bool = False,
     ) -> Dict[str, Any]:
         """批次库存查询"""
+        logger.info(f"query_batch_inventory: material_id={material_id}, material_ids={material_ids}, include_sales_commitment={include_sales_commitment}")
         from apps.master_data.models.material_batch import MaterialBatch
         from apps.kuaizhizao.models.line_side_inventory import LineSideInventory
         from apps.kuaizhizao.models.sales_order import SalesOrder
@@ -424,11 +425,18 @@ class ReportService:
         elif material_id: line_query = line_query.filter(material_id=material_id)
         if batch_number: line_query = line_query.filter(batch_no__icontains=batch_number)
         line_items = await line_query.all()
+        logger.info(f"query_batch_inventory found {len(batches)} batches and {len(line_items)} line items")
         if summary_only:
-            totals = {str(mid): 0.0 for mid in (material_ids if material_ids else [material_id])}
-            for b in batches: totals[str(b.material_id)] = totals.get(str(b.material_id), 0) + float(b.quantity)
-            for l in line_items: totals[str(l.material_id)] = totals.get(str(l.material_id), 0) + float(l.quantity - l.reserved_quantity)
+            target_ids = material_ids if material_ids else ([material_id] if material_id else [])
+            totals = {str(mid): 0.0 for mid in target_ids}
+            for b in batches: 
+                key = str(b.material_id)
+                totals[key] = totals.get(key, 0) + float(b.quantity or 0)
+            for l in line_items: 
+                key = str(l.material_id)
+                totals[key] = totals.get(key, 0) + float((l.quantity or 0) - (l.reserved_quantity or 0))
             if include_sales_commitment:
+                logger.info("query_batch_inventory: including sales commitment")
                 active_order_ids = await SalesOrder.filter(
                     tenant_id=tenant_id,
                     deleted_at__isnull=True,
@@ -455,11 +463,29 @@ class ReportService:
         for b in batches:
             status = b.status
             if b.expiry_date and b.expiry_date < date.today(): status = "已过期"
-            elif b.quantity <= 0: status = "无库存"
-            items.append({"id": 1000000 + b.id, "material_id": b.material_id, "material_code": b.material.main_code or b.material.code, "material_name": b.material.name, "batch_no": b.batch_no, "quantity": float(b.quantity), "status": status, "warehouse_name": "主仓"})
+            elif (b.quantity or 0) <= 0: status = "无库存"
+            items.append({
+                "id": 1000000 + b.id, 
+                "material_id": b.material_id, 
+                "material_code": b.material.main_code if b.material else (b.material.code if b.material else "UNKNOWN"), 
+                "material_name": b.material.name if b.material else "UNKNOWN", 
+                "batch_no": b.batch_no, 
+                "quantity": float(b.quantity or 0), 
+                "status": status, 
+                "warehouse_name": "主仓"
+            })
         for l in line_items:
-            qty = float(l.quantity - l.reserved_quantity)
-            items.append({"id": 2000000 + l.id, "material_id": l.material_id, "material_code": l.material_code, "material_name": l.material_name, "batch_no": l.batch_no, "quantity": qty, "status": "在库" if qty > 0 else "无库存", "warehouse_name": l.warehouse_name})
+            qty = float((l.quantity or 0) - (l.reserved_quantity or 0))
+            items.append({
+                "id": 2000000 + l.id, 
+                "material_id": l.material_id, 
+                "material_code": l.material_code, 
+                "material_name": l.material_name, 
+                "batch_no": l.batch_no, 
+                "quantity": qty, 
+                "status": "在库" if qty > 0 else "无库存", 
+                "warehouse_name": l.warehouse_name
+            })
         return {"total": len(items), "items": items}
 
     async def get_plan_report(self, tenant_id: int, report_type: str = "plan-fulfillment-rate", date_start: Optional[datetime] = None, date_end: Optional[datetime] = None) -> Dict[str, Any]:

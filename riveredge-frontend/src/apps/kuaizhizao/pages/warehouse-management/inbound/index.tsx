@@ -6,28 +6,36 @@
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProFormItem } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Table, Row, Col, Form as AntForm, InputNumber, Input, Typography } from 'antd';
+import { App, Button, Tag, Space, Modal, Table, Row, Col, Form as AntForm, InputNumber, Input, Typography, Select, Spin, Descriptions, Dropdown, Empty } from 'antd';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, InboxOutlined, ShoppingOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
-import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
-import { DictionaryLabel } from '../../../../../components/dictionary-label';
+import { MaterialUnitSelect, prefetchMaterialsForUnitSelect } from '../../../../../components/material-unit-select';
 import type { Material } from '../../../../master-data/types/material';
 import { useTranslation } from 'react-i18next';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
-import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
+import {
+  DocumentTrackingRelationsBody,
+  DocumentTrackingTimelineBody,
+  useDocumentTracking,
+} from '../../../../../components/document-tracking-panel';
 import CodeField from '../../../../../components/code-field';
 import dayjs from 'dayjs';
 import { warehouseApi, workOrderApi } from '../../../services/production';
 import { getInboundLifecycle } from '../../../utils/inboundLifecycle';
-import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
+import {
+  warehouseApi as masterWarehouseApi,
+  storageAreaApi,
+  storageLocationApi,
+} from '../../../../master-data/services/warehouse';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
 import { getPurchaseOrder, listPurchaseOrders, pushPurchaseOrderToReceipt } from '../../../services/purchase';
 import { receiptNoticeApi } from '../../../services/receipt-notice';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { materialApi, materialBatchApi } from '../../../../master-data/services/material';
 
 // 统一的入库单接口（结合采购入库、成品入库、生产退料）
 interface InboundOrder {
@@ -81,6 +89,187 @@ interface InboundOrderItem {
   quantity?: number;
   unit?: string;
   notes?: string;
+  warehouse_id?: number;
+  warehouse_name?: string;
+  location_id?: number;
+  location_code?: string;
+}
+
+/** 单位列展示：直接显示物料单位码，避免 DictionaryLabel 请求 unit 字典（未配置时 404） */
+function formatInboundMaterialUnit(val: unknown): string {
+  if (val == null || val === '') return '-';
+  return String(val);
+}
+
+function renderInboundDetailUnitCell(row: InboundOrderItem): React.ReactNode {
+  if (row.material_id != null) {
+    return (
+      <MaterialUnitSelect
+        materialId={row.material_id}
+        value={row.material_unit ?? row.unit}
+        size="small"
+        disabled
+        noStyle
+      />
+    );
+  }
+  return formatInboundMaterialUnit(row.material_unit ?? row.unit);
+}
+
+/**
+ * 对「已启用批号管理且当前批号为空」的明细，按主数据物料默认批号规则生成批号（每行独立一条，便于多行同料多批次）。
+ */
+async function prefetchPurchasePreviewBatchNumbers(
+  items: any[] | undefined,
+  initialBatch: Record<number, string>
+): Promise<Record<number, string>> {
+  const out: Record<number, string> = { ...initialBatch };
+  const rowsNeed = (items || []).filter((it) => {
+    if (it?.id == null) return false;
+    const id = Number(it.id);
+    const existing = String(out[id] ?? it.batch_number ?? '').trim();
+    return !existing && String(it.material_code || '').trim() !== '';
+  });
+  if (rowsNeed.length === 0) return out;
+
+  const codes = [...new Set(rowsNeed.map((it) => String(it.material_code || '').trim()))];
+  const materialByCode = new Map<
+    string,
+    { uuid: string; batchManaged: boolean; defaultBatchRuleId: number | null }
+  >();
+
+  await Promise.all(
+    codes.map(async (code) => {
+      try {
+        const list = await materialApi.list({ code, limit: 1 });
+        const m = Array.isArray(list) && list[0] ? list[0] : null;
+        if (!m?.uuid) return;
+        const batchManaged = !!(m.batchManaged ?? (m as any).batch_managed);
+        const defaultBatchRuleId =
+          (m.defaultBatchRuleId ?? (m as any).default_batch_rule_id ?? null) as number | null;
+        materialByCode.set(code, {
+          uuid: m.uuid,
+          batchManaged,
+          defaultBatchRuleId:
+            defaultBatchRuleId != null && Number(defaultBatchRuleId) > 0 ? Number(defaultBatchRuleId) : null,
+        });
+      } catch {
+        /* 主数据不可用时跳过自动批号 */
+      }
+    })
+  );
+
+  /** 同物料多行：先同步算好每行 offset，避免 Promise.all 并发导致多行同取 offset=0 */
+  const previewOffsetByCode = new Map<string, number>();
+  const rowPreviewOffset = new Map<number, number>();
+  for (const it of rowsNeed) {
+    const code = String(it.material_code || '').trim();
+    const id = Number(it.id);
+    const n = previewOffsetByCode.get(code) ?? 0;
+    rowPreviewOffset.set(id, n);
+    previewOffsetByCode.set(code, n + 1);
+  }
+  await Promise.all(
+    rowsNeed.map(async (it) => {
+      const id = Number(it.id);
+      const code = String(it.material_code || '').trim();
+      const meta = materialByCode.get(code);
+      if (!meta?.batchManaged || !meta.uuid) return;
+      const off = rowPreviewOffset.get(id) ?? 0;
+      try {
+        const res = await materialBatchApi.generate(meta.uuid, {
+          ruleId: meta.defaultBatchRuleId != null ? meta.defaultBatchRuleId : undefined,
+          preview: true,
+          previewOffset: off,
+        });
+        if (res?.batch_no) out[id] = res.batch_no;
+      } catch {
+        /* 生成失败则保留空，由用户手工填写 */
+      }
+    })
+  );
+
+  return out;
+}
+
+/** 编码与名称相同时只显示其一，避免「ZB-01-01 ZB-01-01」重复 */
+function formatStorageAreaOrLocationLabel(code?: string, name?: string): string {
+  const c = (code || '').trim();
+  const n = (name || '').trim();
+  if (c && n && c === n) return c;
+  return [c, n].filter(Boolean).join(' ').trim();
+}
+
+/** 按仓库拉取库区下全部库位，供确认入库预览行内选择；展示为「库区 - 库位」 */
+async function fetchStorageLocationsForWarehouse(
+  warehouseId: number
+): Promise<{ value: number; label: string; code: string }[]> {
+  const saRes = await storageAreaApi.list({
+    warehouse_id: warehouseId,
+    limit: 500,
+    is_active: true,
+  } as any);
+  const areas = (saRes as { items?: { id: number; code?: string; name?: string }[] })?.items ?? [];
+  const parts = await Promise.all(
+    areas.map(async (a) => {
+      const locRes = await storageLocationApi.list({
+        storage_area_id: a.id,
+        limit: 500,
+        is_active: true,
+      } as any);
+      const locs = (locRes as { items?: { id: number; code?: string; name?: string }[] })?.items ?? [];
+      const areaLabel = formatStorageAreaOrLocationLabel(a.code, a.name) || `库区${a.id}`;
+      return locs.map((l) => {
+        const locLabel = formatStorageAreaOrLocationLabel(l.code, l.name) || String(l.id);
+        return {
+          value: l.id,
+          label: `${areaLabel} - ${locLabel}`,
+          code: String(l.code || ''),
+        };
+      });
+    })
+  );
+  return parts.flat().sort((a, b) => a.label.localeCompare(b.label));
+}
+
+const INBOUND_ROW_ACTIONS_INLINE_MAX = 4;
+const INBOUND_DETAIL_ITEMS_MIN_WIDTH = 1100;
+
+function inboundDocumentTrackingType(
+  order: InboundOrder
+): 'purchase_receipt' | 'finished_goods_receipt' | 'production_return' {
+  if (order.receipt_type === 'purchase') return 'purchase_receipt';
+  if (order.receipt_type === 'finished_goods') return 'finished_goods_receipt';
+  return 'production_return';
+}
+
+function renderInboundRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
+  const wrapped = nodes.map((node, i) => (
+    <span key={`${keyPrefix}-${i}`}>{node}</span>
+  ));
+  if (wrapped.length <= INBOUND_ROW_ACTIONS_INLINE_MAX) {
+    return <Space size="small" wrap>{wrapped}</Space>;
+  }
+  const inline = wrapped.slice(0, INBOUND_ROW_ACTIONS_INLINE_MAX);
+  const overflow = wrapped.slice(INBOUND_ROW_ACTIONS_INLINE_MAX);
+  return (
+    <Space size="small" wrap>
+      {inline}
+      <Dropdown
+        menu={{
+          items: overflow.map((node, i) => ({
+            key: `${keyPrefix}-more-${i}`,
+            label: node,
+          })),
+        }}
+        trigger={['click']}
+      >
+        <Button type="link" size="small">
+          更多
+        </Button>
+      </Dropdown>
+    </Space>
+  );
 }
 
 const InboundPage: React.FC = () => {
@@ -98,6 +287,23 @@ const InboundPage: React.FC = () => {
   const [editableReceiptQuantities, setEditableReceiptQuantities] = useState<Record<number, number>>({});
   const [savingPurchaseReceipt, setSavingPurchaseReceipt] = useState(false);
 
+  /** 采购入库确认前预览：仓库、明细数量与批号 */
+  const [purchaseConfirmPreviewOpen, setPurchaseConfirmPreviewOpen] = useState(false);
+  const [purchaseConfirmPreviewLoading, setPurchaseConfirmPreviewLoading] = useState(false);
+  const [purchaseConfirmPreviewSubmitting, setPurchaseConfirmPreviewSubmitting] = useState(false);
+  const [purchaseConfirmPreviewDetail, setPurchaseConfirmPreviewDetail] = useState<InboundOrder | null>(null);
+  /** 行级入库仓库、库位（确认预览） */
+  const [purchaseConfirmLineWh, setPurchaseConfirmLineWh] = useState<Record<number, number>>({});
+  const [purchaseConfirmLineLoc, setPurchaseConfirmLineLoc] = useState<Record<number, number | undefined>>({});
+  /** 与库位主数据一致的编码，写入明细 location_code */
+  const [purchaseConfirmLineLocCode, setPurchaseConfirmLineLocCode] = useState<Record<number, string>>({});
+  const [locOptionsByWarehouse, setLocOptionsByWarehouse] = useState<
+    Record<number, { value: number; label: string; code: string }[]>
+  >({});
+  const [purchaseConfirmPreviewQty, setPurchaseConfirmPreviewQty] = useState<Record<number, number>>({});
+  const [purchaseConfirmPreviewBatch, setPurchaseConfirmPreviewBatch] = useState<Record<number, string>>({});
+  const [purchaseConfirmWarehouseOptions, setPurchaseConfirmWarehouseOptions] = useState<{ label: string; value: number; name: string }[]>([]);
+
   // 批量入库 Modal
   const [batchModalVisible, setBatchModalVisible] = useState(false);
   const [batchForm] = AntForm.useForm();
@@ -114,6 +320,11 @@ const InboundPage: React.FC = () => {
   const [purchaseSourceOptions, setPurchaseSourceOptions] = useState<{ label: string; value: number }[]>([]);
   const [sourceLoading, setSourceLoading] = useState(false);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
+
+  const inboundDocTrackingType = currentOrder
+    ? inboundDocumentTrackingType(currentOrder)
+    : undefined;
+  const inboundTracking = useDocumentTracking(inboundDocTrackingType, currentOrder?.id);
 
   const defaultPurchaseItem = {
     purchase_order_item_id: 0,
@@ -408,6 +619,7 @@ const InboundPage: React.FC = () => {
         detailData = await warehouseApi.productionReturn.get(record.id!.toString());
       }
       if (detailData) {
+        await prefetchMaterialsForUnitSelect((detailData.items || []).map((it: any) => it?.material_id));
         if (record.receipt_type === 'purchase') {
           const quantities: Record<number, number> = {};
           (detailData.items || []).forEach((it: any) => {
@@ -494,10 +706,189 @@ const InboundPage: React.FC = () => {
     }
   };
 
+  const resetPurchaseConfirmPreview = () => {
+    setPurchaseConfirmPreviewOpen(false);
+    setPurchaseConfirmPreviewDetail(null);
+    setPurchaseConfirmPreviewQty({});
+    setPurchaseConfirmPreviewBatch({});
+    setPurchaseConfirmLineWh({});
+    setPurchaseConfirmLineLoc({});
+    setPurchaseConfirmLineLocCode({});
+    setLocOptionsByWarehouse({});
+  };
+
+  /** 打开采购入库确认预览（加载最新详情，合并抽屉内未保存的实际数量） */
+  const openPurchaseConfirmPreview = async (record: InboundOrder) => {
+    if (!record.id) return;
+    setPurchaseConfirmPreviewOpen(true);
+    setPurchaseConfirmPreviewLoading(true);
+    try {
+      const [whRes, detailData] = await Promise.all([
+        masterWarehouseApi.list({ isActive: true, limit: 500 }),
+        warehouseApi.purchaseReceipt.get(String(record.id)),
+      ]);
+      const whList = Array.isArray(whRes) ? whRes : (whRes as any)?.data ?? (whRes as any)?.items ?? whRes ?? [];
+      await prefetchMaterialsForUnitSelect((detailData.items || []).map((it: any) => it?.material_id));
+      setPurchaseConfirmWarehouseOptions(
+        (Array.isArray(whList) ? whList : []).map((w: any) => ({
+          label: `${w.code || ''} ${w.name || ''}`.trim() || String(w.id),
+          value: w.id,
+          name: w.name || '',
+        }))
+      );
+      const qty: Record<number, number> = {};
+      const batch: Record<number, string> = {};
+      const lineWh: Record<number, number> = {};
+      const lineLoc: Record<number, number | undefined> = {};
+      const lineLocLb: Record<number, string> = {};
+      const headerWh =
+        detailData.warehouse_id != null && Number(detailData.warehouse_id) > 0
+          ? Number(detailData.warehouse_id)
+          : undefined;
+      (detailData.items || []).forEach((it: any) => {
+        if (it?.id == null) return;
+        const id = Number(it.id);
+        const fromDrawer =
+          currentOrder?.id === record.id && currentOrder.receipt_type === 'purchase'
+            ? editableReceiptQuantities[id]
+            : undefined;
+        qty[id] = fromDrawer != null ? Number(fromDrawer) : Number(it.receipt_quantity ?? 0);
+        batch[id] = String(it.batch_number ?? '');
+        const rowWh =
+          it.warehouse_id != null && Number(it.warehouse_id) > 0 ? Number(it.warehouse_id) : headerWh;
+        if (rowWh != null) lineWh[id] = rowWh;
+        if (it.location_id != null && Number(it.location_id) > 0) lineLoc[id] = Number(it.location_id);
+        if (it.location_code) lineLocLb[id] = String(it.location_code);
+      });
+      setPurchaseConfirmPreviewDetail({ ...detailData, receipt_type: 'purchase' });
+      setPurchaseConfirmLineWh(lineWh);
+      setPurchaseConfirmLineLoc(lineLoc);
+      setPurchaseConfirmLineLocCode(lineLocLb);
+      setLocOptionsByWarehouse({});
+      setPurchaseConfirmPreviewQty(qty);
+      const batchPrefilled = await prefetchPurchasePreviewBatchNumbers(detailData.items, batch);
+      setPurchaseConfirmPreviewBatch(batchPrefilled);
+      const uniqueWh = [...new Set(Object.values(lineWh))];
+      await Promise.all(
+        uniqueWh.map(async (wid) => {
+          const opts = await fetchStorageLocationsForWarehouse(wid);
+          setLocOptionsByWarehouse((prev) => ({ ...prev, [wid]: opts }));
+        })
+      );
+    } catch {
+      messageApi.error('加载入库单详情失败');
+      resetPurchaseConfirmPreview();
+    } finally {
+      setPurchaseConfirmPreviewLoading(false);
+    }
+  };
+
+  const submitPurchaseConfirmPreview = async () => {
+    const order = purchaseConfirmPreviewDetail;
+    if (!order?.id) return;
+    const items = (order.items || []) as InboundOrderItem[];
+    if (!items.length) {
+      messageApi.warning('暂无可入库明细');
+      return;
+    }
+    let mappedItems: any[];
+    try {
+      mappedItems = items
+        .filter((it) => it.material_id != null)
+        .map((it) => {
+          const rowId = Number(it.id);
+          const qty = Number(purchaseConfirmPreviewQty[rowId] ?? it.receipt_quantity ?? 0);
+          if (!(qty > 0)) {
+            throw new Error(`物料 ${it.material_code || it.material_name || '-'} 的实际数量必须大于 0`);
+          }
+          const lineWh = purchaseConfirmLineWh[rowId];
+          if (lineWh == null || !(lineWh > 0)) {
+            throw new Error(`请为物料 ${it.material_code || it.material_name || '-'} 选择入库仓库`);
+          }
+          const unitPrice = Number(it.unit_price ?? 0);
+          const qualified = Number(it.qualified_quantity ?? it.receipt_quantity ?? qty);
+          const unqualified = Number(it.unqualified_quantity ?? 0);
+          const batchStr = (purchaseConfirmPreviewBatch[rowId] ?? it.batch_number ?? '').trim();
+          const whOpt = purchaseConfirmWarehouseOptions.find((o) => o.value === lineWh);
+          const locId = purchaseConfirmLineLoc[rowId];
+          const locCode = purchaseConfirmLineLocCode[rowId];
+          return {
+            purchase_order_item_id: Number(it.purchase_order_item_id ?? 0),
+            material_id: Number(it.material_id),
+            material_code: it.material_code || '',
+            material_name: it.material_name || '',
+            material_spec: it.material_spec || undefined,
+            material_unit: it.material_unit || it.unit || '个',
+            receipt_quantity: qty,
+            unit_price: unitPrice,
+            total_amount: Number((qty * unitPrice).toFixed(2)),
+            qualified_quantity: Number((qualified + unqualified > qty ? qty : qualified).toFixed(2)),
+            unqualified_quantity: Number((qualified + unqualified > qty ? 0 : unqualified).toFixed(2)),
+            batch_number: batchStr || undefined,
+            warehouse_id: lineWh,
+            warehouse_name: whOpt?.name ?? '',
+            location_id: locId != null && locId > 0 ? locId : undefined,
+            location_code: locCode || undefined,
+            status: it.status || order.status || '草稿',
+            notes: it.notes || undefined,
+          };
+        });
+    } catch (e: any) {
+      messageApi.error(e?.message || '请检查明细');
+      return;
+    }
+
+    const headerWh = Number(mappedItems[0]?.warehouse_id || order.warehouse_id || 0);
+    const headerWhName =
+      purchaseConfirmWarehouseOptions.find((o) => o.value === headerWh)?.name ?? order.warehouse_name ?? '';
+
+    setPurchaseConfirmPreviewSubmitting(true);
+    try {
+      await warehouseApi.purchaseReceipt.update(String(order.id), {
+        purchase_order_id: Number(order.purchase_order_id || 0),
+        purchase_order_code: order.purchase_order_code || '',
+        supplier_id: Number(order.supplier_id || 0),
+        supplier_name: order.supplier_name || '',
+        warehouse_id: headerWh > 0 ? headerWh : Number(order.warehouse_id || 0),
+        warehouse_name: headerWhName,
+        status: order.status || '草稿',
+        review_status: order.review_status || '待审核',
+        notes: order.notes || undefined,
+        items: mappedItems,
+      });
+      await warehouseApi.purchaseReceipt.confirm(String(order.id));
+      messageApi.success('入库确认成功，库存已更新');
+      resetPurchaseConfirmPreview();
+      actionRef.current?.reload();
+      if (currentOrder?.id === order.id && currentOrder.receipt_type === 'purchase') {
+        try {
+          const detailData = await warehouseApi.purchaseReceipt.get(String(order.id));
+          setCurrentOrder({ ...detailData, receipt_type: 'purchase' });
+          const quantities: Record<number, number> = {};
+          (detailData.items || []).forEach((it: any) => {
+            if (it?.id != null) quantities[it.id] = Number(it.receipt_quantity ?? 0);
+          });
+          setEditableReceiptQuantities(quantities);
+        } catch {
+          /* ignore */
+        }
+      }
+    } catch (error: any) {
+      messageApi.error(error?.message || error?.response?.data?.detail || '入库确认失败');
+      throw error;
+    } finally {
+      setPurchaseConfirmPreviewSubmitting(false);
+    }
+  };
+
   /**
    * 处理确认入库/退料
    */
   const handleConfirm = async (record: InboundOrder) => {
+    if (record.receipt_type === 'purchase') {
+      await openPurchaseConfirmPreview(record);
+      return;
+    }
     const code = record.receipt_code || record.return_code || '';
     const title = record.receipt_type === 'production_return' ? '确认退料' : '确认入库';
     const content = record.receipt_type === 'production_return'
@@ -508,9 +899,7 @@ const InboundPage: React.FC = () => {
       content,
       onOk: async () => {
         try {
-          if (record.receipt_type === 'purchase') {
-            await warehouseApi.purchaseReceipt.confirm(record.id!.toString());
-          } else if (record.receipt_type === 'finished_goods') {
+          if (record.receipt_type === 'finished_goods') {
             await warehouseApi.finishedGoodsReceipt.confirm(record.id!.toString());
           } else if (record.receipt_type === 'production_return') {
             await warehouseApi.productionReturn.confirm(record.id!.toString());
@@ -520,9 +909,7 @@ const InboundPage: React.FC = () => {
           if (currentOrder?.id === record.id) {
             try {
               let detailData: any;
-              if (record.receipt_type === 'purchase') {
-                detailData = await warehouseApi.purchaseReceipt.get(record.id!.toString());
-              } else if (record.receipt_type === 'finished_goods') {
+              if (record.receipt_type === 'finished_goods') {
                 detailData = await warehouseApi.finishedGoodsReceipt.get(record.id!.toString());
               } else if (record.receipt_type === 'production_return') {
                 detailData = await warehouseApi.productionReturn.get(record.id!.toString());
@@ -667,42 +1054,53 @@ const InboundPage: React.FC = () => {
       title: '操作',
       width: 200,
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
+      render: (_, record) => {
+        const pending =
+          record.status === 'draft' ||
+          record.status === '草稿' ||
+          record.status === '待入库' ||
+          record.status === '待退料';
+        const nodes: React.ReactNode[] = [
           <Button
+            key="detail"
             type="link"
             size="small"
             icon={<EyeOutlined />}
             onClick={() => handleDetail(record)}
           >
             详情
-          </Button>
-          {(record.status === 'draft' || record.status === '草稿' || record.status === '待入库' || record.status === '待退料') && (
-            <>
+          </Button>,
+        ];
+        if (pending) {
+          nodes.push(
+            <Button
+              key="confirm"
+              type="link"
+              size="small"
+              icon={<CheckCircleOutlined />}
+              onClick={() => handleConfirm(record)}
+              style={{ color: '#52c41a' }}
+            >
+              {record.receipt_type === 'production_return' ? '确认退料' : '确认入库'}
+            </Button>
+          );
+          if (record.receipt_type === 'production_return') {
+            nodes.push(
               <Button
+                key="delete"
                 type="link"
                 size="small"
-                icon={<CheckCircleOutlined />}
-                onClick={() => handleConfirm(record)}
-                style={{ color: '#52c41a' }}
+                danger
+                icon={<DeleteOutlined />}
+                onClick={() => handleDelete(record)}
               >
-                {record.receipt_type === 'production_return' ? '确认退料' : '确认入库'}
+                删除
               </Button>
-              {record.receipt_type === 'production_return' && (
-                <Button
-                  type="link"
-                  size="small"
-                  danger
-                  icon={<DeleteOutlined />}
-                  onClick={() => handleDelete(record)}
-                >
-                  删除
-                </Button>
-              )}
-            </>
-          )}
-        </Space>
-      ),
+            );
+          }
+        }
+        return renderInboundRowActions(nodes, `inbound-${record.receipt_type}-${record.id}`);
+      },
     },
   ];
 
@@ -1226,6 +1624,171 @@ const InboundPage: React.FC = () => {
         </AntForm>
       </Modal>
 
+      <Modal
+        title="确认入库预览"
+        open={purchaseConfirmPreviewOpen}
+        onCancel={() => {
+          if (!purchaseConfirmPreviewSubmitting) resetPurchaseConfirmPreview();
+        }}
+        onOk={submitPurchaseConfirmPreview}
+        confirmLoading={purchaseConfirmPreviewSubmitting}
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+        okText="确认入库"
+        destroyOnHidden
+      >
+        <Spin spinning={purchaseConfirmPreviewLoading}>
+          <p style={{ marginBottom: 12, color: '#666' }}>
+            请逐行核对入库仓库、库位（可选）与明细数量、批号后再确认；确认后将按行更新库存。
+          </p>
+          <Table
+            size="small"
+            pagination={false}
+            scroll={{ x: 1000 }}
+            rowKey={(r) => (r.id != null ? String(r.id) : `m-${r.material_id}`)}
+            dataSource={(purchaseConfirmPreviewDetail?.items || []) as InboundOrderItem[]}
+            columns={[
+              { title: '物料编号', dataIndex: 'material_code', width: 100, ellipsis: true },
+              { title: '物料名称', dataIndex: 'material_name', width: 150, ellipsis: true },
+              {
+                title: '入库仓库',
+                dataIndex: 'warehouse_id',
+                width: 150,
+                render: (_: unknown, row: InboundOrderItem) => {
+                  if (row.id == null) return '-';
+                  const rid = Number(row.id);
+                  const v = purchaseConfirmLineWh[rid];
+                  return (
+                    <Select
+                      style={{ width: '100%', minWidth: 118 }}
+                      placeholder="请选择"
+                      showSearch
+                      optionFilterProp="label"
+                      value={v}
+                      options={purchaseConfirmWarehouseOptions}
+                      onChange={async (nv) => {
+                        setPurchaseConfirmLineWh((prev) => ({ ...prev, [rid]: nv }));
+                        setPurchaseConfirmLineLoc((prev) => {
+                          const next = { ...prev };
+                          delete next[rid];
+                          return next;
+                        });
+                        setPurchaseConfirmLineLocCode((prev) => {
+                          const next = { ...prev };
+                          delete next[rid];
+                          return next;
+                        });
+                        const opts = await fetchStorageLocationsForWarehouse(nv);
+                        setLocOptionsByWarehouse((prev) => ({ ...prev, [nv]: opts }));
+                      }}
+                      disabled={purchaseConfirmPreviewLoading}
+                    />
+                  );
+                },
+              },
+              {
+                title: '库位',
+                dataIndex: 'location_id',
+                width: 150,
+                render: (_: unknown, row: InboundOrderItem) => {
+                  if (row.id == null) return '-';
+                  const rid = Number(row.id);
+                  const wh = purchaseConfirmLineWh[rid];
+                  const locOpts = wh != null ? locOptionsByWarehouse[wh] ?? [] : [];
+                  const locVal = purchaseConfirmLineLoc[rid];
+                  return (
+                    <Select
+                      style={{ width: '100%', minWidth: 118 }}
+                      placeholder={wh != null ? '可选' : '先选仓库'}
+                      showSearch
+                      allowClear
+                      optionFilterProp="label"
+                      value={locVal}
+                      options={locOpts}
+                      onDropdownVisibleChange={(open) => {
+                        if (open && wh != null && !locOptionsByWarehouse[wh]?.length) {
+                          void fetchStorageLocationsForWarehouse(wh).then((opts) =>
+                            setLocOptionsByWarehouse((p) => ({ ...p, [wh]: opts }))
+                          );
+                        }
+                      }}
+                      onChange={(v) => {
+                        setPurchaseConfirmLineLoc((prev) => ({ ...prev, [rid]: v ?? undefined }));
+                        const o = locOpts.find((x) => x.value === v);
+                        setPurchaseConfirmLineLocCode((prev) => {
+                          const next = { ...prev };
+                          if (v == null) delete next[rid];
+                          else next[rid] = o?.code ?? '';
+                          return next;
+                        });
+                      }}
+                      disabled={purchaseConfirmPreviewLoading || wh == null}
+                    />
+                  );
+                },
+              },
+              {
+                title: '实际数量',
+                dataIndex: 'receipt_quantity',
+                width: 100,
+                align: 'right' as const,
+                render: (_: unknown, row: InboundOrderItem) => {
+                  if (row.id == null) return '-';
+                  const rid = Number(row.id);
+                  return (
+                    <InputNumber
+                      min={0.01}
+                      precision={2}
+                      value={purchaseConfirmPreviewQty[rid]}
+                      onChange={(v) =>
+                        setPurchaseConfirmPreviewQty((prev) => ({ ...prev, [rid]: Number(v) || 0 }))
+                      }
+                      style={{ width: 88 }}
+                      size="small"
+                    />
+                  );
+                },
+              },
+              {
+                title: '单位',
+                dataIndex: 'material_unit',
+                width: 72,
+                render: (_: unknown, row: InboundOrderItem) => {
+                  if (row.material_id == null) return '-';
+                  return (
+                    <MaterialUnitSelect
+                      materialId={row.material_id}
+                      value={row.material_unit ?? row.unit}
+                      size="small"
+                      disabled
+                      noStyle
+                    />
+                  );
+                },
+              },
+              {
+                title: '批号',
+                dataIndex: 'batch_number',
+                width: 138,
+                render: (_: unknown, row: InboundOrderItem) => {
+                  if (row.id == null) return '-';
+                  const rid = Number(row.id);
+                  return (
+                    <Input
+                      placeholder="可选"
+                      value={purchaseConfirmPreviewBatch[rid] ?? ''}
+                      onChange={(e) =>
+                        setPurchaseConfirmPreviewBatch((prev) => ({ ...prev, [rid]: e.target.value }))
+                      }
+                      size="small"
+                    />
+                  );
+                },
+              },
+            ]}
+          />
+        </Spin>
+      </Modal>
+
       <DetailDrawerTemplate
         title={`${currentOrder?.receipt_type === 'production_return' ? '生产退料单' : '入库单'}详情 - ${currentOrder?.receipt_code || currentOrder?.return_code || ''}`}
         open={detailDrawerVisible}
@@ -1255,144 +1818,274 @@ const InboundPage: React.FC = () => {
         }
         customContent={
           currentOrder ? (
-            <div style={{ padding: '16px 0' }}>
-              <Card title="基本信息" style={{ marginBottom: 16 }}>
-                <p><strong>单号：</strong>{currentOrder.receipt_code || currentOrder.return_code}</p>
-                <p><strong>类型：</strong>
-                  <Tag color={
-                    currentOrder.receipt_type === 'purchase' ? 'processing' :
-                      currentOrder.receipt_type === 'finished_goods' ? 'success' : 'warning'
-                  }>
-                    {currentOrder.receipt_type === 'purchase' ? '采购入库' : currentOrder.receipt_type === 'finished_goods' ? '成品入库' : '生产退料'}
-                  </Tag>
-                </p>
-                <p><strong>状态：</strong>
-                  <Tag color={
-                    (currentOrder.status === '已完成' || currentOrder.status === '已退料') ? 'success' :
-                      (currentOrder.status === '已确认' || currentOrder.status === '待退料') ? 'processing' :
-                        currentOrder.status === '已取消' ? 'error' : 'default'
-                  }>
-                    {currentOrder.status}
-                  </Tag>
-                </p>
-                {currentOrder.supplier_name && (
-                  <p><strong>供应商：</strong>{currentOrder.supplier_name}</p>
-                )}
-                {currentOrder.work_order_code && (
-                  <p><strong>工单号：</strong>{currentOrder.work_order_code}</p>
-                )}
-                {currentOrder.picking_code && (
-                  <p><strong>领料单号：</strong>{currentOrder.picking_code}</p>
-                )}
-                {currentOrder.workshop_name && (
-                  <p><strong>车间：</strong>{currentOrder.workshop_name}</p>
-                )}
-                <p><strong>仓库：</strong>{currentOrder.warehouse_name}</p>
-                <p><strong>日期：</strong>{currentOrder.receipt_date || currentOrder.return_time}</p>
-                <p><strong>操作员：</strong>{currentOrder.received_by || currentOrder.returner_name}</p>
-                {currentOrder.notes && (
-                  <p><strong>备注：</strong>{currentOrder.notes}</p>
-                )}
-              </Card>
-
-              {/* 生命周期 */}
-              <DetailDrawerSection title="生命周期">
-                {(() => {
-                  const lifecycle = getInboundLifecycle(currentOrder);
-                  const mainStages = lifecycle.mainStages ?? [];
-                  if (mainStages.length === 0) return null;
-                  return (
-                    <UniLifecycleStepper
-                      steps={mainStages}
-                      status={lifecycle.status}
-                      showLabels
-                      nextStepSuggestions={lifecycle.nextStepSuggestions}
-                    />
-                  );
-                })()}
+            <>
+              <DetailDrawerSection title="基本信息">
+                <Descriptions
+                  column={3}
+                  size="small"
+                  items={[
+                    {
+                      key: 'code',
+                      label: '单号',
+                      children: (
+                        <Typography.Text copyable={{ text: String(currentOrder.receipt_code || currentOrder.return_code || '') }}>
+                          {currentOrder.receipt_code || currentOrder.return_code || '-'}
+                        </Typography.Text>
+                      ),
+                    },
+                    {
+                      key: 'type',
+                      label: '类型',
+                      children: (
+                        <Tag
+                          color={
+                            currentOrder.receipt_type === 'purchase'
+                              ? 'processing'
+                              : currentOrder.receipt_type === 'finished_goods'
+                                ? 'success'
+                                : 'warning'
+                          }
+                        >
+                          {currentOrder.receipt_type === 'purchase'
+                            ? '采购入库'
+                            : currentOrder.receipt_type === 'finished_goods'
+                              ? '成品入库'
+                              : '生产退料'}
+                        </Tag>
+                      ),
+                    },
+                    {
+                      key: 'status',
+                      label: '状态',
+                      children: (
+                        <Tag
+                          color={
+                            currentOrder.status === '已完成' || currentOrder.status === '已退料'
+                              ? 'success'
+                              : currentOrder.status === '已确认' || currentOrder.status === '待退料'
+                                ? 'processing'
+                                : currentOrder.status === '已取消'
+                                  ? 'error'
+                                  : 'default'
+                          }
+                        >
+                          {currentOrder.status ?? '-'}
+                        </Tag>
+                      ),
+                    },
+                    ...(currentOrder.supplier_name
+                      ? [{ key: 'supplier', label: '供应商', children: currentOrder.supplier_name }]
+                      : []),
+                    ...(currentOrder.purchase_order_code
+                      ? [{ key: 'po', label: '采购单号', children: currentOrder.purchase_order_code }]
+                      : []),
+                    ...(currentOrder.work_order_code
+                      ? [{ key: 'wo', label: '工单号', children: currentOrder.work_order_code }]
+                      : []),
+                    ...(currentOrder.picking_code
+                      ? [{ key: 'pick', label: '领料单号', children: currentOrder.picking_code }]
+                      : []),
+                    ...(currentOrder.workshop_name
+                      ? [{ key: 'ws', label: '车间', children: currentOrder.workshop_name }]
+                      : []),
+                    {
+                      key: 'wh',
+                      label: '仓库',
+                      children: currentOrder.warehouse_name ?? '-',
+                    },
+                    {
+                      key: 'date',
+                      label: '日期',
+                      children: currentOrder.receipt_date || currentOrder.return_time || '-',
+                    },
+                    {
+                      key: 'op',
+                      label: '操作员',
+                      children: currentOrder.received_by || currentOrder.returner_name || '-',
+                    },
+                    ...(currentOrder.notes
+                      ? [{ key: 'notes', label: '备注', span: 3, children: currentOrder.notes }]
+                      : []),
+                  ]}
+                />
               </DetailDrawerSection>
 
-              {/* 入库/退料明细 - 始终显示，有数据时展示表格，无数据时展示空状态 */}
-              <Card title={currentOrder.receipt_type === 'production_return' ? '退料明细' : '入库明细'}>
+              <DetailDrawerSection title="生命周期">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {(() => {
+                    const lifecycle = getInboundLifecycle(currentOrder);
+                    const mainStages = lifecycle.mainStages ?? [];
+                    if (mainStages.length === 0) return null;
+                    return (
+                      <UniLifecycleStepper
+                        steps={mainStages}
+                        status={lifecycle.status}
+                        showLabels
+                        nextStepSuggestions={lifecycle.nextStepSuggestions}
+                      />
+                    );
+                  })()}
+                  <div
+                    style={{
+                      paddingTop: 12,
+                      borderTop: '1px solid var(--ant-color-border-secondary)',
+                    }}
+                  >
+                    <div
+                      style={{
+                        marginBottom: 8,
+                        fontWeight: 600,
+                        fontSize: 13,
+                        color: 'var(--ant-color-text)',
+                      }}
+                    >
+                      上下游单据
+                    </div>
+                    {inboundTracking.loading && (
+                      <div style={{ padding: '8px 0' }}>
+                        <Spin size="small" />
+                      </div>
+                    )}
+                    {inboundTracking.error && (
+                      <Typography.Text type="danger">{inboundTracking.error}</Typography.Text>
+                    )}
+                    {inboundTracking.data && (
+                      <DocumentTrackingRelationsBody
+                        data={inboundTracking.data}
+                        onDocumentClick={(type, id) =>
+                          messageApi.info(`跳转到${type}#${id}`)
+                        }
+                      />
+                    )}
+                  </div>
+                </div>
+              </DetailDrawerSection>
+
+              <DetailDrawerSection
+                title={currentOrder.receipt_type === 'production_return' ? '退料明细' : '明细信息'}
+              >
+                <style>{`
+                  .inbound-detail-drawer-items .ant-table-wrapper .ant-table-body,
+                  .inbound-detail-drawer-items .ant-table-wrapper .ant-table-content {
+                    overflow: visible !important;
+                  }
+                `}</style>
+                <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
                 {currentOrder.items && currentOrder.items.length > 0 ? (
-                  <>
-                    <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
+                  <div
+                    className="inbound-detail-drawer-items"
+                    style={{ width: '100%', maxWidth: '100%', overflowX: 'auto', overflowY: 'hidden' }}
+                  >
                     <Table
                       className="warehouse-detail-table"
                       size="small"
-                      rowKey={(r) => r.id ?? r.material_id ?? Math.random()}
+                      tableLayout="fixed"
+                      style={{ minWidth: INBOUND_DETAIL_ITEMS_MIN_WIDTH }}
+                      rowKey={(r, idx) => (r.id != null ? String(r.id) : `m-${r.material_id ?? idx}`)}
                       pagination={false}
-                      columns={currentOrder.receipt_type === 'production_return'
-                        ? [
-                            { title: '物料编号', dataIndex: 'material_code', width: 120 },
-                            { title: '物料名称', dataIndex: 'material_name', width: 150 },
-                            { title: '单位', dataIndex: 'material_unit', width: 60, render: (val) => <DictionaryLabel dictionaryCode="unit" value={val} /> },
-                            { title: '退料数量', dataIndex: 'return_quantity', width: 100, align: 'right' as const },
-                            { title: '仓库', dataIndex: 'warehouse_name', width: 120 },
-                            { title: '批次号', dataIndex: 'batch_number', width: 100 },
-                          ]
-                        : currentOrder.receipt_type === 'purchase'
+                      bordered
+                      columns={
+                        currentOrder.receipt_type === 'production_return'
                           ? [
-                              { title: '物料编号', dataIndex: 'material_code', width: 120 },
-                              { title: '物料名称', dataIndex: 'material_name', width: 150 },
+                              { title: '物料编号', dataIndex: 'material_code', width: 120, ellipsis: true },
+                              { title: '物料名称', dataIndex: 'material_name', width: 150, ellipsis: true },
                               {
-                                title: '实际数量',
-                                dataIndex: 'receipt_quantity',
-                                width: 140,
-                                align: 'right' as const,
-                                render: (_: any, row: InboundOrderItem) => {
-                                  const editable = isEditablePurchaseReceipt(currentOrder) && row.id != null;
-                                  if (!editable) return Number(row.receipt_quantity ?? 0);
-                                  const rid = Number(row.id);
-                                  return (
-                                    <InputNumber
-                                      min={0.01}
-                                      precision={2}
-                                      value={editableReceiptQuantities[rid] ?? Number(row.receipt_quantity ?? 0)}
-                                      onChange={(v) => setEditableReceiptQuantities((prev) => ({ ...prev, [rid]: Number(v) || 0 }))}
-                                      style={{ width: 110 }}
-                                      size="small"
-                                    />
-                                  );
-                                },
+                                title: '单位',
+                                dataIndex: 'material_unit',
+                                width: 72,
+                                render: (_: unknown, row: InboundOrderItem) => renderInboundDetailUnitCell(row),
                               },
-                              { title: '单位', dataIndex: 'material_unit', width: 60, render: (val: any) => <DictionaryLabel dictionaryCode="unit" value={val} /> },
-                              { title: '单价', dataIndex: 'unit_price', width: 90, align: 'right' as const },
-                              { title: '金额', dataIndex: 'total_amount', width: 100, align: 'right' as const },
-                              { title: '批次号', dataIndex: 'batch_number', width: 100 },
+                              {
+                                title: '退料数量',
+                                dataIndex: 'return_quantity',
+                                width: 100,
+                                align: 'right' as const,
+                              },
+                              { title: '仓库', dataIndex: 'warehouse_name', width: 120, ellipsis: true },
+                              { title: '批次号', dataIndex: 'batch_number', width: 100, ellipsis: true },
                             ]
-                          : [
-                              { title: '物料编号', dataIndex: 'material_code', width: 120 },
-                              { title: '物料名称', dataIndex: 'material_name', width: 150 },
-                              { title: '数量', dataIndex: 'receipt_quantity', width: 100, align: 'right' as const },
-                              { title: '单位', dataIndex: 'material_unit', width: 60 },
-                              { title: '批次号', dataIndex: 'batch_number', width: 100 },
-                            ]
+                          : currentOrder.receipt_type === 'purchase'
+                            ? [
+                                { title: '物料编号', dataIndex: 'material_code', width: 120, ellipsis: true },
+                                { title: '物料名称', dataIndex: 'material_name', width: 150, ellipsis: true },
+                                {
+                                  title: '实际数量',
+                                  dataIndex: 'receipt_quantity',
+                                  width: 140,
+                                  align: 'right' as const,
+                                  render: (_: any, row: InboundOrderItem) => {
+                                    const editable = isEditablePurchaseReceipt(currentOrder) && row.id != null;
+                                    if (!editable) return Number(row.receipt_quantity ?? 0);
+                                    const rid = Number(row.id);
+                                    return (
+                                      <InputNumber
+                                        min={0.01}
+                                        precision={2}
+                                        value={editableReceiptQuantities[rid] ?? Number(row.receipt_quantity ?? 0)}
+                                        onChange={(v) =>
+                                          setEditableReceiptQuantities((prev) => ({ ...prev, [rid]: Number(v) || 0 }))
+                                        }
+                                        style={{ width: 110 }}
+                                        size="small"
+                                      />
+                                    );
+                                  },
+                                },
+                                {
+                                  title: '单位',
+                                  dataIndex: 'material_unit',
+                                  width: 72,
+                                  render: (_: unknown, row: InboundOrderItem) => renderInboundDetailUnitCell(row),
+                                },
+                                { title: '单价', dataIndex: 'unit_price', width: 90, align: 'right' as const },
+                                { title: '金额', dataIndex: 'total_amount', width: 100, align: 'right' as const },
+                                { title: '批次号', dataIndex: 'batch_number', width: 100, ellipsis: true },
+                              ]
+                            : [
+                                { title: '物料编号', dataIndex: 'material_code', width: 120, ellipsis: true },
+                                { title: '物料名称', dataIndex: 'material_name', width: 150, ellipsis: true },
+                                {
+                                  title: '数量',
+                                  dataIndex: 'receipt_quantity',
+                                  width: 100,
+                                  align: 'right' as const,
+                                },
+                                {
+                                  title: '单位',
+                                  dataIndex: 'material_unit',
+                                  width: 72,
+                                  render: (_: unknown, row: InboundOrderItem) => renderInboundDetailUnitCell(row),
+                                },
+                                { title: '批次号', dataIndex: 'batch_number', width: 100, ellipsis: true },
+                              ]
                       }
                       dataSource={currentOrder.items}
                     />
-                  </>
+                  </div>
                 ) : (
-                  <div style={{ padding: '24px 0', color: '#999', textAlign: 'center' }}>暂无物料明细</div>
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无明细" />
                 )}
-              </Card>
+              </DetailDrawerSection>
 
-              {/* 操作记录 */}
-              {currentOrder?.id && (
+              {currentOrder?.id != null && (
                 <DetailDrawerSection title="操作记录">
-                  <DocumentTrackingPanel
-                    documentType={
-                      currentOrder.receipt_type === 'purchase'
-                        ? 'purchase_receipt'
-                        : currentOrder.receipt_type === 'finished_goods'
-                          ? 'finished_goods_receipt'
-                          : 'production_return'
-                    }
-                    documentId={currentOrder.id}
-                  />
+                  {inboundTracking.loading && (
+                    <div style={{ textAlign: 'center', padding: 24 }}>
+                      <Spin />
+                    </div>
+                  )}
+                  {inboundTracking.error && !inboundTracking.loading && (
+                    <Typography.Text type="danger">{inboundTracking.error}</Typography.Text>
+                  )}
+                  {inboundTracking.data && !inboundTracking.loading && (
+                    <DocumentTrackingTimelineBody data={inboundTracking.data} />
+                  )}
+                  {!inboundTracking.loading && !inboundTracking.data && !inboundTracking.error && (
+                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+                  )}
                 </DetailDrawerSection>
               )}
-            </div>
+            </>
           ) : null
         }
       />

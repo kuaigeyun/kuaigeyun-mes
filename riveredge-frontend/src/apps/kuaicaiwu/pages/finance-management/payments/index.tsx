@@ -15,7 +15,7 @@ import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import dayjs from 'dayjs';
 import { getFinanceVoucherLifecycle } from '../../../utils/financeLifecycle';
-import { renderRowActionsMax3 } from '../../../utils/renderRowActionsMax3';
+import { renderRowActionsOverflow } from '../../../utils/renderRowActionsOverflow';
 
 interface PaymentVoucher {
   id: number;
@@ -210,7 +210,7 @@ const PaymentsPage: React.FC = () => {
       fixed: 'right',
       width: 220,
       render: (_, record) =>
-        renderRowActionsMax3(
+        renderRowActionsOverflow(
           [
             <Button key="det" type="link" size="small" icon={<EyeOutlined />} onClick={() => messageApi.info('付款单详情功能开发中')}>
               详情

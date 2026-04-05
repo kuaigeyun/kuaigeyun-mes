@@ -752,7 +752,21 @@ async def list_sales_forecasts(
         forecast_period=forecast_period,
     )
     return SalesForecastListResult(**result)
+    
 
+@router.get("/sales-forecasts/statistics", summary="获取销售预测统计分析")
+async def get_sales_forecast_statistics(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> JSONResponse:
+    """获取销售预测统计分析"""
+    from apps.kuaizhizao.services.sales_service import SalesForecastService
+    stats = await SalesForecastService().get_forecast_statistics(tenant_id)
+    return JSONResponse(
+        content=stats,
+        status_code=http_status.HTTP_200_OK
+    )
+    
 
 @router.get("/sales-forecasts/{forecast_id}", response_model=SalesForecastResponse, summary="获取销售预测详情")
 async def get_sales_forecast(

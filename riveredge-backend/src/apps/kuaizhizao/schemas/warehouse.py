@@ -468,6 +468,8 @@ class PurchaseReceiptItemBase(BaseSchema):
     qualified_quantity: float = Field(..., ge=0, description="合格数量")
     unqualified_quantity: float = Field(..., ge=0, description="不合格数量")
     quality_status: str = Field("合格", max_length=20, description="质量状态")
+    warehouse_id: Optional[int] = Field(None, description="行入库仓库ID（可与表头不同）")
+    warehouse_name: Optional[str] = Field(None, max_length=100, description="行入库仓库名称")
     location_id: Optional[int] = Field(None, description="库位ID")
     location_code: Optional[str] = Field(None, max_length=50, description="库位编码")
     batch_number: Optional[str] = Field(None, max_length=50, description="批次号")
@@ -510,6 +512,9 @@ class PurchaseReceiptCreate(PurchaseReceiptBase):
 class PurchaseReceiptUpdate(PurchaseReceiptBase):
     """采购入库单更新schema"""
     receipt_code: Optional[str] = Field(None, max_length=50, description="入库单编码")
+    items: Optional[List[PurchaseReceiptItemUpdate]] = Field(
+        None, description="入库单明细列表（传入则全量替换）"
+    )
 
 
 class PurchaseReceiptResponse(PurchaseReceiptBase):

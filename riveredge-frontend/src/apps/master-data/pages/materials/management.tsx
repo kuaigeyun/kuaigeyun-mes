@@ -20,6 +20,14 @@ import {
   Menu,
   List,
   Typography,
+  Checkbox,
+  Select,
+  Alert,
+  Segmented,
+  Card,
+  Row,
+  Col,
+  Divider,
 } from 'antd'
 import {
   EditOutlined,
@@ -29,6 +37,9 @@ import {
   QrcodeOutlined,
   ExpandOutlined,
   CompressOutlined,
+  TagsOutlined,
+  BarcodeOutlined,
+  NumberOutlined,
 } from '@ant-design/icons'
 import {
   ActionType,
@@ -59,7 +70,9 @@ import type {
   MaterialGroup,
   MaterialGroupCreate,
   MaterialGroupUpdate,
+  MaterialBulkTrackingPayload,
 } from '../../types/material'
+import { batchRuleApi, serialRuleApi } from '../../services/batchSerialRules'
 import { isAutoGenerateEnabled } from '../../../../utils/codeRulePage'
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../services/dataDictionary'
 import { SecureImage } from '../../../../components/secure-image'
@@ -69,6 +82,8 @@ import { useNewShortcut } from '../../../../hooks/useNewShortcut'
 import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut'
 import { getSuspendedModal, clearSuspendedModal } from '../../utils/suspendedModal'
 
+/** 与 MaterialForm 一致：表示使用系统默认批号/序列号规则 */
+const SYSTEM_DEFAULT_BATCH_SERIAL_RULE = '__SYSTEM_DEFAULT__'
 
 /**
  * 物料管理合并页面组件
@@ -90,6 +105,18 @@ const MaterialsManagementPage: React.FC = () => {
   // 右侧物料列表状态
   const actionRef = useRef<ActionType>(null)
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
+
+  /** 批量批号/序列号管理（后端 batch-tracking 单接口） */
+  const [batchSerialModalOpen, setBatchSerialModalOpen] = useState(false)
+  const [bulkTrackingMode, setBulkTrackingMode] = useState<'enable' | 'disable'>('enable')
+  const [bulkApplyBatch, setBulkApplyBatch] = useState(true)
+  const [bulkApplySerial, setBulkApplySerial] = useState(true)
+  const [bulkBatchRuleId, setBulkBatchRuleId] = useState<number | string>(SYSTEM_DEFAULT_BATCH_SERIAL_RULE)
+  const [bulkSerialRuleId, setBulkSerialRuleId] = useState<number | string>(SYSTEM_DEFAULT_BATCH_SERIAL_RULE)
+  const [batchRulesForBulk, setBatchRulesForBulk] = useState<{ id: number; name: string; code: string }[]>([])
+  const [serialRulesForBulk, setSerialRulesForBulk] = useState<{ id: number; name: string; code: string }[]>([])
+  const [bulkRuleOptionsLoading, setBulkRuleOptionsLoading] = useState(false)
+  const [batchSerialSubmitting, setBatchSerialSubmitting] = useState(false)
 
   // 表单引用
   const groupFormRef = useRef<ProFormInstance>()
@@ -560,6 +587,99 @@ const MaterialsManagementPage: React.FC = () => {
       messageApi.error(`${t('app.master-data.materials.batchQrCodeFailed')}: ${error.message || t('common.unknownError')}`)
     }
   }, [selectedRowKeys, messageApi])
+
+  const handleOpenBatchSerialModal = useCallback(() => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning(t('app.master-data.materials.selectForBatchSerial'))
+      return
+    }
+    setBulkTrackingMode('enable')
+    setBulkApplyBatch(true)
+    setBulkApplySerial(true)
+    setBulkBatchRuleId(SYSTEM_DEFAULT_BATCH_SERIAL_RULE)
+    setBulkSerialRuleId(SYSTEM_DEFAULT_BATCH_SERIAL_RULE)
+    setBatchSerialModalOpen(true)
+    setBulkRuleOptionsLoading(true)
+    Promise.all([
+      batchRuleApi.list({ page: 1, pageSize: 500, isActive: true }),
+      serialRuleApi.list({ page: 1, pageSize: 500, isActive: true }),
+    ])
+      .then(([br, sr]) => {
+        setBatchRulesForBulk(br.items.map((r) => ({ id: r.id, name: r.name, code: r.code })))
+        setSerialRulesForBulk(sr.items.map((r) => ({ id: r.id, name: r.name, code: r.code })))
+      })
+      .catch(() => {
+        messageApi.error(t('app.master-data.materials.batchTrackingLoadRulesFailed'))
+        setBatchRulesForBulk([])
+        setSerialRulesForBulk([])
+      })
+      .finally(() => setBulkRuleOptionsLoading(false))
+  }, [selectedRowKeys, messageApi, t])
+
+  const handleConfirmBatchSerial = useCallback(async () => {
+    if (!bulkApplyBatch && !bulkApplySerial) {
+      messageApi.warning(t('app.master-data.materials.batchTrackingPickOneDimension'))
+      return Promise.reject()
+    }
+    setBatchSerialSubmitting(true)
+    try {
+      const payload: MaterialBulkTrackingPayload = {
+        material_uuids: selectedRowKeys.map((k) => String(k)),
+      }
+      if (bulkTrackingMode === 'enable') {
+        if (bulkApplyBatch) {
+          payload.batch_managed = true
+          payload.default_batch_rule_id =
+            bulkBatchRuleId === SYSTEM_DEFAULT_BATCH_SERIAL_RULE ? null : Number(bulkBatchRuleId)
+        }
+        if (bulkApplySerial) {
+          payload.serial_managed = true
+          payload.default_serial_rule_id =
+            bulkSerialRuleId === SYSTEM_DEFAULT_BATCH_SERIAL_RULE ? null : Number(bulkSerialRuleId)
+        }
+      } else {
+        if (bulkApplyBatch) payload.batch_managed = false
+        if (bulkApplySerial) payload.serial_managed = false
+      }
+
+      const res = await materialApi.bulkUpdateTracking(payload)
+      const notFound = res.not_found_uuids?.length ?? 0
+      if (res.updated_count > 0) {
+        messageApi.success(
+          t('app.master-data.materials.batchTrackingSuccess', { count: res.updated_count })
+        )
+        if (notFound > 0) {
+          messageApi.warning(
+            t('app.master-data.materials.batchTrackingNotFound', { count: notFound })
+          )
+        }
+      } else if (notFound > 0) {
+        messageApi.error(t('app.master-data.materials.batchTrackingAllMissing'))
+      } else {
+        messageApi.warning(t('app.master-data.materials.batchTrackingNoop'))
+      }
+      setBatchSerialModalOpen(false)
+      setSelectedRowKeys([])
+      actionRef.current?.reload()
+    } catch (e: any) {
+      const detail = e?.response?.data?.detail
+      const detailMsg =
+        typeof detail === 'string' ? detail : detail?.message ?? (typeof detail === 'object' ? detail?.detail : undefined)
+      messageApi.error(detailMsg || e?.message || t('common.updateFailed'))
+      throw e
+    } finally {
+      setBatchSerialSubmitting(false)
+    }
+  }, [
+    bulkApplyBatch,
+    bulkApplySerial,
+    bulkBatchRuleId,
+    bulkSerialRuleId,
+    bulkTrackingMode,
+    selectedRowKeys,
+    messageApi,
+    t,
+  ])
 
   const handleDeleteMaterial = useCallback(
     async (record: Material) => {
@@ -1141,6 +1261,13 @@ const MaterialsManagementPage: React.FC = () => {
                     {t('app.master-data.materials.batchGenerateQRCode')}
                   </Button>
                   <Button
+                    icon={<TagsOutlined />}
+                    disabled={selectedRowKeys.length === 0}
+                    onClick={handleOpenBatchSerialModal}
+                  >
+                    {t('app.master-data.materials.batchTrackingToolbar')}
+                  </Button>
+                  <Button
                     danger
                     disabled={selectedRowKeys.length === 0}
                     icon={<DeleteOutlined />}
@@ -1281,6 +1408,179 @@ const MaterialsManagementPage: React.FC = () => {
           ),
         }}
       />
+
+      <Modal
+        title={
+          <Space>
+            <TagsOutlined style={{ color: token.colorPrimary }} />
+            <span>{t('app.master-data.materials.batchTrackingTitle')}</span>
+          </Space>
+        }
+        open={batchSerialModalOpen}
+        onCancel={() => {
+          if (!batchSerialSubmitting) setBatchSerialModalOpen(false)
+        }}
+        onOk={handleConfirmBatchSerial}
+        confirmLoading={batchSerialSubmitting}
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
+        destroyOnHidden
+        width={MODAL_CONFIG.LARGE_WIDTH}
+      >
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <Alert
+            type="info"
+            showIcon
+            message={t('app.master-data.materials.batchTrackingAlertTitle', {
+              count: selectedRowKeys.length,
+            })}
+            description={t('app.master-data.materials.batchTrackingHint')}
+          />
+          <div>
+            <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+              {t('app.master-data.materials.batchTrackingMode')}
+            </Typography.Text>
+            <Segmented
+              block
+              size="large"
+              value={bulkTrackingMode}
+              onChange={(v) => setBulkTrackingMode(v as 'enable' | 'disable')}
+              disabled={batchSerialSubmitting || bulkRuleOptionsLoading}
+              options={[
+                { label: t('app.master-data.materials.batchTrackingEnable'), value: 'enable' },
+                { label: t('app.master-data.materials.batchTrackingDisable'), value: 'disable' },
+              ]}
+            />
+          </div>
+          <Divider style={{ margin: '8px 0' }} />
+          <Row gutter={[16, 16]}>
+            <Col xs={24} md={12}>
+              <Card
+                size="small"
+                variant="borderless"
+                style={{
+                  background: token.colorFillAlter,
+                  border: `1px solid ${token.colorBorderSecondary}`,
+                }}
+                title={
+                  <Space>
+                    <BarcodeOutlined style={{ color: token.colorPrimary }} />
+                    <span>{t('app.master-data.materials.batchTrackingCardBatch')}</span>
+                  </Space>
+                }
+                extra={
+                  <Checkbox
+                    checked={bulkApplyBatch}
+                    onChange={(e) => setBulkApplyBatch(e.target.checked)}
+                    disabled={batchSerialSubmitting}
+                  >
+                    {t('app.master-data.materials.batchTrackingIncludeDimension')}
+                  </Checkbox>
+                }
+              >
+                {bulkTrackingMode === 'disable' && bulkApplyBatch && (
+                  <Typography.Paragraph type="secondary" style={{ marginBottom: 12, marginTop: 0 }}>
+                    {t('app.master-data.materials.batchTrackingDisableBatchHint')}
+                  </Typography.Paragraph>
+                )}
+                {bulkTrackingMode === 'enable' && bulkApplyBatch && (
+                  <>
+                    <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 6 }}>
+                      {t('app.master-data.materials.batchTrackingDefaultBatchRule')}
+                    </Typography.Text>
+                    <Select
+                      style={{ width: '100%' }}
+                      loading={bulkRuleOptionsLoading}
+                      disabled={batchSerialSubmitting}
+                      value={bulkBatchRuleId}
+                      onChange={(v) => setBulkBatchRuleId(v)}
+                      options={[
+                        {
+                          label: t('app.master-data.materialForm.systemDefaultRule'),
+                          value: SYSTEM_DEFAULT_BATCH_SERIAL_RULE,
+                        },
+                        ...batchRulesForBulk.map((r) => ({
+                          label: `${r.code} ${r.name}`.trim(),
+                          value: r.id,
+                        })),
+                      ]}
+                      showSearch
+                      optionFilterProp="label"
+                    />
+                  </>
+                )}
+                {bulkApplyBatch && bulkTrackingMode === 'enable' && !bulkRuleOptionsLoading && batchRulesForBulk.length === 0 && (
+                  <Typography.Text type="warning" style={{ fontSize: 12, display: 'block', marginTop: 8 }}>
+                    {t('app.master-data.materials.batchTrackingNoCustomRulesBatch')}
+                  </Typography.Text>
+                )}
+              </Card>
+            </Col>
+            <Col xs={24} md={12}>
+              <Card
+                size="small"
+                variant="borderless"
+                style={{
+                  background: token.colorFillAlter,
+                  border: `1px solid ${token.colorBorderSecondary}`,
+                }}
+                title={
+                  <Space>
+                    <NumberOutlined style={{ color: token.colorPrimary }} />
+                    <span>{t('app.master-data.materials.batchTrackingCardSerial')}</span>
+                  </Space>
+                }
+                extra={
+                  <Checkbox
+                    checked={bulkApplySerial}
+                    onChange={(e) => setBulkApplySerial(e.target.checked)}
+                    disabled={batchSerialSubmitting}
+                  >
+                    {t('app.master-data.materials.batchTrackingIncludeDimension')}
+                  </Checkbox>
+                }
+              >
+                {bulkTrackingMode === 'disable' && bulkApplySerial && (
+                  <Typography.Paragraph type="secondary" style={{ marginBottom: 12, marginTop: 0 }}>
+                    {t('app.master-data.materials.batchTrackingDisableSerialHint')}
+                  </Typography.Paragraph>
+                )}
+                {bulkTrackingMode === 'enable' && bulkApplySerial && (
+                  <>
+                    <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 6 }}>
+                      {t('app.master-data.materials.batchTrackingDefaultSerialRule')}
+                    </Typography.Text>
+                    <Select
+                      style={{ width: '100%' }}
+                      loading={bulkRuleOptionsLoading}
+                      disabled={batchSerialSubmitting}
+                      value={bulkSerialRuleId}
+                      onChange={(v) => setBulkSerialRuleId(v)}
+                      options={[
+                        {
+                          label: t('app.master-data.materialForm.systemDefaultRule'),
+                          value: SYSTEM_DEFAULT_BATCH_SERIAL_RULE,
+                        },
+                        ...serialRulesForBulk.map((r) => ({
+                          label: `${r.code} ${r.name}`.trim(),
+                          value: r.id,
+                        })),
+                      ]}
+                      showSearch
+                      optionFilterProp="label"
+                    />
+                  </>
+                )}
+                {bulkApplySerial && bulkTrackingMode === 'enable' && !bulkRuleOptionsLoading && serialRulesForBulk.length === 0 && (
+                  <Typography.Text type="warning" style={{ fontSize: 12, display: 'block', marginTop: 8 }}>
+                    {t('app.master-data.materials.batchTrackingNoCustomRulesSerial')}
+                  </Typography.Text>
+                )}
+              </Card>
+            </Col>
+          </Row>
+        </Space>
+      </Modal>
 
       {/* 分组创建/编辑 Modal - 使用 FormModalTemplate 与其它单列 modal 行为一致 */}
       <FormModalTemplate

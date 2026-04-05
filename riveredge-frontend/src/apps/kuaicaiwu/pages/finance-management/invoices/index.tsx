@@ -22,7 +22,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate, type StatCard } from '../../../../../components/layout-templates';
 import { getUnifiedInvoiceLifecycle } from '../../../utils/financeLifecycle';
-import { renderRowActionsMax3 } from '../../../utils/renderRowActionsMax3';
+import { renderRowActionsOverflow } from '../../../utils/renderRowActionsOverflow';
 import dayjs from 'dayjs';
 
 const InvoiceList: React.FC = () => {
@@ -144,7 +144,7 @@ const InvoiceList: React.FC = () => {
       fixed: 'right',
       width: 200,
       render: (_, record) =>
-        renderRowActionsMax3(
+        renderRowActionsOverflow(
           [
             <Button
               key="det"

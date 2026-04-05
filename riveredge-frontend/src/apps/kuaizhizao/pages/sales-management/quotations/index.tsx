@@ -177,7 +177,7 @@ const QUOTATION_DETAIL_ITEMS_SCROLL_X = 1060;
 const LINKED_DOCUMENT_DRAWER_WIDTH = '45%';
 const LINKED_DOCUMENT_DRAWER_Z_INDEX = 1050;
 
-/** 操作列平铺按钮上限（最多 3 个），第 4 个起收入「更多」 */
+/** 操作列平铺按钮上限（最多 4 个），第 5 个起收入「更多」 */
 const QUOTATION_ROW_ACTIONS_INLINE_MAX = 4;
 
 function renderQuotationRowActions(

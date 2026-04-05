@@ -17,6 +17,7 @@ Date: 2026-02-28
 from decimal import Decimal
 from typing import Optional, Dict, Any
 from loguru import logger
+from tortoise.exceptions import IntegrityError
 from tortoise.transactions import atomic
 
 from apps.kuaizhizao.utils.inventory_helper import get_material_inventory_info
@@ -39,6 +40,99 @@ class InventoryService:
         cfg = await BusinessConfigService().get_business_config(tenant_id)
         wh = cfg.get("parameters", {}).get("warehouse", {})
         return bool(wh.get("batch_management", False)), bool(wh.get("serial_management", False))
+
+    @staticmethod
+    async def _material_batch_increase_or_restore(
+        tenant_id: int,
+        material_id: int,
+        batch_no: str,
+        quantity: Decimal,
+    ) -> None:
+        """
+        主仓批次数量增加。包含软删行：若 (tenant, material, batch_no) 已存在但 deleted_at 有值，
+        仅查未删行会误判为不存在，insert 会撞唯一约束 uid_apps_master_batch_tenant_material_batch。
+        """
+        from apps.master_data.models.material_batch import MaterialBatch
+
+        bn = batch_no or "DEFAULT"
+        batch = await MaterialBatch.filter(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            batch_no=bn,
+        ).select_for_update().first()
+        if batch:
+            if batch.deleted_at is not None:
+                batch.deleted_at = None
+            batch.quantity = (batch.quantity or Decimal(0)) + quantity
+            batch.status = "in_stock"
+            await batch.save()
+            return
+        try:
+            await MaterialBatch.create(
+                tenant_id=tenant_id,
+                material_id=material_id,
+                batch_no=bn,
+                quantity=quantity,
+                status="in_stock",
+            )
+        except IntegrityError:
+            batch = await MaterialBatch.filter(
+                tenant_id=tenant_id,
+                material_id=material_id,
+                batch_no=bn,
+            ).select_for_update().first()
+            if not batch:
+                raise
+            if batch.deleted_at is not None:
+                batch.deleted_at = None
+            batch.quantity = (batch.quantity or Decimal(0)) + quantity
+            batch.status = "in_stock"
+            await batch.save()
+
+    @staticmethod
+    async def _material_batch_adjust_set(
+        tenant_id: int,
+        material_id: int,
+        batch_no: str,
+        quantity: Decimal,
+    ) -> None:
+        """盘点等场景直接设定批次数量；与 increase 相同需处理软删行与并发 insert。"""
+        from apps.master_data.models.material_batch import MaterialBatch
+
+        bn = batch_no or "DEFAULT"
+        batch = await MaterialBatch.filter(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            batch_no=bn,
+        ).select_for_update().first()
+        if batch:
+            if batch.deleted_at is not None:
+                batch.deleted_at = None
+            batch.quantity = quantity
+            batch.status = "in_stock" if quantity > 0 else "out_stock"
+            await batch.save()
+            return
+        try:
+            await MaterialBatch.create(
+                tenant_id=tenant_id,
+                material_id=material_id,
+                batch_no=bn,
+                quantity=quantity,
+                status="in_stock" if quantity > 0 else "out_stock",
+            )
+        except IntegrityError:
+            batch = await MaterialBatch.filter(
+                tenant_id=tenant_id,
+                material_id=material_id,
+                batch_no=bn,
+            ).select_for_update().first()
+            if not batch:
+                raise
+            if batch.deleted_at is not None:
+                batch.deleted_at = None
+            batch.quantity = quantity
+            batch.status = "in_stock" if quantity > 0 else "out_stock"
+            await batch.save()
 
     @staticmethod
     @atomic()
@@ -79,7 +173,6 @@ class InventoryService:
 
             if not use_line_side:
                 # 主仓（normal/wip 或 warehouse_id 为空）：使用 MaterialBatch
-                from apps.master_data.models.material_batch import MaterialBatch
                 from apps.master_data.models.material import Material
                 from infra.exceptions.exceptions import BusinessLogicError
 
@@ -97,25 +190,12 @@ class InventoryService:
                         )
 
                 logger.info(f"Adding stock for material_id={material_id}, batch_no={batch_no}, qty={quantity}")
-                batch_no = batch_no or "DEFAULT"
-                batch = await MaterialBatch.filter(
+                await InventoryService._material_batch_increase_or_restore(
                     tenant_id=tenant_id,
                     material_id=material_id,
-                    batch_no=batch_no,
-                    deleted_at__isnull=True,
-                ).select_for_update().first()
-                logger.debug(f"Types: quantity={type(quantity)}, batch_qty={type(batch.quantity if batch else None)}")
-                if batch:
-                    batch.quantity = (batch.quantity or Decimal(0)) + quantity
-                    await batch.save()
-                else:
-                    await MaterialBatch.create(
-                        tenant_id=tenant_id,
-                        material_id=material_id,
-                        batch_no=batch_no,
-                        quantity=quantity,
-                        status="in_stock",
-                    )
+                    batch_no=batch_no or "DEFAULT",
+                    quantity=quantity,
+                )
                 logger.info(
                     f"InventoryService.increase_stock: tenant={tenant_id} material={material_id} "
                     f"qty={quantity} warehouse={warehouse_id} batch={batch_no} source={source_type}"
@@ -406,27 +486,12 @@ class InventoryService:
                     use_line_side = True
 
             if not use_line_side:
-                from apps.master_data.models.material_batch import MaterialBatch
-
-                batch_no = batch_no or "DEFAULT"
-                batch = await MaterialBatch.filter(
+                await InventoryService._material_batch_adjust_set(
                     tenant_id=tenant_id,
                     material_id=material_id,
-                    batch_no=batch_no,
-                    deleted_at__isnull=True,
-                ).select_for_update().first()
-                if batch:
-                    batch.quantity = quantity
-                    batch.status = "in_stock" if quantity > 0 else "out_stock"
-                    await batch.save()
-                else:
-                    await MaterialBatch.create(
-                        tenant_id=tenant_id,
-                        material_id=material_id,
-                        batch_no=batch_no,
-                        quantity=quantity,
-                        status="in_stock" if quantity > 0 else "out_stock",
-                    )
+                    batch_no=batch_no or "DEFAULT",
+                    quantity=quantity,
+                )
                 logger.info(
                     f"InventoryService.adjust_inventory: tenant={tenant_id} "
                     f"material={material_id} qty={quantity} reason={reason}"

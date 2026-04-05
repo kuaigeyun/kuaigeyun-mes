@@ -13,7 +13,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { getChineseInvoiceLifecycle } from '../../../utils/financeLifecycle';
-import { renderRowActionsMax3 } from '../../../utils/renderRowActionsMax3';
+import { renderRowActionsOverflow } from '../../../utils/renderRowActionsOverflow';
 import dayjs from 'dayjs';
 
 interface SalesInvoice {
@@ -243,7 +243,7 @@ const SalesInvoicesPage: React.FC = () => {
       fixed: 'right',
       width: 200,
       render: (_, record) =>
-        renderRowActionsMax3(
+        renderRowActionsOverflow(
           [
             <Button key="det" type="link" size="small" icon={<EyeOutlined />} onClick={() => messageApi.info('销售发票详情开发中')}>
               详情

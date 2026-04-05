@@ -39,6 +39,10 @@ class PurchaseReceiptItem(BaseModel):
     unqualified_quantity = fields.DecimalField(max_digits=10, decimal_places=2, description="不合格数量")
     quality_status = fields.CharField(max_length=20, default="合格", description="质量状态")
 
+    # 行级入库仓库（可与表头不同；确认入库过账时优先于表头）
+    warehouse_id = fields.IntField(null=True, description="行入库仓库ID")
+    warehouse_name = fields.CharField(max_length=100, null=True, description="行入库仓库名称")
+
     # 库位信息
     location_id = fields.IntField(null=True, description="库位ID")
     location_code = fields.CharField(max_length=50, null=True, description="库位编码")

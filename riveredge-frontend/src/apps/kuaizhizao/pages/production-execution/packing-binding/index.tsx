@@ -83,7 +83,7 @@ interface PackingBinding {
   updated_at?: string;
 }
 
-const PB_ROW_ACTIONS_INLINE_MAX = 3;
+const PB_ROW_ACTIONS_INLINE_MAX = 4;
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,

@@ -62,7 +62,7 @@ export const SalesOrderTrackingRadar: React.FC<SalesOrderTrackingRadarProps> = (
         percent={percent} 
         strokeColor={{ '0%': `${color}80`, '100%': color }}
         status={percent === 100 ? 'success' : 'active'}
-        strokeWidth={10}
+        size={{ height: 10 }}
       />
       <div style={{ marginTop: 16 }}>
         {details}

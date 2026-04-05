@@ -265,6 +265,21 @@ export interface MaterialListParams {
   sourceType?: string; // 物料来源类型（Make/Buy/Outsource/Phantom）
 }
 
+/** 批量更新批号/序列号管理（POST /materials/batch-tracking） */
+export interface MaterialBulkTrackingPayload {
+  material_uuids: string[];
+  batch_managed?: boolean;
+  default_batch_rule_id?: number | null;
+  serial_managed?: boolean;
+  default_serial_rule_id?: number | null;
+}
+
+export interface MaterialBulkTrackingResult {
+  updated_count: number;
+  requested_count: number;
+  not_found_uuids?: string[];
+}
+
 /**
  * BOM（物料清单）类型定义
  * 

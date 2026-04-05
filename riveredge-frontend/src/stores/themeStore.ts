@@ -118,6 +118,7 @@ interface ThemeState {
   config: ThemeConfig;
   resolved: ResolvedTheme;
   initialized: boolean;
+  loading: boolean;
   initFromApi: () => Promise<void>;
   applyTheme: (themeMode: ThemeMode, config?: Partial<ThemeConfig>) => void;
   /** 与 initFromApi 一致：站点 theme_config + 用户 theme_config 合并后整体写入（偏好订阅/主题编辑器打开时用） */
@@ -195,8 +196,12 @@ export const useThemeStore = create<ThemeState>((set, get) => {
     config: initialConfig,
     resolved: initialResolved,
     initialized: false,
+    loading: false,
 
     initFromApi: async () => {
+      const { initialized, loading } = get();
+      if (initialized || loading) return;
+
       if (!getToken()) {
         const cachedTheme = getThemeFromPreferenceCache();
         if (cachedTheme) {
@@ -209,6 +214,7 @@ export const useThemeStore = create<ThemeState>((set, get) => {
         return;
       }
 
+      set({ loading: true });
       try {
         const [siteSetting] = await Promise.all([
           getSiteSetting().catch(() => null),
@@ -222,7 +228,7 @@ export const useThemeStore = create<ThemeState>((set, get) => {
 
         setThemeFromSiteAndUser(userTheme, siteConfig, userConfig);
 
-        set({ initialized: true });
+        set({ initialized: true, loading: false });
       } catch (e) {
         console.warn('Theme init failed:', e);
         const cachedTheme = getThemeFromPreferenceCache();
@@ -232,12 +238,12 @@ export const useThemeStore = create<ThemeState>((set, get) => {
         } else {
           doApplyTheme('light', { ...DEFAULT_CONFIG });
         }
-        set({ initialized: true });
+        set({ initialized: true, loading: false });
       }
     },
 
     applyTheme: (themeMode: ThemeMode, configOverride?: Partial<ThemeConfig>) => {
-      doApplyTheme(themeMode, configOverride ?? null);
+      doApplyTheme(themeMode, configOverride);
 
       if (getToken()) {
         const persisted = get().config;

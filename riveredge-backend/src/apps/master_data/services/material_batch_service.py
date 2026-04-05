@@ -270,6 +270,9 @@ class MaterialBatchService:
         rule_id: Optional[int] = None,
         rule_uuid: Optional[str] = None,
         supplier_code: Optional[str] = None,
+        *,
+        preview: bool = False,
+        preview_offset: int = 0,
     ) -> str:
         """
         生成批号
@@ -282,6 +285,8 @@ class MaterialBatchService:
             rule_id: 批号规则ID（可选）
             rule_uuid: 批号规则UUID（可选）
             supplier_code: 供应商编码（可选，用于规则变量）
+            preview: 为 True 时不占用流水号，仅用于界面预览
+            preview_offset: 预览时同一单据内多行同物料递增值（0,1,2…）
 
         Returns:
             str: 生成的批号
@@ -318,6 +323,8 @@ class MaterialBatchService:
                 rule=batch_rule,
                 context=context,
                 scope_key=str(material.id),
+                preview=preview,
+                preview_offset=preview_offset,
             )
 
         # 使用系统默认批号规则（未配置时）
@@ -327,6 +334,8 @@ class MaterialBatchService:
             rule=default_rule,
             context=context,
             scope_key=str(material.id),
+            preview=preview,
+            preview_offset=preview_offset,
         )
     
     @staticmethod

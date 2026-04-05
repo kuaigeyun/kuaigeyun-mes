@@ -232,6 +232,53 @@ class MaterialUpdate(BaseModel):
         return v.strip() if v else None
 
 
+class MaterialBulkTrackingRequest(BaseModel):
+    """批量更新物料批号/序列号管理开关及默认规则"""
+
+    material_uuids: List[str] = Field(
+        ...,
+        min_length=1,
+        max_length=2000,
+        description="物料 UUID 列表",
+    )
+    batch_managed: Optional[bool] = Field(
+        None,
+        description="是否更新批号管理；未传则不改该项",
+    )
+    default_batch_rule_id: Optional[int] = Field(
+        None,
+        alias="defaultBatchRuleId",
+        description="默认批号规则 ID（启用批号时可选，null 表示跟随系统默认规则）",
+    )
+    serial_managed: Optional[bool] = Field(
+        None,
+        description="是否更新序列号管理；未传则不改该项",
+    )
+    default_serial_rule_id: Optional[int] = Field(
+        None,
+        alias="defaultSerialRuleId",
+        description="默认序列号规则 ID（启用序列号时可选，null 表示跟随系统默认规则）",
+    )
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    @model_validator(mode="after")
+    def at_least_one_tracking_field(self):
+        if self.batch_managed is None and self.serial_managed is None:
+            raise ValueError("batch_managed 与 serial_managed 至少指定一项")
+        return self
+
+
+class MaterialBulkTrackingResponse(BaseModel):
+    """批量更新批号/序列号管理结果"""
+
+    updated_count: int = Field(..., description="成功更新的物料数量")
+    requested_count: int = Field(..., description="请求中的 UUID 数量（去重后）")
+    not_found_uuids: List[str] = Field(default_factory=list, description="未找到或未匹配的 UUID")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class MaterialCodeAliasResponse(BaseModel):
     """物料编码别名响应 Schema"""
     
@@ -873,6 +920,19 @@ class MaterialBatchUpdate(BaseModel):
     quantity: Optional[Decimal] = Field(None, description="批号数量（当前库存数量）")
     status: Optional[str] = Field(None, description="批号状态")
     remark: Optional[str] = Field(None, description="备注（可选）")
+
+
+class GenerateBatchNoRequest(BaseModel):
+    """
+    生成批号请求（使用 JSON Body，避免仅依赖 Query 时在 POST 上被代理/网关丢弃 preview 参数）。
+    """
+
+    material_uuid: str = Field(..., description="物料UUID")
+    rule_id: Optional[int] = Field(None, description="批号规则ID（可选，优先于物料默认规则）")
+    rule_uuid: Optional[str] = Field(None, description="批号规则UUID（可选）")
+    supplier_code: Optional[str] = Field(None, description="供应商编码（可选，用于规则变量）")
+    preview: bool = Field(False, description="为 True 时不占用流水号，仅用于界面预览")
+    preview_offset: int = Field(0, ge=0, description="预览时同一单据内多行同物料递增值（0,1,2…）")
 
 
 class MaterialBatchResponse(MaterialBatchBase):

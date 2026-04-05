@@ -113,6 +113,9 @@ export const useUserPreferenceStore = create<UserPreferenceState>()(
       initialized: false,
 
       fetchPreferences: async () => {
+        const { initialized, loading } = get();
+        if (initialized || loading) return;
+        
         // 先按当前账户 key 恢复本地缓存，再拉接口，避免换账号后首帧读到旧数据
         get().rehydrateFromStorage();
         set({ loading: true });

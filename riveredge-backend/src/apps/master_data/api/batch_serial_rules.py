@@ -71,7 +71,7 @@ async def create_batch_rule(
 @router.get("/batch-rules", response_model=BatchRuleListResponse, summary="获取批号规则列表")
 async def list_batch_rules(
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=500, description="每页条数（下拉等场景可一次拉全量）"),
     is_active: Optional[bool] = Query(None),
     current_user: Annotated[User, Depends(get_current_user)] = None,
     tenant_id: Annotated[int, Depends(get_current_tenant)] = None,
@@ -147,7 +147,7 @@ async def create_serial_rule(
 @router.get("/serial-rules", response_model=SerialRuleListResponse, summary="获取序列号规则列表")
 async def list_serial_rules(
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=500, description="每页条数（下拉等场景可一次拉全量）"),
     is_active: Optional[bool] = Query(None),
     current_user: Annotated[User, Depends(get_current_user)] = None,
     tenant_id: Annotated[int, Depends(get_current_tenant)] = None,

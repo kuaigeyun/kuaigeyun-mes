@@ -101,7 +101,7 @@ interface Supplier {
   isActive: boolean;
 }
 
-const OO_ROW_ACTIONS_INLINE_MAX = 3;
+const OO_ROW_ACTIONS_INLINE_MAX = 4;
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,

@@ -22,10 +22,12 @@ router = APIRouter(tags=["Master Data Management"])
 # 但目录名使用 master_data（下划线），因为 Python 模块名不能有连字符
 
 # 注册各个模块的路由
+# 注意：batch_serial_rules 与 material 均使用 prefix=/materials，必须先注册 batch_serial_rules，
+# 否则 GET /materials/batch-rules、/materials/serial-rules 会被 material 的 /{material_uuid} 当成 UUID而 404。
 router.include_router(factory_router)
 router.include_router(warehouse_router)
-router.include_router(material_router)
 router.include_router(batch_serial_rules_router)
+router.include_router(material_router)
 router.include_router(process_router)
 router.include_router(supply_chain_router)
 router.include_router(performance_router)

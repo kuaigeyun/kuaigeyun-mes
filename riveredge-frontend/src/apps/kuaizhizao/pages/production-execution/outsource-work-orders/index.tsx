@@ -121,7 +121,7 @@ const PRIORITY_FALLBACK = [
   { label: '紧急', value: 'urgent' },
 ];
 
-const OWO_ROW_ACTIONS_INLINE_MAX = 3;
+const OWO_ROW_ACTIONS_INLINE_MAX = 4;
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,

@@ -14,7 +14,7 @@ from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
 from infra.models.user import User
-from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
+from infra.exceptions.exceptions import NotFoundError, BusinessLogicError, ValidationError
 
 from apps.kuaizhizao.services.receipt_notice_service import ReceiptNoticeService
 from apps.kuaizhizao.schemas.receipt_notice import (
@@ -170,4 +170,6 @@ async def notify_warehouse(
     except NotFoundError as e:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
     except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except ValidationError as e:
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))

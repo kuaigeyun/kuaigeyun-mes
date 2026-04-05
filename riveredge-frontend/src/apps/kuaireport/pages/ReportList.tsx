@@ -21,7 +21,7 @@ interface ReportRow {
   updated_at?: string;
 }
 
-const ROW_ACTIONS_MAX = 3;
+const ROW_ACTIONS_MAX = 4;
 
 const ReportList: React.FC = () => {
   const navigate = useNavigate();

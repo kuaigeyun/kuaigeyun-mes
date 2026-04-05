@@ -106,7 +106,7 @@ const RN_STAT_SPARK_4 = [18, 20, 22, 24, 26, 28, 30];
 
 const RN_DETAIL_ITEMS_MIN_WIDTH = 960;
 
-const RECEIPT_NOTICE_ROW_ACTIONS_INLINE_MAX = 3;
+const RECEIPT_NOTICE_ROW_ACTIONS_INLINE_MAX = 4;
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,

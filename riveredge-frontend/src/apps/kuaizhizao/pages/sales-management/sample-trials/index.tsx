@@ -74,7 +74,7 @@ const STATUS_MAP: Record<string, { text: string; color: string }> = {
   已关闭: { text: '已关闭', color: 'default' },
 };
 
-const SAMPLE_TRIAL_ACTIONS_INLINE_MAX = 3;
+const SAMPLE_TRIAL_ACTIONS_INLINE_MAX = 4;
 
 function renderSampleTrialRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
   const wrapped = nodes.map((node, i) => <span key={`${keyPrefix}-${i}`}>{node}</span>);

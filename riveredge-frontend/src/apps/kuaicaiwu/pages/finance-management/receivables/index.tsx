@@ -17,7 +17,7 @@ import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { getReceivableLifecycle } from '../../../utils/financeLifecycle';
-import { renderRowActionsMax3 } from '../../../utils/renderRowActionsMax3';
+import { renderRowActionsOverflow } from '../../../utils/renderRowActionsOverflow';
 import dayjs from 'dayjs';
 
 const ReceivableList: React.FC = () => {
@@ -175,7 +175,7 @@ const ReceivableList: React.FC = () => {
             fixed: 'right',
             width: 220,
             render: (_, record) =>
-                renderRowActionsMax3(
+                renderRowActionsOverflow(
                     [
                         <Button
                             key="det"

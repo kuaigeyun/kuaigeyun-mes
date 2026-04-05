@@ -137,8 +137,8 @@ interface MaterialInfo {
   bomVersions?: BomVersionOption[]
 }
 
-/** 操作列最多平铺 3 个，第 4 个起收入「更多」（与 UI_Standard / riveredge-detail-drawer-ui skill 一致） */
-const DEMAND_COMPUTATION_ROW_ACTIONS_INLINE_MAX = 3
+/** 操作列最多平铺 4 个，第 5 个起收入「更多」（与全局 ROW_ACTIONS_INLINE_MAX 一致） */
+const DEMAND_COMPUTATION_ROW_ACTIONS_INLINE_MAX = 4
 
 /** 详情明细表最小宽度（外层横滚） */
 /** 明细表列宽合计下限，保证横滚与「尽量不换行」 */

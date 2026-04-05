@@ -20,7 +20,7 @@ import { getToken, clearAuth, getUserInfo, setUserInfo, setTenantId, getTenantId
 import { refreshAccessTokenSilently } from './utils/tokenRefresh';
 import { prefetchAvatarUrl } from './utils/avatar';
 import { useGlobalStore } from './stores';
-import i18n, { loadUserLanguage } from './config/i18n';
+import { loadUserLanguage } from './config/i18n';
 import { useConfigStore } from './stores/configStore';
 import { useUserPreferenceStore } from './stores/userPreferenceStore';
 import { getPlatformSettingsPublic } from './services/platformSettings';
@@ -500,7 +500,7 @@ const AppContent: React.FC = () => {
 
   // 将 navigate 注入到全局，供 QuickNavigation 等工具在非组件上下文中使用
   React.useEffect(() => {
-    setNavigateRef(navigate);
+    setNavigateRef(navigate as any);
   }, [navigate]);
 
   // 应用触屏模式样式类
@@ -564,12 +564,22 @@ export default function App() {
     if (avatarUuid) prefetchAvatarUrl(avatarUuid);
   }, [initFromApi]);
 
-  // 当 userPreferenceStore.preferences 变化时，同步主题到 themeStore（偏好设置页、theme-editor 等通过 updatePreferences 更新后生效）
+  // 当「主题相关」偏好变化时同步 themeStore。勿在 ui.tables 等变更时触发：UniTable 列持久化会频繁 updatePreferences，
+  // 若此处每次都 syncFromPreferences（内部会请求 site-settings），会与 user-preferences 交替形成请求风暴。
   useEffect(() => {
+    const themeSig = (prefs: Record<string, unknown> | undefined) =>
+      JSON.stringify({
+        theme: prefs?.theme,
+        theme_config: prefs?.theme_config,
+      });
+    let lastSig = themeSig(useUserPreferenceStore.getState().preferences as Record<string, unknown>);
     const unsub = useUserPreferenceStore.subscribe((state) => {
-      if (state.preferences && Object.keys(state.preferences).length > 0) {
-        void useThemeStore.getState().syncFromPreferences(state.preferences);
-      }
+      const prefs = state.preferences;
+      if (!prefs || typeof prefs !== 'object' || Object.keys(prefs).length === 0) return;
+      const next = themeSig(prefs as Record<string, unknown>);
+      if (next === lastSig) return;
+      lastSig = next;
+      void useThemeStore.getState().syncFromPreferences(prefs);
     });
     return unsub;
   }, []);

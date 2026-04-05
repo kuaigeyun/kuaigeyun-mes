@@ -13,7 +13,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { getChineseInvoiceLifecycle } from '../../../utils/financeLifecycle';
-import { renderRowActionsMax3 } from '../../../utils/renderRowActionsMax3';
+import { renderRowActionsOverflow } from '../../../utils/renderRowActionsOverflow';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { ModalForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
@@ -159,7 +159,7 @@ const PurchaseInvoiceList: React.FC = () => {
             fixed: 'right',
             width: 200,
             render: (_, record) =>
-                renderRowActionsMax3(
+                renderRowActionsOverflow(
                     [
                         <Button
                             key="det"

@@ -60,8 +60,8 @@ import { useGlobalStore } from '../../../../../stores';
 /** 采购申请详情只读明细表最小横向宽度 */
 const PURCHASE_REQUISITION_DETAIL_ITEMS_MIN_WIDTH = 980;
 
-/** 操作列平铺上限（最多 3 个），第 4 个起收入「更多」 */
-const PURCHASE_REQUISITION_ROW_ACTIONS_INLINE_MAX = 3;
+/** 操作列平铺上限（最多 4 个），第 5 个起收入「更多」 */
+const PURCHASE_REQUISITION_ROW_ACTIONS_INLINE_MAX = 4;
 
 const INITIAL_PR_FORM_ITEM_ROW = {
   material_id: undefined,

@@ -57,7 +57,7 @@ import { downloadFile } from '../../../services/common'
 
 
 export default function SalesForecastsPage() {
-  const SALES_FORECAST_ROW_ACTIONS_INLINE_MAX = 3;
+  const SALES_FORECAST_ROW_ACTIONS_INLINE_MAX = 4;
   const { t } = useTranslation();
   const { message: messageApi, modal: modalApi } = App.useApp()
   const navigate = useNavigate();

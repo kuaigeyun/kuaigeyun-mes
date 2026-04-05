@@ -193,6 +193,43 @@ class SalesForecastService(AppBaseService[SalesForecast]):
                 resp.items = [SalesForecastItemResponse.model_validate(it) for it in f_items]
             result.append(resp.model_dump())
         return {"data": result, "total": total, "success": True}
+        
+    async def get_forecast_statistics(self, tenant_id: int) -> Dict[str, Any]:
+        """获取销售预测统计"""
+        from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
+        
+        # 活动预测数（已审核且未下推计算）
+        active_count = await SalesForecast.filter(
+            tenant_id=tenant_id,
+            status=DocumentStatus.AUDITED.value,
+            planning_pushed_to_computation=False,
+            deleted_at__isnull=True
+        ).count()
+        
+        # 待审核数
+        pending_review_count = await SalesForecast.filter(
+            tenant_id=tenant_id,
+            review_status=ReviewStatus.PENDING.value,
+            deleted_at__isnull=True
+        ).count()
+
+        # 昨日新增（示例实现，按 created_at 判断）
+        from datetime import datetime, timedelta
+        yesterday_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
+        yesterday_end = yesterday_start + timedelta(days=1)
+        yesterday_new = await SalesForecast.filter(
+            tenant_id=tenant_id,
+            created_at__gte=yesterday_start,
+            created_at__lt=yesterday_end,
+            deleted_at__isnull=True
+        ).count()
+        
+        return {
+            "active_forecasts": active_count,
+            "pending_review": pending_review_count,
+            "yesterday_new": yesterday_new,
+            "yesterday_pending_review": pending_review_count # 简化，展示当前待审核
+        }
 
     async def update_sales_forecast(self, tenant_id: int, forecast_id: int, forecast_data: SalesForecastUpdate, updated_by: int) -> SalesForecastResponse:
         """更新销售预测；若提供 items 则先删后增，覆盖全部明细。已审核预测更新后同步关联需求。"""

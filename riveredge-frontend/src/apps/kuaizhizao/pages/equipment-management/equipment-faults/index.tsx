@@ -62,7 +62,7 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   });
 }
 
-const FAULT_ROW_ACTIONS_MAX = 3;
+const FAULT_ROW_ACTIONS_MAX = 4;
 
 function renderFaultRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
   const wrapped = nodes.map((node, i) => <span key={`${keyPrefix}-${i}`}>{node}</span>);

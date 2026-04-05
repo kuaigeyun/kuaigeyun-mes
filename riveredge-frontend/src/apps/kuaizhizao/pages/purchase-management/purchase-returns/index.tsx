@@ -101,7 +101,7 @@ interface PurchaseReturnItem {
 
 const PR_DETAIL_ITEMS_MIN_WIDTH = 1000;
 
-const PURCHASE_RETURN_ROW_ACTIONS_INLINE_MAX = 3;
+const PURCHASE_RETURN_ROW_ACTIONS_INLINE_MAX = 4;
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,

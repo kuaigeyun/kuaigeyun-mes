@@ -7,7 +7,7 @@ Author: RiverEdge Team
 Date: 2026-02-22
 """
 
-from typing import List
+from typing import List, Optional, Tuple
 from datetime import datetime
 from decimal import Decimal
 from tortoise.transactions import in_transaction
@@ -26,6 +26,30 @@ from apps.kuaizhizao.schemas.receipt_notice import (
 )
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError, ValidationError
 from infra.services.business_config_service import BusinessConfigService
+
+
+async def _first_storage_location_for_warehouse(
+    tenant_id: int, warehouse_id: int
+) -> Tuple[Optional[int], Optional[str]]:
+    """取该仓库下第一个可用库位（按库区、库位 id），供启用库位管理时生成入库草稿。"""
+    from apps.master_data.models.warehouse import StorageArea, StorageLocation
+
+    areas = await StorageArea.filter(
+        tenant_id=tenant_id,
+        warehouse_id=warehouse_id,
+        deleted_at__isnull=True,
+        is_active=True,
+    ).order_by("id")
+    for area in areas:
+        loc = await StorageLocation.filter(
+            tenant_id=tenant_id,
+            storage_area_id=area.id,
+            deleted_at__isnull=True,
+            is_active=True,
+        ).order_by("id").first()
+        if loc:
+            return loc.id, loc.code
+    return None, None
 
 
 class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
@@ -197,6 +221,21 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
             wh_id = default_wh.id
             wh_name = default_wh.name
 
+        cfg = await self.business_config_service.get_business_config(tenant_id)
+        wh_params = cfg.get("parameters", {}).get("warehouse", {})
+        location_required = bool(wh_params.get("location_management", False))
+
+        default_loc_id: Optional[int] = None
+        default_loc_code: Optional[str] = None
+        if location_required:
+            default_loc_id, default_loc_code = await _first_storage_location_for_warehouse(
+                tenant_id, int(wh_id)
+            )
+            if not default_loc_id:
+                raise BusinessLogicError(
+                    "已启用库位管理，请先在目标仓库下维护至少一个可用库位，或关闭库位管理后再通知仓库"
+                )
+
         receipt_items: List[PurchaseReceiptItemCreate] = []
         for ni in notice_items:
             qty = Decimal(str(ni.notice_quantity or 0))
@@ -220,22 +259,26 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
             po_line_id = int(ni.purchase_order_item_id) if ni.purchase_order_item_id else 0
             material_spec = (getattr(po_item, "material_spec", None) or None) or ni.material_spec
 
-            receipt_items.append(
-                PurchaseReceiptItemCreate(
-                    purchase_order_item_id=po_line_id,
-                    material_id=int(ni.material_id),
-                    material_code=str(ni.material_code or ""),
-                    material_name=str(ni.material_name or ""),
-                    material_spec=material_spec,
-                    material_unit=str(ni.material_unit or "件"),
-                    receipt_quantity=float(qty),
-                    unit_price=float(unit_p),
-                    total_amount=float(total_amt),
-                    qualified_quantity=float(qty),
-                    unqualified_quantity=0.0,
-                    status="草稿",
-                )
+            item_kwargs = dict(
+                purchase_order_item_id=po_line_id,
+                material_id=int(ni.material_id),
+                material_code=str(ni.material_code or ""),
+                material_name=str(ni.material_name or ""),
+                material_spec=material_spec,
+                material_unit=str(ni.material_unit or "件"),
+                receipt_quantity=float(qty),
+                unit_price=float(unit_p),
+                total_amount=float(total_amt),
+                qualified_quantity=float(qty),
+                unqualified_quantity=0.0,
+                status="草稿",
             )
+            if default_loc_id is not None:
+                item_kwargs["location_id"] = default_loc_id
+                if default_loc_code:
+                    item_kwargs["location_code"] = default_loc_code
+
+            receipt_items.append(PurchaseReceiptItemCreate(**item_kwargs))
 
         if not receipt_items:
             raise BusinessLogicError("没有有效的通知数量，无法生成采购入库单")

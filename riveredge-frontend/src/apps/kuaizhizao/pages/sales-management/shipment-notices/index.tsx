@@ -69,7 +69,7 @@ const STATUS_MAP: Record<string, { text: string; color: string }> = {
 };
 
 const defaultNoticeItem = { material_id: undefined, material_code: '', material_name: '', material_spec: '', material_unit: '件', notice_quantity: 1, unit_price: 0 };
-const SHIPMENT_NOTICE_ROW_ACTIONS_INLINE_MAX = 3;
+const SHIPMENT_NOTICE_ROW_ACTIONS_INLINE_MAX = 4;
 
 const ShipmentNoticesPage: React.FC = () => {
   const { t } = useTranslation();
@@ -155,8 +155,8 @@ const ShipmentNoticesPage: React.FC = () => {
     if (valid.length <= SHIPMENT_NOTICE_ROW_ACTIONS_INLINE_MAX) {
       return <Space size={4}>{valid}</Space>;
     }
-    const inline = valid.slice(0, SHIPMENT_NOTICE_ROW_ACTIONS_INLINE_MAX - 1);
-    const folded = valid.slice(SHIPMENT_NOTICE_ROW_ACTIONS_INLINE_MAX - 1);
+    const inline = valid.slice(0, SHIPMENT_NOTICE_ROW_ACTIONS_INLINE_MAX);
+    const folded = valid.slice(SHIPMENT_NOTICE_ROW_ACTIONS_INLINE_MAX);
     return (
       <Space size={4}>
         {inline}

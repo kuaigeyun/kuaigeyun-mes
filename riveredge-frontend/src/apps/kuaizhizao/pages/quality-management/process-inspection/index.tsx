@@ -63,7 +63,7 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   });
 }
 
-const PROC_ROW_ACTIONS_MAX = 3;
+const PROC_ROW_ACTIONS_MAX = 4;
 
 function renderProcessRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
   const wrapped = nodes.map((node, i) => <span key={`${keyPrefix}-${i}`}>{node}</span>);

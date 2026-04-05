@@ -22,7 +22,7 @@ import {
 import { UniLifecycle } from '../../../components/uni-lifecycle';
 import { getPublishDraftLifecycle } from '../utils/publishLifecycle';
 
-const DASHBOARD_ROW_ACTIONS_MAX = 3;
+const DASHBOARD_ROW_ACTIONS_MAX = 4;
 
 interface Dashboard {
     id: number;

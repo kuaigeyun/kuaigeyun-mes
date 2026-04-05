@@ -221,6 +221,52 @@ def _validate_location_if_required(
         raise ValidationError(f"{scene}失败：物料 {material_label} 启用库位管理后必须提供库位")
 
 
+async def _validate_purchase_line_warehouse_location_match(
+    tenant_id: int,
+    *,
+    warehouse_id: Optional[int],
+    location_id: Optional[int],
+    material_label: str,
+) -> None:
+    """行上同时填写仓库与库位时，校验库位属于该仓库。"""
+    if not location_id or not warehouse_id:
+        return
+    from apps.master_data.models.warehouse import StorageArea, StorageLocation
+
+    loc = await StorageLocation.get_or_none(id=int(location_id), tenant_id=tenant_id, deleted_at__isnull=True)
+    if not loc:
+        raise ValidationError(f"采购入库失败：物料 {material_label} 的库位不存在")
+    area = await StorageArea.get_or_none(id=loc.storage_area_id, tenant_id=tenant_id, deleted_at__isnull=True)
+    if not area:
+        raise ValidationError(f"采购入库失败：物料 {material_label} 的库位所属库区不存在")
+    if int(area.warehouse_id) != int(warehouse_id):
+        raise ValidationError(f"采购入库失败：物料 {material_label} 所选库位不属于所选仓库")
+
+
+async def _resolve_purchase_receipt_line_warehouse_id_for_stock(
+    tenant_id: int,
+    item: Any,
+    receipt: Any,
+) -> Optional[int]:
+    """确认入库过账：优先行仓库，其次由库位反查仓库，最后表头仓库。"""
+    wid = getattr(item, "warehouse_id", None)
+    if wid is not None and int(wid) > 0:
+        return int(wid)
+    lid = getattr(item, "location_id", None)
+    if lid is not None and int(lid) > 0:
+        from apps.master_data.models.warehouse import StorageArea, StorageLocation
+
+        loc = await StorageLocation.get_or_none(id=int(lid), tenant_id=tenant_id, deleted_at__isnull=True)
+        if loc:
+            area = await StorageArea.get_or_none(id=loc.storage_area_id, tenant_id=tenant_id, deleted_at__isnull=True)
+            if area and getattr(area, "warehouse_id", None):
+                return int(area.warehouse_id)
+    rid = getattr(receipt, "warehouse_id", None)
+    if rid is not None and int(rid) > 0:
+        return int(rid)
+    return None
+
+
 def _validate_sales_return_batch_traceability(
     *,
     source_batch_number: Optional[str],
@@ -2470,18 +2516,18 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 if purchase_order_item_id > 0:
                     from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
 
+                    # PurchaseOrderItem 无 deleted_at 字段，勿使用 deleted_at__isnull
                     po_item = await PurchaseOrderItem.filter(
                         tenant_id=tenant_id,
                         id=purchase_order_item_id,
-                        deleted_at__isnull=True,
                     ).select_for_update().first()
                     if not po_item:
                         raise ValidationError(f"采购订单明细不存在: {purchase_order_item_id}")
 
+                    # PurchaseReceiptItem 无 deleted_at 字段
                     historical_items = await PurchaseReceiptItem.filter(
                         tenant_id=tenant_id,
                         purchase_order_item_id=purchase_order_item_id,
-                        deleted_at__isnull=True,
                     ).all()
                     already_received_qty = Decimal("0")
                     for historical in historical_items:
@@ -2519,6 +2565,12 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     location_id=getattr(item_data, 'location_id', None),
                     location_code=getattr(item_data, 'location_code', None),
                     scene="采购入库",
+                    material_label=getattr(item_data, "material_name", None) or getattr(item_data, "material_code", "未知物料"),
+                )
+                await _validate_purchase_line_warehouse_location_match(
+                    tenant_id,
+                    warehouse_id=getattr(item_data, "warehouse_id", None),
+                    location_id=getattr(item_data, "location_id", None),
                     material_label=getattr(item_data, "material_name", None) or getattr(item_data, "material_code", "未知物料"),
                 )
                 
@@ -2635,6 +2687,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     supplier = await Supplier.get_or_none(tenant_id=tenant_id, id=supplier_id, deleted_at__isnull=True)
                     if supplier:
                         supplier_code = supplier.code
+                location_required, _ = await _get_warehouse_policy_flags(tenant_id)
                 for item_data in receipt_data.items:
                     qty = Decimal(str(item_data.receipt_quantity or 0))
                     if qty <= 0:
@@ -2649,7 +2702,6 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                         po_item = await PurchaseOrderItem.filter(
                             tenant_id=tenant_id,
                             id=purchase_order_item_id,
-                            deleted_at__isnull=True,
                         ).select_for_update().first()
                         if not po_item:
                             raise ValidationError(f"采购订单明细不存在: {purchase_order_item_id}")
@@ -2657,7 +2709,6 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                         historical_items = await PurchaseReceiptItem.filter(
                             tenant_id=tenant_id,
                             purchase_order_item_id=purchase_order_item_id,
-                            deleted_at__isnull=True,
                         ).all()
                         already_received_qty = Decimal("0")
                         for historical in historical_items:
@@ -2683,6 +2734,20 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                             tolerance_percentage=tolerance_percentage,
                             material_label=getattr(item_data, "material_name", None) or getattr(item_data, "material_code", "未知物料"),
                         )
+
+                    _validate_location_if_required(
+                        location_required=location_required,
+                        location_id=getattr(item_data, "location_id", None),
+                        location_code=getattr(item_data, "location_code", None),
+                        scene="采购入库",
+                        material_label=getattr(item_data, "material_name", None) or getattr(item_data, "material_code", "未知物料"),
+                    )
+                    await _validate_purchase_line_warehouse_location_match(
+                        tenant_id,
+                        warehouse_id=getattr(item_data, "warehouse_id", None),
+                        location_id=getattr(item_data, "location_id", None),
+                        material_label=getattr(item_data, "material_name", None) or getattr(item_data, "material_code", "未知物料"),
+                    )
 
                     from apps.master_data.models.material import Material
                     from apps.kuaizhizao.services.batch_serial_helper import ensure_batch_no_for_item
@@ -2803,16 +2868,23 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 items = await PurchaseReceiptItem.filter(
                     tenant_id=tenant_id, receipt_id=receipt_id
                 ).all()
-                wh_id = receipt.warehouse_id if receipt.warehouse_id else None
                 for item in items:
                     qty = item.receipt_quantity or Decimal(0)
                     if qty <= 0:
                         continue
+                    line_wh = await _resolve_purchase_receipt_line_warehouse_id_for_stock(
+                        tenant_id, item, receipt
+                    )
+                    if line_wh is None:
+                        raise BusinessLogicError(
+                            f"无法确定入库仓库：物料 {getattr(item, 'material_name', '') or getattr(item, 'material_code', '')} "
+                            "请为明细指定行仓库或库位，或为入库单指定表头仓库"
+                        )
                     await InventoryService.increase_stock(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
                         quantity=qty,
-                        warehouse_id=wh_id,
+                        warehouse_id=line_wh,
                         batch_no=item.batch_number or None,
                         source_type="purchase_receipt",
                         source_doc_id=receipt_id,

@@ -16,6 +16,7 @@ from apps.master_data.services.material_code_service import MaterialCodeService
 from apps.master_data.schemas.material_schemas import (
     MaterialGroupCreate, MaterialGroupUpdate, MaterialGroupResponse,
     MaterialCreate, MaterialUpdate, MaterialResponse,
+    MaterialBulkTrackingRequest, MaterialBulkTrackingResponse,
     BOMCreate, BOMUpdate, BOMResponse, BOMBatchCreate,
     BOMBatchImport, BOMVersionCreate, BOMVersionCompare,
     BOMGroupSummary,
@@ -1043,7 +1044,74 @@ class MaterialService:
                 continue
         
         return result
-    
+
+    @staticmethod
+    async def bulk_update_material_tracking(
+        tenant_id: int,
+        data: MaterialBulkTrackingRequest,
+    ) -> MaterialBulkTrackingResponse:
+        """
+        批量更新物料的批号/序列号管理开关及默认规则（单条 SQL 更新，避免 N 次 HTTP）。
+        """
+        from core.services.business.batch_rule_service import BatchRuleService
+        from core.services.business.serial_rule_service import SerialRuleService
+
+        uuids = list(dict.fromkeys(data.material_uuids))
+        materials = await Material.filter(
+            tenant_id=tenant_id,
+            uuid__in=uuids,
+            deleted_at__isnull=True,
+        ).all()
+        found_uuid_set = {str(m.uuid) for m in materials}
+        not_found = [u for u in uuids if u not in found_uuid_set]
+
+        if not materials:
+            return MaterialBulkTrackingResponse(
+                updated_count=0,
+                requested_count=len(uuids),
+                not_found_uuids=not_found,
+            )
+
+        if data.batch_managed is True and data.default_batch_rule_id is not None:
+            rule = await BatchRuleService.get_rule_by_id(tenant_id, data.default_batch_rule_id)
+            if not rule:
+                raise ValidationError(f"批号规则 id={data.default_batch_rule_id} 不存在或未启用")
+
+        if data.serial_managed is True and data.default_serial_rule_id is not None:
+            rule = await SerialRuleService.get_rule_by_id(tenant_id, data.default_serial_rule_id)
+            if not rule:
+                raise ValidationError(f"序列号规则 id={data.default_serial_rule_id} 不存在或未启用")
+
+        update_fields: Dict[str, Any] = {}
+        if data.batch_managed is not None:
+            update_fields["batch_managed"] = data.batch_managed
+            if data.batch_managed:
+                update_fields["default_batch_rule_id"] = data.default_batch_rule_id
+            else:
+                update_fields["default_batch_rule_id"] = None
+        if data.serial_managed is not None:
+            update_fields["serial_managed"] = data.serial_managed
+            if data.serial_managed:
+                update_fields["default_serial_rule_id"] = data.default_serial_rule_id
+            else:
+                update_fields["default_serial_rule_id"] = None
+
+        if not update_fields:
+            return MaterialBulkTrackingResponse(
+                updated_count=0,
+                requested_count=len(uuids),
+                not_found_uuids=not_found,
+            )
+
+        ids = [m.id for m in materials]
+        await Material.filter(id__in=ids).update(**update_fields)
+
+        return MaterialBulkTrackingResponse(
+            updated_count=len(ids),
+            requested_count=len(uuids),
+            not_found_uuids=not_found,
+        )
+
     @staticmethod
     async def update_material(
         tenant_id: int,
