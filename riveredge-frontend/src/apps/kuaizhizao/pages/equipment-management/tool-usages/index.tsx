@@ -6,11 +6,13 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Tag, message, Modal } from 'antd';
+import { App, Button, Tag, message, Modal, Typography } from 'antd';
 import { PlusOutlined, RollbackOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { ProFormSelect, ProFormText } from '@ant-design/pro-components';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { getCheckoutUsageLifecycle } from '../../../utils/equipmentLifecycle';
 import { toolApi } from '../../../services/equipment';
 import dayjs from 'dayjs';
 
@@ -90,21 +92,63 @@ const ToolUsagesPage: React.FC = () => {
   };
 
   const columns: ProColumns<ToolUsage>[] = [
-    { title: '领用单号', dataIndex: 'usage_no', width: 150, fixed: 'left', ellipsis: true },
-    { title: '工装编号', dataIndex: 'tool_code', width: 120 },
+    {
+      title: '领用单号',
+      dataIndex: 'usage_no',
+      width: 150,
+      fixed: 'left',
+      ellipsis: true,
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.usage_no ?? '') }} ellipsis>
+          {r.usage_no ?? '-'}
+        </Typography.Text>
+      ),
+    },
+    {
+      title: '工装编号',
+      dataIndex: 'tool_code',
+      width: 120,
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.tool_code ?? '') }} ellipsis>
+          {r.tool_code ?? '-'}
+        </Typography.Text>
+      ),
+    },
     { title: '工装名称', dataIndex: 'tool_name', width: 180, ellipsis: true },
     { title: '领用时间', dataIndex: 'checkout_date', valueType: 'dateTime', width: 170 },
     { title: '归还时间', dataIndex: 'checkin_date', valueType: 'dateTime', width: 170 },
     { title: '操作人', dataIndex: 'operator_name', width: 100 },
     { title: '来源类型', dataIndex: 'source_type', width: 100 },
-    { title: '来源单号', dataIndex: 'source_no', width: 140 },
     {
-      title: '状态',
-      dataIndex: 'status',
-      width: 90,
-      render: (_, r) => {
-        const color = r.status === '使用中' ? 'processing' : 'success';
-        return <Tag color={color}>{r.status || '-'}</Tag>;
+      title: '来源单号',
+      dataIndex: 'source_no',
+      width: 140,
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.source_no ?? '') }} ellipsis>
+          {r.source_no ?? '-'}
+        </Typography.Text>
+      ),
+    },
+    {
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      width: 132,
+      fixed: 'right',
+      align: 'left',
+      hideInSearch: true,
+      render: (_, record) => {
+        const lifecycle = getCheckoutUsageLifecycle(record as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
       },
     },
     {
@@ -112,9 +156,18 @@ const ToolUsagesPage: React.FC = () => {
       valueType: 'option',
       width: 100,
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) =>
         record.status === '使用中' ? (
-          <Button type="link" size="small" icon={<RollbackOutlined />} onClick={() => handleCheckin(record)}>
+          <Button
+            type="link"
+            size="small"
+            icon={<RollbackOutlined />}
+            onClick={(e) => {
+              e.stopPropagation();
+              void handleCheckin(record);
+            }}
+          >
             归还
           </Button>
         ) : null,
@@ -124,6 +177,8 @@ const ToolUsagesPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<ToolUsage>
+        headerTitle="工装领用归还"
+        columnPersistenceId="kuaizhizao-em-tool-usages"
         actionRef={actionRef}
         rowKey="uuid"
         columns={columns}
@@ -133,16 +188,18 @@ const ToolUsagesPage: React.FC = () => {
             limit: params.pageSize || 20,
             tool_uuid: params.tool_uuid,
             status: params.status,
+            keyword: (params as any).keyword,
           });
           return { data: res.items || [], success: true, total: res.total || 0 };
         }}
         toolBarRender={() => [
           <Button key="checkout" type="primary" icon={<PlusOutlined />} onClick={handleCheckout}>
-            新建领用
+            新建工装领用
           </Button>,
         ]}
         search={{ labelWidth: 'auto' }}
         pagination={{ defaultPageSize: 20 }}
+        scroll={{ x: 1600 }}
       />
 
       <FormModalTemplate

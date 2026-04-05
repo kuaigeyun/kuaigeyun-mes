@@ -22,6 +22,8 @@ interface ReportBaseProps<T = any> {
   request?: (params: any) => Promise<{ data: T[]; total: number; success: boolean }>;
   /** 额外内容（如图表） */
   children?: React.ReactNode;
+  /** ProTable 列状态持久化 key（质量管理报表等批量改造时按页唯一） */
+  columnPersistenceId?: string;
 }
 
 /**
@@ -34,6 +36,7 @@ const ReportBase: React.FC<ReportBaseProps> = ({
   statCards = [],
   request,
   children,
+  columnPersistenceId,
 }) => {
   const { message: messageApi } = App.useApp();
   const actionRef = React.useRef<ActionType>(null);
@@ -69,6 +72,7 @@ const ReportBase: React.FC<ReportBaseProps> = ({
       {children}
       <UniTable
         headerTitle={title}
+        columnPersistenceId={columnPersistenceId}
         actionRef={actionRef}
         rowKey="id"
         columns={columns}

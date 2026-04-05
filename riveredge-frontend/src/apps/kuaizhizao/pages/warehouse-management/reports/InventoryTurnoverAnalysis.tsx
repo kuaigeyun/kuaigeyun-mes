@@ -3,13 +3,15 @@ import { ProColumns } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import ReportBase from '../../../components/ReportBase';
 import { getWarehouseReport } from '../../../services/reports';
+import { copyableCodeColumn } from '../../../utils/reportCopyableColumn';
 
 const InventoryTurnoverAnalysis: React.FC = () => {
   const { t } = useTranslation();
   const columns: ProColumns[] = [
     { title: '仓库名称', dataIndex: 'warehouse_name', width: 150 },
+    copyableCodeColumn('物料编码', 'material_code', 120),
     { title: '物料名称', dataIndex: 'material_name', width: 200 },
-    { title: '批次号', dataIndex: 'batch_no', width: 150 },
+    copyableCodeColumn('批次号', 'batch_no', 150),
     { title: '数量', dataIndex: 'quantity', valueType: 'digit', width: 100 },
   ];
 
@@ -18,6 +20,7 @@ const InventoryTurnoverAnalysis: React.FC = () => {
       title={t('app.kuaizhizao.menu.reports.inventory-turnover-analysis')}
       reportType="turnover"
       columns={columns}
+      columnPersistenceId="kuaizhizao-wm-report-inventory-turnover-analysis"
       request={async (params: any) => {
         const res = await getWarehouseReport({
           ...params,
@@ -32,6 +35,5 @@ const InventoryTurnoverAnalysis: React.FC = () => {
     />
   );
 };
-
 
 export default InventoryTurnoverAnalysis;

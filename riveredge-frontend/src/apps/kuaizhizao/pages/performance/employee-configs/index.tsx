@@ -4,13 +4,16 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal } from 'antd';
-import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { App, Popconfirm, Button, Tag, Space, Modal, Typography } from 'antd';
+import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import { ProFormSelect, ProFormDigit, ProFormRadio, ProFormSwitch } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { employeePerformanceApi } from '../../../services/performance';
 import type { EmployeePerformanceConfig } from '../../../types/performance';
+import { getPerformanceConfigActiveLifecycle } from '../../../utils/performanceLifecycle';
 
 const CALC_MODE_OPTIONS = [
   { label: '计时', value: 'time' },
@@ -51,8 +54,14 @@ const EmployeeConfigsPage: React.FC = () => {
     }).catch((e: any) => messageApi.error(e?.message || '加载失败'));
   }, [modalVisible, editId]);
 
-  const handleCreate = () => { setEditId(null); setModalVisible(true); };
-  const handleEdit = (record: EmployeePerformanceConfig) => { setEditId(record.id); setModalVisible(true); };
+  const handleCreate = () => {
+    setEditId(null);
+    setModalVisible(true);
+  };
+  const handleEdit = (record: EmployeePerformanceConfig) => {
+    setEditId(record.id);
+    setModalVisible(true);
+  };
   const handleDelete = async (record: EmployeePerformanceConfig) => {
     try {
       await employeePerformanceApi.deleteConfig(record.id);
@@ -63,10 +72,25 @@ const EmployeeConfigsPage: React.FC = () => {
     }
   };
 
-  const handleModalSuccess = () => { setModalVisible(false); setEditId(null); actionRef.current?.reload(); };
+  const handleModalSuccess = () => {
+    setModalVisible(false);
+    setEditId(null);
+    actionRef.current?.reload();
+  };
 
   const columns: ProColumns<EmployeePerformanceConfig>[] = [
-    { title: '员工', dataIndex: 'employee_name', width: 120, ellipsis: true, fixed: 'left' },
+    {
+      title: '员工',
+      dataIndex: 'employee_name',
+      width: 120,
+      ellipsis: true,
+      fixed: 'left',
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.employee_name ?? '') }} ellipsis>
+          {r.employee_name ?? '-'}
+        </Typography.Text>
+      ),
+    },
     {
       title: '计算模式',
       dataIndex: 'calc_mode',
@@ -79,8 +103,40 @@ const EmployeeConfigsPage: React.FC = () => {
     {
       title: '启用',
       dataIndex: 'is_active',
-      width: 80,
-      render: (_, r) => <Tag color={r.is_active ? 'success' : 'default'}>{r.is_active ? '是' : '否'}</Tag>,
+      hideInTable: true,
+      valueEnum: {
+        true: { text: '是' },
+        false: { text: '否' },
+      },
+    },
+    {
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      width: 168,
+      hideInSearch: true,
+      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+    },
+    {
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      width: 120,
+      fixed: 'right',
+      align: 'left',
+      hideInSearch: true,
+      render: (_, record) => {
+        const lifecycle = getPerformanceConfigActiveLifecycle(record as unknown as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
+      },
     },
     {
       title: '操作',
@@ -88,9 +144,13 @@ const EmployeeConfigsPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
+          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+            编辑
+          </Button>
           <Popconfirm title="确定删除？" onConfirm={() => handleDelete(record)}>
-            <Button type="link" size="small" danger icon={<DeleteOutlined />}>删除</Button>
+            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+              删除
+            </Button>
           </Popconfirm>
         </Space>
       ),
@@ -105,18 +165,25 @@ const EmployeeConfigsPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
+          columnPersistenceId="kuaizhizao-perf-employee-configs"
+          showAdvancedSearch
           request={async (params) => {
             try {
+              const pageSize = params.pageSize || 20;
+              const skip = ((params.current || 1) - 1) * pageSize;
               const result = await employeePerformanceApi.listConfigs({
-                skip: ((params.current || 1) - 1) * (params.pageSize || 20),
-                limit: params.pageSize || 20,
+                skip,
+                limit: pageSize,
               });
-              return { data: result, success: true, total: result.length };
+              const rows = Array.isArray(result) ? result : [];
+              const total = rows.length < pageSize ? skip + rows.length : skip + rows.length + 1;
+              return { data: rows, success: true, total };
             } catch (e: any) {
               messageApi.error(e?.message || '加载失败');
               return { data: [], success: false, total: 0 };
             }
           }}
+          scroll={{ x: 1500 }}
           enableRowSelection={true}
           showDeleteButton={true}
           onDelete={async (keys) => {
@@ -137,7 +204,7 @@ const EmployeeConfigsPage: React.FC = () => {
             });
           }}
           showCreateButton
-          createButtonText="新建员工配置"
+          createButtonText="新建员工绩效配置"
           onCreate={handleCreate}
         />
       </ListPageTemplate>
@@ -145,7 +212,10 @@ const EmployeeConfigsPage: React.FC = () => {
       <FormModalTemplate
         title={editId ? '编辑员工绩效配置' : '新建员工绩效配置'}
         open={modalVisible}
-        onClose={() => { setModalVisible(false); setEditId(null); }}
+        onClose={() => {
+          setModalVisible(false);
+          setEditId(null);
+        }}
         formRef={formRef as React.RefObject<ProFormInstance>}
         onFinish={async (values) => {
           const payload = {
@@ -177,12 +247,7 @@ const EmployeeConfigsPage: React.FC = () => {
           colProps={{ span: 12 }}
           disabled={!!editId}
         />
-        <ProFormRadio.Group
-          name="calc_mode"
-          label="计算模式"
-          options={CALC_MODE_OPTIONS}
-          colProps={{ span: 12 }}
-        />
+        <ProFormRadio.Group name="calc_mode" label="计算模式" options={CALC_MODE_OPTIONS} colProps={{ span: 12 }} />
         <ProFormDigit name="hourly_rate" label="工时单价（元/小时）" min={0} fieldProps={{ precision: 2 }} colProps={{ span: 12 }} />
         <ProFormDigit name="default_piece_rate" label="默认计件单价（元/件）" min={0} fieldProps={{ precision: 4 }} colProps={{ span: 12 }} />
         <ProFormDigit name="base_salary" label="月保障工资（元）" min={0} fieldProps={{ precision: 2 }} colProps={{ span: 12 }} />

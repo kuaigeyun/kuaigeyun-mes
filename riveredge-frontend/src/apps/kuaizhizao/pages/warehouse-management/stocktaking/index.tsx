@@ -9,14 +9,14 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Table, Row, Col } from 'antd';
+import { App, Button, Tag, Space, Modal, Card, Table, Row, Col, Typography } from 'antd';
 import { PlusOutlined, EyeOutlined, PlayCircleOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { stocktakingApi } from '../../../services/stocktaking';
 import { getStocktakingLifecycle } from '../../../utils/stocktakingLifecycle';
-import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
 
@@ -292,6 +292,11 @@ const StocktakingPage: React.FC = () => {
       width: 150,
       ellipsis: true,
       fixed: 'left',
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
+          {r.code ?? '-'}
+        </Typography.Text>
+      ),
     },
     {
       title: '仓库',
@@ -313,22 +318,6 @@ const StocktakingPage: React.FC = () => {
         full: { text: '全盘', status: 'default' },
         partial: { text: '抽盘', status: 'default' },
         cycle: { text: '循环盘点', status: 'default' },
-      },
-    },
-    {
-      title: '生命周期',
-      dataIndex: 'lifecycle',
-      width: 100,
-      valueEnum: {
-        draft: { text: '草稿', status: 'default' },
-        in_progress: { text: '盘点中', status: 'processing' },
-        completed: { text: '已完成', status: 'success' },
-        cancelled: { text: '已取消', status: 'error' },
-      },
-      render: (_, record) => {
-        const lifecycle = getStocktakingLifecycle(record);
-        const stageName = lifecycle.stageName ?? record.status ?? '草稿';
-        return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>;
       },
     },
     {
@@ -364,6 +353,36 @@ const StocktakingPage: React.FC = () => {
           ¥{record.total_difference_amount?.toFixed(2) || '0.00'}
         </span>
       ),
+    },
+    {
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      width: 168,
+      hideInSearch: true,
+      defaultSortOrder: 'descend',
+      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+    },
+    {
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      width: 132,
+      fixed: 'right',
+      align: 'left',
+      hideInSearch: true,
+      render: (_, record) => {
+        const lifecycle = getStocktakingLifecycle(record as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
+      },
     },
     {
       title: '操作',
@@ -431,6 +450,7 @@ const StocktakingPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable
         headerTitle="成品盘点"
+        columnPersistenceId="kuaizhizao-wm-stocktaking"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
@@ -447,6 +467,7 @@ const StocktakingPage: React.FC = () => {
               warehouse_id: params.warehouse_id,
               status: params.lifecycle ?? params.status,
               stocktaking_type: params.stocktaking_type,
+              keyword: (params as any).keyword,
             });
             return {
               data: result.items || [],
@@ -480,6 +501,7 @@ const StocktakingPage: React.FC = () => {
             },
           });
         }}
+        scroll={{ x: 2200 }}
       />
 
       {/* 创建盘点单Modal */}

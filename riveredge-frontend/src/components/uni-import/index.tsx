@@ -6,7 +6,7 @@
  */
 
 import React, { useLayoutEffect, useEffect, useRef, useState } from 'react';
-import { Modal, Button, Space, App, theme } from 'antd';
+import { Modal, Button, Space, App, theme, Spin } from 'antd';
 import { CheckOutlined, CloseOutlined, FullscreenOutlined, FullscreenExitOutlined } from '@ant-design/icons';
 
 // 引入 Univer Sheet 样式
@@ -27,7 +27,11 @@ export interface UniImportProps {
   /**
    * 弹窗是否可见
    */
-  visible: boolean;
+  visible?: boolean;
+  /**
+   * 弹窗是否可见 (Ant Design 5+)
+   */
+  open?: boolean;
   /**
    * 关闭弹窗回调
    */
@@ -80,6 +84,7 @@ export interface UniImportProps {
  */
 export const UniImport: React.FC<UniImportProps> = ({
   visible,
+  open,
   onCancel,
   onConfirm,
   title = '导入数据',
@@ -111,7 +116,7 @@ export const UniImport: React.FC<UniImportProps> = ({
 
   // 全屏时禁止 body 滚动，避免出现滚动条
   useEffect(() => {
-    if (visible && isFullscreen) {
+    if ((open ?? visible) && isFullscreen) {
       const prevOverflow = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
       return () => {
@@ -124,7 +129,7 @@ export const UniImport: React.FC<UniImportProps> = ({
    * 初始化 Univer Sheet
    */
   useLayoutEffect(() => {
-    if (visible) {
+    if (open ?? visible) {
       const initUniver = async () => {
         // 等待 DOM 更新
         await new Promise(resolve => setTimeout(resolve, 50));
@@ -395,7 +400,7 @@ export const UniImport: React.FC<UniImportProps> = ({
       }
     };
     return cleanup;
-  }, [visible, isDark, message]);
+  }, [open, visible, isDark, message]);
 
   /**
    * 处理确认导入
@@ -780,7 +785,7 @@ export const UniImport: React.FC<UniImportProps> = ({
   return (
     <>
       {/* Univer Sheet 基本样式 */}
-      {visible && (
+      {(open ?? visible) && (
         <style>{`
           .uni-import-modal .ant-modal-title {
             display: flex !important;
@@ -845,7 +850,7 @@ export const UniImport: React.FC<UniImportProps> = ({
             </Button>
           </>
         }
-        open={visible}
+        open={open ?? visible}
         onCancel={onCancel}
         width={isFullscreen ? '100vw' : width}
         footer={
@@ -902,7 +907,10 @@ export const UniImport: React.FC<UniImportProps> = ({
               zIndex: 1000,
             }}
           >
-            <div>正在加载表格...</div>
+            <div style={{ textAlign: 'center' }}>
+              <Spin size="large" />
+              <div style={{ marginTop: 12 }}>正在加载表格...</div>
+            </div>
           </div>
         )}
       </Modal>

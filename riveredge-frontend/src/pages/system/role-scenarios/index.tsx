@@ -8,10 +8,10 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Card, Tabs, Descriptions, Tag, Space, Button, List, Typography, Empty } from 'antd';
-import { EyeOutlined, DashboardOutlined, SafetyOutlined } from '@ant-design/icons';
+import { Card, Tabs, Descriptions, Tag, Space, List, Typography, Empty } from 'antd';
+import { EyeOutlined, DashboardOutlined } from '@ant-design/icons';
 import { App } from 'antd';
-import { getRoleScenarios, getRoleDashboard, getRolePermissions, RoleScenarioResponse, RoleScenarioData } from '../../../services/roleScenario';
+import { getRoleScenarios, getRoleDashboard, RoleScenarioData } from '../../../services/roleScenario';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -42,7 +42,6 @@ const RoleScenariosPage: React.FC = () => {
   const [activeRole, setActiveRole] = useState<string>('sales');
   const [scenarioData, setScenarioData] = useState<RoleScenarioData | null>(null);
   const [dashboardConfig, setDashboardConfig] = useState<any>(null);
-  const [permissions, setPermissions] = useState<any[]>([]);
 
   /**
    * 加载角色场景数据
@@ -130,7 +129,7 @@ const RoleScenariosPage: React.FC = () => {
       {loading ? (
         <Card loading={loading} />
       ) : scenarioData ? (
-        <Space direction="vertical" size="large" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="large" style={{ width: '100%' }}>
           {/* 角色基本信息 */}
           <Card title="角色信息">
             <Descriptions column={2}>

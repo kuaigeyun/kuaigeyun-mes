@@ -271,7 +271,16 @@ const WarehouseDashboard: React.FC = () => {
                 pagination={false}
                 rowKey={(r) => `${r.doc_type}-${r.doc_code}`}
                 columns={[
-                  { title: '单号', dataIndex: 'doc_code', ellipsis: true },
+                  {
+                    title: '单号',
+                    dataIndex: 'doc_code',
+                    ellipsis: true,
+                    render: (v: string) => (
+                      <Text copyable={{ text: String(v ?? '') }} ellipsis>
+                        {v ?? '—'}
+                      </Text>
+                    ),
+                  },
                   { title: '物料', dataIndex: 'material_name', ellipsis: true },
                   { title: '数量', dataIndex: 'quantity', width: 80, align: 'right', render: (v) => <Text type="success">+{v}</Text> },
                   { title: '时间', dataIndex: 'time', width: 110, align: 'right', render: (v) => formatTime(v) },
@@ -293,7 +302,16 @@ const WarehouseDashboard: React.FC = () => {
                 pagination={false}
                 rowKey={(r) => `${r.doc_type}-${r.doc_code}`}
                 columns={[
-                  { title: '单号', dataIndex: 'doc_code', ellipsis: true },
+                  {
+                    title: '单号',
+                    dataIndex: 'doc_code',
+                    ellipsis: true,
+                    render: (v: string) => (
+                      <Text copyable={{ text: String(v ?? '') }} ellipsis>
+                        {v ?? '—'}
+                      </Text>
+                    ),
+                  },
                   { title: '物料', dataIndex: 'material_name', ellipsis: true },
                   { title: '数量', dataIndex: 'quantity', width: 80, align: 'right', render: (v) => <Text type="danger">-{v}</Text> },
                   { title: '时间', dataIndex: 'time', width: 110, align: 'right', render: (v) => formatTime(v) },

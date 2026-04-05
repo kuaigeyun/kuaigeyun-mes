@@ -2,21 +2,54 @@
  * 采购物流跟踪页面
  *
  * 供应商发货后录入运单号，集中查看在途物流并跟踪轨迹。
+ * 列表与详情遵循 UI_Standard / riveredge-detail-drawer-ui。
  *
  * @author RiverEdge Team
  * @date 2026-03-04
  */
 
-import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Form, Select, Input, DatePicker, Row, Col, Card, Descriptions, Empty } from 'antd';
-import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
+import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import type { DescriptionsProps } from 'antd';
+import {
+  App,
+  Button,
+  Tag,
+  Space,
+  Modal,
+  Form,
+  Select,
+  Input,
+  DatePicker,
+  Row,
+  Col,
+  Descriptions,
+  Empty,
+  Typography,
+  Divider,
+  theme,
+} from 'antd';
+import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
-import { FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import {
+  ListPageTemplate,
+  FormModalTemplate,
+  DetailDrawerTemplate,
+  DetailDrawerSection,
+  DetailDrawerActions,
+  MODAL_CONFIG,
+  DRAWER_CONFIG,
+  type StatCard,
+} from '../../../../../components/layout-templates';
+import { SimpleSparkline } from '../../../../../components';
 import LogisticsTrackingPanel from '../../../../../components/logistics-tracking-panel';
+import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import type { SubStage } from '../../../../../components/uni-lifecycle/types';
 import { purchaseLogisticsApi, type PurchaseLogistics } from '../../../services/purchase-logistics';
 import { listPurchaseOrders, getPurchaseOrder } from '../../../services/purchase';
+import { usePageMetrics } from '../../../../../hooks/usePageMetrics';
 
 const STATUS_MAP: Record<string, { text: string; color: string }> = {
   在途: { text: '在途', color: 'processing' },
@@ -24,17 +57,117 @@ const STATUS_MAP: Record<string, { text: string; color: string }> = {
   异常: { text: '异常', color: 'error' },
 };
 
+/** 指标卡迷你图：稳定引用，避免 SimpleSparkline 重复 update */
+const LT_STAT_SPARK_1 = [12, 14, 13, 15, 16, 18, 17];
+const LT_STAT_SPARK_2 = [8, 6, 7, 5, 4, 3, 2];
+const LT_STAT_SPARK_3 = [20, 22, 25, 28, 30, 32, 35];
+const LT_STAT_SPARK_4 = [1, 2, 1, 3, 2, 1, 2];
+
+function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
+  dataSource: T,
+  cols: ProDescriptionsItemProps<T>[]
+): NonNullable<DescriptionsProps['items']> {
+  return cols.map((col, index) => {
+    const dataIndex = col.dataIndex as keyof T | undefined;
+    const value = dataIndex != null ? dataSource[dataIndex] : undefined;
+    let content: React.ReactNode = value as React.ReactNode;
+    if (col.valueType === 'dateTime' && value) {
+      content = dayjs(value as string).format('YYYY-MM-DD HH:mm:ss');
+    } else if (col.valueType === 'date' && value) {
+      content = dayjs(value as string).format('YYYY-MM-DD');
+    }
+    if (col.render && dataSource != null) {
+      content = col.render(content, dataSource, index, {}, col);
+    }
+    return {
+      key: String(col.key ?? col.dataIndex ?? index),
+      label: col.title as React.ReactNode,
+      children: content !== undefined && content !== null ? content : '-',
+      span: col.span ?? 1,
+    };
+  });
+}
+
+/** 物流状态 → UniLifecycle（列表列与详情步骤条共用） */
+function getLogisticsLifecycle(record: PurchaseLogistics) {
+  const s = (record.status || '').trim();
+  const main: SubStage[] = [
+    { key: 'transit', label: '在途', status: 'pending' },
+    { key: 'signed', label: '已签收', status: 'pending' },
+  ];
+  if (s === '已签收') {
+    main[0].status = 'done';
+    main[1].status = 'done';
+    return {
+      percent: 100,
+      stageName: '已签收',
+      status: 'success',
+      mainStages: main,
+    };
+  }
+  if (s === '异常') {
+    return {
+      percent: 50,
+      stageName: '异常',
+      status: 'exception',
+      mainStages: [
+        { key: 'transit', label: '在途', status: 'done' },
+        { key: 'err', label: '异常', status: 'active' },
+      ],
+    };
+  }
+  main[0].status = 'active';
+  main[1].status = 'pending';
+  return {
+    percent: 45,
+    stageName: '在途',
+    status: 'active',
+    mainStages: main,
+  };
+}
+
 const LogisticsTrackingPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const { token } = theme.useToken();
+  const location = useLocation();
   const actionRef = useRef<ActionType>(null);
-  const [selectedRecord, setSelectedRecord] = useState<PurchaseLogistics | null>(null);
+  const [statsVersion, setStatsVersion] = useState(0);
+  const [localStats, setLocalStats] = useState({ total: 0, inTransit: 0, delivered: 0, exception: 0 });
+
+  const { statCards: pageMetricCards, hasConfig: hasPageMetricConfig } = usePageMetrics(location.pathname);
+
+  const refreshLocalStats = useCallback(async () => {
+    try {
+      const response = await purchaseLogisticsApi.list({ skip: 0, limit: 5000 });
+      const data = Array.isArray(response) ? response : (response as any)?.items || (response as any)?.data || [];
+      const arr = Array.isArray(data) ? data : [];
+      setLocalStats({
+        total: (response as any)?.total ?? arr.length,
+        inTransit: arr.filter((x: PurchaseLogistics) => (x.status || '').trim() === '在途').length,
+        delivered: arr.filter((x: PurchaseLogistics) => (x.status || '').trim() === '已签收').length,
+        exception: arr.filter((x: PurchaseLogistics) => (x.status || '').trim() === '异常').length,
+      });
+    } catch {
+      setLocalStats({ total: 0, inTransit: 0, delivered: 0, exception: 0 });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hasPageMetricConfig) {
+      refreshLocalStats();
+    }
+  }, [hasPageMetricConfig, statsVersion, refreshLocalStats]);
+
+  const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
+  const [detailRecord, setDetailRecord] = useState<PurchaseLogistics | null>(null);
+
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const formRef = useRef<any>(null);
   const [purchaseOrderList, setPurchaseOrderList] = useState<any[]>([]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const load = async () => {
       try {
         const res = await listPurchaseOrders({ limit: 500 });
@@ -46,28 +179,122 @@ const LogisticsTrackingPage: React.FC = () => {
     load();
   }, []);
 
-  const columns: ProColumns<PurchaseLogistics>[] = [
-    { title: '采购订单', dataIndex: 'purchase_order_code', width: 140, ellipsis: true },
-    { title: '供应商', dataIndex: 'supplier_name', width: 140, ellipsis: true },
-    { title: '承运商', dataIndex: 'carrier', width: 100 },
-    { title: '运单号', dataIndex: 'tracking_number', width: 140, ellipsis: true },
+  const openDetail = async (record: PurchaseLogistics) => {
+    try {
+      const detail = await purchaseLogisticsApi.get(record.id!.toString());
+      setDetailRecord(detail as PurchaseLogistics);
+      setDetailDrawerVisible(true);
+    } catch {
+      messageApi.error('获取详情失败');
+    }
+  };
+
+  const detailColumns: ProDescriptionsItemProps<PurchaseLogistics>[] = [
+    {
+      title: '采购订单',
+      dataIndex: 'purchase_order_code',
+      render: (_, entity) => (
+        <Typography.Text copyable={{ text: String(entity.purchase_order_code ?? '') }}>
+          {entity.purchase_order_code ?? '-'}
+        </Typography.Text>
+      ),
+    },
+    { title: '供应商', dataIndex: 'supplier_name' },
+    { title: '承运商', dataIndex: 'carrier' },
+    {
+      title: '运单号',
+      dataIndex: 'tracking_number',
+      render: (_, entity) => (
+        <Typography.Text copyable={{ text: String(entity.tracking_number ?? '') }}>
+          {entity.tracking_number ?? '-'}
+        </Typography.Text>
+      ),
+    },
     {
       title: '状态',
       dataIndex: 'status',
-      width: 90,
-      render: (_, record) => {
-        const c = STATUS_MAP[record.status || ''] || { text: record.status || '-', color: 'default' };
+      render: (v) => {
+        const c = STATUS_MAP[String(v) || ''] || { text: String(v || '-'), color: 'default' };
         return <Tag color={c.color}>{c.text}</Tag>;
       },
+    },
+    { title: '发货日期', dataIndex: 'shipped_at', valueType: 'date' },
+    { title: '预计到货', dataIndex: 'expected_arrival', valueType: 'date' },
+    {
+      title: '备注',
+      dataIndex: 'notes',
+      span: 3,
+      render: (t) => t || '-',
+    },
+  ];
+
+  const columns: ProColumns<PurchaseLogistics>[] = [
+    {
+      title: '采购订单',
+      dataIndex: 'purchase_order_code',
+      width: 148,
+      ellipsis: true,
+      fixed: 'left',
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.purchase_order_code ?? '') }} ellipsis>
+          {r.purchase_order_code ?? '-'}
+        </Typography.Text>
+      ),
+    },
+    { title: '供应商', dataIndex: 'supplier_name', width: 140, ellipsis: true },
+    { title: '承运商', dataIndex: 'carrier', width: 100 },
+    {
+      title: '运单号',
+      dataIndex: 'tracking_number',
+      width: 148,
+      ellipsis: true,
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.tracking_number ?? '') }} ellipsis>
+          {r.tracking_number ?? '-'}
+        </Typography.Text>
+      ),
     },
     { title: '发货日期', dataIndex: 'shipped_at', valueType: 'date', width: 110 },
     { title: '预计到货', dataIndex: 'expected_arrival', valueType: 'date', width: 110 },
     {
-      title: '操作',
-      width: 120,
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      valueType: 'dateTime',
+      width: 168,
+      hideInSearch: true,
+      defaultSortOrder: 'descend',
+    },
+    {
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      width: 132,
       fixed: 'right',
+      align: 'left',
+      hideInSearch: true,
+      render: (_, record) => {
+        const lifecycle = getLogisticsLifecycle(record);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
+      },
+    },
+    {
+      title: '操作',
+      width: 200,
+      fixed: 'right',
+      hideInSearch: true,
       render: (_, record) => (
-        <Space>
+        <Space size="small" wrap>
+          <Button type="link" size="small" icon={<EyeOutlined />} onClick={(e) => { e.stopPropagation(); openDetail(record); }}>
+            详情
+          </Button>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={(e) => { e.stopPropagation(); handleEdit(record); }}>
             编辑
           </Button>
@@ -78,15 +305,6 @@ const LogisticsTrackingPage: React.FC = () => {
       ),
     },
   ];
-
-  const handleSelectRecord = async (record: PurchaseLogistics) => {
-    try {
-      const detail = await purchaseLogisticsApi.get(record.id!.toString());
-      setSelectedRecord(detail as PurchaseLogistics);
-    } catch {
-      messageApi.error('获取详情失败');
-    }
-  };
 
   const handleEdit = async (record: PurchaseLogistics) => {
     try {
@@ -106,12 +324,6 @@ const LogisticsTrackingPage: React.FC = () => {
     }
   };
 
-  const handleDeleteSuccess = () => {
-    if (selectedRecord) {
-      setSelectedRecord(null);
-    }
-  };
-
   const handleDelete = (record: PurchaseLogistics) => {
     Modal.confirm({
       title: '删除物流记录',
@@ -120,7 +332,11 @@ const LogisticsTrackingPage: React.FC = () => {
         try {
           await purchaseLogisticsApi.delete(record.id!.toString());
           messageApi.success('删除成功');
-          handleDeleteSuccess();
+          if (detailRecord?.id === record.id) {
+            setDetailRecord(null);
+            setDetailDrawerVisible(false);
+          }
+          setStatsVersion((v) => v + 1);
           actionRef.current?.reload();
         } catch (e: any) {
           messageApi.error(e?.message || '删除失败');
@@ -161,6 +377,7 @@ const LogisticsTrackingPage: React.FC = () => {
       });
       messageApi.success('创建成功');
       setCreateModalVisible(false);
+      setStatsVersion((v) => v + 1);
       actionRef.current?.reload();
     } catch (e: any) {
       messageApi.error(e?.message || '创建失败');
@@ -181,103 +398,194 @@ const LogisticsTrackingPage: React.FC = () => {
       });
       messageApi.success('更新成功');
       setEditModalVisible(false);
+      setStatsVersion((v) => v + 1);
       actionRef.current?.reload();
+      if (detailRecord?.id === editingId) {
+        const fresh = await purchaseLogisticsApi.get(editingId.toString());
+        setDetailRecord(fresh as PurchaseLogistics);
+      }
     } catch (e: any) {
       messageApi.error(e?.message || '更新失败');
       throw e;
     }
   };
 
+  const statCards: StatCard[] =
+    hasPageMetricConfig && pageMetricCards.length > 0
+    ? pageMetricCards
+    : [
+        {
+          title: '物流记录数',
+          value: localStats.total,
+          valueStyle: { color: token.colorPrimary },
+          backgroundChart: <SimpleSparkline data={LT_STAT_SPARK_1} color={token.colorPrimary} />,
+        },
+        {
+          title: '在途',
+          value: localStats.inTransit,
+          valueStyle: { color: '#faad14' },
+          backgroundChart: <SimpleSparkline data={LT_STAT_SPARK_2} color="#faad14" />,
+        },
+        {
+          title: '已签收',
+          value: localStats.delivered,
+          valueStyle: { color: token.colorSuccess },
+          backgroundChart: <SimpleSparkline data={LT_STAT_SPARK_3} color={token.colorSuccess} />,
+        },
+        {
+          title: '异常',
+          value: localStats.exception,
+          valueStyle: { color: token.colorError },
+          backgroundChart: <SimpleSparkline data={LT_STAT_SPARK_4} color={token.colorError} />,
+        },
+      ];
+
   return (
     <>
-      <div style={{ display: 'flex', gap: 16, minHeight: 500 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <UniTable<PurchaseLogistics>
-            headerTitle="采购物流跟踪"
-            actionRef={actionRef}
-            rowKey="id"
-            columns={columns}
-            showAdvancedSearch
-            showCreateButton
-            createButtonText="新建物流记录"
-            onCreate={() => {
-              setCreateModalVisible(true);
-              setTimeout(() => formRef.current?.resetFields(), 0);
-            }}
-            request={async (params) => {
-              try {
-                const response = await purchaseLogisticsApi.list({
-                  skip: ((params.current || 1) - 1) * (params.pageSize || 20),
-                  limit: params.pageSize || 20,
-                  purchase_order_id: params.purchase_order_id,
-                  supplier_id: params.supplier_id,
-                  tracking_number: params.tracking_number,
-                  carrier: params.carrier,
-                  status: params.status,
-                });
-                const data = Array.isArray(response) ? response : response?.items || response?.data || [];
-                const total = Array.isArray(response) ? response.length : (response as any)?.total ?? data.length;
-                return { data, success: true, total };
-              } catch {
-                messageApi.error('获取列表失败');
-                return { data: [], success: false, total: 0 };
-              }
-            }}
-            scroll={{ x: 1000 }}
-            onRow={(record) => ({
-              onClick: () => handleSelectRecord(record),
-              style: { cursor: 'pointer' },
-              className: selectedRecord?.id === record.id ? 'ant-table-row-selected' : '',
-            })}
-          />
-        </div>
+      <ListPageTemplate statCards={statCards}>
+        <UniTable<PurchaseLogistics>
+          headerTitle="采购物流跟踪"
+          columnPersistenceId="kuaizhizao-logistics-tracking"
+          actionRef={actionRef}
+          rowKey="id"
+          columns={columns}
+          showAdvancedSearch
+          showCreateButton
+          createButtonText="新建物流跟踪"
+          onCreate={() => {
+            setCreateModalVisible(true);
+            setTimeout(() => formRef.current?.resetFields(), 0);
+          }}
+          request={async (params) => {
+            try {
+              const response = await purchaseLogisticsApi.list({
+                skip: ((params.current || 1) - 1) * (params.pageSize || 20),
+                limit: params.pageSize || 20,
+                purchase_order_id: params.purchase_order_id,
+                supplier_id: params.supplier_id,
+                tracking_number: params.tracking_number,
+                carrier: params.carrier,
+                status: params.status,
+                keyword: params.keyword,
+              });
+              const data = Array.isArray(response) ? response : response?.items || response?.data || [];
+              const total = Array.isArray(response) ? response.length : (response as any)?.total ?? data.length;
+              return { data, success: true, total };
+            } catch {
+              messageApi.error('获取列表失败');
+              return { data: [], success: false, total: 0 };
+            }
+          }}
+          scroll={{ x: 1280 }}
+          onRow={(record) => ({
+            onClick: () => openDetail(record),
+            style: { cursor: 'pointer' },
+          })}
+        />
+      </ListPageTemplate>
 
-        <div style={{ width: 400, minWidth: 320, display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <Card title="物流跟踪数据" size="small" style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-            {selectedRecord ? (
-              <>
-                <Descriptions column={1} size="small">
-                  <Descriptions.Item label="采购订单">{selectedRecord.purchase_order_code}</Descriptions.Item>
-                  <Descriptions.Item label="供应商">{selectedRecord.supplier_name}</Descriptions.Item>
-                  <Descriptions.Item label="承运商">{selectedRecord.carrier}</Descriptions.Item>
-                  <Descriptions.Item label="运单号">{selectedRecord.tracking_number}</Descriptions.Item>
-                  <Descriptions.Item label="状态">
-                    {(() => {
-                      const c = STATUS_MAP[selectedRecord.status || ''] || { text: selectedRecord.status || '-', color: 'default' };
-                      return <Tag color={c.color}>{c.text}</Tag>;
-                    })()}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="发货日期">{selectedRecord.shipped_at || '-'}</Descriptions.Item>
-                  <Descriptions.Item label="预计到货">{selectedRecord.expected_arrival || '-'}</Descriptions.Item>
-                  {selectedRecord.notes && <Descriptions.Item label="备注">{selectedRecord.notes}</Descriptions.Item>}
-                </Descriptions>
-                {selectedRecord.carrier && selectedRecord.tracking_number && (
-                  <div style={{ marginTop: 16 }}>
-                    <div style={{ marginBottom: 8, fontWeight: 500 }}>物流轨迹</div>
-                    <LogisticsTrackingPanel
-                      carrier={selectedRecord.carrier}
-                      trackingNumber={selectedRecord.tracking_number}
-                    />
-                  </div>
-                )}
-              </>
-            ) : (
-              <Empty description="点击左侧列表行查看详情" image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ padding: 24 }} />
-            )}
-          </Card>
-
-          <Card title="地图轨迹" size="small" style={{ flex: 1, minHeight: 200 }}>
-            <Empty
-              description="若物流数据支持经纬度，将在此显示地图轨迹"
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              style={{ padding: 24 }}
+      <DetailDrawerTemplate<PurchaseLogistics>
+        title={detailRecord ? `物流跟踪 - ${detailRecord.tracking_number || detailRecord.purchase_order_code || ''}` : '物流跟踪'}
+        open={detailDrawerVisible}
+        onClose={() => {
+          setDetailDrawerVisible(false);
+          setDetailRecord(null);
+        }}
+        dataSource={detailRecord || undefined}
+        columns={[]}
+        column={3}
+        width={DRAWER_CONFIG.HALF_WIDTH}
+        extra={
+          detailRecord && (
+            <DetailDrawerActions
+              items={[
+                {
+                  key: 'edit',
+                  render: () => (
+                    <Button
+                      type="link"
+                      size="small"
+                      icon={<EditOutlined />}
+                      onClick={() => {
+                        setDetailDrawerVisible(false);
+                        handleEdit(detailRecord);
+                      }}
+                    >
+                      编辑
+                    </Button>
+                  ),
+                },
+                {
+                  key: 'delete',
+                  render: () => (
+                    <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(detailRecord)}>
+                      删除
+                    </Button>
+                  ),
+                },
+              ]}
             />
-          </Card>
-        </div>
-      </div>
+          )
+        }
+        customContent={
+          detailRecord && (
+            <>
+              <DetailDrawerSection title="基本信息">
+                <Descriptions
+                  column={3}
+                  size="small"
+                  items={buildDescriptionItemsFromColumns(detailRecord, detailColumns)}
+                />
+              </DetailDrawerSection>
+
+              <DetailDrawerSection title="生命周期">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {(() => {
+                    const lifecycle = getLogisticsLifecycle(detailRecord);
+                    const mainStages = lifecycle.mainStages ?? [];
+                    if (mainStages.length === 0) return null;
+                    return (
+                      <UniLifecycleStepper
+                        steps={mainStages}
+                        status={lifecycle.status}
+                        showLabels
+                      />
+                    );
+                  })()}
+                  {detailRecord.carrier && detailRecord.tracking_number && (
+                    <>
+                      <Divider style={{ margin: 0 }} />
+                      <Typography.Title level={5} style={{ margin: '0 0 8px' }}>
+                        物流轨迹
+                      </Typography.Title>
+                      <LogisticsTrackingPanel carrier={detailRecord.carrier} trackingNumber={detailRecord.tracking_number} />
+                    </>
+                  )}
+                  <Divider style={{ margin: 0 }} />
+                  <Typography.Title level={5} style={{ margin: '0 0 8px' }}>
+                    地图轨迹
+                  </Typography.Title>
+                  <Empty
+                    description="若物流数据支持经纬度，将在此显示地图轨迹"
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  />
+                </div>
+              </DetailDrawerSection>
+
+              <DetailDrawerSection title="明细信息">
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="本单据无行明细，物流节点见「生命周期」" />
+              </DetailDrawerSection>
+
+              <DetailDrawerSection title="操作记录">
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无系统操作记录" />
+              </DetailDrawerSection>
+            </>
+          )
+        }
+      />
 
       <FormModalTemplate
-        title="新建物流记录"
+        title="新建物流跟踪"
         open={createModalVisible}
         onClose={() => setCreateModalVisible(false)}
         formRef={formRef}

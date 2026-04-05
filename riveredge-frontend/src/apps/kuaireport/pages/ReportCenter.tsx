@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Button, Card, Row, Col, Tag, Typography, Space, Empty, Spin, message } from 'antd';
+import { Button, Card, Row, Col, Tag, Typography, Space, Empty, Spin, message, Tooltip } from 'antd';
 import {
     PlusOutlined,
     BarChartOutlined,
@@ -105,19 +105,46 @@ const ReportGrid: React.FC<ReportGridProps> = ({
                         <Card.Meta
                             avatar={<BarChartOutlined style={{ fontSize: 24, color: '#1677ff' }} />}
                             title={
-                                <Space>
-                                    <Text ellipsis style={{ maxWidth: 120 }}>
-                                        {report.name}
-                                    </Text>
+                                <Space wrap size={4}>
+                                    <Tooltip title={report.name}>
+                                        <Text ellipsis style={{ maxWidth: 160 }}>
+                                            {report.name}
+                                        </Text>
+                                    </Tooltip>
                                     <Tag color={statusColor[report.status] ?? 'default'} style={{ margin: 0 }}>
                                         {report.status === 'PUBLISHED' ? '已发布' : '草稿'}
                                     </Tag>
                                 </Space>
                             }
                             description={
-                                <Text type="secondary" ellipsis style={{ fontSize: 12 }}>
-                                    {report.description || report.code}
-                                </Text>
+                                <div style={{ fontSize: 12 }}>
+                                    {report.description ? (
+                                        <Text type="secondary" ellipsis>
+                                            {report.description}
+                                        </Text>
+                                    ) : null}
+                                    {report.code ? (
+                                        <div style={{ marginTop: report.description ? 4 : 0 }}>
+                                            <Text type="secondary" style={{ marginRight: 6 }}>
+                                                编号
+                                            </Text>
+                                            <Typography.Text
+                                                copyable={{ text: String(report.code) }}
+                                                ellipsis
+                                                style={{ fontSize: 12, maxWidth: '100%' }}
+                                            >
+                                                {report.code}
+                                            </Typography.Text>
+                                        </div>
+                                    ) : null}
+                                    {report.updated_at ? (
+                                        <div style={{ marginTop: 4 }}>
+                                            <Text type="secondary" style={{ fontSize: 11 }}>
+                                                更新 {String(report.updated_at).slice(0, 19).replace('T', ' ')}
+                                            </Text>
+                                        </div>
+                                    ) : null}
+                                </div>
                             }
                         />
                     </Card>
@@ -252,7 +279,7 @@ const ReportCenter: React.FC = () => {
                     icon={<PlusOutlined />}
                     onClick={() => navigate('../reports/new')}
                 >
-                    新建报表
+                    新建自制报表
                 </Button>
             )}
         </Space>

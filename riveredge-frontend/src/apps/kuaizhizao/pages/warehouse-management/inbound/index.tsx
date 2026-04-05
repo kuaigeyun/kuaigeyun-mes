@@ -6,7 +6,7 @@
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProFormItem } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Table, Row, Col, Form as AntForm, InputNumber, Input } from 'antd';
+import { App, Button, Tag, Space, Modal, Card, Table, Row, Col, Form as AntForm, InputNumber, Input, Typography } from 'antd';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, InboxOutlined, ShoppingOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
@@ -20,14 +20,14 @@ import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 import CodeField from '../../../../../components/code-field';
+import dayjs from 'dayjs';
 import { warehouseApi, workOrderApi } from '../../../services/production';
 import { getInboundLifecycle } from '../../../utils/inboundLifecycle';
-import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
 import { getPurchaseOrder, listPurchaseOrders, pushPurchaseOrderToReceipt } from '../../../services/purchase';
 import { receiptNoticeApi } from '../../../services/receipt-notice';
-import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 
 // 统一的入库单接口（结合采购入库、成品入库、生产退料）
 interface InboundOrder {
@@ -570,7 +570,14 @@ const InboundPage: React.FC = () => {
       width: 140,
       ellipsis: true,
       fixed: 'left',
-      render: (_, record) => record.receipt_code || record.return_code,
+      render: (_, record) => {
+        const code = String(record.receipt_code || record.return_code || '');
+        return (
+          <Typography.Text copyable={{ text: code }} ellipsis>
+            {code || '-'}
+          </Typography.Text>
+        );
+      },
     },
     {
       title: '入库类型',
@@ -580,16 +587,6 @@ const InboundPage: React.FC = () => {
         purchase: { text: '采购入库', status: 'processing' },
         finished_goods: { text: '成品入库', status: 'success' },
         production_return: { text: '生产退料', status: 'warning' },
-      },
-    },
-    {
-      title: '生命周期',
-      dataIndex: 'lifecycle',
-      width: 100,
-      render: (_, record) => {
-        const lifecycle = getInboundLifecycle(record);
-        const stageName = lifecycle.stageName ?? record.status ?? '草稿';
-        return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>;
       },
     },
     {
@@ -637,10 +634,34 @@ const InboundPage: React.FC = () => {
       render: (_, record) => record.receipt_date || record.return_time || '-',
     },
     {
-      title: '创建时间',
-      dataIndex: 'created_at',
-      valueType: 'dateTime',
-      width: 160,
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      width: 168,
+      hideInSearch: true,
+      defaultSortOrder: 'descend',
+      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+    },
+    {
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      width: 132,
+      fixed: 'right',
+      align: 'left',
+      hideInSearch: true,
+      render: (_, record) => {
+        const lifecycle = getInboundLifecycle(record as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
+      },
     },
     {
       title: '操作',
@@ -741,6 +762,7 @@ const InboundPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable
         headerTitle="入库管理"
+        columnPersistenceId="kuaizhizao-wm-inbound"
         actionRef={actionRef}
         rowKey={(record) => `${record.receipt_type}::${record.id}`}
         columns={columns}
@@ -749,7 +771,7 @@ const InboundPage: React.FC = () => {
           try {
             const skip = ((params.current || 1) - 1) * (params.pageSize || 20);
             const limit = params.pageSize || 20;
-            const listParams = { skip, limit, ...params };
+            const listParams = { skip, limit, ...params, keyword: (params as any).keyword };
 
             // 并行获取采购入库单、成品入库单、生产退料单
             const [purchaseRes, finishedRes, returnRes] = await Promise.all([
@@ -839,6 +861,7 @@ const InboundPage: React.FC = () => {
             批量入库
           </Button>,
         ]}
+        scroll={{ x: 2000 }}
       />
 
       <FormModalTemplate

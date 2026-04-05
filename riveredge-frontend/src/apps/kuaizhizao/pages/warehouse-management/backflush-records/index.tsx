@@ -6,10 +6,12 @@
 
 import React, { useRef } from 'react';
 import type { ProColumns } from '@ant-design/pro-components';
-import { Tag, App, Button } from 'antd';
+import { App, Button, Typography } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import { warehouseApi } from '../../../services/production';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { getBackflushRecordLifecycle } from '../../../utils/backflushRecordLifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 
 interface BackflushRecordItem {
@@ -60,11 +62,21 @@ const BackflushRecordsPage: React.FC = () => {
       dataIndex: 'work_order_code',
       width: 130,
       fixed: 'left',
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.work_order_code ?? '') }} ellipsis>
+          {r.work_order_code ?? '-'}
+        </Typography.Text>
+      ),
     },
     {
       title: '物料编号',
       dataIndex: 'material_code',
       width: 120,
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.material_code ?? '') }} ellipsis>
+          {r.material_code ?? '-'}
+        </Typography.Text>
+      ),
     },
     {
       title: '物料名称',
@@ -105,16 +117,34 @@ const BackflushRecordsPage: React.FC = () => {
     {
       title: '状态',
       dataIndex: 'status',
-      width: 90,
+      hideInTable: true,
+      valueEnum: {
+        pending: { text: '待处理' },
+        completed: { text: '已完成' },
+        failed: { text: '失败' },
+        cancelled: { text: '已取消' },
+      },
+    },
+    {
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      width: 120,
+      fixed: 'right',
+      align: 'left',
+      hideInSearch: true,
       render: (_, record) => {
-        const statusMap: Record<string, { color: string; text: string }> = {
-          pending: { color: 'default', text: '待处理' },
-          completed: { color: 'green', text: '已完成' },
-          failed: { color: 'red', text: '失败' },
-          cancelled: { color: 'default', text: '已取消' },
-        };
-        const s = statusMap[record.status] || { color: 'default', text: record.status };
-        return <Tag color={s.color}>{s.text}</Tag>;
+        const lifecycle = getBackflushRecordLifecycle(record as unknown as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
       },
     },
     {
@@ -175,11 +205,12 @@ const BackflushRecordsPage: React.FC = () => {
         headerTitle="物料倒冲记录"
         actionRef={actionRef}
         columns={columns}
+        columnPersistenceId="kuaizhizao-wm-backflush-records"
         request={fetchRecords}
         rowKey="id"
         search={{ labelWidth: 'auto' }}
         pagination={{ defaultPageSize: 20, showSizeChanger: true }}
-        scroll={{ x: 1300 }}
+        scroll={{ x: 1480 }}
       />
     </ListPageTemplate>
   );

@@ -719,7 +719,7 @@ const SOPPage: React.FC = () => {
         onCancel={handleCloseCreateModal}
         footer={null}
         width={900}
-        destroyOnClose
+        destroyOnHidden
       >
         <SOPBatchCreateSteps
           onSuccess={handleBatchCreateSuccess}

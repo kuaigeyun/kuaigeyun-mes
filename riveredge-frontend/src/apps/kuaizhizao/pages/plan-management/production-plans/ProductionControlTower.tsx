@@ -240,7 +240,7 @@ const ProductionControlTower: React.FC = () => {
           <Col span={24}>
             <Row gutter={[16, 16]}>
               {shortcuts.map((sc) => (
-                <Col xs={12} sm={8} md={4} key={sc.path}>
+                <Col xs={12} sm={8} md={4} key={sc.title}>
                   <Card
                     hoverable
                     onClick={() => navigate(sc.path)}

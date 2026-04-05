@@ -46,8 +46,10 @@ export const SalesOrderTrackingRadar: React.FC<SalesOrderTrackingRadarProps> = (
   const renderProgressCard = (title: string, percent: number, icon: React.ReactNode, color: string, details: React.ReactNode) => (
     <Card 
       size="small" 
-      headStyle={{ borderBottom: 'none', paddingBottom: 0 }}
-      bodyStyle={{ paddingTop: 8 }}
+      styles={{
+        header: { borderBottom: 'none', paddingBottom: 0 },
+        body: { paddingTop: 8 }
+      }}
       style={{ height: '100%', borderRadius: 8, border: `1px solid ${color}40`, background: `linear-gradient(to bottom right, ${color}05, ${color}15)` }}
     >
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>

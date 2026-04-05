@@ -711,7 +711,7 @@ const DataBackupsPage: React.FC = () => {
         open={uploadModalVisible}
         onCancel={() => setUploadModalVisible(false)}
         footer={null}
-        destroyOnClose
+        destroyOnHidden
       >
         <Upload.Dragger
           accept=".zip"
@@ -740,7 +740,7 @@ const DataBackupsPage: React.FC = () => {
         onOk={handleRestoreConfirm}
         okText={t('common.confirm')}
         cancelText={t('common.cancel')}
-        destroyOnClose
+        destroyOnHidden
       >
         <div style={{ marginBottom: 16 }}>
           <p>{restoreBackupRecord?.source_type === 'uploaded' ? t('pages.system.dataBackups.restoreUploadedConfirmContent') : t('pages.system.dataBackups.restoreConfirmContent')}</p>

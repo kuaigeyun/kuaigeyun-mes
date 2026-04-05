@@ -10,8 +10,9 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormUploadButton, ProFormItem } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Row, Col, Table, Empty, Timeline, Divider, Form as AntForm, Input, InputNumber, DatePicker, Switch, List, Typography, theme, Dropdown } from 'antd';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormUploadButton } from '@ant-design/pro-components';
+import type { DescriptionsProps } from 'antd';
+import { App, Button, Tag, Space, Modal, Row, Col, Table, Empty, Timeline, Divider, Form as AntForm, Input, InputNumber, DatePicker, Switch, List, Typography, theme, Dropdown, Descriptions, Spin } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, ClockCircleOutlined, CheckCircleTwoTone, CloseCircleTwoTone, SendOutlined, DownOutlined, FileTextOutlined, InboxOutlined, DollarOutlined, RollbackOutlined, ShoppingOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
@@ -42,7 +43,11 @@ import LandingCostAllocationModal from './LandingCostAllocationModal';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
 import { getApprovalStatus, ApprovalStatusResponse } from '../../../../../services/approvalInstance';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
-import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
+import {
+  DocumentTrackingRelationsBody,
+  DocumentTrackingTimelineBody,
+  useDocumentTracking,
+} from '../../../../../components/document-tracking-panel';
 import { getUserList, type User } from '../../../../../services/user';
 import {
   DocumentStatus,
@@ -53,6 +58,11 @@ import {
   isAuditedStatus,
 } from '../../../constants/documentStatus';
 import { resolveStatusTagDisplayProps } from '../../../../../constants/statusBadges';
+import { getPurchaseOrderLifecycle } from '../../../utils/purchaseOrderLifecycle';
+import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { SupplierFormModal } from '../../../../master-data/components/SupplierFormModal';
+import { batchImport } from '../../../../../utils/batchOperations';
+import { usePageMetrics } from '../../../../../hooks/usePageMetrics';
 
 /** 与后端 DocumentStatus / ReviewStatus 及中文存量值对齐，供 UniWorkflowActions 识别 */
 const PO_WORKFLOW_DRAFT_STATUSES = ['草稿', 'draft', 'DRAFT', DocumentStatus.DRAFT];
@@ -86,12 +96,63 @@ const PO_STAT_SPARKLINE_ANNUAL = [1000, 2000, 1500, 3000, 2500, 4000, 3500];
 const PO_STAT_SPARKLINE_SUPPLIER = [92, 95, 88, 96, 94, 98, 95];
 const PO_STAT_SPARKLINE_OVERDUE = [5, 8, 3, 12, 7, 15, 10];
 
-import { getPurchaseOrderLifecycle } from '../../../utils/purchaseOrderLifecycle';
-import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
-import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
-import { SupplierFormModal } from '../../../../master-data/components/SupplierFormModal';
-import { batchImport } from '../../../../../utils/batchOperations';
-import { usePageMetrics } from '../../../../../hooks/usePageMetrics';
+/** 详情只读明细表最小宽度（外层横滚） */
+const PO_DETAIL_ITEMS_MIN_WIDTH = 1200;
+
+/** 列表操作列最多平铺 3 个，其余收入「更多」（与 UI_Standard / riveredge-detail-drawer-ui 一致） */
+const PO_ROW_ACTIONS_INLINE_MAX = 3;
+
+function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
+  dataSource: T,
+  cols: ProDescriptionsItemProps<T>[]
+): NonNullable<DescriptionsProps['items']> {
+  return cols.map((col, index) => {
+    const dataIndex = col.dataIndex as keyof T | undefined;
+    const value = dataIndex != null ? dataSource[dataIndex] : undefined;
+    let content: React.ReactNode = value as React.ReactNode;
+    if (col.valueType === 'dateTime' && value) {
+      content = dayjs(value as string).format('YYYY-MM-DD HH:mm:ss');
+    } else if (col.valueType === 'date' && value) {
+      content = dayjs(value as string).format('YYYY-MM-DD');
+    }
+    if (col.render && dataSource != null) {
+      content = col.render(content, dataSource, index, {}, col);
+    }
+    return {
+      key: String(col.key ?? col.dataIndex ?? index),
+      label: col.title as React.ReactNode,
+      children: content !== undefined && content !== null ? content : '-',
+      span: col.span ?? 1,
+    };
+  });
+}
+
+function renderPurchaseOrderRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
+  const wrapped = nodes.map((node, i) => <span key={`${keyPrefix}-${i}`}>{node}</span>);
+  if (wrapped.length <= PO_ROW_ACTIONS_INLINE_MAX) {
+    return <Space size="small" wrap>{wrapped}</Space>;
+  }
+  const inline = wrapped.slice(0, PO_ROW_ACTIONS_INLINE_MAX);
+  const overflow = wrapped.slice(PO_ROW_ACTIONS_INLINE_MAX);
+  return (
+    <Space size="small" wrap>
+      {inline}
+      <Dropdown
+        menu={{
+          items: overflow.map((node, i) => ({
+            key: `${keyPrefix}-more-${i}`,
+            label: node,
+          })),
+        }}
+        trigger={['click']}
+      >
+        <Button type="link" size="small">
+          更多
+        </Button>
+      </Dropdown>
+    </Space>
+  );
+}
 
 // 使用从服务文件导入的接口
 type PurchaseOrderDetail = PurchaseOrder;
@@ -327,16 +388,17 @@ const PurchaseOrdersPage: React.FC = () => {
 
   useEffect(() => {
     const loadOrderType = async () => {
-      setOrderTypeLoading(true);
-      try {
-        const dict = await getDataDictionaryByCode('ORDER_TYPE');
-        const items = await getDictionaryItemList(dict.uuid, true);
-        setOrderTypeOptions(items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value })));
-      } catch {
-        setOrderTypeOptions([{ label: '标准采购', value: '标准采购' }, { label: '紧急采购', value: '紧急采购' }, { label: '框架协议', value: '框架协议' }]);
-      } finally {
-        setOrderTypeLoading(false);
-      }
+      // ORDER_TYPE 字典当前缺失，直接使用默认值
+      // setOrderTypeLoading(true);
+      // try {
+      //   const dict = await getDataDictionaryByCode('ORDER_TYPE');
+      //   const items = await getDictionaryItemList(dict.uuid, true);
+      //   setOrderTypeOptions(items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value })));
+      // } catch {
+      //   setOrderTypeOptions([{ label: '标准采购', value: '标准采购' }, { label: '紧急采购', value: '紧急采购' }, { label: '框架协议', value: '框架协议' }]);
+      // } finally {
+      //   setOrderTypeLoading(false);
+      // }
     };
     const loadCurrency = async () => {
       setCurrencyLoading(true);
@@ -371,12 +433,20 @@ const PurchaseOrdersPage: React.FC = () => {
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [orderDetail, setOrderDetail] = useState<PurchaseOrderDetail | null>(null);
+  const purchaseOrderTracking = useDocumentTracking(
+    detailDrawerVisible && orderDetail?.id ? 'purchase_order' : undefined,
+    orderDetail?.id
+  );
 
   // 供应商列表、订单类型、币种
   const [supplierList, setSupplierList] = useState<any[]>([]);
   const [suppliersLoading, setSuppliersLoading] = useState(false);
-  const [orderTypeOptions, setOrderTypeOptions] = useState<Array<{ label: string; value: string }>>([]);
-  const [orderTypeLoading, setOrderTypeLoading] = useState(false);
+  const [orderTypeOptions] = useState<Array<{ label: string; value: string }>>([
+    { label: '标准采购', value: '标准采购' },
+    { label: '紧急采购', value: '紧急采购' },
+    { label: '框架协议', value: '框架协议' },
+  ]);
+  const [orderTypeLoading] = useState(false);
   const [currencyOptions, setCurrencyOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [currencyLoading, setCurrencyLoading] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
@@ -458,14 +528,19 @@ const PurchaseOrdersPage: React.FC = () => {
   const [landingCostModalVisible, setLandingCostModalVisible] = useState(false);
   const [landingCostOrder, setLandingCostOrder] = useState<PurchaseOrder | null>(null);
 
-  // 表格列定义
+  /** 列表列顺序：金额/数量/时间在前；生命周期固定倒数第二；操作列最后（与 UI_Standard 一致） */
   const columns: ProColumns<PurchaseOrder>[] = [
     {
       title: '订单编号',
       dataIndex: 'order_code',
-      width: 140,
+      width: 148,
       ellipsis: true,
       fixed: 'left',
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.order_code ?? '') }} ellipsis>
+          {r.order_code ?? '-'}
+        </Typography.Text>
+      ),
     },
     {
       title: '供应商',
@@ -492,26 +567,6 @@ const PurchaseOrdersPage: React.FC = () => {
       width: 120,
     },
     {
-      title: '生命周期',
-      dataIndex: 'lifecycle',
-      width: 100,
-      valueType: 'select',
-      valueEnum: {
-        草稿: { text: '草稿' },
-        待审核: { text: '待审核' },
-        已审核: { text: '已审核' },
-        已下推入库: { text: '已下推入库' },
-        已完成: { text: '已完成' },
-        已驳回: { text: '已驳回' },
-        已取消: { text: '已取消' },
-      },
-      render: (_: any, record: PurchaseOrder) => {
-        const lifecycle = getPurchaseOrderLifecycle(record);
-        const stageName = lifecycle.stageName ?? record.status ?? '草稿';
-        return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>;
-      },
-    },
-    {
       title: '订单金额',
       dataIndex: 'total_amount',
       width: 120,
@@ -525,18 +580,59 @@ const PurchaseOrdersPage: React.FC = () => {
       align: 'right',
     },
     {
-      title: '操作',
-      width: 240,
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      valueType: 'dateTime',
+      width: 168,
+      hideInSearch: true,
+      defaultSortOrder: 'descend',
+    },
+    {
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      width: 132,
       fixed: 'right',
-      render: (_: any, record: PurchaseOrder) => (
-        <Space>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
+      align: 'left',
+      hideInSearch: true,
+      render: (_: any, record: PurchaseOrder) => {
+        const lifecycle = getPurchaseOrderLifecycle(record);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
+      },
+    },
+    {
+      title: '操作',
+      width: 120,
+      fixed: 'right',
+      hideInSearch: true,
+      render: (_: any, record: PurchaseOrder) => {
+        const parts: React.ReactNode[] = [
+          <Button key="d" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
             详情
-          </Button>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+          </Button>,
+          <Button key="e" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
             编辑
-          </Button>
+          </Button>,
+        ];
+        if (isDraftStatus(record.status)) {
+          parts.push(
+            <Button key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
+              删除
+            </Button>
+          );
+        }
+        parts.push(
           <UniWorkflowActions
+            key="wf"
             record={record}
             entityName="采购订单"
             statusField="status"
@@ -553,10 +649,17 @@ const PurchaseOrdersPage: React.FC = () => {
               approve: (id) => approvePurchaseOrder(id, { approved: true, review_remarks: '' }),
               reject: (id, reason) => approvePurchaseOrder(id, { approved: false, review_remarks: reason || '' }),
             }}
-            onSuccess={() => { invalidateStatistics(); actionRef.current?.reload(); }}
+            onSuccess={() => {
+              invalidateStatistics();
+              actionRef.current?.reload();
+            }}
           />
-          {isAuditedStatus(record.status) && (
+        );
+        if (isAuditedStatus(record.status)) {
+          parts.push(
             <Dropdown
+              key="push"
+              trigger={['click']}
               menu={{
                 items: [
                   { key: 'receipt-notice', label: '收货通知', icon: <FileTextOutlined />, onClick: () => handlePushToNotice(record) },
@@ -570,9 +673,10 @@ const PurchaseOrdersPage: React.FC = () => {
                 下推 <DownOutlined />
               </Button>
             </Dropdown>
-          )}
-          {isAuditedStatus(record.status) && (
+          );
+          parts.push(
             <Button
+              key="lc"
               type="link"
               size="small"
               icon={<DollarOutlined />}
@@ -583,14 +687,10 @@ const PurchaseOrdersPage: React.FC = () => {
             >
               费用分摊
             </Button>
-          )}
-          {isDraftStatus(record.status) && (
-            <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
-              删除
-            </Button>
-          )}
-        </Space>
-      ),
+          );
+        }
+        return renderPurchaseOrderRowActions(parts, `po-${record.id ?? 'row'}`);
+      },
     },
   ];
 
@@ -1242,10 +1342,19 @@ const PurchaseOrdersPage: React.FC = () => {
     {
       title: '订单编号',
       dataIndex: 'order_code',
+      render: (_: unknown, entity: PurchaseOrderDetail) => (
+        <Typography.Text copyable={{ text: String(entity.order_code ?? '') }}>{entity.order_code ?? '-'}</Typography.Text>
+      ),
     },
     {
       title: '供应商',
       dataIndex: 'supplier_name',
+      render: (_: unknown, entity: PurchaseOrderDetail) => (
+        <Space>
+          {entity.supplier_name}
+          {entity.supplier_id != null ? <SupplierPerformanceTag supplierId={entity.supplier_id} /> : null}
+        </Space>
+      ),
     },
     {
       title: '订单类型',
@@ -1300,7 +1409,7 @@ const PurchaseOrdersPage: React.FC = () => {
     {
       title: '备注',
       dataIndex: 'notes',
-      span: 2,
+      span: 3,
       render: (text) => text || '-',
     },
   ];
@@ -2132,7 +2241,8 @@ const PurchaseOrdersPage: React.FC = () => {
           setApprovalStatus(null);
         }}
         dataSource={orderDetail || undefined}
-        columns={detailColumns}
+        columns={[]}
+        column={3}
         width={DRAWER_CONFIG.HALF_WIDTH}
         extra={
           orderDetail && (
@@ -2228,244 +2338,291 @@ const PurchaseOrdersPage: React.FC = () => {
         }
         customContent={
           orderDetail && (
-            <div>
+            <>
               <DetailDrawerSection title="基本信息">
-                <Row gutter={16}>
-                  <Col span={8}>
-                    <strong>订单编号：</strong>{orderDetail.order_code}
-                  </Col>
-                  <Col span={8}>
-                    <strong>供应商：</strong>
-                    <Space>
-                      {orderDetail.supplier_name}
-                      {orderDetail.supplier_id && <SupplierPerformanceTag supplierId={orderDetail.supplier_id} />}
-                    </Space>
-                  </Col>
-                  <Col span={8}>
-                    <strong>订单类型：</strong>{orderDetail.order_type || '-'}
-                  </Col>
-                </Row>
-                <Row gutter={16} style={{ marginTop: 8 }}>
-                  <Col span={6}>
-                    <strong>订单日期：</strong>{orderDetail.order_date}
-                  </Col>
-                  <Col span={6}>
-                    <strong>交货日期：</strong>{orderDetail.delivery_date}
-                  </Col>
-                  <Col span={6}>
-                    <strong>状态：</strong>
-                    {(() => {
-                      const config = getStatusDisplay(orderDetail.status);
-                      return <Tag {...resolveStatusTagDisplayProps(config)}>{config.text}</Tag>;
-                    })()}
-                  </Col>
-                  <Col span={6}>
-                    <strong>审核状态：</strong>
-                    {(() => {
-                      const config = getReviewStatusDisplay(orderDetail.review_status);
-                      return <Tag color={config.color}>{config.text}</Tag>;
-                    })()}
-                  </Col>
-                </Row>
-                <Row gutter={16} style={{ marginTop: 8 }}>
-                  <Col span={6}>
-                    <strong>订单金额：</strong>¥{formatAmount(orderDetail.total_amount)}
-                  </Col>
-                  <Col span={6}>
-                    <strong>税率：</strong>{orderDetail.tax_rate ? `${orderDetail.tax_rate}%` : '-'}
-                  </Col>
-                  <Col span={6}>
-                    <strong>税额：</strong>¥{formatAmount(orderDetail.tax_amount)}
-                  </Col>
-                  <Col span={6}>
-                    <strong>含税金额：</strong>¥{formatAmount(orderDetail.net_amount)}
-                  </Col>
-                </Row>
+                <Descriptions
+                  column={3}
+                  size="small"
+                  items={buildDescriptionItemsFromColumns(orderDetail, detailColumns)}
+                />
+                {orderDetail.fee_details && orderDetail.fee_details.length > 0 && (
+                  <>
+                    <Divider style={{ margin: '16px 0' }} />
+                    <Typography.Title level={5} style={{ margin: '0 0 8px' }}>
+                      费用明细
+                    </Typography.Title>
+                    <div style={{ marginBottom: 12 }}>
+                      <Typography.Text type="secondary">
+                        总费用金额：<strong>¥{formatAmount(orderDetail.total_fee_amount)}</strong>
+                      </Typography.Text>
+                    </div>
+                    <Table
+                      size="small"
+                      columns={[
+                        {
+                          title: '费用类型',
+                          dataIndex: 'type',
+                          width: 120,
+                          render: (val) => {
+                            const opt = feeTypeOptions.find((o: any) => o.value === val);
+                            return opt?.label || val;
+                          },
+                        },
+                        {
+                          title: '金额',
+                          dataIndex: 'amount',
+                          width: 120,
+                          align: 'right',
+                          render: (val) => `¥${formatAmount(val)}`,
+                        },
+                        {
+                          title: '承担方',
+                          dataIndex: 'bearer',
+                          width: 100,
+                          render: (val) => (val === 'our_side' ? '我方' : '对方'),
+                        },
+                        { title: '备注', dataIndex: 'notes' },
+                      ]}
+                      dataSource={orderDetail.fee_details}
+                      rowKey={(_: any, i?: number) => i ?? 0}
+                      pagination={false}
+                      bordered
+                    />
+                  </>
+                )}
               </DetailDrawerSection>
 
-              {/* 辅助费用 */}
-              {orderDetail.fee_details && orderDetail.fee_details.length > 0 && (
-                <DetailDrawerSection title="费用明细">
-                  <Row gutter={16} style={{ marginBottom: 16 }}>
-                    <Col span={6}>
-                      <strong>总费用金额：</strong>¥{formatAmount(orderDetail.total_fee_amount)}
-                    </Col>
-                  </Row>
-                  <Table
-                    size="small"
-                    columns={[
-                      { title: '费用类型', dataIndex: 'type', width: 120, render: (val) => {
-                         const opt = feeTypeOptions.find((o: any) => o.value === val);
-                         return opt?.label || val;
-                      }},
-                      { title: '金额', dataIndex: 'amount', width: 120, align: 'right', render: (val) => `¥${formatAmount(val)}` },
-                      { title: '承担方', dataIndex: 'bearer', width: 100, render: (val) => val === 'our_side' ? '我方' : '对方' },
-                      { title: '备注', dataIndex: 'notes' },
-                    ]}
-                    dataSource={orderDetail.fee_details}
-                    rowKey={(_: any, i?: number) => i ?? 0}
-                    pagination={false}
-                    bordered
-                  />
-                </DetailDrawerSection>
-              )}
-
-              {/* 生命周期 */}
-              {(() => {
-                const lifecycle = getPurchaseOrderLifecycle(orderDetail);
-                const mainStages = lifecycle.mainStages ?? [];
-                const subStages = lifecycle.subStages ?? [];
-                if (mainStages.length === 0 && subStages.length === 0) return null;
-                return (
-                  <DetailDrawerSection title="生命周期">
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                      {mainStages.length > 0 && (
-                        <UniLifecycleStepper
-                          steps={mainStages}
-                          status={lifecycle.status}
-                          showLabels
-                          nextStepSuggestions={lifecycle.nextStepSuggestions}
-                        />
-                      )}
-                      {subStages.length > 0 && (
-                        <div>
-                          <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
-                            执行中 · 全链路
+              <DetailDrawerSection title="生命周期">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {(() => {
+                    const lifecycle = getPurchaseOrderLifecycle(orderDetail);
+                    const mainStages = lifecycle.mainStages ?? [];
+                    const subStages = lifecycle.subStages ?? [];
+                    return (
+                      <>
+                        {mainStages.length > 0 && (
+                          <UniLifecycleStepper
+                            steps={mainStages}
+                            status={lifecycle.status}
+                            showLabels
+                            nextStepSuggestions={lifecycle.nextStepSuggestions}
+                          />
+                        )}
+                        {subStages.length > 0 && (
+                          <div>
+                            <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
+                              执行中 · 全链路
+                            </div>
+                            <UniLifecycleStepper steps={subStages} showLabels />
                           </div>
-                          <UniLifecycleStepper steps={subStages} showLabels />
-                        </div>
-                      )}
+                        )}
+                      </>
+                    );
+                  })()}
+                  <div
+                    style={{
+                      paddingTop: 12,
+                      borderTop: '1px solid var(--ant-color-border-secondary)',
+                    }}
+                  >
+                    <div style={{ marginBottom: 8, fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
+                      上下游单据
                     </div>
-                  </DetailDrawerSection>
-                );
-              })()}
+                    {purchaseOrderTracking.loading && (
+                      <div style={{ padding: '8px 0' }}>
+                        <Spin size="small" />
+                      </div>
+                    )}
+                    {purchaseOrderTracking.error && (
+                      <Typography.Text type="danger">{purchaseOrderTracking.error}</Typography.Text>
+                    )}
+                    {purchaseOrderTracking.data && (
+                      <DocumentTrackingRelationsBody
+                        data={purchaseOrderTracking.data}
+                        onDocumentClick={(type, id) => messageApi.info(`跳转到${type}#${id}`)}
+                      />
+                    )}
+                  </div>
+                  {orderDetail.status !== '草稿' && (
+                    <>
+                      <Divider style={{ margin: 0 }} />
+                      <div style={{ marginBottom: 8, fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
+                        履约全链路追踪
+                      </div>
+                      <FulfillmentTrackingTimeline orderId={orderDetail.id!} />
+                    </>
+                  )}
+                </div>
+              </DetailDrawerSection>
 
-              {/* 采购赋能：全链路追踪 */}
-              {orderDetail.status !== '草稿' && (
-                <DetailDrawerSection title="履约全链路追踪">
-                  <FulfillmentTrackingTimeline orderId={orderDetail.id!} />
-                </DetailDrawerSection>
-              )}
+              <DetailDrawerSection title="明细信息">
+                <style>{`
+                  .purchase-order-detail-drawer-items .ant-table-wrapper .ant-table-body,
+                  .purchase-order-detail-drawer-items .ant-table-wrapper .ant-table-content {
+                    overflow: visible !important;
+                  }
+                `}</style>
+                {orderDetail.items && orderDetail.items.length > 0 ? (
+                  <div
+                    className="purchase-order-detail-drawer-items"
+                    style={{ width: '100%', maxWidth: '100%', overflowX: 'auto', overflowY: 'hidden' }}
+                  >
+                    <Table
+                      size="small"
+                      tableLayout="fixed"
+                      style={{ minWidth: PO_DETAIL_ITEMS_MIN_WIDTH }}
+                      columns={[
+                        { title: '物料编号', dataIndex: 'material_code', width: 120, ellipsis: true },
+                        { title: '物料名称', dataIndex: 'material_name', width: 150, ellipsis: true },
+                        { title: '采购数量', dataIndex: 'ordered_quantity', width: 100, align: 'right' },
+                        { title: '单位', dataIndex: 'unit', width: 60 },
+                        {
+                          title: '单价',
+                          dataIndex: 'unit_price',
+                          width: 100,
+                          align: 'right',
+                          render: (text) => `¥${text}`,
+                        },
+                        {
+                          title: '总价',
+                          dataIndex: 'total_price',
+                          width: 120,
+                          align: 'right',
+                          render: (text) => `¥${text?.toLocaleString()}`,
+                        },
+                        { title: '已到货', dataIndex: 'received_quantity', width: 100, align: 'right' },
+                        { title: '未到货', dataIndex: 'outstanding_quantity', width: 100, align: 'right' },
+                        { title: '要求到货日期', dataIndex: 'required_date', width: 120 },
+                        {
+                          title: '是否检验',
+                          dataIndex: 'inspection_required',
+                          width: 100,
+                          render: (val) => (val ? '是' : '否'),
+                        },
+                      ]}
+                      dataSource={orderDetail.items}
+                      pagination={false}
+                      rowKey="id"
+                      bordered
+                    />
+                  </div>
+                ) : (
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无明细" />
+                )}
+              </DetailDrawerSection>
 
-              {/* 3. 单据明细 */}
-              {orderDetail.items && orderDetail.items.length > 0 && (
-                <DetailDrawerSection title="订单明细">
-                  <Table
-                    size="small"
-                    columns={[
-                      { title: '物料编号', dataIndex: 'material_code', width: 120 },
-                      { title: '物料名称', dataIndex: 'material_name', width: 150 },
-                      { title: '采购数量', dataIndex: 'ordered_quantity', width: 100, align: 'right' },
-                      { title: '单位', dataIndex: 'unit', width: 60 },
-                      { title: '单价', dataIndex: 'unit_price', width: 100, align: 'right', render: (text) => `¥${text}` },
-                      { title: '总价', dataIndex: 'total_price', width: 120, align: 'right', render: (text) => `¥${text?.toLocaleString()}` },
-                      { title: '已到货', dataIndex: 'received_quantity', width: 100, align: 'right' },
-                      { title: '未到货', dataIndex: 'outstanding_quantity', width: 100, align: 'right' },
-                      { title: '要求到货日期', dataIndex: 'required_date', width: 120 },
-                      { title: '是否检验', dataIndex: 'inspection_required', width: 100, render: (val) => val ? '是' : '否' },
-                    ]}
-                    dataSource={orderDetail.items}
-                    pagination={false}
-                    rowKey="id"
-                    bordered
-                    scroll={{ x: 1000 }}
-                  />
-                </DetailDrawerSection>
-              )}
-
-              {/* 4. 操作记录 */}
               {orderDetail?.id && (
-                <DetailDrawerSection title="操作历史">
-                  <DocumentTrackingPanel
-                    documentType="purchase_order"
-                    documentId={orderDetail.id}
-                    onDocumentClick={(type, id) => messageApi.info(`跳转到${type}#${id}`)}
-                  />
-                </DetailDrawerSection>
-              )}
+                <DetailDrawerSection title="操作记录">
+                  {purchaseOrderTracking.loading && (
+                    <div style={{ textAlign: 'center', padding: 24 }}>
+                      <Spin />
+                    </div>
+                  )}
+                  {purchaseOrderTracking.error && !purchaseOrderTracking.loading && (
+                    <Typography.Text type="danger">{purchaseOrderTracking.error}</Typography.Text>
+                  )}
+                  {purchaseOrderTracking.data && !purchaseOrderTracking.loading && (
+                    <DocumentTrackingTimelineBody data={purchaseOrderTracking.data} />
+                  )}
 
-              {/* 5. 变更记录 (V2 增强：审计必备) */}
-              {orderDetail?.id && (
-                <DetailDrawerSection title="订单变更审计历史">
+                  {approvalStatus && approvalStatus.has_flow && (
+                    <Spin spinning={approvalLoading}>
+                      <>
+                        <Divider style={{ margin: '16px 0' }} />
+                        <div
+                          style={{
+                            marginBottom: 8,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            flexWrap: 'wrap',
+                            gap: 8,
+                          }}
+                        >
+                          <Typography.Title level={5} style={{ margin: 0 }}>
+                            审批流程
+                          </Typography.Title>
+                          <Tag
+                            color={
+                              approvalStatus.status === 'approved'
+                                ? 'success'
+                                : approvalStatus.status === 'rejected'
+                                  ? 'error'
+                                  : 'processing'
+                            }
+                          >
+                            {approvalStatus.status === 'approved'
+                              ? '已通过'
+                              : approvalStatus.status === 'rejected'
+                                ? '已驳回'
+                                : '进行中'}
+                          </Tag>
+                        </div>
+                        <div style={{ marginBottom: 16 }}>
+                          {approvalStatus.current_node && (
+                            <div>
+                              <strong>当前节点：</strong>
+                              <Tag color="blue">{approvalStatus.current_node}</Tag>
+                            </div>
+                          )}
+                        </div>
+                        {approvalStatus?.history && approvalStatus.history.length > 0 && (
+                          <div>
+                            <Divider titlePlacement="left">审批记录</Divider>
+                            <Timeline
+                              items={approvalStatus.history.map((h) => {
+                                const isPassed = h.action === 'approve';
+                                const isRejected = h.action === 'reject';
+                                return {
+                                  dot: isPassed ? (
+                                    <CheckCircleTwoTone twoToneColor="#52c41a" />
+                                  ) : isRejected ? (
+                                    <CloseCircleTwoTone twoToneColor="#ff4d4f" />
+                                  ) : (
+                                    <ClockCircleOutlined style={{ color: '#1890ff' }} />
+                                  ),
+                                  color: isPassed ? 'green' : isRejected ? 'red' : 'blue',
+                                  children: (
+                                    <div>
+                                      <div style={{ marginBottom: 4 }}>
+                                        <Tag color={isPassed ? 'success' : isRejected ? 'error' : 'processing'}>
+                                          {isPassed ? '通过' : isRejected ? '驳回' : h.action || '-'}
+                                        </Tag>
+                                      </div>
+                                      <div style={{ color: '#666', fontSize: '12px', marginBottom: 4 }}>
+                                        {h.action_at && `审核时间：${h.action_at}`}
+                                      </div>
+                                      {h.comment && (
+                                        <div style={{ color: '#999', fontSize: '12px', marginTop: 4 }}>
+                                          审核意见：{h.comment}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ),
+                                };
+                              })}
+                            />
+                          </div>
+                        )}
+                        {(!approvalStatus?.history || approvalStatus.history.length === 0) && approvalStatus?.has_flow && (
+                          <Empty
+                            description="暂无审批记录"
+                            image={Empty.PRESENTED_IMAGE_SIMPLE}
+                            style={{ margin: '20px 0' }}
+                          />
+                        )}
+                      </>
+                    </Spin>
+                  )}
+
+                  <Divider style={{ margin: '16px 0' }} />
+                  <Typography.Title level={5} style={{ margin: '0 0 8px' }}>
+                    变更审计
+                  </Typography.Title>
                   <OrderChangeHistoryTable orderId={orderDetail.id} />
                 </DetailDrawerSection>
               )}
-
-              {/* 5. 其他功能：审批流程 */}
-              {approvalStatus && approvalStatus.has_flow && (
-                <Card
-                  title="审批流程"
-                  style={{ marginBottom: 16 }}
-                  loading={approvalLoading}
-                  extra={
-                    <Tag color={approvalStatus.status === 'approved' ? 'success' : approvalStatus.status === 'rejected' ? 'error' : 'processing'}>
-                      {approvalStatus.status === 'approved' ? '已通过' : approvalStatus.status === 'rejected' ? '已驳回' : '进行中'}
-                    </Tag>
-                  }
-                >
-                  <div style={{ marginBottom: 16 }}>
-                    {approvalStatus.current_node && (
-                      <div>
-                        <strong>当前节点：</strong>
-                        <Tag color="blue">{approvalStatus.current_node}</Tag>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* 审批记录时间线 */}
-                  {approvalStatus?.history && approvalStatus.history.length > 0 && (
-                    <div>
-                      <Divider titlePlacement="left">审批记录</Divider>
-                      <Timeline
-                        items={approvalStatus.history.map((h) => {
-                          const isPassed = h.action === 'approve';
-                          const isRejected = h.action === 'reject';
-
-                          return {
-                            dot: isPassed ? (
-                              <CheckCircleTwoTone twoToneColor="#52c41a" />
-                            ) : isRejected ? (
-                              <CloseCircleTwoTone twoToneColor="#ff4d4f" />
-                            ) : (
-                              <ClockCircleOutlined style={{ color: '#1890ff' }} />
-                            ),
-                            color: isPassed ? 'green' : isRejected ? 'red' : 'blue',
-                            children: (
-                              <div>
-                                <div style={{ marginBottom: 4 }}>
-                                  <Tag
-                                    color={isPassed ? 'success' : isRejected ? 'error' : 'processing'}
-                                  >
-                                    {isPassed ? '通过' : isRejected ? '驳回' : h.action || '-'}
-                                  </Tag>
-                                </div>
-                                <div style={{ color: '#666', fontSize: '12px', marginBottom: 4 }}>
-                                  {h.action_at && `审核时间：${h.action_at}`}
-                                </div>
-                                {h.comment && (
-                                  <div style={{ color: '#999', fontSize: '12px', marginTop: 4 }}>
-                                    审核意见：{h.comment}
-                                  </div>
-                                )}
-                              </div>
-                            ),
-                          };
-                        })}
-                      />
-                    </div>
-                  )}
-
-                  {(!approvalStatus?.history || approvalStatus.history.length === 0) && approvalStatus?.has_flow && (
-                    <Empty
-                      description="暂无审批记录"
-                      image={Empty.PRESENTED_IMAGE_SIMPLE}
-                      style={{ margin: '20px 0' }}
-                    />
-                  )}
-                </Card>
-              )}
-
-            </div>
+            </>
           )
         }
       />
@@ -2491,7 +2648,7 @@ const PurchaseOrdersPage: React.FC = () => {
         confirmLoading={pushToReceiptLoading}
         okText="确认下推"
         width={MODAL_CONFIG.STANDARD_WIDTH}
-        destroyOnClose
+        destroyOnHidden
       >
         {pushToReceiptOrder && (
           <div>
@@ -2556,7 +2713,7 @@ const PurchaseOrdersPage: React.FC = () => {
         confirmLoading={pushToNoticeLoading}
         okText="确认下推"
         width={MODAL_CONFIG.STANDARD_WIDTH}
-        destroyOnClose
+        destroyOnHidden
       >
         {pushToNoticeOrder && (
           <div>
@@ -2616,7 +2773,7 @@ const PurchaseOrdersPage: React.FC = () => {
         confirmLoading={pushToReturnLoading}
         okText="确认下推"
         width={MODAL_CONFIG.STANDARD_WIDTH}
-        destroyOnClose
+        destroyOnHidden
       >
         {pushToReturnOrder && (
           <div>

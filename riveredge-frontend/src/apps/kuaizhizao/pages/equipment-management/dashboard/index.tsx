@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { Card, Row, Col, Progress, Table, Typography, Empty, Tag, Spin, Space, Badge } from 'antd';
+import React from 'react';
+import { Card, Row, Col, Progress, Table, Typography, Tag, Spin } from 'antd';
 import { useRequest } from 'ahooks';
 import { ProCard } from '@ant-design/pro-components';
 import { 
@@ -9,11 +9,9 @@ import {
   SettingOutlined,
   AlertOutlined,
   SafetyCertificateOutlined,
-  BuildOutlined,
-  SyncOutlined
+  BuildOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import dayjs from 'dayjs';
 import { mesDashboardService } from '../../../services/dashboard';
 import { equipmentFaultApi, maintenancePlanApi } from '../../../services/equipment';
 
@@ -209,8 +207,8 @@ const EquipmentDashboard: React.FC = () => {
                           percent={s?.average_oee ?? 0}
                           showInfo={false}
                           strokeColor="#fff"
-                          trailColor="rgba(255, 255, 255, 0.2)"
-                          strokeWidth={6}
+                          railColor="rgba(255, 255, 255, 0.2)"
+                          size={6}
                         />
                       </div>
                     </div>

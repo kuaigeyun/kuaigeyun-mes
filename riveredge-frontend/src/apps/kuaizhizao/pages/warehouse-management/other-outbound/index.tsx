@@ -10,7 +10,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form as AntForm, InputNumber, Input, Row, Col } from 'antd';
+import { App, Button, Tag, Space, Modal, Table, Form as AntForm, InputNumber, Input, Row, Col, Typography } from 'antd';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, ShoppingOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
@@ -25,7 +25,8 @@ import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../s
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { getOtherOutboundLifecycle } from '../../../utils/otherOutboundLifecycle';
-import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import dayjs from 'dayjs';
 import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
 import { useTranslation } from 'react-i18next';
 
@@ -52,6 +53,7 @@ interface OtherOutbound {
   total_amount?: number;
   notes?: string;
   created_at?: string;
+  updated_at?: string;
   [key: string]: any;
 }
 
@@ -120,7 +122,18 @@ const OtherOutboundPage: React.FC = () => {
   }, []);
 
   const columns: ProColumns<OtherOutbound>[] = [
-    { title: '出库单编号', dataIndex: 'outbound_code', width: 140, ellipsis: true, fixed: 'left' },
+    {
+      title: '出库单编号',
+      dataIndex: 'outbound_code',
+      width: 140,
+      ellipsis: true,
+      fixed: 'left',
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.outbound_code ?? '') }} ellipsis>
+          {r.outbound_code ?? '-'}
+        </Typography.Text>
+      ),
+    },
     { title: '仓库', dataIndex: 'warehouse_name', width: 120, ellipsis: true },
     {
       title: '原因类型',
@@ -128,19 +141,38 @@ const OtherOutboundPage: React.FC = () => {
       width: 100,
       render: (v) => <Tag>{v || '-'}</Tag>,
     },
+    { title: '出库人', dataIndex: 'deliverer_name', width: 100 },
+    { title: '出库时间', dataIndex: 'delivery_time', valueType: 'dateTime', width: 160 },
+    {
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      width: 168,
+      hideInSearch: true,
+      defaultSortOrder: 'descend',
+      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+    },
     {
       title: '生命周期',
       dataIndex: 'lifecycle',
-      width: 100,
+      width: 132,
+      fixed: 'right',
+      align: 'left',
+      hideInSearch: true,
       render: (_, record) => {
-        const lifecycle = getOtherOutboundLifecycle(record);
-        const stageName = lifecycle.stageName ?? record.status ?? '待出库';
-        return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>;
+        const lifecycle = getOtherOutboundLifecycle(record as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
       },
     },
-    { title: '出库人', dataIndex: 'deliverer_name', width: 100 },
-    { title: '出库时间', dataIndex: 'delivery_time', valueType: 'dateTime', width: 160 },
-    { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime', width: 160 },
     {
       title: '操作',
       width: 180,
@@ -285,6 +317,7 @@ const OtherOutboundPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable
           headerTitle="其他出库"
+          columnPersistenceId="kuaizhizao-wm-other-outbound"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -300,6 +333,7 @@ const OtherOutboundPage: React.FC = () => {
                 status: params.status,
                 reason_type: params.reason_type,
                 warehouse_id: params.warehouse_id,
+                keyword: (params as any).keyword,
               });
               const data = Array.isArray(response) ? response : response?.items || response?.data || [];
               const total = Array.isArray(response) ? response.length : response?.total ?? data.length;

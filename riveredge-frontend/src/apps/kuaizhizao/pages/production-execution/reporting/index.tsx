@@ -4,26 +4,85 @@
  * 提供报工记录的管理和查询功能，支持移动端扫码报工。
  */
 
-import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProFormSelect, ProFormRadio, ProFormDigit, ProFormTextArea, ProFormItem, ProFormText, ProFormDatePicker, ProFormSwitch } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Row, Col, Input, Alert, Spin, Form, Radio, theme as AntdTheme } from 'antd';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
+import type { DescriptionsProps } from 'antd';
+import {
+  ActionType,
+  ProColumns,
+  ProFormSelect,
+  ProFormRadio,
+  ProFormDigit,
+  ProFormTextArea,
+  ProFormItem,
+  ProFormText,
+  ProFormDatePicker,
+  ProFormSwitch,
+  ProDescriptionsItemProps,
+} from '@ant-design/pro-components';
+import {
+  App,
+  Button,
+  Tag,
+  Space,
+  Modal,
+  Card,
+  Row,
+  Col,
+  Input,
+  Alert,
+  Spin,
+  Form,
+  Radio,
+  theme as AntdTheme,
+  Descriptions,
+  Typography,
+  Dropdown,
+  Empty,
+  Table,
+} from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from 'react-router-dom';
-import { QrcodeOutlined, ScanOutlined, ClockCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, DeleteOutlined, WarningOutlined, PlusOutlined, MinusOutlined, RollbackOutlined } from '@ant-design/icons';
+import {
+  QrcodeOutlined,
+  ScanOutlined,
+  ClockCircleOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  DeleteOutlined,
+  WarningOutlined,
+  PlusOutlined,
+  MinusOutlined,
+  RollbackOutlined,
+  EyeOutlined,
+} from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
-import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG, type StatCard } from '../../../../../components/layout-templates';
+import {
+  ListPageTemplate,
+  FormModalTemplate,
+  MODAL_CONFIG,
+  DetailDrawerTemplate,
+  DetailDrawerSection,
+  DRAWER_CONFIG,
+  type StatCard,
+} from '../../../../../components/layout-templates';
 import { SimpleSparkline } from '../../../../../components';
 import { reportingApi, workOrderApi, materialBindingApi, getReportingStatistics } from '../../../services/production';
 import { getReportingLifecycle } from '../../../utils/reportingLifecycle';
-import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
+import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import {
+  DocumentTrackingRelationsBody,
+  DocumentTrackingTimelineBody,
+  useDocumentTracking,
+} from '../../../../../components/document-tracking-panel';
 import { materialApi } from '../../../../master-data/services/material';
 import { sopApi } from '../../../../master-data/services/process';
 import { getUserInfo } from '../../../../../utils/auth';
 import { usePageMetrics } from '../../../../../hooks/usePageMetrics';
 import { getRemainingReportableQuantity } from '../../../utils/workOrderReporting';
+import dayjs from 'dayjs';
 
 /** 报工记录（后端返回 snake_case） */
 interface ReportingRecord {
@@ -41,6 +100,61 @@ interface ReportingRecord {
   remarks?: string;
   sop_parameters?: Record<string, any>;
   [key: string]: any; // 支持索引访问
+}
+
+const REPORTING_ROW_ACTIONS_INLINE_MAX = 3;
+const REPORTING_DETAIL_BINDINGS_MIN_WIDTH = 1100;
+
+function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
+  dataSource: T,
+  cols: ProDescriptionsItemProps<T>[]
+): NonNullable<DescriptionsProps['items']> {
+  return cols.map((col, index) => {
+    const dataIndex = col.dataIndex as keyof T | undefined;
+    const value = dataIndex != null ? dataSource[dataIndex] : undefined;
+    let content: React.ReactNode = value as React.ReactNode;
+    if (col.valueType === 'dateTime' && value) {
+      content = dayjs(value as string).format('YYYY-MM-DD HH:mm:ss');
+    } else if (col.valueType === 'date' && value) {
+      content = dayjs(value as string).format('YYYY-MM-DD');
+    }
+    if (col.render && dataSource != null) {
+      content = col.render(content, dataSource, index, {}, col);
+    }
+    return {
+      key: String(col.key ?? col.dataIndex ?? index),
+      label: col.title as React.ReactNode,
+      children: content !== undefined && content !== null ? content : '-',
+      span: col.span ?? 1,
+    };
+  });
+}
+
+function renderReportingRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
+  const wrapped = nodes.map((node, i) => <span key={`${keyPrefix}-${i}`}>{node}</span>);
+  if (wrapped.length <= REPORTING_ROW_ACTIONS_INLINE_MAX) {
+    return <Space size="small" wrap>{wrapped}</Space>;
+  }
+  const inline = wrapped.slice(0, REPORTING_ROW_ACTIONS_INLINE_MAX);
+  const overflow = wrapped.slice(REPORTING_ROW_ACTIONS_INLINE_MAX);
+  return (
+    <Space size="small" wrap>
+      {inline}
+      <Dropdown
+        menu={{
+          items: overflow.map((node, i) => ({
+            key: `${keyPrefix}-more-${i}`,
+            label: node,
+          })),
+        }}
+        trigger={['click']}
+      >
+        <Button type="link" size="small">
+          更多
+        </Button>
+      </Dropdown>
+    </Space>
+  );
 }
 
 /** 获取报工员工信息：优先使用工序派工的 assigned_worker，否则使用当前登录用户 */
@@ -363,7 +477,17 @@ const ReportingPage: React.FC = () => {
   const location = useLocation();
   const actionRef = useRef<ActionType>(null);
 
-  const { statCards: pageMetricCards, hasConfig: hasPageMetricConfig } = usePageMetrics();
+  const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
+  const [reportingDetail, setReportingDetail] = useState<ReportingRecord | null>(null);
+  const [detailMaterialBindings, setDetailMaterialBindings] = useState<any[]>([]);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
+  const reportingTracking = useDocumentTracking(
+    detailDrawerVisible && reportingDetail?.id ? 'reporting_record' : undefined,
+    reportingDetail?.id
+  );
+
+  const { statCards: pageMetricCards, hasConfig: hasPageMetricConfig } = usePageMetrics(location.pathname);
   const invalidateStatistics = () => {
     queryClient.invalidateQueries({ queryKey: ['reportingStatistics'] });
     queryClient.invalidateQueries({ queryKey: ['pageMetrics', location.pathname] });
@@ -1197,6 +1321,8 @@ const ReportingPage: React.FC = () => {
         throw new Error('修正原因不能为空');
       }
 
+      const correctedId = currentReportingRecordForCorrect.id;
+
       await reportingApi.correct(
         currentReportingRecordForCorrect.id.toString(),
         values
@@ -1206,12 +1332,245 @@ const ReportingPage: React.FC = () => {
       setCurrentReportingRecordForCorrect(null);
       correctFormRef.current?.resetFields();
       actionRef.current?.reload();
+      invalidateStatistics();
+      if (reportingDetail?.id === correctedId) {
+        try {
+          const fresh = await reportingApi.get(String(correctedId));
+          setReportingDetail(fresh as ReportingRecord);
+        } catch {
+          /* ignore */
+        }
+      }
     } catch (error: any) {
       if (error.message !== '修正原因不能为空') {
         messageApi.error(error.message || '修正报工数据失败');
       }
       throw error;
     }
+  };
+
+  const handleDetail = async (record: ReportingRecord) => {
+    try {
+      const detail = await reportingApi.get(record.id!.toString());
+      setReportingDetail(detail as ReportingRecord);
+      setDetailDrawerVisible(true);
+      try {
+        const bindings = await materialBindingApi.getByReportingRecord(String(record.id));
+        setDetailMaterialBindings(Array.isArray(bindings) ? bindings : []);
+      } catch {
+        setDetailMaterialBindings([]);
+      }
+    } catch {
+      messageApi.error('获取报工记录详情失败');
+    }
+  };
+
+  const renderReportingRowActionNodes = (record: ReportingRecord): React.ReactNode[] => {
+    const nodes: React.ReactNode[] = [];
+    nodes.push(
+      <Button
+        key="detail"
+        type="link"
+        size="small"
+        icon={<EyeOutlined />}
+        onClick={(e) => {
+          e.stopPropagation();
+          void handleDetail(record);
+        }}
+      >
+        详情
+      </Button>
+    );
+    if (record.status === 'pending') {
+      nodes.push(
+        <span key="wf" onClick={(e) => e.stopPropagation()}>
+          <UniWorkflowActions
+            record={record}
+            entityName="报工记录"
+            statusField="status"
+            draftStatuses={[]}
+            pendingStatuses={['pending']}
+            approvedStatuses={['approved']}
+            rejectedStatuses={['rejected']}
+            actions={{
+              approve: (id) => reportingApi.approve(id.toString(), {}),
+              reject: (id, reason) =>
+                reportingApi.approve(id.toString(), {}, { rejection_reason: reason || undefined }),
+            }}
+            onSuccess={() => {
+              actionRef.current?.reload();
+              invalidateStatistics();
+              if (reportingDetail?.id === record.id) {
+                reportingApi
+                  .get(record.id.toString())
+                  .then((d) => setReportingDetail(d as ReportingRecord))
+                  .catch(() => {});
+              }
+            }}
+            theme="link"
+            size="small"
+          />
+        </span>
+      );
+      nodes.push(
+        <Button
+          key="corr"
+          type="link"
+          size="small"
+          onClick={(e) => {
+            e.stopPropagation();
+            void handleCorrectReporting(record);
+          }}
+        >
+          修正
+        </Button>
+      );
+      nodes.push(
+        <Button
+          key="del"
+          type="link"
+          size="small"
+          danger
+          onClick={(e) => {
+            e.stopPropagation();
+            Modal.confirm({
+              title: '确认删除',
+              content: '确定要删除这条待审核的报工记录吗？删除后将扣减工单/工序相应的完成数量。',
+              onOk: async () => {
+                try {
+                  await reportingApi.delete(record.id.toString());
+                  messageApi.success('删除成功');
+                  if (reportingDetail?.id === record.id) {
+                    setDetailDrawerVisible(false);
+                    setReportingDetail(null);
+                  }
+                  actionRef.current?.reload();
+                  invalidateStatistics();
+                } catch (error: any) {
+                  messageApi.error(error.message || '删除失败');
+                }
+              },
+            });
+          }}
+        >
+          删除
+        </Button>
+      );
+    }
+    if (record.status === 'approved') {
+      nodes.push(
+        <Button
+          key="revoke"
+          type="link"
+          size="small"
+          onClick={(e) => {
+            e.stopPropagation();
+            Modal.confirm({
+              title: '确认撤回审核',
+              content:
+                '撤回审核后，该报工记录将变为"待审核"状态，且不再计入工单已完成数量。确定要撤回吗？',
+              onOk: async () => {
+                try {
+                  await reportingApi.revoke(record.id.toString());
+                  messageApi.success('已撤回审核');
+                  if (reportingDetail?.id === record.id) {
+                    reportingApi
+                      .get(record.id.toString())
+                      .then((d) => setReportingDetail(d as ReportingRecord))
+                      .catch(() => {});
+                  }
+                  actionRef.current?.reload();
+                  invalidateStatistics();
+                } catch (error: any) {
+                  messageApi.error(error.message || '撤回失败');
+                }
+              },
+            });
+          }}
+        >
+          撤回审核
+        </Button>
+      );
+      if ((record.unqualified_quantity || 0) > 0) {
+        nodes.push(
+          <Button
+            key="defect"
+            type="link"
+            size="small"
+            icon={<WarningOutlined />}
+            style={{ color: '#faad14' }}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleCreateDefect(record);
+            }}
+          >
+            不良品
+          </Button>
+        );
+        nodes.push(
+          <Button
+            key="scrap"
+            type="link"
+            size="small"
+            danger
+            icon={<DeleteOutlined />}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleCreateScrap(record);
+            }}
+          >
+            报废
+          </Button>
+        );
+      }
+      nodes.push(
+        <Button
+          key="corr2"
+          type="link"
+          size="small"
+          onClick={(e) => {
+            e.stopPropagation();
+            void handleCorrectReporting(record);
+          }}
+        >
+          修正
+        </Button>
+      );
+    }
+    if (record.status === 'rejected') {
+      nodes.push(
+        <Button
+          key="del2"
+          type="link"
+          size="small"
+          danger
+          onClick={(e) => {
+            e.stopPropagation();
+            Modal.confirm({
+              title: '确认删除',
+              content: '确定要删除这条被驳回的报工记录吗？',
+              onOk: async () => {
+                try {
+                  await reportingApi.delete(record.id.toString());
+                  messageApi.success('删除成功');
+                  if (reportingDetail?.id === record.id) {
+                    setDetailDrawerVisible(false);
+                    setReportingDetail(null);
+                  }
+                  actionRef.current?.reload();
+                  invalidateStatistics();
+                } catch (error: any) {
+                  messageApi.error(error.message || '删除失败');
+                }
+              },
+            });
+          }}
+        >
+          删除
+        </Button>
+      );
+    }
+    return nodes;
   };
 
   /**
@@ -1221,9 +1580,14 @@ const ReportingPage: React.FC = () => {
     {
       title: '工单编号',
       dataIndex: 'work_order_code',
-      width: 140,
+      width: 148,
       ellipsis: true,
       fixed: 'left',
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.work_order_code ?? '') }} ellipsis>
+          {r.work_order_code ?? '-'}
+        </Typography.Text>
+      ),
     },
     {
       title: '工单名称',
@@ -1268,167 +1632,48 @@ const ReportingPage: React.FC = () => {
       align: 'right',
     },
     {
-      title: '生命周期',
-      dataIndex: 'lifecycle',
-      width: 100,
-      valueEnum: {
-        pending: { text: '待审核', status: 'default' },
-        approved: { text: '已审核', status: 'success' },
-        rejected: { text: '已驳回', status: 'error' },
-      },
-      render: (_, record) => {
-        const lifecycle = getReportingLifecycle(record);
-        const stageName = lifecycle.stageName ?? record.status ?? '待审核';
-        return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>;
-      },
-    },
-    {
       title: '报工时间',
       dataIndex: 'reported_at',
       valueType: 'dateTime',
       width: 160,
     },
     {
-      title: '操作',
-      width: 300,
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      valueType: 'dateTime',
+      width: 168,
+      hideInSearch: true,
+      defaultSortOrder: 'descend',
+    },
+    {
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      width: 132,
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          {record.status === 'pending' && (
-            <>
-              <UniWorkflowActions
-                record={record}
-                entityName="报工记录"
-                statusField="status"
-                draftStatuses={[]}
-                pendingStatuses={['pending']}
-                approvedStatuses={['approved']}
-                rejectedStatuses={['rejected']}
-                actions={{
-                  approve: (id) => reportingApi.approve(id.toString(), {}),
-                  reject: (id, reason) => reportingApi.approve(id.toString(), {}, { rejection_reason: reason || undefined }),
-                }}
-                onSuccess={() => {
-                  actionRef.current?.reload();
-                  invalidateStatistics();
-                }}
-                theme="link"
-                size="small"
-              />
-              <Button
-                type="link"
-                size="small"
-                onClick={() => handleCorrectReporting(record)}
-              >
-                修正
-              </Button>
-              <Button
-                type="link"
-                size="small"
-                danger
-                onClick={() => {
-                  Modal.confirm({
-                    title: '确认删除',
-                    content: '确定要删除这条待审核的报工记录吗？删除后将扣减工单/工序相应的完成数量。',
-                    onOk: async () => {
-                      try {
-                        await reportingApi.delete(record.id.toString());
-                        messageApi.success('删除成功');
-                        actionRef.current?.reload();
-                        invalidateStatistics();
-                      } catch (error: any) {
-                        messageApi.error(error.message || '删除失败');
-                      }
-                    },
-                  });
-                }}
-              >
-                删除
-              </Button>
-            </>
-          )}
-          {record.status === 'approved' && (
-            <>
-              <Button
-                type="link"
-                size="small"
-                onClick={async () => {
-                  Modal.confirm({
-                    title: '确认撤回审核',
-                    content: '撤回审核后，该报工记录将变为"待审核"状态，且不再计入工单已完成数量。确定要撤回吗？',
-                    onOk: async () => {
-                      try {
-                        await reportingApi.revoke(record.id.toString());
-                        messageApi.success('已撤回审核');
-                        actionRef.current?.reload();
-                        invalidateStatistics();
-                      } catch (error: any) {
-                        messageApi.error(error.message || '撤回失败');
-                      }
-                    },
-                  });
-                }}
-              >
-                撤回审核
-              </Button>
-              {(record.unqualified_quantity || 0) > 0 && (
-                <>
-                  <Button
-                    type="link"
-                    size="small"
-                    icon={<WarningOutlined />}
-                    onClick={() => handleCreateDefect(record)}
-                    style={{ color: '#faad14' }}
-                  >
-                    不良品
-                  </Button>
-                  <Button
-                    type="link"
-                    size="small"
-                    danger
-                    icon={<DeleteOutlined />}
-                    onClick={() => handleCreateScrap(record)}
-                  >
-                    报废
-                  </Button>
-                </>
-              )}
-              <Button
-                type="link"
-                size="small"
-                onClick={() => handleCorrectReporting(record)}
-              >
-                修正
-              </Button>
-            </>
-          )}
-          {record.status === 'rejected' && (
-            <Button
-              type="link"
-              size="small"
-              danger
-              onClick={() => {
-                Modal.confirm({
-                  title: '确认删除',
-                  content: '确定要删除这条被驳回的报工记录吗？',
-                  onOk: async () => {
-                    try {
-                      await reportingApi.delete(record.id.toString());
-                      messageApi.success('删除成功');
-                      actionRef.current?.reload();
-                      invalidateStatistics();
-                    } catch (error: any) {
-                      messageApi.error(error.message || '删除失败');
-                    }
-                  },
-                });
-              }}
-            >
-              删除
-            </Button>
-          )}
-        </Space>
-      ),
+      align: 'left',
+      hideInSearch: true,
+      render: (_, record) => {
+        const lifecycle = getReportingLifecycle(record);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
+      },
+    },
+    {
+      title: '操作',
+      width: 200,
+      fixed: 'right',
+      hideInSearch: true,
+      render: (_, record) =>
+        renderReportingRowActions(renderReportingRowActionNodes(record), `rr-${record.id}`),
     },
   ];
 
@@ -1554,11 +1799,55 @@ const ReportingPage: React.FC = () => {
         },
       ];
 
+  const reportingDetailBaseColumns: ProDescriptionsItemProps<ReportingRecord>[] = useMemo(
+    () => [
+      {
+        title: '工单编号',
+        dataIndex: 'work_order_code',
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: String(r.work_order_code ?? '') }}>{r.work_order_code ?? '-'}</Typography.Text>
+        ),
+      },
+      { title: '工单名称', dataIndex: 'work_order_name' },
+      { title: '工序', dataIndex: 'operation_name' },
+      { title: '操作工', dataIndex: 'worker_name' },
+      {
+        title: '审核状态',
+        dataIndex: 'status',
+        render: (s) => {
+          const m: Record<string, { text: string; color: string }> = {
+            pending: { text: '待审核', color: 'default' },
+            approved: { text: '已审核', color: 'success' },
+            rejected: { text: '已驳回', color: 'error' },
+          };
+          const x = m[String(s)] || { text: String(s ?? '-'), color: 'default' };
+          return <Tag color={x.color}>{x.text}</Tag>;
+        },
+      },
+      { title: '报工数量', dataIndex: 'reported_quantity' },
+      { title: '合格数量', dataIndex: 'qualified_quantity' },
+      { title: '不合格数量', dataIndex: 'unqualified_quantity' },
+      { title: '工时(小时)', dataIndex: 'work_hours' },
+      { title: '报工时间', dataIndex: 'reported_at', valueType: 'dateTime' },
+      { title: '审核时间', dataIndex: 'approved_at', valueType: 'dateTime' },
+      { title: '审核人', dataIndex: 'approved_by_name' },
+      { title: '驳回原因', dataIndex: 'rejection_reason', span: 3, render: (t: any) => t || '-' },
+      {
+        title: '备注',
+        dataIndex: 'remarks',
+        span: 3,
+        render: (text: any) => text || '-',
+      },
+    ],
+    []
+  );
+
   return (
     <>
       <ListPageTemplate statCards={statCards}>
       <UniTable
         headerTitle="报工管理"
+        columnPersistenceId="kuaizhizao-reporting-management"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
@@ -1570,7 +1859,7 @@ const ReportingPage: React.FC = () => {
             const list = await reportingApi.list({
               skip,
               limit,
-              work_order_code: params.work_order_code,
+              work_order_code: params.keyword || params.work_order_code,
               work_order_name: params.work_order_name,
               operation_name: params.operation_name,
               worker_name: params.worker_name,
@@ -1591,8 +1880,9 @@ const ReportingPage: React.FC = () => {
           }
         }}
         enableRowSelection={true}
+        onRowSelectionChange={setSelectedRowKeys}
         showCreateButton={true}
-        createButtonText="新建报工"
+        createButtonText="新建报工记录"
         onCreate={handleNewReporting}
         showDeleteButton={true}
         onDelete={async (keys) => {
@@ -1605,13 +1895,24 @@ const ReportingPage: React.FC = () => {
                   await reportingApi.delete(String(id));
                 }
                 messageApi.success(`成功删除 ${keys.length} 条记录`);
+                setSelectedRowKeys([]);
+                if (reportingDetail?.id != null && keys.includes(reportingDetail.id)) {
+                  setDetailDrawerVisible(false);
+                  setReportingDetail(null);
+                }
                 actionRef.current?.reload();
+                invalidateStatistics();
               } catch (error: any) {
                 messageApi.error(error.message || '删除失败');
               }
             },
           });
         }}
+        scroll={{ x: 1700 }}
+        onRow={(record) => ({
+          onClick: () => void handleDetail(record),
+          style: { cursor: 'pointer' },
+        })}
         toolBarRender={(_, { selectedRowKeys }) => [
           selectedRowKeys && selectedRowKeys.length > 0 && (
             <Button
@@ -1632,6 +1933,7 @@ const ReportingPage: React.FC = () => {
                       }
                       actionRef.current?.reload();
                       invalidateStatistics();
+                      setSelectedRowKeys([]);
                     } catch (error: any) {
                       messageApi.error(error.message || '批量撤回失败');
                     }
@@ -1653,7 +1955,7 @@ const ReportingPage: React.FC = () => {
       />
 
       <FormModalTemplate
-        title="新建报工"
+        title="新建报工记录"
         open={reportingModalVisible}
         onClose={() => {
           setReportingModalVisible(false);
@@ -2697,6 +2999,135 @@ const ReportingPage: React.FC = () => {
           />
         )}
       </Modal>
+
+      <DetailDrawerTemplate<ReportingRecord>
+        title={`报工记录详情${reportingDetail?.work_order_code ? ` - ${reportingDetail.work_order_code}` : ''}`}
+        open={detailDrawerVisible}
+        onClose={() => {
+          setDetailDrawerVisible(false);
+          setReportingDetail(null);
+          setDetailMaterialBindings([]);
+        }}
+        width={DRAWER_CONFIG.HALF_WIDTH}
+        columns={[]}
+        column={3}
+        dataSource={reportingDetail || undefined}
+        customContent={
+          reportingDetail && (
+            <>
+              <DetailDrawerSection title="基本信息">
+                <Descriptions
+                  column={3}
+                  size="small"
+                  items={buildDescriptionItemsFromColumns(reportingDetail, reportingDetailBaseColumns)}
+                />
+                {reportingDetail.sop_parameters && Object.keys(reportingDetail.sop_parameters).length > 0 && (
+                  <div style={{ marginTop: 12 }}>
+                    <Typography.Text strong>SOP 参数</Typography.Text>
+                    <pre style={{ marginTop: 8, fontSize: 12, whiteSpace: 'pre-wrap' }}>
+                      {JSON.stringify(reportingDetail.sop_parameters, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </DetailDrawerSection>
+
+              <DetailDrawerSection title="生命周期">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {(() => {
+                    const lifecycle = getReportingLifecycle(reportingDetail);
+                    const mainStages = lifecycle.mainStages ?? [];
+                    if (mainStages.length === 0) return null;
+                    return (
+                      <UniLifecycleStepper
+                        steps={mainStages}
+                        status={lifecycle.status}
+                        showLabels
+                        nextStepSuggestions={lifecycle.nextStepSuggestions}
+                      />
+                    );
+                  })()}
+                  <div
+                    style={{
+                      paddingTop: 12,
+                      borderTop: '1px solid var(--ant-color-border-secondary)',
+                    }}
+                  >
+                    <div style={{ marginBottom: 8, fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
+                      上下游单据
+                    </div>
+                    {reportingTracking.loading && (
+                      <div style={{ padding: '8px 0' }}>
+                        <Spin size="small" />
+                      </div>
+                    )}
+                    {reportingTracking.error && (
+                      <Typography.Text type="danger">{reportingTracking.error}</Typography.Text>
+                    )}
+                    {reportingTracking.data && (
+                      <DocumentTrackingRelationsBody
+                        data={reportingTracking.data}
+                        onDocumentClick={(type, id) => messageApi.info(`跳转到${type}#${id}`)}
+                      />
+                    )}
+                  </div>
+                </div>
+              </DetailDrawerSection>
+
+              <DetailDrawerSection title="明细信息">
+                <style>{`
+                  .reporting-detail-bindings .ant-table-wrapper .ant-table-body,
+                  .reporting-detail-bindings .ant-table-wrapper .ant-table-content {
+                    overflow: visible !important;
+                  }
+                `}</style>
+                {detailMaterialBindings.length > 0 ? (
+                  <div
+                    className="reporting-detail-bindings"
+                    style={{ width: '100%', maxWidth: '100%', overflowX: 'auto', overflowY: 'hidden' }}
+                  >
+                    <Table
+                      size="small"
+                      tableLayout="fixed"
+                      style={{ minWidth: REPORTING_DETAIL_BINDINGS_MIN_WIDTH }}
+                      columns={[
+                        { title: '类型', dataIndex: 'binding_type', width: 100, ellipsis: true },
+                        { title: '物料编码', dataIndex: 'material_code', width: 120, ellipsis: true },
+                        { title: '物料名称', dataIndex: 'material_name', width: 160, ellipsis: true },
+                        { title: '数量', dataIndex: 'quantity', width: 100, align: 'right' as const },
+                        { title: '仓库', dataIndex: 'warehouse_name', width: 120, ellipsis: true },
+                        { title: '绑定方式', dataIndex: 'binding_method', width: 100 },
+                      ]}
+                      dataSource={detailMaterialBindings}
+                      pagination={false}
+                      rowKey={(r: any) => String(r.id ?? `${r.material_code}-${r.binding_type}`)}
+                      bordered
+                    />
+                  </div>
+                ) : (
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无物料绑定明细" />
+                )}
+              </DetailDrawerSection>
+
+              <DetailDrawerSection title="操作记录">
+                {reportingTracking.loading && (
+                  <div style={{ textAlign: 'center', padding: 24 }}>
+                    <Spin />
+                  </div>
+                )}
+                {reportingTracking.error && !reportingTracking.loading && (
+                  <Typography.Text type="danger">{reportingTracking.error}</Typography.Text>
+                )}
+                {reportingTracking.data && !reportingTracking.loading && (
+                  <DocumentTrackingTimelineBody data={reportingTracking.data} />
+                )}
+                {!reportingTracking.loading && !reportingTracking.data && !reportingTracking.error && (
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+                )}
+              </DetailDrawerSection>
+            </>
+          )
+        }
+      />
 
     </ListPageTemplate>
     </>

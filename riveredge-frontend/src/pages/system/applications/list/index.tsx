@@ -880,7 +880,7 @@ const ApplicationListPage: React.FC = () => {
         onCancel={() => setResetModalVisible(false)}
         footer={null}
         width={480}
-        destroyOnClose
+        destroyOnHidden
       >
         <div style={{ padding: '8px 0' }}>
           {resetStage === 1 && (

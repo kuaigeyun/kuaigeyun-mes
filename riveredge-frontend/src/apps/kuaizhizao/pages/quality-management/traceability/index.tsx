@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { Input, Space, Select, Empty, Spin, message, Descriptions, Tag, Button, theme } from 'antd';
+import { Input, Space, Select, Empty, Spin, message, Descriptions, Tag, Button, theme, Typography } from 'antd';
 import { useRequest } from 'ahooks';
 import { api } from '../../../../../services/api';
 import { useTranslation } from 'react-i18next';
 import { FlowGraph } from '@ant-design/graphs';
-import { DetailDrawerTemplate, ListPageTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { DetailDrawerTemplate, DetailDrawerSection, ListPageTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 
 const { useToken } = theme;
 
@@ -29,7 +29,7 @@ const TraceabilityPage: React.FC = () => {
         {
             manual: true,
             onError: (err) => {
-                message.error('Fetch failed: ' + err.message);
+                message.error('追溯数据加载失败：' + (err?.message || String(err)));
             }
         }
     );
@@ -144,39 +144,50 @@ const TraceabilityPage: React.FC = () => {
                 width={DRAWER_CONFIG.HALF_WIDTH}
                 columns={[]}
                 customContent={selectedNode ? (
-                    <Descriptions column={1} bordered size="small">
-                        <Descriptions.Item label={t('pages.traceability.nodeType', { defaultValue: '类型' })}>
-                            <Tag color={selectedNode.type === 'work_order' ? 'blue' : 'green'}>
-                                {selectedNode.type === 'work_order' ? t('pages.traceability.workOrder', { defaultValue: '产线工单' }) : t('pages.traceability.batch', { defaultValue: '物料批次' })}
-                            </Tag>
-                        </Descriptions.Item>
-                        <Descriptions.Item label={t('pages.traceability.nodeId', { defaultValue: '标识' })}>
-                            {selectedNode.id}
-                        </Descriptions.Item>
-                        {selectedNode.data?.material_name && (
-                            <Descriptions.Item label={t('pages.traceability.materialName', { defaultValue: '物料名称' })}>
-                                {selectedNode.data.material_name}
-                            </Descriptions.Item>
-                        )}
-                        {selectedNode.data?.material_code && (
-                            <Descriptions.Item label={t('pages.traceability.materialCode', { defaultValue: '物料编号' })}>
-                                {selectedNode.data.material_code}
-                            </Descriptions.Item>
-                        )}
-                        {selectedNode.data?.operation_name && (
-                            <Descriptions.Item label={t('pages.traceability.operationName', { defaultValue: '执行工序' })}>
-                                {selectedNode.data.operation_name}
-                            </Descriptions.Item>
-                        )}
-                    </Descriptions>
+                    <>
+                        <DetailDrawerSection title="基本信息">
+                            <Descriptions column={1} bordered size="small">
+                                <Descriptions.Item label={t('pages.traceability.nodeType', { defaultValue: '类型' })}>
+                                    <Tag color={selectedNode.type === 'work_order' ? 'blue' : 'green'}>
+                                        {selectedNode.type === 'work_order' ? t('pages.traceability.workOrder', { defaultValue: '产线工单' }) : t('pages.traceability.batch', { defaultValue: '物料批次' })}
+                                    </Tag>
+                                </Descriptions.Item>
+                                <Descriptions.Item label={t('pages.traceability.nodeId', { defaultValue: '标识' })}>
+                                    <Typography.Text copyable={{ text: String(selectedNode.id) }}>{selectedNode.id}</Typography.Text>
+                                </Descriptions.Item>
+                                {selectedNode.data?.material_name && (
+                                    <Descriptions.Item label={t('pages.traceability.materialName', { defaultValue: '物料名称' })}>
+                                        {selectedNode.data.material_name}
+                                    </Descriptions.Item>
+                                )}
+                                {selectedNode.data?.material_code && (
+                                    <Descriptions.Item label={t('pages.traceability.materialCode', { defaultValue: '物料编号' })}>
+                                        <Typography.Text copyable={{ text: String(selectedNode.data.material_code) }}>{selectedNode.data.material_code}</Typography.Text>
+                                    </Descriptions.Item>
+                                )}
+                                {selectedNode.data?.operation_name && (
+                                    <Descriptions.Item label={t('pages.traceability.operationName', { defaultValue: '执行工序' })}>
+                                        {selectedNode.data.operation_name}
+                                    </Descriptions.Item>
+                                )}
+                            </Descriptions>
+                        </DetailDrawerSection>
+                        <DetailDrawerSection title="生命周期">
+                            <Typography.Text type="secondary">追溯图为查询快照，不展示业务单据审核生命周期</Typography.Text>
+                        </DetailDrawerSection>
+                        <DetailDrawerSection title="明细信息">
+                            {selectedNode?.type === 'work_order' && selectedNode.data?.work_order_id ? (
+                                <Button type="primary" block>{t('pages.traceability.viewWorkOrder', { defaultValue: '查看工单详情' })}</Button>
+                            ) : (
+                                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前节点无扩展明细" />
+                            )}
+                        </DetailDrawerSection>
+                        <DetailDrawerSection title="操作记录">
+                            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="追溯查询无操作时间线" />
+                        </DetailDrawerSection>
+                    </>
                 ) : null}
-            >
-                {selectedNode?.type === 'work_order' && selectedNode.data?.work_order_id && (
-                    <div style={{ marginTop: 24 }}>
-                        <Button type="primary" block>{t('pages.traceability.viewWorkOrder', { defaultValue: '查看工单详情' })}</Button>
-                    </div>
-                )}
-            </DetailDrawerTemplate>
+            />
         </div>
         </ListPageTemplate>
     );

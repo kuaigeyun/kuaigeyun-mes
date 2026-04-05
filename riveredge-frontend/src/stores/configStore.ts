@@ -51,6 +51,27 @@ const DEFAULT_CONFIGS = {
   'system.max_retries': 3,
 };
 
+/**
+ * 递归展平对象为点分隔键的 Record
+ */
+function flattenObject(obj: any, prefix = ''): Record<string, any> {
+  const flattened: Record<string, any> = {};
+  if (!obj || typeof obj !== 'object') return flattened;
+  
+  Object.keys(obj).forEach((key) => {
+    const value = obj[key];
+    const newKey = prefix ? `${prefix}.${key}` : key;
+    
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      Object.assign(flattened, flattenObject(value, newKey));
+    } else {
+      flattened[newKey] = value;
+    }
+  });
+  
+  return flattened;
+}
+
 export const useConfigStore = create<ConfigState>()(
   persist(
     (set, get) => ({
@@ -62,11 +83,12 @@ export const useConfigStore = create<ConfigState>()(
         set({ loading: true });
         try {
           const response = await getSiteSetting();
+          const backendConfigs = flattenObject(response.settings || {});
           // 合并后端配置与默认配置
           set((state) => ({
             configs: {
               ...state.configs,
-              ...(response.settings || {}),
+              ...backendConfigs,
             },
             initialized: true,
           }));
@@ -83,11 +105,15 @@ export const useConfigStore = create<ConfigState>()(
         set({ loading: true });
         try {
           const { configs } = get();
+          // 更新单个配置项时，同时保持状态展平
           const newConfigs = { ...configs, [key]: value };
           
-          await updateSiteSetting({ settings: newConfigs });
-          
+          // 发送给后端的仍是包含嵌套的对象（通过 updateSiteSetting 处理），但 store 内部保持展平
+          // 为兼容后端，这里实际上应由 updateSiteSetting 处理嵌套逻辑，但我们至少保证 store 同步
           set({ configs: newConfigs });
+          
+          // 对站点设置而言，通常采用批量更新更安全，因为后端存储的是 JSON
+          await updateSiteSetting({ settings: newConfigs });
         } catch (error) {
           console.error('更新系统配置失败:', error);
           throw error;
@@ -100,7 +126,8 @@ export const useConfigStore = create<ConfigState>()(
         set({ loading: true });
         try {
           const { configs } = get();
-          const newConfigs = { ...configs, ...settings };
+          const flattenedUpdates = flattenObject(settings);
+          const newConfigs = { ...configs, ...flattenedUpdates };
           
           await updateSiteSetting({ settings: newConfigs });
           

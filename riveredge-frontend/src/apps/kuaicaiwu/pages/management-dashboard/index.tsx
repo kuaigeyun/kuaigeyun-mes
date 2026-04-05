@@ -1,7 +1,7 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Card, Col, Row, Statistic, Spin, Empty, Typography, Space, Divider } from 'antd';
-import { Pie, Column, Line } from '@ant-design/charts';
+import { Card, Col, Row, Statistic, Spin, Typography, Space, Divider } from 'antd';
+import { Pie } from '@ant-design/charts';
 import { 
   RocketOutlined, 
   SafetyCertificateOutlined, 
@@ -35,7 +35,12 @@ const ManagementDashboard: React.FC = () => {
   });
 
   if (loadingKpis || loadingQuality || loadingEfficiency || loadingWIP) {
-    return <div style={{ padding: 100, textAlign: 'center' }}><Spin size="large" tip="载入数字化经营看板..." /></div>;
+    return (
+      <div style={{ padding: 100, textAlign: 'center' }}>
+        <Spin size="large" />
+        <div style={{ marginTop: 16, color: 'var(--ant-color-text-secondary)' }}>载入数字化经营看板...</div>
+      </div>
+    );
   }
 
   // 账龄数据转换
@@ -109,9 +114,8 @@ const ManagementDashboard: React.FC = () => {
                 title="WIP 在制品估值"
                 value={wip?.estimated_wip_value}
                 precision={0}
-                prefix="¥"
                 valueStyle={{ color: '#faad14' }}
-                prefix={<HistoryOutlined />}
+                prefix={<Space size={4}><HistoryOutlined />¥</Space>}
               />
               <Text type="secondary">车间在产资金沉淀</Text>
             </Card>

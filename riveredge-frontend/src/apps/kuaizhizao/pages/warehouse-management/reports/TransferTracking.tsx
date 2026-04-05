@@ -2,11 +2,12 @@ import React from 'react';
 import { ProColumns } from '@ant-design/pro-components';
 import ReportBase from '../../../components/ReportBase';
 import { useTranslation } from 'react-i18next';
+import { copyableCodeColumn } from '../../../utils/reportCopyableColumn';
 
 const TransferTracking: React.FC = () => {
   const { t } = useTranslation();
   const columns: ProColumns[] = [
-    { title: '调拨单号', dataIndex: 'order_code', width: 150 },
+    copyableCodeColumn('调拨单号', 'order_code', 150),
     { title: '调出仓库', dataIndex: 'from_warehouse', width: 150 },
     { title: '调入仓库', dataIndex: 'to_warehouse', width: 150 },
     { title: '物料名称', dataIndex: 'material_name', width: 200 },
@@ -19,6 +20,7 @@ const TransferTracking: React.FC = () => {
       title={t('app.kuaizhizao.menu.reports.transfer-tracking')}
       reportType="transfer_tracking"
       columns={columns}
+      columnPersistenceId="kuaizhizao-wm-report-transfer-tracking"
     />
   );
 };

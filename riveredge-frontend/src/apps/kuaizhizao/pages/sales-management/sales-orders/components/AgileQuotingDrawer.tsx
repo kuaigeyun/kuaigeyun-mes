@@ -7,14 +7,14 @@ const { Title, Text, Paragraph } = Typography;
 
 interface AgileQuotingDrawerProps {
   materialId?: number;
-  visible: boolean;
+  open: boolean;
   onClose: () => void;
   onAdopt?: (price: number) => void;
 }
 
 export const AgileQuotingDrawer: React.FC<AgileQuotingDrawerProps> = ({
   materialId,
-  visible,
+  open,
   onClose,
   onAdopt
 }) => {
@@ -24,10 +24,10 @@ export const AgileQuotingDrawer: React.FC<AgileQuotingDrawerProps> = ({
   const [finalPrice, setFinalPrice] = useState<number>(0);
 
   useEffect(() => {
-    if (visible && materialId) {
+    if (open && materialId) {
       loadData();
     }
-  }, [visible, materialId]);
+  }, [open, materialId]);
 
   useEffect(() => {
     if (data) {
@@ -112,9 +112,11 @@ export const AgileQuotingDrawer: React.FC<AgileQuotingDrawerProps> = ({
         </Space>
       }
       placement="right"
-      width={800}
+      styles={{
+        wrapper: { width: 800 }
+      }}
       onClose={onClose}
-      open={visible}
+      open={open}
       footer={
         <div style={{ textAlign: 'right', padding: '10px 16px' }}>
           <Button onClick={onClose} style={{ marginRight: 8 }}>取消</Button>
@@ -133,7 +135,10 @@ export const AgileQuotingDrawer: React.FC<AgileQuotingDrawerProps> = ({
       }
     >
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '100px 0' }}><Spin tip="核算成本中..." /></div>
+        <div style={{ textAlign: 'center', padding: '100px 0' }}>
+          <Spin />
+          <div style={{ marginTop: 12, color: 'var(--ant-color-text-secondary)' }}>核算成本中...</div>
+        </div>
       ) : data ? (
         <div style={{ padding: '0 10px' }}>
           <Card size="small" style={{ marginBottom: 20, background: '#fafafa', border: '1px solid #f0f0f0' }}>
@@ -150,7 +155,7 @@ export const AgileQuotingDrawer: React.FC<AgileQuotingDrawerProps> = ({
             pagination={false} 
             size="small" 
             rowKey={(record, index) => `${record.name}-${index}`}
-            summary={pageData => {
+            summary={() => {
               return (
                 <Table.Summary fixed>
                   <Table.Summary.Row style={{ background: '#fafafa' }}>

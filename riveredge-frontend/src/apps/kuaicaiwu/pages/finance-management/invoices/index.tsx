@@ -8,7 +8,7 @@
  */
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal, Popconfirm, Space } from 'antd';
+import { App, Button, Modal, Popconfirm, Typography } from 'antd';
 import { FileTextOutlined, AccountBookOutlined, PayCircleOutlined, EyeOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { invoiceService } from '../../../services/finance/invoice';
 import { Invoice, InvoiceCreateData } from '../../../types/finance/invoice';
@@ -17,7 +17,11 @@ import { apiRequest } from '../../../../../services/api';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { getUnifiedInvoiceLifecycle } from '../../../utils/financeLifecycle';
+import { renderRowActionsMax3 } from '../../../utils/renderRowActionsMax3';
+import dayjs from 'dayjs';
 
 const InvoiceList: React.FC = () => {
   const actionRef = useRef<ActionType>();
@@ -39,10 +43,12 @@ const InvoiceList: React.FC = () => {
     {
       title: t('common.code', { defaultValue: '编号' }),
       dataIndex: 'invoice_code',
-      width: 150,
+      width: 168,
       fixed: 'left',
-      render: (dom, entity) => (
-        <a onClick={() => navigate(`/apps/kuaicaiwu/finance-management/invoices/${entity.invoice_code}`)}>{dom}</a>
+      render: (_, entity) => (
+        <Typography.Text copyable={{ text: String(entity.invoice_code ?? '') }} ellipsis>
+          <a onClick={() => navigate(`/apps/kuaicaiwu/finance-management/invoices/${entity.invoice_code}`)}>{entity.invoice_code}</a>
+        </Typography.Text>
       ),
     },
     {
@@ -81,56 +87,84 @@ const InvoiceList: React.FC = () => {
     {
       title: '状态',
       dataIndex: 'status',
+      hideInTable: true,
       valueEnum: {
-        DRAFT: { text: '草稿', status: 'Default' },
-        CONFIRMED: { text: '已确认', status: 'Processing' },
-        VERIFIED: { text: '已认证', status: 'Success' },
-        CANCELLED: { text: '已作废', status: 'Error' },
+        DRAFT: { text: '草稿' },
+        CONFIRMED: { text: '已确认' },
+        VERIFIED: { text: '已认证' },
+        CANCELLED: { text: '已作废' },
       },
-      width: 100,
     },
     {
-      title: '创建时间',
-      dataIndex: 'created_at',
-      valueType: 'dateTime',
-      width: 150,
-      search: false,
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      width: 168,
+      hideInSearch: true,
+      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+    },
+    {
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      fixed: 'right',
+      align: 'left',
+      width: 120,
+      hideInSearch: true,
+      render: (_, record) => {
+        const lc = getUnifiedInvoiceLifecycle(record as unknown as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lc.percent}
+            stageName={lc.stageName}
+            status={lc.status}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
+      },
     },
     {
       title: '操作',
       valueType: 'option',
       fixed: 'right',
       width: 200,
-      render: (_, record) => (
-        <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => navigate(`/apps/kuaicaiwu/finance-management/invoices/${record.invoice_code}`)}
-          >
-            详情
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => navigate(`/apps/kuaicaiwu/finance-management/invoices/${record.invoice_code}`)}
-          >
-            编辑
-          </Button>
-          <Popconfirm
-            title="确定要删除吗？"
-            onConfirm={async () => {
-              await invoiceService.deleteInvoice(record.invoice_code);
-              messageApi.success('删除成功');
-              actionRef.current?.reload();
-            }}
-          >
-            <Button type="link" size="small" danger icon={<DeleteOutlined />}>删除</Button>
-          </Popconfirm>
-        </Space>
-      ),
+      render: (_, record) =>
+        renderRowActionsMax3(
+          [
+            <Button
+              key="det"
+              type="link"
+              size="small"
+              icon={<EyeOutlined />}
+              onClick={() => navigate(`/apps/kuaicaiwu/finance-management/invoices/${record.invoice_code}`)}
+            >
+              详情
+            </Button>,
+            <Button
+              key="ed"
+              type="link"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => navigate(`/apps/kuaicaiwu/finance-management/invoices/${record.invoice_code}`)}
+            >
+              编辑
+            </Button>,
+            <Popconfirm
+              key="del"
+              title="确定要删除吗？"
+              onConfirm={async () => {
+                await invoiceService.deleteInvoice(record.invoice_code);
+                messageApi.success('删除成功');
+                actionRef.current?.reload();
+              }}
+            >
+              <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                删除
+              </Button>
+            </Popconfirm>,
+          ],
+          `inv-${record.invoice_code}`,
+        ),
     },
   ];
 
@@ -147,6 +181,9 @@ const InvoiceList: React.FC = () => {
         headerTitle={headerTitle}
         actionRef={actionRef}
         rowKey="invoice_code"
+        columnPersistenceId="kuaicaiwu-finance-invoices"
+        scroll={{ x: 1680 }}
+        showAdvancedSearch
         search={{ labelWidth: 120 }}
         showCreateButton
         createButtonText="新建发票"

@@ -321,8 +321,8 @@ export const DocumentTrackingTimelineBody: React.FC<{
     );
 
     return {
-      dot: icon,
-      children: (
+      icon: icon,
+      content: (
         <div>
           <div style={{ fontWeight: 500 }}>{label}</div>
           <div style={{ color: 'var(--ant-color-text-secondary)', fontSize: 12 }}>{detailContent}</div>
@@ -390,11 +390,12 @@ export const DocumentTrackingPanel: React.FC<DocumentTrackingPanelProps> = ({
   const { data, loading, error } = useDocumentTracking(documentType, documentId, refreshKey);
 
   if (loading) {
-    return (
       <div style={{ padding: 24, textAlign: 'center' }}>
-        <Spin tip={t('components.documentTrackingPanel.loadingTip')} />
+        <Spin />
+        <div style={{ marginTop: 16, color: 'var(--ant-color-text-secondary)' }}>
+          {t('components.documentTrackingPanel.loadingTip')}
+        </div>
       </div>
-    );
   }
   if (error) {
     return (

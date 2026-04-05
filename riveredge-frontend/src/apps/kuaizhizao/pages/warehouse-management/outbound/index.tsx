@@ -6,7 +6,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, message, Card, Table, Row, Col, Form, Tooltip } from 'antd';
+import { App, Button, Tag, Space, Modal, message, Card, Table, Row, Col, Form, Tooltip, Typography } from 'antd';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined, InboxOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -16,10 +16,10 @@ import DocumentTrackingPanel from '../../../../../components/document-tracking-p
 import CodeField from '../../../../../components/code-field';
 import { warehouseApi, workOrderApi } from '../../../services/production';
 import { getOutboundLifecycle } from '../../../utils/outboundLifecycle';
-import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
+import dayjs from 'dayjs';
 import { listSalesOrders } from '../../../services/sales-order';
 import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
-import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 
 // 统一的出库单接口（结合生产领料和销售出库）
 interface OutboundOrder {
@@ -282,7 +282,14 @@ const OutboundPage: React.FC = () => {
       width: 140,
       ellipsis: true,
       fixed: 'left',
-      render: (_, record) => record.delivery_code || record.picking_code,
+      render: (_, record) => {
+        const code = String(record.delivery_code || record.picking_code || '');
+        return (
+          <Typography.Text copyable={{ text: code }} ellipsis>
+            {code || '-'}
+          </Typography.Text>
+        );
+      },
     },
     {
       title: '出库类型',
@@ -291,22 +298,6 @@ const OutboundPage: React.FC = () => {
       valueEnum: {
         production_picking: { text: '生产领料', status: 'processing' },
         sales_delivery: { text: '销售出库', status: 'success' },
-      },
-    },
-    {
-      title: '生命周期',
-      dataIndex: 'lifecycle',
-      width: 100,
-      valueEnum: {
-        '草稿': { text: '草稿', status: 'default' },
-        '已确认': { text: '已确认', status: 'processing' },
-        '已完成': { text: '已完成', status: 'success' },
-        '已取消': { text: '已取消', status: 'error' },
-      },
-      render: (_, record) => {
-        const lifecycle = getOutboundLifecycle(record);
-        const stageName = lifecycle.stageName ?? record.status ?? '草稿';
-        return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>;
       },
     },
     {
@@ -352,10 +343,34 @@ const OutboundPage: React.FC = () => {
       width: 120,
     },
     {
-      title: '创建时间',
-      dataIndex: 'created_at',
-      valueType: 'dateTime',
-      width: 160,
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      width: 168,
+      hideInSearch: true,
+      defaultSortOrder: 'descend',
+      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+    },
+    {
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      width: 132,
+      fixed: 'right',
+      align: 'left',
+      hideInSearch: true,
+      render: (_, record) => {
+        const lifecycle = getOutboundLifecycle(record as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
+      },
     },
     {
       title: '操作',
@@ -418,6 +433,7 @@ const OutboundPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable
         headerTitle="出库管理"
+        columnPersistenceId="kuaizhizao-wm-outbound"
         actionRef={actionRef}
         rowKey={(record) => `${record.outbound_type}::${record.id}`}
         columns={columns}
@@ -425,16 +441,19 @@ const OutboundPage: React.FC = () => {
         request={async (params) => {
           try {
             // 并行获取生产领料单和销售出库单
+            const kw = (params as any).keyword;
             const [pickingRes, deliveryRes] = await Promise.all([
               warehouseApi.productionPicking.list({
                 skip: (params.current! - 1) * params.pageSize!,
                 limit: params.pageSize,
                 ...params,
+                keyword: kw,
               }),
               warehouseApi.salesDelivery.list({
                 skip: (params.current! - 1) * params.pageSize!,
                 limit: params.pageSize,
                 ...params,
+                keyword: kw,
               }),
             ]);
 
@@ -518,6 +537,7 @@ const OutboundPage: React.FC = () => {
             批量出库
           </Button>,
         ]}
+        scroll={{ x: 2000 }}
       />
 
       <FormModalTemplate

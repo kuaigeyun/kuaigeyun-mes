@@ -565,7 +565,7 @@ function DashboardKpiRichCard({
 
   return (
     <Card
-      bordered={false}
+      variant="borderless"
       hoverable
       onClick={onClick}
       style={{
@@ -1314,7 +1314,7 @@ export default function DashboardPage() {
           >
             <DashboardLcdClock time={currentTime} compact={false} inline />
             {showCalendarText ? (
-              <Space direction="vertical" size={2} style={{ flex: 1, minWidth: 0 }}>
+              <Space orientation="vertical" size={2} style={{ flex: 1, minWidth: 0 }}>
                 <Text
                   style={{
                     fontSize: 14,

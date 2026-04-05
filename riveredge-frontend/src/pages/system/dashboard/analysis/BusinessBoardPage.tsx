@@ -403,7 +403,7 @@ const BusinessBoardPage: React.FC = () => {
         onCancel={() => setTitleModalOpen(false)}
         okText={t('dashboard.businessBoard.saveTitle')}
         cancelText={t('common.cancel')}
-        destroyOnClose
+        destroyOnHidden
       >
         <Input
           value={titleDraft}
@@ -665,7 +665,7 @@ const BusinessBoardPage: React.FC = () => {
                         '0%': g.color,
                         '100%': g.color + 'dd',
                       }}
-                      trailColor="rgba(255,255,255,0.06)"
+                      railColor="rgba(255,255,255,0.06)"
                       format={(p) => (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                           <span style={{ color: g.color, fontSize: isFullscreen ? 17 : 14, fontWeight: 800 }}>{p}%</span>

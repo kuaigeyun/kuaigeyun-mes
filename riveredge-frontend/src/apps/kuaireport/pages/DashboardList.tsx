@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Space, Tag } from 'antd';
+import { App, Button, Space, Dropdown, Typography } from 'antd';
 import {
     PlusOutlined,
     EditOutlined,
@@ -19,6 +19,10 @@ import {
     shareDashboard,
     mountDashboardToMenu,
 } from '../services/kuaireport';
+import { UniLifecycle } from '../../../components/uni-lifecycle';
+import { getPublishDraftLifecycle } from '../utils/publishLifecycle';
+
+const DASHBOARD_ROW_ACTIONS_MAX = 3;
 
 interface Dashboard {
     id: number;
@@ -78,6 +82,81 @@ const DashboardList: React.FC = () => {
         }
     };
 
+    const renderDashboardRowActions = (record: Dashboard) => {
+        const nodes: React.ReactNode[] = [
+            <Button
+                key="edit"
+                type="link"
+                size="small"
+                icon={<EditOutlined />}
+                onClick={() => navigate('../dashboard-designer?id=' + record.id)}
+            >
+                编辑
+            </Button>,
+            <Button
+                key="preview"
+                type="link"
+                size="small"
+                icon={<PlayCircleOutlined />}
+                onClick={() => navigate(`../dashboards/${record.id}`)}
+            >
+                预览
+            </Button>,
+            <Button
+                key="share"
+                type="link"
+                size="small"
+                icon={<ShareAltOutlined />}
+                onClick={() => handleShare(record)}
+            >
+                分享
+            </Button>,
+            <Button
+                key="mount"
+                type="link"
+                size="small"
+                icon={<MenuOutlined />}
+                onClick={() => setMountModal({ visible: true, dashboard: record })}
+            >
+                挂载到菜单
+            </Button>,
+            <Button
+                key="delete"
+                type="link"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                onClick={() => handleDelete([record.id])}
+            >
+                删除
+            </Button>,
+        ];
+        const wrapped = nodes.map((node, i) => <span key={`db-act-${record.id}-${i}`}>{node}</span>);
+        if (wrapped.length <= DASHBOARD_ROW_ACTIONS_MAX) {
+            return <Space size="small">{wrapped}</Space>;
+        }
+        const inline = wrapped.slice(0, DASHBOARD_ROW_ACTIONS_MAX);
+        const overflow = wrapped.slice(DASHBOARD_ROW_ACTIONS_MAX);
+        return (
+            <Space size="small" wrap>
+                {inline}
+                <Dropdown
+                    menu={{
+                        items: overflow.map((node, i) => ({
+                            key: `db-more-${record.id}-${i}`,
+                            label: node,
+                        })),
+                    }}
+                    trigger={['click']}
+                >
+                    <Button type="link" size="small">
+                        更多
+                    </Button>
+                </Dropdown>
+            </Space>
+        );
+    };
+
     const columns: ProColumns<Dashboard>[] = [
         {
             title: '名称',
@@ -88,16 +167,11 @@ const DashboardList: React.FC = () => {
         {
             title: '编号',
             dataIndex: 'code',
-            width: 150,
-        },
-        {
-            title: '状态',
-            dataIndex: 'status',
-            width: 100,
-            render: (_, record) => (
-                <Tag color={record.status === 'PUBLISHED' ? 'green' : 'orange'}>
-                    {record.status === 'PUBLISHED' ? '已发布' : '草稿'}
-                </Tag>
+            width: 160,
+            render: (_, r) => (
+                <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
+                    {r.code ?? '-'}
+                </Typography.Text>
             ),
         },
         {
@@ -105,57 +179,26 @@ const DashboardList: React.FC = () => {
             dataIndex: 'updated_at',
             valueType: 'dateTime',
             width: 160,
+            search: false,
+        },
+        {
+            title: '生命周期',
+            dataIndex: 'lifecycle',
+            key: 'lifecycle',
+            width: 200,
+            fixed: 'right',
+            align: 'left',
+            search: false,
+            render: (_, record) => (
+                <UniLifecycle {...getPublishDraftLifecycle(record as Record<string, unknown>)} showCircleTooltip={false} />
+            ),
         },
         {
             title: '操作',
             valueType: 'option',
             fixed: 'right',
-            width: 280,
-            render: (_, record) => (
-                <Space size="small">
-                    <Button
-                        type="link"
-                        size="small"
-                        icon={<EditOutlined />}
-                        onClick={() => navigate('../dashboard-designer?id=' + record.id)}
-                    >
-                        编辑
-                    </Button>
-                    <Button
-                        type="link"
-                        size="small"
-                        icon={<PlayCircleOutlined />}
-                        onClick={() => navigate(`../dashboards/${record.id}`)}
-                    >
-                        预览
-                    </Button>
-                    <Button
-                        type="link"
-                        size="small"
-                        icon={<ShareAltOutlined />}
-                        onClick={() => handleShare(record)}
-                    >
-                        分享
-                    </Button>
-                    <Button
-                        type="link"
-                        size="small"
-                        icon={<MenuOutlined />}
-                        onClick={() => setMountModal({ visible: true, dashboard: record })}
-                    >
-                        挂载到菜单
-                    </Button>
-                    <Button
-                        type="link"
-                        size="small"
-                        danger
-                        icon={<DeleteOutlined />}
-                        onClick={() => handleDelete([record.id])}
-                    >
-                        删除
-                    </Button>
-                </Space>
-            ),
+            width: 220,
+            render: (_, record) => renderDashboardRowActions(record),
         },
     ];
 
@@ -165,6 +208,8 @@ const DashboardList: React.FC = () => {
                 <UniTable<Dashboard>
                     headerTitle="大屏中心"
                     actionRef={actionRef}
+                    columnPersistenceId="kuaireport-dashboard-list"
+                    scroll={{ x: 'max-content' }}
                     columns={columns}
                     request={async (params) => {
                         const { current, pageSize } = params;

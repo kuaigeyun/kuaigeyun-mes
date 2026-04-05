@@ -37,7 +37,6 @@ const DatasetDesignerPage: React.FC = () => {
   const [executing, setExecuting] = useState(false);
   const [dataset, setDataset] = useState<Dataset | null>(null);
   const [editorTab, setEditorTab] = useState<'sql' | 'visual'>('sql');
-  const [queryType, setQueryType] = useState<'sql' | 'api'>('sql');
   const [sqlText, setSqlText] = useState<string>('');
   const [parametersList, setParametersList] = useState<Array<{ key: string; value: string }>>([{ key: '', value: '' }]);
   const [queryConfigForVisual, setQueryConfigForVisual] = useState<Record<string, any>>({});
@@ -54,7 +53,6 @@ const DatasetDesignerPage: React.FC = () => {
       try {
         const detail = await getDatasetByUuid(uuid);
         setDataset(detail);
-        setQueryType(detail.query_type);
         const cfg = detail.query_config || {};
         setSqlText(cfg.sql || '');
         const params = cfg.parameters || {};
@@ -96,7 +94,6 @@ const DatasetDesignerPage: React.FC = () => {
       });
       messageApi.success(t('pages.system.datasets.saveSuccess'));
       setDataset((prev) => (prev ? { ...prev, query_type: saveQueryType, query_config: queryConfig } : null));
-      setQueryType(saveQueryType);
     } catch (error: any) {
       messageApi.error(error?.message || t('pages.system.datasets.saveFailed'));
     } finally {
@@ -138,7 +135,8 @@ const DatasetDesignerPage: React.FC = () => {
   if (loading) {
     return (
       <div style={{ padding: 48, textAlign: 'center' }}>
-        <Spin size="large" tip={t('pages.system.datasets.loading')} />
+        <Spin size="large" />
+        <div style={{ marginTop: 16, color: 'var(--ant-color-text-secondary)' }}>{t('pages.system.datasets.loading')}</div>
       </div>
     );
   }
@@ -170,7 +168,7 @@ const DatasetDesignerPage: React.FC = () => {
       onChange={(k) => {
         setEditorTab(k as 'sql' | 'visual');
         if (k === 'visual') {
-          setQueryType('sql'); // 图形化只生成 SQL，不覆盖当前 JSON
+          // 图形化只生成 SQL，不覆盖当前 JSON
         }
       }}
       items={[

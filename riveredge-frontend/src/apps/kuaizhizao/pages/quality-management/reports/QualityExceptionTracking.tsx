@@ -17,6 +17,7 @@ const QualityExceptionTracking: React.FC = () => {
     <ReportBase
       title={t('app.kuaizhizao.menu.reports.quality-exception-tracking')}
       reportType="quality_exception"
+      columnPersistenceId="kuaizhizao-qm-report-quality-exception-tracking"
       columns={columns}
     />
   );

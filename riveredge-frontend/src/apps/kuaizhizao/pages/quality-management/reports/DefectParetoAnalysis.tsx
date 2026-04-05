@@ -18,6 +18,7 @@ const DefectParetoAnalysis: React.FC = () => {
     <ReportBase
       title={t('app.kuaizhizao.menu.reports.defect-pareto-analysis')}
       reportType="analysis"
+      columnPersistenceId="kuaizhizao-qm-report-defect-pareto"
       columns={columns}
       request={async (params: any) => {
         const res = await getQualityReport({

@@ -8,7 +8,6 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Row, Col, Select, Typography, Dropdown, Empty, Descriptions, Input } from 'antd';
@@ -20,7 +19,6 @@ import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
 import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
-import { DictionarySelect } from '../../../../../components/dictionary-select';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, DetailDrawerSection } from '../../../../../components/layout-templates';
 import { sampleTrialApi } from '../../../services/sample-trial';
@@ -28,6 +26,7 @@ import { pushSalesOrderToShipmentNotice } from '../../../services/sales-order';
 import { customerApi } from '../../../../master-data/services/supply-chain';
 import { materialApi } from '../../../../master-data/services/material';
 import { warehouseApi } from '../../../../master-data/services/warehouse';
+import type { Material } from '../../../../master-data/types/material';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { batchImport } from '../../../../../utils/batchOperations';
@@ -111,8 +110,8 @@ function getSampleTrialLifecycle(trial?: Pick<SampleTrial, 'status' | 'sales_ord
   if (trial?.other_outbound_id) {
     return { percent: 70, stageName: '试用中（已出库）', status: 'normal' as const };
   }
-  const map: Record<string, { percent: number; stageName: string; status: 'normal' | 'success' | 'warning' | 'exception' }> = {
-    草稿: { percent: 16, stageName: '草稿', status: 'warning' },
+  const map: Record<string, { percent: number; stageName: string; status: 'normal' | 'success' | 'exception' | 'active' }> = {
+    草稿: { percent: 16, stageName: '草稿', status: 'normal' },
     已提交: { percent: 28, stageName: '已提交', status: 'normal' },
     已审核: { percent: 35, stageName: '已审核', status: 'normal' },
     已审批: { percent: 35, stageName: '已审核', status: 'normal' },
@@ -216,7 +215,6 @@ const SampleTrialMaterialSelectCell: React.FC<{ index: number }> = ({ index }) =
 
 const SampleTrialsPage: React.FC = () => {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
@@ -250,9 +248,9 @@ const SampleTrialsPage: React.FC = () => {
       setCustomersLoading(true);
       try {
         const [custRes, matRes, whRes] = await Promise.allSettled([
-          customerApi.list({ limit: 1000, isActive: true }),
-          materialApi.list({ limit: 2000, isActive: true }),
-          warehouseApi.list({ limit: 1000, isActive: true }),
+          customerApi.list({ limit: 1000, is_active: true } as any),
+          materialApi.list({ limit: 1000, is_active: true } as any),
+          warehouseApi.list({ limit: 1000, is_active: true } as any),
         ]);
         const cust = custRes.status === 'fulfilled' ? custRes.value : [];
         const mat = matRes.status === 'fulfilled' ? matRes.value : [];
@@ -274,6 +272,7 @@ const SampleTrialsPage: React.FC = () => {
     { title: '客户', dataIndex: 'customer_name', width: 140, ellipsis: true },
     {
       title: '试用单号',
+      key: 'trial_code_search',
       dataIndex: 'trial_code',
       hideInTable: true,
       order: 10,
@@ -310,7 +309,7 @@ const SampleTrialsPage: React.FC = () => {
         已关闭: { text: '已关闭' },
       },
     },
-    { title: '试用目的', dataIndex: 'trial_purpose', width: 120, ellipsis: true, hideInSearch: true },
+    { title: '试用目的', dataIndex: 'trial_purpose', ellipsis: true, hideInSearch: true },
     { title: '试用开始', dataIndex: 'trial_period_start', valueType: 'date', width: 110, hideInSearch: true },
     { title: '试用结束', dataIndex: 'trial_period_end', valueType: 'date', width: 110, hideInSearch: true },
     { title: '关联销售订单', dataIndex: 'sales_order_code', width: 130, ellipsis: true, hideInSearch: true },
@@ -1252,26 +1251,31 @@ const SampleTrialsPage: React.FC = () => {
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           toolBarRender={() => [
-            <Dropdown.Button
-              key={`batch-btn-${selectedRowKeys.length}`}
-              disabled={selectedRowKeys.length === 0}
-              trigger={['click']}
-              danger
-              icon={<ArrowDownOutlined />}
-              onClick={() => handleBatchDelete(selectedRowKeys)}
-              menu={{
-                items: [
-                  {
-                    key: 'convert',
-                    label: '批量转订单',
-                    icon: <SwapOutlined />,
-                    onClick: () => handleBatchConvertToOrder(selectedRowKeys),
-                  },
-                ],
-              }}
-            >
-              <DeleteOutlined /> 批量删除
-            </Dropdown.Button>,
+            <Space.Compact key={`batch-btn-${selectedRowKeys.length}`}>
+              <Button
+                disabled={selectedRowKeys.length === 0}
+                danger
+                onClick={() => handleBatchDelete(selectedRowKeys)}
+              >
+                <DeleteOutlined /> 批量删除
+              </Button>
+              <Dropdown
+                disabled={selectedRowKeys.length === 0}
+                trigger={['click']}
+                menu={{
+                  items: [
+                    {
+                      key: 'convert',
+                      label: '批量转订单',
+                      icon: <SwapOutlined />,
+                      onClick: () => handleBatchConvertToOrder(selectedRowKeys),
+                    },
+                  ],
+                }}
+              >
+                <Button danger icon={<ArrowDownOutlined />} />
+              </Dropdown>
+            </Space.Compact>,
           ]}
           showImportButton
           onImport={handleListImport}

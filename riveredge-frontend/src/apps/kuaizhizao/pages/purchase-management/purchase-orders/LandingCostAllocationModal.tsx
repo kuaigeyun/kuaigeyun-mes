@@ -52,7 +52,7 @@ const LandingCostAllocationModal: React.FC<LandingCostAllocationModalProps> = ({
       width={600}
       okText="确认分摊"
       cancelText="取消"
-      destroyOnClose
+      destroyOnHidden
     >
       <Form
         form={form}

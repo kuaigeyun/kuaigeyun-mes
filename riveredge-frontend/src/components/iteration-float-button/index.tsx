@@ -90,7 +90,7 @@ export default function IterationFloatButton() {
         onCancel={() => setVisible(false)}
         footer={null}
         width={440}
-        destroyOnClose
+        destroyOnHidden
       >
         <Spin spinning={versionLoading}>
           <div style={{ marginBottom: 20 }}>

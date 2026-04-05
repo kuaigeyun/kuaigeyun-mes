@@ -9,8 +9,8 @@
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form as AntForm, InputNumber, Input, DatePicker, Row, Col } from 'antd';
-import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, PrinterOutlined, ShoppingOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, Modal, Table, Form as AntForm, InputNumber, Input, DatePicker, Row, Col, Typography, Dropdown } from 'antd';
+import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, PrinterOutlined, ShoppingOutlined, MoreOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
@@ -22,7 +22,8 @@ import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-mo
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { getMaterialBorrowLifecycle } from '../../../utils/materialBorrowLifecycle';
-import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import dayjs from 'dayjs';
 import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
 import { useTranslation } from 'react-i18next';
 
@@ -41,6 +42,7 @@ interface MaterialBorrow {
   total_quantity?: number;
   notes?: string;
   created_at?: string;
+  updated_at?: string;
 }
 
 interface MaterialBorrowDetail extends MaterialBorrow {
@@ -88,41 +90,109 @@ const MaterialBorrowsPage: React.FC = () => {
   }, []);
 
   const columns: ProColumns<MaterialBorrow>[] = [
-    { title: '借料单号', dataIndex: 'borrow_code', width: 140, ellipsis: true, fixed: 'left' },
+    {
+      title: '借料单号',
+      dataIndex: 'borrow_code',
+      width: 140,
+      ellipsis: true,
+      fixed: 'left',
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.borrow_code ?? '') }} ellipsis>
+          {r.borrow_code ?? '-'}
+        </Typography.Text>
+      ),
+    },
     { title: '仓库', dataIndex: 'warehouse_name', width: 120, ellipsis: true },
     { title: '借料人', dataIndex: 'borrower_name', width: 100 },
     { title: '部门', dataIndex: 'department', width: 100 },
+    { title: '预计归还日期', dataIndex: 'expected_return_date', valueType: 'date', width: 120 },
+    { title: '借出时间', dataIndex: 'borrow_time', valueType: 'dateTime', width: 160 },
+    {
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      width: 168,
+      hideInSearch: true,
+      defaultSortOrder: 'descend',
+      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+    },
     {
       title: '生命周期',
       dataIndex: 'lifecycle',
-      width: 100,
+      width: 132,
+      fixed: 'right',
+      align: 'left',
+      hideInSearch: true,
       render: (_, record) => {
-        const lifecycle = getMaterialBorrowLifecycle(record);
-        const stageName = lifecycle.stageName ?? record.status ?? '待借出';
-        return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>;
+        const lifecycle = getMaterialBorrowLifecycle(record as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
       },
     },
-    { title: '预计归还日期', dataIndex: 'expected_return_date', valueType: 'date', width: 120 },
-    { title: '借出时间', dataIndex: 'borrow_time', valueType: 'dateTime', width: 160 },
-    { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime', width: 160 },
     {
       title: '操作',
       width: 220,
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>详情</Button>
-          {record.status === '待借出' && (
-            <>
-              <Button type="link" size="small" icon={<CheckCircleOutlined />} onClick={() => handleConfirm(record)} style={{ color: '#52c41a' }}>确认借出</Button>
-              <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>删除</Button>
-            </>
-          )}
-          {(record.status === '待借出' || record.status === '已借出') && (
-            <Button type="link" size="small" icon={<PrinterOutlined />} onClick={() => handlePrint(record)}>打印</Button>
-          )}
-        </Space>
-      ),
+      render: (_, record) => {
+        const showPrint = record.status === '待借出' || record.status === '已借出';
+        const printInMore = record.status === '待借出';
+        return (
+          <Space size="small" wrap>
+            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
+              详情
+            </Button>
+            {record.status === '待借出' && (
+              <>
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<CheckCircleOutlined />}
+                  onClick={() => handleConfirm(record)}
+                  style={{ color: '#52c41a' }}
+                >
+                  确认借出
+                </Button>
+                <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
+                  删除
+                </Button>
+              </>
+            )}
+            {printInMore ? (
+              <Dropdown
+                menu={{
+                  items: [
+                    {
+                      key: 'print',
+                      icon: <PrinterOutlined />,
+                      label: '打印',
+                      onClick: () => handlePrint(record),
+                    },
+                  ],
+                }}
+                trigger={['click']}
+              >
+                <Button type="link" size="small" icon={<MoreOutlined />}>
+                  更多
+                </Button>
+              </Dropdown>
+            ) : (
+              showPrint && (
+                <Button type="link" size="small" icon={<PrinterOutlined />} onClick={() => handlePrint(record)}>
+                  打印
+                </Button>
+              )
+            )}
+          </Space>
+        );
+      },
     },
   ];
 
@@ -313,6 +383,7 @@ const MaterialBorrowsPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable
           headerTitle="借料单"
+          columnPersistenceId="kuaizhizao-wm-material-borrows"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -361,6 +432,7 @@ const MaterialBorrowsPage: React.FC = () => {
                 limit: params.pageSize || 20,
                 status: params.status,
                 warehouse_id: params.warehouse_id,
+                keyword: (params as any).keyword,
               });
               const data = Array.isArray(response) ? response : response?.items || response?.data || [];
               const total = Array.isArray(response) ? response.length : response?.total ?? data.length;

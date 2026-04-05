@@ -10,16 +10,21 @@
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form as AntForm, Select, InputNumber, Input, DatePicker, Dropdown, Row, Col } from 'antd';
+import { App, Button, Tag, Space, Modal, Table, Form as AntForm, Select, InputNumber, Input, DatePicker, Dropdown, Row, Col, Typography, Spin, Empty, Descriptions } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, PrinterOutlined, MoreOutlined, ShoppingOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
-import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES, DetailDrawerSection } from '../../../../../components/layout-templates';
 import { deliveryNoticeApi } from '../../../services/delivery-notice';
 import { getDeliveryNoticeLifecycle } from '../../../utils/deliveryNoticeLifecycle';
 import { useTranslation } from 'react-i18next';
-import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import {
+  DocumentTrackingRelationsBody,
+  DocumentTrackingTimelineBody,
+  useDocumentTracking,
+} from '../../../../../components/document-tracking-panel';
 import { customerApi } from '../../../../master-data/services/supply-chain';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
@@ -46,6 +51,7 @@ interface DeliveryNotice {
   total_amount?: number;
   notes?: string;
   created_at?: string;
+  updated_at?: string;
 }
 
 interface DeliveryNoticeDetail extends DeliveryNotice {
@@ -64,6 +70,11 @@ const DeliveryNotesPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [noticeDetail, setNoticeDetail] = useState<DeliveryNoticeDetail | null>(null);
+
+  const deliveryTracking = useDocumentTracking(
+    detailDrawerVisible && noticeDetail?.id ? 'delivery_notice' : undefined,
+    noticeDetail?.id
+  );
 
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -105,28 +116,63 @@ const DeliveryNotesPage: React.FC = () => {
   );
 
   const columns: ProColumns<DeliveryNotice>[] = [
-    { title: '通知单号', dataIndex: 'notice_code', width: 140, ellipsis: true, fixed: 'left' },
-    { title: '销售出库单号', dataIndex: 'sales_delivery_code', width: 140, ellipsis: true },
+    {
+      title: '通知单号',
+      dataIndex: 'notice_code',
+      width: 140,
+      ellipsis: true,
+      fixed: 'left',
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.notice_code ?? '') }} ellipsis>
+          {r.notice_code ?? '-'}
+        </Typography.Text>
+      ),
+    },
+    {
+      title: '销售出库单号',
+      dataIndex: 'sales_delivery_code',
+      width: 140,
+      ellipsis: true,
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.sales_delivery_code ?? '') }} ellipsis>
+          {r.sales_delivery_code ?? '-'}
+        </Typography.Text>
+      ),
+    },
     { title: '客户', dataIndex: 'customer_name', width: 140, ellipsis: true },
     { title: '承运商', dataIndex: 'carrier', width: 100 },
     { title: '运单号', dataIndex: 'tracking_number', width: 120, ellipsis: true },
     { title: '预计送达', dataIndex: 'planned_delivery_date', valueType: 'date', width: 110 },
     { title: '发送时间', dataIndex: 'sent_at', valueType: 'dateTime', width: 160 },
-    { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime', width: 160 },
+    {
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      width: 168,
+      hideInSearch: true,
+      defaultSortOrder: 'descend',
+      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+    },
     {
       title: '生命周期',
       dataIndex: 'lifecycle',
       width: 132,
-      align: 'center',
+      align: 'left',
       fixed: 'right',
-      render: (_, record) => (
-        <UniLifecycle
-          value={getDeliveryNoticeLifecycle(record as any)}
-          showLabel
-          showCircleTooltip={false}
-          size="small"
-        />
-      ),
+      hideInSearch: true,
+      render: (_, record) => {
+        const lc = getDeliveryNoticeLifecycle(record as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lc.percent}
+            stageName={lc.stageName}
+            status={lc.status}
+            subStages={lc.subStages}
+            showLabel
+            showCircleTooltip={false}
+            size="small"
+          />
+        );
+      },
     },
     {
       title: '操作',
@@ -598,6 +644,7 @@ const DeliveryNotesPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable
           headerTitle="送货单"
+          columnPersistenceId="kuaizhizao-wm-delivery-notes"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -646,6 +693,7 @@ const DeliveryNotesPage: React.FC = () => {
                 limit: params.pageSize || 20,
                 status: params.status,
                 customer_id: params.customer_id,
+                keyword: (params as any).keyword,
               });
               const data = Array.isArray(response) ? response : response?.items || response?.data || [];
               const total = Array.isArray(response) ? response.length : response?.total ?? data.length;
@@ -664,30 +712,125 @@ const DeliveryNotesPage: React.FC = () => {
         open={detailDrawerVisible}
         onClose={() => { setDetailDrawerVisible(false); setNoticeDetail(null); }}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={detailColumns}
-        dataSource={noticeDetail || {}}
-      >
-        {noticeDetail?.items && noticeDetail.items.length > 0 && (
-          <>
-            <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
-            <Table
-              className="warehouse-detail-table"
-              size="small"
-              rowKey={(_, idx) => (noticeDetail?.items?.[idx] as any)?.id ?? idx}
-              columns={[
-                { title: '物料编号', dataIndex: 'material_code', width: 120 },
-                { title: '物料名称', dataIndex: 'material_name', width: 150 },
-                { title: '单位', dataIndex: 'material_unit', width: 60 },
-                { title: '数量', dataIndex: 'notice_quantity', width: 90, align: 'right' },
-                { title: '单价', dataIndex: 'unit_price', width: 90, align: 'right' },
-                { title: '金额', dataIndex: 'total_amount', width: 100, align: 'right' },
-              ]}
-              dataSource={noticeDetail.items}
-              pagination={false}
-            />
-          </>
-        )}
-      </DetailDrawerTemplate>
+        columns={[]}
+        column={3}
+        customContent={
+          noticeDetail ? (
+            <>
+              <DetailDrawerSection title="基本信息">
+                <Descriptions
+                  column={3}
+                  size="small"
+                  items={detailColumns.map((col, index) => {
+                    const value = col.dataIndex
+                      ? (noticeDetail as Record<string, unknown>)[col.dataIndex as string]
+                      : undefined;
+                    let content: React.ReactNode = value as React.ReactNode;
+                    if (col.valueType === 'dateTime' && value) {
+                      content = dayjs(value as string).format('YYYY-MM-DD HH:mm:ss');
+                    } else if (col.valueType === 'date' && value) {
+                      content = dayjs(value as string).format('YYYY-MM-DD');
+                    }
+                    if (col.render && noticeDetail != null) {
+                      content = col.render(content, noticeDetail, index, {}, col);
+                    }
+                    return {
+                      key: String(col.key ?? col.dataIndex ?? index),
+                      label: col.title as React.ReactNode,
+                      children: content !== undefined && content !== null ? content : '-',
+                      span: col.span ?? 1,
+                    };
+                  })}
+                />
+              </DetailDrawerSection>
+
+              <DetailDrawerSection title="生命周期">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {(() => {
+                    const lc = getDeliveryNoticeLifecycle(noticeDetail as Record<string, unknown>);
+                    const mainStages = lc.mainStages ?? [];
+                    if (mainStages.length === 0) return null;
+                    return (
+                      <UniLifecycleStepper
+                        steps={mainStages}
+                        showLabels
+                        status={lc.status}
+                        nextStepSuggestions={lc.nextStepSuggestions}
+                      />
+                    );
+                  })()}
+                  <div
+                    style={{
+                      paddingTop: 12,
+                      borderTop: '1px solid var(--ant-color-border-secondary)',
+                    }}
+                  >
+                    <div style={{ marginBottom: 8, fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
+                      上下游单据
+                    </div>
+                    {deliveryTracking.loading && (
+                      <div style={{ padding: '8px 0' }}>
+                        <Spin size="small" />
+                      </div>
+                    )}
+                    {deliveryTracking.error && (
+                      <Typography.Text type="danger">{deliveryTracking.error}</Typography.Text>
+                    )}
+                    {deliveryTracking.data && (
+                      <DocumentTrackingRelationsBody
+                        data={deliveryTracking.data}
+                        onDocumentClick={(type, id) => messageApi.info(`跳转到${type}#${id}`)}
+                      />
+                    )}
+                  </div>
+                </div>
+              </DetailDrawerSection>
+
+              <DetailDrawerSection title="明细信息">
+                {noticeDetail.items && noticeDetail.items.length > 0 ? (
+                  <>
+                    <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
+                    <Table
+                      className="warehouse-detail-table"
+                      size="small"
+                      rowKey={(_, idx) => (noticeDetail?.items?.[idx] as any)?.id ?? idx}
+                      columns={[
+                        { title: '物料编号', dataIndex: 'material_code', width: 120 },
+                        { title: '物料名称', dataIndex: 'material_name', width: 150 },
+                        { title: '单位', dataIndex: 'material_unit', width: 60 },
+                        { title: '数量', dataIndex: 'notice_quantity', width: 90, align: 'right' },
+                        { title: '单价', dataIndex: 'unit_price', width: 90, align: 'right' },
+                        { title: '金额', dataIndex: 'total_amount', width: 100, align: 'right' },
+                      ]}
+                      dataSource={noticeDetail.items}
+                      pagination={false}
+                    />
+                  </>
+                ) : (
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无明细" />
+                )}
+              </DetailDrawerSection>
+
+              <DetailDrawerSection title="操作记录">
+                {deliveryTracking.loading && (
+                  <div style={{ textAlign: 'center', padding: 24 }}>
+                    <Spin />
+                  </div>
+                )}
+                {deliveryTracking.error && !deliveryTracking.loading && (
+                  <Typography.Text type="danger">{deliveryTracking.error}</Typography.Text>
+                )}
+                {deliveryTracking.data && !deliveryTracking.loading && (
+                  <DocumentTrackingTimelineBody data={deliveryTracking.data} />
+                )}
+                {!deliveryTracking.loading && !deliveryTracking.data && !deliveryTracking.error && (
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+                )}
+              </DetailDrawerSection>
+            </>
+          ) : null
+        }
+      />
 
       <FormModalTemplate
         title="新建送货单"

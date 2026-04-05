@@ -43,38 +43,6 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         super().__init__(PurchaseOrder)
 
     @staticmethod
-    def _validate_supplier_admission_for_material(
-        *,
-        supplier_id: int,
-        supplier_name: str,
-        material: Material,
-    ) -> None:
-        """
-        P3-P-003: 供方准入联锁（最小闭环）。
-        对采购件（Buy）若已配置默认供应商，则仅允许该供应商下单。
-        """
-        source_type = str(getattr(material, "source_type", "") or "").strip().lower()
-        if source_type != "buy":
-            return
-
-        cfg = getattr(material, "source_config", None)
-        if not isinstance(cfg, dict):
-            return
-        inner = cfg.get("source_config") if isinstance(cfg.get("source_config"), dict) else cfg
-        default_supplier_id = inner.get("default_supplier_id") if isinstance(inner, dict) else None
-        if default_supplier_id in (None, ""):
-            return
-        try:
-            admitted_supplier_id = int(default_supplier_id)
-        except Exception:
-            return
-        if admitted_supplier_id != int(supplier_id):
-            material_label = getattr(material, "main_code", None) or getattr(material, "code", None) or str(material.id)
-            raise BusinessLogicError(
-                f"物料 {material_label} 仅允许供应商 {admitted_supplier_id} 供货，当前供应商 {supplier_name or supplier_id} 不在准入清单"
-            )
-
-    @staticmethod
     def _extract_material_purchase_benchmark_price(material: Material) -> Optional[Decimal]:
         """
         从物料默认值中提取采购基准价，用于采购价格偏差风控。
@@ -209,11 +177,6 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 material = await Material.get_or_none(tenant_id=tenant_id, id=item_data.material_id)
                 if not material:
                     raise NotFoundError(f"物料不存在: {item_data.material_id}")
-                self._validate_supplier_admission_for_material(
-                    supplier_id=order_data.supplier_id,
-                    supplier_name=order_data.supplier_name or supplier.name,
-                    material=material,
-                )
                 self._validate_purchase_price_fluctuation_for_material(
                     material=material,
                     unit_price=item_data.unit_price,
@@ -439,13 +402,6 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     material = await Material.get_or_none(tenant_id=tenant_id, id=item_data.material_id)
                     if not material:
                         raise NotFoundError(f"物料不存在: {item_data.material_id}")
-                    final_supplier_id = int(order_data.supplier_id or order.supplier_id or 0)
-                    if final_supplier_id > 0:
-                        self._validate_supplier_admission_for_material(
-                            supplier_id=final_supplier_id,
-                            supplier_name=(order_data.supplier_name or order.supplier_name or ""),
-                            material=material,
-                        )
                     self._validate_purchase_price_fluctuation_for_material(
                         material=material,
                         unit_price=item_data.unit_price,

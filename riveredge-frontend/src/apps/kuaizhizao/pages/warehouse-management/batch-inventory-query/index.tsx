@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import type { ProColumns } from '@ant-design/pro-components';
-import { Tag, message, Space, Button } from 'antd';
+import { Tag, message, Space, Button, Typography } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { WarningOutlined, ExportOutlined } from '@ant-design/icons';
@@ -25,6 +25,7 @@ interface BatchInventoryItem {
 const BatchInventoryQuery: React.FC = () => {
     const [includeExpired, setIncludeExpired] = useState(false);
     const lastParamsRef = useRef<Record<string, any>>({});
+    const actionRef = useRef<any>(null);
 
     const columns: ProColumns<BatchInventoryItem>[] = [
         {
@@ -32,6 +33,11 @@ const BatchInventoryQuery: React.FC = () => {
             dataIndex: 'material_code',
             width: 120,
             fixed: 'left',
+            render: (_, r) => (
+                <Typography.Text copyable={{ text: String(r.material_code ?? '') }} ellipsis>
+                    {r.material_code ?? '-'}
+                </Typography.Text>
+            ),
         },
         {
             title: '物料名称',
@@ -171,7 +177,9 @@ const BatchInventoryQuery: React.FC = () => {
     return (
         <ListPageTemplate>
             <UniTable<BatchInventoryItem>
+                actionRef={actionRef}
                 columns={columns}
+                columnPersistenceId="kuaizhizao-wm-batch-inventory-query"
                 request={fetchBatchInventory}
                 rowKey="id"
                 search={{

@@ -219,7 +219,7 @@ export const BatchCreateStorageLocationModal: React.FC<BatchCreateStorageLocatio
       onCancel={handleCancel}
       footer={renderFooter()}
       width={step === STEP_FORM ? 480 : 560}
-      destroyOnClose
+      destroyOnHidden
       className="batch-create-storage-location-modal"
       styles={{ body: { maxHeight: 'none', overflow: 'visible' } }}
     >

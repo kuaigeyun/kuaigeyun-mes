@@ -8,9 +8,12 @@ import React, { useRef } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Space, Modal, Typography } from 'antd';
 import { CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/warehouse-execution';
+import { getMaterialCallLifecycle } from '../../../utils/materialCallLifecycle';
 
 const MaterialCallsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
@@ -19,11 +22,11 @@ const MaterialCallsPage: React.FC = () => {
   /**
    * 处理叫料请求状态流转
    */
-  const handleHandleCall = async (id: number, status: 'picking' | 'completed' | 'cancelled') => {
+  const handleHandleCall = async (id: number, status: 'processing' | 'completed' | 'cancelled') => {
     try {
       await warehouseApi.materialCall.update(id, { status });
       const statusMap: Record<string, string> = {
-        picking: '已开始配料',
+        processing: '已开始配料',
         completed: '叫料已完成',
         cancelled: '叫料已取消',
       };
@@ -38,14 +41,23 @@ const MaterialCallsPage: React.FC = () => {
     {
       title: '叫料单号',
       dataIndex: 'code',
-      copyable: true,
       width: 140,
       fixed: 'left',
+      render: (_, r: any) => (
+        <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
+          {r.code ?? '-'}
+        </Typography.Text>
+      ),
     },
     {
       title: '关联工单',
       dataIndex: 'work_order_code',
       width: 140,
+      render: (_, r: any) => (
+        <Typography.Text copyable={{ text: String(r.work_order_code ?? '') }} ellipsis>
+          {r.work_order_code ?? '-'}
+        </Typography.Text>
+      ),
     },
     {
       title: '物料信息',
@@ -60,12 +72,17 @@ const MaterialCallsPage: React.FC = () => {
     },
     {
       title: '叫料数量',
-      dataIndex: 'quantity',
+      dataIndex: 'requested_quantity',
       width: 100,
       align: 'right',
-      render: (val, record) => (
-        <Typography.Text strong>{val} {record.unit || ''}</Typography.Text>
-      ),
+      render: (val, record: any) => {
+        const q = val ?? record.quantity ?? record.requested_quantity;
+        return (
+          <Typography.Text strong>
+            {q} {record.unit || record.material_unit || ''}
+          </Typography.Text>
+        );
+      },
     },
     {
       title: '优先级',
@@ -82,19 +99,21 @@ const MaterialCallsPage: React.FC = () => {
     {
       title: '状态',
       dataIndex: 'status',
-      width: 100,
+      hideInTable: true,
       valueType: 'select',
       valueEnum: {
         pending: { text: '待处理', status: 'Warning' },
-        picking: { text: '配料中', status: 'Processing' },
+        processing: { text: '配料中', status: 'Processing' },
+        partial: { text: '部分送达', status: 'Processing' },
         completed: { text: '已完成', status: 'Success' },
         cancelled: { text: '已取消', status: 'Default' },
       },
     },
     {
       title: '叫料人',
-      dataIndex: 'created_by_name',
+      dataIndex: 'caller_name',
       width: 100,
+      render: (_, r: any) => r.caller_name ?? r.created_by_name ?? '-',
     },
     {
       title: '叫料时间',
@@ -103,56 +122,88 @@ const MaterialCallsPage: React.FC = () => {
       width: 160,
     },
     {
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      width: 168,
+      hideInSearch: true,
+      render: (_, r: any) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+    },
+    {
       title: '备注',
       dataIndex: 'remarks',
       ellipsis: true,
     },
     {
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      width: 140,
+      fixed: 'right',
+      align: 'left',
+      hideInSearch: true,
+      render: (_, record) => {
+        const lifecycle = getMaterialCallLifecycle(record as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
+      },
+    },
+    {
       title: '操作',
       width: 180,
       fixed: 'right',
-      render: (_, record: any) => (
-        <Space>
-          {record.status === 'pending' && (
-            <Button
-              type="link"
-              size="small"
-              icon={<ClockCircleOutlined />}
-              onClick={() => handleHandleCall(record.id, 'picking')}
-            >
-              开始配料
-            </Button>
-          )}
-          {record.status === 'picking' && (
-            <Button
-              type="link"
-              size="small"
-              icon={<CheckCircleOutlined />}
-              onClick={() => handleHandleCall(record.id, 'completed')}
-              style={{ color: '#52c41a' }}
-            >
-              完成
-            </Button>
-          )}
-          {['pending', 'picking'].includes(record.status) && (
-            <Button
-              type="link"
-              size="small"
-              danger
-              icon={<CloseCircleOutlined />}
-              onClick={() => {
-                Modal.confirm({
-                  title: '确认取消',
-                  content: '确认要取消该叫料请求吗？',
-                  onOk: () => handleHandleCall(record.id, 'cancelled'),
-                });
-              }}
-            >
-              取消
-            </Button>
-          )}
-        </Space>
-      ),
+      render: (_, record: any) => {
+        const st = record.status === 'picking' ? 'processing' : record.status;
+        return (
+          <Space>
+            {st === 'pending' && (
+              <Button
+                type="link"
+                size="small"
+                icon={<ClockCircleOutlined />}
+                onClick={() => handleHandleCall(record.id, 'processing')}
+              >
+                开始配料
+              </Button>
+            )}
+            {(st === 'processing' || st === 'partial') && (
+              <Button
+                type="link"
+                size="small"
+                icon={<CheckCircleOutlined />}
+                onClick={() => handleHandleCall(record.id, 'completed')}
+                style={{ color: '#52c41a' }}
+              >
+                完成
+              </Button>
+            )}
+            {['pending', 'processing', 'partial', 'picking'].includes(record.status) && (
+              <Button
+                type="link"
+                size="small"
+                danger
+                icon={<CloseCircleOutlined />}
+                onClick={() => {
+                  Modal.confirm({
+                    title: '确认取消',
+                    content: '确认要取消该叫料请求吗？',
+                    onOk: () => handleHandleCall(record.id, 'cancelled'),
+                  });
+                }}
+              >
+                取消
+              </Button>
+            )}
+          </Space>
+        );
+      },
     },
   ];
 
@@ -163,6 +214,7 @@ const MaterialCallsPage: React.FC = () => {
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
+        columnPersistenceId="kuaizhizao-wm-material-calls"
         showAdvancedSearch={true}
         request={async (params) => {
           try {
@@ -172,16 +224,25 @@ const MaterialCallsPage: React.FC = () => {
               status: params.status,
               work_order_code: params.work_order_code,
             });
+            const rows = Array.isArray(res) ? res : (res as { items?: unknown[] })?.items ?? [];
+            const pageSize = params.pageSize || 20;
+            const skip = (params.current! - 1) * pageSize;
+            const total = Array.isArray(res)
+              ? rows.length < pageSize
+                ? skip + rows.length
+                : skip + rows.length + 1
+              : (res as { total?: number }).total ?? rows.length;
             return {
-              data: res.items || [],
-              total: res.total || 0,
+              data: rows as any[],
+              total,
               success: true,
             };
           } catch (error) {
             return { data: [], success: false, total: 0 };
           }
         }}
-        polling={10000} // 每10秒自动刷新一次
+        polling={10000}
+        scroll={{ x: 1400 }}
       />
     </ListPageTemplate>
   );

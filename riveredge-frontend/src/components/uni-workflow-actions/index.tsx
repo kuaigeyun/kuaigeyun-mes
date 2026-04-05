@@ -191,40 +191,42 @@ export const UniWorkflowActions: React.FC<UniWorkflowActionsProps> = ({
 
   return (
     <Space>
-      {(isDraft || isRejected) && (actions.submit || apiPrefix) ? (
+      {(isDraft || isRejected) && (actions.submit || apiPrefix) && (
         <Button
+          key="submit"
           {...getBtnProps('submit')}
           icon={<SendOutlined />}
           onClick={() => handleAction('submit', submitActionLabel)}
         >
           {submitActionLabel}
         </Button>
-      ) : null}
+      )}
 
-      {isPending && (actions.approve || apiPrefix) ? (
-        <>
-          <Button
-            {...getBtnProps('approve')}
-            icon={<CheckCircleOutlined />}
-            onClick={() => handleAction('approve', '审核')}
-          >
-            审核
-          </Button>
-          {(actions.reject || apiPrefix) && (
-            <Button
-              {...getBtnProps('reject')}
-              danger
-              icon={<CloseCircleOutlined />}
-              onClick={handleReject}
-            >
-              驳回
-            </Button>
-          )}
-        </>
-      ) : null}
-
-      {isApproved && (actions.revoke || apiPrefix) ? (
+      {isPending && (actions.approve || apiPrefix) && (
         <Button
+          key="approve"
+          {...getBtnProps('approve')}
+          icon={<CheckCircleOutlined />}
+          onClick={() => handleAction('approve', '审核')}
+        >
+          审核
+        </Button>
+      )}
+      {isPending && (actions.approve || apiPrefix) && (actions.reject || apiPrefix) && (
+        <Button
+          key="reject"
+          {...getBtnProps('reject')}
+          danger
+          icon={<CloseCircleOutlined />}
+          onClick={handleReject}
+        >
+          驳回
+        </Button>
+      )}
+
+      {isApproved && (actions.revoke || apiPrefix) && (
+        <Button
+          key="revoke"
           {...getBtnProps('revoke')}
           danger={!isLink}
           icon={<UndoOutlined />}
@@ -232,7 +234,7 @@ export const UniWorkflowActions: React.FC<UniWorkflowActionsProps> = ({
         >
           撤销审核
         </Button>
-      ) : null}
+      )}
     </Space>
   );
 };

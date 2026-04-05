@@ -32,7 +32,7 @@ export const MrpParametersCustomerGuideTrigger: React.FC<{ size?: 'small' | 'mid
         onCancel={() => setOpen(false)}
         footer={null}
         width={720}
-        destroyOnClose
+        destroyOnHidden
       >
         <Typography>
           <Paragraph type="secondary" style={{ marginBottom: 16 }}>

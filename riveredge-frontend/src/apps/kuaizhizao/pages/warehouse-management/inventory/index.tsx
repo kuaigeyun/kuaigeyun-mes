@@ -7,7 +7,7 @@
 
 import React, { useRef, useState } from 'react';
 import type { ProColumns } from '@ant-design/pro-components';
-import { Tag, Space, App, Button } from 'antd';
+import { Tag, Space, App, Button, Typography } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { WarningOutlined } from '@ant-design/icons';
@@ -40,6 +40,11 @@ const InventoryPage: React.FC = () => {
       dataIndex: 'material_code',
       width: 120,
       fixed: 'left',
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.material_code ?? '') }} ellipsis>
+          {r.material_code ?? '-'}
+        </Typography.Text>
+      ),
     },
     {
       title: '物料名称',
@@ -134,6 +139,7 @@ const InventoryPage: React.FC = () => {
             warehouse_id: search.warehouse_id,
             batch_number: search.batch_no ?? search.batch_number,
             include_expired: search.include_expired ?? includeExpired,
+            keyword: (search as any).keyword ?? (_params as any)?.keyword,
           },
         }
       );
@@ -157,6 +163,7 @@ const InventoryPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable<InventoryItem>
         headerTitle="库存查询"
+        columnPersistenceId="kuaizhizao-wm-inventory-query"
         actionRef={actionRef}
         columns={columns}
         request={fetchInventory}

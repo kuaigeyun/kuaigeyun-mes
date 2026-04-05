@@ -748,6 +748,7 @@ const DemandManagementPage: React.FC = () => {
                 <span key={`demand-${record.id ?? 'row'}-inline-${i}`}>{node}</span>
               ))}
             <UniWorkflowActions
+              key="workflow-actions"
               record={record}
               entityName="需求"
               statusField="status"
@@ -947,7 +948,10 @@ const DemandManagementPage: React.FC = () => {
             >
               新建需求计划
             </Button>,
-            <Tooltip title="合并选中需求进入统一需求计算，随后在计算单中下推半成品工单等下游单据">
+            <Tooltip
+              key="merge-computation-tooltip"
+              title="合并选中需求进入统一需求计算，随后在计算单中下推半成品工单等下游单据"
+            >
               <Button
                 key="merge-computation"
                 type="primary"

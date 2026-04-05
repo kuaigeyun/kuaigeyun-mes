@@ -25,6 +25,11 @@ function useStableNumericSeries(data: unknown): number[] {
   }, [key]);
 }
 
+/** G2 5 / @ant-design/plots 2 需表格数据 + x/y 通道，纯 number[] 会报 Missing encoding for channel: x */
+function toTinyChartData(values: number[]): { x: number; y: number }[] {
+  return values.map((y, i) => ({ x: i, y }));
+}
+
 export const SimpleSparkline: React.FC<SimpleSparklineProps> = ({
   data,
   type = 'area',
@@ -32,12 +37,15 @@ export const SimpleSparkline: React.FC<SimpleSparklineProps> = ({
   height = 60,
 }) => {
   const safeData = useStableNumericSeries(data);
+  const chartData = useMemo(() => toTinyChartData(safeData), [safeData]);
 
   const baseConfig = useMemo(
     () => ({
       height,
       autoFit: true,
-      data: safeData,
+      data: chartData,
+      xField: 'x',
+      yField: 'y',
       smooth: true,
       padding: 0,
       axis: false,
@@ -45,7 +53,7 @@ export const SimpleSparkline: React.FC<SimpleSparklineProps> = ({
       // 关闭动画，减少异步渲染与快速 update 叠加时的未处理 Promise / 中间态错误
       animation: false,
     }),
-    [height, safeData],
+    [height, chartData],
   );
 
   const areaProps = useMemo(

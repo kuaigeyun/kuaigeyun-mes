@@ -5,19 +5,58 @@
  * 详情抽屉包含领用记录、维保记录、校验记录 Tab。
  */
 
-import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormSwitch } from '@ant-design/pro-components';
+import React, { useRef, useState, useMemo } from 'react';
+import type { DescriptionsProps } from 'antd';
+import {
+  ActionType,
+  ProColumns,
+  ProFormText,
+  ProFormSelect,
+  ProFormDatePicker,
+  ProFormDigit,
+  ProFormTextArea,
+  ProFormSwitch,
+  ProDescriptionsItemProps,
+} from '@ant-design/pro-components';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
-import { App, Button, Tag, Tabs, Table, Form, Input, InputNumber, Descriptions, DatePicker, Select, Modal, Row, Col } from 'antd';
+import { App, Button, Tag, Table, Form, Input, InputNumber, Descriptions, DatePicker, Select, Modal, Row, Col, Typography, Empty } from 'antd';
 import { PlusOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import CodeField from '../../../../../components/code-field';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { getToolAssetLifecycle } from '../../../utils/equipmentLifecycle';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../../../utils/globalSubmitShortcut';
 import { toolApi } from '../../../services/equipment';
 import { batchImport } from '../../../../../utils/batchOperations';
 import dayjs from 'dayjs';
+
+function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
+  dataSource: T,
+  cols: ProDescriptionsItemProps<T>[]
+): NonNullable<DescriptionsProps['items']> {
+  return cols.map((col, index) => {
+    const dataIndex = col.dataIndex as keyof T | undefined;
+    const value = dataIndex != null ? dataSource[dataIndex] : undefined;
+    let content: React.ReactNode = value as React.ReactNode;
+    if (col.valueType === 'date' && value) {
+      content = dayjs(value as string).format('YYYY-MM-DD');
+    }
+    if (col.valueType === 'dateTime' && value) {
+      content = dayjs(value as string).format('YYYY-MM-DD HH:mm:ss');
+    }
+    if (col.render && dataSource != null) {
+      content = col.render(content, dataSource, index, {}, col);
+    }
+    return {
+      key: String(col.key ?? col.dataIndex ?? index),
+      label: col.title as React.ReactNode,
+      children: content !== undefined && content !== null ? content : '-',
+      span: col.span ?? 1,
+    };
+  });
+}
 
 interface Tool {
   id?: number;
@@ -305,68 +344,124 @@ const ToolLedgerPage: React.FC = () => {
     }
   };
 
-  const detailColumns: ProDescriptionsItemType<Tool>[] = [
-    { title: '工装编号', dataIndex: 'code' },
-    { title: '工装名称', dataIndex: 'name' },
-    { title: '工装类型', dataIndex: 'type' },
-    { title: '规格型号', dataIndex: 'spec' },
-    { title: '制造商', dataIndex: 'manufacturer' },
-    { title: '供应商', dataIndex: 'supplier' },
-    { title: '采购日期', dataIndex: 'purchase_date', valueType: 'date' },
-    { title: '保修到期日', dataIndex: 'warranty_expiry', valueType: 'date' },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      render: (status) => {
-        const statusMap: Record<string, { text: string; color: string }> = {
-          '正常': { text: '正常', color: 'success' },
-          '领用中': { text: '领用中', color: 'processing' },
-          '维修中': { text: '维修中', color: 'warning' },
-          '校验中': { text: '校验中', color: 'warning' },
-          '停用': { text: '停用', color: 'default' },
-          '报废': { text: '报废', color: 'error' },
-        };
-        const config = statusMap[status || ''] || { text: status || '-', color: 'default' };
-        return <Tag color={config.color}>{config.text}</Tag>;
+  const detailBaseColumns: ProDescriptionsItemProps<Tool>[] = useMemo(
+    () => [
+      {
+        title: '工装编号',
+        dataIndex: 'code',
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: String(r.code ?? '') }}>{r.code ?? '-'}</Typography.Text>
+        ),
       },
-    },
-    { title: '累计使用次数', dataIndex: 'total_usage_count' },
-    { title: '描述', dataIndex: 'description' },
-    { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
-    { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
-  ];
+      { title: '工装名称', dataIndex: 'name' },
+      { title: '工装类型', dataIndex: 'type' },
+      { title: '规格型号', dataIndex: 'spec' },
+      { title: '制造商', dataIndex: 'manufacturer' },
+      { title: '供应商', dataIndex: 'supplier' },
+      { title: '采购日期', dataIndex: 'purchase_date', valueType: 'date' },
+      { title: '保修到期日', dataIndex: 'warranty_expiry', valueType: 'date' },
+      {
+        title: '状态',
+        dataIndex: 'status',
+        render: (status) => {
+          const statusMap: Record<string, { text: string; color: string }> = {
+            正常: { text: '正常', color: 'success' },
+            领用中: { text: '领用中', color: 'processing' },
+            维修中: { text: '维修中', color: 'warning' },
+            校验中: { text: '校验中', color: 'warning' },
+            停用: { text: '停用', color: 'default' },
+            报废: { text: '报废', color: 'error' },
+          };
+          const config = statusMap[status || ''] || { text: status || '-', color: 'default' };
+          return <Tag color={config.color}>{config.text}</Tag>;
+        },
+      },
+      { title: '累计使用次数', dataIndex: 'total_usage_count' },
+      { title: '备注', dataIndex: 'description' },
+      { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
+      { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
+    ],
+    []
+  );
 
   const columns: ProColumns<Tool>[] = [
-    { title: '工装编号', dataIndex: 'code', width: 140, ellipsis: true, fixed: 'left' },
+    {
+      title: '工装编号',
+      dataIndex: 'code',
+      width: 140,
+      ellipsis: true,
+      fixed: 'left',
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
+          {r.code ?? '-'}
+        </Typography.Text>
+      ),
+    },
     { title: '工装名称', dataIndex: 'name', width: 200, ellipsis: true },
     { title: '工装类型', dataIndex: 'type', width: 100 },
     { title: '规格型号', dataIndex: 'spec', width: 120, ellipsis: true },
+    { title: '累计使用次数', dataIndex: 'total_usage_count', width: 110 },
     {
-      title: '状态',
-      dataIndex: 'status',
-      width: 90,
-      render: (status) => {
-        const statusMap: Record<string, { text: string; color: string }> = {
-          '正常': { text: '正常', color: 'success' },
-          '领用中': { text: '领用中', color: 'processing' },
-          '维修中': { text: '维修中', color: 'warning' },
-          '校验中': { text: '校验中', color: 'warning' },
-          '停用': { text: '停用', color: 'default' },
-          '报废': { text: '报废', color: 'error' },
-        };
-        const config = statusMap[status as string || ''] || { text: (status as string) || '-', color: 'default' };
-        return <Tag color={config.color}>{config.text}</Tag>;
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      width: 168,
+      hideInSearch: true,
+      defaultSortOrder: 'descend',
+      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+    },
+    {
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      width: 132,
+      fixed: 'right',
+      align: 'left',
+      hideInSearch: true,
+      render: (_, record) => {
+        const lifecycle = getToolAssetLifecycle(record as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
       },
     },
-    { title: '累计使用次数', dataIndex: 'total_usage_count', width: 110 },
     {
       title: '操作',
       valueType: 'option',
       width: 150,
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) => [
-        <Button key="detail" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>详情</Button>,
-        <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>,
+        <Button
+          key="detail"
+          type="link"
+          size="small"
+          icon={<EyeOutlined />}
+          onClick={(e) => {
+            e.stopPropagation();
+            void handleDetail(record);
+          }}
+        >
+          详情
+        </Button>,
+        <Button
+          key="edit"
+          type="link"
+          size="small"
+          icon={<EditOutlined />}
+          onClick={(e) => {
+            e.stopPropagation();
+            void handleEdit(record);
+          }}
+        >
+          编辑
+        </Button>,
       ],
     },
   ];
@@ -376,16 +471,22 @@ const ToolLedgerPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<Tool>
           headerTitle="工装台账"
+          columnPersistenceId="kuaizhizao-em-tool-ledger"
           actionRef={actionRef}
           rowKey="uuid"
           columns={columns}
           showAdvancedSearch={true}
+          onRow={(record) => ({
+            onClick: () => void handleDetail(record),
+            style: { cursor: 'pointer' },
+          })}
           request={async (params) => {
             try {
               const response = await toolApi.list({
                 skip: (params.current! - 1) * params.pageSize!,
                 limit: params.pageSize,
                 ...params,
+                keyword: (params as any).keyword,
               });
               return {
                 data: response.items || [],
@@ -409,6 +510,13 @@ const ToolLedgerPage: React.FC = () => {
                     await toolApi.delete(String(uuid));
                   }
                   messageApi.success(`成功删除 ${keys.length} 条记录`);
+                  if (toolDetail?.uuid && keys.map(String).includes(String(toolDetail.uuid))) {
+                    setDrawerVisible(false);
+                    setToolDetail(null);
+                    setUsages([]);
+                    setMaintenances([]);
+                    setCalibrations([]);
+                  }
                   actionRef.current?.reload();
                 } catch (error: any) {
                   messageApi.error(error.message || '删除失败');
@@ -499,6 +607,7 @@ const ToolLedgerPage: React.FC = () => {
               messageApi.error(error?.message || '导出失败');
             }
           }}
+          scroll={{ x: 1800 }}
         />
       </ListPageTemplate>
 
@@ -601,160 +710,160 @@ const ToolLedgerPage: React.FC = () => {
           setCalibrations([]);
         }}
         title={`工装详情 - ${toolDetail?.code || ''}`}
-        columns={detailColumns}
-        dataSource={toolDetail}
+        columns={[]}
+        column={2}
         width={DRAWER_CONFIG.HALF_WIDTH}
         customContent={
-          toolDetail && (
-            <Tabs
-              defaultActiveKey="basic"
-              items={[
-                {
-                  key: 'basic',
-                  label: '基本信息',
-                  children: (
-                    <Descriptions column={2} size="small">
-                      {detailColumns.map((col) => {
-                        const val = (toolDetail as any)[col.dataIndex as string];
-                        let content: React.ReactNode = val;
-                        if (col.valueType === 'dateTime' && val) content = dayjs(val).format('YYYY-MM-DD HH:mm:ss');
-                        else if (col.valueType === 'date' && val) content = dayjs(val).format('YYYY-MM-DD');
-                        else if (col.render) content = col.render(val, toolDetail, 0, {}, col);
-                        return (
-                          <Descriptions.Item key={String(col.dataIndex)} label={col.title}>
-                            {content ?? '-'}
-                          </Descriptions.Item>
-                        );
-                      })}
-                    </Descriptions>
-                  ),
-                },
-                {
-                  key: 'usages',
-                  label: '领用记录',
-                  children: (
-                    <>
-                      <div style={{ marginBottom: 12 }}>
-                        <Button type="primary" size="small" icon={<PlusOutlined />} onClick={handleCheckout}>
-                          新建领用
-                        </Button>
-                      </div>
-                      <Table<ToolUsage>
-                        size="small"
-                        loading={usagesLoading}
-                        dataSource={usages}
-                        rowKey="uuid"
-                        pagination={false}
-                        columns={[
-                          { title: '领用单号', dataIndex: 'usage_no', width: 140 },
-                          { title: '来源类型', dataIndex: 'source_type', width: 100 },
-                          { title: '来源单号', dataIndex: 'source_no', width: 120 },
-                          { title: '操作人', dataIndex: 'operator_name', width: 90 },
-                          {
-                            title: '领用时间',
-                            dataIndex: 'checkout_date',
-                            width: 160,
-                            render: (v) => v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-',
-                          },
-                          {
-                            title: '归还时间',
-                            dataIndex: 'checkin_date',
-                            width: 160,
-                            render: (v) => v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-',
-                          },
-                          {
-                            title: '状态',
-                            dataIndex: 'status',
-                            width: 80,
-                            render: (s) => <Tag>{s || '-'}</Tag>,
-                          },
-                          {
-                            title: '操作',
-                            width: 80,
-                            render: (_, record) =>
-                              record.status === '使用中' ? (
-                                <Button type="link" size="small" onClick={() => handleCheckin(record.uuid!)}>
-                                  归还
-                                </Button>
-                              ) : null,
-                          },
-                        ]}
+          toolDetail ? (
+            <>
+              <DetailDrawerSection title="基本信息">
+                <Descriptions
+                  column={2}
+                  size="small"
+                  items={buildDescriptionItemsFromColumns(toolDetail, detailBaseColumns)}
+                />
+              </DetailDrawerSection>
+              <DetailDrawerSection title="生命周期">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {(() => {
+                    const lc = getToolAssetLifecycle(toolDetail as Record<string, unknown>);
+                    const mainStages = lc.mainStages ?? [];
+                    if (mainStages.length === 0) return null;
+                    return (
+                      <UniLifecycleStepper
+                        steps={mainStages}
+                        showLabels
+                        status={lc.status}
+                        nextStepSuggestions={lc.nextStepSuggestions}
                       />
-                    </>
-                  ),
-                },
-                {
-                  key: 'maintenances',
-                  label: '维保记录',
-                  children: (
-                    <>
-                      <div style={{ marginBottom: 12 }}>
-                        <Button type="primary" size="small" icon={<PlusOutlined />} onClick={handleRecordMaintenance}>
-                          新建维保记录
-                        </Button>
-                      </div>
-                      <Table<ToolMaintenance>
-                        size="small"
-                        loading={maintLoading}
-                        dataSource={maintenances}
-                        rowKey="uuid"
-                        pagination={false}
-                        columns={[
-                          { title: '维保类型', dataIndex: 'maintenance_type', width: 100 },
-                          {
-                            title: '维保日期',
-                            dataIndex: 'maintenance_date',
-                            width: 110,
-                            render: (v) => v ? dayjs(v).format('YYYY-MM-DD') : '-',
-                          },
-                          { title: '执行人', dataIndex: 'executor', width: 90 },
-                          { title: '内容', dataIndex: 'content', ellipsis: true },
-                          { title: '结果', dataIndex: 'result', width: 80 },
-                        ]}
-                      />
-                    </>
-                  ),
-                },
-                {
-                  key: 'calibrations',
-                  label: '校验记录',
-                  children: (
-                    <>
-                      <div style={{ marginBottom: 12 }}>
-                        <Button type="primary" size="small" icon={<PlusOutlined />} onClick={handleRecordCalibration}>
-                          新建校验记录
-                        </Button>
-                      </div>
-                      <Table<ToolCalibration>
-                        size="small"
-                        loading={calibLoading}
-                        dataSource={calibrations}
-                        rowKey="uuid"
-                        pagination={false}
-                        columns={[
-                          {
-                            title: '校验日期',
-                            dataIndex: 'calibration_date',
-                            width: 110,
-                            render: (v) => v ? dayjs(v).format('YYYY-MM-DD') : '-',
-                          },
-                          { title: '校验机构', dataIndex: 'calibration_org', width: 120 },
-                          { title: '证书编号', dataIndex: 'certificate_no', width: 120 },
-                          { title: '结果', dataIndex: 'result', width: 80 },
-                          {
-                            title: '有效期至',
-                            dataIndex: 'expiry_date',
-                            width: 110,
-                            render: (v) => v ? dayjs(v).format('YYYY-MM-DD') : '-',
-                          },
-                        ]}
-                      />
-                    </>
-                  ),
-                },
-              ]}
-            />
-          )
+                    );
+                  })()}
+                  <Typography.Text type="secondary">工装台账未接入单据跟踪中心；领用/维保/校验见下方明细</Typography.Text>
+                </div>
+              </DetailDrawerSection>
+              <DetailDrawerSection title="明细信息">
+                <div style={{ overflowX: 'auto', overflowY: 'hidden' }}>
+                  <div style={{ marginBottom: 16 }}>
+                    <Typography.Text strong>领用记录</Typography.Text>
+                    <div style={{ marginTop: 8, marginBottom: 8 }}>
+                      <Button type="primary" size="small" icon={<PlusOutlined />} onClick={handleCheckout}>
+                        新建领用
+                      </Button>
+                    </div>
+                    <Table<ToolUsage>
+                      size="small"
+                      loading={usagesLoading}
+                      dataSource={usages}
+                      rowKey="uuid"
+                      pagination={false}
+                      tableLayout="fixed"
+                      style={{ minWidth: 1100 }}
+                      columns={[
+                        { title: '领用单号', dataIndex: 'usage_no', width: 140 },
+                        { title: '来源类型', dataIndex: 'source_type', width: 100 },
+                        { title: '来源单号', dataIndex: 'source_no', width: 120 },
+                        { title: '操作人', dataIndex: 'operator_name', width: 90 },
+                        {
+                          title: '领用时间',
+                          dataIndex: 'checkout_date',
+                          width: 160,
+                          render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-'),
+                        },
+                        {
+                          title: '归还时间',
+                          dataIndex: 'checkin_date',
+                          width: 160,
+                          render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-'),
+                        },
+                        {
+                          title: '状态',
+                          dataIndex: 'status',
+                          width: 80,
+                          render: (s) => <Tag>{s || '-'}</Tag>,
+                        },
+                        {
+                          title: '操作',
+                          width: 80,
+                          render: (_, record) =>
+                            record.status === '使用中' ? (
+                              <Button type="link" size="small" onClick={() => handleCheckin(record.uuid!)}>
+                                归还
+                              </Button>
+                            ) : null,
+                        },
+                      ]}
+                    />
+                  </div>
+                  <div style={{ marginBottom: 16 }}>
+                    <Typography.Text strong>维保记录</Typography.Text>
+                    <div style={{ marginTop: 8, marginBottom: 8 }}>
+                      <Button type="primary" size="small" icon={<PlusOutlined />} onClick={handleRecordMaintenance}>
+                        新建维保记录
+                      </Button>
+                    </div>
+                    <Table<ToolMaintenance>
+                      size="small"
+                      loading={maintLoading}
+                      dataSource={maintenances}
+                      rowKey="uuid"
+                      pagination={false}
+                      tableLayout="fixed"
+                      style={{ minWidth: 900 }}
+                      columns={[
+                        { title: '维保类型', dataIndex: 'maintenance_type', width: 100 },
+                        {
+                          title: '维保日期',
+                          dataIndex: 'maintenance_date',
+                          width: 110,
+                          render: (v) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+                        },
+                        { title: '执行人', dataIndex: 'executor', width: 90 },
+                        { title: '内容', dataIndex: 'content', ellipsis: true },
+                        { title: '结果', dataIndex: 'result', width: 80 },
+                      ]}
+                    />
+                  </div>
+                  <div>
+                    <Typography.Text strong>校验记录</Typography.Text>
+                    <div style={{ marginTop: 8, marginBottom: 8 }}>
+                      <Button type="primary" size="small" icon={<PlusOutlined />} onClick={handleRecordCalibration}>
+                        新建校验记录
+                      </Button>
+                    </div>
+                    <Table<ToolCalibration>
+                      size="small"
+                      loading={calibLoading}
+                      dataSource={calibrations}
+                      rowKey="uuid"
+                      pagination={false}
+                      tableLayout="fixed"
+                      style={{ minWidth: 900 }}
+                      columns={[
+                        {
+                          title: '校验日期',
+                          dataIndex: 'calibration_date',
+                          width: 110,
+                          render: (v) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+                        },
+                        { title: '校验机构', dataIndex: 'calibration_org', width: 120 },
+                        { title: '证书编号', dataIndex: 'certificate_no', width: 120 },
+                        { title: '结果', dataIndex: 'result', width: 80 },
+                        {
+                          title: '有效期至',
+                          dataIndex: 'expiry_date',
+                          width: 110,
+                          render: (v) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+                        },
+                      ]}
+                    />
+                  </div>
+                </div>
+              </DetailDrawerSection>
+              <DetailDrawerSection title="操作记录">
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+              </DetailDrawerSection>
+            </>
+          ) : null
         }
       />
 

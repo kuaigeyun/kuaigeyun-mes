@@ -36,6 +36,8 @@ import {
   Divider,
   Alert,
   Typography,
+  Descriptions,
+  Timeline,
 } from 'antd';
 import { ProDescriptions } from '@ant-design/pro-components';
 import {
@@ -55,9 +57,13 @@ import { UniTable } from '../../../../../components/uni-table';
 import {
   ListPageTemplate,
   DetailDrawerTemplate,
+  DetailDrawerSection,
   MultiTabListPageTemplate,
   DRAWER_CONFIG,
 } from '../../../../../components/layout-templates';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { buildMasterDetailDescriptionItems } from '../../../utils/buildMasterDetailDescriptionItems';
+import { getCostCalculationLifecycle } from '../../../utils/costLifecycle';
 import { costCalculationApi, costComparisonApi } from '../../../services/cost';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
@@ -457,6 +463,11 @@ const CostCalculationPage: React.FC = () => {
       key: 'calculation_no',
       width: 150,
       fixed: 'left',
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.calculation_no ?? '') }} ellipsis>
+          {r.calculation_no ?? '-'}
+        </Typography.Text>
+      ),
     },
     {
       title: '核算类型',
@@ -479,12 +490,28 @@ const CostCalculationPage: React.FC = () => {
       dataIndex: 'work_order_code',
       key: 'work_order_code',
       width: 150,
+      render: (_, r) =>
+        r.work_order_code ? (
+          <Typography.Text copyable={{ text: String(r.work_order_code) }} ellipsis>
+            {r.work_order_code}
+          </Typography.Text>
+        ) : (
+          '-'
+        ),
     },
     {
       title: '产品编号',
       dataIndex: 'product_code',
       key: 'product_code',
       width: 150,
+      render: (_, r) =>
+        r.product_code ? (
+          <Typography.Text copyable={{ text: String(r.product_code) }} ellipsis>
+            {r.product_code}
+          </Typography.Text>
+        ) : (
+          '-'
+        ),
     },
     {
       title: '产品名称',
@@ -535,26 +562,32 @@ const CostCalculationPage: React.FC = () => {
       render: (text: number) => `¥${text?.toFixed(2) || '0.00'}`,
     },
     {
-      title: '核算状态',
-      dataIndex: 'calculation_status',
-      key: 'calculation_status',
-      width: 100,
-      render: (text: string) => {
-        const statusMap: Record<string, { color: string; text: string }> = {
-          草稿: { color: 'default', text: '草稿' },
-          已核算: { color: 'processing', text: '已核算' },
-          已审核: { color: 'success', text: '已审核' },
-        };
-        const status = statusMap[text] || { color: 'default', text: text };
-        return <Tag color={status.color}>{status.text}</Tag>;
-      },
-    },
-    {
       title: '核算日期',
       dataIndex: 'calculation_date',
       key: 'calculation_date',
       width: 120,
+      search: false,
       render: (text: string) => (text ? dayjs(text).format('YYYY-MM-DD') : '-'),
+    },
+    {
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      key: 'updated_at',
+      width: 180,
+      search: false,
+      render: (text: string) => (text ? dayjs(text).format('YYYY-MM-DD HH:mm:ss') : '-'),
+    },
+    {
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      key: 'lifecycle',
+      width: 200,
+      fixed: 'right',
+      align: 'left',
+      search: false,
+      render: (_, record) => (
+        <UniLifecycle {...getCostCalculationLifecycle(record as Record<string, unknown>)} showCircleTooltip={false} />
+      ),
     },
     {
       title: '操作',
@@ -623,7 +656,15 @@ const CostCalculationPage: React.FC = () => {
       dataIndex: 'created_at',
       render: (text: string) => (text ? dayjs(text).format('YYYY-MM-DD HH:mm:ss') : '-'),
     },
+    { title: '更新人', dataIndex: 'updated_by_name' },
+    {
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      render: (text: string) => (text ? dayjs(text).format('YYYY-MM-DD HH:mm:ss') : '-'),
+    },
   ];
+
+  const calculationDetailBaseItems = detailItems.filter((d) => d.dataIndex !== 'cost_details');
 
   const closeWorkOrderModal = () => {
     setExecModal(null);
@@ -715,6 +756,8 @@ const CostCalculationPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable<CostCalculation>
         actionRef={actionRef}
+        columnPersistenceId="kuaicaiwu-cost-calculations-ledger"
+        scroll={{ x: 'max-content' }}
         request={async (params) => {
           const response = await costCalculationApi.list(params);
           return {
@@ -746,7 +789,7 @@ const CostCalculationPage: React.FC = () => {
         open={execModal === 'work_order'}
         onCancel={closeWorkOrderModal}
         footer={null}
-        destroyOnClose
+        destroyOnHidden
         width={520}
         maskClosable={false}
       >
@@ -757,7 +800,7 @@ const CostCalculationPage: React.FC = () => {
         open={execModal === 'product'}
         onCancel={closeProductModal}
         footer={null}
-        destroyOnClose
+        destroyOnHidden
         width={520}
         maskClosable={false}
       >
@@ -766,10 +809,83 @@ const CostCalculationPage: React.FC = () => {
       <DetailDrawerTemplate
         title="成本核算记录详情"
         open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
+        onClose={() => {
+          setDrawerVisible(false);
+          setCostCalculationDetail(null);
+        }}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        dataSource={costCalculationDetail}
-        columns={detailItems}
+        columns={[]}
+        customContent={
+          costCalculationDetail ? (
+            <>
+              <DetailDrawerSection title="基本信息">
+                <Descriptions
+                  column={3}
+                  size="small"
+                  items={buildMasterDetailDescriptionItems(
+                    costCalculationDetail as Record<string, unknown>,
+                    calculationDetailBaseItems as any,
+                  )}
+                />
+              </DetailDrawerSection>
+              <DetailDrawerSection title="生命周期">
+                <UniLifecycle
+                  {...getCostCalculationLifecycle(costCalculationDetail as Record<string, unknown>)}
+                  showCircleTooltip={false}
+                />
+                <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
+                  核算状态以列表与基本信息为准；完整上下游跟踪接入后可在此展示关联单据。
+                </Typography.Paragraph>
+              </DetailDrawerSection>
+              <DetailDrawerSection title="明细信息">
+                <div style={{ overflowX: 'auto', overflowY: 'hidden' }}>
+                  <pre
+                    style={{
+                      margin: 0,
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                      minWidth: 480,
+                    }}
+                  >
+                    {costCalculationDetail.cost_details
+                      ? JSON.stringify(costCalculationDetail.cost_details, null, 2)
+                      : '-'}
+                  </pre>
+                </div>
+              </DetailDrawerSection>
+              <DetailDrawerSection title="操作记录">
+                <Timeline
+                  items={[
+                    {
+                      color: 'green',
+                      children: (
+                        <>
+                          创建 ·{' '}
+                          {costCalculationDetail.created_at
+                            ? dayjs(costCalculationDetail.created_at).format('YYYY-MM-DD HH:mm:ss')
+                            : '-'}
+                          {costCalculationDetail.created_by_name ? ` · ${costCalculationDetail.created_by_name}` : ''}
+                        </>
+                      ),
+                    },
+                    {
+                      color: 'blue',
+                      children: (
+                        <>
+                          更新 ·{' '}
+                          {costCalculationDetail.updated_at
+                            ? dayjs(costCalculationDetail.updated_at).format('YYYY-MM-DD HH:mm:ss')
+                            : '-'}
+                          {costCalculationDetail.updated_by_name ? ` · ${costCalculationDetail.updated_by_name}` : ''}
+                        </>
+                      ),
+                    },
+                  ]}
+                />
+              </DetailDrawerSection>
+            </>
+          ) : null
+        }
       />
     </ListPageTemplate>
   );

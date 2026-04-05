@@ -11,20 +11,59 @@
  * Updated: 2026-01-20（重命名为工单委外）
  */
 
-import React, { useRef, useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, message, Divider, Modal } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
+import type { DescriptionsProps } from 'antd';
+import { useNavigate, useLocation } from 'react-router-dom';
+import {
+  ActionType,
+  ProColumns,
+  ProDescriptionsItemProps,
+  ProFormText,
+  ProFormSelect,
+  ProFormDatePicker,
+  ProFormDigit,
+  ProFormTextArea,
+  ProFormItem,
+} from '@ant-design/pro-components';
+import {
+  App,
+  Button,
+  Tag,
+  Space,
+  Divider,
+  Modal,
+  Descriptions,
+  Typography,
+  Dropdown,
+  Empty,
+  Spin,
+  theme as AntdTheme,
+} from 'antd';
+import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import CodeField from '../../../../../components/code-field';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import {
+  ListPageTemplate,
+  FormModalTemplate,
+  DetailDrawerTemplate,
+  DetailDrawerSection,
+  MODAL_CONFIG,
+  DRAWER_CONFIG,
+  type StatCard,
+} from '../../../../../components/layout-templates';
+import { SimpleSparkline } from '../../../../../components';
 import { outsourceWorkOrderApi, outsourceMaterialIssueApi, outsourceMaterialReceiptApi } from '../../../services/production';
 import { getOutsourceWorkOrderLifecycle } from '../../../utils/outsourceWorkOrderLifecycle';
-import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
+import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import {
+  DocumentTrackingRelationsBody,
+  DocumentTrackingTimelineBody,
+  useDocumentTracking,
+} from '../../../../../components/document-tracking-panel';
+import { usePageMetrics } from '../../../../../hooks/usePageMetrics';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
 import { materialApi } from '../../../../master-data/services/material';
 import { warehouseApi } from '../../../../master-data/services/warehouse';
@@ -66,6 +105,13 @@ interface OutsourceWorkOrder {
   remarks?: string;
   createdAt?: string;
   updatedAt?: string;
+  /** 后端 snake_case */
+  product_id?: number;
+  supplier_id?: number;
+  outsource_operation?: string;
+  planned_start_date?: string;
+  planned_end_date?: string;
+  updated_at?: string;
 }
 
 const PRIORITY_FALLBACK = [
@@ -75,10 +121,76 @@ const PRIORITY_FALLBACK = [
   { label: '紧急', value: 'urgent' },
 ];
 
+const OWO_ROW_ACTIONS_INLINE_MAX = 3;
+
+function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
+  dataSource: T,
+  cols: ProDescriptionsItemProps<T>[]
+): NonNullable<DescriptionsProps['items']> {
+  return cols.map((col, index) => {
+    const dataIndex = col.dataIndex as keyof T | undefined;
+    const value = dataIndex != null ? dataSource[dataIndex] : undefined;
+    let content: React.ReactNode = value as React.ReactNode;
+    if (col.valueType === 'dateTime' && value) {
+      content = dayjs(value as string).format('YYYY-MM-DD HH:mm:ss');
+    } else if (col.valueType === 'date' && value) {
+      content = dayjs(value as string).format('YYYY-MM-DD');
+    }
+    if (col.render && dataSource != null) {
+      content = col.render(content, dataSource, index, {}, col);
+    }
+    return {
+      key: String(col.key ?? col.dataIndex ?? index),
+      label: col.title as React.ReactNode,
+      children: content !== undefined && content !== null ? content : '-',
+      span: col.span ?? 1,
+    };
+  });
+}
+
+function renderOwoRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
+  const wrapped = nodes.map((node, i) => <span key={`${keyPrefix}-${i}`}>{node}</span>);
+  if (wrapped.length <= OWO_ROW_ACTIONS_INLINE_MAX) {
+    return <Space size="small" wrap>{wrapped}</Space>;
+  }
+  const inline = wrapped.slice(0, OWO_ROW_ACTIONS_INLINE_MAX);
+  const overflow = wrapped.slice(OWO_ROW_ACTIONS_INLINE_MAX);
+  return (
+    <Space size="small" wrap>
+      {inline}
+      <Dropdown
+        menu={{
+          items: overflow.map((node, i) => ({
+            key: `${keyPrefix}-more-${i}`,
+            label: node,
+          })),
+        }}
+        trigger={['click']}
+      >
+        <Button type="link" size="small">
+          更多
+        </Button>
+      </Dropdown>
+    </Space>
+  );
+}
+
+const OWO_STAT_SPARK_1 = [2, 3, 4, 3, 5, 4, 6];
+const OWO_STAT_SPARK_2 = [1, 2, 1, 0, 2, 1, 1];
+const OWO_STAT_SPARK_3 = [3, 4, 5, 6, 5, 7, 8];
+
 export const OutsourceWorkOrdersTable: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { message: messageApi } = App.useApp();
+  const { token } = AntdTheme.useToken();
   const actionRef = useRef<ActionType>(null);
+
+  const [statsVersion, setStatsVersion] = useState(0);
+  const [localStats, setLocalStats] = useState({ total: 0, draft: 0, inProgress: 0 });
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
+  const { statCards: pageMetricCards, hasConfig: hasPageMetricConfig } = usePageMetrics(location.pathname);
 
   // 产品列表状态（只显示委外件）
   const [productList, setProductList] = useState<any[]>([]);
@@ -98,6 +210,34 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
   // 详情 Drawer 相关状态
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [workOrderDetail, setWorkOrderDetail] = useState<OutsourceWorkOrder | null>(null);
+
+  const outsourceWorkOrderTracking = useDocumentTracking(
+    drawerVisible && workOrderDetail?.id ? 'outsource_work_order' : undefined,
+    workOrderDetail?.id
+  );
+
+  const refreshLocalStats = useCallback(async () => {
+    try {
+      const response = await outsourceWorkOrderApi.list({ skip: 0, limit: 5000 });
+      const arr = Array.isArray(response)
+        ? response
+        : (response as any)?.data || (response as any)?.items || [];
+      const list = Array.isArray(arr) ? arr : [];
+      setLocalStats({
+        total: list.length,
+        draft: list.filter((x: OutsourceWorkOrder) => (x.status || '').trim() === 'draft').length,
+        inProgress: list.filter((x: OutsourceWorkOrder) => (x.status || '').trim() === 'in_progress').length,
+      });
+    } catch {
+      setLocalStats({ total: 0, draft: 0, inProgress: 0 });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hasPageMetricConfig) {
+      void refreshLocalStats();
+    }
+  }, [hasPageMetricConfig, statsVersion, refreshLocalStats]);
 
   // 委外发料 Modal 相关状态
   const [issueModalVisible, setIssueModalVisible] = useState(false);
@@ -163,6 +303,176 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
     };
     loadPriority();
   }, []);
+
+  const detailBaseColumns: ProDescriptionsItemProps<OutsourceWorkOrder>[] = useMemo(
+    () => [
+      {
+        title: '工单委外编号',
+        dataIndex: 'code',
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: String(r.code ?? '') }}>{r.code ?? '-'}</Typography.Text>
+        ),
+      },
+      { title: '工单委外名称', dataIndex: 'name' },
+      {
+        title: '产品编号',
+        dataIndex: ['productCode', 'product_code'] as any,
+        render: (_, record) => (
+          <Typography.Text copyable={{ text: String(record.productCode || record.product_code || '') }}>
+            {record.productCode || record.product_code || '-'}
+          </Typography.Text>
+        ),
+      },
+      {
+        title: '产品名称',
+        dataIndex: ['productName', 'product_name'] as any,
+        render: (_, record) => record.productName || record.product_name || '-',
+      },
+      {
+        title: '委外数量',
+        dataIndex: 'quantity',
+        render: (_, record) => (record.quantity != null ? Number(record.quantity).toFixed(2) : '-'),
+      },
+      {
+        title: '委外供应商',
+        dataIndex: ['supplierName', 'supplier_name'] as any,
+        render: (_, record) => record.supplierName || record.supplier_name || '-',
+      },
+      {
+        title: '委外工序',
+        dataIndex: ['outsourceOperation', 'outsource_operation'] as any,
+        render: (_, record) => record.outsourceOperation || record.outsource_operation || '-',
+      },
+      {
+        title: '委外单价',
+        dataIndex: ['unitPrice', 'unit_price'] as any,
+        render: (_, record) => {
+          const price = record.unitPrice || record.unit_price;
+          return price != null && price !== '' ? (
+            <AmountDisplay resource="outsource_order" value={Number(price)} />
+          ) : (
+            '-'
+          );
+        },
+      },
+      {
+        title: '委外总金额',
+        dataIndex: ['totalAmount', 'total_amount'] as any,
+        render: (_, record) => {
+          const amount = record.totalAmount || record.total_amount;
+          return amount != null && amount !== '' ? (
+            <AmountDisplay resource="outsource_order" value={Number(amount)} />
+          ) : (
+            '-'
+          );
+        },
+      },
+      {
+        title: '状态',
+        dataIndex: 'status',
+        render: (_, record) => {
+          const statusMap: Record<string, { color: string; text: string }> = {
+            draft: { color: 'default', text: '草稿' },
+            released: { color: 'processing', text: '已下达' },
+            in_progress: { color: 'processing', text: '执行中' },
+            completed: { color: 'success', text: '已完成' },
+            cancelled: { color: 'error', text: '已取消' },
+          };
+          const status = statusMap[record.status || 'draft'] || { color: 'default', text: record.status || '未知' };
+          return <Tag color={status.color}>{status.text}</Tag>;
+        },
+      },
+      {
+        title: '优先级',
+        dataIndex: 'priority',
+        render: (_, record) => {
+          const priorityMap: Record<string, { color: string; text: string }> = {
+            low: { color: 'default', text: '低' },
+            normal: { color: 'blue', text: '正常' },
+            high: { color: 'orange', text: '高' },
+            urgent: { color: 'red', text: '紧急' },
+          };
+          const priority = priorityMap[record.priority || 'normal'] || { color: 'default', text: record.priority || '正常' };
+          return <Tag color={priority.color}>{priority.text}</Tag>;
+        },
+      },
+      {
+        title: '已发料数量',
+        dataIndex: ['issuedQuantity', 'issued_quantity'] as any,
+        render: (_, record) => {
+          const qty = record.issuedQuantity || record.issued_quantity;
+          return qty ? Number(qty).toFixed(2) : '0.00';
+        },
+      },
+      {
+        title: '已收货数量',
+        dataIndex: ['receivedQuantity', 'received_quantity'] as any,
+        render: (_, record) => {
+          const qty = record.receivedQuantity || record.received_quantity;
+          return qty ? Number(qty).toFixed(2) : '0.00';
+        },
+      },
+      {
+        title: '合格数量',
+        dataIndex: ['qualifiedQuantity', 'qualified_quantity'] as any,
+        render: (_, record) => {
+          const qty = record.qualifiedQuantity || record.qualified_quantity;
+          return qty ? Number(qty).toFixed(2) : '0.00';
+        },
+      },
+      {
+        title: '不合格数量',
+        dataIndex: ['unqualifiedQuantity', 'unqualified_quantity'] as any,
+        render: (_, record) => {
+          const qty = record.unqualifiedQuantity || record.unqualified_quantity;
+          return qty ? Number(qty).toFixed(2) : '0.00';
+        },
+      },
+      {
+        title: '计划开始时间',
+        dataIndex: ['plannedStartDate', 'planned_start_date'] as any,
+        valueType: 'dateTime',
+        render: (_, record) => {
+          const date = record.plannedStartDate || record.planned_start_date;
+          return date ? dayjs(date).format('YYYY-MM-DD HH:mm:ss') : '-';
+        },
+      },
+      {
+        title: '计划结束时间',
+        dataIndex: ['plannedEndDate', 'planned_end_date'] as any,
+        valueType: 'dateTime',
+        render: (_, record) => {
+          const date = record.plannedEndDate || record.planned_end_date;
+          return date ? dayjs(date).format('YYYY-MM-DD HH:mm:ss') : '-';
+        },
+      },
+      {
+        title: '实际开始时间',
+        dataIndex: ['actualStartDate', 'actual_start_date'] as any,
+        valueType: 'dateTime',
+        render: (_, record) => {
+          const date = record.actualStartDate || record.actual_start_date;
+          return date ? dayjs(date).format('YYYY-MM-DD HH:mm:ss') : '-';
+        },
+      },
+      {
+        title: '实际结束时间',
+        dataIndex: ['actualEndDate', 'actual_end_date'] as any,
+        valueType: 'dateTime',
+        render: (_, record) => {
+          const date = record.actualEndDate || record.actual_end_date;
+          return date ? dayjs(date).format('YYYY-MM-DD HH:mm:ss') : '-';
+        },
+      },
+      {
+        title: '备注',
+        dataIndex: 'remarks',
+        span: 3,
+        render: (text) => text || '-',
+      },
+    ],
+    []
+  );
 
   /** 产品选择变更：获取物料来源信息并自动填充 */
   const handleProductChange = async (value: number | undefined) => {
@@ -268,16 +578,26 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
    * 处理删除工单委外
    */
   const handleDelete = async (keys: React.Key[]) => {
-    if (keys.length === 0) return;
+    if (keys.length === 0) {
+      messageApi.warning('请选择要删除的工单委外');
+      return;
+    }
     Modal.confirm({
       title: '确认批量删除',
       content: `确定要删除选中的 ${keys.length} 条工单委外吗？`,
       onOk: async () => {
         try {
+          const ids = keys.map((k) => Number(k));
           for (const id of keys) {
             await outsourceWorkOrderApi.delete(String(id));
           }
           messageApi.success(`成功删除 ${keys.length} 条记录`);
+          setSelectedRowKeys([]);
+          if (workOrderDetail?.id != null && ids.includes(workOrderDetail.id)) {
+            setDrawerVisible(false);
+            setWorkOrderDetail(null);
+          }
+          setStatsVersion((v) => v + 1);
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '删除失败');
@@ -374,8 +694,10 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         values.total_amount = values.quantity * values.unit_price;
       }
 
-      if (isEdit && currentWorkOrder?.id) {
-        await outsourceWorkOrderApi.update(currentWorkOrder.id.toString(), values);
+      const wid = currentWorkOrder?.id;
+
+      if (isEdit && wid) {
+        await outsourceWorkOrderApi.update(wid.toString(), values);
         messageApi.success('工单委外更新成功');
       } else {
         await outsourceWorkOrderApi.create(values);
@@ -384,6 +706,15 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       setModalVisible(false);
       setSelectedMaterialSourceInfo(null);
       actionRef.current?.reload();
+      setStatsVersion((v) => v + 1);
+      if (wid && workOrderDetail?.id === wid) {
+        try {
+          const fresh = await outsourceWorkOrderApi.get(String(wid));
+          setWorkOrderDetail(fresh);
+        } catch {
+          /* ignore */
+        }
+      }
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
       throw error;
@@ -436,6 +767,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       setIssueModalVisible(false);
       setCurrentWorkOrderForIssue(null);
       issueFormRef.current?.resetFields();
+      setStatsVersion((v) => v + 1);
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '创建委外发料单失败');
@@ -492,6 +824,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       setReceiptModalVisible(false);
       setCurrentWorkOrderForReceipt(null);
       receiptFormRef.current?.resetFields();
+      setStatsVersion((v) => v + 1);
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '创建委外收货单失败');
@@ -499,13 +832,80 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
     }
   };
 
-  // 定义表格列
+  const renderOwoRowActionNodes = (record: OutsourceWorkOrder): React.ReactNode[] => {
+    const nodes: React.ReactNode[] = [];
+    nodes.push(
+      <Button
+        key="detail"
+        type="link"
+        size="small"
+        icon={<EyeOutlined />}
+        onClick={(e) => {
+          e.stopPropagation();
+          void handleDetail(record);
+        }}
+      >
+        详情
+      </Button>
+    );
+    nodes.push(
+      <Button
+        key="edit"
+        type="link"
+        size="small"
+        icon={<EditOutlined />}
+        disabled={record.status === 'completed' || record.status === 'cancelled'}
+        onClick={(e) => {
+          e.stopPropagation();
+          void handleEdit(record);
+        }}
+      >
+        编辑
+      </Button>
+    );
+    if (record.status === 'released' || record.status === 'in_progress') {
+      nodes.push(
+        <Button
+          key="issue"
+          type="link"
+          size="small"
+          onClick={(e) => {
+            e.stopPropagation();
+            void handleIssue(record);
+          }}
+        >
+          发料
+        </Button>
+      );
+      nodes.push(
+        <Button
+          key="receipt"
+          type="link"
+          size="small"
+          onClick={(e) => {
+            e.stopPropagation();
+            void handleReceipt(record);
+          }}
+        >
+          收货
+        </Button>
+      );
+    }
+    return nodes;
+  };
+
   const columns: ProColumns<OutsourceWorkOrder>[] = [
     {
       title: '工单委外编号',
       dataIndex: 'code',
-      width: 150,
+      width: 168,
       fixed: 'left',
+      ellipsis: true,
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
+          {r.code ?? '-'}
+        </Typography.Text>
+      ),
     },
     {
       title: '工单委外名称',
@@ -516,8 +916,16 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
     {
       title: '产品编号',
       dataIndex: ['productCode', 'product_code'],
-      width: 120,
-      render: (_, record) => record.productCode || record.product_code,
+      width: 128,
+      ellipsis: true,
+      render: (_, record) => {
+        const c = record.productCode || record.product_code;
+        return (
+          <Typography.Text copyable={{ text: String(c ?? '') }} ellipsis>
+            {c ?? '-'}
+          </Typography.Text>
+        );
+      },
     },
     {
       title: '产品名称',
@@ -536,12 +944,14 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       title: '委外供应商',
       dataIndex: ['supplierName', 'supplier_name'],
       width: 150,
+      ellipsis: true,
       render: (_, record) => record.supplierName || record.supplier_name,
     },
     {
       title: '委外工序',
       dataIndex: ['outsourceOperation', 'outsource_operation'],
       width: 150,
+      ellipsis: true,
       render: (_, record) => record.outsourceOperation || record.outsource_operation,
     },
     {
@@ -568,337 +978,202 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         ) : (
           '-'
         );
+      },
+    },
+    {
+      title: '优先级',
+      dataIndex: 'priority',
+      width: 100,
+      render: (_, record) => {
+        const priorityMap: Record<string, { color: string; text: string }> = {
+          low: { color: 'default', text: '低' },
+          normal: { color: 'blue', text: '正常' },
+          high: { color: 'orange', text: '高' },
+          urgent: { color: 'red', text: '紧急' },
+        };
+        const priority = priorityMap[record.priority || 'normal'] || { color: 'default', text: record.priority || '正常' };
+        return <Tag color={priority.color}>{priority.text}</Tag>;
+      },
+    },
+    {
+      title: '已发料数量',
+      dataIndex: ['issuedQuantity', 'issued_quantity'],
+      width: 100,
+      render: (_, record) => {
+        const qty = record.issuedQuantity || record.issued_quantity;
+        return qty ? Number(qty).toFixed(2) : '0.00';
+      },
+    },
+    {
+      title: '已收货数量',
+      dataIndex: ['receivedQuantity', 'received_quantity'],
+      width: 100,
+      render: (_, record) => {
+        const qty = record.receivedQuantity || record.received_quantity;
+        return qty ? Number(qty).toFixed(2) : '0.00';
+      },
+    },
+    {
+      title: '合格数量',
+      dataIndex: ['qualifiedQuantity', 'qualified_quantity'],
+      width: 100,
+      render: (_, record) => {
+        const qty = record.qualifiedQuantity || record.qualified_quantity;
+        return qty ? Number(qty).toFixed(2) : '0.00';
+      },
+    },
+    {
+      title: '计划开始时间',
+      dataIndex: ['plannedStartDate', 'planned_start_date'],
+      valueType: 'dateTime',
+      width: 160,
+      render: (_, record) => {
+        const date = record.plannedStartDate || record.planned_start_date;
+        return date ? dayjs(date).format('YYYY-MM-DD HH:mm:ss') : '-';
+      },
+    },
+    {
+      title: '计划结束时间',
+      dataIndex: ['plannedEndDate', 'planned_end_date'],
+      valueType: 'dateTime',
+      width: 160,
+      render: (_, record) => {
+        const date = record.plannedEndDate || record.planned_end_date;
+        return date ? dayjs(date).format('YYYY-MM-DD HH:mm:ss') : '-';
+      },
+    },
+    {
+      title: '更新时间',
+      dataIndex: ['updatedAt', 'updated_at'] as any,
+      width: 168,
+      hideInSearch: true,
+      defaultSortOrder: 'descend',
+      render: (_, record) => {
+        const d = record.updatedAt || (record as any).updated_at;
+        return d ? dayjs(d).format('YYYY-MM-DD HH:mm:ss') : '-';
       },
     },
     {
       title: '生命周期',
       dataIndex: 'lifecycle',
-      width: 100,
+      width: 132,
+      fixed: 'right',
+      align: 'left',
+      hideInSearch: true,
       render: (_, record) => {
-        const lifecycle = getOutsourceWorkOrderLifecycle(record);
-        const stageName = lifecycle.stageName ?? record.status ?? '草稿';
-        return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>;
-      },
-    },
-    {
-      title: '优先级',
-      dataIndex: 'priority',
-      width: 100,
-      render: (_, record) => {
-        const priorityMap: Record<string, { color: string; text: string }> = {
-          low: { color: 'default', text: '低' },
-          normal: { color: 'blue', text: '正常' },
-          high: { color: 'orange', text: '高' },
-          urgent: { color: 'red', text: '紧急' },
-        };
-        const priority = priorityMap[record.priority || 'normal'] || { color: 'default', text: record.priority || '正常' };
-        return <Tag color={priority.color}>{priority.text}</Tag>;
-      },
-    },
-    {
-      title: '已发料数量',
-      dataIndex: ['issuedQuantity', 'issued_quantity'],
-      width: 100,
-      render: (_, record) => {
-        const qty = record.issuedQuantity || record.issued_quantity;
-        return qty ? Number(qty).toFixed(2) : '0.00';
-      },
-    },
-    {
-      title: '已收货数量',
-      dataIndex: ['receivedQuantity', 'received_quantity'],
-      width: 100,
-      render: (_, record) => {
-        const qty = record.receivedQuantity || record.received_quantity;
-        return qty ? Number(qty).toFixed(2) : '0.00';
-      },
-    },
-    {
-      title: '合格数量',
-      dataIndex: ['qualifiedQuantity', 'qualified_quantity'],
-      width: 100,
-      render: (_, record) => {
-        const qty = record.qualifiedQuantity || record.qualified_quantity;
-        return qty ? Number(qty).toFixed(2) : '0.00';
-      },
-    },
-    {
-      title: '计划开始时间',
-      dataIndex: ['plannedStartDate', 'planned_start_date'],
-      width: 150,
-      render: (_, record) => {
-        const date = record.plannedStartDate || record.planned_start_date;
-        return date ? dayjs(date).format('YYYY-MM-DD') : '-';
-      },
-    },
-    {
-      title: '计划结束时间',
-      dataIndex: ['plannedEndDate', 'planned_end_date'],
-      width: 150,
-      render: (_, record) => {
-        const date = record.plannedEndDate || record.planned_end_date;
-        return date ? dayjs(date).format('YYYY-MM-DD') : '-';
+        const lifecycle = getOutsourceWorkOrderLifecycle(record as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
       },
     },
     {
       title: '操作',
-      valueType: 'option',
       width: 200,
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleDetail(record)}
-          >
-            详情
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-            disabled={record.status === 'completed' || record.status === 'cancelled'}
-          >
-            编辑
-          </Button>
-          {(record.status === 'released' || record.status === 'in_progress') && (
-            <Button
-              type="link"
-              size="small"
-              onClick={() => handleIssue(record)}
-            >
-              发料
-            </Button>
-          )}
-          {(record.status === 'released' || record.status === 'in_progress') && (
-            <Button
-              type="link"
-              size="small"
-              onClick={() => handleReceipt(record)}
-            >
-              收货
-            </Button>
-          )}
-        </Space>
-      ),
+      hideInSearch: true,
+      render: (_, record) =>
+        renderOwoRowActions(renderOwoRowActionNodes(record), `owo-${record.id ?? 'row'}`),
     },
   ];
 
-  // 定义详情列
-  const detailColumns: ProDescriptionsItemType<OutsourceWorkOrder>[] = [
-    {
-      title: '工单委外编号',
-      dataIndex: 'code',
-    },
-    {
-      title: '工单委外名称',
-      dataIndex: 'name',
-    },
-    {
-      title: '产品编号',
-      dataIndex: ['productCode', 'product_code'],
-      render: (_, record) => record.productCode || record.product_code,
-    },
-    {
-      title: '产品名称',
-      dataIndex: ['productName', 'product_name'],
-      render: (_, record) => record.productName || record.product_name,
-    },
-    {
-      title: '委外数量',
-      dataIndex: 'quantity',
-      render: (_, record) => (record.quantity != null ? Number(record.quantity).toFixed(2) : '-'),
-    },
-    {
-      title: '委外供应商',
-      dataIndex: ['supplierName', 'supplier_name'],
-      render: (_, record) => record.supplierName || record.supplier_name,
-    },
-    {
-      title: '委外工序',
-      dataIndex: ['outsourceOperation', 'outsource_operation'],
-      render: (_, record) => record.outsourceOperation || record.outsource_operation,
-    },
-    {
-      title: '委外单价',
-      dataIndex: ['unitPrice', 'unit_price'],
-      render: (_, record) => {
-        const price = record.unitPrice || record.unit_price;
-        return price != null && price !== '' ? (
-          <AmountDisplay resource="outsource_order" value={Number(price)} />
-        ) : (
-          '-'
-        );
-      },
-    },
-    {
-      title: '委外总金额',
-      dataIndex: ['totalAmount', 'total_amount'],
-      render: (_, record) => {
-        const amount = record.totalAmount || record.total_amount;
-        return amount != null && amount !== '' ? (
-          <AmountDisplay resource="outsource_order" value={Number(amount)} />
-        ) : (
-          '-'
-        );
-      },
-    },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      render: (_, record) => {
-        const statusMap: Record<string, { color: string; text: string }> = {
-          draft: { color: 'default', text: '草稿' },
-          released: { color: 'processing', text: '已下达' },
-          in_progress: { color: 'processing', text: '执行中' },
-          completed: { color: 'success', text: '已完成' },
-          cancelled: { color: 'error', text: '已取消' },
+  const handleWorkOrderListRequest = async (params: any) => {
+    try {
+      const response = await outsourceWorkOrderApi.list({
+        skip: (params.current! - 1) * params.pageSize!,
+        limit: params.pageSize,
+        ...params,
+        keyword: params.keyword,
+      });
+
+      if (Array.isArray(response)) {
+        return {
+          data: response,
+          success: true,
+          total: response.length,
         };
-        const status = statusMap[record.status || 'draft'] || { color: 'default', text: record.status || '未知' };
-        return <Tag color={status.color}>{status.text}</Tag>;
-      },
-    },
-    {
-      title: '优先级',
-      dataIndex: 'priority',
-      render: (_, record) => {
-        const priorityMap: Record<string, { color: string; text: string }> = {
-          low: { color: 'default', text: '低' },
-          normal: { color: 'blue', text: '正常' },
-          high: { color: 'orange', text: '高' },
-          urgent: { color: 'red', text: '紧急' },
+      }
+      if (response && typeof response === 'object') {
+        return {
+          data: (response as any).data || (response as any).items || [],
+          success: (response as any).success !== false,
+          total: (response as any).total || ((response as any).data || (response as any).items || []).length,
         };
-        const priority = priorityMap[record.priority || 'normal'] || { color: 'default', text: record.priority || '正常' };
-        return <Tag color={priority.color}>{priority.text}</Tag>;
-      },
-    },
-    {
-      title: '已发料数量',
-      dataIndex: ['issuedQuantity', 'issued_quantity'],
-      render: (_, record) => {
-        const qty = record.issuedQuantity || record.issued_quantity;
-        return qty ? Number(qty).toFixed(2) : '0.00';
-      },
-    },
-    {
-      title: '已收货数量',
-      dataIndex: ['receivedQuantity', 'received_quantity'],
-      render: (_, record) => {
-        const qty = record.receivedQuantity || record.received_quantity;
-        return qty ? Number(qty).toFixed(2) : '0.00';
-      },
-    },
-    {
-      title: '合格数量',
-      dataIndex: ['qualifiedQuantity', 'qualified_quantity'],
-      render: (_, record) => {
-        const qty = record.qualifiedQuantity || record.qualified_quantity;
-        return qty ? Number(qty).toFixed(2) : '0.00';
-      },
-    },
-    {
-      title: '不合格数量',
-      dataIndex: ['unqualifiedQuantity', 'unqualified_quantity'],
-      render: (_, record) => {
-        const qty = record.unqualifiedQuantity || record.unqualified_quantity;
-        return qty ? Number(qty).toFixed(2) : '0.00';
-      },
-    },
-    {
-      title: '计划开始时间',
-      dataIndex: ['plannedStartDate', 'planned_start_date'],
-      render: (_, record) => {
-        const date = record.plannedStartDate || record.planned_start_date;
-        return date ? dayjs(date).format('YYYY-MM-DD HH:mm:ss') : '-';
-      },
-    },
-    {
-      title: '计划结束时间',
-      dataIndex: ['plannedEndDate', 'planned_end_date'],
-      render: (_, record) => {
-        const date = record.plannedEndDate || record.planned_end_date;
-        return date ? dayjs(date).format('YYYY-MM-DD HH:mm:ss') : '-';
-      },
-    },
-    {
-      title: '实际开始时间',
-      dataIndex: ['actualStartDate', 'actual_start_date'],
-      render: (_, record) => {
-        const date = record.actualStartDate || record.actual_start_date;
-        return date ? dayjs(date).format('YYYY-MM-DD HH:mm:ss') : '-';
-      },
-    },
-    {
-      title: '实际结束时间',
-      dataIndex: ['actualEndDate', 'actual_end_date'],
-      render: (_, record) => {
-        const date = record.actualEndDate || record.actual_end_date;
-        return date ? dayjs(date).format('YYYY-MM-DD HH:mm:ss') : '-';
-      },
-    },
-    {
-      title: '备注',
-      dataIndex: 'remarks',
-      span: 2,
-    },
-  ];
+      }
+
+      return {
+        data: [],
+        success: false,
+        total: 0,
+      };
+    } catch (error) {
+      console.error('获取工单委外列表失败:', error);
+      messageApi.error('获取工单委外列表失败');
+      return {
+        data: [],
+        success: false,
+        total: 0,
+      };
+    }
+  };
+
+  const statCards: StatCard[] =
+    hasPageMetricConfig && pageMetricCards.length > 0
+      ? pageMetricCards
+      : [
+          {
+            title: '工单委外总数',
+            value: localStats.total,
+            valueStyle: { color: token.colorPrimary },
+            backgroundChart: <SimpleSparkline data={OWO_STAT_SPARK_1} color={token.colorPrimary} />,
+          },
+          {
+            title: '草稿',
+            value: localStats.draft,
+            valueStyle: { color: token.colorWarning },
+            backgroundChart: <SimpleSparkline data={OWO_STAT_SPARK_2} color={token.colorWarning} />,
+          },
+          {
+            title: '执行中',
+            value: localStats.inProgress,
+            valueStyle: { color: token.colorSuccess },
+            backgroundChart: <SimpleSparkline data={OWO_STAT_SPARK_3} color={token.colorSuccess} />,
+          },
+        ];
 
   return (
     <>
-      <UniTable<OutsourceWorkOrder>
-        headerTitle="工单委外管理"
-        actionRef={actionRef}
-        rowKey="id"
-        columns={columns}
-        showAdvancedSearch={true}
-        request={async (params) => {
-          try {
-            const response = await outsourceWorkOrderApi.list({
-              skip: (params.current! - 1) * params.pageSize!,
-              limit: params.pageSize,
-              ...params,
-            });
-
-            if (Array.isArray(response)) {
-              return {
-                data: response,
-                success: true,
-                total: response.length,
-              };
-            } else if (response && typeof response === 'object') {
-              return {
-                data: response.data || response.items || [],
-                success: response.success !== false,
-                total: response.total || (response.data || response.items || []).length,
-              };
-            }
-
-            return {
-              data: [],
-              success: false,
-              total: 0,
-            };
-          } catch (error) {
-            console.error('获取工单委外列表失败:', error);
-            messageApi.error('获取工单委外列表失败');
-            return {
-              data: [],
-              success: false,
-              total: 0,
-            };
-          }
-        }}
-        enableRowSelection={true}
-        showCreateButton={true}
-        createButtonText="新建工单委外"
-        onCreate={handleCreate}
-        showDeleteButton={true}
-        onDelete={handleDelete}
-        toolBarRender={() => []}
-      />
+      <ListPageTemplate statCards={statCards}>
+        <UniTable<OutsourceWorkOrder>
+          headerTitle="工单委外"
+          columnPersistenceId="kuaizhizao-outsource-work-orders-list"
+          actionRef={actionRef}
+          rowKey="id"
+          columns={columns}
+          showAdvancedSearch={true}
+          request={handleWorkOrderListRequest}
+          enableRowSelection={true}
+          onRowSelectionChange={setSelectedRowKeys}
+          showCreateButton={true}
+          createButtonText="新建工单委外"
+          onCreate={handleCreate}
+          showDeleteButton={true}
+          onDelete={handleDelete}
+          scroll={{ x: 2000 }}
+          onRow={(record) => ({
+            onClick: () => void handleDetail(record),
+            style: { cursor: 'pointer' },
+          })}
+        />
+      </ListPageTemplate>
 
       {/* 创建/编辑工单委外 Modal */}
       <FormModalTemplate
@@ -1125,17 +1400,93 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         />
       </FormModalTemplate >
 
-      {/* 工单委外详情 Drawer */}
-      < DetailDrawerTemplate<OutsourceWorkOrder>
-        title={`工单委外详情 - ${workOrderDetail?.code || ''}`}
+      <DetailDrawerTemplate<OutsourceWorkOrder>
+        title={`工单委外详情${workOrderDetail?.code ? ` - ${workOrderDetail.code}` : ''}`}
         open={drawerVisible}
         onClose={() => {
           setDrawerVisible(false);
           setWorkOrderDetail(null);
         }}
-        dataSource={workOrderDetail || undefined}
-        columns={detailColumns}
         width={DRAWER_CONFIG.HALF_WIDTH}
+        columns={[]}
+        column={3}
+        dataSource={workOrderDetail || undefined}
+        customContent={
+          workOrderDetail && (
+            <>
+              <DetailDrawerSection title="基本信息">
+                <Descriptions
+                  column={3}
+                  size="small"
+                  items={buildDescriptionItemsFromColumns(workOrderDetail, detailBaseColumns)}
+                />
+              </DetailDrawerSection>
+
+              <DetailDrawerSection title="生命周期">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {(() => {
+                    const lifecycle = getOutsourceWorkOrderLifecycle(workOrderDetail as Record<string, unknown>);
+                    const mainStages = lifecycle.mainStages ?? [];
+                    if (mainStages.length === 0) return null;
+                    return (
+                      <UniLifecycleStepper
+                        steps={mainStages}
+                        status={lifecycle.status}
+                        showLabels
+                        nextStepSuggestions={lifecycle.nextStepSuggestions}
+                      />
+                    );
+                  })()}
+                  <div
+                    style={{
+                      paddingTop: 12,
+                      borderTop: '1px solid var(--ant-color-border-secondary)',
+                    }}
+                  >
+                    <div style={{ marginBottom: 8, fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
+                      上下游单据
+                    </div>
+                    {outsourceWorkOrderTracking.loading && (
+                      <div style={{ padding: '8px 0' }}>
+                        <Spin size="small" />
+                      </div>
+                    )}
+                    {outsourceWorkOrderTracking.error && (
+                      <Typography.Text type="danger">{outsourceWorkOrderTracking.error}</Typography.Text>
+                    )}
+                    {outsourceWorkOrderTracking.data && (
+                      <DocumentTrackingRelationsBody
+                        data={outsourceWorkOrderTracking.data}
+                        onDocumentClick={(type, id) => messageApi.info(`跳转到${type}#${id}`)}
+                      />
+                    )}
+                  </div>
+                </div>
+              </DetailDrawerSection>
+
+              <DetailDrawerSection title="明细信息">
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="工单委外无明细行表" />
+              </DetailDrawerSection>
+
+              <DetailDrawerSection title="操作记录">
+                {outsourceWorkOrderTracking.loading && (
+                  <div style={{ textAlign: 'center', padding: 24 }}>
+                    <Spin />
+                  </div>
+                )}
+                {outsourceWorkOrderTracking.error && !outsourceWorkOrderTracking.loading && (
+                  <Typography.Text type="danger">{outsourceWorkOrderTracking.error}</Typography.Text>
+                )}
+                {outsourceWorkOrderTracking.data && !outsourceWorkOrderTracking.loading && (
+                  <DocumentTrackingTimelineBody data={outsourceWorkOrderTracking.data} />
+                )}
+                {!outsourceWorkOrderTracking.loading && !outsourceWorkOrderTracking.data && !outsourceWorkOrderTracking.error && (
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+                )}
+              </DetailDrawerSection>
+            </>
+          )
+        }
       />
 
       {/* 委外发料 Modal */}
@@ -1352,11 +1703,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
 };
 
 const OutsourceWorkOrdersPage: React.FC = () => {
-  return (
-    <ListPageTemplate>
-      <OutsourceWorkOrdersTable />
-    </ListPageTemplate>
-  );
+  return <OutsourceWorkOrdersTable />;
 };
 
 export default OutsourceWorkOrdersPage;

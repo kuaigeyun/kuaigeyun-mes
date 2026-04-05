@@ -7,25 +7,89 @@
  * @date 2025-12-29
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
+import type { DescriptionsProps } from 'antd';
 import { useNavigate } from 'react-router-dom';
-import { ActionType, ProColumns, ProFormDigit, ProFormTextArea, ProFormSelect, ProFormItem } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Table, Card, Row, Col, Modal } from 'antd';
+import {
+  ActionType,
+  ProColumns,
+  ProFormDigit,
+  ProFormTextArea,
+  ProFormSelect,
+  ProFormItem,
+  ProDescriptionsItemProps,
+} from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Card, Row, Col, Modal, Descriptions, Typography, Dropdown, Spin, Empty } from 'antd';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
-import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
+import {
+  DocumentTrackingRelationsBody,
+  DocumentTrackingTimelineBody,
+  useDocumentTracking,
+} from '../../../../../components/document-tracking-panel';
 import { getIncomingInspectionLifecycle } from '../../../utils/incomingInspectionLifecycle';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../../../../../services/api';
 import { qualityApi, warehouseApi } from '../../../services/production';
-import { getDocumentRelations } from '../../../services/document-relation';
-import type { DocumentRelationData } from '../../../../../components/document-relation-display';
-import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 import { downloadFile } from '../../../services/common';
+import dayjs from 'dayjs';
+
+function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
+  dataSource: T,
+  cols: ProDescriptionsItemProps<T>[]
+): NonNullable<DescriptionsProps['items']> {
+  return cols.map((col, index) => {
+    const dataIndex = col.dataIndex as keyof T | undefined;
+    const value = dataIndex != null ? dataSource[dataIndex] : undefined;
+    let content: React.ReactNode = value as React.ReactNode;
+    if (col.valueType === 'dateTime' && value) {
+      content = dayjs(value as string).format('YYYY-MM-DD HH:mm:ss');
+    }
+    if (col.render && dataSource != null) {
+      content = col.render(content, dataSource, index, {}, col);
+    }
+    return {
+      key: String(col.key ?? col.dataIndex ?? index),
+      label: col.title as React.ReactNode,
+      children: content !== undefined && content !== null ? content : '-',
+      span: col.span ?? 1,
+    };
+  });
+}
+
+const INCOMING_ROW_ACTIONS_MAX = 3;
+
+function renderIncomingRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
+  const wrapped = nodes.map((node, i) => <span key={`${keyPrefix}-${i}`}>{node}</span>);
+  if (wrapped.length <= INCOMING_ROW_ACTIONS_MAX) {
+    return <Space size="small" wrap>{wrapped}</Space>;
+  }
+  const inline = wrapped.slice(0, INCOMING_ROW_ACTIONS_MAX);
+  const overflow = wrapped.slice(INCOMING_ROW_ACTIONS_MAX);
+  return (
+    <Space size="small" wrap>
+      {inline}
+      <Dropdown
+        menu={{
+          items: overflow.map((node, i) => ({
+            key: `${keyPrefix}-more-${i}`,
+            label: node,
+          })),
+        }}
+        trigger={['click']}
+      >
+        <Button type="link" size="small">
+          更多
+        </Button>
+      </Dropdown>
+    </Space>
+  );
+}
 
 // 来料检验接口定义
 interface IncomingInspection {
@@ -72,6 +136,7 @@ const IncomingInspectionPage: React.FC = () => {
   const queryClient = useQueryClient();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const invalidateStats = () => queryClient.invalidateQueries({ queryKey: ['incoming-inspection-statistics'] });
   const [disposalOptions, setDisposalOptions] = useState<Array<{ label: string; value: string }>>(DISPOSAL_METHOD_FALLBACK);
@@ -100,7 +165,11 @@ const IncomingInspectionPage: React.FC = () => {
   // 详情Drawer状态
   const [detailVisible, setDetailVisible] = useState(false);
   const [inspectionDetail, setInspectionDetail] = useState<IncomingInspection | null>(null);
-  const [documentRelations, setDocumentRelations] = useState<DocumentRelationData | null>(null);
+
+  const incomingTracking = useDocumentTracking(
+    detailVisible && inspectionDetail?.id ? 'incoming_inspection' : undefined,
+    inspectionDetail?.id
+  );
 
   // 从采购入库单创建Modal状态
   const [createFromReceiptModalVisible, setCreateFromReceiptModalVisible] = useState(false);
@@ -165,10 +234,6 @@ const IncomingInspectionPage: React.FC = () => {
       const detail = await qualityApi.incomingInspection.get(record.id!.toString());
       setInspectionDetail(detail);
       setDetailVisible(true);
-
-      // 获取单据关联
-      const relations = await getDocumentRelations('incoming_inspection', record.id!);
-      setDocumentRelations(relations);
     } catch (error) {
       messageApi.error('获取检验单详情失败');
     }
@@ -277,6 +342,152 @@ const IncomingInspectionPage: React.FC = () => {
     }
   };
 
+  const detailBaseColumns: ProDescriptionsItemProps<IncomingInspection>[] = useMemo(
+    () => [
+      {
+        title: '检验单号',
+        dataIndex: 'inspection_code',
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: String(r.inspection_code ?? '') }}>{r.inspection_code ?? '-'}</Typography.Text>
+        ),
+      },
+      {
+        title: '物料编号',
+        dataIndex: 'material_code',
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: String(r.material_code ?? '') }}>{r.material_code ?? '-'}</Typography.Text>
+        ),
+      },
+      { title: '物料名称', dataIndex: 'material_name' },
+      {
+        title: '采购入库单号',
+        dataIndex: 'purchase_receipt_code',
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: String(r.purchase_receipt_code ?? '') }}>{r.purchase_receipt_code ?? '-'}</Typography.Text>
+        ),
+      },
+      { title: '供应商', dataIndex: 'supplier_name' },
+      { title: '检验数量', dataIndex: 'inspection_quantity', valueType: 'digit' },
+      { title: '合格数量', dataIndex: 'qualified_quantity', valueType: 'digit' },
+      { title: '不合格数量', dataIndex: 'unqualified_quantity', valueType: 'digit' },
+      {
+        title: '检验状态',
+        dataIndex: 'status',
+        render: (s) => {
+          const statusMap: Record<string, { text: string; color: string }> = {
+            草稿: { text: '草稿', color: 'default' },
+            已审核: { text: '已审核', color: 'processing' },
+            已完成: { text: '已完成', color: 'success' },
+            已取消: { text: '已取消', color: 'error' },
+          };
+          const config = statusMap[String(s)] || { text: String(s ?? '-'), color: 'default' };
+          return <Tag color={config.color}>{config.text}</Tag>;
+        },
+      },
+      {
+        title: '质量状态',
+        dataIndex: 'quality_status',
+        render: (t) => <Tag color={t === '合格' ? 'success' : 'error'}>{t || '待判定'}</Tag>,
+      },
+      {
+        title: '检验结果',
+        dataIndex: 'inspection_result',
+        render: (text) => {
+          const resultMap: Record<string, { text: string; color: string }> = {
+            待检验: { text: '待检验', color: 'default' },
+            合格: { text: '合格', color: 'success' },
+            不合格: { text: '不合格', color: 'error' },
+            部分合格: { text: '部分合格', color: 'warning' },
+          };
+          const config = resultMap[text as string] || { text: text || '待检验', color: 'default' };
+          return <Tag color={config.color}>{config.text}</Tag>;
+        },
+      },
+      { title: '检验员', dataIndex: 'inspector_name' },
+      { title: '检验时间', dataIndex: 'inspection_time', valueType: 'dateTime' },
+      { title: '审核人', dataIndex: 'reviewer_name', render: (t) => t || '-' },
+      { title: '审核时间', dataIndex: 'review_time', valueType: 'dateTime', render: (t) => t || '-' },
+      { title: '检验备注', dataIndex: 'notes', span: 2, render: (t) => t || '-' },
+    ],
+    []
+  );
+
+  const renderIncomingRowNodes = (record: IncomingInspection): React.ReactNode[] => {
+    if (record.status === '待检验' || record.inspection_result === '待检验') {
+      return [
+        <Button
+          key="inspect"
+          size="small"
+          type="primary"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleInspect(record);
+          }}
+        >
+          检验
+        </Button>,
+      ];
+    }
+    const nodes: React.ReactNode[] = [
+      <Button
+        key="detail"
+        size="small"
+        type="link"
+        icon={<EyeOutlined />}
+        onClick={(e) => {
+          e.stopPropagation();
+          void handleDetail(record);
+        }}
+      >
+        详情
+      </Button>,
+      <UniWorkflowActions
+        key="wf"
+        record={record}
+        entityName="来料检验单"
+        statusField="status"
+        reviewStatusField="review_status"
+        draftStatuses={[]}
+        pendingStatuses={['待审核', '已检验']}
+        approvedStatuses={['已审核']}
+        rejectedStatuses={['已驳回']}
+        theme="link"
+        size="small"
+        actions={{
+          approve: (id) => apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}/approve`, { method: 'POST' }),
+          reject: (id, reason) =>
+            apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}/approve`, {
+              method: 'POST',
+              params: reason ? { rejection_reason: reason } : undefined,
+            }),
+        }}
+        onSuccess={() => {
+          actionRef.current?.reload();
+          if (inspectionDetail?.id === record.id) {
+            qualityApi.incomingInspection.get(record.id!.toString()).then(setInspectionDetail).catch(() => {});
+          }
+        }}
+      />,
+    ];
+    if (record.quality_status === '不合格' && (record.unqualified_quantity || 0) > 0) {
+      nodes.push(
+        <Button
+          key="defect"
+          size="small"
+          type="link"
+          danger
+          onClick={(e) => {
+            e.stopPropagation();
+            handleCreateDefect(record);
+          }}
+        >
+          创建不合格品记录
+        </Button>
+      );
+    }
+    return nodes;
+  };
+
   // 表格列定义
   const columns: ProColumns<IncomingInspection>[] = [
     {
@@ -285,11 +496,21 @@ const IncomingInspectionPage: React.FC = () => {
       width: 140,
       ellipsis: true,
       fixed: 'left',
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.inspection_code ?? '') }} ellipsis>
+          {r.inspection_code ?? '-'}
+        </Typography.Text>
+      ),
     },
     {
       title: '物料编号',
       dataIndex: 'material_code',
       width: 120,
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.material_code ?? '') }} ellipsis>
+          {r.material_code ?? '-'}
+        </Typography.Text>
+      ),
     },
     {
       title: '物料名称',
@@ -302,6 +523,11 @@ const IncomingInspectionPage: React.FC = () => {
       dataIndex: 'purchase_receipt_code',
       width: 140,
       ellipsis: true,
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.purchase_receipt_code ?? '') }} ellipsis>
+          {r.purchase_receipt_code ?? '-'}
+        </Typography.Text>
+      ),
     },
     {
       title: '供应商',
@@ -327,21 +553,6 @@ const IncomingInspectionPage: React.FC = () => {
       dataIndex: 'unqualified_quantity',
       width: 100,
       align: 'right',
-    },
-    {
-      title: '检验状态',
-      dataIndex: 'status',
-      width: 100,
-      render: (status) => {
-        const statusMap = {
-          '草稿': { text: '草稿', color: 'default' },
-          '已审核': { text: '已审核', color: 'processing' },
-          '已完成': { text: '已完成', color: 'success' },
-          '已取消': { text: '已取消', color: 'error' },
-        };
-        const config = statusMap[status as keyof typeof statusMap] || statusMap['草稿'];
-        return <Tag color={config.color}>{config.text}</Tag>;
-      },
     },
     {
       title: '检验员',
@@ -370,70 +581,43 @@ const IncomingInspectionPage: React.FC = () => {
       valueType: 'dateTime',
     },
     {
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      width: 168,
+      hideInSearch: true,
+      defaultSortOrder: 'descend',
+      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+    },
+    {
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      width: 132,
+      fixed: 'right',
+      align: 'left',
+      hideInSearch: true,
+      render: (_, record) => {
+        const lifecycle = getIncomingInspectionLifecycle(record as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
+      },
+    },
+    {
       title: '操作',
       key: 'action',
-      width: 220,
+      width: 240,
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          {record.status === '待检验' || record.inspection_result === '待检验' ? (
-            <Button
-              size="small"
-              type="primary"
-              onClick={() => handleInspect(record)}
-            >
-              检验
-            </Button>
-          ) : (
-            <>
-              <Button
-                size="small"
-                type="link"
-                icon={<EyeOutlined />}
-                onClick={() => handleDetail(record)}
-              >
-                详情
-              </Button>
-              <UniWorkflowActions
-                record={record}
-                entityName="来料检验单"
-                statusField="status"
-                reviewStatusField="review_status"
-                draftStatuses={[]}
-                pendingStatuses={['待审核', '已检验']}
-                approvedStatuses={['已审核']}
-                rejectedStatuses={['已驳回']}
-                theme="link"
-                size="small"
-                actions={{
-                  approve: (id) => apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}/approve`, { method: 'POST' }),
-                  reject: (id, reason) =>
-                    apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}/approve`, {
-                      method: 'POST',
-                      params: reason ? { rejection_reason: reason } : undefined,
-                    }),
-                }}
-                onSuccess={() => {
-                  actionRef.current?.reload();
-                  if (inspectionDetail?.id === record.id) {
-                    qualityApi.incomingInspection.get(record.id!.toString()).then(setInspectionDetail).catch(() => {});
-                  }
-                }}
-              />
-              {record.quality_status === '不合格' && (record.unqualified_quantity || 0) > 0 && (
-                <Button
-                  size="small"
-                  type="link"
-                  danger
-                  onClick={() => handleCreateDefect(record)}
-                >
-                  创建不合格品记录
-                </Button>
-              )}
-            </>
-          )}
-        </Space>
-      ),
+      hideInSearch: true,
+      render: (_, record) =>
+        renderIncomingRowActions(renderIncomingRowNodes(record), `inc-${record.id ?? 'row'}`),
     },
   ];
 
@@ -468,6 +652,7 @@ const IncomingInspectionPage: React.FC = () => {
     >
       <UniTable<IncomingInspection>
         headerTitle="来料检验"
+        columnPersistenceId="kuaizhizao-qm-incoming-inspection"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
@@ -481,6 +666,7 @@ const IncomingInspectionPage: React.FC = () => {
               quality_status: params.quality_status,
               supplier_id: params.supplier_id,
               material_id: params.material_id,
+              keyword: params.keyword,
             });
             // 后端返回的是数组
             const data = Array.isArray(response) ? response : (response.data || []);
@@ -502,6 +688,11 @@ const IncomingInspectionPage: React.FC = () => {
         createButtonText="从采购入库单创建"
         onCreate={handleCreateFromReceipt}
         enableRowSelection={true}
+        onRowSelectionChange={setSelectedRowKeys}
+        onRow={(record) => ({
+          onClick: () => void handleDetail(record),
+          style: { cursor: 'pointer' },
+        })}
         showImportButton={true}
         onImport={handleImport}
         importHeaders={['采购入库单号', '物料编号', '检验数量', '合格数量', '不合格数量', '备注']}
@@ -515,10 +706,16 @@ const IncomingInspectionPage: React.FC = () => {
             content: `确定要删除选中的 ${keys.length} 条来料检验单吗？`,
             onOk: async () => {
               try {
+                const ids = keys.map(Number);
                 for (const id of keys) {
                   await qualityApi.incomingInspection.delete(String(id));
                 }
                 messageApi.success(`成功删除 ${keys.length} 条记录`);
+                setSelectedRowKeys([]);
+                if (inspectionDetail?.id != null && ids.includes(inspectionDetail.id)) {
+                  setDetailVisible(false);
+                  setInspectionDetail(null);
+                }
                 invalidateStats();
                 actionRef.current?.reload();
               } catch (error: any) {
@@ -527,7 +724,7 @@ const IncomingInspectionPage: React.FC = () => {
             },
           });
         }}
-        scroll={{ x: 1400 }}
+        scroll={{ x: 1800 }}
       />
 
       <FormModalTemplate
@@ -616,9 +813,13 @@ const IncomingInspectionPage: React.FC = () => {
       <DetailDrawerTemplate
         title={`检验详情 - ${inspectionDetail?.inspection_code || ''}`}
         open={detailVisible}
-        onClose={() => setDetailVisible(false)}
+        onClose={() => {
+          setDetailVisible(false);
+          setInspectionDetail(null);
+        }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
+        column={3}
         extra={
           inspectionDetail && (
             <UniWorkflowActions
@@ -651,156 +852,78 @@ const IncomingInspectionPage: React.FC = () => {
         }
         customContent={
           inspectionDetail ? (
-            <div style={{ padding: '16px 0' }}>
-              {/* 单据关联展示 */}
-              {documentRelations && (
-                <Card title="单据关联" style={{ marginBottom: 16 }}>
-                  {documentRelations.upstream_count > 0 && (
-                    <div style={{ marginBottom: 16 }}>
-                      <div style={{ marginBottom: 8, fontWeight: 'bold' }}>
-                        上游单据 ({documentRelations.upstream_count})
-                      </div>
-                      <Table
-                        size="small"
-                        columns={[
-                          { title: '单据类型', dataIndex: 'document_type', width: 120 },
-                          { title: '单据编号', dataIndex: 'document_code', width: 150 },
-                          { title: '关联时间', dataIndex: 'relation_time', width: 160 },
-                        ]}
-                        dataSource={documentRelations.upstream_documents}
-                        pagination={false}
-                        rowKey="id"
-                      />
-                    </div>
-                  )}
-                  {documentRelations.downstream_count > 0 && (
-                    <div>
-                      <div style={{ marginBottom: 8, fontWeight: 'bold' }}>
-                        下游单据 ({documentRelations.downstream_count})
-                      </div>
-                      <Table
-                        size="small"
-                        columns={[
-                          { title: '单据类型', dataIndex: 'document_type', width: 120 },
-                          { title: '单据编号', dataIndex: 'document_code', width: 150 },
-                          { title: '关联时间', dataIndex: 'relation_time', width: 160 },
-                        ]}
-                        dataSource={documentRelations.downstream_documents}
-                        pagination={false}
-                        rowKey="id"
-                      />
-                    </div>
-                  )}
-                  {documentRelations.upstream_count === 0 && documentRelations.downstream_count === 0 && (
-                    <div style={{ textAlign: 'center', color: '#999', padding: '20px 0' }}>
-                      暂无关联单据
-                    </div>
-                  )}
-                </Card>
-              )}
-
-              <Card title="基本信息" style={{ marginBottom: 16 }}>
-                <Row gutter={16}>
-                  <Col span={12}>
-                    <strong>检验单号：</strong>{inspectionDetail.inspection_code}
-                  </Col>
-                  <Col span={12}>
-                    <strong>物料编号：</strong>{inspectionDetail.material_code}
-                  </Col>
-                </Row>
-                <Row gutter={16} style={{ marginTop: 8 }}>
-                  <Col span={24}>
-                    <strong>物料名称：</strong>{inspectionDetail.material_name}
-                  </Col>
-                </Row>
-                <Row gutter={16} style={{ marginTop: 8 }}>
-                  <Col span={8}>
-                    <strong>检验数量：</strong>{inspectionDetail.inspection_quantity || 0}
-                  </Col>
-                  <Col span={8}>
-                    <strong>合格数量：</strong>{inspectionDetail.qualified_quantity || 0}
-                  </Col>
-                  <Col span={8}>
-                    <strong>不合格数量：</strong>{inspectionDetail.unqualified_quantity || 0}
-                  </Col>
-                </Row>
-                <Row gutter={16} style={{ marginTop: 8 }}>
-                  <Col span={12}>
-                    <strong>采购入库单号：</strong>{inspectionDetail.purchase_receipt_code}
-                  </Col>
-                  <Col span={12}>
-                    <strong>供应商：</strong>{inspectionDetail.supplier_name}
-                  </Col>
-                </Row>
-              </Card>
-
-              <DetailDrawerSection title="生命周期">
-                {(() => {
-                  const lc = getIncomingInspectionLifecycle(inspectionDetail as Record<string, unknown>);
-                  return (
-                    <UniLifecycleStepper
-                      steps={lc.mainStages ?? []}
-                      showLabels
-                      status={lc.status}
-                      nextStepSuggestions={lc.nextStepSuggestions}
-                    />
-                  );
-                })()}
+            <>
+              <DetailDrawerSection title="基本信息">
+                <Descriptions
+                  column={3}
+                  size="small"
+                  items={buildDescriptionItemsFromColumns(inspectionDetail, detailBaseColumns)}
+                />
               </DetailDrawerSection>
 
-              <Card title="检验结果">
-                <Row gutter={16}>
-                  <Col span={12}>
-                    <strong>检验状态：</strong>
-                    <Tag color={
-                      inspectionDetail.status === '已完成' ? 'success' :
-                        inspectionDetail.status === '已审核' ? 'processing' :
-                          inspectionDetail.status === '已取消' ? 'error' : 'default'
-                    }>
-                      {inspectionDetail.status}
-                    </Tag>
-                  </Col>
-                  <Col span={12}>
-                    <strong>质量状态：</strong>
-                    <Tag color={inspectionDetail.quality_status === '合格' ? 'success' : 'error'}>
-                      {inspectionDetail.quality_status || '待判定'}
-                    </Tag>
-                  </Col>
-                </Row>
-                <Row gutter={16} style={{ marginTop: 8 }}>
-                  <Col span={12}>
-                    <strong>检验员：</strong>{inspectionDetail.inspector_name || '未指定'}
-                  </Col>
-                  <Col span={12}>
-                    <strong>检验时间：</strong>{inspectionDetail.inspection_time || '未检验'}
-                  </Col>
-                </Row>
-                {inspectionDetail.reviewer_name && (
-                  <Row gutter={16} style={{ marginTop: 8 }}>
-                    <Col span={12}>
-                      <strong>审核人：</strong>{inspectionDetail.reviewer_name}
-                    </Col>
-                    <Col span={12}>
-                      <strong>审核时间：</strong>{inspectionDetail.review_time || '未审核'}
-                    </Col>
-                  </Row>
-                )}
-                {inspectionDetail.notes && (
-                  <Row style={{ marginTop: 8 }}>
-                    <Col span={24}>
-                      <strong>检验备注：</strong>{inspectionDetail.notes}
-                    </Col>
-                  </Row>
-                )}
-              </Card>
+              <DetailDrawerSection title="生命周期">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {(() => {
+                    const lc = getIncomingInspectionLifecycle(inspectionDetail as Record<string, unknown>);
+                    const mainStages = lc.mainStages ?? [];
+                    if (mainStages.length === 0) return null;
+                    return (
+                      <UniLifecycleStepper
+                        steps={mainStages}
+                        showLabels
+                        status={lc.status}
+                        nextStepSuggestions={lc.nextStepSuggestions}
+                      />
+                    );
+                  })()}
+                  <div
+                    style={{
+                      paddingTop: 12,
+                      borderTop: '1px solid var(--ant-color-border-secondary)',
+                    }}
+                  >
+                    <div style={{ marginBottom: 8, fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
+                      上下游单据
+                    </div>
+                    {incomingTracking.loading && (
+                      <div style={{ padding: '8px 0' }}>
+                        <Spin size="small" />
+                      </div>
+                    )}
+                    {incomingTracking.error && (
+                      <Typography.Text type="danger">{incomingTracking.error}</Typography.Text>
+                    )}
+                    {incomingTracking.data && (
+                      <DocumentTrackingRelationsBody
+                        data={incomingTracking.data}
+                        onDocumentClick={(type, id) => messageApi.info(`跳转到${type}#${id}`)}
+                      />
+                    )}
+                  </div>
+                </div>
+              </DetailDrawerSection>
 
-              {/* 操作记录 */}
-              {inspectionDetail?.id && (
-                <DetailDrawerSection title="操作记录">
-                  <DocumentTrackingPanel documentType="incoming_inspection" documentId={inspectionDetail.id} />
-                </DetailDrawerSection>
-              )}
-            </div>
+              <DetailDrawerSection title="明细信息">
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="来料检验无明细行表" />
+              </DetailDrawerSection>
+
+              <DetailDrawerSection title="操作记录">
+                {incomingTracking.loading && (
+                  <div style={{ textAlign: 'center', padding: 24 }}>
+                    <Spin />
+                  </div>
+                )}
+                {incomingTracking.error && !incomingTracking.loading && (
+                  <Typography.Text type="danger">{incomingTracking.error}</Typography.Text>
+                )}
+                {incomingTracking.data && !incomingTracking.loading && (
+                  <DocumentTrackingTimelineBody data={incomingTracking.data} />
+                )}
+                {!incomingTracking.loading && !incomingTracking.data && !incomingTracking.error && (
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+                )}
+              </DetailDrawerSection>
+            </>
           ) : null
         }
       />

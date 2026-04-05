@@ -3,14 +3,17 @@
  */
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Space } from 'antd';
+import { App, Button, Typography } from 'antd';
 import { EyeOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { purchaseInvoiceService } from '../../../services/finance/purchase-invoice';
 import { PurchaseInvoice } from '../../../types/finance/purchase-invoice';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { getChineseInvoiceLifecycle } from '../../../utils/financeLifecycle';
+import { renderRowActionsMax3 } from '../../../utils/renderRowActionsMax3';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { ModalForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
@@ -75,10 +78,12 @@ const PurchaseInvoiceList: React.FC = () => {
         {
             title: '发票编号',
             dataIndex: 'invoice_code',
-            width: 150,
+            width: 168,
             fixed: 'left',
-            render: (dom, entity) => (
-                <a onClick={() => navigate(`/apps/kuaicaiwu/finance-management/purchase-invoices/${entity.id}`)}>{dom}</a>
+            render: (_, entity) => (
+                <Typography.Text copyable={{ text: String(entity.invoice_code ?? '') }} ellipsis>
+                    <a onClick={() => navigate(`/apps/kuaicaiwu/finance-management/purchase-invoices/${entity.id}`)}>{entity.invoice_code}</a>
+                </Typography.Text>
             ),
         },
         {
@@ -112,49 +117,82 @@ const PurchaseInvoiceList: React.FC = () => {
         {
             title: '状态',
             dataIndex: 'status',
-            width: 100,
+            hideInTable: true,
         },
         {
             title: '审核状态',
             dataIndex: 'review_status',
+            hideInTable: true,
             valueEnum: {
-                '待审核': { text: '待审核', status: 'Processing' },
-                '已审核': { text: '已审核', status: 'Success' },
-                '已驳回': { text: '已驳回', status: 'Error' },
-                '通过': { text: '已审核', status: 'Success' },
-                '驳回': { text: '已驳回', status: 'Error' },
+                '待审核': { text: '待审核' },
+                '已审核': { text: '已审核' },
+                '已驳回': { text: '已驳回' },
+                '通过': { text: '已审核' },
+                '驳回': { text: '已驳回' },
             },
-            width: 100,
+        },
+        {
+            title: '生命周期',
+            dataIndex: 'lifecycle',
+            fixed: 'right',
+            align: 'left',
+            width: 130,
+            hideInSearch: true,
+            render: (_, record) => {
+                const lc = getChineseInvoiceLifecycle(record as unknown as Record<string, unknown>);
+                return (
+                    <UniLifecycle
+                        percent={lc.percent}
+                        stageName={lc.stageName}
+                        status={lc.status}
+                        subStages={lc.subStages}
+                        showLabel
+                        size="small"
+                        showCircleTooltip={false}
+                    />
+                );
+            },
         },
         {
             title: '操作',
             valueType: 'option',
             fixed: 'right',
             width: 200,
-            render: (_, record) => (
-                <Space>
-                    <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => navigate(`/apps/kuaicaiwu/finance-management/purchase-invoices/${record.id}`)}>详情</Button>
-                    {(record.review_status === '待审核') && (
-                        <UniWorkflowActions
-                            record={record}
-                            entityName="采购发票"
-                            statusField="status"
-                            reviewStatusField="review_status"
-                            draftStatuses={[]}
-                            pendingStatuses={['待审核']}
-                            approvedStatuses={['已审核', '通过']}
-                            rejectedStatuses={['已驳回', '驳回']}
-                            theme="link"
+            render: (_, record) =>
+                renderRowActionsMax3(
+                    [
+                        <Button
+                            key="det"
+                            type="link"
                             size="small"
-                            actions={{
-                                approve: (id) => purchaseInvoiceService.approve(id),
-                                reject: (id, reason) => purchaseInvoiceService.approve(id, reason),
-                            }}
-                            onSuccess={() => actionRef.current?.reload()}
-                        />
-                    )}
-                </Space>
-            ),
+                            icon={<EyeOutlined />}
+                            onClick={() => navigate(`/apps/kuaicaiwu/finance-management/purchase-invoices/${record.id}`)}
+                        >
+                            详情
+                        </Button>,
+                        record.review_status === '待审核' ? (
+                            <UniWorkflowActions
+                                key="wf"
+                                record={record}
+                                entityName="采购发票"
+                                statusField="status"
+                                reviewStatusField="review_status"
+                                draftStatuses={[]}
+                                pendingStatuses={['待审核']}
+                                approvedStatuses={['已审核', '通过']}
+                                rejectedStatuses={['已驳回', '驳回']}
+                                theme="link"
+                                size="small"
+                                actions={{
+                                    approve: (id) => purchaseInvoiceService.approve(id),
+                                    reject: (id, reason) => purchaseInvoiceService.approve(id, reason),
+                                }}
+                                onSuccess={() => actionRef.current?.reload()}
+                            />
+                        ) : null,
+                    ].filter(Boolean) as React.ReactNode[],
+                    `pi-${record.id}`,
+                ),
         },
     ];
 
@@ -164,6 +202,9 @@ const PurchaseInvoiceList: React.FC = () => {
                 headerTitle="采购发票"
                 actionRef={actionRef}
                 columns={columns}
+                columnPersistenceId="kuaicaiwu-finance-purchase-invoices"
+                scroll={{ x: 1600 }}
+                showAdvancedSearch
                 request={async (params) => {
                     const { current, pageSize, ...rest } = params;
                     try {
@@ -184,7 +225,7 @@ const PurchaseInvoiceList: React.FC = () => {
                 }}
                 rowKey="id"
                 showCreateButton
-                createButtonText="登记发票"
+                createButtonText="登记采购发票"
                 onCreate={() => setCreateModalVisible(true)}
             />
 

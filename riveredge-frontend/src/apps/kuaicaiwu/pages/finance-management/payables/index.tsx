@@ -3,7 +3,7 @@
  */
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal, Space } from 'antd';
+import { App, Button, Modal, Typography } from 'antd';
 import { ModalForm, ProFormDatePicker, ProFormMoney, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
 import { EyeOutlined, DollarOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
@@ -13,8 +13,11 @@ import { batchImport } from '../../../../../utils/batchOperations';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
+import { getPayableLifecycle } from '../../../utils/financeLifecycle';
+import { renderRowActionsMax3 } from '../../../utils/renderRowActionsMax3';
 import dayjs from 'dayjs';
 
 const PayableList: React.FC = () => {
@@ -68,10 +71,12 @@ const PayableList: React.FC = () => {
         {
             title: t('app.kuaicaiwu.common.code', { defaultValue: '编号' }),
             dataIndex: 'payable_code',
-            width: 150,
+            width: 168,
             fixed: 'left',
-            render: (dom, entity) => (
-                <a onClick={() => navigate(`/apps/kuaicaiwu/finance-management/payables/${entity.id}`)}>{dom}</a>
+            render: (_, entity) => (
+                <Typography.Text copyable={{ text: String(entity.payable_code ?? '') }} ellipsis>
+                    <a onClick={() => navigate(`/apps/kuaicaiwu/finance-management/payables/${entity.id}`)}>{entity.payable_code}</a>
+                </Typography.Text>
             ),
         },
         {
@@ -101,9 +106,11 @@ const PayableList: React.FC = () => {
             width: 120,
             render: (_, record) => (
                 <span style={{ color: record.remaining_amount > 0 ? 'red' : 'inherit', fontWeight: 'bold' }}>
-                    {_}
+                    {record.remaining_amount != null
+                        ? `¥${Number(record.remaining_amount).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`
+                        : '-'}
                 </span>
-            )
+            ),
         },
         {
             title: '到期日期',
@@ -114,53 +121,103 @@ const PayableList: React.FC = () => {
         {
             title: '状态',
             dataIndex: 'status',
+            hideInTable: true,
             valueEnum: {
-                '未付款': { text: '未付款', status: 'Error' },
-                '部分付款': { text: '部分付款', status: 'Processing' },
-                '已结清': { text: '已结清', status: 'Success' },
+                '未付款': { text: '未付款' },
+                '部分付款': { text: '部分付款' },
+                '已结清': { text: '已结清' },
             },
-            width: 100,
         },
         {
             title: '审核状态',
             dataIndex: 'review_status',
+            hideInTable: true,
             valueEnum: {
-                '待审核': { text: '待审核', status: 'Processing' },
-                '已审核': { text: '已审核', status: 'Success' },
-                '已驳回': { text: '已驳回', status: 'Error' },
-                '通过': { text: '已审核', status: 'Success' },
-                '驳回': { text: '已驳回', status: 'Error' },
+                '待审核': { text: '待审核' },
+                '已审核': { text: '已审核' },
+                '已驳回': { text: '已驳回' },
+                '通过': { text: '已审核' },
+                '驳回': { text: '已驳回' },
             },
-            width: 100,
+        },
+        {
+            title: '更新时间',
+            dataIndex: 'updated_at',
+            width: 168,
+            hideInSearch: true,
+            render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+        },
+        {
+            title: '生命周期',
+            dataIndex: 'lifecycle',
+            fixed: 'right',
+            align: 'left',
+            width: 130,
+            hideInSearch: true,
+            render: (_, record) => {
+                const lc = getPayableLifecycle(record as unknown as Record<string, unknown>);
+                return (
+                    <UniLifecycle
+                        percent={lc.percent}
+                        stageName={lc.stageName}
+                        status={lc.status}
+                        subStages={lc.subStages}
+                        showLabel
+                        size="small"
+                        showCircleTooltip={false}
+                    />
+                );
+            },
         },
         {
             title: '操作',
             valueType: 'option',
             fixed: 'right',
-            width: 280,
-            render: (_, record) => (
-                <Space>
-                    <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => navigate(`/apps/kuaicaiwu/finance-management/payables/${record.id}`)}>详情</Button>
-                    <UniWorkflowActions
-                        record={record}
-                        entityName="应付单"
-                        statusField="status"
-                        reviewStatusField="review_status"
-                        draftStatuses={[]}
-                        pendingStatuses={['待审核']}
-                        approvedStatuses={['已审核', '通过']}
-                        rejectedStatuses={['已驳回', '驳回']}
-                        theme="link"
-                        size="small"
-                        actions={{
-                            approve: (id) => payableService.approvePayable(id),
-                            reject: (id, reason) => payableService.approvePayable(id, reason),
-                        }}
-                        onSuccess={() => actionRef.current?.reload()}
-                    />
-                    {record.remaining_amount > 0 && <Button type="link" size="small" icon={<DollarOutlined />} onClick={() => navigate(`/apps/kuaicaiwu/finance-management/payables/${record.id}`)}>付款</Button>}
-                </Space>
-            ),
+            width: 220,
+            render: (_, record) =>
+                renderRowActionsMax3(
+                    [
+                        <Button
+                            key="det"
+                            type="link"
+                            size="small"
+                            icon={<EyeOutlined />}
+                            onClick={() => navigate(`/apps/kuaicaiwu/finance-management/payables/${record.id}`)}
+                        >
+                            详情
+                        </Button>,
+                        <UniWorkflowActions
+                            key="wf"
+                            record={record}
+                            entityName="应付单"
+                            statusField="status"
+                            reviewStatusField="review_status"
+                            draftStatuses={[]}
+                            pendingStatuses={['待审核']}
+                            approvedStatuses={['已审核', '通过']}
+                            rejectedStatuses={['已驳回', '驳回']}
+                            theme="link"
+                            size="small"
+                            actions={{
+                                approve: (id) => payableService.approvePayable(id),
+                                reject: (id, reason) => payableService.approvePayable(id, reason),
+                            }}
+                            onSuccess={() => actionRef.current?.reload()}
+                        />,
+                        record.remaining_amount > 0 ? (
+                            <Button
+                                key="pay"
+                                type="link"
+                                size="small"
+                                icon={<DollarOutlined />}
+                                onClick={() => navigate(`/apps/kuaicaiwu/finance-management/payables/${record.id}`)}
+                            >
+                                付款
+                            </Button>
+                        ) : null,
+                    ].filter(Boolean) as React.ReactNode[],
+                    `pay-${record.id}`,
+                ),
         },
     ];
 
@@ -170,6 +227,9 @@ const PayableList: React.FC = () => {
                 headerTitle="应付账款"
                 actionRef={actionRef}
                 rowKey="id"
+                columnPersistenceId="kuaicaiwu-finance-payables"
+                scroll={{ x: 1680 }}
+                showAdvancedSearch
                 search={{ labelWidth: 120 }}
                 showCreateButton
                 createButtonText="新建应付单"

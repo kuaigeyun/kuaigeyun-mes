@@ -3,11 +3,12 @@ import { ProColumns } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import ReportBase from '../../../components/ReportBase';
 import { getWarehouseReport } from '../../../services/reports';
+import { copyableCodeColumn } from '../../../utils/reportCopyableColumn';
 
 const InboundSummary: React.FC = () => {
   const { t } = useTranslation();
   const columns: ProColumns[] = [
-    { title: '业务单号', dataIndex: 'move_code', width: 150 },
+    copyableCodeColumn('业务单号', 'move_code', 150),
     { title: '物料名称', dataIndex: 'material_name', width: 200 },
     { title: '异动类型', dataIndex: 'move_type', width: 120 },
     { title: '异动数量', dataIndex: 'quantity', valueType: 'digit', width: 100 },
@@ -19,6 +20,7 @@ const InboundSummary: React.FC = () => {
       title={t('app.kuaizhizao.menu.reports.inbound-summary')}
       reportType="inbound_outbound"
       columns={columns}
+      columnPersistenceId="kuaizhizao-wm-report-inbound-summary"
       request={async (params: any) => {
         const res = await getWarehouseReport({
           ...params,
@@ -33,6 +35,5 @@ const InboundSummary: React.FC = () => {
     />
   );
 };
-
 
 export default InboundSummary;

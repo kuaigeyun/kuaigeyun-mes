@@ -1,0 +1,33 @@
+import type { DescriptionsProps } from 'antd';
+import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
+import dayjs from 'dayjs';
+import type { ReactNode } from 'react';
+
+/**
+ * 主数据详情：将 ProDescriptions 列配置转为 Ant Design Descriptions items（与设备台账等页一致）
+ */
+export function buildMasterDetailDescriptionItems<T extends Record<string, any>>(
+  dataSource: T,
+  cols: ProDescriptionsItemProps<T>[]
+): NonNullable<DescriptionsProps['items']> {
+  return cols.map((col, index) => {
+    const dataIndex = col.dataIndex as keyof T | undefined;
+    const value = dataIndex != null ? dataSource[dataIndex] : undefined;
+    let content: ReactNode = value as ReactNode;
+    if (col.valueType === 'date' && value) {
+      content = dayjs(value as string).format('YYYY-MM-DD');
+    }
+    if (col.valueType === 'dateTime' && value) {
+      content = dayjs(value as string).format('YYYY-MM-DD HH:mm:ss');
+    }
+    if (col.render && dataSource != null) {
+      content = col.render(content, dataSource, index, {}, col);
+    }
+    return {
+      key: String(col.key ?? col.dataIndex ?? index),
+      label: col.title as React.ReactNode,
+      children: content !== undefined && content !== null ? content : '-',
+      span: col.span ?? 1,
+    };
+  });
+}

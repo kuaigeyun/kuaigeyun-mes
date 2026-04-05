@@ -17,6 +17,7 @@ const QualityRateTrend: React.FC = () => {
     <ReportBase
       title={t('app.kuaizhizao.menu.reports.quality-rate-trend')}
       reportType="quality_rate_trend"
+      columnPersistenceId="kuaizhizao-qm-report-quality-rate-trend"
       columns={columns}
     />
   );

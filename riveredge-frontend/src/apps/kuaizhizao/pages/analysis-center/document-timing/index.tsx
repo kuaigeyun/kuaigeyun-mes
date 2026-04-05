@@ -8,12 +8,19 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProDescriptions } from '@ant-design/pro-components';
-import { App, Card, Tag, Table } from 'antd';
+import { ActionType, ProColumns } from '@ant-design/pro-components';
+import { App, Tag, Table, Descriptions, Typography, Timeline } from 'antd';
 import { EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import {
+  ListPageTemplate,
+  DetailDrawerTemplate,
+  DetailDrawerSection,
+  DRAWER_CONFIG,
+} from '../../../../../components/layout-templates';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { apiRequest } from '../../../../../services/api';
+import { getDocumentTimingLifecycle } from '../../../utils/documentTimingLifecycle';
 
 /**
  * 单据耗时统计接口定义
@@ -66,6 +73,9 @@ const DocumentTimingPage: React.FC = () => {
   /**
    * 表格列定义
    */
+  const docTypeLabel = (t?: string) =>
+    t === 'work_order' ? '工单' : t === 'purchase_order' ? '采购订单' : t === 'sales_order' ? '销售订单' : t || '-';
+
   const columns: ProColumns<any>[] = [
     {
       title: '单据类型',
@@ -76,27 +86,47 @@ const DocumentTimingPage: React.FC = () => {
         purchase_order: { text: '采购订单', status: 'default' },
         sales_order: { text: '销售订单', status: 'success' },
       },
+      render: (_, record: any) => docTypeLabel(record.document_type),
     },
     {
       title: '单据编号',
       dataIndex: 'document_code',
-      width: 150,
+      width: 180,
       fixed: 'left',
+      render: (_, r: any) => (
+        <Typography.Text copyable={{ text: String(r.document_code ?? '') }} ellipsis>
+          {r.document_code ?? '-'}
+        </Typography.Text>
+      ),
     },
     {
       title: '总耗时（小时）',
       dataIndex: 'total_duration_hours',
       width: 120,
       align: 'right',
+      search: false,
       render: (_, record: any) => record.total_duration_hours?.toFixed(2) || '-',
+    },
+    {
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      key: 'lifecycle',
+      width: 200,
+      fixed: 'right',
+      align: 'left',
+      search: false,
+      render: (_, record: any) => (
+        <UniLifecycle {...getDocumentTimingLifecycle(record)} showCircleTooltip={false} />
+      ),
     },
     {
       title: '操作',
       width: 100,
       fixed: 'right',
+      search: false,
       render: (_, record: any) => (
         <a onClick={() => handleDetail(record)}>
-          <EyeOutlined /> 查看
+          <EyeOutlined /> 详情
         </a>
       ),
     },
@@ -145,6 +175,8 @@ const DocumentTimingPage: React.FC = () => {
       <UniTable
         headerTitle="单据节点耗时"
         actionRef={actionRef}
+        columnPersistenceId="kuaireport-analysis-document-timing"
+        scroll={{ x: 'max-content' }}
         rowKey="document_code"
         columns={columns}
         request={async (params: any) => {
@@ -178,48 +210,82 @@ const DocumentTimingPage: React.FC = () => {
       <DetailDrawerTemplate
         title={`耗时统计 - ${currentTiming?.document_code || ''}`}
         open={detailDrawerVisible}
-        onClose={() => setDetailDrawerVisible(false)}
+        onClose={() => {
+          setDetailDrawerVisible(false);
+          setCurrentTiming(null);
+        }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
         customContent={
           currentTiming ? (
-            <div style={{ padding: '16px 0' }}>
-              <Card title="基本信息" style={{ marginBottom: 16 }}>
-                <ProDescriptions
-                  column={2}
-                  dataSource={{
-                    document_type: (
-                      <Tag color={
-                        currentTiming.document_type === 'work_order' ? 'processing' :
-                          currentTiming.document_type === 'purchase_order' ? 'default' : 'success'
-                      }>
-                        {currentTiming.document_type === 'work_order' ? '工单' :
-                          currentTiming.document_type === 'purchase_order' ? '采购订单' : '销售订单'}
-                      </Tag>
+            <>
+              <DetailDrawerSection title="基本信息">
+                <Descriptions column={2} size="small" bordered>
+                  <Descriptions.Item label="单据类型">
+                    <Tag
+                      color={
+                        currentTiming.document_type === 'work_order'
+                          ? 'processing'
+                          : currentTiming.document_type === 'purchase_order'
+                            ? 'default'
+                            : 'success'
+                      }
+                    >
+                      {docTypeLabel(currentTiming.document_type)}
+                    </Tag>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="单据编号">
+                    <Typography.Text copyable={{ text: String(currentTiming.document_code ?? '') }}>
+                      {currentTiming.document_code ?? '-'}
+                    </Typography.Text>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="总耗时（小时）">
+                    {currentTiming.total_duration_hours?.toFixed(2) ?? '-'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="总耗时（秒）">
+                    {currentTiming.total_duration_seconds ?? '-'}
+                  </Descriptions.Item>
+                </Descriptions>
+              </DetailDrawerSection>
+              <DetailDrawerSection title="生命周期">
+                <UniLifecycle {...getDocumentTimingLifecycle(currentTiming)} showCircleTooltip={false} />
+                <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
+                  分析中心为只读统计；上下游单据跟踪未接入时仅展示节点汇总进度。
+                </Typography.Paragraph>
+              </DetailDrawerSection>
+              <DetailDrawerSection title="明细信息">
+                <div style={{ overflowX: 'auto', overflowY: 'hidden' }}>
+                  <Table
+                    columns={nodeColumns}
+                    dataSource={currentTiming.nodes || []}
+                    rowKey={(r) => String(r.id ?? r.node_code ?? Math.random())}
+                    pagination={false}
+                    size="small"
+                    scroll={{ x: 'max-content' }}
+                  />
+                </div>
+              </DetailDrawerSection>
+              <DetailDrawerSection title="操作记录" marginBottom={0}>
+                <Timeline
+                  items={(currentTiming.nodes || []).slice(0, 12).map((n, i) => ({
+                    key: String(n.id ?? i),
+                    color: 'blue',
+                    children: (
+                      <>
+                        {n.node_name || n.node_code || '节点'} ·{' '}
+                        {n.end_time || n.start_time
+                          ? `${n.start_time ?? ''} → ${n.end_time ?? ''}`
+                          : '-'}
+                        {n.operator_name ? ` · ${n.operator_name}` : ''}
+                      </>
                     ),
-                    document_code: currentTiming.document_code,
-                    total_duration_hours: currentTiming.total_duration_hours?.toFixed(2) || '-',
-                    total_duration_seconds: currentTiming.total_duration_seconds || '-',
-                  }}
-                  columns={[
-                    { title: '单据类型', dataIndex: 'document_type' },
-                    { title: '单据编号', dataIndex: 'document_code' },
-                    { title: '总耗时（小时）', dataIndex: 'total_duration_hours' },
-                    { title: '总耗时（秒）', dataIndex: 'total_duration_seconds' },
-                  ]}
+                  }))}
                 />
-              </Card>
-
-              <Card title="节点耗时明细">
-                <Table
-                  columns={nodeColumns}
-                  dataSource={currentTiming.nodes || []}
-                  rowKey="id"
-                  pagination={false}
-                  size="small"
-                />
-              </Card>
-            </div>
+                {(!currentTiming.nodes || currentTiming.nodes.length === 0) && (
+                  <Typography.Text type="secondary">暂无节点级时间线，请先加载完整耗时详情。</Typography.Text>
+                )}
+              </DetailDrawerSection>
+            </>
           ) : null
         }
       />

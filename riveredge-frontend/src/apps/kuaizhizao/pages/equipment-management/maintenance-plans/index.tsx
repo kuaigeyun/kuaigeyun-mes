@@ -8,14 +8,88 @@
  * Date: 2026-01-05
  */
 
-import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, message, Modal, Row, Col } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
+import React, { useRef, useState, useMemo } from 'react';
+import type { DescriptionsProps } from 'antd';
+import {
+  ActionType,
+  ProColumns,
+  ProDescriptionsItemProps,
+  ProFormText,
+  ProFormSelect,
+  ProFormDatePicker,
+  ProFormDigit,
+  ProFormTextArea,
+} from '@ant-design/pro-components';
+import { App, Button, Tag, Space, message, Modal, Row, Col, Descriptions, Typography, Dropdown, Empty } from 'antd';
+import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import {
+  ListPageTemplate,
+  FormModalTemplate,
+  DetailDrawerTemplate,
+  DetailDrawerSection,
+  MODAL_CONFIG,
+  DRAWER_CONFIG,
+} from '../../../../../components/layout-templates';
+import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { getMaintenancePlanLifecycle } from '../../../utils/equipmentLifecycle';
 import { maintenancePlanApi, equipmentApi } from '../../../services/equipment';
 import dayjs from 'dayjs';
+
+function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
+  dataSource: T,
+  cols: ProDescriptionsItemProps<T>[]
+): NonNullable<DescriptionsProps['items']> {
+  return cols.map((col, index) => {
+    const dataIndex = col.dataIndex as keyof T | undefined;
+    const value = dataIndex != null ? dataSource[dataIndex] : undefined;
+    let content: React.ReactNode = value as React.ReactNode;
+    if (col.valueType === 'date' && value) {
+      content = dayjs(value as string).format('YYYY-MM-DD');
+    }
+    if (col.valueType === 'dateTime' && value) {
+      content = dayjs(value as string).format('YYYY-MM-DD HH:mm:ss');
+    }
+    if (col.render && dataSource != null) {
+      content = col.render(content, dataSource, index, {}, col);
+    }
+    return {
+      key: String(col.key ?? col.dataIndex ?? index),
+      label: col.title as React.ReactNode,
+      children: content !== undefined && content !== null ? content : '-',
+      span: col.span ?? 1,
+    };
+  });
+}
+
+const PLAN_ROW_ACTIONS_MAX = 3;
+
+function renderPlanRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
+  const wrapped = nodes.map((node, i) => <span key={`${keyPrefix}-${i}`}>{node}</span>);
+  if (wrapped.length <= PLAN_ROW_ACTIONS_MAX) {
+    return <Space size="small" wrap>{wrapped}</Space>;
+  }
+  const inline = wrapped.slice(0, PLAN_ROW_ACTIONS_MAX);
+  const overflow = wrapped.slice(PLAN_ROW_ACTIONS_MAX);
+  return (
+    <Space size="small" wrap>
+      {inline}
+      <Dropdown
+        menu={{
+          items: overflow.map((node, i) => ({
+            key: `${keyPrefix}-more-${i}`,
+            label: node,
+          })),
+        }}
+        trigger={['click']}
+      >
+        <Button type="link" size="small">
+          更多
+        </Button>
+      </Dropdown>
+    </Space>
+  );
+}
 
 interface MaintenancePlan {
   id?: number;
@@ -40,6 +114,7 @@ interface MaintenancePlan {
 const MaintenancePlansPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   // Modal 相关状态（创建/编辑维护计划）
   const [modalVisible, setModalVisible] = useState(false);
@@ -127,6 +202,11 @@ const MaintenancePlansPage: React.FC = () => {
             await maintenancePlanApi.delete(String(uuid));
           }
           messageApi.success(`成功删除 ${keys.length} 条记录`);
+          setSelectedRowKeys([]);
+          if (planDetail?.uuid && keys.map(String).includes(String(planDetail.uuid))) {
+            setDrawerVisible(false);
+            setPlanDetail(null);
+          }
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '删除失败');
@@ -207,13 +287,14 @@ const MaintenancePlansPage: React.FC = () => {
     }
   };
 
-  /**
-   * 详情列定义
-   */
-  const detailColumns: ProDescriptionsItemType<MaintenancePlan>[] = [
+  const detailBaseColumns: ProDescriptionsItemProps<MaintenancePlan>[] = useMemo(
+    () => [
     {
       title: '计划编号',
       dataIndex: 'plan_no',
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.plan_no ?? '') }}>{r.plan_no ?? '-'}</Typography.Text>
+      ),
     },
     {
       title: '计划名称',
@@ -226,6 +307,9 @@ const MaintenancePlansPage: React.FC = () => {
     {
       title: '设备编号',
       dataIndex: 'equipment_code',
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.equipment_code ?? '') }}>{r.equipment_code ?? '-'}</Typography.Text>
+      ),
     },
     {
       title: '设备名称',
@@ -274,7 +358,71 @@ const MaintenancePlansPage: React.FC = () => {
       dataIndex: 'updated_at',
       valueType: 'dateTime',
     },
-  ];
+    ],
+    []
+  );
+
+  const renderPlanRowNodes = (record: MaintenancePlan): React.ReactNode[] => {
+    const nodes: React.ReactNode[] = [
+      <Button
+        key="detail"
+        type="link"
+        size="small"
+        icon={<EyeOutlined />}
+        onClick={(e) => {
+          e.stopPropagation();
+          void handleDetail(record);
+        }}
+      >
+        详情
+      </Button>,
+      <Button
+        key="edit"
+        type="link"
+        size="small"
+        icon={<EditOutlined />}
+        onClick={(e) => {
+          e.stopPropagation();
+          void handleEdit(record);
+        }}
+      >
+        编辑
+      </Button>,
+      <Button
+        key="del"
+        type="link"
+        size="small"
+        danger
+        icon={<DeleteOutlined />}
+        onClick={(e) => {
+          e.stopPropagation();
+          Modal.confirm({
+            title: '确认删除',
+            content: `确定要删除维护计划"${record.plan_name}"吗？`,
+            onOk: () => record.uuid && handleDelete([record.uuid]),
+          });
+        }}
+      >
+        删除
+      </Button>,
+    ];
+    if (record.status === '待执行') {
+      nodes.push(
+        <Button
+          key="exec"
+          type="link"
+          size="small"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleExecute(record);
+          }}
+        >
+          执行
+        </Button>
+      );
+    }
+    return nodes;
+  };
 
   /**
    * 表格列定义
@@ -286,6 +434,11 @@ const MaintenancePlansPage: React.FC = () => {
       width: 140,
       ellipsis: true,
       fixed: 'left',
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.plan_no ?? '') }} ellipsis>
+          {r.plan_no ?? '-'}
+        </Typography.Text>
+      ),
     },
     {
       title: '计划名称',
@@ -302,6 +455,11 @@ const MaintenancePlansPage: React.FC = () => {
       title: '设备编号',
       dataIndex: 'equipment_code',
       width: 140,
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.equipment_code ?? '') }} ellipsis>
+          {r.equipment_code ?? '-'}
+        </Typography.Text>
+      ),
     },
     {
       title: '设备名称',
@@ -321,81 +479,49 @@ const MaintenancePlansPage: React.FC = () => {
       render: (_, record) => record ? `${record.maintenance_cycle ?? ''} ${record.maintenance_cycle_unit ?? ''}`.trim() || '-' : '-',
     },
     {
-      title: '状态',
-      dataIndex: 'status',
-      width: 100,
-      render: (status) => {
-        const statusMap: Record<string, { text: string; color: string }> = {
-          '待执行': { text: '待执行', color: 'default' },
-          '执行中': { text: '执行中', color: 'processing' },
-          '已完成': { text: '已完成', color: 'success' },
-          '已取消': { text: '已取消', color: 'error' },
-        };
-        const config = statusMap[status || ''] || { text: status || '-', color: 'default' };
-        return <Tag color={config.color}>{config.text}</Tag>;
-      },
-    },
-    {
       title: '计划开始日期',
       dataIndex: 'planned_start_date',
       valueType: 'date',
       width: 120,
     },
     {
-      title: '创建时间',
-      dataIndex: 'created_at',
-      valueType: 'dateTime',
-      width: 160,
-      sorter: true,
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      width: 168,
+      hideInSearch: true,
+      defaultSortOrder: 'descend',
+      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+    },
+    {
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      width: 132,
+      fixed: 'right',
+      align: 'left',
+      hideInSearch: true,
+      render: (_, record) => {
+        const lifecycle = getMaintenancePlanLifecycle(record as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
+      },
     },
     {
       title: '操作',
-      width: 220,
+      key: 'action',
+      width: 200,
       fixed: 'right',
-      render: (_text, record) => (
-        <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleDetail(record)}
-          >
-            详情
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            编辑
-          </Button>
-          {record.status === '待执行' && (
-            <Button
-              type="link"
-              size="small"
-              onClick={() => handleExecute(record)}
-            >
-              执行
-            </Button>
-          )}
-          <Button
-            type="link"
-            size="small"
-            danger
-            icon={<DeleteOutlined />}
-            onClick={() => {
-              Modal.confirm({
-                title: '确认删除',
-                content: `确定要删除维护计划"${record.plan_name}"吗？`,
-                onOk: () => handleDelete([record]),
-              });
-            }}
-          >
-            删除
-          </Button>
-        </Space>
-      ),
+      hideInSearch: true,
+      render: (_, record) =>
+        renderPlanRowActions(renderPlanRowNodes(record), `mpl-${record.uuid ?? 'row'}`),
     },
   ];
 
@@ -404,6 +530,7 @@ const MaintenancePlansPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<MaintenancePlan>
           headerTitle="维护保养计划管理"
+          columnPersistenceId="kuaizhizao-em-maintenance-plans"
           actionRef={actionRef}
           rowKey="uuid"
           columns={columns}
@@ -414,6 +541,7 @@ const MaintenancePlansPage: React.FC = () => {
                 skip: (params.current! - 1) * params.pageSize!,
                 limit: params.pageSize,
                 ...params,
+                keyword: (params as any).keyword,
               });
               return {
                 data: response.items || [],
@@ -430,11 +558,17 @@ const MaintenancePlansPage: React.FC = () => {
             }
           }}
           enableRowSelection={true}
+          onRowSelectionChange={setSelectedRowKeys}
+          onRow={(record) => ({
+            onClick: () => void handleDetail(record),
+            style: { cursor: 'pointer' },
+          })}
           showDeleteButton={true}
           onDelete={handleDelete}
           showCreateButton={true}
           createButtonText="新建保养计划"
           onCreate={handleCreate}
+          scroll={{ x: 1900 }}
         />
       </ListPageTemplate>
 
@@ -632,8 +766,45 @@ const MaintenancePlansPage: React.FC = () => {
           setPlanDetail(null);
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        dataSource={planDetail}
-        columns={detailColumns}
+        columns={[]}
+        column={3}
+        customContent={
+          planDetail ? (
+            <>
+              <DetailDrawerSection title="基本信息">
+                <Descriptions
+                  column={3}
+                  size="small"
+                  items={buildDescriptionItemsFromColumns(planDetail, detailBaseColumns)}
+                />
+              </DetailDrawerSection>
+              <DetailDrawerSection title="生命周期">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {(() => {
+                    const lc = getMaintenancePlanLifecycle(planDetail as Record<string, unknown>);
+                    const mainStages = lc.mainStages ?? [];
+                    if (mainStages.length === 0) return null;
+                    return (
+                      <UniLifecycleStepper
+                        steps={mainStages}
+                        showLabels
+                        status={lc.status}
+                        nextStepSuggestions={lc.nextStepSuggestions}
+                      />
+                    );
+                  })()}
+                  <Typography.Text type="secondary">保养计划未接入单据跟踪中心</Typography.Text>
+                </div>
+              </DetailDrawerSection>
+              <DetailDrawerSection title="明细信息">
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="保养计划无明细行表" />
+              </DetailDrawerSection>
+              <DetailDrawerSection title="操作记录">
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+              </DetailDrawerSection>
+            </>
+          ) : null
+        }
       />
     </>
   );

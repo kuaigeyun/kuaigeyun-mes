@@ -6,9 +6,11 @@
 
 import React, { useRef, useState } from 'react';
 import type { ProColumns } from '@ant-design/pro-components';
-import { Tag, App, Select } from 'antd';
+import { App, Select, Typography } from 'antd';
 import { warehouseApi } from '../../../services/production';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { getLineSideInventoryLifecycle } from '../../../utils/lineSideInventoryLifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 
 interface LineSideWarehouse {
@@ -62,6 +64,11 @@ const LineSideWarehousePage: React.FC = () => {
       title: '物料编号',
       dataIndex: 'material_code',
       width: 120,
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.material_code ?? '') }} ellipsis>
+          {r.material_code ?? '-'}
+        </Typography.Text>
+      ),
     },
     {
       title: '物料名称',
@@ -116,17 +123,25 @@ const LineSideWarehousePage: React.FC = () => {
       render: (_, record) => record.work_order_code || '-',
     },
     {
-      title: '状态',
-      dataIndex: 'status',
-      width: 90,
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      width: 120,
+      fixed: 'right',
+      align: 'left',
+      hideInSearch: true,
       render: (_, record) => {
-        const statusMap: Record<string, { color: string; text: string }> = {
-          available: { color: 'green', text: '可用' },
-          reserved: { color: 'blue', text: '已预留' },
-          consumed: { color: 'default', text: '已消耗' },
-        };
-        const s = statusMap[record.status] || { color: 'default', text: record.status };
-        return <Tag color={s.color}>{s.text}</Tag>;
+        const lifecycle = getLineSideInventoryLifecycle(record as unknown as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
       },
     },
   ];
@@ -157,12 +172,13 @@ const LineSideWarehousePage: React.FC = () => {
         headerTitle="线边仓库存"
         actionRef={actionRef}
         columns={columns}
+        columnPersistenceId="kuaizhizao-wm-line-side-warehouse"
         request={fetchInventory}
         rowKey="id"
         search={{ labelWidth: 'auto' }}
         pagination={{ defaultPageSize: 20, showSizeChanger: true }}
         params={{ warehouse_id: selectedWarehouseId }}
-        scroll={{ x: 1100 }}
+        scroll={{ x: 1280 }}
         toolBarRender={() => [
           <Select
             key="warehouse-select"

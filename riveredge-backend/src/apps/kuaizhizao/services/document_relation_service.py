@@ -25,6 +25,7 @@ from apps.kuaizhizao.models.demand import Demand
 from apps.kuaizhizao.models.sales_delivery import SalesDelivery
 from apps.kuaizhizao.models.sales_return import SalesReturn
 from apps.kuaizhizao.models.delivery_notice import DeliveryNotice
+from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
 from apps.kuaizhizao.models.purchase_order import PurchaseOrder
 from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
 from apps.kuaizhizao.models.purchase_return import PurchaseReturn
@@ -37,6 +38,9 @@ from apps.kuaizhizao.models.process_inspection import ProcessInspection
 from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
 from apps.kuaizhizao.models.rework_order import ReworkOrder
 from apps.kuaizhizao.models.outsource_order import OutsourceOrder
+from apps.kuaizhizao.models.outsource_work_order import OutsourceWorkOrder
+from apps.kuaizhizao.models.packing_binding import PackingBinding
+from apps.kuaizhizao.models.receipt_notice import ReceiptNotice
 from apps.kuaizhizao.models.document_relation import DocumentRelation
 
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -57,17 +61,24 @@ class DocumentRelationService:
         "work_order": {"model": WorkOrder, "code_field": "code", "name_field": "name"},
         "production_picking": {"model": ProductionPicking, "code_field": "picking_code", "name_field": None},
         "production_return": {"model": ProductionReturn, "code_field": "return_code", "name_field": None},
-        "reporting_record": {"model": ReportingRecord, "code_field": "reporting_code", "name_field": None},
+        "reporting_record": {"model": ReportingRecord, "code_field": "work_order_code", "name_field": None},
         "finished_goods_receipt": {"model": FinishedGoodsReceipt, "code_field": "receipt_code", "name_field": None},
         "sales_delivery": {"model": SalesDelivery, "code_field": "delivery_code", "name_field": None},
         "delivery_notice": {"model": DeliveryNotice, "code_field": "notice_code", "name_field": None},
         "purchase_order": {"model": PurchaseOrder, "code_field": "order_code", "name_field": "order_name"},
         "purchase_receipt": {"model": PurchaseReceipt, "code_field": "receipt_code", "name_field": None},
+        "purchase_return": {"model": PurchaseReturn, "code_field": "return_code", "name_field": None},
         "payable": {"model": Payable, "code_field": "payable_code", "name_field": None},
         "receivable": {"model": Receivable, "code_field": "receivable_code", "name_field": None},
         "incoming_inspection": {"model": IncomingInspection, "code_field": "inspection_code", "name_field": None},
         "process_inspection": {"model": ProcessInspection, "code_field": "inspection_code", "name_field": None},
         "finished_goods_inspection": {"model": FinishedGoodsInspection, "code_field": "inspection_code", "name_field": None},
+        "outsource_order": {"model": OutsourceOrder, "code_field": "code", "name_field": "operation_name"},
+        "outsource_work_order": {"model": OutsourceWorkOrder, "code_field": "code", "name_field": "name"},
+        "packing_binding": {"model": PackingBinding, "code_field": "uuid", "name_field": None},
+        "receipt_notice": {"model": ReceiptNotice, "code_field": "notice_code", "name_field": None},
+        "sales_return": {"model": SalesReturn, "code_field": "return_code", "name_field": None},
+        "shipment_notice": {"model": ShipmentNotice, "code_field": "notice_code", "name_field": None},
     }
 
     async def get_document_relations(
@@ -159,6 +170,39 @@ class DocumentRelationService:
             upstream_documents = await self._get_purchase_receipt_upstream(tenant_id, document_id)
             downstream_documents = await self._get_purchase_receipt_downstream(tenant_id, document_id)
 
+        elif document_type == "purchase_return":
+            # 采购退货单的上游：采购入库单、采购订单；下游：无
+            upstream_documents = await self._get_purchase_return_upstream(tenant_id, document_id)
+            downstream_documents = []
+
+        elif document_type == "reporting_record":
+            # 报工记录的上游：工单；下游：由领域后续扩展（检验/入库等）
+            upstream_documents = await self._get_reporting_record_upstream(tenant_id, document_id)
+            downstream_documents = []
+
+        elif document_type == "outsource_order":
+            # 工序委外单的上游：工单；下游：采购入库单（若已关联）
+            upstream_documents = await self._get_outsource_order_upstream(tenant_id, document_id)
+            downstream_documents = await self._get_outsource_order_downstream(tenant_id, document_id)
+
+        elif document_type == "outsource_work_order":
+            # 工单委外：独立单据，上下游由 DocumentRelation 表扩展；此处保持空
+            upstream_documents = []
+            downstream_documents = []
+
+        elif document_type == "packing_binding":
+            # 装箱绑定：上游为成品入库单或销售出库单
+            upstream_documents = await self._get_packing_binding_upstream(tenant_id, document_id)
+            downstream_documents = []
+
+        elif document_type == "receipt_notice":
+            upstream_documents = await self._get_receipt_notice_upstream(tenant_id, document_id)
+            downstream_documents = await self._get_receipt_notice_downstream(tenant_id, document_id)
+
+        elif document_type == "sales_return":
+            upstream_documents = await self._get_sales_return_upstream(tenant_id, document_id)
+            downstream_documents = []
+
         elif document_type == "payable":
             # 应付单的上游：采购入库单
             upstream_documents = await self._get_payable_upstream(tenant_id, document_id)
@@ -193,6 +237,10 @@ class DocumentRelationService:
             # 送货单的上游：销售出库单、销售订单
             upstream_documents = await self._get_delivery_notice_upstream(tenant_id, document_id)
             downstream_documents = []
+
+        elif document_type == "shipment_notice":
+            upstream_documents = await self._get_shipment_notice_upstream(tenant_id, document_id)
+            downstream_documents = await self._get_shipment_notice_downstream(tenant_id, document_id)
 
         return {
             "document_type": document_type,
@@ -586,6 +634,309 @@ class DocumentRelationService:
                                 })
 
         return upstream
+
+    async def _get_purchase_return_upstream(
+        self,
+        tenant_id: int,
+        return_id: int,
+    ) -> List[Dict[str, Any]]:
+        """获取采购退货单的上游单据（采购入库单、采购订单）"""
+        pr = await PurchaseReturn.get_or_none(
+            tenant_id=tenant_id, id=return_id, deleted_at__isnull=True
+        )
+        if not pr:
+            return []
+
+        upstream: List[Dict[str, Any]] = []
+
+        if pr.purchase_receipt_id:
+            receipt = await PurchaseReceipt.get_or_none(
+                tenant_id=tenant_id, id=pr.purchase_receipt_id
+            )
+            if receipt:
+                upstream.append({
+                    "document_type": "purchase_receipt",
+                    "document_id": receipt.id,
+                    "document_code": receipt.receipt_code,
+                    "document_name": None,
+                    "status": receipt.status if hasattr(receipt, "status") else None,
+                    "created_at": receipt.created_at.isoformat() if receipt.created_at else None,
+                })
+                if receipt.purchase_order_id:
+                    purchase_order = await PurchaseOrder.get_or_none(
+                        tenant_id=tenant_id, id=receipt.purchase_order_id
+                    )
+                    if purchase_order:
+                        upstream.append({
+                            "document_type": "purchase_order",
+                            "document_id": purchase_order.id,
+                            "document_code": purchase_order.order_code,
+                            "document_name": purchase_order.order_name
+                            if hasattr(purchase_order, "order_name")
+                            else None,
+                            "status": purchase_order.status,
+                            "created_at": purchase_order.created_at.isoformat()
+                            if purchase_order.created_at
+                            else None,
+                        })
+        elif pr.purchase_order_id:
+            purchase_order = await PurchaseOrder.get_or_none(
+                tenant_id=tenant_id, id=pr.purchase_order_id
+            )
+            if purchase_order:
+                upstream.append({
+                    "document_type": "purchase_order",
+                    "document_id": purchase_order.id,
+                    "document_code": purchase_order.order_code,
+                    "document_name": purchase_order.order_name
+                    if hasattr(purchase_order, "order_name")
+                    else None,
+                    "status": purchase_order.status,
+                    "created_at": purchase_order.created_at.isoformat()
+                    if purchase_order.created_at
+                    else None,
+                })
+
+        return upstream
+
+    async def _get_reporting_record_upstream(
+        self,
+        tenant_id: int,
+        record_id: int,
+    ) -> List[Dict[str, Any]]:
+        """获取报工记录的上游单据（工单）"""
+        rec = await ReportingRecord.get_or_none(
+            tenant_id=tenant_id, id=record_id, deleted_at__isnull=True
+        )
+        if not rec:
+            return []
+        wo = await WorkOrder.get_or_none(tenant_id=tenant_id, id=rec.work_order_id)
+        if not wo:
+            return []
+        return [{
+            "document_type": "work_order",
+            "document_id": wo.id,
+            "document_code": wo.code,
+            "document_name": getattr(wo, "name", None),
+            "status": wo.status if hasattr(wo, "status") else None,
+            "created_at": wo.created_at.isoformat() if wo.created_at else None,
+        }]
+
+    async def _get_outsource_order_upstream(
+        self,
+        tenant_id: int,
+        order_id: int,
+    ) -> List[Dict[str, Any]]:
+        """工序委外单的上游：工单"""
+        oo = await OutsourceOrder.get_or_none(
+            tenant_id=tenant_id, id=order_id, deleted_at__isnull=True
+        )
+        if not oo:
+            return []
+        wo = await WorkOrder.get_or_none(tenant_id=tenant_id, id=oo.work_order_id)
+        if not wo:
+            return []
+        return [{
+            "document_type": "work_order",
+            "document_id": wo.id,
+            "document_code": wo.code,
+            "document_name": getattr(wo, "name", None),
+            "status": wo.status if hasattr(wo, "status") else None,
+            "created_at": wo.created_at.isoformat() if wo.created_at else None,
+        }]
+
+    async def _get_outsource_order_downstream(
+        self,
+        tenant_id: int,
+        order_id: int,
+    ) -> List[Dict[str, Any]]:
+        """工序委外单的下游：关联的采购入库单（委外收货）"""
+        oo = await OutsourceOrder.get_or_none(
+            tenant_id=tenant_id, id=order_id, deleted_at__isnull=True
+        )
+        if not oo or not getattr(oo, "purchase_receipt_id", None):
+            return []
+        pr = await PurchaseReceipt.get_or_none(
+            tenant_id=tenant_id, id=oo.purchase_receipt_id
+        )
+        if not pr:
+            return []
+        return [{
+            "document_type": "purchase_receipt",
+            "document_id": pr.id,
+            "document_code": pr.receipt_code,
+            "document_name": None,
+            "status": pr.status if hasattr(pr, "status") else None,
+            "created_at": pr.created_at.isoformat() if pr.created_at else None,
+        }]
+
+    async def _get_packing_binding_upstream(
+        self,
+        tenant_id: int,
+        binding_id: int,
+    ) -> List[Dict[str, Any]]:
+        """装箱绑定上游：成品入库单或销售出库单（二选一）"""
+        pb = await PackingBinding.get_or_none(
+            tenant_id=tenant_id, id=binding_id, deleted_at__isnull=True
+        )
+        if not pb:
+            return []
+        upstream: List[Dict[str, Any]] = []
+        if pb.finished_goods_receipt_id:
+            fr = await FinishedGoodsReceipt.get_or_none(
+                tenant_id=tenant_id, id=pb.finished_goods_receipt_id
+            )
+            if fr:
+                upstream.append({
+                    "document_type": "finished_goods_receipt",
+                    "document_id": fr.id,
+                    "document_code": fr.receipt_code,
+                    "document_name": None,
+                    "status": fr.status if hasattr(fr, "status") else None,
+                    "created_at": fr.created_at.isoformat() if fr.created_at else None,
+                })
+        if pb.sales_delivery_id:
+            sd = await SalesDelivery.get_or_none(
+                tenant_id=tenant_id, id=pb.sales_delivery_id
+            )
+            if sd:
+                upstream.append({
+                    "document_type": "sales_delivery",
+                    "document_id": sd.id,
+                    "document_code": sd.delivery_code,
+                    "document_name": None,
+                    "status": sd.status if hasattr(sd, "status") else None,
+                    "created_at": sd.created_at.isoformat() if sd.created_at else None,
+                })
+        return upstream
+
+    async def _get_receipt_notice_upstream(
+        self,
+        tenant_id: int,
+        notice_id: int,
+    ) -> List[Dict[str, Any]]:
+        """收货通知单上游：采购订单"""
+        rn = await ReceiptNotice.get_or_none(
+            tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True
+        )
+        if not rn or not rn.purchase_order_id:
+            return []
+        po = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=rn.purchase_order_id)
+        if not po:
+            return []
+        return [{
+            "document_type": "purchase_order",
+            "document_id": po.id,
+            "document_code": po.order_code,
+            "document_name": getattr(po, "order_name", None),
+            "status": po.status if hasattr(po, "status") else None,
+            "created_at": po.created_at.isoformat() if po.created_at else None,
+        }]
+
+    async def _get_receipt_notice_downstream(
+        self,
+        tenant_id: int,
+        notice_id: int,
+    ) -> List[Dict[str, Any]]:
+        """收货通知单下游：已生成时关联采购入库单"""
+        rn = await ReceiptNotice.get_or_none(
+            tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True
+        )
+        if not rn or not rn.purchase_receipt_id:
+            return []
+        pr = await PurchaseReceipt.get_or_none(tenant_id=tenant_id, id=rn.purchase_receipt_id)
+        if not pr:
+            return []
+        return [{
+            "document_type": "purchase_receipt",
+            "document_id": pr.id,
+            "document_code": pr.receipt_code,
+            "document_name": None,
+            "status": pr.status if hasattr(pr, "status") else None,
+            "created_at": pr.created_at.isoformat() if pr.created_at else None,
+        }]
+
+    async def _get_sales_return_upstream(
+        self,
+        tenant_id: int,
+        return_id: int,
+    ) -> List[Dict[str, Any]]:
+        """销售退货单上游：销售出库单、销售订单"""
+        sr = await SalesReturn.get_or_none(
+            tenant_id=tenant_id, id=return_id, deleted_at__isnull=True
+        )
+        if not sr:
+            return []
+        upstream: List[Dict[str, Any]] = []
+        if sr.sales_delivery_id:
+            sd = await SalesDelivery.get_or_none(tenant_id=tenant_id, id=sr.sales_delivery_id)
+            if sd:
+                upstream.append({
+                    "document_type": "sales_delivery",
+                    "document_id": sd.id,
+                    "document_code": sd.delivery_code,
+                    "document_name": None,
+                    "status": sd.status if hasattr(sd, "status") else None,
+                    "created_at": sd.created_at.isoformat() if sd.created_at else None,
+                })
+        if sr.sales_order_id:
+            so = await SalesOrder.get_or_none(tenant_id=tenant_id, id=sr.sales_order_id)
+            if so:
+                upstream.append({
+                    "document_type": "sales_order",
+                    "document_id": so.id,
+                    "document_code": so.order_code,
+                    "document_name": getattr(so, "order_name", None),
+                    "status": so.status if hasattr(so, "status") else None,
+                    "created_at": so.created_at.isoformat() if so.created_at else None,
+                })
+        return upstream
+
+    async def _get_shipment_notice_upstream(
+        self,
+        tenant_id: int,
+        notice_id: int,
+    ) -> List[Dict[str, Any]]:
+        """发货通知单上游：销售订单"""
+        sn = await ShipmentNotice.get_or_none(
+            tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True
+        )
+        if not sn or not sn.sales_order_id:
+            return []
+        so = await SalesOrder.get_or_none(tenant_id=tenant_id, id=sn.sales_order_id)
+        if not so:
+            return []
+        return [{
+            "document_type": "sales_order",
+            "document_id": so.id,
+            "document_code": so.order_code,
+            "document_name": getattr(so, "order_name", None),
+            "status": so.status if hasattr(so, "status") else None,
+            "created_at": so.created_at.isoformat() if so.created_at else None,
+        }]
+
+    async def _get_shipment_notice_downstream(
+        self,
+        tenant_id: int,
+        notice_id: int,
+    ) -> List[Dict[str, Any]]:
+        """发货通知单下游：已出库时关联销售出库单"""
+        sn = await ShipmentNotice.get_or_none(
+            tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True
+        )
+        if not sn or not sn.sales_delivery_id:
+            return []
+        sd = await SalesDelivery.get_or_none(tenant_id=tenant_id, id=sn.sales_delivery_id)
+        if not sd:
+            return []
+        return [{
+            "document_type": "sales_delivery",
+            "document_id": sd.id,
+            "document_code": sd.delivery_code,
+            "document_name": None,
+            "status": sd.status if hasattr(sd, "status") else None,
+            "created_at": sd.created_at.isoformat() if sd.created_at else None,
+        }]
 
     async def _get_payable_upstream(
         self,

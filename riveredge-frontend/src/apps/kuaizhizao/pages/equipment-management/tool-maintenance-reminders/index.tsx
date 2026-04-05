@@ -6,8 +6,10 @@
 
 import React, { useRef } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { Tag } from 'antd';
+import { Tag, Typography } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { getDueReminderLifecycle } from '../../../utils/equipmentLifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { toolApi } from '../../../services/equipment';
 import dayjs from 'dayjs';
@@ -26,7 +28,16 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
 
   const columns: ProColumns<ToolMaintenanceReminder>[] = [
-    { title: '工装编号', dataIndex: 'tool_code', width: 120 },
+    {
+      title: '工装编号',
+      dataIndex: 'tool_code',
+      width: 120,
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.tool_code ?? '') }} ellipsis>
+          {r.tool_code ?? '-'}
+        </Typography.Text>
+      ),
+    },
     { title: '工装名称', dataIndex: 'tool_name', width: 180, ellipsis: true },
     {
       title: '类型',
@@ -52,14 +63,25 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
       },
     },
     {
-      title: '状态',
-      dataIndex: 'due_type',
-      width: 100,
-      render: (_, r) => {
-        const t = r.due_type;
-        if (t === 'overdue') return <Tag color="red">已过期</Tag>;
-        if (t === 'due_soon') return <Tag color="orange">即将到期</Tag>;
-        return <Tag>{t || '-'}</Tag>;
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      width: 132,
+      fixed: 'right',
+      align: 'left',
+      hideInSearch: true,
+      render: (_, record) => {
+        const lifecycle = getDueReminderLifecycle(record as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
       },
     },
   ];
@@ -67,6 +89,8 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<ToolMaintenanceReminder>
+        headerTitle="工装保养校准提醒"
+        columnPersistenceId="kuaizhizao-em-tool-maintenance-reminders"
         actionRef={actionRef}
         rowKey={(_, __, index) => `reminder-${index}`}
         columns={columns}
@@ -75,11 +99,13 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
             due_type: params.due_type,
+            keyword: (params as any).keyword,
           });
           return { data: res.items || [], success: true, total: res.total || 0 };
         }}
         search={{ labelWidth: 'auto' }}
         pagination={{ defaultPageSize: 20 }}
+        scroll={{ x: 1200 }}
       />
     </ListPageTemplate>
   );

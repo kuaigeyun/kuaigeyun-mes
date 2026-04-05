@@ -5,12 +5,15 @@
  */
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal, Space, Tag } from 'antd';
+import { App, Button, Modal, Typography } from 'antd';
 import { ModalForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
-import { CheckCircleOutlined, DeleteOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { getChineseInvoiceLifecycle } from '../../../utils/financeLifecycle';
+import { renderRowActionsMax3 } from '../../../utils/renderRowActionsMax3';
 import dayjs from 'dayjs';
 
 interface SalesInvoice {
@@ -32,12 +35,6 @@ interface SalesInvoice {
   notes?: string;
   created_at: string;
 }
-
-const STATUS_COLOR: Record<string, string> = {
-  '未审核': 'default',
-  '已审核': 'success',
-  '已驳回': 'error',
-};
 
 const INVOICE_TYPE_OPTIONS = [
   { label: '增值税专用发票', value: '增值税专用发票' },
@@ -135,8 +132,13 @@ const SalesInvoicesPage: React.FC = () => {
     {
       title: '发票编号',
       dataIndex: 'invoice_code',
-      width: 160,
+      width: 168,
       fixed: 'left',
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.invoice_code ?? '') }} ellipsis>
+          {r.invoice_code ?? '-'}
+        </Typography.Text>
+      ),
     },
     {
       title: '发票号码',
@@ -194,26 +196,71 @@ const SalesInvoicesPage: React.FC = () => {
     {
       title: '状态',
       dataIndex: 'status',
-      width: 90,
-      render: (_, record) => (
-        <Tag color={STATUS_COLOR[record.status] || 'default'}>{record.status}</Tag>
-      ),
+      hideInTable: true,
+    },
+    {
+      title: '审核状态',
+      dataIndex: 'review_status',
+      hideInTable: true,
+      valueEnum: {
+        待审核: { text: '待审核' },
+        已审核: { text: '已审核' },
+        已驳回: { text: '已驳回' },
+      },
+    },
+    {
+      title: '创建时间',
+      dataIndex: 'created_at',
+      width: 168,
+      hideInSearch: true,
+      render: (_, r) => (r.created_at ? dayjs(r.created_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+    },
+    {
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      fixed: 'right',
+      align: 'left',
+      width: 130,
+      hideInSearch: true,
+      render: (_, record) => {
+        const lc = getChineseInvoiceLifecycle(record as unknown as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lc.percent}
+            stageName={lc.stageName}
+            status={lc.status}
+            subStages={lc.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
+      },
     },
     {
       title: '操作',
       valueType: 'option',
       fixed: 'right',
-      width: 160,
-      render: (_, record) => (
-        <Space>
-          {record.review_status === '待审核' && (
-            <Button type="link" size="small" icon={<CheckCircleOutlined />} onClick={() => handleApprove(record)}>审核</Button>
-          )}
-          {record.status !== '已审核' && (
-            <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>删除</Button>
-          )}
-        </Space>
-      ),
+      width: 200,
+      render: (_, record) =>
+        renderRowActionsMax3(
+          [
+            <Button key="det" type="link" size="small" icon={<EyeOutlined />} onClick={() => messageApi.info('销售发票详情开发中')}>
+              详情
+            </Button>,
+            record.review_status === '待审核' ? (
+              <Button key="ap" type="link" size="small" icon={<CheckCircleOutlined />} onClick={() => handleApprove(record)}>
+                审核
+              </Button>
+            ) : null,
+            record.status !== '已审核' ? (
+              <Button key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
+                删除
+              </Button>
+            ) : null,
+          ].filter(Boolean) as React.ReactNode[],
+          `si-${record.id}`,
+        ),
     },
   ];
 
@@ -223,9 +270,12 @@ const SalesInvoicesPage: React.FC = () => {
         headerTitle="销售发票"
         actionRef={actionRef}
         rowKey="id"
+        columnPersistenceId="kuaicaiwu-finance-sales-invoices"
+        scroll={{ x: 1800 }}
+        showAdvancedSearch
         search={{ labelWidth: 120 }}
         showCreateButton
-        createButtonText="开具发票"
+        createButtonText="新建销售发票"
         onCreate={() => setCreateModalVisible(true)}
         request={async (params) => {
           const { current, pageSize, ...rest } = params;

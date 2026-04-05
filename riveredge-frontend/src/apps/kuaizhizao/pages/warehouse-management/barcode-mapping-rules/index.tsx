@@ -9,7 +9,7 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormSwitch, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Tag, Button, Space, Popconfirm, Modal } from 'antd';
+import { App, Tag, Button, Space, Popconfirm, Modal, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
@@ -130,6 +130,11 @@ const BarcodeMappingRulesPage: React.FC = () => {
       dataIndex: 'code',
       width: 120,
       fixed: 'left',
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
+          {r.code ?? '-'}
+        </Typography.Text>
+      ),
     },
     {
       title: '规则名称',
@@ -267,6 +272,7 @@ const BarcodeMappingRulesPage: React.FC = () => {
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
+        columnPersistenceId="kuaizhizao-wm-barcode-mapping-rules"
         showCreateButton={true}
         createButtonText="新建条码映射规则"
         onCreate={handleCreate}
@@ -291,14 +297,18 @@ const BarcodeMappingRulesPage: React.FC = () => {
         }}
         request={async (params) => {
           try {
+            const pageSize = params.pageSize || 20;
+            const skip = (params.current! - 1) * pageSize;
             const result = await warehouseApi.barcodeMappingRule.list({
-              skip: (params.current! - 1) * params.pageSize!,
-              limit: params.pageSize,
+              skip,
+              limit: pageSize,
             });
+            const rows = Array.isArray(result) ? result : [];
+            const total = rows.length < pageSize ? skip + rows.length : skip + rows.length + 1;
             return {
-              data: result || [],
+              data: rows,
               success: true,
-              total: result?.length || 0,
+              total,
             };
           } catch (error) {
             messageApi.error('获取规则列表失败');
@@ -309,6 +319,7 @@ const BarcodeMappingRulesPage: React.FC = () => {
             };
           }
         }}
+        scroll={{ x: 1400 }}
       />
 
       {/* 创建/编辑 Modal */}

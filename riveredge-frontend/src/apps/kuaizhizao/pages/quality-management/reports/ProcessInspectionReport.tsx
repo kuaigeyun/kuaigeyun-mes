@@ -18,6 +18,7 @@ const ProcessInspectionReport: React.FC = () => {
     <ReportBase
       title={t('app.kuaizhizao.menu.reports.process-inspection-report')}
       reportType="process_pass_rate"
+      columnPersistenceId="kuaizhizao-qm-report-process-inspection"
       columns={columns}
       request={async (params: any) => {
         const res = await getQualityReport({

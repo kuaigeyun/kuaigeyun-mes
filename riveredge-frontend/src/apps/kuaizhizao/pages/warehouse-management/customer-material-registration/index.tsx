@@ -9,11 +9,13 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormDigit, ProFormTextArea, ProFormSelect, ProFormDatePicker } from '@ant-design/pro-components';
-import { App, Button, Space, Popconfirm, Row, Col } from 'antd';
+import { App, Button, Space, Popconfirm, Row, Col, Typography } from 'antd';
 import { EyeOutlined, CheckCircleOutlined, CloseCircleOutlined, ScanOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { customerMaterialRegistrationApi } from '../../../services/customer-material-registration';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { getCustomerMaterialRegistrationLifecycle } from '../../../utils/customerMaterialRegistrationLifecycle';
 import dayjs from 'dayjs';
 
 interface CustomerMaterialRegistration {
@@ -184,6 +186,11 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       width: 150,
       ellipsis: true,
       fixed: 'left',
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.registration_code ?? '') }} ellipsis>
+          {r.registration_code ?? '-'}
+        </Typography.Text>
+      ),
     },
     {
       title: '客户名称',
@@ -224,7 +231,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
     {
       title: '状态',
       dataIndex: 'status',
-      width: 100,
+      hideInTable: true,
       valueEnum: {
         pending: { text: '待处理', status: 'warning' },
         processed: { text: '已处理', status: 'success' },
@@ -236,6 +243,35 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       dataIndex: 'registered_by_name',
       width: 100,
       ellipsis: true,
+    },
+    {
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      width: 168,
+      hideInSearch: true,
+      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+    },
+    {
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      width: 132,
+      fixed: 'right',
+      align: 'left',
+      hideInSearch: true,
+      render: (_, record) => {
+        const lifecycle = getCustomerMaterialRegistrationLifecycle(record as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
+      },
     },
     {
       title: '操作',
@@ -296,24 +332,29 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
+        columnPersistenceId="kuaizhizao-wm-customer-material-registration"
         showAdvancedSearch={true}
         showCreateButton={true}
         createButtonText="新建客户来料登记"
         onCreate={handleCreate}
         request={async (params: any) => {
           try {
+            const pageSize = params.pageSize || 20;
+            const skip = (params.current! - 1) * pageSize;
             const result = await customerMaterialRegistrationApi.list({
-              skip: (params.current! - 1) * params.pageSize!,
-              limit: params.pageSize,
+              skip,
+              limit: pageSize,
               customer_id: params.customer_id,
               status: params.status,
               registration_date_start: params.registration_date_start,
               registration_date_end: params.registration_date_end,
             });
+            const rows = Array.isArray(result) ? result : [];
+            const total = rows.length < pageSize ? skip + rows.length : skip + rows.length + 1;
             return {
-              data: result || [],
+              data: rows,
               success: true,
-              total: result?.length || 0,
+              total,
             };
           } catch (error) {
             return {
@@ -323,6 +364,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
             };
           }
         }}
+        scroll={{ x: 1680 }}
         rowSelection={{
           selectedRowKeys,
           onChange: setSelectedRowKeys,

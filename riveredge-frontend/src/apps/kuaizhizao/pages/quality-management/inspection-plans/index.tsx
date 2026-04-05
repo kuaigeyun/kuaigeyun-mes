@@ -8,14 +8,14 @@
  * @date 2026-02-26
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
+import type { DescriptionsProps } from 'antd';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ActionType,
   ProColumns,
-  ProDescriptionsItemType,
+  ProDescriptionsItemProps,
   ProForm,
-  ProFormSelect,
   ProFormText,
   ProFormTextArea,
   ProFormItem,
@@ -23,18 +23,61 @@ import {
 } from '@ant-design/pro-components';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
-import { App, Button, Tag, Space, Card, Table, Modal, Row, Col } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, Card, Table, Modal, Row, Col, Descriptions, Typography, Empty } from 'antd';
+import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   ListPageTemplate,
   FormModalTemplate,
   DetailDrawerTemplate,
+  DetailDrawerSection,
   MODAL_CONFIG,
   DRAWER_CONFIG,
 } from '../../../../../components/layout-templates';
+import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import type { LifecycleResult } from '../../../../../components/uni-lifecycle/types';
 import { inspectionPlanApi } from '../../../services/production';
 import { InspectionPlanStepEditor, type InspectionPlanStepItem } from '../../../components/InspectionPlanStepEditor';
+import dayjs from 'dayjs';
+
+function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
+  dataSource: T,
+  cols: ProDescriptionsItemProps<T>[]
+): NonNullable<DescriptionsProps['items']> {
+  return cols.map((col, index) => {
+    const dataIndex = col.dataIndex as keyof T | undefined;
+    const value = dataIndex != null ? dataSource[dataIndex] : undefined;
+    let content: React.ReactNode = value as React.ReactNode;
+    if (col.valueType === 'dateTime' && value) {
+      content = dayjs(value as string).format('YYYY-MM-DD HH:mm:ss');
+    }
+    if (col.render && dataSource != null) {
+      content = col.render(content, dataSource, index, {}, col);
+    }
+    return {
+      key: String(col.key ?? col.dataIndex ?? index),
+      label: col.title as React.ReactNode,
+      children: content !== undefined && content !== null ? content : '-',
+      span: col.span ?? 1,
+    };
+  });
+}
+
+function getInspectionPlanLifecycle(record: InspectionPlan | null | undefined): LifecycleResult {
+  if (!record) return { percent: 0, stageName: '-', mainStages: [] };
+  const active = record.is_active === true;
+  return {
+    percent: active ? 100 : 35,
+    stageName: active ? '启用' : '停用',
+    status: active ? 'success' : 'normal',
+    mainStages: [
+      { key: 'maintain', label: '维护', status: 'done' },
+      { key: 'active', label: active ? '启用' : '停用', status: 'active' },
+    ],
+    subStages: [],
+    nextStepSuggestions: active ? [] : ['可在列表中启用方案'],
+  };
+}
 
 interface InspectionPlan {
   id?: number;
@@ -66,6 +109,7 @@ const InspectionPlansPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [planTypeOptions, setPlanTypeOptions] = useState<Array<{ label: string; value: string }>>(PLAN_TYPE_FALLBACK);
   const [planTypeLoading, setPlanTypeLoading] = useState(false);
 
@@ -230,8 +274,58 @@ const InspectionPlansPage: React.FC = () => {
     }
   };
 
+  const planTypeLabel = (planType: string | undefined) => {
+    const map: Record<string, string> = { incoming: '来料检验', process: '过程检验', finished: '成品检验' };
+    return map[planType || ''] || planType || '-';
+  };
+
+  const detailBaseColumns: ProDescriptionsItemProps<InspectionPlan>[] = useMemo(
+    () => [
+      {
+        title: '方案编号',
+        dataIndex: 'plan_code',
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: String(r.plan_code ?? '') }}>{r.plan_code ?? '-'}</Typography.Text>
+        ),
+      },
+      { title: '方案名称', dataIndex: 'plan_name' },
+      {
+        title: '方案类型',
+        dataIndex: 'plan_type',
+        render: (_, r) => planTypeLabel(r?.plan_type),
+      },
+      {
+        title: '适用物料编号',
+        dataIndex: 'material_code',
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: String(r.material_code ?? '') }}>{r.material_code || '-'}</Typography.Text>
+        ),
+      },
+      { title: '适用物料', dataIndex: 'material_name', render: (t) => t || '-' },
+      { title: '版本', dataIndex: 'version' },
+      {
+        title: '启用状态',
+        dataIndex: 'is_active',
+        render: (_, r) => (r ? <Tag color={r.is_active ? 'success' : 'default'}>{r.is_active ? '启用' : '停用'}</Tag> : '-'),
+      },
+      { title: '备注', dataIndex: 'remarks', span: 2, render: (t) => t || '-' },
+    ],
+    []
+  );
+
   const columns: ProColumns<InspectionPlan>[] = [
-    { title: '方案编号', dataIndex: 'plan_code', width: 140, ellipsis: true },
+    {
+      title: '方案编号',
+      dataIndex: 'plan_code',
+      width: 140,
+      ellipsis: true,
+      fixed: 'left',
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.plan_code ?? '') }} ellipsis>
+          {r.plan_code ?? '-'}
+        </Typography.Text>
+      ),
+    },
     { title: '方案名称', dataIndex: 'plan_name', width: 180, ellipsis: true },
     {
       title: '方案类型',
@@ -239,37 +333,92 @@ const InspectionPlansPage: React.FC = () => {
       width: 100,
       render: (_, record) => {
         if (!record) return '-';
-        const map: Record<string, string> = { incoming: '来料检验', process: '过程检验', finished: '成品检验' };
-        return map[record.plan_type || ''] || record.plan_type || '-';
+        return planTypeLabel(record.plan_type);
       },
     },
-    { title: '适用物料', dataIndex: 'material_name', width: 150, ellipsis: true, render: (t) => t || '-' },
     {
-      title: '启用状态',
-      dataIndex: 'is_active',
-      width: 90,
-      render: (_, record) =>
-        record ? (
-          <Tag color={record.is_active ? 'success' : 'default'}>{record.is_active ? '启用' : '停用'}</Tag>
-        ) : (
-          '-'
-        ),
+      title: '适用物料编号',
+      dataIndex: 'material_code',
+      width: 120,
+      ellipsis: true,
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.material_code ?? '') }} ellipsis>
+          {r.material_code || '-'}
+        </Typography.Text>
+      ),
     },
+    { title: '适用物料', dataIndex: 'material_name', width: 150, ellipsis: true, render: (t) => t || '-' },
     { title: '版本', dataIndex: 'version', width: 80 },
+    {
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      width: 168,
+      hideInSearch: true,
+      defaultSortOrder: 'descend',
+      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+    },
+    {
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      width: 132,
+      fixed: 'right',
+      align: 'left',
+      hideInSearch: true,
+      render: (_, record) => {
+        const lifecycle = getInspectionPlanLifecycle(record);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
+      },
+    },
     {
       title: '操作',
       key: 'action',
-      width: 180,
+      width: 200,
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) => (
-        <Space>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
+        <Space size="small" wrap>
+          <Button
+            type="link"
+            size="small"
+            icon={<EyeOutlined />}
+            onClick={(e) => {
+              e.stopPropagation();
+              void handleDetail(record);
+            }}
+          >
             详情
           </Button>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+          <Button
+            type="link"
+            size="small"
+            icon={<EditOutlined />}
+            onClick={(e) => {
+              e.stopPropagation();
+              void handleEdit(record);
+            }}
+          >
             编辑
           </Button>
-          <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
+          <Button
+            type="link"
+            danger
+            size="small"
+            icon={<DeleteOutlined />}
+            onClick={(e) => {
+              e.stopPropagation();
+              void handleDelete(record);
+            }}
+          >
             删除
           </Button>
         </Space>
@@ -277,32 +426,11 @@ const InspectionPlansPage: React.FC = () => {
     },
   ];
 
-  const detailColumns: ProDescriptionsItemType<InspectionPlan>[] = [
-    { title: '方案编号', dataIndex: 'plan_code' },
-    { title: '方案名称', dataIndex: 'plan_name' },
-    {
-      title: '方案类型',
-      dataIndex: 'plan_type',
-      render: (_, record) => {
-        if (!record) return '-';
-        const map: Record<string, string> = { incoming: '来料检验', process: '过程检验', finished: '成品检验' };
-        return map[record.plan_type || ''] || record.plan_type || '-';
-      },
-    },
-    { title: '适用物料', dataIndex: 'material_name', render: (t) => t || '-' },
-    { title: '版本', dataIndex: 'version' },
-    {
-      title: '启用状态',
-      dataIndex: 'is_active',
-      render: (_, record) => (record ? (record.is_active ? '启用' : '停用') : '-'),
-    },
-    { title: '备注', dataIndex: 'remarks', span: 2 },
-  ];
-
   return (
     <ListPageTemplate>
       <UniTable<InspectionPlan>
         headerTitle="质检方案"
+        columnPersistenceId="kuaizhizao-qm-inspection-plans"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
@@ -315,6 +443,7 @@ const InspectionPlansPage: React.FC = () => {
               is_active: params.is_active,
               plan_code: params.plan_code,
               plan_name: params.plan_name,
+              keyword: params.keyword,
             });
             const data = Array.isArray(response) ? response : response?.data || [];
             return { data, success: true, total: data.length };
@@ -327,6 +456,11 @@ const InspectionPlansPage: React.FC = () => {
         createButtonText="新建质检方案"
         onCreate={handleCreate}
         enableRowSelection={true}
+        onRowSelectionChange={setSelectedRowKeys}
+        onRow={(record) => ({
+          onClick: () => void handleDetail(record),
+          style: { cursor: 'pointer' },
+        })}
         showDeleteButton={true}
         onDelete={async (keys) => {
           Modal.confirm({
@@ -334,10 +468,16 @@ const InspectionPlansPage: React.FC = () => {
             content: `确定要删除选中的 ${keys.length} 条质检方案吗？`,
             onOk: async () => {
               try {
+                const ids = keys.map(Number);
                 for (const id of keys) {
                   await inspectionPlanApi.delete(String(id));
                 }
                 messageApi.success(`成功删除 ${keys.length} 条记录`);
+                setSelectedRowKeys([]);
+                if (planDetail?.id != null && ids.includes(planDetail.id)) {
+                  setDrawerVisible(false);
+                  setPlanDetail(null);
+                }
                 actionRef.current?.reload();
               } catch (error: any) {
                 messageApi.error(error.message || '删除失败');
@@ -345,6 +485,7 @@ const InspectionPlansPage: React.FC = () => {
             },
           });
         }}
+        scroll={{ x: 1600 }}
       />
 
       <FormModalTemplate
@@ -441,33 +582,74 @@ const InspectionPlansPage: React.FC = () => {
           setDrawerVisible(false);
           setPlanDetail(null);
         }}
-        dataSource={planDetail}
-        columns={detailColumns}
         width={DRAWER_CONFIG.HALF_WIDTH}
-      >
-        {planDetail?.steps && planDetail.steps.length > 0 && (
-          <Card title="检验步骤" size="small" style={{ marginTop: 16 }}>
-            <Table
-              dataSource={planDetail.steps}
-              rowKey={(_, i) => `step-${i}`}
-              pagination={false}
-              size="small"
-              columns={[
-                { title: '序号', key: 'index', width: 60, render: (_, __, i) => i + 1 },
-                { title: '检验项目', dataIndex: 'inspection_item' },
-                { title: '检验方法', dataIndex: 'inspection_method', width: 120 },
-                { title: '合格标准', dataIndex: 'acceptance_criteria', width: 150 },
-                {
-                  title: '抽样方式',
-                  dataIndex: 'sampling_type',
-                  width: 90,
-                  render: (v: string) => (v === 'sampling' ? '抽检' : '全检'),
-                },
-              ]}
-            />
-          </Card>
-        )}
-      </DetailDrawerTemplate>
+        columns={[]}
+        column={3}
+        customContent={
+          planDetail ? (
+            <>
+              <DetailDrawerSection title="基本信息">
+                <Descriptions
+                  column={3}
+                  size="small"
+                  items={buildDescriptionItemsFromColumns(planDetail, detailBaseColumns)}
+                />
+              </DetailDrawerSection>
+
+              <DetailDrawerSection title="生命周期">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {(() => {
+                    const lc = getInspectionPlanLifecycle(planDetail);
+                    const mainStages = lc.mainStages ?? [];
+                    if (mainStages.length === 0) return null;
+                    return (
+                      <UniLifecycleStepper
+                        steps={mainStages}
+                        showLabels
+                        status={lc.status}
+                        nextStepSuggestions={lc.nextStepSuggestions}
+                      />
+                    );
+                  })()}
+                  <Typography.Text type="secondary">质检方案无上下游业务单据关联</Typography.Text>
+                </div>
+              </DetailDrawerSection>
+
+              <DetailDrawerSection title="明细信息">
+                {planDetail.steps && planDetail.steps.length > 0 ? (
+                  <div style={{ overflowX: 'auto', overflowY: 'hidden' }}>
+                    <Table
+                      style={{ minWidth: 720 }}
+                      dataSource={planDetail.steps}
+                      rowKey={(_, i) => `step-${i}`}
+                      pagination={false}
+                      size="small"
+                      columns={[
+                        { title: '序号', key: 'index', width: 60, render: (_, __, i) => i + 1 },
+                        { title: '检验项目', dataIndex: 'inspection_item' },
+                        { title: '检验方法', dataIndex: 'inspection_method', width: 120 },
+                        { title: '合格标准', dataIndex: 'acceptance_criteria', width: 150 },
+                        {
+                          title: '抽样方式',
+                          dataIndex: 'sampling_type',
+                          width: 90,
+                          render: (v: string) => (v === 'sampling' ? '抽检' : '全检'),
+                        },
+                      ]}
+                    />
+                  </div>
+                ) : (
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无检验步骤" />
+                )}
+              </DetailDrawerSection>
+
+              <DetailDrawerSection title="操作记录">
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+              </DetailDrawerSection>
+            </>
+          ) : null
+        }
+      />
     </ListPageTemplate>
   );
 };

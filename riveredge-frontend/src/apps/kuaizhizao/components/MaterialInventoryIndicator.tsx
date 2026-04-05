@@ -12,7 +12,7 @@
  * @date 2026-02-24
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Tooltip } from 'antd';
 import { apiRequest } from '../../../services/api';
 import { useSalesOrderIndicators } from './SalesOrderIndicatorsProvider';
@@ -31,7 +31,7 @@ async function fetchMaterialInventory(materialId: number): Promise<number> {
       {
         method: 'GET',
         params: {
-          material_id: materialId,
+          material_ids: [materialId],
           include_expired: false,
           summary_only: true,
           include_sales_commitment: true,

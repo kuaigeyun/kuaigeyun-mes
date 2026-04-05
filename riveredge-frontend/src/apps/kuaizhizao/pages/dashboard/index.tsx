@@ -36,7 +36,7 @@ const MESDashboard: React.FC = () => {
   });
 
   // 3. 获取实时播报
-  const { data: broadcast, isLoading: broadcastLoading } = useQuery({
+  const { data: broadcast } = useQuery({
     queryKey: ['mesBroadcast'],
     queryFn: () => mesDashboardService.getProductionBroadcast(8),
     refetchInterval: 30000, // 每 30 秒轮询一次
@@ -49,18 +49,23 @@ const MESDashboard: React.FC = () => {
   });
 
   // 5. 获取管理指标
-  const { data: metrics, isLoading: metricsLoading } = useQuery({
+  const { data: metrics } = useQuery({
     queryKey: ['mesManagementMetrics'],
     queryFn: () => mesDashboardService.getManagementMetrics(),
   });
 
   if (statsLoading || todosLoading || progressLoading) {
-    return <div style={{ padding: 100, textAlign: 'center' }}><Spin size="large" tip="正在加载车间实时看板..." /></div>;
+    return (
+      <div style={{ padding: 100, textAlign: 'center' }}>
+        <Spin size="large" />
+        <div style={{ marginTop: 16, color: 'var(--ant-color-text-secondary)' }}>正在加载车间实时看板...</div>
+      </div>
+    );
   }
 
   return (
     <div style={{ padding: '24px', background: '#f0f2f5', minHeight: '100vh' }}>
-      <Space direction="vertical" style={{ width: '100%' }} size="large">
+      <Space orientation="vertical" style={{ width: '100%' }} size="large">
         <Title level={3}>车间数字化看板 <Text type="secondary" style={{ fontSize: '14px' }}>实时生产执行监控与辅助决策</Text></Title>
 
         {/* 核心指标行 */}
@@ -131,7 +136,7 @@ const MESDashboard: React.FC = () => {
         <Row gutter={[16, 16]}>
           {/* 左侧：待办与广播 */}
           <Col span={16}>
-            <Space direction="vertical" style={{ width: '100%' }} size="large">
+            <Space orientation="vertical" style={{ width: '100%' }} size="large">
               {/* 在制工序进展 */}
               <ProCard title="在制工序进展监控" extra={<Link>查看全部工单</Link>} bordered>
                 <div style={{ maxHeight: 400, overflowY: 'auto' }}>
@@ -196,26 +201,31 @@ const MESDashboard: React.FC = () => {
               bordered 
               headerBordered
             >
-              <Timeline mode="left">
-                {broadcast?.items?.map((item: any) => (
-                  <Timeline.Item 
-                    key={item.id} 
-                    color={item.unqualified_quantity > 0 ? 'red' : 'green'}
-                    label={dayjs(item.created_at).format('HH:mm')}
-                  >
-                    <Text strong>{item.operator_name}</Text> 在工序 <Text style={{ color: '#1890ff' }}>{item.process_name}</Text> 完成报工
-                    <div style={{ marginTop: 4 }}>
-                      <Text type="secondary">产品: {item.product_name}</Text>
-                      <br />
-                      <Badge status="success" text={`合格: ${item.qualified_quantity}`} />
-                      {item.unqualified_quantity > 0 && (
-                        <Badge status="error" text={` 不合格: ${item.unqualified_quantity}`} style={{ marginLeft: 16 }} />
-                      )}
-                    </div>
-                  </Timeline.Item>
-                ))}
-                {(!broadcast?.items || broadcast.items.length === 0) && <Empty description="暂无动态" />}
-              </Timeline>
+              {(!broadcast?.items || broadcast.items.length === 0) ? (
+                <Empty description="暂无动态" />
+              ) : (
+                <Timeline 
+                  mode="left" 
+                  items={broadcast.items.map((item: any) => ({
+                    key: item.id,
+                    label: dayjs(item.created_at).format('HH:mm'),
+                    color: item.unqualified_quantity > 0 ? 'red' : 'green',
+                    content: (
+                      <>
+                        <Text strong>{item.operator_name}</Text> 在工序 <Text style={{ color: '#1890ff' }}>{item.process_name}</Text> 完成报工
+                        <div style={{ marginTop: 4 }}>
+                          <Text type="secondary">产品: {item.product_name}</Text>
+                          <br />
+                          <Badge status="success" text={`合格: ${item.qualified_quantity}`} />
+                          {item.unqualified_quantity > 0 && (
+                            <Badge status="error" text={` 不合格: ${item.unqualified_quantity}`} style={{ marginLeft: 16 }} />
+                          )}
+                        </div>
+                      </>
+                    )
+                  }))}
+                />
+              )}
             </ProCard>
 
             <Divider dashed />

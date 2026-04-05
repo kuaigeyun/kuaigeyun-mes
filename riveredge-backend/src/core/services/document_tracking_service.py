@@ -24,6 +24,7 @@ def _get_model_registry() -> Dict[str, tuple]:
     from apps.kuaizhizao.models.quotation import Quotation
     from apps.kuaizhizao.models.rework_order import ReworkOrder
     from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+    from apps.kuaizhizao.models.purchase_return import PurchaseReturn
     from apps.kuaizhizao.models.sales_delivery import SalesDelivery
     from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
     from apps.kuaizhizao.models.process_inspection import ProcessInspection
@@ -33,7 +34,17 @@ def _get_model_registry() -> Dict[str, tuple]:
     from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
     from apps.kuaizhizao.models.sample_trial import SampleTrial
     from apps.kuaizhizao.models.other_outbound import OtherOutbound
+    from apps.kuaizhizao.models.material_return import MaterialReturn
     from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
+    from apps.kuaizhizao.models.reporting_record import ReportingRecord
+    from apps.kuaizhizao.models.outsource_order import OutsourceOrder
+    from apps.kuaizhizao.models.outsource_work_order import OutsourceWorkOrder
+    from apps.kuaizhizao.models.packing_binding import PackingBinding
+    from apps.kuaizhizao.models.receipt_notice import ReceiptNotice
+    from apps.kuaizhizao.models.sales_return import SalesReturn
+    from apps.kuaizhizao.models.delivery_notice import DeliveryNotice
+    from apps.kuaicaiwu.models.receivable import Receivable
+    from apps.kuaicaiwu.models.payable import Payable
     return {
         "demand": (Demand, "demand_code"),
         "sales_order": (SalesOrder, "order_code"),
@@ -46,6 +57,7 @@ def _get_model_registry() -> Dict[str, tuple]:
         "quotation": (Quotation, "quotation_code"),
         "rework_order": (ReworkOrder, "code"),
         "purchase_receipt": (PurchaseReceipt, "receipt_code"),
+        "purchase_return": (PurchaseReturn, "return_code"),
         "sales_delivery": (SalesDelivery, "delivery_code"),
         "incoming_inspection": (IncomingInspection, "inspection_code"),
         "process_inspection": (ProcessInspection, "inspection_code"),
@@ -55,7 +67,17 @@ def _get_model_registry() -> Dict[str, tuple]:
         "finished_goods_receipt": (FinishedGoodsReceipt, "receipt_code"),
         "sample_trial": (SampleTrial, "trial_code"),
         "other_outbound": (OtherOutbound, "outbound_code"),
+        "material_return": (MaterialReturn, "return_code"),
         "shipment_notice": (ShipmentNotice, "notice_code"),
+        "delivery_notice": (DeliveryNotice, "notice_code"),
+        "reporting_record": (ReportingRecord, "work_order_code"),
+        "outsource_order": (OutsourceOrder, "code"),
+        "outsource_work_order": (OutsourceWorkOrder, "code"),
+        "packing_binding": (PackingBinding, "uuid"),
+        "receipt_notice": (ReceiptNotice, "notice_code"),
+        "sales_return": (SalesReturn, "return_code"),
+        "receivable": (Receivable, "receivable_code"),
+        "payable": (Payable, "payable_code"),
     }
 
 DOCUMENT_MODEL_REGISTRY = _get_model_registry
@@ -73,6 +95,7 @@ DOCUMENT_TYPE_LABEL_ZH: Dict[str, str] = {
     "quotation": "报价单",
     "rework_order": "返工单",
     "purchase_receipt": "采购收货单",
+    "purchase_return": "采购退货单",
     "sales_delivery": "销售出库单",
     "incoming_inspection": "来料检验单",
     "process_inspection": "过程检验单",
@@ -82,7 +105,17 @@ DOCUMENT_TYPE_LABEL_ZH: Dict[str, str] = {
     "finished_goods_receipt": "成品入库单",
     "sample_trial": "样品试用单",
     "other_outbound": "其他出库单",
+    "material_return": "还料单",
     "shipment_notice": "发货通知单",
+    "delivery_notice": "送货单",
+    "reporting_record": "报工记录",
+    "outsource_order": "工序委外单",
+    "outsource_work_order": "工单委外",
+    "packing_binding": "装箱绑定",
+    "receipt_notice": "收货通知单",
+    "sales_return": "销售退货单",
+    "receivable": "应收单",
+    "payable": "应付单",
 }
 
 
@@ -368,6 +401,263 @@ class DocumentTrackingService:
                 })
         except Exception:
             pass
+
+        # 3.5 采购退货单：从领域模型补充上游（入库单、采购订单），避免仅依赖 DocumentRelation 表
+        if document_type == "purchase_return":
+            try:
+                from apps.kuaizhizao.services.document_relation_service import DocumentRelationService
+
+                rel_svc = DocumentRelationService()
+                rel_data = await rel_svc.get_document_relations(
+                    tenant_id, document_type, document_id
+                )
+                existing = {(r["type"], r["id"]) for r in relations["upstream"]}
+                for u in rel_data.get("upstream_documents") or []:
+                    dt = u.get("document_type")
+                    did = u.get("document_id")
+                    if not dt or did is None:
+                        continue
+                    key = (dt, did)
+                    if key in existing:
+                        continue
+                    rel_flags = await self._resolve_relation_flags(
+                        tenant_id=tenant_id,
+                        relation_type=dt,
+                        relation_id=did,
+                        relation_created_at=None,
+                        relation_code=u.get("document_code"),
+                    )
+                    relations["upstream"].append({
+                        "type": dt,
+                        "id": did,
+                        "code": u.get("document_code"),
+                        "name": u.get("document_name"),
+                        "mode": None,
+                        "is_auto_created": False,
+                        "is_deleted": rel_flags["is_deleted"],
+                        "is_changed_after_link": rel_flags["is_changed_after_link"],
+                    })
+                    existing.add(key)
+            except Exception:
+                pass
+
+        # 3.5b 收货通知 / 销售退货 / 应收 / 应付：从领域模型补充上下游（含 source_type 链）
+        if document_type in (
+            "receipt_notice",
+            "sales_return",
+            "receivable",
+            "payable",
+            "delivery_notice",
+            "shipment_notice",
+            "material_return",
+        ):
+            try:
+                from apps.kuaizhizao.services.document_relation_service import DocumentRelationService
+
+                rel_svc = DocumentRelationService()
+                rel_data = await rel_svc.get_document_relations(
+                    tenant_id, document_type, document_id
+                )
+                existing_u = {(r["type"], r["id"]) for r in relations["upstream"]}
+                for u in rel_data.get("upstream_documents") or []:
+                    dt = u.get("document_type")
+                    did = u.get("document_id")
+                    if not dt or did is None:
+                        continue
+                    key = (dt, did)
+                    if key in existing_u:
+                        continue
+                    rel_flags = await self._resolve_relation_flags(
+                        tenant_id=tenant_id,
+                        relation_type=dt,
+                        relation_id=did,
+                        relation_created_at=None,
+                        relation_code=u.get("document_code"),
+                    )
+                    relations["upstream"].append({
+                        "type": dt,
+                        "id": did,
+                        "code": u.get("document_code"),
+                        "name": u.get("document_name"),
+                        "mode": None,
+                        "is_auto_created": False,
+                        "is_deleted": rel_flags["is_deleted"],
+                        "is_changed_after_link": rel_flags["is_changed_after_link"],
+                    })
+                    existing_u.add(key)
+                existing_d = {(r["type"], r["id"]) for r in relations["downstream"]}
+                for d in rel_data.get("downstream_documents") or []:
+                    dt = d.get("document_type")
+                    did = d.get("document_id")
+                    if not dt or did is None:
+                        continue
+                    key = (dt, did)
+                    if key in existing_d:
+                        continue
+                    rel_flags = await self._resolve_relation_flags(
+                        tenant_id=tenant_id,
+                        relation_type=dt,
+                        relation_id=did,
+                        relation_created_at=None,
+                        relation_code=d.get("document_code"),
+                    )
+                    relations["downstream"].append({
+                        "type": dt,
+                        "id": did,
+                        "code": d.get("document_code"),
+                        "name": d.get("document_name"),
+                        "mode": None,
+                        "is_auto_created": False,
+                        "is_deleted": rel_flags["is_deleted"],
+                        "is_changed_after_link": rel_flags["is_changed_after_link"],
+                    })
+                    existing_d.add(key)
+            except Exception:
+                pass
+
+        # 3.6 报工记录：从领域模型补充上游（工单）
+        if document_type == "reporting_record":
+            try:
+                from apps.kuaizhizao.services.document_relation_service import DocumentRelationService
+
+                rel_svc = DocumentRelationService()
+                rel_data = await rel_svc.get_document_relations(
+                    tenant_id, document_type, document_id
+                )
+                existing = {(r["type"], r["id"]) for r in relations["upstream"]}
+                for u in rel_data.get("upstream_documents") or []:
+                    dt = u.get("document_type")
+                    did = u.get("document_id")
+                    if not dt or did is None:
+                        continue
+                    key = (dt, did)
+                    if key in existing:
+                        continue
+                    rel_flags = await self._resolve_relation_flags(
+                        tenant_id=tenant_id,
+                        relation_type=dt,
+                        relation_id=did,
+                        relation_created_at=None,
+                        relation_code=u.get("document_code"),
+                    )
+                    relations["upstream"].append({
+                        "type": dt,
+                        "id": did,
+                        "code": u.get("document_code"),
+                        "name": u.get("document_name"),
+                        "mode": None,
+                        "is_auto_created": False,
+                        "is_deleted": rel_flags["is_deleted"],
+                        "is_changed_after_link": rel_flags["is_changed_after_link"],
+                    })
+                    existing.add(key)
+            except Exception:
+                pass
+
+        # 3.7 工序委外 / 工单委外：从领域模型补充上下游
+        if document_type in ("outsource_order", "outsource_work_order"):
+            try:
+                from apps.kuaizhizao.services.document_relation_service import DocumentRelationService
+
+                rel_svc = DocumentRelationService()
+                rel_data = await rel_svc.get_document_relations(
+                    tenant_id, document_type, document_id
+                )
+                existing = {(r["type"], r["id"]) for r in relations["upstream"]}
+                for u in rel_data.get("upstream_documents") or []:
+                    dt = u.get("document_type")
+                    did = u.get("document_id")
+                    if not dt or did is None:
+                        continue
+                    key = (dt, did)
+                    if key in existing:
+                        continue
+                    rel_flags = await self._resolve_relation_flags(
+                        tenant_id=tenant_id,
+                        relation_type=dt,
+                        relation_id=did,
+                        relation_created_at=None,
+                        relation_code=u.get("document_code"),
+                    )
+                    relations["upstream"].append({
+                        "type": dt,
+                        "id": did,
+                        "code": u.get("document_code"),
+                        "name": u.get("document_name"),
+                        "mode": None,
+                        "is_auto_created": False,
+                        "is_deleted": rel_flags["is_deleted"],
+                        "is_changed_after_link": rel_flags["is_changed_after_link"],
+                    })
+                    existing.add(key)
+                existing_d = {(r["type"], r["id"]) for r in relations["downstream"]}
+                for d in rel_data.get("downstream_documents") or []:
+                    dt = d.get("document_type")
+                    did = d.get("document_id")
+                    if not dt or did is None:
+                        continue
+                    key = (dt, did)
+                    if key in existing_d:
+                        continue
+                    rel_flags = await self._resolve_relation_flags(
+                        tenant_id=tenant_id,
+                        relation_type=dt,
+                        relation_id=did,
+                        relation_created_at=None,
+                        relation_code=d.get("document_code"),
+                    )
+                    relations["downstream"].append({
+                        "type": dt,
+                        "id": did,
+                        "code": d.get("document_code"),
+                        "name": d.get("document_name"),
+                        "mode": None,
+                        "is_auto_created": False,
+                        "is_deleted": rel_flags["is_deleted"],
+                        "is_changed_after_link": rel_flags["is_changed_after_link"],
+                    })
+                    existing_d.add(key)
+            except Exception:
+                pass
+
+        # 3.8 装箱绑定：从领域模型补充上游（成品入库单 / 销售出库单）
+        if document_type == "packing_binding":
+            try:
+                from apps.kuaizhizao.services.document_relation_service import DocumentRelationService
+
+                rel_svc = DocumentRelationService()
+                rel_data = await rel_svc.get_document_relations(
+                    tenant_id, document_type, document_id
+                )
+                existing = {(r["type"], r["id"]) for r in relations["upstream"]}
+                for u in rel_data.get("upstream_documents") or []:
+                    dt = u.get("document_type")
+                    did = u.get("document_id")
+                    if not dt or did is None:
+                        continue
+                    key = (dt, did)
+                    if key in existing:
+                        continue
+                    rel_flags = await self._resolve_relation_flags(
+                        tenant_id=tenant_id,
+                        relation_type=dt,
+                        relation_id=did,
+                        relation_created_at=None,
+                        relation_code=u.get("document_code"),
+                    )
+                    relations["upstream"].append({
+                        "type": dt,
+                        "id": did,
+                        "code": u.get("document_code"),
+                        "name": u.get("document_name"),
+                        "mode": None,
+                        "is_auto_created": False,
+                        "is_deleted": rel_flags["is_deleted"],
+                        "is_changed_after_link": rel_flags["is_changed_after_link"],
+                    })
+                    existing.add(key)
+            except Exception:
+                pass
 
         # 按时间排序 timeline
         def sort_key(t):

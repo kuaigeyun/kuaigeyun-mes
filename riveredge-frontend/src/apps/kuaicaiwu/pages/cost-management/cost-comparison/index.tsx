@@ -8,10 +8,10 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProFormSelect, ProFormDigit, ProFormDatePicker, PageContainer, ProDescriptions } from '@ant-design/pro-components';
-import { App, Button, Card, Tag, message, Modal, Divider, Row, Col, Statistic, Alert } from 'antd';
-import { CalculatorOutlined, BarChartOutlined } from '@ant-design/icons';
-import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { ProFormSelect, ProFormDigit, ProFormDatePicker, PageContainer } from '@ant-design/pro-components';
+import { App, Button, Tag, message, Divider, Row, Col, Statistic, Alert, Descriptions, Typography, Empty, Timeline } from 'antd';
+import { BarChartOutlined } from '@ant-design/icons';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerSection, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { costComparisonApi } from '../../../services/cost';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
@@ -189,105 +189,158 @@ const CostComparisonPage: React.FC = () => {
         </Button>,
       ]}
     >
-      {/* 对比结果展示 */}
-      {result && (
-        <Card title="对比结果" style={{ marginBottom: 16 }} styles={{ body: { padding: 16 } }}>
-          <ProDescriptions
-            bordered
-            column={2}
-            style={{ marginBottom: 24 }}
-            dataSource={{
-              material_code: result.material_code,
-              material_name: result.material_name,
-              source_type: getSourceTypeTag(result.source_type),
-              quantity: result.quantity,
-            }}
-            columns={[
-              { title: '物料编号', dataIndex: 'material_code' },
-              { title: '物料名称', dataIndex: 'material_name' },
-              { title: '物料来源类型', dataIndex: 'source_type' },
-              { title: '数量', dataIndex: 'quantity' },
-            ]}
-          />
+      <ListPageTemplate>
+        {!result ? (
+          <Empty description="暂无对比结果，请点击「对比标准成本和实际成本」发起对比" />
+        ) : (
+          <>
+            <DetailDrawerSection title="基本信息">
+              <Descriptions column={3} size="small" bordered>
+                <Descriptions.Item label="物料编号">
+                  <Typography.Text copyable={{ text: String(result.material_code ?? '') }}>
+                    {result.material_code ?? '-'}
+                  </Typography.Text>
+                </Descriptions.Item>
+                <Descriptions.Item label="物料名称">{result.material_name ?? '-'}</Descriptions.Item>
+                <Descriptions.Item label="物料来源类型">{getSourceTypeTag(result.source_type)}</Descriptions.Item>
+                <Descriptions.Item label="数量">{result.quantity}</Descriptions.Item>
+                <Descriptions.Item label="核算日期">
+                  {result.calculation_date ? dayjs(result.calculation_date).format('YYYY-MM-DD') : '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="差异类型">
+                  {getVarianceTypeTag(result.cost_variance.variance_type, result.cost_variance.total_cost_variance)}
+                </Descriptions.Item>
+              </Descriptions>
+            </DetailDrawerSection>
 
-          <Row gutter={16} style={{ marginBottom: 24 }}>
-            <Col span={12}>
-              <Card title="标准成本" size="small">
-                <Statistic
-                  title="总成本"
-                  value={result.standard_cost.total_cost}
-                  prefix="¥"
-                  precision={2}
-                />
-                <Divider style={{ margin: '12px 0' }} />
-                <Statistic
-                  title="单位成本"
-                  value={result.standard_cost.unit_cost}
-                  prefix="¥"
-                  precision={2}
-                />
-                <div style={{ marginTop: 12, fontSize: '12px', color: '#666' }}>
-                  核算类型：{result.standard_cost.calculation_type}
-                </div>
-              </Card>
-            </Col>
-            <Col span={12}>
-              <Card title="实际成本" size="small">
-                <Statistic
-                  title="总成本"
-                  value={result.actual_cost.total_cost}
-                  prefix="¥"
-                  precision={2}
-                />
-                <Divider style={{ margin: '12px 0' }} />
-                <Statistic
-                  title="单位成本"
-                  value={result.actual_cost.unit_cost}
-                  prefix="¥"
-                  precision={2}
-                />
-                <div style={{ marginTop: 12, fontSize: '12px', color: '#666' }}>
-                  核算类型：{result.actual_cost.calculation_type}
-                </div>
-              </Card>
-            </Col>
-          </Row>
+            <DetailDrawerSection title="生命周期">
+              <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+                本页为分析型对比结果，无单据生命周期；差异类型已在基本信息中展示。
+              </Typography.Paragraph>
+            </DetailDrawerSection>
 
-          <Card title="成本差异" style={{ marginBottom: 16 }}>
-            <Alert
-              message={result.cost_variance.variance_type}
-              description={
-                <div>
-                  <p>总成本差异：¥{result.cost_variance.total_cost_variance.toFixed(2)}</p>
-                  <p>总成本差异率：{result.cost_variance.total_cost_variance_rate.toFixed(2)}%</p>
-                  <p>单位成本差异：¥{result.cost_variance.unit_cost_variance.toFixed(2)}</p>
-                  <p>单位成本差异率：{result.cost_variance.unit_cost_variance_rate.toFixed(2)}%</p>
-                </div>
-              }
-              type={result.cost_variance.variance_type === '超支' ? 'error' : result.cost_variance.variance_type === '节约' ? 'success' : 'info'}
-              showIcon
-            />
-          </Card>
+            <DetailDrawerSection title="明细信息">
+              <Typography.Text strong>标准成本与实际成本</Typography.Text>
+              <Row gutter={16} style={{ marginTop: 8 }}>
+                <Col xs={24} md={12}>
+                  <Typography.Text type="secondary">标准成本</Typography.Text>
+                  <Divider style={{ margin: '8px 0' }} />
+                  <Statistic
+                    title="总成本"
+                    value={result.standard_cost.total_cost}
+                    prefix="¥"
+                    precision={2}
+                  />
+                  <Statistic
+                    style={{ marginTop: 12 }}
+                    title="单位成本"
+                    value={result.standard_cost.unit_cost}
+                    prefix="¥"
+                    precision={2}
+                  />
+                  <div style={{ marginTop: 12, fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
+                    核算类型：{result.standard_cost.calculation_type}
+                  </div>
+                </Col>
+                <Col xs={24} md={12}>
+                  <Typography.Text type="secondary">实际成本</Typography.Text>
+                  <Divider style={{ margin: '8px 0' }} />
+                  <Statistic
+                    title="总成本"
+                    value={result.actual_cost.total_cost}
+                    prefix="¥"
+                    precision={2}
+                  />
+                  <Statistic
+                    style={{ marginTop: 12 }}
+                    title="单位成本"
+                    value={result.actual_cost.unit_cost}
+                    prefix="¥"
+                    precision={2}
+                  />
+                  <div style={{ marginTop: 12, fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
+                    核算类型：{result.actual_cost.calculation_type}
+                  </div>
+                </Col>
+              </Row>
+              <Divider style={{ margin: '16px 0' }} />
+              <Alert
+                message={result.cost_variance.variance_type}
+                description={
+                  <div>
+                    <p>总成本差异：¥{result.cost_variance.total_cost_variance.toFixed(2)}</p>
+                    <p>总成本差异率：{result.cost_variance.total_cost_variance_rate.toFixed(2)}%</p>
+                    <p>单位成本差异：¥{result.cost_variance.unit_cost_variance.toFixed(2)}</p>
+                    <p>单位成本差异率：{result.cost_variance.unit_cost_variance_rate.toFixed(2)}%</p>
+                  </div>
+                }
+                type={
+                  result.cost_variance.variance_type === '超支'
+                    ? 'error'
+                    : result.cost_variance.variance_type === '节约'
+                      ? 'success'
+                      : 'info'
+                }
+                showIcon
+              />
+              <Divider style={{ margin: '16px 0' }} />
+              <Typography.Text strong>结构化明细（JSON）</Typography.Text>
+              <div style={{ overflowX: 'auto', overflowY: 'hidden', marginTop: 8 }}>
+                <Row gutter={16}>
+                  <Col xs={24} lg={12}>
+                    <Typography.Text type="secondary">标准成本明细</Typography.Text>
+                    <pre
+                      style={{
+                        marginTop: 8,
+                        marginBottom: 0,
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-word',
+                        maxHeight: 320,
+                        overflow: 'auto',
+                      }}
+                    >
+                      {JSON.stringify(result.standard_cost.cost_details, null, 2)}
+                    </pre>
+                  </Col>
+                  <Col xs={24} lg={12}>
+                    <Typography.Text type="secondary">实际成本明细</Typography.Text>
+                    <pre
+                      style={{
+                        marginTop: 8,
+                        marginBottom: 0,
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-word',
+                        maxHeight: 320,
+                        overflow: 'auto',
+                      }}
+                    >
+                      {JSON.stringify(result.actual_cost.cost_details, null, 2)}
+                    </pre>
+                  </Col>
+                </Row>
+              </div>
+            </DetailDrawerSection>
 
-          <Divider>成本明细</Divider>
-          <Row gutter={16}>
-            <Col span={12}>
-              <Card title="标准成本明细" size="small">
-                <pre style={{ background: '#f5f5f5', padding: '12px', borderRadius: '4px', maxHeight: '300px', overflow: 'auto', fontSize: '12px' }}>
-                  {JSON.stringify(result.standard_cost.cost_details, null, 2)}
-                </pre>
-              </Card>
-            </Col>
-            <Col span={12}>
-              <Card title="实际成本明细" size="small">
-                <pre style={{ background: '#f5f5f5', padding: '12px', borderRadius: '4px', maxHeight: '300px', overflow: 'auto', fontSize: '12px' }}>
-                  {JSON.stringify(result.actual_cost.cost_details, null, 2)}
-                </pre>
-              </Card>
-            </Col>
-          </Row>
-        </Card>
-      )}
+            <DetailDrawerSection title="操作记录">
+              <Timeline
+                items={[
+                  {
+                    color: 'blue',
+                    children: (
+                      <>
+                        对比完成 ·{' '}
+                        {result.calculation_date
+                          ? dayjs(result.calculation_date).format('YYYY-MM-DD')
+                          : dayjs().format('YYYY-MM-DD HH:mm:ss')}
+                      </>
+                    ),
+                  },
+                ]}
+              />
+            </DetailDrawerSection>
+          </>
+        )}
+      </ListPageTemplate>
 
       {/* 对比弹窗 */}
       <FormModalTemplate

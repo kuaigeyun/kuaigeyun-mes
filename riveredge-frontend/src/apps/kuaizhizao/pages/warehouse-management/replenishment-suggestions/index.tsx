@@ -9,12 +9,15 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProDescriptionsItemType } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Table, Input } from 'antd';
+import { App, Button, Tag, Space, Modal, Card, Table, Input, Typography } from 'antd';
+import dayjs from 'dayjs';
 import { ProForm, ProFormRadio, ProFormTextArea } from '@ant-design/pro-components';
 import { EyeOutlined, ReloadOutlined, CheckCircleOutlined, CloseCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { warehouseApi } from '../../../services/production';
+import { getReplenishmentSuggestionLifecycle } from '../../../utils/replenishmentSuggestionLifecycle';
 
 // 补货建议接口定义
 interface ReplenishmentSuggestion {
@@ -47,6 +50,7 @@ interface ReplenishmentSuggestion {
   related_demand_code?: string;
   remarks?: string;
   created_at?: string;
+  updated_at?: string;
 }
 
 const ReplenishmentSuggestionsPage: React.FC = () => {
@@ -72,6 +76,11 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
       width: 120,
       ellipsis: true,
       fixed: 'left',
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.material_code ?? '') }} ellipsis>
+          {r.material_code ?? '-'}
+        </Typography.Text>
+      ),
     },
     {
       title: '物料名称',
@@ -134,15 +143,12 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
     {
       title: '状态',
       dataIndex: 'status',
-      width: 100,
-      render: (status) => {
-        const statusMap = {
-          'pending': { text: '待处理', color: 'default' },
-          'processed': { text: '已处理', color: 'success' },
-          'ignored': { text: '已忽略', color: 'error' },
-        };
-        const config = statusMap[status as keyof typeof statusMap] || statusMap['pending'];
-        return <Tag color={config.color}>{config.text}</Tag>;
+      hideInTable: true,
+      valueType: 'select',
+      valueEnum: {
+        pending: { text: '待处理' },
+        processed: { text: '已处理' },
+        ignored: { text: '已忽略' },
       },
     },
     {
@@ -156,6 +162,35 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
       dataIndex: 'created_at',
       valueType: 'dateTime',
       width: 160,
+    },
+    {
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      width: 168,
+      hideInSearch: true,
+      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+    },
+    {
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      width: 132,
+      fixed: 'right',
+      align: 'left',
+      hideInSearch: true,
+      render: (_, record) => {
+        const lifecycle = getReplenishmentSuggestionLifecycle(record as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
+      },
     },
     {
       title: '操作',
@@ -356,6 +391,7 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
+          columnPersistenceId="kuaizhizao-wm-replenishment-suggestions"
           showAdvancedSearch={true}
           request={async (params) => {
             try {

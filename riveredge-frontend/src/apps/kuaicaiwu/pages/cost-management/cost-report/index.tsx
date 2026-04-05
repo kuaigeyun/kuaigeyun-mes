@@ -17,9 +17,10 @@ import {
   ProFormRadio,
   ProDescriptions,
 } from '@ant-design/pro-components';
-import { App, Card, Tag, Divider, Row, Col, Statistic, Space, Tabs, Empty } from 'antd';
+import type { TabsProps } from 'antd';
+import { App, Tag, Divider, Row, Col, Statistic, Space, Tabs, Empty, Descriptions, Typography, Timeline, theme } from 'antd';
 import { BarChartOutlined, LineChartOutlined, FileTextOutlined } from '@ant-design/icons';
-import { MultiTabListPageTemplate } from '../../../../../components/layout-templates';
+import { MultiTabListPageTemplate, DetailDrawerSection } from '../../../../../components/layout-templates';
 import { costReportApi } from '../../../services/cost';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
@@ -80,7 +81,14 @@ const defaultFormValues = {
   group_by: 'month',
 };
 
+const REPORT_TYPE_LABEL: Record<string, string> = {
+  comprehensive: '综合报表',
+  trend: '成本趋势分析',
+  structure: '成本结构分析',
+};
+
 const CostReportPage: React.FC = () => {
+  const { token } = theme.useToken();
   const { message: messageApi } = App.useApp();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -151,162 +159,189 @@ const CostReportPage: React.FC = () => {
     return <Tag color={type.color}>{type.text}</Tag>;
   };
 
-  const renderReportResult = (result: CostReportResult) => (
-    <Card title="成本报表" style={{ marginTop: 16 }}>
-      <ProDescriptions
-        bordered
-        column={2}
-        style={{ marginBottom: 24 }}
-        dataSource={{
-          report_type: result.report_type,
-          generated_at: dayjs(result.generated_at).format('YYYY-MM-DD HH:mm:ss'),
-          start_date: dayjs(result.start_date).format('YYYY-MM-DD'),
-          end_date: dayjs(result.end_date).format('YYYY-MM-DD'),
-        }}
-        columns={[
-          { title: '报表类型', dataIndex: 'report_type' },
-          { title: '生成时间', dataIndex: 'generated_at' },
-          { title: '开始日期', dataIndex: 'start_date' },
-          { title: '结束日期', dataIndex: 'end_date' },
-        ]}
-      />
-
-      <Tabs defaultActiveKey={result.trend_analysis ? '1' : '2'}>
-        {result.trend_analysis && (
-          <Tabs.TabPane tab="成本趋势" key="1">
-            <Card title="成本趋势分析" size="small">
-              <Row gutter={16} style={{ marginBottom: 24 }}>
-                <Col span={8}>
-                  <Statistic title="总期间数" value={result.trend_analysis.summary.total_periods} />
-                </Col>
-                <Col span={8}>
-                  <Statistic
-                    title="总成本"
-                    value={result.trend_analysis.summary.total_cost}
-                    prefix="¥"
-                    precision={2}
-                  />
-                </Col>
-                <Col span={8}>
-                  <Statistic
-                    title="平均成本/期间"
-                    value={result.trend_analysis.summary.avg_cost_per_period}
-                    prefix="¥"
-                    precision={2}
-                  />
-                </Col>
-              </Row>
-
-              <div style={{ marginTop: 24 }}>
-                <h4>趋势数据</h4>
-                <pre
-                  style={{
-                    background: '#f5f5f5',
-                    padding: '16px',
-                    borderRadius: '4px',
-                    maxHeight: '400px',
-                    overflow: 'auto',
-                  }}
-                >
-                  {JSON.stringify(result.trend_analysis.trend_data, null, 2)}
-                </pre>
-              </div>
-            </Card>
-          </Tabs.TabPane>
-        )}
-
-        {result.structure_analysis && (
-          <Tabs.TabPane tab="成本结构" key="2">
-            <Card title="成本结构分析" size="small">
-              <Row gutter={16} style={{ marginBottom: 24 }}>
-                <Col span={8}>
-                  <Card>
-                    <Statistic
-                      title="材料成本"
-                      value={result.structure_analysis.cost_composition.material_cost}
-                      prefix="¥"
-                      precision={2}
-                    />
-                    <div style={{ marginTop: 8, fontSize: '12px', color: '#666' }}>
-                      占比：{result.structure_analysis.cost_rates.material_cost_rate.toFixed(2)}%
-                    </div>
-                  </Card>
-                </Col>
-                <Col span={8}>
-                  <Card>
-                    <Statistic
-                      title="人工成本"
-                      value={result.structure_analysis.cost_composition.labor_cost}
-                      prefix="¥"
-                      precision={2}
-                    />
-                    <div style={{ marginTop: 8, fontSize: '12px', color: '#666' }}>
-                      占比：{result.structure_analysis.cost_rates.labor_cost_rate.toFixed(2)}%
-                    </div>
-                  </Card>
-                </Col>
-                <Col span={8}>
-                  <Card>
-                    <Statistic
-                      title="制造费用"
-                      value={result.structure_analysis.cost_composition.manufacturing_cost}
-                      prefix="¥"
-                      precision={2}
-                    />
-                    <div style={{ marginTop: 8, fontSize: '12px', color: '#666' }}>
-                      占比：{result.structure_analysis.cost_rates.manufacturing_cost_rate.toFixed(2)}%
-                    </div>
-                  </Card>
-                </Col>
-              </Row>
-
-              <Card title="总成本" style={{ marginBottom: 16 }}>
+  const renderReportResult = (result: CostReportResult) => {
+    const tabItems: NonNullable<TabsProps['items']> = [];
+    if (result.trend_analysis) {
+      tabItems.push({
+        key: 'trend',
+        label: '成本趋势',
+        children: (
+          <>
+            <Row gutter={16} style={{ marginBottom: 24 }}>
+              <Col xs={24} sm={8}>
+                <Statistic title="总期间数" value={result.trend_analysis!.summary.total_periods} />
+              </Col>
+              <Col xs={24} sm={8}>
                 <Statistic
-                  value={result.structure_analysis.total_cost}
+                  title="总成本"
+                  value={result.trend_analysis!.summary.total_cost}
                   prefix="¥"
                   precision={2}
-                  valueStyle={{ fontSize: '24px', fontWeight: 'bold', color: '#1890ff' }}
                 />
-              </Card>
+              </Col>
+              <Col xs={24} sm={8}>
+                <Statistic
+                  title="平均成本/期间"
+                  value={result.trend_analysis!.summary.avg_cost_per_period}
+                  prefix="¥"
+                  precision={2}
+                />
+              </Col>
+            </Row>
+            <Typography.Text type="secondary">趋势数据（JSON）</Typography.Text>
+            <div style={{ overflowX: 'auto', overflowY: 'hidden', marginTop: 8 }}>
+              <pre
+                style={{
+                  margin: 0,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  maxHeight: 400,
+                  overflow: 'auto',
+                }}
+              >
+                {JSON.stringify(result.trend_analysis.trend_data, null, 2)}
+              </pre>
+            </div>
+          </>
+        ),
+      });
+    }
+    if (result.structure_analysis) {
+      tabItems.push({
+        key: 'structure',
+        label: '成本结构',
+        children: (
+          <>
+            <Typography.Text strong>总成本</Typography.Text>
+            <Statistic
+              value={result.structure_analysis.total_cost}
+              prefix="¥"
+              precision={2}
+              valueStyle={{ fontSize: 22, fontWeight: 600, color: token.colorPrimary }}
+            />
+            <Divider style={{ margin: '16px 0' }} />
+            <Row gutter={[16, 16]}>
+              <Col xs={24} md={8}>
+                <Statistic
+                  title="材料成本"
+                  value={result.structure_analysis.cost_composition.material_cost}
+                  prefix="¥"
+                  precision={2}
+                />
+                <div style={{ marginTop: 8, fontSize: 12, color: token.colorTextSecondary }}>
+                  占比：{result.structure_analysis.cost_rates.material_cost_rate.toFixed(2)}%
+                </div>
+              </Col>
+              <Col xs={24} md={8}>
+                <Statistic
+                  title="人工成本"
+                  value={result.structure_analysis.cost_composition.labor_cost}
+                  prefix="¥"
+                  precision={2}
+                />
+                <div style={{ marginTop: 8, fontSize: 12, color: token.colorTextSecondary }}>
+                  占比：{result.structure_analysis.cost_rates.labor_cost_rate.toFixed(2)}%
+                </div>
+              </Col>
+              <Col xs={24} md={8}>
+                <Statistic
+                  title="制造费用"
+                  value={result.structure_analysis.cost_composition.manufacturing_cost}
+                  prefix="¥"
+                  precision={2}
+                />
+                <div style={{ marginTop: 8, fontSize: 12, color: token.colorTextSecondary }}>
+                  占比：{result.structure_analysis.cost_rates.manufacturing_cost_rate.toFixed(2)}%
+                </div>
+              </Col>
+            </Row>
+            {result.structure_analysis.by_source_type &&
+              Object.keys(result.structure_analysis.by_source_type).length > 0 && (
+                <>
+                  <Divider>按物料来源类型统计</Divider>
+                  <Row gutter={[16, 16]}>
+                    {Object.entries(result.structure_analysis.by_source_type).map(([sourceType, data]: [string, any]) => (
+                      <Col xs={24} lg={12} key={sourceType}>
+                        <div
+                          style={{
+                            padding: 12,
+                            border: `1px solid ${token.colorBorder}`,
+                            borderRadius: token.borderRadius,
+                            background: token.colorFillAlter,
+                          }}
+                        >
+                          <div style={{ marginBottom: 8 }}>{getSourceTypeTag(sourceType)}</div>
+                          <ProDescriptions
+                            column={1}
+                            size="small"
+                            dataSource={{
+                              total_cost: `¥${data.total_cost.toFixed(2)}`,
+                              material_cost: `¥${data.material_cost.toFixed(2)}`,
+                              labor_cost: `¥${data.labor_cost.toFixed(2)}`,
+                              manufacturing_cost: `¥${data.manufacturing_cost.toFixed(2)}`,
+                              count: data.count,
+                            }}
+                            columns={[
+                              { title: '总成本', dataIndex: 'total_cost' },
+                              { title: '材料成本', dataIndex: 'material_cost' },
+                              { title: '人工成本', dataIndex: 'labor_cost' },
+                              { title: '制造费用', dataIndex: 'manufacturing_cost' },
+                              { title: '记录数', dataIndex: 'count' },
+                            ]}
+                          />
+                        </div>
+                      </Col>
+                    ))}
+                  </Row>
+                </>
+              )}
+          </>
+        ),
+      });
+    }
 
-              {result.structure_analysis.by_source_type &&
-                Object.keys(result.structure_analysis.by_source_type).length > 0 && (
-                  <>
-                    <Divider>按物料来源类型统计</Divider>
-                    <Row gutter={16}>
-                      {Object.entries(result.structure_analysis.by_source_type).map(([sourceType, data]: [string, any]) => (
-                        <Col span={12} key={sourceType} style={{ marginBottom: 16 }}>
-                          <Card title={getSourceTypeTag(sourceType)} size="small">
-                            <ProDescriptions
-                              column={1}
-                              size="small"
-                              dataSource={{
-                                total_cost: `¥${data.total_cost.toFixed(2)}`,
-                                material_cost: `¥${data.material_cost.toFixed(2)}`,
-                                labor_cost: `¥${data.labor_cost.toFixed(2)}`,
-                                manufacturing_cost: `¥${data.manufacturing_cost.toFixed(2)}`,
-                                count: data.count,
-                              }}
-                              columns={[
-                                { title: '总成本', dataIndex: 'total_cost' },
-                                { title: '材料成本', dataIndex: 'material_cost' },
-                                { title: '人工成本', dataIndex: 'labor_cost' },
-                                { title: '制造费用', dataIndex: 'manufacturing_cost' },
-                                { title: '记录数', dataIndex: 'count' },
-                              ]}
-                            />
-                          </Card>
-                        </Col>
-                      ))}
-                    </Row>
-                  </>
-                )}
-            </Card>
-          </Tabs.TabPane>
-        )}
-      </Tabs>
-    </Card>
-  );
+    return (
+      <div style={{ marginTop: 16 }}>
+        <DetailDrawerSection title="基本信息">
+          <Descriptions bordered column={{ xs: 1, sm: 2, md: 3 }} size="small">
+            <Descriptions.Item label="报表类型">
+              {REPORT_TYPE_LABEL[result.report_type] ?? result.report_type}
+            </Descriptions.Item>
+            <Descriptions.Item label="生成时间">
+              {dayjs(result.generated_at).format('YYYY-MM-DD HH:mm:ss')}
+            </Descriptions.Item>
+            <Descriptions.Item label="开始日期">{dayjs(result.start_date).format('YYYY-MM-DD')}</Descriptions.Item>
+            <Descriptions.Item label="结束日期">{dayjs(result.end_date).format('YYYY-MM-DD')}</Descriptions.Item>
+          </Descriptions>
+        </DetailDrawerSection>
+
+        <DetailDrawerSection title="生命周期">
+          <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+            报表为分析型快照，无单据生命周期与上下游关联。
+          </Typography.Paragraph>
+        </DetailDrawerSection>
+
+        <DetailDrawerSection title="明细信息">
+          {tabItems.length > 0 ? (
+            <Tabs defaultActiveKey={tabItems[0].key} items={tabItems} />
+          ) : (
+            <Empty description="当前报表未返回趋势或结构数据" />
+          )}
+        </DetailDrawerSection>
+
+        <DetailDrawerSection title="操作记录" marginBottom={0}>
+          <Timeline
+            items={[
+              {
+                color: 'blue',
+                children: <>报表生成 · {dayjs(result.generated_at).format('YYYY-MM-DD HH:mm:ss')}</>,
+              },
+            ]}
+          />
+        </DetailDrawerSection>
+      </div>
+    );
+  };
 
   const materialSelectField = (
     <ProFormSelect

@@ -1,12 +1,22 @@
 import React from 'react';
 import { ProColumns } from '@ant-design/pro-components';
+import { Typography } from 'antd';
 import ReportBase from '../../../components/ReportBase';
 import { useTranslation } from 'react-i18next';
 
 const EquipmentMaintenanceDetail: React.FC = () => {
   const { t } = useTranslation();
   const columns: ProColumns[] = [
-    { title: '维修单号', dataIndex: 'maint_code', width: 150 },
+    {
+      title: '维修单号',
+      dataIndex: 'maint_code',
+      width: 150,
+      render: (_, r: any) => (
+        <Typography.Text copyable={{ text: String(r?.maint_code ?? '') }} ellipsis>
+          {r?.maint_code ?? '-'}
+        </Typography.Text>
+      ),
+    },
     { title: '设备名称', dataIndex: 'equipment_name', width: 150 },
     { title: '故障描述', dataIndex: 'fault_desc', ellipsis: true },
     { title: '维修人员', dataIndex: 'maint_person', width: 100 },
@@ -19,6 +29,7 @@ const EquipmentMaintenanceDetail: React.FC = () => {
       title={t('app.kuaizhizao.menu.reports.equipment-maintenance-detail')}
       reportType="equip_maint_detail"
       columns={columns}
+      columnPersistenceId="kuaizhizao-em-report-equipment-maintenance-detail"
     />
   );
 };

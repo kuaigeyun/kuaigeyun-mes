@@ -9,13 +9,16 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col } from 'antd';
-import { EyeOutlined, CheckCircleOutlined, DeleteOutlined, PrinterOutlined } from '@ant-design/icons';
+import { App, Button, Space, Modal, Table, Form, InputNumber, Input, Row, Col, Typography, Dropdown } from 'antd';
+import { EyeOutlined, CheckCircleOutlined, DeleteOutlined, PrinterOutlined, MoreOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import CodeField from '../../../../../components/code-field';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { getMaterialReturnLifecycle } from '../../../utils/materialReturnLifecycle';
 
 interface MaterialReturn {
   id?: number;
@@ -32,6 +35,7 @@ interface MaterialReturn {
   total_quantity?: number;
   notes?: string;
   created_at?: string;
+  updated_at?: string;
 }
 
 interface MaterialReturnDetail extends MaterialReturn {
@@ -131,44 +135,118 @@ const MaterialReturnsPage: React.FC = () => {
   };
 
   const columns: ProColumns<MaterialReturn>[] = [
-    { title: '还料单号', dataIndex: 'return_code', width: 140, ellipsis: true, fixed: 'left' },
-    { title: '借料单号', dataIndex: 'borrow_code', width: 140, ellipsis: true },
+    {
+      title: '还料单号',
+      dataIndex: 'return_code',
+      width: 140,
+      ellipsis: true,
+      fixed: 'left',
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.return_code ?? '') }} ellipsis>
+          {r.return_code ?? '-'}
+        </Typography.Text>
+      ),
+    },
+    {
+      title: '借料单号',
+      dataIndex: 'borrow_code',
+      width: 140,
+      ellipsis: true,
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.borrow_code ?? '') }} ellipsis>
+          {r.borrow_code ?? '-'}
+        </Typography.Text>
+      ),
+    },
     { title: '仓库', dataIndex: 'warehouse_name', width: 120, ellipsis: true },
     { title: '归还人', dataIndex: 'returner_name', width: 100 },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      width: 100,
-      render: (status: any) => {
-        const map: Record<string, { text: string; color: string }> = {
-          '待归还': { text: '待归还', color: 'default' },
-          '已归还': { text: '已归还', color: 'success' },
-          '已取消': { text: '已取消', color: 'error' },
-        };
-        const c = map[(status as any) || ''] || { text: (status as any) || '-', color: 'default' };
-        return <Tag color={c.color}>{c.text}</Tag>;
-      },
-    },
     { title: '归还时间', dataIndex: 'return_time', valueType: 'dateTime', width: 160 },
     { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime', width: 160 },
+    {
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      width: 168,
+      hideInSearch: true,
+      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+    },
+    {
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      width: 132,
+      fixed: 'right',
+      align: 'left',
+      hideInSearch: true,
+      render: (_, record) => {
+        const lifecycle = getMaterialReturnLifecycle(record as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
+      },
+    },
     {
       title: '操作',
       width: 220,
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>详情</Button>
-          {record.status === '待归还' && (
-            <>
-              <Button type="link" size="small" icon={<CheckCircleOutlined />} onClick={() => handleConfirm(record)} style={{ color: '#52c41a' }}>确认归还</Button>
-              <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>删除</Button>
-            </>
-          )}
-          {(record.status === '待归还' || record.status === '已归还') && (
-            <Button type="link" size="small" icon={<PrinterOutlined />} onClick={() => handlePrint(record)}>打印</Button>
-          )}
-        </Space>
-      ),
+      render: (_, record) => {
+        const showPrint = record.status === '待归还' || record.status === '已归还';
+        const printInMore = record.status === '待归还';
+        return (
+          <Space size="small" wrap>
+            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
+              详情
+            </Button>
+            {record.status === '待归还' && (
+              <>
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<CheckCircleOutlined />}
+                  onClick={() => handleConfirm(record)}
+                  style={{ color: '#52c41a' }}
+                >
+                  确认归还
+                </Button>
+                <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
+                  删除
+                </Button>
+              </>
+            )}
+            {printInMore ? (
+              <Dropdown
+                menu={{
+                  items: [
+                    {
+                      key: 'print',
+                      icon: <PrinterOutlined />,
+                      label: '打印',
+                      onClick: () => handlePrint(record),
+                    },
+                  ],
+                }}
+                trigger={['click']}
+              >
+                <Button type="link" size="small" icon={<MoreOutlined />}>
+                  更多
+                </Button>
+              </Dropdown>
+            ) : (
+              showPrint && (
+                <Button type="link" size="small" icon={<PrinterOutlined />} onClick={() => handlePrint(record)}>
+                  打印
+                </Button>
+              )
+            )}
+          </Space>
+        );
+      },
     },
   ];
 
@@ -289,14 +367,19 @@ const MaterialReturnsPage: React.FC = () => {
     {
       title: '状态',
       dataIndex: 'status',
-      render: (s) => {
-        const map: Record<string, { text: string; color: string }> = {
-          '待归还': { text: '待归还', color: 'default' },
-          '已归还': { text: '已归还', color: 'success' },
-          '已取消': { text: '已取消', color: 'error' },
-        };
-        const c = map[(s as any) || ''] || { text: (s as any) || '-', color: 'default' };
-        return <Tag color={c.color}>{c.text}</Tag>;
+      render: (_, record) => {
+        const lifecycle = getMaterialReturnLifecycle(record as unknown as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
       },
     },
     { title: '归还时间', dataIndex: 'return_time', valueType: 'dateTime' },
@@ -311,6 +394,7 @@ const MaterialReturnsPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
+          columnPersistenceId="kuaizhizao-wm-material-returns"
           showAdvancedSearch
           showCreateButton
           createButtonText="新建还料单"

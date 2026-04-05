@@ -9,9 +9,29 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form as AntForm, Select, InputNumber, Input, DatePicker, Row, Col } from 'antd';
+import type { DescriptionsProps } from 'antd';
+import {
+  App,
+  Button,
+  Tag,
+  Space,
+  Modal,
+  Table,
+  Form as AntForm,
+  Select,
+  InputNumber,
+  Input,
+  Row,
+  Col,
+  Typography,
+  Descriptions,
+  Empty,
+  Dropdown,
+  Spin,
+  theme,
+} from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, ShoppingOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
@@ -19,7 +39,24 @@ import { UniMaterialSelect } from '../../../../../components/uni-material-select
 import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
 import type { Material } from '../../../../master-data/types/material';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
-import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import {
+  ListPageTemplate,
+  DetailDrawerTemplate,
+  DetailDrawerSection,
+  DetailDrawerActions,
+  FormModalTemplate,
+  DRAWER_CONFIG,
+  MODAL_CONFIG,
+  type StatCard,
+} from '../../../../../components/layout-templates';
+import { SimpleSparkline } from '../../../../../components';
+import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import {
+  DocumentTrackingRelationsBody,
+  DocumentTrackingTimelineBody,
+  useDocumentTracking,
+} from '../../../../../components/document-tracking-panel';
+import { usePageMetrics } from '../../../../../hooks/usePageMetrics';
 import { receiptNoticeApi } from '../../../services/receipt-notice';
 import { getReceiptNoticeLifecycle } from '../../../utils/receiptNoticeLifecycle';
 import { listPurchaseOrders, getPurchaseOrder } from '../../../services/purchase';
@@ -47,6 +84,7 @@ interface ReceiptNotice {
   total_amount?: number;
   notes?: string;
   created_at?: string;
+  updated_at?: string;
 }
 
 interface ReceiptNoticeDetail extends ReceiptNotice {
@@ -61,13 +99,106 @@ const STATUS_MAP: Record<string, { text: string; color: string }> = {
 
 const defaultReceiptItem = { material_id: undefined, material_code: '', material_name: '', material_unit: '件', notice_quantity: 1, unit_price: 0 };
 
+const RN_STAT_SPARK_1 = [10, 12, 11, 13, 14, 15, 16];
+const RN_STAT_SPARK_2 = [6, 8, 7, 9, 8, 10, 9];
+const RN_STAT_SPARK_3 = [4, 3, 5, 4, 6, 5, 7];
+const RN_STAT_SPARK_4 = [18, 20, 22, 24, 26, 28, 30];
+
+const RN_DETAIL_ITEMS_MIN_WIDTH = 960;
+
+const RECEIPT_NOTICE_ROW_ACTIONS_INLINE_MAX = 3;
+
+function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
+  dataSource: T,
+  cols: ProDescriptionsItemProps<T>[]
+): NonNullable<DescriptionsProps['items']> {
+  return cols.map((col, index) => {
+    const dataIndex = col.dataIndex as keyof T | undefined;
+    const value = dataIndex != null ? dataSource[dataIndex] : undefined;
+    let content: React.ReactNode = value as React.ReactNode;
+    if (col.valueType === 'dateTime' && value) {
+      content = dayjs(value as string).format('YYYY-MM-DD HH:mm:ss');
+    } else if (col.valueType === 'date' && value) {
+      content = dayjs(value as string).format('YYYY-MM-DD');
+    }
+    if (col.render && dataSource != null) {
+      content = col.render(content, dataSource, index, {}, col);
+    }
+    return {
+      key: String(col.key ?? col.dataIndex ?? index),
+      label: col.title as React.ReactNode,
+      children: content !== undefined && content !== null ? content : '-',
+      span: col.span ?? 1,
+    };
+  });
+}
+
+function renderReceiptNoticeRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
+  const wrapped = nodes.map((node, i) => <span key={`${keyPrefix}-${i}`}>{node}</span>);
+  if (wrapped.length <= RECEIPT_NOTICE_ROW_ACTIONS_INLINE_MAX) {
+    return <Space size="small" wrap>{wrapped}</Space>;
+  }
+  const inline = wrapped.slice(0, RECEIPT_NOTICE_ROW_ACTIONS_INLINE_MAX);
+  const overflow = wrapped.slice(RECEIPT_NOTICE_ROW_ACTIONS_INLINE_MAX);
+  return (
+    <Space size="small" wrap>
+      {inline}
+      <Dropdown
+        menu={{
+          items: overflow.map((node, i) => ({
+            key: `${keyPrefix}-more-${i}`,
+            label: node,
+          })),
+        }}
+        trigger={['click']}
+      >
+        <Button type="link" size="small">
+          更多
+        </Button>
+      </Dropdown>
+    </Space>
+  );
+}
+
 const ReceiptNoticesPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { token } = theme.useToken();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const [statsVersion, setStatsVersion] = useState(0);
+  const [localStats, setLocalStats] = useState({ total: 0, pending: 0, notified: 0, received: 0 });
+
+  const { statCards: pageMetricCards, hasConfig: hasPageMetricConfig } = usePageMetrics(location.pathname);
+
+  const refreshLocalStats = useCallback(async () => {
+    try {
+      const response = await receiptNoticeApi.list({ skip: 0, limit: 5000 });
+      const data = Array.isArray(response) ? response : (response as any)?.items || (response as any)?.data || [];
+      const arr = Array.isArray(data) ? data : [];
+      setLocalStats({
+        total: (response as any)?.total ?? arr.length,
+        pending: arr.filter((x: ReceiptNotice) => (x.status || '').trim() === '待收货').length,
+        notified: arr.filter((x: ReceiptNotice) => (x.status || '').trim() === '已通知').length,
+        received: arr.filter((x: ReceiptNotice) => (x.status || '').trim() === '已入库').length,
+      });
+    } catch {
+      setLocalStats({ total: 0, pending: 0, notified: 0, received: 0 });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hasPageMetricConfig) {
+      refreshLocalStats();
+    }
+  }, [hasPageMetricConfig, statsVersion, refreshLocalStats]);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [noticeDetail, setNoticeDetail] = useState<ReceiptNoticeDetail | null>(null);
+  const receiptNoticeTracking = useDocumentTracking(
+    detailDrawerVisible && noticeDetail?.id ? 'receipt_notice' : undefined,
+    noticeDetail?.id
+  );
 
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -109,40 +240,131 @@ const ReceiptNoticesPage: React.FC = () => {
   );
 
   const columns: ProColumns<ReceiptNotice>[] = [
-    { title: '通知单号', dataIndex: 'notice_code', width: 140, ellipsis: true, fixed: 'left' },
-    { title: '采购订单号', dataIndex: 'purchase_order_code', width: 140, ellipsis: true },
+    {
+      title: '通知单号',
+      dataIndex: 'notice_code',
+      width: 148,
+      ellipsis: true,
+      fixed: 'left',
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.notice_code ?? '') }} ellipsis>
+          {r.notice_code ?? '-'}
+        </Typography.Text>
+      ),
+    },
+    {
+      title: '采购订单号',
+      dataIndex: 'purchase_order_code',
+      width: 148,
+      ellipsis: true,
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.purchase_order_code ?? '') }} ellipsis>
+          {r.purchase_order_code ?? '-'}
+        </Typography.Text>
+      ),
+    },
     { title: '供应商', dataIndex: 'supplier_name', width: 140, ellipsis: true },
     { title: '入库仓库', dataIndex: 'warehouse_name', width: 120 },
+    { title: '计划收货日期', dataIndex: 'planned_receipt_date', valueType: 'date', width: 120 },
+    { title: '通知时间', dataIndex: 'notified_at', valueType: 'dateTime', width: 160 },
+    {
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      valueType: 'dateTime',
+      width: 168,
+      hideInSearch: true,
+      defaultSortOrder: 'descend',
+    },
     {
       title: '生命周期',
       dataIndex: 'lifecycle',
-      width: 100,
+      width: 132,
+      fixed: 'right',
+      align: 'left',
+      hideInSearch: true,
       render: (_, record) => {
         const lifecycle = getReceiptNoticeLifecycle(record);
-        const stageName = lifecycle.stageName ?? record.status ?? '待收货';
-        const c = STATUS_MAP[stageName] || { text: stageName || '-', color: 'default' };
-        return <Tag color={c.color}>{c.text}</Tag>;
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
       },
     },
-    { title: '计划收货日期', dataIndex: 'planned_receipt_date', valueType: 'date', width: 120 },
-    { title: '通知时间', dataIndex: 'notified_at', valueType: 'dateTime', width: 160 },
-    { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime', width: 160 },
     {
       title: '操作',
-      width: 200,
+      width: 220,
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>详情</Button>
-          {record.status === '待收货' && (
-            <>
-              <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
-              <Button type="link" size="small" icon={<SendOutlined />} onClick={() => handleNotify(record)} style={{ color: '#1890ff' }}>通知仓库</Button>
-              <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>删除</Button>
-            </>
-          )}
-        </Space>
-      ),
+      hideInSearch: true,
+      render: (_, record) => {
+        const parts: React.ReactNode[] = [
+          <Button
+            key="d"
+            type="link"
+            size="small"
+            icon={<EyeOutlined />}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDetail(record);
+            }}
+          >
+            详情
+          </Button>,
+        ];
+        if (record.status === '待收货') {
+          parts.push(
+            <Button
+              key="e"
+              type="link"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleEdit(record);
+              }}
+            >
+              编辑
+            </Button>
+          );
+          parts.push(
+            <Button
+              key="n"
+              type="link"
+              size="small"
+              icon={<SendOutlined />}
+              style={{ color: '#1890ff' }}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleNotify(record);
+              }}
+            >
+              通知仓库
+            </Button>
+          );
+          parts.push(
+            <Button
+              key="del"
+              type="link"
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDelete(record);
+              }}
+            >
+              删除
+            </Button>
+          );
+        }
+        return renderReceiptNoticeRowActions(parts, `rn-${record.id ?? 'row'}`);
+      },
     },
   ];
 
@@ -199,6 +421,11 @@ const ReceiptNoticesPage: React.FC = () => {
               ? `已通知仓库，已生成采购入库草稿：${res.purchase_receipt_code}`
               : '已通知仓库',
           );
+          setStatsVersion((v) => v + 1);
+          if (noticeDetail?.id === record.id) {
+            const fresh = await receiptNoticeApi.get(record.id!.toString());
+            setNoticeDetail(fresh as ReceiptNoticeDetail);
+          }
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '通知失败');
@@ -215,6 +442,11 @@ const ReceiptNoticesPage: React.FC = () => {
         try {
           await receiptNoticeApi.delete(record.id!.toString());
           messageApi.success('删除成功');
+          if (noticeDetail?.id === record.id) {
+            setNoticeDetail(null);
+            setDetailDrawerVisible(false);
+          }
+          setStatsVersion((v) => v + 1);
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '删除失败');
@@ -235,6 +467,7 @@ const ReceiptNoticesPage: React.FC = () => {
           }
           messageApi.success(`已删除 ${keys.length} 条收货通知单`);
           setSelectedRowKeys([]);
+          setStatsVersion((v) => v + 1);
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error?.message || '批量删除失败');
@@ -359,6 +592,7 @@ const ReceiptNoticesPage: React.FC = () => {
       messageApi.success('创建成功');
       setCreateModalVisible(false);
       setEffectiveRuleCode(null);
+      setStatsVersion((v) => v + 1);
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '创建失败');
@@ -379,6 +613,10 @@ const ReceiptNoticesPage: React.FC = () => {
       });
       messageApi.success('更新成功');
       setEditModalVisible(false);
+      if (noticeDetail?.id === editingId) {
+        const fresh = await receiptNoticeApi.get(editingId.toString());
+        setNoticeDetail(fresh as ReceiptNoticeDetail);
+      }
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '更新失败');
@@ -387,8 +625,20 @@ const ReceiptNoticesPage: React.FC = () => {
   };
 
   const detailColumns: ProDescriptionsItemProps<ReceiptNoticeDetail>[] = [
-    { title: '通知单号', dataIndex: 'notice_code' },
-    { title: '采购订单号', dataIndex: 'purchase_order_code' },
+    {
+      title: '通知单号',
+      dataIndex: 'notice_code',
+      render: (_, entity) => (
+        <Typography.Text copyable={{ text: String(entity.notice_code ?? '') }}>{entity.notice_code ?? '-'}</Typography.Text>
+      ),
+    },
+    {
+      title: '采购订单号',
+      dataIndex: 'purchase_order_code',
+      render: (_, entity) => (
+        <Typography.Text copyable={{ text: String(entity.purchase_order_code ?? '') }}>{entity.purchase_order_code ?? '-'}</Typography.Text>
+      ),
+    },
     { title: '供应商', dataIndex: 'supplier_name' },
     { title: '联系人', dataIndex: 'supplier_contact' },
     { title: '电话', dataIndex: 'supplier_phone' },
@@ -403,7 +653,12 @@ const ReceiptNoticesPage: React.FC = () => {
       },
     },
     { title: '通知时间', dataIndex: 'notified_at', valueType: 'dateTime' },
-    { title: '备注', dataIndex: 'notes', span: 2 },
+    {
+      title: '关联入库单',
+      dataIndex: 'purchase_receipt_code',
+      render: (v) => v || '-',
+    },
+    { title: '备注', dataIndex: 'notes', span: 3, render: (t) => t || '-' },
   ];
 
   const renderCreateForm = () => (
@@ -644,11 +899,42 @@ const ReceiptNoticesPage: React.FC = () => {
     </>
   );
 
+  const statCards: StatCard[] =
+    hasPageMetricConfig && pageMetricCards.length > 0
+      ? pageMetricCards
+      : [
+          {
+            title: '单据总数',
+            value: localStats.total,
+            valueStyle: { color: token.colorPrimary },
+            backgroundChart: <SimpleSparkline data={RN_STAT_SPARK_1} color={token.colorPrimary} />,
+          },
+          {
+            title: '待收货',
+            value: localStats.pending,
+            valueStyle: { color: token.colorWarning },
+            backgroundChart: <SimpleSparkline data={RN_STAT_SPARK_2} color={token.colorWarning} />,
+          },
+          {
+            title: '已通知',
+            value: localStats.notified,
+            valueStyle: { color: token.colorInfo },
+            backgroundChart: <SimpleSparkline data={RN_STAT_SPARK_3} color={token.colorInfo} />,
+          },
+          {
+            title: '已入库',
+            value: localStats.received,
+            valueStyle: { color: token.colorSuccess },
+            backgroundChart: <SimpleSparkline data={RN_STAT_SPARK_4} color={token.colorSuccess} />,
+          },
+        ];
+
   return (
     <>
-      <ListPageTemplate>
+      <ListPageTemplate statCards={statCards}>
         <UniTable
           headerTitle="收货通知单"
+          columnPersistenceId="kuaizhizao-receipt-notices"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -668,6 +954,7 @@ const ReceiptNoticesPage: React.FC = () => {
                 status: params.status,
                 supplier_id: params.supplier_id,
                 purchase_order_id: params.purchase_order_id,
+                keyword: params.keyword,
               });
               const data = Array.isArray(response) ? response : response?.items || response?.data || [];
               const total = Array.isArray(response) ? response.length : response?.total ?? data.length;
@@ -677,35 +964,182 @@ const ReceiptNoticesPage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          scroll={{ x: 1200 }}
+          scroll={{ x: 1400 }}
+          onRow={(record) => ({
+            onClick: () => handleDetail(record),
+            style: { cursor: 'pointer' },
+          })}
         />
       </ListPageTemplate>
 
-      <DetailDrawerTemplate
+      <DetailDrawerTemplate<ReceiptNoticeDetail>
         title={`收货通知单详情${noticeDetail?.notice_code ? ` - ${noticeDetail.notice_code}` : ''}`}
         open={detailDrawerVisible}
-        onClose={() => { setDetailDrawerVisible(false); setNoticeDetail(null); }}
+        onClose={() => {
+          setDetailDrawerVisible(false);
+          setNoticeDetail(null);
+        }}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={detailColumns}
-        dataSource={noticeDetail || {}}
-      >
-        {noticeDetail?.items && noticeDetail.items.length > 0 && (
-          <Table
-            size="small"
-            rowKey={(_, idx) => (noticeDetail?.items?.[idx] as any)?.id ?? idx}
-            columns={[
-              { title: '物料编号', dataIndex: 'material_code', width: 120 },
-              { title: '物料名称', dataIndex: 'material_name', width: 150 },
-              { title: '单位', dataIndex: 'material_unit', width: 60 },
-              { title: '数量', dataIndex: 'notice_quantity', width: 90, align: 'right' },
-              { title: '单价', dataIndex: 'unit_price', width: 90, align: 'right' },
-              { title: '金额', dataIndex: 'total_amount', width: 100, align: 'right' },
-            ]}
-            dataSource={noticeDetail.items}
-            pagination={false}
-          />
-        )}
-      </DetailDrawerTemplate>
+        columns={[]}
+        column={3}
+        dataSource={noticeDetail || undefined}
+        extra={
+          noticeDetail && (
+            <DetailDrawerActions
+              items={[
+                {
+                  key: 'edit',
+                  visible: noticeDetail.status === '待收货',
+                  render: () => (
+                    <Button
+                      type="link"
+                      size="small"
+                      icon={<EditOutlined />}
+                      onClick={() => {
+                        setDetailDrawerVisible(false);
+                        handleEdit(noticeDetail);
+                      }}
+                    >
+                      编辑
+                    </Button>
+                  ),
+                },
+                {
+                  key: 'notify',
+                  visible: noticeDetail.status === '待收货',
+                  render: () => (
+                    <Button
+                      type="link"
+                      size="small"
+                      icon={<SendOutlined />}
+                      style={{ color: '#1890ff' }}
+                      onClick={() => handleNotify(noticeDetail)}
+                    >
+                      通知仓库
+                    </Button>
+                  ),
+                },
+                {
+                  key: 'delete',
+                  visible: noticeDetail.status === '待收货',
+                  render: () => (
+                    <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(noticeDetail)}>
+                      删除
+                    </Button>
+                  ),
+                },
+              ]}
+            />
+          )
+        }
+        customContent={
+          noticeDetail && (
+            <>
+              <DetailDrawerSection title="基本信息">
+                <Descriptions
+                  column={3}
+                  size="small"
+                  items={buildDescriptionItemsFromColumns(noticeDetail, detailColumns)}
+                />
+              </DetailDrawerSection>
+
+              <DetailDrawerSection title="生命周期">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {(() => {
+                    const lifecycle = getReceiptNoticeLifecycle(noticeDetail);
+                    const mainStages = lifecycle.mainStages ?? [];
+                    if (mainStages.length === 0) return null;
+                    return (
+                      <UniLifecycleStepper
+                        steps={mainStages}
+                        status={lifecycle.status}
+                        showLabels
+                        nextStepSuggestions={lifecycle.nextStepSuggestions}
+                      />
+                    );
+                  })()}
+                  <div
+                    style={{
+                      paddingTop: 12,
+                      borderTop: '1px solid var(--ant-color-border-secondary)',
+                    }}
+                  >
+                    <div style={{ marginBottom: 8, fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
+                      上下游单据
+                    </div>
+                    {receiptNoticeTracking.loading && (
+                      <div style={{ padding: '8px 0' }}>
+                        <Spin size="small" />
+                      </div>
+                    )}
+                    {receiptNoticeTracking.error && (
+                      <Typography.Text type="danger">{receiptNoticeTracking.error}</Typography.Text>
+                    )}
+                    {receiptNoticeTracking.data && (
+                      <DocumentTrackingRelationsBody
+                        data={receiptNoticeTracking.data}
+                        onDocumentClick={(type, id) => messageApi.info(`跳转到${type}#${id}`)}
+                      />
+                    )}
+                  </div>
+                </div>
+              </DetailDrawerSection>
+
+              <DetailDrawerSection title="明细信息">
+                <style>{`
+                  .receipt-notice-detail-items .ant-table-wrapper .ant-table-body,
+                  .receipt-notice-detail-items .ant-table-wrapper .ant-table-content {
+                    overflow: visible !important;
+                  }
+                `}</style>
+                {noticeDetail.items && noticeDetail.items.length > 0 ? (
+                  <div
+                    className="receipt-notice-detail-items"
+                    style={{ width: '100%', maxWidth: '100%', overflowX: 'auto', overflowY: 'hidden' }}
+                  >
+                    <Table
+                      size="small"
+                      tableLayout="fixed"
+                      style={{ minWidth: RN_DETAIL_ITEMS_MIN_WIDTH }}
+                      rowKey={(_, idx) => (noticeDetail?.items?.[idx] as any)?.id ?? idx}
+                      columns={[
+                        { title: '物料编号', dataIndex: 'material_code', width: 120, ellipsis: true },
+                        { title: '物料名称', dataIndex: 'material_name', width: 150, ellipsis: true },
+                        { title: '单位', dataIndex: 'material_unit', width: 60 },
+                        { title: '数量', dataIndex: 'notice_quantity', width: 90, align: 'right' },
+                        { title: '单价', dataIndex: 'unit_price', width: 90, align: 'right' },
+                        { title: '金额', dataIndex: 'total_amount', width: 100, align: 'right' },
+                      ]}
+                      dataSource={noticeDetail.items}
+                      pagination={false}
+                      bordered
+                    />
+                  </div>
+                ) : (
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无明细" />
+                )}
+              </DetailDrawerSection>
+
+              <DetailDrawerSection title="操作记录">
+                {receiptNoticeTracking.loading && (
+                  <div style={{ textAlign: 'center', padding: 24 }}>
+                    <Spin />
+                  </div>
+                )}
+                {receiptNoticeTracking.error && !receiptNoticeTracking.loading && (
+                  <Typography.Text type="danger">{receiptNoticeTracking.error}</Typography.Text>
+                )}
+                {receiptNoticeTracking.data && !receiptNoticeTracking.loading && (
+                  <DocumentTrackingTimelineBody data={receiptNoticeTracking.data} />
+                )}
+                {!receiptNoticeTracking.loading && !receiptNoticeTracking.data && !receiptNoticeTracking.error && (
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+                )}
+              </DetailDrawerSection>
+            </>
+          )
+        }
+      />
 
       <FormModalTemplate
         title="新建收货通知单"

@@ -96,12 +96,17 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
       title={title}
       open={open ?? visible}
       onClose={onClose}
-      width={drawerSize}
-      size={drawerSize}
+      size={(drawerSize === 'default' || drawerSize === 'large') ? (drawerSize as 'default' | 'large') : undefined}
+      styles={{
+        ...styles,
+        wrapper: {
+          width: (typeof drawerSize === 'number' || (typeof drawerSize === 'string' && !['default', 'large'].includes(drawerSize))) ? drawerSize : undefined,
+          ...styles?.wrapper,
+        }
+      }}
       loading={loading}
       className={className}
       extra={extra}
-      styles={styles}
       zIndex={zIndex}
     >
       {customContent || (columns && columns.length > 0 && (

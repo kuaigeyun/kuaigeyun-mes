@@ -4,13 +4,16 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal } from 'antd';
-import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { App, Popconfirm, Button, Space, Modal, Typography } from 'antd';
+import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import { ProFormText, ProFormDigit, ProFormSelect, ProFormSwitch } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { employeePerformanceApi } from '../../../services/performance';
 import type { KPIDefinition } from '../../../types/performance';
+import { getPerformanceConfigActiveLifecycle } from '../../../utils/performanceLifecycle';
 
 const CALC_TYPE_OPTIONS = [
   { label: '质量', value: 'quality' },
@@ -44,8 +47,14 @@ const KpiDefinitionsPage: React.FC = () => {
     }).catch((e: any) => messageApi.error(e?.message || '加载失败'));
   }, [modalVisible, editId]);
 
-  const handleCreate = () => { setEditId(null); setModalVisible(true); };
-  const handleEdit = (r: KPIDefinition) => { setEditId(r.id); setModalVisible(true); };
+  const handleCreate = () => {
+    setEditId(null);
+    setModalVisible(true);
+  };
+  const handleEdit = (r: KPIDefinition) => {
+    setEditId(r.id);
+    setModalVisible(true);
+  };
   const handleDelete = async (r: KPIDefinition) => {
     try {
       await employeePerformanceApi.deleteKpiDefinition(r.id);
@@ -57,20 +66,76 @@ const KpiDefinitionsPage: React.FC = () => {
   };
 
   const columns: ProColumns<KPIDefinition>[] = [
-    { title: '编号', dataIndex: 'code', width: 120, fixed: 'left' },
+    {
+      title: '编号',
+      dataIndex: 'code',
+      width: 120,
+      fixed: 'left',
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
+          {r.code ?? '-'}
+        </Typography.Text>
+      ),
+    },
     { title: '名称', dataIndex: 'name', width: 150, ellipsis: true },
     { title: '权重', dataIndex: 'weight', width: 80, align: 'right' },
-    { title: '计算类型', dataIndex: 'calc_type', width: 100, render: (_, r) => CALC_TYPE_OPTIONS.find((o) => o.value === r.calc_type)?.label || r.calc_type },
-    { title: '启用', dataIndex: 'is_active', width: 80, render: (_, r) => <Tag color={r.is_active ? 'success' : 'default'}>{r.is_active ? '是' : '否'}</Tag> },
+    {
+      title: '计算类型',
+      dataIndex: 'calc_type',
+      width: 100,
+      render: (_, r) => CALC_TYPE_OPTIONS.find((o) => o.value === r.calc_type)?.label || r.calc_type,
+    },
+    {
+      title: '启用',
+      dataIndex: 'is_active',
+      hideInTable: true,
+      valueEnum: {
+        true: { text: '是' },
+        false: { text: '否' },
+      },
+    },
+    {
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      width: 168,
+      hideInSearch: true,
+      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+    },
+    {
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      width: 120,
+      fixed: 'right',
+      align: 'left',
+      hideInSearch: true,
+      render: (_, record) => {
+        const lifecycle = getPerformanceConfigActiveLifecycle(record as unknown as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
+      },
+    },
     {
       title: '操作',
       width: 150,
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
+          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+            编辑
+          </Button>
           <Popconfirm title="确定删除？" onConfirm={() => handleDelete(record)}>
-            <Button type="link" size="small" danger icon={<DeleteOutlined />}>删除</Button>
+            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+              删除
+            </Button>
           </Popconfirm>
         </Space>
       ),
@@ -85,18 +150,25 @@ const KpiDefinitionsPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
+          columnPersistenceId="kuaizhizao-perf-kpi-definitions"
+          showAdvancedSearch
           request={async (params) => {
             try {
+              const pageSize = params.pageSize || 20;
+              const skip = ((params.current || 1) - 1) * pageSize;
               const result = await employeePerformanceApi.listKpiDefinitions({
-                skip: ((params.current || 1) - 1) * (params.pageSize || 20),
-                limit: params.pageSize || 20,
+                skip,
+                limit: pageSize,
               });
-              return { data: result, success: true, total: result.length };
+              const rows = Array.isArray(result) ? result : [];
+              const total = rows.length < pageSize ? skip + rows.length : skip + rows.length + 1;
+              return { data: rows, success: true, total };
             } catch (e: any) {
               messageApi.error(e?.message || '加载失败');
               return { data: [], success: false, total: 0 };
             }
           }}
+          scroll={{ x: 1280 }}
           enableRowSelection={true}
           showDeleteButton={true}
           onDelete={async (keys) => {
@@ -117,7 +189,7 @@ const KpiDefinitionsPage: React.FC = () => {
             });
           }}
           showCreateButton
-          createButtonText="新建KPI定义"
+          createButtonText="新建KPI指标定义"
           onCreate={handleCreate}
         />
       </ListPageTemplate>
@@ -125,10 +197,19 @@ const KpiDefinitionsPage: React.FC = () => {
       <FormModalTemplate
         title={editId ? '编辑KPI指标' : '新建KPI指标'}
         open={modalVisible}
-        onClose={() => { setModalVisible(false); setEditId(null); }}
+        onClose={() => {
+          setModalVisible(false);
+          setEditId(null);
+        }}
         formRef={formRef as React.RefObject<ProFormInstance>}
         onFinish={async (values) => {
-          const payload = { code: values.code, name: values.name, weight: values.weight || 1, calc_type: values.calc_type, is_active: values.is_active !== false };
+          const payload = {
+            code: values.code,
+            name: values.name,
+            weight: values.weight || 1,
+            calc_type: values.calc_type,
+            is_active: values.is_active !== false,
+          };
           if (editId) {
             await employeePerformanceApi.updateKpiDefinition(editId, payload);
             messageApi.success('更新成功');

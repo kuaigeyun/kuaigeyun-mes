@@ -6,7 +6,9 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker } from '@ant-design/pro-components';
-import { App, Button, Tag, message } from 'antd';
+import { App, Button, Tag, message, Typography } from 'antd';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { getCalibrationResultLifecycle } from '../../../utils/equipmentLifecycle';
 import { PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -70,7 +72,16 @@ const ToolCalibrationsPage: React.FC = () => {
   };
 
   const columns: ProColumns<ToolCalibration>[] = [
-    { title: '工装编号', dataIndex: 'tool_code', width: 120 },
+    {
+      title: '工装编号',
+      dataIndex: 'tool_code',
+      width: 120,
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.tool_code ?? '') }} ellipsis>
+          {r.tool_code ?? '-'}
+        </Typography.Text>
+      ),
+    },
     { title: '工装名称', dataIndex: 'tool_name', width: 180, ellipsis: true },
     { title: '校准日期', dataIndex: 'calibration_date', valueType: 'date', width: 120 },
     {
@@ -82,14 +93,47 @@ const ToolCalibrationsPage: React.FC = () => {
         return <Tag color={color}>{r.result || '-'}</Tag>;
       },
     },
-    { title: '证书编号', dataIndex: 'certificate_no', width: 140 },
+    {
+      title: '证书编号',
+      dataIndex: 'certificate_no',
+      width: 140,
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.certificate_no ?? '') }} ellipsis>
+          {r.certificate_no ?? '-'}
+        </Typography.Text>
+      ),
+    },
     { title: '有效期至', dataIndex: 'expiry_date', valueType: 'date', width: 120 },
     { title: '校验机构', dataIndex: 'calibration_org', width: 140, hideInSearch: true },
+    {
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      width: 132,
+      fixed: 'right',
+      align: 'left',
+      hideInSearch: true,
+      render: (_, record) => {
+        const lifecycle = getCalibrationResultLifecycle(record as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
+      },
+    },
   ];
 
   return (
     <ListPageTemplate>
       <UniTable<ToolCalibration>
+        headerTitle="工装校准记录"
+        columnPersistenceId="kuaizhizao-em-tool-calibrations"
         actionRef={actionRef}
         rowKey="uuid"
         columns={columns}
@@ -98,6 +142,7 @@ const ToolCalibrationsPage: React.FC = () => {
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
             tool_uuid: params.tool_uuid,
+            keyword: (params as any).keyword,
           });
           return { data: res.items || [], success: true, total: res.total || 0 };
         }}
@@ -108,6 +153,7 @@ const ToolCalibrationsPage: React.FC = () => {
         ]}
         search={{ labelWidth: 'auto' }}
         pagination={{ defaultPageSize: 20 }}
+        scroll={{ x: 1500 }}
       />
 
       <FormModalTemplate

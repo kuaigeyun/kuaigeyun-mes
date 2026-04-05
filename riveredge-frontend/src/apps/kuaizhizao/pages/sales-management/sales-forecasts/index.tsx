@@ -9,7 +9,7 @@
 
 import React, { useRef, useState, useEffect, useCallback } from 'react'
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormInstance, ProFormSelect } from '@ant-design/pro-components'
-import { App, Button, Tag, Space, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Typography, Modal, Dropdown, Descriptions } from 'antd'
+import { App, Button, Space, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Typography, Modal, Dropdown, Descriptions } from 'antd'
 import { PlusOutlined, DeleteOutlined, EyeOutlined, EditOutlined, ArrowDownOutlined, ImportOutlined, AppstoreAddOutlined } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -78,7 +78,7 @@ export default function SalesForecastsPage() {
   const { statCards: pageMetricCards, hasConfig: hasPageMetricConfig } = usePageMetrics();
   const { data: statistics } = useQuery({
     queryKey: ['salesForecastStatistics'],
-    queryFn: getSalesForecastStatistics,
+    queryFn: () => getSalesForecastStatistics(),
   });
 
   const { token } = AntdTheme.useToken();
@@ -836,6 +836,7 @@ export default function SalesForecastsPage() {
         }
         parts.push(
           <UniWorkflowActions
+            key="workflow-actions"
             record={record}
             entityName={t('app.kuaizhizao.salesForecast.title')}
             statusField="status"
@@ -1044,41 +1045,46 @@ export default function SalesForecastsPage() {
           createButtonText={t('app.kuaizhizao.salesForecast.create')}
           onCreate={handleCreate}
           toolBarRender={() => [
-            <Dropdown.Button
-              key={`batch-btn-${selectedRowKeys.length}`}
-              disabled={selectedRowKeys.length === 0}
-              trigger={['click']}
-              danger
-              icon={<ArrowDownOutlined />}
-              onClick={() => handleDelete(selectedRowKeys)}
-              menu={{
-                items: [
-                  {
-                    key: 'submit',
-                    label: '批量提交',
-                    onClick: async () => {
-                      if (selectedRowKeys.length === 0) return;
-                      let success = 0;
-                      let failed = 0;
-                      for (const k of selectedRowKeys) {
-                        try {
-                          await submitSalesForecast(Number(k));
-                          success += 1;
-                        } catch {
-                          failed += 1;
+            <Space.Compact key={`batch-btn-${selectedRowKeys.length}`}>
+              <Button
+                disabled={selectedRowKeys.length === 0}
+                danger
+                onClick={() => handleDelete(selectedRowKeys)}
+              >
+                <DeleteOutlined /> {t('common.batchDelete')}
+              </Button>
+              <Dropdown
+                disabled={selectedRowKeys.length === 0}
+                trigger={['click']}
+                menu={{
+                  items: [
+                    {
+                      key: 'submit',
+                      label: '批量提交',
+                      onClick: async () => {
+                        if (selectedRowKeys.length === 0) return;
+                        let success = 0;
+                        let failed = 0;
+                        for (const k of selectedRowKeys) {
+                          try {
+                            await submitSalesForecast(Number(k));
+                            success += 1;
+                          } catch {
+                            failed += 1;
+                          }
                         }
-                      }
-                      if (success > 0) messageApi.success(`已提交 ${success} 条`);
-                      if (failed > 0) messageApi.warning(`提交失败 ${failed} 条`);
-                      setSelectedRowKeys([]);
-                      tableRef.current?.reload();
+                        if (success > 0) messageApi.success(`已提交 ${success} 条`);
+                        if (failed > 0) messageApi.warning(`提交失败 ${failed} 条`);
+                        setSelectedRowKeys([]);
+                        tableRef.current?.reload();
+                      },
                     },
-                  },
-                ],
-              }}
-            >
-              <DeleteOutlined /> {t('common.batchDelete')}
-            </Dropdown.Button>,
+                  ],
+                }}
+              >
+                <Button danger icon={<ArrowDownOutlined />} />
+              </Dropdown>
+            </Space.Compact>,
           ]}
           showImportButton={true}
           onImport={() => setImportModalVisible(true)}

@@ -9,14 +9,14 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, message, Card, Table, Row, Col } from 'antd';
+import { App, Button, Space, Modal, message, Card, Table, Row, Col, Typography } from 'antd';
 import { PlusOutlined, EyeOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { inventoryTransferApi } from '../../../services/inventory-transfer';
 import { getInventoryTransferLifecycle } from '../../../utils/inventoryTransferLifecycle';
-import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
 
@@ -242,6 +242,11 @@ const InventoryTransferPage: React.FC = () => {
       width: 150,
       ellipsis: true,
       fixed: 'left',
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
+          {r.code ?? '-'}
+        </Typography.Text>
+      ),
     },
     {
       title: '调出仓库',
@@ -262,22 +267,6 @@ const InventoryTransferPage: React.FC = () => {
       width: 120,
     },
     {
-      title: '状态',
-      dataIndex: 'lifecycle',
-      width: 100,
-      valueEnum: {
-        draft: { text: '草稿', status: 'default' },
-        in_progress: { text: '调拨中', status: 'processing' },
-        completed: { text: '已完成', status: 'success' },
-        cancelled: { text: '已取消', status: 'error' },
-      },
-      render: (_, record) => {
-        const lifecycle = getInventoryTransferLifecycle(record);
-        const stageName = lifecycle.stageName ?? record.status ?? '草稿';
-        return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>;
-      },
-    },
-    {
       title: '调拨物料总数',
       dataIndex: 'total_items',
       width: 120,
@@ -295,6 +284,36 @@ const InventoryTransferPage: React.FC = () => {
       width: 120,
       align: 'right',
       render: (_, record) => `¥${record.total_amount?.toFixed(2) || '0.00'}`,
+    },
+    {
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      width: 168,
+      hideInSearch: true,
+      defaultSortOrder: 'descend',
+      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+    },
+    {
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      width: 132,
+      fixed: 'right',
+      align: 'left',
+      hideInSearch: true,
+      render: (_, record) => {
+        const lifecycle = getInventoryTransferLifecycle(record as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
+      },
     },
     {
       title: '操作',
@@ -350,13 +369,14 @@ const InventoryTransferPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable
         headerTitle="库存调拨管理"
+        columnPersistenceId="kuaizhizao-wm-inventory-transfer"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
         showAdvancedSearch={true}
-showCreateButton={true}
-          createButtonText="新建调拨单"
-          onCreate={handleCreate}
+        showCreateButton={true}
+        createButtonText="新建调拨单"
+        onCreate={handleCreate}
         request={async (params) => {
           try {
             const result = await inventoryTransferApi.list({
@@ -366,6 +386,7 @@ showCreateButton={true}
               from_warehouse_id: params.from_warehouse_id,
               to_warehouse_id: params.to_warehouse_id,
               status: params.lifecycle ?? params.status,
+              keyword: (params as any).keyword,
             });
             return {
               data: result.items || [],
@@ -399,6 +420,7 @@ showCreateButton={true}
             },
           });
         }}
+        scroll={{ x: 2000 }}
       />
 
       {/* 创建调拨单Modal */}

@@ -3219,7 +3219,7 @@ const BOMDesignerPage: React.FC = () => {
       }}
       okText={t('common.confirm')}
       cancelText={t('common.cancel')}
-      destroyOnClose
+      destroyOnHidden
       okButtonProps={{ disabled: !addConfigurableOptionMaterial }}
     >
       <div style={{ marginBottom: 8 }}>{t('app.master-data.bom.optionalMaterialsList')}</div>
@@ -3261,7 +3261,7 @@ const BOMDesignerPage: React.FC = () => {
       }}
       okText={t('common.confirm')}
       cancelText={t('common.cancel')}
-      destroyOnClose
+      destroyOnHidden
       okButtonProps={{ disabled: !addAlternativeOptionMaterial }}
     >
       <div style={{ marginBottom: 8 }}>{t('app.master-data.bom.alternativeMaterialsList')}</div>
@@ -3299,7 +3299,7 @@ const BOMDesignerPage: React.FC = () => {
       onOk={() => handleCopyBomSubmit()}
       okText={t('common.confirm')}
       cancelText={t('common.cancel')}
-      destroyOnClose
+      destroyOnHidden
       confirmLoading={copyBomLoading}
       okButtonProps={{ disabled: !copyBomNewRootMaterial }}
     >
@@ -3361,7 +3361,7 @@ const BOMDesignerPage: React.FC = () => {
         </Button>,
       ]}
       width={720}
-      destroyOnClose
+      destroyOnHidden
     >
       {!versionCompareResult ? (
         <Space direction="vertical" style={{ width: '100%' }} size="middle">

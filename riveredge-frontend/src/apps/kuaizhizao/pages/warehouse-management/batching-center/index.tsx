@@ -16,12 +16,11 @@ import { useQuery } from '@tanstack/react-query';
 import { warehouseApi } from '../../../services/warehouse-execution';
 import { List, Typography, Progress } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { batchingOrderApi } from '../../../services/batching-order';
 import { getBatchingOrderStageName, getBatchingOrderLifecycle } from '../../../utils/batchingOrderLifecycle';
-import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import { workOrderApi } from '../../../services/production';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
@@ -189,6 +188,11 @@ const BatchingCenterPage: React.FC = () => {
       width: 140,
       ellipsis: true,
       fixed: 'left',
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
+          {r.code ?? '-'}
+        </Typography.Text>
+      ),
     },
     {
       title: '仓库',
@@ -215,12 +219,33 @@ const BatchingCenterPage: React.FC = () => {
       align: 'right',
     },
     {
-      title: '状态',
-      dataIndex: 'status',
-      width: 100,
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      width: 168,
+      hideInSearch: true,
+      defaultSortOrder: 'descend',
+      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+    },
+    {
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      width: 132,
+      fixed: 'right',
+      align: 'left',
+      hideInSearch: true,
       render: (_, record) => {
-        const stageName = getBatchingOrderStageName(record.status);
-        return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>;
+        const lifecycle = getBatchingOrderLifecycle(record as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
       },
     },
     {
@@ -258,6 +283,7 @@ const BatchingCenterPage: React.FC = () => {
       <MaterialPrepReminders onCreateBatching={handleCreate} />
       <UniTable<BatchingOrder>
         headerTitle="配料单"
+        columnPersistenceId="kuaizhizao-wm-batching-center"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
@@ -293,6 +319,7 @@ const BatchingCenterPage: React.FC = () => {
               warehouse_id: params.warehouse_id,
               work_order_id: params.work_order_id,
               status: params.status,
+              keyword: (params as any).keyword,
             });
             return {
               data: result.items || [],
@@ -303,6 +330,7 @@ const BatchingCenterPage: React.FC = () => {
             return { data: [], success: false, total: 0 };
           }
         }}
+        scroll={{ x: 1800 }}
       />
 
       {/* 新建配料单 Modal */}

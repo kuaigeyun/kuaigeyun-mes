@@ -6,7 +6,9 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker } from '@ant-design/pro-components';
-import { App, Button, Tag, message } from 'antd';
+import { App, Button, Tag, message, Typography } from 'antd';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { getCalibrationResultLifecycle } from '../../../utils/equipmentLifecycle';
 import { PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -69,7 +71,16 @@ const MoldCalibrationsPage: React.FC = () => {
   };
 
   const columns: ProColumns<MoldCalibration>[] = [
-    { title: '模具编号', dataIndex: 'mold_code', width: 120 },
+    {
+      title: '模具编号',
+      dataIndex: 'mold_code',
+      width: 120,
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.mold_code ?? '') }} ellipsis>
+          {r.mold_code ?? '-'}
+        </Typography.Text>
+      ),
+    },
     { title: '模具名称', dataIndex: 'mold_name', width: 180, ellipsis: true },
     { title: '校准日期', dataIndex: 'calibration_date', valueType: 'date', width: 120 },
     {
@@ -81,14 +92,47 @@ const MoldCalibrationsPage: React.FC = () => {
         return <Tag color={color}>{r.result || '-'}</Tag>;
       },
     },
-    { title: '证书编号', dataIndex: 'certificate_no', width: 140 },
+    {
+      title: '证书编号',
+      dataIndex: 'certificate_no',
+      width: 140,
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.certificate_no ?? '') }} ellipsis>
+          {r.certificate_no ?? '-'}
+        </Typography.Text>
+      ),
+    },
     { title: '有效期至', dataIndex: 'expiry_date', valueType: 'date', width: 120 },
+    {
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      width: 132,
+      fixed: 'right',
+      align: 'left',
+      hideInSearch: true,
+      render: (_, record) => {
+        const lifecycle = getCalibrationResultLifecycle(record as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
+      },
+    },
     { title: '备注', dataIndex: 'remark', ellipsis: true, hideInSearch: true },
   ];
 
   return (
     <ListPageTemplate>
       <UniTable<MoldCalibration>
+        headerTitle="模具校准记录"
+        columnPersistenceId="kuaizhizao-em-mold-calibrations"
         actionRef={actionRef}
         rowKey="uuid"
         columns={columns}
@@ -97,6 +141,7 @@ const MoldCalibrationsPage: React.FC = () => {
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
             mold_uuid: params.mold_uuid,
+            keyword: (params as any).keyword,
           });
           return { data: res.items || [], success: true, total: res.total || 0 };
         }}
@@ -107,6 +152,7 @@ const MoldCalibrationsPage: React.FC = () => {
         ]}
         search={{ labelWidth: 'auto' }}
         pagination={{ defaultPageSize: 20 }}
+        scroll={{ x: 1500 }}
       />
 
       <FormModalTemplate

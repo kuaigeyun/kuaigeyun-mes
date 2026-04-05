@@ -221,9 +221,10 @@ export interface SalesForecastStatistics {
 }
 
 /** 获取销售预测统计 */
-export async function getSalesForecastStatistics(): Promise<SalesForecastStatistics> {
+export async function getSalesForecastStatistics(params: { is_active?: boolean } = { is_active: true }): Promise<SalesForecastStatistics> {
   return apiRequest<SalesForecastStatistics>('/apps/kuaizhizao/sales-forecasts/statistics', {
     method: 'GET',
+    params,
   });
 }
 

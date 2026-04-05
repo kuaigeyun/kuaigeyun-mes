@@ -6,7 +6,9 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker } from '@ant-design/pro-components';
-import { App, Button, message } from 'antd';
+import { App, Button, message, Typography } from 'antd';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { getToolMaintenanceLifecycle } from '../../../utils/equipmentLifecycle';
 import { PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -70,18 +72,51 @@ const ToolMaintenancesPage: React.FC = () => {
   };
 
   const columns: ProColumns<ToolMaintenance>[] = [
-    { title: '工装编号', dataIndex: 'tool_code', width: 120 },
+    {
+      title: '工装编号',
+      dataIndex: 'tool_code',
+      width: 120,
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.tool_code ?? '') }} ellipsis>
+          {r.tool_code ?? '-'}
+        </Typography.Text>
+      ),
+    },
     { title: '工装名称', dataIndex: 'tool_name', width: 180, ellipsis: true },
     { title: '维保类型', dataIndex: 'maintenance_type', width: 120 },
     { title: '维保日期', dataIndex: 'maintenance_date', valueType: 'date', width: 120 },
     { title: '执行人', dataIndex: 'executor', width: 100 },
     { title: '结果', dataIndex: 'result', width: 90 },
+    {
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      width: 132,
+      fixed: 'right',
+      align: 'left',
+      hideInSearch: true,
+      render: (_, record) => {
+        const lifecycle = getToolMaintenanceLifecycle(record as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
+      },
+    },
     { title: '维保内容', dataIndex: 'content', ellipsis: true, hideInSearch: true },
   ];
 
   return (
     <ListPageTemplate>
       <UniTable<ToolMaintenance>
+        headerTitle="工装维保记录"
+        columnPersistenceId="kuaizhizao-em-tool-maintenances"
         actionRef={actionRef}
         rowKey="uuid"
         columns={columns}
@@ -90,6 +125,7 @@ const ToolMaintenancesPage: React.FC = () => {
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
             tool_uuid: params.tool_uuid,
+            keyword: (params as any).keyword,
           });
           return { data: res.items || [], success: true, total: res.total || 0 };
         }}
@@ -100,6 +136,7 @@ const ToolMaintenancesPage: React.FC = () => {
         ]}
         search={{ labelWidth: 'auto' }}
         pagination={{ defaultPageSize: 20 }}
+        scroll={{ x: 1500 }}
       />
 
       <FormModalTemplate

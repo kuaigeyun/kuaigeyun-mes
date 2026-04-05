@@ -264,7 +264,7 @@ export const MaterialBatchPickerModal: React.FC<MaterialBatchPickerModalProps> =
       onCancel={handleCancel}
       onOk={handleOk}
       width={960}
-      destroyOnClose
+      destroyOnHidden
       okText={t('common.confirm')}
       cancelText={t('common.cancel')}
     >

@@ -6,14 +6,28 @@
 
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProDescriptionsItemType } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal } from 'antd';
-import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { App, Popconfirm, Button, Space, Modal, Typography, Descriptions, Empty, Spin } from 'antd';
+import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { holidayApi } from '../../../services/performance';
 import { HolidayFormModal } from '../../../components/HolidayFormModal';
 import type { Holiday } from '../../../types/performance';
+import { getPerformanceConfigActiveLifecycle } from '../../../utils/performanceLifecycle';
+import { buildMasterDetailDescriptionItems } from '../../../utils/buildMasterDetailDescriptionItems';
+
+const HOLIDAY_DETAIL_COLUMNS: ProDescriptionsItemProps<Holiday>[] = [
+  { title: '假期名称', dataIndex: 'name' },
+  { title: '假期日期', dataIndex: 'holidayDate', valueType: 'date' },
+  { title: '假期类型', dataIndex: 'holidayType' },
+  { title: '描述', dataIndex: 'description', span: 3 },
+  { title: '启用状态', dataIndex: 'isActive', render: (_, record) => (record?.isActive ? '启用' : '禁用') },
+  { title: '创建时间', dataIndex: 'createdAt', valueType: 'dateTime' },
+  { title: '更新时间', dataIndex: 'updatedAt', valueType: 'dateTime' },
+];
 
 const HolidaysPage: React.FC = () => {
   const { t } = useTranslation();
@@ -21,7 +35,6 @@ const HolidaysPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [drawerVisible, setDrawerVisible] = useState(false);
-  const [currentHolidayUuid, setCurrentHolidayUuid] = useState<string | null>(null);
   const [holidayDetail, setHolidayDetail] = useState<Holiday | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
@@ -77,8 +90,8 @@ const HolidaysPage: React.FC = () => {
 
   const handleOpenDetail = async (record: Holiday) => {
     try {
-      setCurrentHolidayUuid(record.uuid);
       setDrawerVisible(true);
+      setHolidayDetail(null);
       setDetailLoading(true);
       const detail = await holidayApi.get(record.uuid);
       setHolidayDetail(detail);
@@ -90,22 +103,59 @@ const HolidaysPage: React.FC = () => {
   };
 
   const handleModalSuccess = () => { setModalVisible(false); setEditUuid(null); actionRef.current?.reload(); };
-  const handleCloseDetail = () => { setDrawerVisible(false); setCurrentHolidayUuid(null); setHolidayDetail(null); };
+  const handleCloseDetail = () => { setDrawerVisible(false); setHolidayDetail(null); };
 
   const columns: ProColumns<Holiday>[] = [
-    { title: '假期名称', dataIndex: 'name', width: 200, fixed: 'left' },
+    {
+      title: '假期名称',
+      dataIndex: 'name',
+      width: 200,
+      fixed: 'left',
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.name ?? '') }} ellipsis>
+          {r.name ?? '-'}
+        </Typography.Text>
+      ),
+    },
     { title: '假期日期', dataIndex: 'holidayDate', width: 150, valueType: 'date', sorter: true },
     { title: '假期类型', dataIndex: 'holidayType', width: 150, hideInSearch: true },
     { title: '描述', dataIndex: 'description', ellipsis: true, hideInSearch: true },
     {
-      title: '启用状态',
+      title: '启用',
       dataIndex: 'isActive',
-      width: 100,
+      hideInTable: true,
       valueType: 'select',
-      valueEnum: { true: { text: '启用', status: 'Success' }, false: { text: '禁用', status: 'Default' } },
-      render: (_, record) => <Tag color={record?.isActive ? 'success' : 'default'}>{record?.isActive ? '启用' : '禁用'}</Tag>,
+      valueEnum: { true: { text: '启用' }, false: { text: '禁用' } },
     },
-    { title: '创建时间', dataIndex: 'createdAt', width: 180, valueType: 'dateTime', hideInSearch: true, sorter: true },
+    {
+      title: '更新时间',
+      dataIndex: 'updatedAt',
+      width: 168,
+      hideInSearch: true,
+      render: (_, r) => (r.updatedAt ? dayjs(r.updatedAt).format('YYYY-MM-DD HH:mm:ss') : '-'),
+    },
+    {
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      width: 120,
+      fixed: 'right',
+      align: 'left',
+      hideInSearch: true,
+      render: (_, record) => {
+        const lifecycle = getPerformanceConfigActiveLifecycle(record as unknown as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
+      },
+    },
     {
       title: '操作',
       valueType: 'option',
@@ -113,38 +163,40 @@ const HolidaysPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button type="link" size="small" onClick={() => handleOpenDetail(record)}>详情</Button>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
+          <Button type="link" size="small" onClick={() => handleOpenDetail(record)}>
+            详情
+          </Button>
+          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+            编辑
+          </Button>
           <Popconfirm title="确定要删除这个假期吗？" onConfirm={() => handleDelete(record)}>
-            <Button type="link" danger size="small" icon={<DeleteOutlined />}>删除</Button>
+            <Button type="link" danger size="small" icon={<DeleteOutlined />}>
+              删除
+            </Button>
           </Popconfirm>
         </Space>
       ),
     },
   ];
 
-  const detailColumns: ProDescriptionsItemType<Holiday>[] = [
-    { title: '假期名称', dataIndex: 'name' },
-    { title: '假期日期', dataIndex: 'holidayDate', valueType: 'date' },
-    { title: '假期类型', dataIndex: 'holidayType' },
-    { title: '描述', dataIndex: 'description', span: 2 },
-    { title: '启用状态', dataIndex: 'isActive', render: (_, record) => <Tag color={record?.isActive ? 'success' : 'default'}>{record?.isActive ? '启用' : '禁用'}</Tag> },
-    { title: '创建时间', dataIndex: 'createdAt', valueType: 'dateTime' },
-    { title: '更新时间', dataIndex: 'updatedAt', valueType: 'dateTime' },
-  ];
-
   return (
     <>
       <ListPageTemplate>
         <UniTable<Holiday>
+          headerTitle="假期管理"
           actionRef={actionRef}
           columns={columns}
+          columnPersistenceId="kuaizhizao-perf-holidays"
           request={async (params, _sort, _filter, searchFormValues) => {
-            const apiParams: any = { skip: ((params.current || 1) - 1) * (params.pageSize || 20), limit: params.pageSize || 20 };
+            const pageSize = params.pageSize || 20;
+            const skip = ((params.current || 1) - 1) * pageSize;
+            const apiParams: any = { skip, limit: pageSize };
             if (searchFormValues?.isActive !== undefined && searchFormValues.isActive !== '' && searchFormValues.isActive !== null) apiParams.isActive = searchFormValues.isActive;
             try {
               const result = await holidayApi.list(apiParams);
-              return { data: result, success: true, total: result.length };
+              const rows = Array.isArray(result) ? result : [];
+              const total = rows.length < pageSize ? skip + rows.length : skip + rows.length + 1;
+              return { data: rows, success: true, total };
             } catch (error: any) {
               messageApi.error(error?.message || '获取假期列表失败');
               return { data: [], success: false, total: 0 };
@@ -152,6 +204,7 @@ const HolidaysPage: React.FC = () => {
           }}
           rowKey="uuid"
           showAdvancedSearch={true}
+          scroll={{ x: 1280 }}
           pagination={{ defaultPageSize: 20, showSizeChanger: true }}
           showCreateButton
           createButtonText="新建假期"
@@ -163,7 +216,58 @@ const HolidaysPage: React.FC = () => {
           deleteButtonText="批量删除"
         />
       </ListPageTemplate>
-      <DetailDrawerTemplate<Holiday> title="假期详情" open={drawerVisible} onClose={handleCloseDetail} dataSource={holidayDetail || undefined} columns={detailColumns} loading={detailLoading} width={DRAWER_CONFIG.HALF_WIDTH} />
+      <DetailDrawerTemplate<Holiday>
+        title="假期详情"
+        open={drawerVisible}
+        onClose={handleCloseDetail}
+        width={DRAWER_CONFIG.HALF_WIDTH}
+        loading={detailLoading}
+        columns={[]}
+        customContent={
+          detailLoading && !holidayDetail ? (
+            <div style={{ textAlign: 'center', padding: 48 }}>
+              <Spin />
+            </div>
+          ) : holidayDetail ? (
+            <>
+              <DetailDrawerSection title="基本信息">
+                <Descriptions
+                  column={3}
+                  size="small"
+                  items={buildMasterDetailDescriptionItems(holidayDetail, HOLIDAY_DETAIL_COLUMNS)}
+                />
+              </DetailDrawerSection>
+              <DetailDrawerSection title="生命周期">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {(() => {
+                    const lc = getPerformanceConfigActiveLifecycle(holidayDetail as unknown as Record<string, unknown>);
+                    return (
+                      <UniLifecycle
+                        percent={lc.percent}
+                        stageName={lc.stageName}
+                        status={lc.status}
+                        subStages={lc.subStages}
+                        showLabel
+                        size="small"
+                        showCircleTooltip={false}
+                      />
+                    );
+                  })()}
+                  <Typography.Text type="secondary">
+                    假期主数据未接入单据跟踪中心；上下游与操作日志以业务单据为准。
+                  </Typography.Text>
+                </div>
+              </DetailDrawerSection>
+              <DetailDrawerSection title="明细信息">
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无明细行" />
+              </DetailDrawerSection>
+              <DetailDrawerSection title="操作记录">
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+              </DetailDrawerSection>
+            </>
+          ) : null
+        }
+      />
       <HolidayFormModal open={modalVisible} onClose={() => { setModalVisible(false); setEditUuid(null); }} editUuid={editUuid} onSuccess={handleModalSuccess} />
     </>
   );

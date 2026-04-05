@@ -937,7 +937,7 @@ const RolesPermissionsPage: React.FC = () => {
 
         {/* 新建按钮与加载初始 */}
         <div style={{ padding: '8px', borderBottom: `1px solid ${token.colorBorder}` }}>
-          <Space direction="vertical" style={{ width: '100%' }} size="small">
+          <Space orientation="vertical" style={{ width: '100%' }} size="small">
             <Button
               type="primary"
               icon={<PlusOutlined />}
@@ -1080,7 +1080,7 @@ const RolesPermissionsPage: React.FC = () => {
           {selectedRole ? (
             <Spin spinning={selectedRoleLoading || permissionsLoading}>
               <div style={{ marginBottom: 16 }}>
-                <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                <Space orientation="vertical" size="small" style={{ width: '100%' }}>
                   <div>
                     <span style={{ color: token.colorTextSecondary }}>{t('pages.system.roles.roleDescription')}</span>
                     <span style={{ color: token.colorText }}>

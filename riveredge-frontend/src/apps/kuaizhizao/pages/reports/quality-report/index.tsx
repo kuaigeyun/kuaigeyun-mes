@@ -17,6 +17,7 @@ import { ListPageTemplate, StatCard } from '../../../../../components/layout-tem
 import { qualityApi } from '../../../services/production';
 import { exportReport } from '../../../services/reports';
 import dayjs from 'dayjs';
+import { copyableCodeColumn } from '../../../utils/reportCopyableColumn';
 
 // 质量报表接口定义
 interface QualityReportItem {
@@ -242,28 +243,15 @@ const QualityReportPage: React.FC = () => {
         return <Tag color={config.color}>{config.text}</Tag>;
       },
     },
-    {
-      title: '检验单号',
-      dataIndex: 'inspectionCode',
-      width: 140,
-      ellipsis: true,
-    },
-    {
-      title: '产品编号',
-      dataIndex: 'productCode',
-      width: 120,
-    },
+    copyableCodeColumn<QualityReportItem>('检验单号', 'inspectionCode', 140),
+    copyableCodeColumn<QualityReportItem>('产品编号', 'productCode', 120),
     {
       title: '产品名称',
       dataIndex: 'productName',
       width: 150,
       ellipsis: true,
     },
-    {
-      title: '批次号',
-      dataIndex: 'batchNo',
-      width: 100,
-    },
+    copyableCodeColumn<QualityReportItem>('批次号', 'batchNo', 100),
     {
       title: '检验数量',
       dataIndex: 'totalQuantity',
@@ -515,26 +503,26 @@ const QualityReportPage: React.FC = () => {
       <Spin spinning={loading}>
         {reportType === 'summary' && (
           <UniTable<QualityReportItem>
-          headerTitle="质量检验汇总报表"
-          actionRef={actionRef}
-          rowKey="id"
-          columns={columns}
-          showAdvancedSearch={true}
-          request={async (params) => {
-            // 使用真实数据
-            return {
-              data: reportData,
-              success: true,
-              total: reportData.length,
-            };
-          }}
-          rowSelection={{
-            selectedRowKeys,
-            onChange: setSelectedRowKeys,
-          }}
-          scroll={{ x: 1400 }}
-        />
-      )}
+            headerTitle="质量检验汇总报表"
+            actionRef={actionRef}
+            rowKey="id"
+            columns={columns}
+            columnPersistenceId="kuaizhizao-report-quality-summary"
+            showAdvancedSearch={true}
+            request={async () => {
+              return {
+                data: reportData,
+                success: true,
+                total: reportData.length,
+              };
+            }}
+            rowSelection={{
+              selectedRowKeys,
+              onChange: setSelectedRowKeys,
+            }}
+            scroll={{ x: 1400 }}
+          />
+        )}
 
       {reportType === 'trend' && (
         <div>

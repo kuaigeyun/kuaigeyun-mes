@@ -5375,7 +5375,7 @@ const WorkOrdersPage: React.FC = () => {
         }}
         width={1000}
         footer={null}
-        destroyOnClose
+        destroyOnHidden
       >
         <Row gutter={24}>
           <Col span={10}>

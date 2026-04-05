@@ -6,8 +6,10 @@
 
 import React, { useRef } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { Tag } from 'antd';
+import { Tag, Typography } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { getDueReminderLifecycle } from '../../../utils/equipmentLifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { moldApi } from '../../../services/equipment';
 
@@ -26,7 +28,16 @@ const MoldMaintenanceRemindersPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
 
   const columns: ProColumns<MoldMaintenanceReminder>[] = [
-    { title: '模具编号', dataIndex: 'mold_code', width: 120 },
+    {
+      title: '模具编号',
+      dataIndex: 'mold_code',
+      width: 120,
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.mold_code ?? '') }} ellipsis>
+          {r.mold_code ?? '-'}
+        </Typography.Text>
+      ),
+    },
     { title: '模具名称', dataIndex: 'mold_name', width: 180, ellipsis: true },
     { title: '当前使用次数', dataIndex: 'total_usage_count', width: 120, align: 'right' },
     { title: '保养间隔', dataIndex: 'maintenance_interval', width: 100, align: 'right' },
@@ -43,14 +54,25 @@ const MoldMaintenanceRemindersPage: React.FC = () => {
       },
     },
     {
-      title: '状态',
-      dataIndex: 'reminder_type',
-      width: 100,
-      render: (_, r) => {
-        const t = r.reminder_type;
-        if (t === 'overdue') return <Tag color="red">已过期</Tag>;
-        if (t === 'due_soon') return <Tag color="orange">即将到期</Tag>;
-        return <Tag>{t || '-'}</Tag>;
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      width: 132,
+      fixed: 'right',
+      align: 'left',
+      hideInSearch: true,
+      render: (_, record) => {
+        const lifecycle = getDueReminderLifecycle(record as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
       },
     },
   ];
@@ -58,6 +80,8 @@ const MoldMaintenanceRemindersPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<MoldMaintenanceReminder>
+        headerTitle="模具保养提醒"
+        columnPersistenceId="kuaizhizao-em-mold-maintenance-reminders"
         actionRef={actionRef}
         rowKey="mold_uuid"
         columns={columns}
@@ -66,11 +90,13 @@ const MoldMaintenanceRemindersPage: React.FC = () => {
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
             reminder_type: params.reminder_type,
+            keyword: (params as any).keyword,
           });
           return { data: res.items || [], success: true, total: res.total || 0 };
         }}
         search={{ labelWidth: 'auto' }}
         pagination={{ defaultPageSize: 20 }}
+        scroll={{ x: 1200 }}
       />
     </ListPageTemplate>
   );

@@ -11,7 +11,9 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormSwitch } from '@ant-design/pro-components';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
-import { App, Button, Tag, Space, message, Modal, Tabs, Table, Form, Input, InputNumber, Descriptions, DatePicker, Select, Row, Col } from 'antd';
+import { App, Button, Tag, Space, message, Modal, Tabs, Table, Form, Input, InputNumber, Descriptions, DatePicker, Select, Row, Col, Typography } from 'antd';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { getMoldAssetLifecycle } from '../../../utils/equipmentLifecycle';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import CodeField from '../../../../../components/code-field';
@@ -286,6 +288,10 @@ const MoldsPage: React.FC = () => {
             await moldApi.delete(String(uuid));
           }
           messageApi.success(`成功删除 ${keys.length} 条记录`);
+          if (moldDetail?.uuid && keys.map(String).includes(String(moldDetail.uuid))) {
+            setDrawerVisible(false);
+            setMoldDetail(null);
+          }
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '删除失败');
@@ -463,6 +469,11 @@ const MoldsPage: React.FC = () => {
       width: 140,
       ellipsis: true,
       fixed: 'left',
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
+          {r.code ?? '-'}
+        </Typography.Text>
+      ),
     },
     {
       title: '模具名称',
@@ -496,22 +507,6 @@ const MoldsPage: React.FC = () => {
       width: 150,
     },
     {
-      title: '状态',
-      dataIndex: 'status',
-      width: 100,
-      render: (status) => {
-        const statusMap: Record<string, { text: string; color: string }> = {
-          '正常': { text: '正常', color: 'success' },
-          '使用中': { text: '使用中', color: 'processing' },
-          '维护中': { text: '维护中', color: 'warning' },
-          '停用': { text: '停用', color: 'default' },
-          '报废': { text: '报废', color: 'error' },
-        };
-        const config = statusMap[status || ''] || { text: status || '-', color: 'default' };
-        return <Tag color={config.color}>{config.text}</Tag>;
-      },
-    },
-    {
       title: '是否启用',
       dataIndex: 'is_active',
       width: 100,
@@ -541,11 +536,34 @@ const MoldsPage: React.FC = () => {
       },
     },
     {
-      title: '创建时间',
-      dataIndex: 'created_at',
-      valueType: 'dateTime',
-      width: 160,
-      sorter: true,
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      width: 168,
+      hideInSearch: true,
+      defaultSortOrder: 'descend',
+      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+    },
+    {
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      width: 132,
+      fixed: 'right',
+      align: 'left',
+      hideInSearch: true,
+      render: (_, record) => {
+        const lifecycle = getMoldAssetLifecycle(record as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
+      },
     },
     {
       title: '操作',
@@ -557,7 +575,10 @@ const MoldsPage: React.FC = () => {
             type="link"
             size="small"
             icon={<EyeOutlined />}
-            onClick={() => handleDetail(record)}
+            onClick={(e) => {
+              e.stopPropagation();
+              void handleDetail(record);
+            }}
           >
             详情
           </Button>
@@ -565,7 +586,10 @@ const MoldsPage: React.FC = () => {
             type="link"
             size="small"
             icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
+            onClick={(e) => {
+              e.stopPropagation();
+              void handleEdit(record);
+            }}
           >
             编辑
           </Button>
@@ -574,11 +598,12 @@ const MoldsPage: React.FC = () => {
             size="small"
             danger
             icon={<DeleteOutlined />}
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               Modal.confirm({
                 title: '确认删除',
                 content: `确定要删除模具"${record.name}"吗？`,
-                onOk: () => handleDelete([record]),
+                onOk: () => record.uuid && handleDelete([record.uuid]),
               });
             }}
           >
@@ -594,16 +619,22 @@ const MoldsPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<Mold>
           headerTitle="模具管理"
+          columnPersistenceId="kuaizhizao-em-molds"
           actionRef={actionRef}
           rowKey="uuid"
           columns={columns}
           showAdvancedSearch={true}
+          onRow={(record) => ({
+            onClick: () => void handleDetail(record),
+            style: { cursor: 'pointer' },
+          })}
           request={async (params) => {
             try {
               const response = await moldApi.list({
                 skip: (params.current! - 1) * params.pageSize!,
                 limit: params.pageSize,
                 ...params,
+                keyword: (params as any).keyword,
               });
               return {
                 data: response.items || [],
@@ -709,6 +740,7 @@ const MoldsPage: React.FC = () => {
               messageApi.error(error?.message || '导出失败');
             }
           }}
+          scroll={{ x: 2000 }}
         />
       </ListPageTemplate>
 

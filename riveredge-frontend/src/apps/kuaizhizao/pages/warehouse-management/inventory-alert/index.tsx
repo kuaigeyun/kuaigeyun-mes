@@ -9,11 +9,14 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormDigit, ProFormTextArea, ProFormSelect, ProFormSwitch } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, message, Popconfirm, Badge, Card, Row, Col, Statistic } from 'antd';
+import { App, Button, Tag, Space, Modal, message, Popconfirm, Badge, Card, Row, Col, Statistic, Typography } from 'antd';
 import { EyeOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined, CloseCircleOutlined, WarningOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { inventoryAlertApi } from '../../../services/inventory-alert';
+import { getInventoryAlertLifecycle } from '../../../utils/inventoryAlertLifecycle';
 
 interface InventoryAlert {
   id?: number;
@@ -271,6 +274,11 @@ const InventoryAlertPage: React.FC = () => {
       dataIndex: 'material_code',
       width: 120,
       ellipsis: true,
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.material_code ?? '') }} ellipsis>
+          {r.material_code ?? '-'}
+        </Typography.Text>
+      ),
     },
     {
       title: '物料名称',
@@ -309,7 +317,7 @@ const InventoryAlertPage: React.FC = () => {
     {
       title: '状态',
       dataIndex: 'status',
-      width: 100,
+      hideInTable: true,
       valueEnum: {
         pending: { text: '待处理', status: 'warning' },
         processing: { text: '处理中', status: 'processing' },
@@ -322,6 +330,35 @@ const InventoryAlertPage: React.FC = () => {
       dataIndex: 'triggered_at',
       valueType: 'dateTime',
       width: 160,
+    },
+    {
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      width: 168,
+      hideInSearch: true,
+      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+    },
+    {
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      width: 132,
+      fixed: 'right',
+      align: 'left',
+      hideInSearch: true,
+      render: (_, record) => {
+        const lifecycle = getInventoryAlertLifecycle(record as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
+      },
     },
     {
       title: '操作',
@@ -362,6 +399,11 @@ const InventoryAlertPage: React.FC = () => {
       width: 150,
       ellipsis: true,
       fixed: 'left',
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
+          {r.code ?? '-'}
+        </Typography.Text>
+      ),
     },
     {
       title: '规则名称',
@@ -415,6 +457,13 @@ const InventoryAlertPage: React.FC = () => {
         true: { text: '启用', status: 'success' },
         false: { text: '禁用', status: 'default' },
       },
+    },
+    {
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      width: 168,
+      hideInSearch: true,
+      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
       title: '操作',
@@ -494,15 +543,21 @@ const InventoryAlertPage: React.FC = () => {
         actionRef={actionRef}
         rowKey="id"
         columns={activeTab === 'alerts' ? alertColumns : ruleColumns}
+        columnPersistenceId={
+          activeTab === 'alerts' ? 'kuaizhizao-wm-inventory-alert-records' : 'kuaizhizao-wm-inventory-alert-rules'
+        }
         showAdvancedSearch={true}
         showCreateButton={activeTab === 'rules'}
+        createButtonText="新建库存预警规则"
         onCreate={activeTab === 'rules' ? handleCreateRule : undefined}
         request={async (params) => {
           try {
+            const pageSize = params.pageSize || 20;
+            const skip = (params.current! - 1) * pageSize;
             const result = activeTab === 'alerts'
               ? await inventoryAlertApi.list({
-                  skip: (params.current! - 1) * params.pageSize!,
-                  limit: params.pageSize,
+                  skip,
+                  limit: pageSize,
                   alert_type: params.alert_type,
                   status: params.status,
                   alert_level: params.alert_level,
@@ -510,15 +565,17 @@ const InventoryAlertPage: React.FC = () => {
                   warehouse_id: params.warehouse_id,
                 })
               : await inventoryAlertApi.listRules({
-                  skip: (params.current! - 1) * params.pageSize!,
-                  limit: params.pageSize,
+                  skip,
+                  limit: pageSize,
                   alert_type: params.alert_type,
                   is_enabled: params.is_enabled,
                 });
+            const rows = Array.isArray(result) ? result : [];
+            const total = rows.length < pageSize ? skip + rows.length : skip + rows.length + 1;
             return {
-              data: result || [],
+              data: rows,
               success: true,
-              total: result?.length || 0,
+              total,
             };
           } catch (error) {
             return {

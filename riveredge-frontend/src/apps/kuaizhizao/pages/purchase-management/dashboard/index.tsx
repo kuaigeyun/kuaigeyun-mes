@@ -215,7 +215,7 @@ const PurchaseDashboard: React.FC = () => {
                           percent={s?.arrival_rate ?? 0}
                           showInfo={false}
                           strokeColor="#fff"
-                          trailColor="rgba(255, 255, 255, 0.2)"
+                          railColor="rgba(255, 255, 255, 0.2)"
                           strokeWidth={6}
                         />
                       </div>

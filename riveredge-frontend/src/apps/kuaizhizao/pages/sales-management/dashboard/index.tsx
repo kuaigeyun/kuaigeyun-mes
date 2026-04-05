@@ -1,12 +1,11 @@
-import React, { useMemo } from 'react';
-import { Card, Row, Col, Progress, Table, Typography, Empty, Tag, Button, Spin, Space } from 'antd';
+import React from 'react';
+import { Card, Row, Col, Progress, Table, Typography, Tag, Spin } from 'antd';
 import { useRequest } from 'ahooks';
 import { ProCard } from '@ant-design/pro-components';
 import { 
   FileTextOutlined, 
   SendOutlined, 
   RiseOutlined, 
-  PlusOutlined,
   UserOutlined,
   CustomerServiceOutlined,
   SolutionOutlined,
@@ -16,7 +15,7 @@ import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { mesDashboardService } from '../../../services/dashboard';
 import { listSalesOrders } from '../../../services/sales-order';
-import { customerFollowUpApi, type CustomerFollowUp } from '../../../services/customer-follow-up';
+import { customerFollowUpApi } from '../../../services/customer-follow-up';
 import { AmountDisplay } from '../../../../../components/permission';
 import { useGlobalStore } from '../../../../../stores/globalStore';
 import { canViewKuaizhizaoPricing } from '../../../../../utils/kuaizhizaoPricingPermission';
@@ -101,11 +100,6 @@ const SalesDashboard: React.FC = () => {
     },
   ];
 
-  const formatTime = (iso: string | null | undefined) => {
-    if (!iso) return '—';
-    const d = dayjs(iso);
-    return d.isValid() ? d.format('MM-DD HH:mm') : '—';
-  };
 
   return (
     <div style={{ padding: '0 0 16px', overflow: 'visible' }}>
@@ -224,8 +218,8 @@ const SalesDashboard: React.FC = () => {
                           percent={s?.achievement_rate ?? 0}
                           showInfo={false}
                           strokeColor="#fff"
-                          trailColor="rgba(255, 255, 255, 0.2)"
-                          strokeWidth={6}
+                          railColor="rgba(255, 255, 255, 0.2)"
+                          size={6}
                         />
                       </div>
                     </div>

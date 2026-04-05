@@ -1603,7 +1603,7 @@ const DemandComputationPage: React.FC = () => {
       {/* 执行计算 - 计算参数 Modal */}
       <Modal
         open={executeModalVisible}
-        destroyOnClose
+        destroyOnHidden
         onCancel={() => {
           setExecuteModalVisible(false)
           setExecuteRecord(null)
@@ -1835,7 +1835,6 @@ const DemandComputationPage: React.FC = () => {
         }}
         title="计算详情"
         rootClassName="demand-computation-drawer"
-        width="50%"
         styles={{
           wrapper: { width: '50%' },
           /** 仅本页详情抽屉：内容区去掉上下 padding，左右保持主题默认 */
@@ -1974,6 +1973,7 @@ const DemandComputationPage: React.FC = () => {
                           {
                             key: 't2',
                             label: '结束时间',
+                            span: validationResults ? 1 : 2,
                             children: formatDateTimeBySiteSetting(currentComputation.computation_end_time) || '—',
                           },
                           ...(validationResults
@@ -1990,6 +1990,7 @@ const DemandComputationPage: React.FC = () => {
                                 {
                                   key: 'v1',
                                   label: '验证通过/失败/总数',
+                                  span: 3,
                                   children: `${validationResults.passed_count ?? 0} / ${validationResults.failed_count ?? 0} / ${validationResults.total_count ?? 0}`,
                                 },
                               ]
@@ -2040,6 +2041,7 @@ const DemandComputationPage: React.FC = () => {
                             {dynamicMonitorLoading ? (
                               <div style={{ textAlign: 'center', padding: 24 }}>
                                 <Spin />
+                                <div style={{ marginTop: 16, color: 'var(--ant-color-text-secondary)' }}>正在拉取监控数据...</div>
                               </div>
                             ) : dynamicMonitorData ? (
                               <>
@@ -2137,7 +2139,7 @@ const DemandComputationPage: React.FC = () => {
                                             (alert: any, i: number) => ({
                                               key: i,
                                               label: alert.planned_end_date || alert.delivery_date,
-                                              children: (
+                                              content: (
                                                 <div>
                                                   <div style={{ fontWeight: 'bold' }}>
                                                     {alert.code} ({alert.name})

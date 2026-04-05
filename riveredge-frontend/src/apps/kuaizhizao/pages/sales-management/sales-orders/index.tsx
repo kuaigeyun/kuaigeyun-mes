@@ -11,7 +11,7 @@
 import { getBusinessConfig } from '../../../../../services/businessConfig';
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormUploadButton } from '@ant-design/pro-components';
-import { App, Button, Space, Modal, Drawer, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Progress, Tooltip, Dropdown, Select, theme as AntdTheme } from 'antd';
+import { App, Button, Space, Modal, Drawer, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Progress, Tooltip, Dropdown, Select, Tag, theme as AntdTheme } from 'antd';
 import { EyeOutlined, EditOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, ImportOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, AppstoreAddOutlined, CommentOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
@@ -109,18 +109,18 @@ type SalesOrderItemRow = SalesOrderItem & {
 };
 
 /** 明细行是否已挂工单（直推工单路径与需求计算路径互斥） */
-function orderHasLineWorkOrders(order: SalesOrderLite | null | undefined): boolean {
+function orderHasLineWorkOrders(order: SalesOrder | null | undefined): boolean {
   return !!(order?.items?.some((it) => it?.work_order_id != null && Number(it.work_order_id) > 0));
 }
 
-function canOpenDemandComputationPush(order: SalesOrderLite | null | undefined, nodeEnabled: boolean): boolean {
+function canOpenDemandComputationPush(order: SalesOrder | null | undefined, nodeEnabled: boolean): boolean {
   if (!nodeEnabled) return false;
   if (order?.pushed_to_computation) return false;
   if (orderHasLineWorkOrders(order)) return false;
   return true;
 }
 
-function canOpenDirectWorkOrderPush(order: SalesOrderLite | null | undefined, nodeEnabled: boolean): boolean {
+function canOpenDirectWorkOrderPush(order: SalesOrder | null | undefined, nodeEnabled: boolean): boolean {
   if (!nodeEnabled) return false;
   if (order?.pushed_to_computation) return false;
   return true;
@@ -128,32 +128,7 @@ function canOpenDirectWorkOrderPush(order: SalesOrderLite | null | undefined, no
 
 const SALES_ORDER_ROW_ACTIONS_INLINE_MAX = 4;
 
-const renderSalesOrderRowActions = (
-  nodes: React.ReactNode[],
-  keyPrefix: string,
-  inlineMax: number = SALES_ORDER_ROW_ACTIONS_INLINE_MAX
-): React.ReactNode => {
-  const wrapped = nodes.map((node, i) => <span key={`${keyPrefix}-${i}`}>{node}</span>);
-  if (wrapped.length <= inlineMax) {
-    return <Space size="small" wrap>{wrapped}</Space>;
-  }
-  return (
-    <Space size="small" wrap>
-      {wrapped.slice(0, inlineMax)}
-      <Dropdown
-        trigger={['click']}
-        menu={{
-          items: wrapped.slice(inlineMax).map((node, i) => ({
-            key: `${keyPrefix}-more-${i}`,
-            label: node,
-          })),
-        }}
-      >
-        <Button type="link" size="small">更多</Button>
-      </Dropdown>
-    </Space>
-  );
-};
+
 
 function formatMoneyYuan(n: number): string {
   return `¥${(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -1152,7 +1127,7 @@ const SalesOrdersPage: React.FC = () => {
   /**
    * 处理下推到需求计算（含预览）
    */
-  const handlePushToComputation = async (id: number, order?: SalesOrderLite | null) => {
+  const handlePushToComputation = async (id: number, order?: SalesOrder | null) => {
     if (!salesNodeEnabled.demand_computation) {
       messageApi.warning('需求计算节点未启用，无法下推');
       return;
@@ -1274,7 +1249,7 @@ const SalesOrdersPage: React.FC = () => {
   };
 
   /** 直推工单（含预览） */
-  const handlePushToWorkOrder = async (id: number, order?: SalesOrderLite | null) => {
+  const handlePushToWorkOrder = async (id: number, order?: SalesOrder | null) => {
     if (!salesNodeEnabled.work_order) {
       messageApi.warning('工单节点未启用，无法下推');
       return;
@@ -1701,6 +1676,7 @@ const SalesOrdersPage: React.FC = () => {
         }
         fixedInlineNodes.push(
           <UniWorkflowActions
+            key="workflow-actions"
             record={record}
             entityName={t('app.kuaizhizao.salesOrder.entityName')}
             statusField="status"
@@ -2332,44 +2308,49 @@ const SalesOrdersPage: React.FC = () => {
           createButtonText={t('app.kuaizhizao.salesOrder.create')}
           onCreate={handleCreate}
           toolBarRender={() => [
-            <Dropdown.Button
-              key={`batch-btn-${selectedRowKeys.length}`}
-              disabled={selectedRowKeys.length === 0}
-              trigger={['click']}
-              danger
-              icon={<ArrowDownOutlined />}
-              onClick={() => handleDeleteResolved(selectedRowKeys)}
-              menu={{
-                items: [
-                  {
-                    key: 'submit',
-                    label: t('app.kuaizhizao.salesOrder.batchSubmit', '批量提交'),
-                    icon: <SendOutlined />,
-                    onClick: () => handleBatchSubmit(selectedRowKeys),
-                  },
-                  {
-                    key: 'approve',
-                    label: t('app.kuaizhizao.salesOrder.batchApprove', '批量审核'),
-                    icon: <FileTextOutlined />,
-                    onClick: () => handleBatchApprove(selectedRowKeys),
-                  },
-                  {
-                    key: 'withdraw',
-                    label: t('app.kuaizhizao.salesOrder.batchWithdraw', '批量撤回'),
-                    icon: <RollbackOutlined />,
-                    onClick: () => handleBatchWithdraw(selectedRowKeys),
-                  },
-                  {
-                    key: 'unapprove',
-                    label: t('app.kuaizhizao.salesOrder.batchUnapprove', '批量反审核'),
-                    icon: <RollbackOutlined />,
-                    onClick: () => handleBatchUnapprove(selectedRowKeys),
-                  },
-                ],
-              }}
-            >
-              <DeleteOutlined /> {t('app.kuaizhizao.salesOrder.batchDelete', '批量删除')}
-            </Dropdown.Button>,
+            <Space.Compact key={`batch-btn-${selectedRowKeys.length}`}>
+              <Button
+                disabled={selectedRowKeys.length === 0}
+                danger
+                onClick={() => handleDeleteResolved(selectedRowKeys)}
+              >
+                <DeleteOutlined /> {t('app.kuaizhizao.salesOrder.batchDelete', '批量删除')}
+              </Button>
+              <Dropdown
+                disabled={selectedRowKeys.length === 0}
+                trigger={['click']}
+                menu={{
+                  items: [
+                    {
+                      key: 'submit',
+                      label: t('app.kuaizhizao.salesOrder.batchSubmit', '批量提交'),
+                      icon: <SendOutlined />,
+                      onClick: () => handleBatchSubmit(selectedRowKeys),
+                    },
+                    {
+                      key: 'approve',
+                      label: t('app.kuaizhizao.salesOrder.batchApprove', '批量审核'),
+                      icon: <FileTextOutlined />,
+                      onClick: () => handleBatchApprove(selectedRowKeys),
+                    },
+                    {
+                      key: 'withdraw',
+                      label: t('app.kuaizhizao.salesOrder.batchWithdraw', '批量撤回'),
+                      icon: <RollbackOutlined />,
+                      onClick: () => handleBatchWithdraw(selectedRowKeys),
+                    },
+                    {
+                      key: 'unapprove',
+                      label: t('app.kuaizhizao.salesOrder.batchUnapprove', '批量反审核'),
+                      icon: <RollbackOutlined />,
+                      onClick: () => handleBatchUnapprove(selectedRowKeys),
+                    },
+                  ],
+                }}
+              >
+                <Button danger icon={<ArrowDownOutlined />} />
+              </Dropdown>
+            </Space.Compact>,
           ]}
           showImportButton={true}
           onImport={handleImport}
@@ -3262,7 +3243,9 @@ const SalesOrdersPage: React.FC = () => {
             )}
           </Space>
         }
-        width="50%"
+        styles={{
+          wrapper: { width: '50%' },
+        }}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         extra={
@@ -3322,19 +3305,19 @@ const SalesOrdersPage: React.FC = () => {
                         key: 'computation',
                         label: t('app.kuaizhizao.salesOrder.demandComputation'),
                         icon: <ArrowDownOutlined />,
-                        disabled: !canOpenDemandComputationPush(currentSalesOrder as SalesOrderLite, salesNodeEnabled.demand_computation),
+                        disabled: !canOpenDemandComputationPush(currentSalesOrder as SalesOrder, salesNodeEnabled.demand_computation),
                         onClick: () =>
-                          canOpenDemandComputationPush(currentSalesOrder as SalesOrderLite, salesNodeEnabled.demand_computation) &&
-                          handlePushToComputation(currentSalesOrder.id!, currentSalesOrder as SalesOrderLite),
+                          canOpenDemandComputationPush(currentSalesOrder as SalesOrder, salesNodeEnabled.demand_computation) &&
+                          handlePushToComputation(currentSalesOrder.id!, currentSalesOrder as SalesOrder),
                       },
                       {
                         key: 'workorder',
                         label: t('app.kuaizhizao.salesOrder.pushToWorkOrder'),
                         icon: <ArrowDownOutlined />,
-                        disabled: !canOpenDirectWorkOrderPush(currentSalesOrder as SalesOrderLite, salesNodeEnabled.work_order),
+                        disabled: !canOpenDirectWorkOrderPush(currentSalesOrder as SalesOrder, salesNodeEnabled.work_order),
                         onClick: () =>
-                          canOpenDirectWorkOrderPush(currentSalesOrder as SalesOrderLite, salesNodeEnabled.work_order) &&
-                          handlePushToWorkOrder(currentSalesOrder.id!, currentSalesOrder as SalesOrderLite),
+                          canOpenDirectWorkOrderPush(currentSalesOrder as SalesOrder, salesNodeEnabled.work_order) &&
+                          handlePushToWorkOrder(currentSalesOrder.id!, currentSalesOrder as SalesOrder),
                       },
                       { type: 'divider' },
                       { key: 'shipment', label: t('app.kuaizhizao.salesOrder.shipmentNotice'), icon: <SendOutlined />, disabled: !salesNodeEnabled.shipment_notice, onClick: () => handlePushToShipmentNotice(currentSalesOrder.id!) },
@@ -3376,7 +3359,7 @@ const SalesOrdersPage: React.FC = () => {
       />
 
       <AgileQuotingDrawer
-        visible={quoteDrawerVisible}
+        open={quoteDrawerVisible}
         materialId={quoteMaterialId}
         onClose={() => setQuoteDrawerVisible(false)}
         onAdopt={(price) => {
@@ -3456,7 +3439,7 @@ const SalesOrdersPage: React.FC = () => {
         confirmLoading={pushToReturnLoading}
         okText="确认下推"
         width={720}
-        destroyOnClose
+        destroyOnHidden
       >
         {pushToReturnOrder && (
           <>
@@ -3528,8 +3511,9 @@ const SalesOrdersPage: React.FC = () => {
         okButtonProps={{ disabled: pushPreviewLoading || !pushPreviewData }}
       >
         {pushPreviewLoading ? (
-          <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Spin tip={t('app.kuaizhizao.salesOrder.loadingPreview')} />
+          <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+            <Spin />
+            <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
           </div>
         ) : pushPreviewData ? (
           <div>

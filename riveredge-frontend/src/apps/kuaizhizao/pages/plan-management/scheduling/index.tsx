@@ -326,8 +326,9 @@ const SchedulingPage: React.FC = () => {
       >
         <Suspense
           fallback={
-            <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
-              <Spin tip="加载甘特图…" />
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 48, gap: 16 }}>
+              <Spin size="large" />
+              <div style={{ color: 'var(--ant-color-primary)' }}>加载甘特图…</div>
             </div>
           }
         >
@@ -366,7 +367,7 @@ const SchedulingPage: React.FC = () => {
           <div style={{ color: '#8c8c8c', fontSize: 12, marginBottom: 16 }}>
             勾选表示排程时考虑该约束，取消勾选则忽略（适合资源有限的中小企业按实情选择）
           </div>
-          <Space direction="vertical" size={16} style={{ width: '100%' }}>
+          <Space orientation="vertical" size={16} style={{ width: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>人：考虑人员约束</span>
               <Switch

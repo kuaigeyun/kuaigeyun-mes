@@ -5,15 +5,17 @@
  */
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal, Space, Tag } from 'antd';
+import { App, Button, Modal, Typography } from 'antd';
 import { ModalForm, ProFormDatePicker, ProFormMoney, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { EyeOutlined, CheckOutlined, StopOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import dayjs from 'dayjs';
-import { RE_STATUS_BADGE_DRAFT, resolveStatusTagDisplayProps } from '../../../../../constants/statusBadges';
+import { getFinanceVoucherLifecycle } from '../../../utils/financeLifecycle';
+import { renderRowActionsMax3 } from '../../../utils/renderRowActionsMax3';
 
 interface ReceiptVoucher {
   id: number;
@@ -30,12 +32,6 @@ interface ReceiptVoucher {
   notes?: string;
   created_at: string;
 }
-
-const STATUS_MAP: Record<string, { text: string; color: string }> = {
-  Draft: { text: '草稿', color: RE_STATUS_BADGE_DRAFT },
-  Confirmed: { text: '已确认', color: 'success' },
-  Cancelled: { text: '已作废', color: 'error' },
-};
 
 const PAYMENT_METHOD_OPTIONS = [
   { label: '银行转账', value: '银行转账' },
@@ -121,8 +117,13 @@ const ReceiptsPage: React.FC = () => {
     {
       title: '收款单号',
       dataIndex: 'receipt_code',
-      width: 160,
+      width: 168,
       fixed: 'left',
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.receipt_code ?? '') }} ellipsis>
+          {r.receipt_code ?? '-'}
+        </Typography.Text>
+      ),
     },
     {
       title: '客户名称',
@@ -168,31 +169,70 @@ const ReceiptsPage: React.FC = () => {
     {
       title: '状态',
       dataIndex: 'status',
-      width: 90,
+      hideInTable: true,
+      valueEnum: {
+        Draft: { text: '草稿' },
+        Confirmed: { text: '已确认' },
+        Cancelled: { text: '已作废' },
+      },
+    },
+    {
+      title: '创建时间',
+      dataIndex: 'created_at',
+      width: 168,
+      hideInSearch: true,
+      render: (_, r) => (r.created_at ? dayjs(r.created_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+    },
+    {
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      fixed: 'right',
+      align: 'left',
+      width: 120,
+      hideInSearch: true,
       render: (_, record) => {
-        const s = STATUS_MAP[record.status] || { text: record.status, color: 'default' };
-        return <Tag {...resolveStatusTagDisplayProps(s)}>{s.text}</Tag>;
+        const lc = getFinanceVoucherLifecycle(record as unknown as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lc.percent}
+            stageName={lc.stageName}
+            status={lc.status}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
       },
     },
     {
       title: '操作',
       valueType: 'option',
       fixed: 'right',
-      width: 200,
-      render: (_, record) => (
-        <Space>
-          {record.status === 'Draft' && (
-            <Button type="link" size="small" icon={<CheckOutlined />} onClick={() => handleConfirm(record)}>确认</Button>
-          )}
-          {record.status === 'Confirmed' && (
-            <Button type="link" size="small" onClick={() => navigate(`/apps/kuaicaiwu/finance-management/settlement`)}>核销</Button>
-          )}
-          {record.status !== 'Cancelled' && record.settled_amount === 0 && (
-            <Button type="link" size="small" danger icon={<StopOutlined />} onClick={() => handleCancel(record)}>作废</Button>
-          )}
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => messageApi.info('收款单详情功能开发中')}>详情</Button>
-        </Space>
-      ),
+      width: 220,
+      render: (_, record) =>
+        renderRowActionsMax3(
+          [
+            <Button key="det" type="link" size="small" icon={<EyeOutlined />} onClick={() => messageApi.info('收款单详情功能开发中')}>
+              详情
+            </Button>,
+            record.status === 'Draft' ? (
+              <Button key="cf" type="link" size="small" icon={<CheckOutlined />} onClick={() => handleConfirm(record)}>
+                确认
+              </Button>
+            ) : null,
+            record.status === 'Confirmed' ? (
+              <Button key="st" type="link" size="small" onClick={() => navigate(`/apps/kuaicaiwu/finance-management/settlement`)}>
+                核销
+              </Button>
+            ) : null,
+            record.status !== 'Cancelled' && record.settled_amount === 0 ? (
+              <Button key="ca" type="link" size="small" danger icon={<StopOutlined />} onClick={() => handleCancel(record)}>
+                作废
+              </Button>
+            ) : null,
+          ].filter(Boolean) as React.ReactNode[],
+          `rcv-${record.id}`,
+        ),
     },
   ];
 
@@ -202,6 +242,9 @@ const ReceiptsPage: React.FC = () => {
         headerTitle="收款单管理"
         actionRef={actionRef}
         rowKey="id"
+        columnPersistenceId="kuaicaiwu-finance-receipts"
+        scroll={{ x: 1680 }}
+        showAdvancedSearch
         search={{ labelWidth: 120 }}
         showCreateButton
         createButtonText="新建收款单"

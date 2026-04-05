@@ -10,10 +10,20 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormTextArea, ProFormSwitch } from '@ant-design/pro-components';
-import { App, Button, Tag, Space } from 'antd';
+import { App, Button, Tag, Space, Descriptions, Typography, Timeline } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import {
+  ListPageTemplate,
+  FormModalTemplate,
+  DetailDrawerTemplate,
+  DetailDrawerSection,
+  MODAL_CONFIG,
+  DRAWER_CONFIG,
+} from '../../../../../components/layout-templates';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { getPerformanceConfigActiveLifecycle } from '../../../../kuaizhizao/utils/performanceLifecycle';
+import { buildMasterDetailDescriptionItems } from '../../../utils/buildMasterDetailDescriptionItems';
 import { costRuleApi } from '../../../services/cost';
 import dayjs from 'dayjs';
 
@@ -187,11 +197,30 @@ const CostRulePage: React.FC = () => {
    */
   const columns: ProColumns<CostRule>[] = [
     {
+      title: '是否启用',
+      dataIndex: 'is_active',
+      key: 'is_active',
+      hideInTable: true,
+      valueType: 'select',
+      fieldProps: {
+        allowClear: true,
+        options: [
+          { label: '启用', value: true },
+          { label: '禁用', value: false },
+        ],
+      },
+    },
+    {
       title: '规则编号',
       dataIndex: 'code',
       key: 'code',
       width: 150,
       fixed: 'left',
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
+          {r.code ?? '-'}
+        </Typography.Text>
+      ),
     },
     {
       title: '规则名称',
@@ -240,20 +269,32 @@ const CostRulePage: React.FC = () => {
       width: 120,
     },
     {
-      title: '是否启用',
-      dataIndex: 'is_active',
-      key: 'is_active',
-      width: 100,
-      render: (dom) => (
-        <Tag color={!!dom ? 'green' : 'red'}>{!!dom ? '启用' : '禁用'}</Tag>
-      ),
-    },
-    {
       title: '创建时间',
       dataIndex: 'created_at',
       key: 'created_at',
       width: 180,
-      render: (dom) => dom ? dayjs(dom as string).format('YYYY-MM-DD HH:mm:ss') : '-',
+      search: false,
+      render: (dom) => (dom ? dayjs(dom as string).format('YYYY-MM-DD HH:mm:ss') : '-'),
+    },
+    {
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      key: 'updated_at',
+      width: 180,
+      search: false,
+      render: (dom) => (dom ? dayjs(dom as string).format('YYYY-MM-DD HH:mm:ss') : '-'),
+    },
+    {
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      key: 'lifecycle',
+      width: 200,
+      fixed: 'right',
+      align: 'left',
+      search: false,
+      render: (_, record) => (
+        <UniLifecycle {...getPerformanceConfigActiveLifecycle(record)} showCircleTooltip={false} />
+      ),
     },
     {
       title: '操作',
@@ -357,10 +398,14 @@ const CostRulePage: React.FC = () => {
     },
   ];
 
+  const ruleDetailBaseItems = detailItems.filter(
+    (d) => !['calculation_formula', 'rule_parameters'].includes(String((d as { dataIndex?: string }).dataIndex)),
+  );
+
   const ruleToolbarActions = (
     <Space wrap size="middle">
       <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
-        新建规则
+        新建成本核算规则
       </Button>
       <Button type="primary" ghost onClick={handleInitPresets}>
         初始化推荐规则
@@ -373,17 +418,21 @@ const CostRulePage: React.FC = () => {
       <UniTable<CostRule>
         actionRef={actionRef}
         headerActions={ruleToolbarActions}
+        columnPersistenceId="kuaicaiwu-cost-rules"
+        scroll={{ x: 'max-content' }}
         request={async (params: any) => {
           // 将 ProTable 的分页参数转换为后端期望的格式
           const queryParams: any = {
             skip: (params.current! - 1) * params.pageSize!,
             limit: params.pageSize!,
           };
-          
+
           // 传递其他搜索参数
           if (params.rule_type) queryParams.rule_type = params.rule_type;
           if (params.cost_type) queryParams.cost_type = params.cost_type;
-          if (params.is_active !== undefined) queryParams.is_active = params.is_active;
+          if (params.is_active !== undefined && params.is_active !== '') {
+            queryParams.is_active = params.is_active;
+          }
           if (params.search) queryParams.search = params.search;
           
           const response = await costRuleApi.list(queryParams);
@@ -525,10 +574,95 @@ const CostRulePage: React.FC = () => {
       <DetailDrawerTemplate
         title="成本核算规则详情"
         open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
+        onClose={() => {
+          setDrawerVisible(false);
+          setCostRuleDetail(null);
+        }}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        dataSource={costRuleDetail as any}
-        columns={detailItems}
+        columns={[]}
+        customContent={
+          costRuleDetail ? (
+            <>
+              <DetailDrawerSection title="基本信息">
+                <Descriptions
+                  column={3}
+                  size="small"
+                  items={buildMasterDetailDescriptionItems(costRuleDetail as Record<string, unknown>, ruleDetailBaseItems as any)}
+                />
+              </DetailDrawerSection>
+              <DetailDrawerSection title="生命周期">
+                <UniLifecycle {...getPerformanceConfigActiveLifecycle(costRuleDetail)} showCircleTooltip={false} />
+                <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
+                  规则配置类数据；上下游单据跟踪未接入时仅展示启用状态生命周期。
+                </Typography.Paragraph>
+              </DetailDrawerSection>
+              <DetailDrawerSection title="明细信息">
+                <div style={{ overflowX: 'auto', overflowY: 'hidden' }}>
+                  <Typography.Text type="secondary">计算公式</Typography.Text>
+                  <pre
+                    style={{
+                      marginTop: 8,
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                      maxHeight: 240,
+                      overflow: 'auto',
+                    }}
+                  >
+                    {costRuleDetail.calculation_formula
+                      ? JSON.stringify(costRuleDetail.calculation_formula, null, 2)
+                      : '-'}
+                  </pre>
+                  <Typography.Text type="secondary" style={{ display: 'block', marginTop: 16 }}>
+                    规则参数
+                  </Typography.Text>
+                  <pre
+                    style={{
+                      marginTop: 8,
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                      maxHeight: 240,
+                      overflow: 'auto',
+                    }}
+                  >
+                    {costRuleDetail.rule_parameters
+                      ? JSON.stringify(costRuleDetail.rule_parameters, null, 2)
+                      : '-'}
+                  </pre>
+                </div>
+              </DetailDrawerSection>
+              <DetailDrawerSection title="操作记录">
+                <Timeline
+                  items={[
+                    {
+                      color: 'green',
+                      children: (
+                        <>
+                          创建 ·{' '}
+                          {costRuleDetail.created_at
+                            ? dayjs(costRuleDetail.created_at).format('YYYY-MM-DD HH:mm:ss')
+                            : '-'}
+                          {costRuleDetail.created_by_name ? ` · ${costRuleDetail.created_by_name}` : ''}
+                        </>
+                      ),
+                    },
+                    {
+                      color: 'blue',
+                      children: (
+                        <>
+                          更新 ·{' '}
+                          {costRuleDetail.updated_at
+                            ? dayjs(costRuleDetail.updated_at).format('YYYY-MM-DD HH:mm:ss')
+                            : '-'}
+                          {costRuleDetail.updated_by_name ? ` · ${costRuleDetail.updated_by_name}` : ''}
+                        </>
+                      ),
+                    },
+                  ]}
+                />
+              </DetailDrawerSection>
+            </>
+          ) : null
+        }
       />
     </ListPageTemplate>
   );

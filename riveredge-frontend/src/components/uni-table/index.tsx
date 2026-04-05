@@ -5,7 +5,7 @@
  * 后续完善时，只需修改此组件，所有表格都会同步更新。
  */
 
-import React, { useRef, ReactNode, useState, useEffect, useLayoutEffect, useCallback, useMemo, Suspense, lazy } from 'react'
+import React, { useRef, ReactNode, useState, useEffect, useCallback, useMemo, Suspense, lazy } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import {
@@ -981,26 +981,31 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   }, [effectiveColumns, dateFormatKey])
 
   // 列宽拖拽：遵循 use-antd-resizable-header 与 ProTable 固定列规范
-  // - 至少一列不设置 width（自适应），固定列必须保留 width
-  // - 操作列不参与拖拽，排除后单独合并，避免其宽度被持久化为过小值导致内容裁剪
-  const columnsForResize = React.useMemo(() => {
-    if (!processedColumns.length) return []
-    const nonOpCols = processedColumns.filter((c: any) => !isOperationColumn(c))
-    if (nonOpCols.length === 0) return []
-    const allHaveWidth = nonOpCols.every((c: any) => c.width != null)
-    if (!allHaveWidth) return nonOpCols
-    let idxToRemove = -1
-    for (let i = nonOpCols.length - 1; i >= 0; i--) {
-      if (!nonOpCols[i].fixed) {
-        idxToRemove = i
-        break
+    // - 至少一列不设置 width（自适应），固定列必须保留 width
+    // - 操作列不参与拖拽，排除后单独合并，避免其宽度被持久化为过小值导致内容裁剪
+    // - 排除 hideInTable: true 的列（搜索专用列），避免 dataIndex 重复导致的 resizable-header 错误
+    const columnsForResize = React.useMemo(() => {
+      if (!processedColumns.length) return []
+      const tableCols = processedColumns.filter((c: any) => !isOperationColumn(c) && c.hideInTable !== true)
+      if (tableCols.length === 0) return []
+      
+      const allHaveWidth = tableCols.every((c: any) => c.width != null)
+      if (!allHaveWidth) return tableCols
+      
+      let idxToRemove = -1
+      // 优先从非固定列中选取一列去掉宽度，使其能自适应占满剩余空间
+      for (let i = tableCols.length - 1; i >= 0; i--) {
+        if (!tableCols[i].fixed) {
+          idxToRemove = i
+          break
+        }
       }
-    }
-    if (idxToRemove < 0) return nonOpCols
-    return nonOpCols.map((col: any, i: number) =>
-      i === idxToRemove ? (() => { const { width, ...rest } = col; return rest })() : col
-    )
-  }, [processedColumns])
+      
+      if (idxToRemove < 0) return tableCols
+      return tableCols.map((col: any, i: number) =>
+        i === idxToRemove ? (() => { const { width, ...rest } = col; return rest })() : col
+      )
+    }, [processedColumns])
 
   // 列宽拖拽 hook（仅表格视图时生效，与 ProTable 列设置共存）
   const tableId = columnPersistenceId ?? headerTitle
@@ -1024,9 +1029,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
   // 操作列：宽度自适应内容、不换行（不参与拖拽，不设固定 width）
   const effectiveTableColumns = React.useMemo(() => {
-    const baseCols = resizableColumns.length > 0 ? resizableColumns : processedColumns.filter((c: any) => !isOperationColumn(c))
+    const baseCols = resizableColumns.length > 0 ? resizableColumns : processedColumns.filter((c: any) => !isOperationColumn(c) && !c.hideInTable)
     const opCols = processedColumns.filter((c: any) => isOperationColumn(c))
-    if (opCols.length === 0) return baseCols
+    if (opCols.length === 0 && !processedColumns.some(c => c.hideInTable)) return baseCols
+    
     // 将操作列按原顺序插回（通常为最后一列）
     const opIndices = processedColumns
       .map((c: any, i: number) => (isOperationColumn(c) ? i : -1))
@@ -1035,6 +1041,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     let baseIdx = 0
     let opIdx = 0
     for (let i = 0; i < processedColumns.length; i++) {
+      const col = processedColumns[i];
       if (opIndices.includes(i)) {
         const opCol = opCols[opIdx++]
         const baseOnCell = opCol.onCell
@@ -1063,8 +1070,11 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           ellipsis: false,
           onCell: mergedOnCell,
         })
+      } else if (col.hideInTable) {
+        // 搜索专用列不参与 resize 也不参与 baseCols 映射，直接透传原定义以保持 ProTable 搜索表单功能
+        result.push(col)
       } else {
-        result.push(baseCols[baseIdx++] ?? processedColumns[i])
+        result.push(baseCols[baseIdx++] ?? col)
       }
     }
     return applyLifecycleColumnAlignLeft(normalizeFixedRightColumnOrder(result))

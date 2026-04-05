@@ -9,10 +9,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Card, Tabs, Table, Tag, Space, Button, Typography, Statistic, Progress, Alert, List } from 'antd';
-import { ReloadOutlined, FileTextOutlined, BulbOutlined } from '@ant-design/icons';
+import { Card, Tabs, Tag, Space, Button, Typography, Statistic, Progress, Alert, List } from 'antd';
+import { ReloadOutlined, FileTextOutlined } from '@ant-design/icons';
 import { App } from 'antd';
-import { analyzeFunctionUsage, analyzeDataQuality, analyzePerformance, generateUsageReport, FunctionUsageAnalysis, DataQualityAnalysis, PerformanceAnalysis, UsageReport } from '../../../services/usageAnalysis';
+import { analyzeFunctionUsage, analyzeDataQuality, analyzePerformance, generateUsageReport, FunctionUsageAnalysis, DataQualityAnalysis, PerformanceAnalysis } from '../../../services/usageAnalysis';
 import { getSuggestions, OptimizationSuggestion } from '../../../services/optimizationSuggestion';
 
 const { Title, Paragraph, Text } = Typography;
@@ -27,7 +27,6 @@ const UsageAnalysisPage: React.FC = () => {
   const [functionUsage, setFunctionUsage] = useState<FunctionUsageAnalysis | null>(null);
   const [dataQuality, setDataQuality] = useState<DataQualityAnalysis | null>(null);
   const [performance, setPerformance] = useState<PerformanceAnalysis | null>(null);
-  const [usageReport, setUsageReport] = useState<UsageReport | null>(null);
   const [suggestions, setSuggestions] = useState<OptimizationSuggestion[]>([]);
   const [activeTab, setActiveTab] = useState<string>('function');
 
@@ -82,8 +81,7 @@ const UsageAnalysisPage: React.FC = () => {
   const handleGenerateReport = async () => {
     try {
       setLoading(true);
-      const data = await generateUsageReport();
-      setUsageReport(data);
+      await generateUsageReport();
       messageApi.success(t('pages.system.usageAnalysis.reportSuccess'));
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.usageAnalysis.reportFailed'));
@@ -145,7 +143,7 @@ const UsageAnalysisPage: React.FC = () => {
                 loading={loading}
               >
                 {functionUsage && (
-                  <Space direction="vertical" size="large" style={{ width: '100%' }}>
+                  <Space orientation="vertical" size="large" style={{ width: '100%' }}>
                     <div>
                       <Title level={4}>统计信息</Title>
                       <Space size="large">
@@ -173,7 +171,7 @@ const UsageAnalysisPage: React.FC = () => {
                 loading={loading}
               >
                 {dataQuality && (
-                  <Space direction="vertical" size="large" style={{ width: '100%' }}>
+                  <Space orientation="vertical" size="large" style={{ width: '100%' }}>
                     <div>
                       <Title level={4}>数据质量评分</Title>
                       <Progress
@@ -204,7 +202,7 @@ const UsageAnalysisPage: React.FC = () => {
                 loading={loading}
               >
                 {performance && (
-                  <Space direction="vertical" size="large" style={{ width: '100%' }}>
+                  <Space orientation="vertical" size="large" style={{ width: '100%' }}>
                     <div>
                       <Title level={4}>响应时间</Title>
                       <Space size="large">
@@ -241,7 +239,7 @@ const UsageAnalysisPage: React.FC = () => {
                     renderItem={(item) => (
                       <List.Item>
                         <Card style={{ width: '100%' }}>
-                          <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                          <Space orientation="vertical" size="small" style={{ width: '100%' }}>
                             <div>
                               <Tag color={item.priority === 'high' ? 'red' : item.priority === 'medium' ? 'orange' : 'blue'}>
                                 {item.priority === 'high' ? '高优先级' : item.priority === 'medium' ? '中优先级' : '低优先级'}

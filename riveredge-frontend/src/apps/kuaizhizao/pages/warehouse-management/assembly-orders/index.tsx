@@ -9,13 +9,14 @@
 
 import React, { useRef } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Space, Modal, Tag } from 'antd';
+import { App, Button, Space, Modal, Typography } from 'antd';
 import { PlusOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { assemblyOrderApi } from '../../../services/assembly-order';
 import { getAssemblyOrderLifecycle } from '../../../utils/assemblyOrderLifecycle';
-import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import dayjs from 'dayjs';
 
 interface AssemblyOrder {
   id?: number;
@@ -31,6 +32,7 @@ interface AssemblyOrder {
   total_items?: number;
   remarks?: string;
   created_at?: string;
+  updated_at?: string;
 }
 
 const AssemblyOrdersPage: React.FC = () => {
@@ -44,6 +46,11 @@ const AssemblyOrdersPage: React.FC = () => {
       width: 150,
       ellipsis: true,
       fixed: 'left',
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
+          {r.code ?? '-'}
+        </Typography.Text>
+      ),
     },
     {
       title: '仓库',
@@ -76,19 +83,33 @@ const AssemblyOrdersPage: React.FC = () => {
       align: 'right',
     },
     {
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      width: 168,
+      hideInSearch: true,
+      defaultSortOrder: 'descend',
+      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+    },
+    {
       title: '生命周期',
       dataIndex: 'lifecycle',
-      width: 100,
-      valueEnum: {
-        draft: { text: '草稿', status: 'default' },
-        in_progress: { text: '组装中', status: 'processing' },
-        completed: { text: '已完成', status: 'success' },
-        cancelled: { text: '已取消', status: 'error' },
-      },
+      width: 132,
+      fixed: 'right',
+      align: 'left',
+      hideInSearch: true,
       render: (_, record) => {
-        const lifecycle = getAssemblyOrderLifecycle(record);
-        const stageName = lifecycle.stageName ?? record.status ?? '草稿';
-        return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>;
+        const lifecycle = getAssemblyOrderLifecycle(record as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
       },
     },
     {
@@ -116,6 +137,7 @@ const AssemblyOrdersPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable<AssemblyOrder>
         headerTitle="组装单"
+        columnPersistenceId="kuaizhizao-wm-assembly-orders"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
@@ -148,6 +170,8 @@ const AssemblyOrdersPage: React.FC = () => {
           const result = await assemblyOrderApi.list({
             skip: (params.current! - 1) * params.pageSize!,
             limit: params.pageSize,
+            ...(params as any),
+            keyword: (params as any).keyword,
           });
           return {
             data: result.items || result.data || [],
@@ -158,6 +182,7 @@ const AssemblyOrdersPage: React.FC = () => {
         locale={{
           emptyText: '暂无组装单数据。后端接口就绪后将支持完整功能。',
         }}
+        scroll={{ x: 1600 }}
       />
     </ListPageTemplate>
   );

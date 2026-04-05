@@ -51,9 +51,10 @@ export const mesDashboardService = {
     });
   },
   // 获取销售中心汇总
-  getSalesSummary: async () => {
+  getSalesSummary: async (is_active = true) => {
     return apiRequest('/apps/kuaizhizao/dashboard/sales-summary', {
       method: 'GET',
+      params: { is_active },
     });
   },
 

@@ -625,7 +625,7 @@ const WorkOrdersKioskPage: React.FC = () => {
                                                             size={64}
                                                             strokeWidth={12}
                                                             strokeColor={strokeColor}
-                                                            trailColor="rgba(255,255,255,0.1)"
+                                                            railColor="rgba(255,255,255,0.1)"
                                                             showInfo={true}
                                                             format={(p) => <span style={{ fontSize: 14, fontWeight: 600, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY }}>{p}%</span>}
                                                         />

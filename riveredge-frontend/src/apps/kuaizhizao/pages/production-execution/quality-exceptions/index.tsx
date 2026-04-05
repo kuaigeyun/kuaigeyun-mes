@@ -7,11 +7,13 @@
  * @date 2025-01-15
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormTextArea, ProFormSelect, ProFormDatePicker } from '@ant-design/pro-components';
-import { App, Tag, Button, Space, Divider } from 'antd';
+import { App, Tag, Button, Space, Divider, Typography } from 'antd';
 import { EyeOutlined, CheckCircleOutlined, SearchOutlined, ToolOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { getQualityExceptionLifecycle } from '../../../utils/qualityExceptionLifecycle';
 import { UniUserSelect } from '../../../../../components/uni-user-select';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { apiRequest } from '../../../../../services/api';
@@ -151,11 +153,21 @@ const QualityExceptionsPage: React.FC = () => {
       title: '工单编号',
       dataIndex: 'work_order_code',
       width: 140,
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.work_order_code ?? '') }} ellipsis>
+          {r.work_order_code ?? '-'}
+        </Typography.Text>
+      ),
     },
     {
       title: '物料编号',
       dataIndex: 'material_code',
       width: 120,
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.material_code ?? '') }} ellipsis>
+          {r.material_code ?? '-'}
+        </Typography.Text>
+      ),
     },
     {
       title: '物料名称',
@@ -167,6 +179,11 @@ const QualityExceptionsPage: React.FC = () => {
       title: '批次号',
       dataIndex: 'batch_no',
       width: 100,
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.batch_no ?? '') }} ellipsis>
+          {r.batch_no ?? '-'}
+        </Typography.Text>
+      ),
     },
     {
       title: '问题描述',
@@ -187,13 +204,35 @@ const QualityExceptionsPage: React.FC = () => {
     {
       title: '状态',
       dataIndex: 'status',
-      width: 100,
+      hideInTable: true,
       valueEnum: {
         pending: { text: '待处理', status: 'default' },
         investigating: { text: '调查中', status: 'processing' },
         correcting: { text: '纠正中', status: 'processing' },
         closed: { text: '已关闭', status: 'success' },
         cancelled: { text: '已取消', status: 'error' },
+      },
+    },
+    {
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      width: 140,
+      fixed: 'right',
+      align: 'left',
+      hideInSearch: true,
+      render: (_, record) => {
+        const lifecycle = getQualityExceptionLifecycle(record as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
       },
     },
     {
@@ -274,22 +313,28 @@ const QualityExceptionsPage: React.FC = () => {
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
+        columnPersistenceId="kuaizhizao-pe-quality-exceptions"
         request={async (params) => {
           try {
+            const pageSize = params.pageSize || 20;
+            const skip = (params.current! - 1) * pageSize;
             const result = await apiRequest('/apps/kuaizhizao/exceptions/quality', {
               method: 'GET',
               params: {
-                skip: (params.current! - 1) * params.pageSize!,
-                limit: params.pageSize,
+                skip,
+                limit: pageSize,
                 exception_type: params.exception_type,
                 status: params.status,
                 severity: params.severity,
               },
             });
+            const rows = Array.isArray(result) ? result : (result as { items?: QualityException[] })?.items ?? [];
+            const total =
+              rows.length < pageSize ? skip + rows.length : skip + rows.length + 1;
             return {
-              data: result || [],
+              data: rows,
               success: true,
-              total: result?.length || 0,
+              total,
             };
           } catch (error) {
             messageApi.error('获取异常列表失败');
@@ -301,6 +346,7 @@ const QualityExceptionsPage: React.FC = () => {
           }
         }}
         showAdvancedSearch={true}
+        scroll={{ x: 1680 }}
       />
 
       {/* 详情 Drawer */}

@@ -12,7 +12,7 @@ import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, List, Typography, Alert, theme as AntdTheme, Descriptions, Empty, Spin, Dropdown } from 'antd';
 import type { DescriptionsProps } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, AppstoreAddOutlined, SendOutlined, CommentOutlined, RollbackOutlined, FileTextOutlined, CheckOutlined, CloseCircleOutlined, UndoOutlined, ArrowDownOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, AppstoreAddOutlined, SendOutlined, CommentOutlined, RollbackOutlined, CheckOutlined, CloseCircleOutlined, UndoOutlined, ArrowDownOutlined } from '@ant-design/icons';
 import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
@@ -159,7 +159,7 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
       content = dayjs(value as string).format('YYYY-MM-DD');
     }
     if (col.render && dataSource != null) {
-      content = col.render(content, dataSource, index, {}, col);
+      content = col.render(content, dataSource, index, {} as any, col as any);
     }
     return {
       key: String(col.key ?? col.dataIndex ?? index),
@@ -393,54 +393,15 @@ const QuotationsPage: React.FC = () => {
     loadPaymentTerms();
   }, []);
 
-  /** 高级搜索：编号、客户、日期范围、状态（与 UI 标准一致） */
-  const quotationSearchColumns: ProColumns<Quotation>[] = [
-    {
-      title: '报价单编号',
-      dataIndex: 'quotation_code',
-      hideInTable: true,
-      fieldProps: { placeholder: '支持模糊匹配' },
-      order: 10,
-    },
-    {
-      title: '客户名称',
-      dataIndex: 'customer_name',
-      hideInTable: true,
-      fieldProps: { placeholder: '客户名称' },
-      order: 20,
-    },
-    {
-      title: '报价日期',
-      dataIndex: 'date_range',
-      valueType: 'dateRange',
-      hideInTable: true,
-      fieldProps: { placeholder: ['开始日期', '结束日期'] },
-      order: 30,
-    },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      valueType: 'select',
-      hideInTable: true,
-      valueEnum: {
-        草稿: { text: '草稿' },
-        已发送: { text: '已发送' },
-        已接受: { text: '已接受' },
-        已拒绝: { text: '已拒绝' },
-        已转订单: { text: '已转订单' },
-      },
-      order: 40,
-    },
-  ];
-
-  /** 列表列顺序与表单头字段顺序对齐；生命周期固定倒数第二列，操作列最后 */
-  const quotationTableColumns: ProColumns<Quotation>[] = [
+  /** 高级搜索与列表列统一定义，避免 dataIndex 重复 */
+  const columns: ProColumns<Quotation>[] = [
     {
       title: '报价单编号',
       dataIndex: 'quotation_code',
       width: 168,
       fixed: 'left',
-      hideInSearch: true,
+      order: 10,
+      fieldProps: { placeholder: '支持模糊匹配' },
       render: (_, r) => (
         <Typography.Text copyable={{ text: String(r.quotation_code ?? '') }} ellipsis>
           {r.quotation_code ?? '-'}
@@ -450,9 +411,10 @@ const QuotationsPage: React.FC = () => {
     {
       title: '客户',
       dataIndex: 'customer_name',
-      width: 140,
+      // 不设置 width 以便自适应响应式布局
       ellipsis: true,
-      hideInSearch: true,
+      order: 20,
+      fieldProps: { placeholder: '客户名称' },
     },
     {
       title: '报价日期',
@@ -460,6 +422,14 @@ const QuotationsPage: React.FC = () => {
       width: 110,
       valueType: 'date',
       hideInSearch: true,
+    },
+    {
+      title: '报价日期范围',
+      dataIndex: 'date_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      fieldProps: { placeholder: ['开始日期', '结束日期'] },
+      order: 30,
     },
     {
       title: '销售员',
@@ -475,6 +445,20 @@ const QuotationsPage: React.FC = () => {
       align: 'right',
       hideInSearch: true,
       render: (_, r) => <AmountDisplay resource="sales_order" value={r.total_amount} />,
+    },
+    {
+      title: '状态',
+      dataIndex: 'status',
+      valueType: 'select',
+      hideInTable: true,
+      valueEnum: {
+        草稿: { text: '草稿' },
+        已发送: { text: '已发送' },
+        已接受: { text: '已接受' },
+        已拒绝: { text: '已拒绝' },
+        已转订单: { text: '已转订单' },
+      },
+      order: 40,
     },
     {
       title: '更新时间',
@@ -611,7 +595,7 @@ const QuotationsPage: React.FC = () => {
     },
   ];
 
-  const columns: ProColumns<Quotation>[] = [...quotationSearchColumns, ...quotationTableColumns];
+  // columns 定义已合并
 
   const handleDetail = async (id: number) => {
     try {
@@ -1695,9 +1679,9 @@ const QuotationsPage: React.FC = () => {
                   render: (_: unknown, __: unknown, index: number) => (
                     <Form.Item
                       noStyle
-                      shouldUpdate={(prev: unknown, curr: unknown) =>
-                        (prev as { items?: unknown[] })?.items?.[index]?.material_id !==
-                        (curr as { items?: unknown[] })?.items?.[index]?.material_id
+                      shouldUpdate={(prev: any, curr: any) =>
+                        prev?.items?.[index]?.material_id !==
+                        curr?.items?.[index]?.material_id
                       }
                     >
                       {({ getFieldValue }) => {
@@ -1900,44 +1884,49 @@ const QuotationsPage: React.FC = () => {
           onCreate={handleCreate}
           enableRowSelection
           toolBarRender={() => [
-            <Dropdown.Button
-              key={`batch-btn-${selectedRowKeys.length}`}
-              disabled={selectedRowKeys.length === 0}
-              trigger={['click']}
-              danger
-              icon={<ArrowDownOutlined />}
-              onClick={() => handleBatchDelete(selectedRowKeys)}
-              menu={{
-                items: [
-                  {
-                    key: 'submit',
-                    label: '批量提交',
-                    icon: <SendOutlined />,
-                    onClick: () => handleBatchSubmit(selectedRowKeys),
-                  },
-                  {
-                    key: 'approve',
-                    label: '批量审核通过',
-                    icon: <CheckOutlined />,
-                    onClick: () => handleBatchApprove(selectedRowKeys),
-                  },
-                  {
-                    key: 'withdraw',
-                    label: '批量撤回',
-                    icon: <RollbackOutlined />,
-                    onClick: () => handleBatchWithdraw(selectedRowKeys),
-                  },
-                  {
-                    key: 'reopen',
-                    label: '批量重新编辑',
-                    icon: <EditOutlined />,
-                    onClick: () => handleBatchReopen(selectedRowKeys),
-                  },
-                ],
-              }}
-            >
-              <DeleteOutlined /> 批量删除
-            </Dropdown.Button>,
+            <Space.Compact key={`batch-btn-${selectedRowKeys.length}`}>
+              <Button
+                disabled={selectedRowKeys.length === 0}
+                danger
+                onClick={() => handleBatchDelete(selectedRowKeys)}
+              >
+                <DeleteOutlined /> 批量删除
+              </Button>
+              <Dropdown
+                disabled={selectedRowKeys.length === 0}
+                trigger={['click']}
+                menu={{
+                  items: [
+                    {
+                      key: 'submit',
+                      label: '批量提交',
+                      icon: <SendOutlined />,
+                      onClick: () => handleBatchSubmit(selectedRowKeys),
+                    },
+                    {
+                      key: 'approve',
+                      label: '批量审核通过',
+                      icon: <CheckOutlined />,
+                      onClick: () => handleBatchApprove(selectedRowKeys),
+                    },
+                    {
+                      key: 'withdraw',
+                      label: '批量撤回',
+                      icon: <RollbackOutlined />,
+                      onClick: () => handleBatchWithdraw(selectedRowKeys),
+                    },
+                    {
+                      key: 'reopen',
+                      label: '批量重新编辑',
+                      icon: <EditOutlined />,
+                      onClick: () => handleBatchReopen(selectedRowKeys),
+                    },
+                  ],
+                }}
+              >
+                <Button danger icon={<ArrowDownOutlined />} />
+              </Dropdown>
+            </Space.Compact>,
           ]}
           showImportButton={true}
           onImport={handleListImport}
@@ -2345,7 +2334,7 @@ const QuotationsPage: React.FC = () => {
           setRejectingRecord(null);
           setRejectRemarks('');
         }}
-        destroyOnClose
+        destroyOnHidden
       >
         <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
           报价单：{rejectingRecord?.quotation_code ?? rejectingRecord?.id ?? '-'}

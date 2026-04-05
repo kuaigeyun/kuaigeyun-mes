@@ -6,7 +6,9 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProFormDigit } from '@ant-design/pro-components';
-import { App, Button, Tag, message, Modal } from 'antd';
+import { App, Button, message, Modal, Typography } from 'antd';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { getCheckoutUsageLifecycle } from '../../../utils/equipmentLifecycle';
 import { PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -75,21 +77,63 @@ const MoldUsagesPage: React.FC = () => {
   };
 
   const columns: ProColumns<MoldUsage>[] = [
-    { title: '使用单号', dataIndex: 'usage_no', width: 150, fixed: 'left', ellipsis: true },
-    { title: '模具编号', dataIndex: 'mold_code', width: 120 },
+    {
+      title: '使用单号',
+      dataIndex: 'usage_no',
+      width: 150,
+      fixed: 'left',
+      ellipsis: true,
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.usage_no ?? '') }} ellipsis>
+          {r.usage_no ?? '-'}
+        </Typography.Text>
+      ),
+    },
+    {
+      title: '模具编号',
+      dataIndex: 'mold_code',
+      width: 120,
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.mold_code ?? '') }} ellipsis>
+          {r.mold_code ?? '-'}
+        </Typography.Text>
+      ),
+    },
     { title: '模具名称', dataIndex: 'mold_name', width: 180, ellipsis: true },
     { title: '使用日期', dataIndex: 'usage_date', valueType: 'dateTime', width: 170 },
     { title: '使用次数', dataIndex: 'usage_count', width: 100, align: 'right' },
     { title: '来源类型', dataIndex: 'source_type', width: 100 },
-    { title: '来源单号', dataIndex: 'source_no', width: 140 },
+    {
+      title: '来源单号',
+      dataIndex: 'source_no',
+      width: 140,
+      render: (_, r) => (
+        <Typography.Text copyable={{ text: String(r.source_no ?? '') }} ellipsis>
+          {r.source_no ?? '-'}
+        </Typography.Text>
+      ),
+    },
     { title: '操作人', dataIndex: 'operator_name', width: 100 },
     {
-      title: '状态',
-      dataIndex: 'status',
-      width: 90,
-      render: (_, r) => {
-        const color = r.status === '使用中' ? 'processing' : r.status === '已归还' ? 'success' : 'default';
-        return <Tag color={color}>{r.status || '-'}</Tag>;
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      width: 132,
+      fixed: 'right',
+      align: 'left',
+      hideInSearch: true,
+      render: (_, record) => {
+        const lifecycle = getCheckoutUsageLifecycle(record as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
       },
     },
     { title: '备注', dataIndex: 'remark', ellipsis: true, hideInSearch: true },
@@ -98,6 +142,8 @@ const MoldUsagesPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<MoldUsage>
+        headerTitle="模具使用记录"
+        columnPersistenceId="kuaizhizao-em-mold-usages"
         actionRef={actionRef}
         rowKey="uuid"
         columns={columns}
@@ -108,6 +154,7 @@ const MoldUsagesPage: React.FC = () => {
             mold_uuid: params.mold_uuid,
             status: params.status,
             search: params.usage_no,
+            keyword: (params as any).keyword,
           });
           return { data: res.items || [], success: true, total: res.total || 0 };
         }}
@@ -118,6 +165,7 @@ const MoldUsagesPage: React.FC = () => {
         ]}
         search={{ labelWidth: 'auto' }}
         pagination={{ defaultPageSize: 20 }}
+        scroll={{ x: 1700 }}
       />
 
       <FormModalTemplate

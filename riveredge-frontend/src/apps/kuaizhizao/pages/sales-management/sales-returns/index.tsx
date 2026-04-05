@@ -117,7 +117,10 @@ const SalesReturnsPage: React.FC = () => {
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [returnDetail, setReturnDetail] = useState<SalesReturnDetail | null>(null);
-  const salesReturnTracking = useDocumentTracking('sales_return', returnDetail?.id, detailDrawerVisible ? 1 : 0);
+  const salesReturnTracking = useDocumentTracking(
+    detailDrawerVisible && returnDetail?.id ? 'sales_return' : undefined,
+    returnDetail?.id
+  );
   const handleCopy = async (text?: string) => {
     if (!text) return;
     try {
