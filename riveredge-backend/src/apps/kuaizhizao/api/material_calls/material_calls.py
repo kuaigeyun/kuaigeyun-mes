@@ -11,7 +11,8 @@ from apps.kuaizhizao.services.material_call_service import MaterialCallService
 from apps.kuaizhizao.schemas.material_call import (
     MaterialCallRequestCreate,
     MaterialCallRequestUpdate,
-    MaterialCallRequestResponse
+    MaterialCallRequestResponse,
+    MaterialCallBatchFromWorkOrderRequest,
 )
 
 router = APIRouter(prefix="/material-calls", tags=["Kuaige Zhizao - Material Call"])
@@ -24,6 +25,25 @@ async def create_material_call(
 ) -> MaterialCallRequestResponse:
     """生产现场发起物料叫料请求"""
     return await MaterialCallService().create_call_request(tenant_id, create_data, current_user)
+
+
+@router.post(
+    "/batch-from-work-order",
+    response_model=List[MaterialCallRequestResponse],
+    summary="整单叫料（按工单齐套缺料批量生成）",
+)
+async def batch_material_calls_from_work_order(
+    body: MaterialCallBatchFromWorkOrderRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[MaterialCallRequestResponse]:
+    """按工单 BOM 齐套分析，对 shortage_quantity>0 的物料逐条生成叫料单（call_type=FULL_ORDER）。"""
+    return await MaterialCallService().batch_create_from_work_order_kitting(
+        tenant_id=tenant_id,
+        work_order_id=body.work_order_id,
+        user=current_user,
+    )
+
 
 @router.get("", response_model=List[MaterialCallRequestResponse], summary="查询叫料请求列表")
 async def list_material_calls(

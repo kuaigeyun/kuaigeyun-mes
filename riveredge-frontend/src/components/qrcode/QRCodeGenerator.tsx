@@ -30,6 +30,8 @@ export interface QRCodeGeneratorProps {
   autoGenerate?: boolean;
   /** 生成成功回调 */
   onGenerateSuccess?: (response: QRCodeGenerateResponse) => void;
+  /** 是否显示卡片标题「二维码」（默认 true；为 false 时仅保留右上角操作按钮） */
+  showCardTitle?: boolean;
 }
 
 /**
@@ -43,6 +45,7 @@ export const QRCodeGenerator: React.FC<QRCodeGeneratorProps> = ({
   errorCorrection = 'M',
   autoGenerate = true,
   onGenerateSuccess,
+  showCardTitle = true,
 }) => {
   const { message } = App.useApp();
   const [loading, setLoading] = useState(false);
@@ -134,7 +137,7 @@ export const QRCodeGenerator: React.FC<QRCodeGeneratorProps> = ({
 
   return (
     <Card
-      title="二维码"
+      title={showCardTitle ? '二维码' : undefined}
       extra={
         <Space>
           <Button

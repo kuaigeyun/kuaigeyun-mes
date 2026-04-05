@@ -36,6 +36,7 @@ from apps.kuaizhizao.schemas.work_order import (
     WorkOrderOperationResponse,
     WorkOrderOperationsUpdateRequest,
     WorkOrderOperationDispatch,
+    WorkOrderKittingAnalysisResponse,
 )
 from apps.kuaizhizao.schemas.rework_order import (
     ReworkOrderCreate,
@@ -1065,6 +1066,25 @@ async def check_work_order_shortage(
         warehouse_id=warehouse_id
     )
     return MaterialShortageResponse(**result)
+
+
+@router.get(
+    "/work-orders/{work_order_id}/kitting-analysis",
+    response_model=WorkOrderKittingAnalysisResponse,
+    summary="工单齐套性分析",
+)
+async def get_work_order_kitting_analysis(
+    work_order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> WorkOrderKittingAnalysisResponse:
+    """
+    BOM 展开 + 已领料 + 库位库存，返回齐套率与明细（与前端齐套分析面板、列表悬停一致）。
+    """
+    try:
+        return await WorkOrderService().get_work_order_kitting_analysis(tenant_id, work_order_id)
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.post("/work-orders/{work_order_id}/release", response_model=WorkOrderResponse, summary="下达工单")

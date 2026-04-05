@@ -353,4 +353,72 @@ SYSTEM_DICTIONARIES: List[Dict[str, Any]] = [
             {"label": "其他", "value": "OTHER", "description": "其他杂费", "sort_order": 99},
         ],
     },
+    {
+        "code": "MATERIAL_CALL_TYPE",
+        "name": "叫料类型",
+        "description": "生产向仓库发起叫料时的类型：单物料指定数量，或按工单 BOM 整单缺料批量叫料",
+        "items": [
+            {
+                "label": "单物料叫料",
+                "value": "SINGLE_MATERIAL",
+                "description": "指定单个物料与数量发起叫料",
+                "sort_order": 1,
+            },
+            {
+                "label": "整单叫料",
+                "value": "FULL_ORDER",
+                "description": "按工单齐套分析，对仍缺料的物料逐条生成叫料",
+                "sort_order": 2,
+            },
+        ],
+    },
+    {
+        "code": "MATERIAL_CALL_REASON",
+        "name": "叫料原因",
+        "description": "单物料叫料时说明现场需求场景，便于仓库与计划追溯",
+        "items": [
+            {
+                "label": "线边仓缺料",
+                "value": "LINE_SIDE_SHORTAGE",
+                "description": "线边库存不足，需从主仓等配送",
+                "sort_order": 1,
+            },
+            {
+                "label": "批量领料未领足",
+                "value": "PICKING_SHORTAGE",
+                "description": "按批量领料单领取的数量不足，需补叫",
+                "sort_order": 2,
+            },
+            {
+                "label": "报废/质量异常补料",
+                "value": "SCRAP_REPLENISH",
+                "description": "报废、返工或质检异常导致的补料需求",
+                "sort_order": 3,
+            },
+            {
+                "label": "工艺或设计变更换料",
+                "value": "ENGINEERING_CHANGE",
+                "description": "工艺调整、设计变更引起的物料规格或数量变化",
+                "sort_order": 4,
+            },
+            {
+                "label": "计划变更/紧急插单",
+                "value": "PLAN_CHANGE",
+                "description": "计划变更、插单导致用料与领料计划不一致",
+                "sort_order": 5,
+            },
+            {
+                "label": "试制/打样加料",
+                "value": "TRIAL_SAMPLE",
+                "description": "试制、打样、小批量验证的额外用料",
+                "sort_order": 6,
+            },
+            {
+                "label": "其他",
+                "value": "OTHER",
+                "description": "其他原因（建议在备注中说明）",
+                "sort_order": 99,
+            },
+        ],
+    },
 ]

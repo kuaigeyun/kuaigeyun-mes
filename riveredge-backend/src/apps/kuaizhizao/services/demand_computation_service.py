@@ -2553,11 +2553,24 @@ class DemandComputationService:
             
             # MTO 时解析销售订单ID：工单表外键指向 sales_orders，需用需求的 source_id（销售订单ID），而非 demand_id（需求ID）
             sales_order_id = None
+            sales_order_code = None
+            sales_order_name = None
             if production_mode == "MTO":
                 demand = await Demand.get_or_none(tenant_id=tenant_id, id=computation.demand_id)
                 if demand and getattr(demand, "demand_type", None) == "sales_order" and getattr(demand, "source_type", None) == "sales_order" and getattr(demand, "source_id", None):
                     sales_order_id = demand.source_id
-            
+            if sales_order_id:
+                from apps.kuaizhizao.models.sales_order import SalesOrder
+
+                so = await SalesOrder.get_or_none(
+                    id=sales_order_id, tenant_id=tenant_id, deleted_at__isnull=True
+                )
+                if so:
+                    sales_order_code = so.order_code
+                    sales_order_name = (
+                        f"{so.order_code} · {so.customer_name}" if so.customer_name else so.order_code
+                    )
+
             # 确定计划时间（如果有LRP的日期信息）
             planned_start_date = None
             planned_end_date = None
@@ -2577,6 +2590,8 @@ class DemandComputationService:
                 quantity=float(item.suggested_work_order_quantity or 0),
                 production_mode=production_mode,
                 sales_order_id=sales_order_id,
+                sales_order_code=sales_order_code,
+                sales_order_name=sales_order_name,
                 planned_start_date=planned_start_date,
                 planned_end_date=planned_end_date,
                 remarks=remarks,

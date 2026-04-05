@@ -100,6 +100,7 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
   formItemProps,
   ...restProps
 }) => {
+  const { style: formItemStyle, ...restFormItemProps } = formItemProps || {}
   const form = Form.useFormInstance();
   const [materialModalVisible, setMaterialModalVisible] = useState(false);
 
@@ -282,8 +283,9 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
         validateTrigger={['onChange', 'onBlur']}
         getValueFromEvent={(val: unknown) => uniMaterialSelectValueFromEvent(val)}
         getValueProps={(v: any) => uniMaterialSelectGetValueProps(v)}
-        style={{ margin: 0, ...formItemProps?.style }}
-        {...formItemProps}
+        /** 勿用 margin:0，会吃掉 ant-form-item 默认 margin-bottom，导致与下一表单项贴死 */
+        style={{ marginTop: 0, marginInline: 0, ...formItemStyle }}
+        {...restFormItemProps}
       >
         {dropdown}
       </Form.Item>

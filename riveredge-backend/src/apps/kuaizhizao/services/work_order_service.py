@@ -21,6 +21,7 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError, Business
 from apps.base_service import AppBaseService
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
+from apps.kuaizhizao.models.sales_order import SalesOrder
 from apps.kuaizhizao.schemas.work_order import (
     WorkOrderCreate,
     WorkOrderUpdate,
@@ -70,6 +71,31 @@ from apps.kuaizhizao.utils.material_source_helper import (
 )
 from loguru import logger
 from infra.services.business_config_service import BusinessConfigService
+
+
+async def _resolve_sales_order_snapshot_fields(
+    tenant_id: int,
+    sales_order_id: Optional[int],
+    sales_order_code: Optional[str],
+    sales_order_name: Optional[str],
+) -> tuple[Optional[str], Optional[str]]:
+    """仅有 sales_order_id 时从销售订单主表补全编号/名称，便于列表与详情展示。"""
+    if not sales_order_id:
+        return sales_order_code, sales_order_name
+    if sales_order_code and sales_order_name:
+        return sales_order_code, sales_order_name
+    so = await SalesOrder.get_or_none(
+        id=sales_order_id,
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+    )
+    if not so:
+        return sales_order_code, sales_order_name
+    code = sales_order_code or so.order_code
+    name = sales_order_name or (
+        f"{so.order_code} · {so.customer_name}" if so.customer_name else so.order_code
+    )
+    return code, name
 
 
 def _max_reportable_quantity_for_op(work_order: WorkOrder, op: WorkOrderOperation) -> Decimal:
@@ -691,6 +717,13 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             if stored_pr_id is None and process_route_resolved and not has_manual_ops:
                 stored_pr_id = process_route_resolved.id
 
+            resolved_so_code, resolved_so_name = await _resolve_sales_order_snapshot_fields(
+                tenant_id,
+                work_order_data.sales_order_id,
+                work_order_data.sales_order_code,
+                work_order_data.sales_order_name,
+            )
+
             # 创建工单
             work_order = await WorkOrder.create(
                 tenant_id=tenant_id,
@@ -703,8 +736,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 quantity=work_order_data.quantity,
                 production_mode=work_order_data.production_mode,
                 sales_order_id=work_order_data.sales_order_id,
-                sales_order_code=work_order_data.sales_order_code,
-                sales_order_name=work_order_data.sales_order_name,
+                sales_order_code=resolved_so_code,
+                sales_order_name=resolved_so_name,
                 workshop_id=work_order_data.workshop_id,
                 workshop_name=work_order_data.workshop_name,
                 work_center_id=work_order_data.work_center_id,
@@ -926,7 +959,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         )
         milestones = await get_document_milestones(tenant_id, "work_order", work_order_id)
         response.lifecycle = get_work_order_lifecycle(work_order, milestones=milestones)
-        # 从产品物料获取制造模式（加工型/装配型）
+        # 制造模式定义在物料主数据：工单 product_id 即本单制造的产品物料，从其 source_config 读取
         if work_order.product_id:
             product = await Material.get_or_none(
                 id=work_order.product_id,
@@ -939,6 +972,15 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 response.manufacturing_mode = "fabrication"
         else:
             response.manufacturing_mode = "fabrication"
+        if work_order.sales_order_id and not work_order.sales_order_code:
+            rc, rn = await _resolve_sales_order_snapshot_fields(
+                tenant_id,
+                work_order.sales_order_id,
+                work_order.sales_order_code,
+                work_order.sales_order_name,
+            )
+            response.sales_order_code = rc
+            response.sales_order_name = rn
         return response
 
     async def list_work_orders(
@@ -1058,6 +1100,43 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         order_clause = order_by if order_by else "-created_at"
         work_orders = await query.offset(skip).limit(limit).order_by(order_clause).all()
 
+        # 制造模式：定义在「产品物料」主数据的 source_config；工单通过 product_id（本单制造对象）关联物料后读取，与 get_work_order_by_id 一致
+        product_ids = list({wo.product_id for wo in work_orders if wo.product_id})
+        manufacturing_mode_by_product: dict[int, str] = {}
+        if product_ids:
+            materials = await Material.filter(
+                tenant_id=tenant_id,
+                id__in=product_ids,
+                deleted_at__isnull=True,
+            ).only("id", "source_config")
+            for m in materials:
+                sc = m.source_config or {}
+                if isinstance(sc, dict):
+                    manufacturing_mode_by_product[m.id] = sc.get("manufacturing_mode") or "fabrication"
+                else:
+                    manufacturing_mode_by_product[m.id] = "fabrication"
+
+        # 列表展示：仅有 sales_order_id、缺编号/名称时，批量补全销售订单快照（历史数据或下推未写冗余字段）
+        so_ids_missing_label = list(
+            {
+                wo.sales_order_id
+                for wo in work_orders
+                if wo.sales_order_id and not getattr(wo, "sales_order_code", None)
+            }
+        )
+        so_snapshot_map: dict[int, tuple[str, str]] = {}
+        if so_ids_missing_label:
+            sos = await SalesOrder.filter(
+                tenant_id=tenant_id,
+                id__in=so_ids_missing_label,
+                deleted_at__isnull=True,
+            ).only("id", "order_code", "customer_name")
+            for so in sos:
+                so_snapshot_map[so.id] = (
+                    so.order_code,
+                    f"{so.order_code} · {so.customer_name}" if so.customer_name else so.order_code,
+                )
+
         # 批量预取 created_by_name（消除 N+1）
         created_by_ids = [wo.created_by for wo in work_orders if wo.created_by and not wo.created_by_name]
         user_name_map: dict[int, str] = {}
@@ -1158,6 +1237,17 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
                 if include_operations:
                     item_dict["operations"] = operations_map.get(wo.id, [])
+
+                # product_id → 工单制造的产品物料 → 该物料档案上的制造模式
+                item_dict["manufacturing_mode"] = manufacturing_mode_by_product.get(
+                    wo.product_id, "fabrication"
+                ) if wo.product_id else "fabrication"
+
+                if wo.sales_order_id and not item_dict.get("sales_order_code"):
+                    snap = so_snapshot_map.get(wo.sales_order_id)
+                    if snap:
+                        item_dict["sales_order_code"] = snap[0]
+                        item_dict["sales_order_name"] = snap[1]
                 
                 result.append(WorkOrderListResponse.model_validate(item_dict))
             except Exception as e:
@@ -1994,7 +2084,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             )
 
     async def _resolve_manufacturing_mode(self, tenant_id: int, product_id: Optional[int]) -> str:
-        """与 get_work_order_by_id 一致：从产品物料 source_config 取制造模式。"""
+        """product_id 为工单制造对象对应物料 id；制造模式定义在该物料 source_config，与 get_work_order_by_id 一致。"""
         if not product_id:
             return "fabrication"
         product = await Material.get_or_none(
@@ -2401,7 +2491,14 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             # 获取派工人信息
             user_info = await self.get_user_info(dispatched_by)
 
-            # 更新派工信息
+            # 更新派工信息（车间/工作中心仅当请求体显式包含对应字段时更新，兼容旧客户端）
+            dispatch_patch = dispatch_data.model_dump(exclude_unset=True)
+            if "workshop_id" in dispatch_patch or "workshop_name" in dispatch_patch:
+                work_order_operation.workshop_id = dispatch_data.workshop_id
+                work_order_operation.workshop_name = dispatch_data.workshop_name
+            if "work_center_id" in dispatch_patch or "work_center_name" in dispatch_patch:
+                work_order_operation.work_center_id = dispatch_data.work_center_id
+                work_order_operation.work_center_name = dispatch_data.work_center_name
             work_order_operation.assigned_worker_id = dispatch_data.assigned_worker_id
             work_order_operation.assigned_worker_name = dispatch_data.assigned_worker_name
             work_order_operation.assigned_equipment_id = dispatch_data.assigned_equipment_id
@@ -2806,21 +2903,45 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         total_items = len(requirements)
         fully_kitted_count = 0
 
+        # 领料单明细未声明 ForeignKey，不能使用 picking__work_order_id；明细表亦无 deleted_at
+        picking_ids = await ProductionPicking.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            deleted_at__isnull=True,
+        ).values_list("id", flat=True)
+        picking_id_list = list(picking_ids) if picking_ids else []
+
         for req in requirements:
             # 3.1 获取已领料数量 (从 ProductionPickingItem 汇总)
             # 状态为“已领料”或“已确认”的视为已下线到车间/线边
-            agg_picked = await ProductionPickingItem.filter(
-                tenant_id=tenant_id,
-                picking__work_order_id=work_order_id,
-                material_id=req.component_id,
-                status__in=["已领料", "已确认", "picked", "confirmed"],
-                deleted_at__isnull=True
-            ).aggregate(total=Sum("picked_quantity"))
-            picked_qty = Decimal(str(agg_picked.get("total") or 0))
+            if not picking_id_list:
+                picked_qty = Decimal("0")
+            else:
+                agg_picked = await ProductionPickingItem.filter(
+                    tenant_id=tenant_id,
+                    picking_id__in=picking_id_list,
+                    material_id=req.component_id,
+                    status__in=["已领料", "已确认", "picked", "confirmed"],
+                ).aggregate(total=Sum("picked_quantity"))
+                picked_qty = Decimal(str(agg_picked.get("total") or 0))
 
             # 3.2 获取实时库位分布
             locations_data = await get_material_detailed_locations(tenant_id, req.component_id)
-            locations = [MaterialLocationInfo(**loc) for loc in locations_data]
+            locations: List[MaterialLocationInfo] = []
+            for loc in locations_data:
+                try:
+                    qv = loc.get("quantity")
+                    locations.append(
+                        MaterialLocationInfo(
+                            warehouse_id=int(loc.get("warehouse_id") or 0),
+                            warehouse_name=str(loc.get("warehouse_name") or ""),
+                            batch_no=loc.get("batch_no"),
+                            quantity=Decimal(str(qv)) if qv is not None else Decimal("0"),
+                            storage_location_code=loc.get("storage_location_code"),
+                        )
+                    )
+                except Exception as exc:
+                    logger.warning(f"齐套分析库位行解析跳过: {loc} err={exc}")
 
             # 3.3 计算按仓库类型的汇总库存
             main_warehouse_qty = Decimal("0")
@@ -2829,8 +2950,11 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             # 这里简单通过名称或 warehouse_id 判断（生产实务中通常 warehouse_id 段位不同或有辅助字段）
             # 我们在 inventory_helper 里标记了 wh_id=0 为主仓，>0 且匹配类型为线边仓
             for loc in locations_data:
-                q = Decimal(str(loc["quantity"]))
-                if loc["storage_location_code"] == "线边位":
+                try:
+                    q = Decimal(str(loc.get("quantity") or 0))
+                except Exception:
+                    q = Decimal("0")
+                if loc.get("storage_location_code") == "线边位":
                     line_side_qty += q
                 else:
                     main_warehouse_qty += q

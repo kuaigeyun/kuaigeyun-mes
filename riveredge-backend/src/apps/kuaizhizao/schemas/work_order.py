@@ -179,7 +179,10 @@ class WorkOrderResponse(WorkOrderBase):
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
-    manufacturing_mode: Optional[str] = Field(None, description="制造模式（fabrication加工型/assembly装配型，来自产品物料的 source_config）")
+    manufacturing_mode: Optional[str] = Field(
+        None,
+        description="制造模式（fabrication/assembly）：定义在物料主数据；工单 product_id 指向本单制造的产品物料，由后端从该物料 source_config 解析",
+    )
 
 
 class WorkOrderOperationMinimalForGantt(BaseModel):
@@ -210,6 +213,7 @@ class WorkOrderListResponse(BaseModel):
     quantity: Decimal = Field(..., description="计划生产数量")
     production_mode: str = Field(..., description="生产模式")
     sales_order_code: Optional[str] = Field(None, description="销售订单编码")
+    sales_order_name: Optional[str] = Field(None, description="销售订单名称（冗余展示）")
     status: str = Field(..., description="工单状态")
     priority: Optional[str] = Field(None, description="优先级")
     planned_start_date: Optional[datetime] = Field(None, description="计划开始时间")
@@ -218,6 +222,10 @@ class WorkOrderListResponse(BaseModel):
     work_center_name: Optional[str] = Field(None, description="工作中心名称")
     created_by_name: Optional[str] = Field(None, description="创建人姓名")
     readiness_rate: Optional[float] = Field(None, description="齐套率 (%)")
+    manufacturing_mode: Optional[str] = Field(
+        None,
+        description="制造模式（fabrication/assembly）：定义在物料主数据；工单以 product_id 关联所制造的产品物料，从该物料 source_config 解析",
+    )
     created_at: datetime = Field(..., description="创建时间")
     operations: Optional[List[WorkOrderOperationMinimalForGantt]] = Field(None, description="工序列表（include_operations=true 时返回）")
 
@@ -333,6 +341,10 @@ class WorkOrderOperationBase(BaseModel):
 
 class WorkOrderOperationDispatch(BaseModel):
     """工单工序派工请求Schema"""
+    workshop_id: Optional[int] = Field(None, description="车间ID（派工时可调整）")
+    workshop_name: Optional[str] = Field(None, max_length=200, description="车间名称")
+    work_center_id: Optional[int] = Field(None, description="工作中心ID（派工时可调整）")
+    work_center_name: Optional[str] = Field(None, max_length=200, description="工作中心名称")
     assigned_worker_id: Optional[int] = Field(None, description="分配的员工ID")
     assigned_worker_name: Optional[str] = Field(None, description="分配的员工姓名")
     assigned_equipment_id: Optional[int] = Field(None, description="分配的设备ID")

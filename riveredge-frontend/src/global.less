@@ -795,6 +795,15 @@ code {
   }
 }
 
+/* 指定 Modal 不显示标题左侧竖条（如工序派工等） */
+.ant-modal.form-modal-no-title-accent .ant-modal-header .ant-modal-title {
+  padding-left: 0;
+
+  &::before {
+    display: none;
+  }
+}
+
 /* 应用级菜单分组标题容器样式优化 - 修改包含 menu-group-title-app 的菜单项容器 */
 /* 通过 data-menu-id 属性定位应用分组菜单项（key 以 app-group- 开头） */
 .ant-menu-item[data-menu-id*='app-group-'],

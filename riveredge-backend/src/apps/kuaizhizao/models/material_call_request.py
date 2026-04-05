@@ -38,6 +38,10 @@ class MaterialCallRequest(BaseModel):
     
     # 状态：pending(待处理), processing(配料中), partial(部分送达), completed(已完成), cancelled(已取消)
     status = fields.CharField(max_length=20, default="pending", description="状态")
+    # 叫料类型：数据字典 MATERIAL_CALL_TYPE（如 SINGLE_MATERIAL 单物料叫料、FULL_ORDER 整单叫料）
+    call_type = fields.CharField(max_length=64, default="SINGLE_MATERIAL", description="叫料类型")
+    # 单物料叫料原因：数据字典 MATERIAL_CALL_REASON；整单叫料可为空
+    call_reason = fields.CharField(max_length=64, null=True, description="叫料原因（单物料）")
     priority = fields.CharField(max_length=20, default="normal", description="优先级（low/normal/high/urgent）")
     
     # 人员与时间

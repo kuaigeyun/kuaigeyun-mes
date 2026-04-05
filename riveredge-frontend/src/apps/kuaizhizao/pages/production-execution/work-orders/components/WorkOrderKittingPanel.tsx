@@ -7,6 +7,7 @@ import { ShoppingOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { workOrderApi } from '../../../../services/production'
 import { warehouseApi } from '../../../../services/warehouse-execution'
+import { getUserInfo } from '../../../../../../utils/auth'
 
 const WorkOrderKittingPanel: React.FC<{ workOrderId?: number }> = ({ workOrderId }) => {
   const { message: messageApi } = App.useApp()
@@ -23,12 +24,28 @@ const WorkOrderKittingPanel: React.FC<{ workOrderId?: number }> = ({ workOrderId
     try {
       setCalling(prev => ({ ...prev, [record.material_id]: true }))
       const shortage = record.required_quantity - record.picked_quantity
+      const u = getUserInfo() as Record<string, unknown> | null
+      const callerId = Number(u?.id ?? u?.user_id ?? u?.worker_id ?? 0)
+      const callerName = String(u?.name ?? u?.username ?? u?.worker_name ?? '未知')
+      if (!callerId) {
+        messageApi.error('无法获取当前登录用户')
+        return
+      }
       await warehouseApi.materialCall.create({
         work_order_id: workOrderId,
+        work_order_code: String(kittingData?.work_order_code ?? ''),
         material_id: record.material_id,
-        quantity: shortage > 0 ? shortage : 0,
+        material_code: String(record.material_code ?? ''),
+        material_name: String(record.material_name ?? ''),
+        material_unit: record.material_unit != null ? String(record.material_unit) : undefined,
+        requested_quantity: shortage > 0 ? shortage : 0,
+        call_type: 'SINGLE_MATERIAL',
+        /** 与数据字典 MATERIAL_CALL_REASON 预置项一致：缺料行补叫默认视为线边缺料 */
+        call_reason: 'LINE_SIDE_SHORTAGE',
         priority: 'normal',
         remarks: '生产现场通过齐套分析发起叫料',
+        caller_id: callerId,
+        caller_name: callerName,
       })
       messageApi.success(`已为物料 ${record.material_name} 发起叫料请求`)
     } catch (error: any) {

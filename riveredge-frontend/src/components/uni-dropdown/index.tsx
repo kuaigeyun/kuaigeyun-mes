@@ -6,7 +6,7 @@
  * 与 Form.Item 配合使用：<Form.Item name="customer_id"><UniDropdown options={...} quickCreate={...} advancedSearch={...} /></Form.Item>
  */
 
-import React, { useState, useCallback, useEffect, useRef, forwardRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, forwardRef, useMemo } from 'react';
 import { Select, theme } from 'antd';
 import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
 import type { SelectProps } from 'antd';
@@ -20,6 +20,23 @@ export interface UniDropdownProps extends Omit<SelectProps, 'dropdownRender' | '
   advancedSearch?: AdvancedSearchConfig;
 }
 
+/** 下拉选项左对齐（Modal/居中容器内常继承 text-align:center，需显式覆盖） */
+function mergeSelectPopupStyles(stylesProp: SelectProps['styles'] | undefined): SelectProps['styles'] {
+  return {
+    ...stylesProp,
+    popup: {
+      ...stylesProp?.popup,
+      root: { textAlign: 'left', ...stylesProp?.popup?.root },
+      list: { textAlign: 'left', ...stylesProp?.popup?.list },
+      listItem: {
+        justifyContent: 'flex-start',
+        textAlign: 'left',
+        ...stylesProp?.popup?.listItem,
+      },
+    },
+  };
+}
+
 export const UniDropdown = forwardRef<any, UniDropdownProps>(({
   quickCreate,
   advancedSearch,
@@ -27,9 +44,11 @@ export const UniDropdown = forwardRef<any, UniDropdownProps>(({
   filterOption,
   optionFilterProp,
   style,
+  styles: stylesProp,
   ...selectProps
 }, ref) => {
   const { token } = theme.useToken();
+  const mergedStyles = useMemo(() => mergeSelectPopupStyles(stylesProp), [stylesProp]);
   const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);
   const pinyinMatchRef = useRef<((text: string, pattern: string) => any) | null>(null);
 
@@ -145,6 +164,7 @@ export const UniDropdown = forwardRef<any, UniDropdownProps>(({
     <>
       <Select
         {...selectProps}
+        styles={mergedStyles}
         style={{ width: '100%', minWidth: 0, boxSizing: 'border-box', ...style }}
         filterOption={effectiveFilterOption}
         optionFilterProp={effectiveOptionFilterProp}

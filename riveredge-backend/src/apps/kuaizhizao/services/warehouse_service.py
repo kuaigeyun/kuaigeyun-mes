@@ -573,12 +573,21 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                             )
                             limit_map = {r.component_id: r.gross_requirement for r in reqs}
                             
-                            # 2. 统计已领过多少
-                            past_items = await ProductionPickingItem.filter(
+                            # 2. 统计已领过多少（明细表无 FK 至领料单，不可使用 picking__；先查本工单已领料状态的领料单 id）
+                            wo_picking_ids = await ProductionPicking.filter(
                                 tenant_id=tenant_id,
-                                picking__work_order_id=picking.work_order_id,
-                                picking__status='已领料'
-                            ).group_by("material_id").annotate(total_picked=Sum("picked_quantity")).values("material_id", "total_picked")
+                                work_order_id=picking.work_order_id,
+                                deleted_at__isnull=True,
+                                status="已领料",
+                            ).values_list("id", flat=True)
+                            wo_pid_list = list(wo_picking_ids) if wo_picking_ids else []
+                            if not wo_pid_list:
+                                past_items = []
+                            else:
+                                past_items = await ProductionPickingItem.filter(
+                                    tenant_id=tenant_id,
+                                    picking_id__in=wo_pid_list,
+                                ).group_by("material_id").annotate(total_picked=Sum("picked_quantity")).values("material_id", "total_picked")
                             past_map = {item["material_id"]: item["total_picked"] or 0 for item in past_items}
                             
                             # 3. 计算本期即将领用的

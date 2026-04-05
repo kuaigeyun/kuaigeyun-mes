@@ -12,6 +12,7 @@ import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { DictionaryLabel } from '../../../../../components/dictionary-label';
 import { warehouseApi } from '../../../services/warehouse-execution';
 import { getMaterialCallLifecycle } from '../../../utils/materialCallLifecycle';
 
@@ -58,6 +59,28 @@ const MaterialCallsPage: React.FC = () => {
           {r.work_order_code ?? '-'}
         </Typography.Text>
       ),
+    },
+    {
+      title: '叫料类型',
+      dataIndex: 'call_type',
+      width: 110,
+      hideInSearch: true,
+      render: (_, r: any) => (
+        <DictionaryLabel dictionaryCode="MATERIAL_CALL_TYPE" value={r.call_type} notFoundPlaceholder="—" />
+      ),
+    },
+    {
+      title: '叫料原因',
+      dataIndex: 'call_reason',
+      width: 120,
+      ellipsis: true,
+      hideInSearch: true,
+      render: (_, r: any) =>
+        r.call_type === 'SINGLE_MATERIAL' && r.call_reason ? (
+          <DictionaryLabel dictionaryCode="MATERIAL_CALL_REASON" value={r.call_reason} notFoundPlaceholder="—" />
+        ) : (
+          <Typography.Text type="secondary">—</Typography.Text>
+        ),
     },
     {
       title: '物料信息',

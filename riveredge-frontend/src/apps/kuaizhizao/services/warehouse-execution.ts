@@ -44,6 +44,9 @@ export const warehouseApi = {
   materialCall: {
     list: async (params?: any) => apiRequest('/apps/kuaizhizao/material-calls', { method: 'GET', params }),
     create: async (data: any) => apiRequest('/apps/kuaizhizao/material-calls', { method: 'POST', data }),
+    /** 整单叫料：按工单齐套缺料批量生成多条叫料 */
+    batchFromWorkOrder: async (data: { work_order_id: number }) =>
+      apiRequest('/apps/kuaizhizao/material-calls/batch-from-work-order', { method: 'POST', data }),
     update: async (id: number, data: any) => apiRequest(`/apps/kuaizhizao/material-calls/${id}`, { method: 'PATCH', data }),
     cancel: async (id: number) => apiRequest(`/apps/kuaizhizao/material-calls/${id}/cancel`, { method: 'POST' }),
   },

@@ -4,10 +4,10 @@
 定义叫料请求相关的 Pydantic 模型。
 """
 
-from typing import Optional, List
+from typing import Optional
 from datetime import datetime
 from decimal import Decimal
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class MaterialCallRequestBase(BaseModel):
@@ -19,6 +19,14 @@ class MaterialCallRequestBase(BaseModel):
     material_name: str
     material_unit: Optional[str] = None
     requested_quantity: Decimal
+    call_type: str = Field(
+        default="SINGLE_MATERIAL",
+        description="叫料类型：数据字典 MATERIAL_CALL_TYPE（SINGLE_MATERIAL / FULL_ORDER 等）",
+    )
+    call_reason: Optional[str] = Field(
+        default=None,
+        description="叫料原因：数据字典 MATERIAL_CALL_REASON；单物料叫料必填，整单叫料可空",
+    )
     source_warehouse_id: Optional[int] = None
     target_warehouse_id: Optional[int] = None
     priority: str = "normal"
@@ -70,8 +78,15 @@ class MaterialCallRequestListResponse(BaseModel):
     requested_quantity: Decimal
     delivered_quantity: Decimal
     status: str
+    call_type: str = "SINGLE_MATERIAL"
     priority: str
     caller_name: str
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class MaterialCallBatchFromWorkOrderRequest(BaseModel):
+    """按工单整单发起叫料（齐套分析缺料行逐条生成）"""
+
+    work_order_id: int = Field(..., description="工单ID")
