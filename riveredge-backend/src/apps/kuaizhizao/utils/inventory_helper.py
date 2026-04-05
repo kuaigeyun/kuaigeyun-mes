@@ -195,7 +195,8 @@ async def get_material_inventory_info(
     batch_qty = Decimal("0")
     line_items: List[Any] = []
 
-    # 1. MaterialBatch：主仓批次库存（status=in_stock 且 quantity>0）
+    # 1. MaterialBatch：主仓批次库存（与报表「批次库存查询」口径对齐：quantity>0、未删除、未过期；
+    #    排除明确已出库/报废/过期状态；避免仅 status=in_stock 时与即时库存页不一致）
     try:
         from apps.master_data.models.material_batch import MaterialBatch
 
@@ -203,9 +204,8 @@ async def get_material_inventory_info(
             tenant_id=tenant_id,
             material_id=material_id,
             deleted_at__isnull=True,
-            status="in_stock",
             quantity__gt=0,
-        )
+        ).filter(~Q(status__in=["out_stock", "scrapped", "expired"]))
         today = date.today()
         batch_query = batch_query.filter(
             Q(expiry_date__isnull=True) | Q(expiry_date__gte=today)
@@ -313,7 +313,7 @@ async def get_material_inventory_info(
             "main_batch": {
                 "label": "主仓批次库存",
                 "quantity": float(batch_qty),
-                "note_zh": "MaterialBatch：在库、未删除、未过期批次数量合计（当前模型未按仓库维度拆分）",
+                "note_zh": "MaterialBatch：quantity>0、未删除、未过期，且状态非已出库/报废/过期（与批次库存查询一致；未按仓库维度拆分）",
             },
             "line_side_scope_zh": wh_scope,
             "line_side_rows": line_rows,
@@ -348,9 +348,8 @@ async def get_material_detailed_locations(
             tenant_id=tenant_id,
             material_id=material_id,
             deleted_at__isnull=True,
-            status="in_stock",
-            quantity__gt=0
-        ).all()
+            quantity__gt=0,
+        ).filter(~Q(status__in=["out_stock", "scrapped", "expired"])).all()
         
         # 暂时没有在 MaterialBatch 里直接存 warehouse_id，
         # 如果有仓库字段则关联；如果没有则标记为“默认主仓”
@@ -434,9 +433,8 @@ async def batch_get_material_inventory(
             tenant_id=tenant_id,
             material_id__in=material_ids,
             deleted_at__isnull=True,
-            status="in_stock",
             quantity__gt=0,
-        ).filter(
+        ).filter(~Q(status__in=["out_stock", "scrapped", "expired"])).filter(
             Q(expiry_date__isnull=True) | Q(expiry_date__gte=today)
         ).all()
 

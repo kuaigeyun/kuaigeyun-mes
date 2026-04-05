@@ -3727,7 +3727,7 @@ const WorkOrdersPage: React.FC = () => {
         width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef}
         grid
-        modalRender={modal => <div data-smart-suggestion-anchor="work-order-form" style={{ overflow: 'hidden' }}>{modal}</div>}
+        modalRender={(modal) => <div data-smart-suggestion-anchor="work-order-form">{modal}</div>}
       >
         <CodeField
           pageCode="kuaizhizao-production-work-order"
@@ -3748,7 +3748,7 @@ const WorkOrdersPage: React.FC = () => {
         />
         <ProFormText name="production_mode" initialValue="MTS" hidden />
 
-        {/* 产品与数量 */}
+        {/* 产品与数量：裸 Col 与 ProForm 栅格并存为既有布局，勿改为 ProFormGroup（会改变内部 Form.Item 宽度与行高） */}
         <Col span={10}>
           <Suspense fallback={<Spin style={{ margin: '12px 0' }} />}>
             <LazyUniMaterialSelect
@@ -3757,6 +3757,8 @@ const WorkOrdersPage: React.FC = () => {
               placeholder="请选择产品"
               required
               disabled={isEdit}
+              /* UniMaterialSelect 默认 formItem style={{ margin: 0 }}，会吃掉与其它 ProForm 行一致的底间距 */
+              formItemProps={{ style: { marginBottom: 24 } }}
               fallbackOption={
                 isEdit && currentWorkOrder?.product_id
                   ? {
@@ -3924,84 +3926,87 @@ const WorkOrdersPage: React.FC = () => {
           fieldProps={{ style: { width: '100%' } }}
         />
 
-        <ProForm.Item name="process_route_id" label="工艺路线" colProps={{ span: 24 }}>
-          <UniDropdown
-            placeholder="选择后自动加载工序"
-            options={processRouteList.map(route => ({
-              label: `${route.code} - ${route.name}`,
-              value: route.id,
-            }))}
-            disabled={isEdit && String(currentWorkOrder?.status || '') !== 'draft'}
-            showSearch
-            allowClear
-            advancedSearch={{
-              label: '高级搜索',
-              fields: [
-                { name: 'code', label: '工艺路线编号' },
-                { name: 'name', label: '工艺路线名称' },
-              ],
-              onSearch: async (values) => {
-                try {
-                  const res = await processRouteApi.list({ ...values, limit: 100 });
-                  const list = Array.isArray(res) ? res : (res as any)?.data || [];
-                  return list.map((r: any) => ({
-                    value: r.id,
-                    label: `${r.code ?? ''} - ${r.name ?? ''}`.trim() || String(r.id),
-                  }));
-                } catch {
-                  return [];
-                }
-              },
-            }}
-            onChange={async (value) => {
-              if (value) {
-                try {
-                  const route = processRouteList.find(r => r.id === value)
-                  if (!route || !route.uuid) {
-                    messageApi.warning('未找到工艺路线信息')
-                    return
+        {/* 与「产品」一致：裸 Col span={10} + Form.Item，避免 ProForm.Item colProps span=24 与栅格行错位导致裁切 */}
+        <Col span={10}>
+          <Form.Item name="process_route_id" label="工艺路线" style={{ marginBottom: 16 }}>
+            <UniDropdown
+              placeholder="选择后自动加载工序"
+              options={processRouteList.map(route => ({
+                label: `${route.code} - ${route.name}`,
+                value: route.id,
+              }))}
+              disabled={isEdit && String(currentWorkOrder?.status || '') !== 'draft'}
+              showSearch
+              allowClear
+              advancedSearch={{
+                label: '高级搜索',
+                fields: [
+                  { name: 'code', label: '工艺路线编号' },
+                  { name: 'name', label: '工艺路线名称' },
+                ],
+                onSearch: async (values) => {
+                  try {
+                    const res = await processRouteApi.list({ ...values, limit: 100 });
+                    const list = Array.isArray(res) ? res : (res as any)?.data || [];
+                    return list.map((r: any) => ({
+                      value: r.id,
+                      label: `${r.code ?? ''} - ${r.name ?? ''}`.trim() || String(r.id),
+                    }));
+                  } catch {
+                    return [];
                   }
-                  const routeDetail = await processRouteApi.get(route.uuid)
-                  const routeJump =
-                    (routeDetail as any)?.allow_operation_jump ??
-                    (routeDetail as any)?.allowOperationJump ??
-                    false
-                  formRef.current?.setFieldsValue({ allow_operation_jump: routeJump })
-                  const operations = parseOperationSequence(
-                    routeDetail?.operation_sequence,
-                    operationList
-                  )
-                  if (operations.length > 0) {
-                    setSelectedOperations(operations)
-                    formRef.current?.setFieldsValue({
-                      operations: operations.map((op: any) => op.operation_id),
-                    })
-                    messageApi.success(`已加载 ${operations.length} 个工序`)
-                  } else {
+                },
+              }}
+              onChange={async (value) => {
+                if (value) {
+                  try {
+                    const route = processRouteList.find(r => r.id === value)
+                    if (!route || !route.uuid) {
+                      messageApi.warning('未找到工艺路线信息')
+                      return
+                    }
+                    const routeDetail = await processRouteApi.get(route.uuid)
+                    const routeJump =
+                      (routeDetail as any)?.allow_operation_jump ??
+                      (routeDetail as any)?.allowOperationJump ??
+                      false
+                    formRef.current?.setFieldsValue({ allow_operation_jump: routeJump })
+                    const operations = parseOperationSequence(
+                      routeDetail?.operation_sequence,
+                      operationList
+                    )
+                    if (operations.length > 0) {
+                      setSelectedOperations(operations)
+                      formRef.current?.setFieldsValue({
+                        operations: operations.map((op: any) => op.operation_id),
+                      })
+                      messageApi.success(`已加载 ${operations.length} 个工序`)
+                    } else {
+                      setSelectedOperations([])
+                      formRef.current?.setFieldsValue({ operations: undefined })
+                      if (routeDetail?.operation_sequence) {
+                        messageApi.warning('该工艺路线工序数据无法解析，请检查工序主数据是否完整')
+                      } else {
+                        messageApi.warning('该工艺路线未配置工序序列')
+                      }
+                    }
+                  } catch (error: any) {
+                    console.error('获取工艺路线工序失败:', error)
+                    messageApi.error(error.message || '获取工艺路线工序失败')
                     setSelectedOperations([])
                     formRef.current?.setFieldsValue({ operations: undefined })
-                    if (routeDetail?.operation_sequence) {
-                      messageApi.warning('该工艺路线工序数据无法解析，请检查工序主数据是否完整')
-                    } else {
-                      messageApi.warning('该工艺路线未配置工序序列')
-                    }
                   }
-                } catch (error: any) {
-                  console.error('获取工艺路线工序失败:', error)
-                  messageApi.error(error.message || '获取工艺路线工序失败')
+                } else {
                   setSelectedOperations([])
-                  formRef.current?.setFieldsValue({ operations: undefined })
+                  formRef.current?.setFieldsValue({
+                    operations: undefined,
+                    allow_operation_jump: false,
+                  })
                 }
-              } else {
-                setSelectedOperations([])
-                formRef.current?.setFieldsValue({
-                  operations: undefined,
-                  allow_operation_jump: false,
-                })
-              }
-            }}
-          />
-        </ProForm.Item>
+              }}
+            />
+          </Form.Item>
+        </Col>
         <Form.Item name="operations" hidden />
         <Form.Item
           label="工艺路线工序清单"

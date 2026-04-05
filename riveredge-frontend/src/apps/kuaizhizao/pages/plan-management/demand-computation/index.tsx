@@ -2273,8 +2273,22 @@ const DemandComputationPage: React.FC = () => {
                                 />
                               ),
                             },
+                            { title: '需求数量', dataIndex: 'required_quantity', width: 96, align: 'right' },
                             {
-                              title: '就绪状态',
+                              title: '可用库存',
+                              dataIndex: 'available_inventory',
+                              width: 96,
+                              align: 'right' as const,
+                              render: (v: number, record: DemandComputationItem) =>
+                                renderAvailableInventoryCell(v, record.detail_results as Record<string, unknown> | undefined),
+                            },
+                            { title: '净需求', dataIndex: 'net_requirement', width: 90, align: 'right', render: (v) => <span style={{ fontWeight: 'bold' }}>{v}</span> },
+                            {
+                              title: (
+                                <Tooltip title="就绪率 = 可用库存 ÷ 毛需求；毛需求很大时，即使有库存也可能显示缺料或比例很小（非即时库存无数据）">
+                                  <span>就绪状态</span>
+                                </Tooltip>
+                              ),
                               dataIndex: 'readiness_status',
                               width: 148,
                               render: (status: string, record: DemandComputationItem) => {
@@ -2284,6 +2298,17 @@ const DemandComputationPage: React.FC = () => {
                                   Shortage: { label: '缺料', color: 'error' },
                                 }
                                 const info = map[status || 'Shortage'] || { label: '未知', color: 'default' }
+                                const rate = record.readiness_rate
+                                const pctLabel =
+                                  rate != null && rate < 1
+                                    ? (() => {
+                                        const p = Number(rate) * 100
+                                        if (p <= 0) return '0%'
+                                        if (p < 0.1) return '<0.1%'
+                                        if (p < 1) return `${p.toFixed(1)}%`
+                                        return `${Math.round(p)}%`
+                                      })()
+                                    : null
                                 return (
                                   <span
                                     style={{
@@ -2296,9 +2321,9 @@ const DemandComputationPage: React.FC = () => {
                                     <Tag color={info.color} style={{ margin: 0, flexShrink: 0 }}>
                                       {info.label}
                                     </Tag>
-                                    {record.readiness_rate != null && record.readiness_rate < 1 ? (
+                                    {pctLabel ? (
                                       <span style={{ fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
-                                        {Math.round(record.readiness_rate * 100)}%
+                                        {pctLabel}
                                       </span>
                                     ) : null}
                                   </span>
@@ -2358,16 +2383,6 @@ const DemandComputationPage: React.FC = () => {
                                 )
                               },
                             },
-                            { title: '需求数量', dataIndex: 'required_quantity', width: 96, align: 'right' },
-                            {
-                              title: '可用库存',
-                              dataIndex: 'available_inventory',
-                              width: 96,
-                              align: 'right' as const,
-                              render: (v: number, record: DemandComputationItem) =>
-                                renderAvailableInventoryCell(v, record.detail_results as Record<string, unknown> | undefined),
-                            },
-                            { title: '净需求', dataIndex: 'net_requirement', width: 90, align: 'right', render: (v) => <span style={{ fontWeight: 'bold' }}>{v}</span> },
                             {
                               title: '建议工单',
                               dataIndex: 'suggested_work_order_quantity',
