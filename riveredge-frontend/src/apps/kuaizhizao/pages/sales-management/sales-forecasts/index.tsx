@@ -14,6 +14,7 @@ import { PlusOutlined, DeleteOutlined, EyeOutlined, EditOutlined, ArrowDownOutli
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts'
 import { theme as AntdTheme } from 'antd'
 import { StatCardTrendArea } from '../../../../../components/common/StatCardTrendArea'
 import { usePageMetrics } from '../../../../../hooks/usePageMetrics'
@@ -69,7 +70,7 @@ export default function SalesForecastsPage() {
   const queryClient = useQueryClient();
   const location = useLocation();
 
-  const invalidateMenuBadge = () => { queryClient.invalidateQueries({ queryKey: ['menuBadgeCounts'] }); };
+  const invalidateMenuBadge = useInvalidateMenuBadgeCounts();
   const invalidateStatistics = () => {
     queryClient.invalidateQueries({ queryKey: ['salesForecastStatistics'] });
     queryClient.invalidateQueries({ queryKey: ['pageMetrics', location.pathname] });

@@ -8,6 +8,7 @@
  */
 
 import React, { useRef, useState, useMemo } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useLocation } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import type { DescriptionsProps } from 'antd';
@@ -160,6 +161,7 @@ const PurchaseReturnsPage: React.FC = () => {
   const { token } = theme.useToken();
   const location = useLocation();
   const actionRef = useRef<ActionType>(null);
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const queryClient = useQueryClient();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
@@ -206,6 +208,8 @@ const PurchaseReturnsPage: React.FC = () => {
             const fresh = await warehouseApi.purchaseReturn.get(record.id!.toString());
             setReturnDetail(fresh as PurchaseReturnDetail);
           }
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '采购退货确认失败');
@@ -509,6 +513,8 @@ const PurchaseReturnsPage: React.FC = () => {
                     setReturnDetail(null);
                     setDetailDrawerVisible(false);
                   }
+                  invalidateMenuBadgeCounts();
+
                   actionRef.current?.reload();
                 } catch (error: any) {
                   messageApi.error(error.message || '删除失败');

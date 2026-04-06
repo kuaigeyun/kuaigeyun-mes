@@ -537,17 +537,13 @@ const ReportingKioskPage: React.FC = () => {
                 )}
 
                 {/* 工时 */}
-                <Form.Item
-                  name="work_hours"
-                  label="工时（小时）"
-                  rules={[{ required: true, message: '请输入工时' }]}
-                >
+                <Form.Item name="work_hours" label="工时（小时）">
                   <InputNumber
                     size="large"
                     min={0}
                     precision={2}
                     style={{ width: '100%', height: 60, fontSize: 24 }}
-                    placeholder="请输入工时"
+                    placeholder="选填，默认按 0"
                   />
                 </Form.Item>
 

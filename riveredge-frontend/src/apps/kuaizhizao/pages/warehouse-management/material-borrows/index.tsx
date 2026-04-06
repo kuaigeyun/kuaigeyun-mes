@@ -8,6 +8,7 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form as AntForm, InputNumber, Input, DatePicker, Row, Col, Typography, Dropdown } from 'antd';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, PrinterOutlined, ShoppingOutlined, MoreOutlined } from '@ant-design/icons';
@@ -23,7 +24,6 @@ import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFI
 import { warehouseApi } from '../../../services/production';
 import { getMaterialBorrowLifecycle } from '../../../utils/materialBorrowLifecycle';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import dayjs from 'dayjs';
 import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
 import { useTranslation } from 'react-i18next';
 
@@ -65,6 +65,7 @@ const MaterialBorrowsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
@@ -214,6 +215,8 @@ const MaterialBorrowsPage: React.FC = () => {
         try {
           await warehouseApi.materialBorrow.confirm(record.id!.toString());
           messageApi.success('借出确认成功');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '借出确认失败');
@@ -230,6 +233,8 @@ const MaterialBorrowsPage: React.FC = () => {
         try {
           await warehouseApi.materialBorrow.delete(record.id!.toString());
           messageApi.success('删除成功');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '删除失败');
@@ -250,6 +255,8 @@ const MaterialBorrowsPage: React.FC = () => {
           }
           messageApi.success(`已删除 ${keys.length} 条借料单`);
           setSelectedRowKeys([]);
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error?.message || '批量删除失败');
@@ -273,6 +280,8 @@ const MaterialBorrowsPage: React.FC = () => {
         successCount += 1;
       }
       messageApi.success(`已同步 ${successCount} 条借料单`);
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error?.message || '同步失败');
@@ -348,6 +357,8 @@ const MaterialBorrowsPage: React.FC = () => {
       });
       messageApi.success('创建成功');
       setCreateModalVisible(false);
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       if (error.message !== '请至少添加一条有效明细') messageApi.error(error.message || '创建失败');

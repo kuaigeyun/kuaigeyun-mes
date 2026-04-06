@@ -116,13 +116,16 @@ class ApplicationRegistryService:
                 apps.append(app_data)
 
             logger.info(f"📋 从数据库发现 {len(apps)} 个活跃应用: {[app['name'] for app in apps]}")
-            
+
             # 如果数据库中没有应用，回退到文件系统扫描
             if not apps:
                 logger.warning("⚠️ 数据库中没有已安装的应用，尝试从文件系统扫描应用")
                 raise Exception("数据库中没有应用，回退到文件系统扫描")
-            
-            return apps
+
+            # 首租户 core_applications 若漏装某应用，此前会直接跳过文件系统扫描，导致该应用在 OpenAPI 中完全不存在（整路径 404）。
+            # 合并：1) manifest 扫描（APPS_MANIFEST_DIR 正确时）2) src/apps/*/api/router.py 包目录（manifest 目录指错或未扫描到仍生效）
+            merged = cls._append_filesystem_apps_for_missing_codes(apps)
+            return cls._append_router_package_dirs_for_missing_codes(merged)
 
         except Exception as e:
             logger.warning(f"⚠️ 数据库查询失败或没有应用，尝试从文件系统扫描应用: {e}")
@@ -171,6 +174,115 @@ class ApplicationRegistryService:
         finally:
             if conn:
                 await conn.close()
+
+    @classmethod
+    def _append_filesystem_apps_for_missing_codes(cls, apps: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        将「磁盘上存在 manifest + apps.<code>.api.router」但不在当前 DB 应用列表中的应用并入列表。
+
+        典型场景：首个租户的 core_applications 未写入 kuaizhizao，但代码已部署，此前会导致 /api/v1/apps/kuaizhizao/* 全部 404。
+        """
+        existing_codes = {a.get("code") for a in apps if a.get("code")}
+        try:
+            from core.services.application.application_service import ApplicationService
+
+            discovered_plugins = ApplicationService._scan_plugin_manifests()
+        except Exception as e:
+            logger.warning(f"合并磁盘应用路由：扫描 manifest 失败，跳过: {e}")
+            return apps
+
+        out = list(apps)
+        added_codes: List[str] = []
+        for manifest in discovered_plugins:
+            app_code = manifest.get("code")
+            if not app_code or app_code in existing_codes:
+                continue
+            module_code = app_code.replace("-", "_")
+            route_module_path = f"apps.{module_code}.api.router"
+            if not cls._module_exists(route_module_path):
+                continue
+            out.append(
+                {
+                    "uuid": f"{app_code}-filesystem-merge-uuid",
+                    "code": app_code,
+                    "name": manifest.get("name", app_code),
+                    "description": manifest.get("description", ""),
+                    "version": manifest.get("version", "1.0.0"),
+                    "route_path": manifest.get("route_path", f"/apps/{app_code}"),
+                    "entry_point": route_module_path,
+                    "menu_config": manifest.get("menu_config"),
+                    "is_system": False,
+                    "is_active": True,
+                    "is_installed": True,
+                    "created_at": None,
+                    "updated_at": None,
+                }
+            )
+            existing_codes.add(app_code)
+            added_codes.append(app_code)
+
+        if added_codes:
+            logger.info(
+                "📎 已合并磁盘应用（首租户 DB 列表缺失但有后端 router）: {}",
+                added_codes,
+            )
+        return out
+
+    @classmethod
+    def _append_router_package_dirs_for_missing_codes(cls, apps: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        按源码树合并应用：凡存在 ``src/apps/<package>/api/router.py`` 且不在当前列表中的应用。
+
+        解决 ``APPS_MANIFEST_DIR`` 指向空目录/错误路径时 ``_scan_plugin_manifests`` 返回空、导致无法通过 manifest 合并的问题。
+        应用 code 由目录名推导：包名中的下划线转为连字符（如 ``master_data`` -> ``master-data``）。
+        """
+        existing_codes = {a.get("code") for a in apps if a.get("code")}
+        current_file = Path(__file__).resolve()
+        src_dir = current_file.parent.parent.parent.parent
+        apps_root = src_dir / "apps"
+        if not apps_root.is_dir():
+            return apps
+
+        out = list(apps)
+        added_codes: List[str] = []
+        for sub in sorted(apps_root.iterdir()):
+            if not sub.is_dir() or sub.name.startswith("."):
+                continue
+            if not (sub / "api" / "router.py").is_file():
+                continue
+            package_name = sub.name
+            app_code = package_name.replace("_", "-")
+            if app_code in existing_codes:
+                continue
+            route_module_path = f"apps.{package_name}.api.router"
+            if not cls._module_exists(route_module_path):
+                continue
+            out.append(
+                {
+                    "uuid": f"{app_code}-router-pkg-merge-uuid",
+                    "code": app_code,
+                    "name": app_code,
+                    "description": "",
+                    "version": "1.0.0",
+                    "route_path": f"/apps/{app_code}",
+                    "entry_point": route_module_path,
+                    "menu_config": None,
+                    "is_system": False,
+                    "is_active": True,
+                    "is_installed": True,
+                    "created_at": None,
+                    "updated_at": None,
+                }
+            )
+            existing_codes.add(app_code)
+            added_codes.append(app_code)
+
+        if added_codes:
+            logger.info(
+                "📎 已合并 src/apps/*/api/router 包（DB/manifest 未列出）: {}",
+                added_codes,
+            )
+        return out
 
     @classmethod
     async def _register_app_models(cls, apps: List[Dict[str, Any]]) -> None:
@@ -262,7 +374,7 @@ class ApplicationRegistryService:
 
         registered_routes = []
         # 在 main.py 中已静态注册的应用，此处跳过避免重复注册
-        statically_registered_apps = {"master-data", "kuaireport"}
+        statically_registered_apps = {"master-data", "kuaireport", "kuaizhizao"}
 
         for app in apps:
             app_code = app['code']
@@ -284,8 +396,9 @@ class ApplicationRegistryService:
                         # 注意：在导入路由模块时，确保sys.path已正确设置
                         import sys
                         from pathlib import Path
-                        src_path = Path(__file__).parent.parent.parent.parent / "src"
-                        if str(src_path) not in sys.path:
+                        # 本文件位于 src/core/services/application/，向上 4 级即为含 apps/、core/ 的 src 根目录（勿再拼 /src，否则会指向不存在的 src/src）
+                        src_path = Path(__file__).resolve().parent.parent.parent.parent
+                        if src_path.is_dir() and str(src_path) not in sys.path:
                             sys.path.insert(0, str(src_path))
                         
                         # 如果模块已经导入过，先移除它以便重新导入（修复语法错误后需要重新导入）

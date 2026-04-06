@@ -72,6 +72,8 @@ export interface WorkOrderExecutionConfig {
   require_confirmed_picking_before_operation_start: boolean;
   require_confirmed_picking_before_reporting: boolean;
   current_user_can_confirm_picking: boolean;
+  /** 末道工序自动入库：none | direct_inbound | inbound_notice */
+  last_operation_auto_inbound_mode?: string;
 }
 
 export const workOrderApi = {

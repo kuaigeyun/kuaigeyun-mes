@@ -9,6 +9,7 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormItem, ProFormDependency } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, message, Row, Col } from 'antd';
@@ -65,6 +66,7 @@ const ReworkOrdersPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
 
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [reworkTypeOptions, setReworkTypeOptions] = useState<Array<{ label: string; value: string }>>(REWORK_TYPE_FALLBACK);
   const [reworkTypeLoading, setReworkTypeLoading] = useState(false);
 
@@ -385,6 +387,8 @@ const ReworkOrdersPage: React.FC = () => {
         try {
           await reworkOrderApi.delete(record.id!.toString());
           messageApi.success('删除成功');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '删除失败');
@@ -415,6 +419,8 @@ const ReworkOrdersPage: React.FC = () => {
         messageApi.success('返工单创建成功');
       }
       setModalVisible(false);
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
@@ -517,6 +523,8 @@ const ReworkOrdersPage: React.FC = () => {
             await reworkOrderApi.delete(key.toString());
           }
           messageApi.success('删除成功');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '删除失败');

@@ -8,6 +8,7 @@
  */
 
 import React, { useRef, useState } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProDescriptionsItemType } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Card, Table, Input, Typography } from 'antd';
 import dayjs from 'dayjs';
@@ -56,6 +57,7 @@ interface ReplenishmentSuggestion {
 const ReplenishmentSuggestionsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   // Drawer 相关状态
@@ -253,6 +255,8 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
       messageApi.success('补货建议处理成功');
       setProcessModalVisible(false);
       setProcessSuggestion(null);
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '处理失败');
@@ -268,6 +272,8 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
         try {
           await warehouseApi.replenishmentSuggestion.generateFromAlerts();
           messageApi.success('补货建议生成成功');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '生成失败');

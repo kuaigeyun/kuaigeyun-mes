@@ -8,6 +8,7 @@
  */
 
 import React, { useRef, useState } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Card, Table, Row, Col, Typography } from 'antd';
 import { PlusOutlined, EyeOutlined, PlayCircleOutlined, CheckCircleOutlined } from '@ant-design/icons';
@@ -66,6 +67,7 @@ const StocktakingPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
 
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   // Modal 相关状态
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [itemModalVisible, setItemModalVisible] = useState(false);
@@ -130,6 +132,8 @@ const StocktakingPage: React.FC = () => {
       messageApi.success('盘点单创建成功');
       setCreateModalVisible(false);
       formRef.current?.resetFields();
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '创建盘点单失败');
@@ -161,6 +165,8 @@ const StocktakingPage: React.FC = () => {
         try {
           await stocktakingApi.start(record.id!.toString());
           messageApi.success('盘点已开始');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '开始盘点失败');
@@ -211,6 +217,8 @@ const StocktakingPage: React.FC = () => {
       setItemModalVisible(false);
       setCurrentStocktakingId(null);
       itemFormRef.current?.resetFields();
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '添加盘点明细失败');
@@ -256,6 +264,8 @@ const StocktakingPage: React.FC = () => {
         const detail = await stocktakingApi.get(currentStocktaking.id.toString());
         setCurrentStocktaking(detail);
       }
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '执行盘点明细失败');
@@ -274,6 +284,8 @@ const StocktakingPage: React.FC = () => {
         try {
           await stocktakingApi.adjust(record.id!.toString());
           messageApi.success('盘点差异处理成功');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '处理盘点差异失败');
@@ -494,6 +506,8 @@ const StocktakingPage: React.FC = () => {
                   await stocktakingApi.delete(String(id));
                 }
                 messageApi.success(`成功删除 ${keys.length} 条记录`);
+                invalidateMenuBadgeCounts();
+
                 actionRef.current?.reload();
               } catch (error: any) {
                 messageApi.error(error.message || '删除失败');

@@ -9,6 +9,7 @@
  */
 
 import React, { useRef, useState, useCallback } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormSelect, ProFormTextArea, ProFormDatePicker, ProFormRadio, ProFormDependency, ProFormItem } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, message, Card, Table, Form as AntForm, InputNumber, Row, Col } from 'antd';
 import { PlusOutlined, DeleteOutlined, EyeOutlined, CheckCircleOutlined, BellOutlined } from '@ant-design/icons';
@@ -66,6 +67,7 @@ const BatchingCenterPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
 
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
@@ -146,6 +148,8 @@ const BatchingCenterPage: React.FC = () => {
       }
       setCreateModalVisible(false);
       formRef.current?.resetFields();
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       if (error.message && !error.message.includes('请选择') && !error.message.includes('请添加')) {
@@ -173,6 +177,8 @@ const BatchingCenterPage: React.FC = () => {
         try {
           await batchingOrderApi.confirm(record.id!.toString());
           messageApi.success('配料确认成功');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '确认配料失败');
@@ -300,6 +306,8 @@ const BatchingCenterPage: React.FC = () => {
                   await batchingOrderApi.delete(String(id));
                 }
                 messageApi.success(`成功删除 ${keys.length} 条记录`);
+                invalidateMenuBadgeCounts();
+
                 actionRef.current?.reload();
               } catch (error: any) {
                 messageApi.error(error?.message || '删除失败');

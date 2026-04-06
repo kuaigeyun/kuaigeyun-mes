@@ -8,6 +8,7 @@
  */
 
 import React, { useRef, useState } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormTextArea, ProFormSelect, ProFormDatePicker } from '@ant-design/pro-components';
 import { App, Tag, Button, Space, Divider, Typography } from 'antd';
 import { EyeOutlined, CheckCircleOutlined, SearchOutlined, ToolOutlined, CloseCircleOutlined } from '@ant-design/icons';
@@ -52,6 +53,7 @@ interface QualityException {
 const QualityExceptionsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentRecord, setCurrentRecord] = useState<QualityException | null>(null);
   const [handleModalVisible, setHandleModalVisible] = useState(false);
@@ -128,6 +130,8 @@ const QualityExceptionsPage: React.FC = () => {
       setHandleModalVisible(false);
       setCurrentRecord(null);
       setCurrentAction('');
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '处理失败');

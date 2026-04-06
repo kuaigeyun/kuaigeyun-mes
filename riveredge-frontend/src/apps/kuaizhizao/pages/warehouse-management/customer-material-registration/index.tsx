@@ -8,6 +8,7 @@
  */
 
 import React, { useRef, useState } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormText, ProFormDigit, ProFormTextArea, ProFormSelect, ProFormDatePicker } from '@ant-design/pro-components';
 import { App, Button, Space, Popconfirm, Row, Col, Typography } from 'antd';
 import { EyeOutlined, CheckCircleOutlined, CloseCircleOutlined, ScanOutlined } from '@ant-design/icons';
@@ -47,6 +48,7 @@ interface CustomerMaterialRegistration {
 const CustomerMaterialRegistrationPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   // Modal 相关状态
@@ -130,6 +132,8 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       messageApi.success('客户来料登记成功');
       setCreateModalVisible(false);
       formRef.current?.resetFields();
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '客户来料登记失败');
@@ -157,6 +161,8 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
     try {
       await customerMaterialRegistrationApi.process(record.id!.toString());
       messageApi.success('客户来料登记已处理（入库）');
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '处理客户来料登记失败');
@@ -170,6 +176,8 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
     try {
       await customerMaterialRegistrationApi.cancel(record.id!.toString());
       messageApi.success('客户来料登记已取消');
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '取消客户来料登记失败');

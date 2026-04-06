@@ -356,18 +356,18 @@ SYSTEM_DICTIONARIES: List[Dict[str, Any]] = [
     {
         "code": "MATERIAL_CALL_TYPE",
         "name": "叫料类型",
-        "description": "生产向仓库发起叫料时的类型：单物料指定数量，或按工单 BOM 整单缺料批量叫料",
+        "description": "单独叫料为自选一种或多种物料；整单叫料按工单齐套缺料生成一张叫料单多行明细",
         "items": [
             {
-                "label": "单物料叫料",
-                "value": "SINGLE_MATERIAL",
-                "description": "指定单个物料与数量发起叫料",
+                "label": "单独叫料",
+                "value": "CUSTOM_SELECTION",
+                "description": "自选一种或多种物料及数量发起叫料",
                 "sort_order": 1,
             },
             {
                 "label": "整单叫料",
                 "value": "FULL_ORDER",
-                "description": "按工单齐套分析，对仍缺料的物料逐条生成叫料",
+                "description": "按工单齐套分析缺料生成一张叫料单（多行明细）",
                 "sort_order": 2,
             },
         ],
@@ -375,7 +375,7 @@ SYSTEM_DICTIONARIES: List[Dict[str, Any]] = [
     {
         "code": "MATERIAL_CALL_REASON",
         "name": "叫料原因",
-        "description": "单物料叫料时说明现场需求场景，便于仓库与计划追溯",
+        "description": "单独叫料时说明现场需求场景，便于仓库与计划追溯",
         "items": [
             {
                 "label": "线边仓缺料",

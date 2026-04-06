@@ -21,6 +21,7 @@ from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
 from apps.kuaizhizao.models.reporting_record import ReportingRecord
 from apps.kuaizhizao.models.scrap_record import ScrapRecord
+from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
 from apps.kuaizhizao.models.defect_record import DefectRecord
 from apps.kuaizhizao.services.rework_order_service import ReworkOrderService
 from apps.kuaizhizao.schemas.rework_order import ReworkOrderCreate
@@ -68,6 +69,63 @@ class ReportingService(AppBaseService[ReportingRecord]):
         except Exception:
             return default_rate
 
+    async def _maybe_trigger_direct_finished_goods_inbound(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        acting_user_id: int,
+    ) -> None:
+        """
+        业务参数「末道工序自动入库」为直接入库时，在报工已审核且工单已完工后尝试自动生成成品入库单。
+        在报工事务提交之后调用，避免与报工嵌套事务冲突。
+        """
+        try:
+            mode = await BusinessConfigService().get_last_operation_auto_inbound_mode(tenant_id)
+            if mode != "direct_inbound":
+                return
+
+            wo = await WorkOrder.get_or_none(id=work_order_id, tenant_id=tenant_id)
+            if not wo or wo.status != "completed":
+                return
+
+            exists = await FinishedGoodsReceipt.filter(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                deleted_at__isnull=True,
+            ).exists()
+            if exists:
+                return
+
+            from apps.kuaizhizao.services.warehouse_service import FinishedGoodsReceiptService
+
+            wh_svc = FinishedGoodsReceiptService()
+            resolved = await wh_svc.resolve_default_inbound_warehouse_for_work_order(
+                tenant_id=tenant_id,
+                work_order=wo,
+            )
+            if not resolved:
+                logger.warning(
+                    "末道工序直接入库已开启但跳过创建成品入库单：未解析到默认仓库，请配置与工单工作中心/车间关联的启用仓库或至少一个启用的普通仓。"
+                    f" tenant_id={tenant_id} work_order_id={work_order_id} work_order_code={getattr(wo, 'code', '')}"
+                )
+                return
+
+            warehouse_id, warehouse_name = resolved
+            await wh_svc.quick_receipt_from_work_order(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                created_by=acting_user_id,
+                warehouse_id=warehouse_id,
+                warehouse_name=warehouse_name,
+            )
+            logger.info(
+                f"末道工序直接入库：已为工单 {wo.code}（id={work_order_id}）自动创建成品入库单"
+            )
+        except Exception as e:
+            logger.warning(
+                f"末道工序直接入库自动创建成品入库单失败：tenant_id={tenant_id} work_order_id={work_order_id} err={e}"
+            )
+
     async def create_reporting_record(
         self,
         tenant_id: int,
@@ -90,6 +148,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
             ValidationError: 数据验证失败
             NotFoundError: 工单不存在
         """
+        trigger_direct_inbound = False
+        wo_id_for_auto: Optional[int] = None
         async with in_transaction():
             # 验证工单是否存在且状态正确
             work_order = await WorkOrder.get_or_none(
@@ -211,9 +271,10 @@ class ReportingService(AppBaseService[ReportingRecord]):
                     reported_quantity=reported_quantity_dec,
                 )
 
-            # 工时合法性：必须为正数
-            if Decimal(str(getattr(reporting_data, "work_hours", 0) or 0)) <= 0:
-                raise ValidationError("报工工时必须大于0")
+            # 工时合法性：允许为空/0（按 0 落库）；不允许负数
+            wh = Decimal(str(getattr(reporting_data, "work_hours", 0) or 0))
+            if wh < 0:
+                raise ValidationError("报工工时不能为负数")
 
             # 报工时间合法性：禁止未来时间（兼容时区 aware/naive）
             if getattr(reporting_data, "reported_at", None):
@@ -348,11 +409,6 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 work_order.status = 'in_progress'
                 work_order.actual_start_date = work_order.actual_start_date or datetime.now()
             
-            # 更新工单完成数量
-            work_order.completed_quantity = (work_order.completed_quantity or Decimal('0')) + reporting_data.reported_quantity
-            work_order.qualified_quantity = (work_order.qualified_quantity or Decimal('0')) + reporting_data.qualified_quantity
-            work_order.unqualified_quantity = (work_order.unqualified_quantity or Decimal('0')) + reporting_data.unqualified_quantity
-            
             # 检查工单是否完成（以最后一道工序完成为依据，即所有工序都完成）
             all_operations = await WorkOrderOperation.filter(
                 tenant_id=tenant_id,
@@ -363,6 +419,15 @@ class ReportingService(AppBaseService[ReportingRecord]):
             if all_completed and work_order.status != 'completed':
                 work_order.status = 'completed'
                 work_order.actual_end_date = work_order.actual_end_date or datetime.now()
+
+            # 工单头已完成/合格数量 = 末道工序累计（不按全工序报工相加）
+            if all_operations:
+                last_op = max(all_operations, key=lambda op: (op.sequence or 0, op.id or 0))
+                work_order.completed_quantity = last_op.completed_quantity or Decimal("0")
+                work_order.qualified_quantity = last_op.qualified_quantity or Decimal("0")
+            else:
+                work_order.completed_quantity = Decimal("0")
+                work_order.qualified_quantity = Decimal("0")
             
             await work_order.save()
 
@@ -412,7 +477,34 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
             logger.info(f"报工成功：工单 {work_order.code}，工序 {work_order_operation.operation_name}，数量 {reporting_data.reported_quantity}")
 
-            return ReportingRecordResponse.model_validate(reporting_record)
+            trigger_direct_inbound = (
+                reporting_record.status == "approved"
+                and work_order.status == "completed"
+            )
+            wo_id_for_auto = work_order.id
+
+        if trigger_direct_inbound and wo_id_for_auto is not None:
+            await self._maybe_trigger_direct_finished_goods_inbound(
+                tenant_id, wo_id_for_auto, reported_by
+            )
+
+        # 新建/自动审核报工后，待入库成品入库单数量与末道已审合格数对齐（撤销审核等走 _update_work_order_progress）
+        try:
+            from apps.kuaizhizao.services.warehouse_service import FinishedGoodsReceiptService
+
+            await FinishedGoodsReceiptService().sync_pending_finished_goods_receipts_for_work_order(
+                tenant_id=tenant_id,
+                work_order_id=reporting_record.work_order_id,
+            )
+        except Exception as sync_err:
+            logger.warning(
+                "报工创建后同步待入库成品入库单失败 tenant_id=%s work_order_id=%s err=%s",
+                tenant_id,
+                getattr(reporting_record, "work_order_id", None),
+                sync_err,
+            )
+
+        return ReportingRecordResponse.model_validate(reporting_record)
 
     async def get_reporting_record_by_id(
         self,
@@ -519,6 +611,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
             NotFoundError: 报工记录不存在
             ValidationError: 审核状态错误
         """
+        should_try_direct_inbound = False
+        wo_id_for_inbound: Optional[int] = None
         async with in_transaction():
             record = await ReportingRecord.get_or_none(
                 id=record_id,
@@ -619,7 +713,18 @@ class ReportingService(AppBaseService[ReportingRecord]):
                     except Exception as qc_err:
                         logger.warning(f"报工审核成功但触发质量检验失败：{qc_err}")
 
-            return ReportingRecordResponse.model_validate(record)
+            if record.status == "approved":
+                should_try_direct_inbound = True
+                wo_id_for_inbound = record.work_order_id
+
+            response = ReportingRecordResponse.model_validate(record)
+
+        if should_try_direct_inbound and wo_id_for_inbound is not None:
+            await self._maybe_trigger_direct_finished_goods_inbound(
+                tenant_id, wo_id_for_inbound, approved_by
+            )
+
+        return response
 
     async def revoke_reporting_approval(
         self,
@@ -808,22 +913,15 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 
                 await work_order_op.save()
 
-            # 获取工单并扣减计数
+            # 获取工单：头表数量由末道工序行推导，不在此按报工行扣减
             work_order = await WorkOrder.get_or_none(id=record.work_order_id, tenant_id=tenant_id)
             if work_order:
-                # 注意：WorkOrder 的计数通常由 _update_work_order_progress (只看 approved) 维护。
-                # 但如果在 pending 状态删除，也需要从 work_order.completed_quantity 扣减（如果它在 create 时加了）。
-                # 在 create_reporting_record 中确实加了。
-                work_order.completed_quantity = _dec_non_negative((work_order.completed_quantity or Decimal('0')) - record.reported_quantity)
-                work_order.qualified_quantity = _dec_non_negative((work_order.qualified_quantity or Decimal('0')) - record.qualified_quantity)
-                work_order.unqualified_quantity = _dec_non_negative((work_order.unqualified_quantity or Decimal('0')) - record.unqualified_quantity)
-                
                 if work_order.status == 'completed':
                     work_order.status = 'in_progress'
                 
                 await work_order.save()
 
-            # 硬删除（报工记录表暂无 deleted_at 字段，后续可改为软删除）
+            # 当前仍为物理删除；表已具备 deleted_at，后续可改为软删除并统一查询过滤
             await record.delete()
             
             # 最后再次同步一次工单进度（确保稳健）
@@ -1014,6 +1112,30 @@ class ReportingService(AppBaseService[ReportingRecord]):
         except Exception as e:
             logger.warning(f"报工自动累计模具使用次数失败: {e}")
 
+    async def _sync_work_order_header_quantities_from_last_operation(
+        self,
+        tenant_id: int,
+        work_order: WorkOrder,
+    ) -> None:
+        """
+        将工单头的已完成/合格数量与「末道工序」行对齐。
+
+        多道工序时，各工序报工合格数表示该工序产出，不能简单相加作为工单成品数量；
+        工单维度应以 sequence 最大的工序上的累计完成/合格为准。
+        """
+        operations = await WorkOrderOperation.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order.id,
+            deleted_at__isnull=True,
+        ).all()
+        if not operations:
+            work_order.completed_quantity = Decimal("0")
+            work_order.qualified_quantity = Decimal("0")
+            return
+        last_op = max(operations, key=lambda op: (op.sequence or 0, op.id or 0))
+        work_order.completed_quantity = last_op.completed_quantity or Decimal("0")
+        work_order.qualified_quantity = last_op.qualified_quantity or Decimal("0")
+
     async def _update_work_order_progress(
         self,
         tenant_id: int,
@@ -1026,18 +1148,6 @@ class ReportingService(AppBaseService[ReportingRecord]):
             tenant_id: 组织ID
             work_order_id: 工单ID
         """
-        # 查询该工单的所有已审核通过的报工记录
-        records = await ReportingRecord.filter(
-            tenant_id=tenant_id,
-            work_order_id=work_order_id,
-            status='approved',
-
-        ).all()
-
-        # 计算总完成数量
-        total_completed = sum(r.qualified_quantity for r in records)
-        total_work_hours = sum(r.work_hours for r in records)
-
         # 更新工单
         work_order = await WorkOrder.get_or_none(
             id=work_order_id,
@@ -1046,9 +1156,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
         )
 
         if work_order:
-            work_order.completed_quantity = total_completed
-            work_order.qualified_quantity = total_completed
-            
+            await self._sync_work_order_header_quantities_from_last_operation(tenant_id, work_order)
+
             # 更新不合格数量（从报废记录统计）
             await self._update_work_order_unqualified_quantity(tenant_id, work_order_id, work_order)
 
@@ -1064,6 +1173,22 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 work_order.actual_end_date = datetime.now()
 
             await work_order.save()
+
+            # 末道报工变动后，同步尚未确认入库的成品入库数量（与下推/自动入库口径一致）
+            try:
+                from apps.kuaizhizao.services.warehouse_service import FinishedGoodsReceiptService
+
+                await FinishedGoodsReceiptService().sync_pending_finished_goods_receipts_for_work_order(
+                    tenant_id=tenant_id,
+                    work_order_id=work_order_id,
+                )
+            except Exception as sync_err:
+                logger.warning(
+                    "同步待入库成品入库单失败 tenant_id=%s work_order_id=%s err=%s",
+                    tenant_id,
+                    work_order_id,
+                    sync_err,
+                )
 
     async def _update_work_order_unqualified_quantity(
         self,
@@ -1496,9 +1621,11 @@ class ReportingService(AppBaseService[ReportingRecord]):
             ):
                 raise ValidationError("合格数与不合格数之和不能超过报工数量")
 
-            # 与创建口径一致：工时必须大于 0，报工时间不得晚于当前时间
-            if "work_hours" in update_data and Decimal(str(update_data.get("work_hours") or 0)) <= Decimal("0"):
-                raise ValidationError("报工工时必须大于0")
+            # 与创建口径一致：工时允许为 0；不允许负数；报工时间不得晚于当前时间
+            if "work_hours" in update_data:
+                wh_corr = Decimal(str(update_data.get("work_hours") or 0))
+                if wh_corr < 0:
+                    raise ValidationError("报工工时不能为负数")
             if "reported_at" in update_data and update_data.get("reported_at") is not None:
                 corrected_reported_at = update_data["reported_at"]
                 now_ref = (

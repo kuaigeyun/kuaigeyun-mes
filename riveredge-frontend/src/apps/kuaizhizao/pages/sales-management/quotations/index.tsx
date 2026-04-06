@@ -8,6 +8,7 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, List, Typography, Alert, theme as AntdTheme, Descriptions, Empty, Spin, Dropdown } from 'antd';
@@ -299,6 +300,7 @@ const QuotationsPage: React.FC = () => {
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const tableSearchFormRef = useRef<any>(null);
   const [listTotal, setListTotal] = useState(0);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -674,6 +676,8 @@ const QuotationsPage: React.FC = () => {
         try {
           await deleteQuotation(record.id!);
           messageApi.success('删除成功');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '删除失败');
@@ -733,6 +737,8 @@ const QuotationsPage: React.FC = () => {
             await deleteQuotation(Number(k));
           }
           messageApi.success(`已删除 ${keys.length} 条报价单`);
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '批量删除失败');
@@ -768,6 +774,8 @@ const QuotationsPage: React.FC = () => {
         console.error(`${actionName}失败详情:`, failedItems);
       }
     }
+    invalidateMenuBadgeCounts();
+
     actionRef.current?.reload();
     setSelectedRowKeys([]);
   };
@@ -797,6 +805,8 @@ const QuotationsPage: React.FC = () => {
         successCount += 1;
       }
       messageApi.success(`已同步 ${successCount} 条报价单`);
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error?.message || '同步失败');
@@ -965,6 +975,8 @@ const QuotationsPage: React.FC = () => {
         messageApi.success(`成功导入 ${result.successCount} 条报价单`);
       }
       if (result.successCount > 0) {
+        invalidateMenuBadgeCounts();
+
         actionRef.current?.reload();
       }
     } catch (error: any) {
@@ -980,6 +992,8 @@ const QuotationsPage: React.FC = () => {
         try {
           const res = await convertQuotationToOrder(record.id!);
           messageApi.success(`已转为销售订单：${res.sales_order?.order_code || ''}`);
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
           setDetailDrawerVisible(false);
           setQuotationDetail(null);
@@ -998,6 +1012,8 @@ const QuotationsPage: React.FC = () => {
         try {
           const updated = await submitQuotation(record.id!);
           messageApi.success('提交成功');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
           setQuotationDetail((prev) => (prev?.id === record.id ? updated : prev));
         } catch (error: any) {
@@ -1015,6 +1031,8 @@ const QuotationsPage: React.FC = () => {
         try {
           const updated = await withdrawQuotation(record.id!);
           messageApi.success('已撤回');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
           setQuotationDetail((prev) => (prev?.id === record.id ? updated : prev));
         } catch (error: any) {
@@ -1040,6 +1058,8 @@ const QuotationsPage: React.FC = () => {
       setRejectModalOpen(false);
       setRejectingRecord(null);
       setRejectRemarks('');
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
       setQuotationDetail((prev) => (prev?.id === rejectingRecord.id ? updated : prev));
     } catch (e: any) {
@@ -1055,6 +1075,8 @@ const QuotationsPage: React.FC = () => {
         try {
           const updated = await approveQuotation(record.id!);
           messageApi.success('审核已通过');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
           setQuotationDetail((prev) => (prev?.id === record.id ? updated : prev));
         } catch (e: any) {
@@ -1072,6 +1094,8 @@ const QuotationsPage: React.FC = () => {
         try {
           const updated = await revokeReviewQuotation(record.id!);
           messageApi.success('已撤回审核');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
           setQuotationDetail((prev) => (prev?.id === record.id ? updated : prev));
         } catch (e: any) {
@@ -1089,6 +1113,8 @@ const QuotationsPage: React.FC = () => {
         try {
           const updated = await confirmCustomerQuotation(record.id!);
           messageApi.success('已标记客户确认');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
           setQuotationDetail((prev) => (prev?.id === record.id ? updated : prev));
         } catch (e: any) {
@@ -1106,6 +1132,8 @@ const QuotationsPage: React.FC = () => {
         try {
           const updated = await reopenQuotation(record.id!);
           messageApi.success('已恢复草稿');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
           setQuotationDetail((prev) => (prev?.id === record.id ? updated : prev));
         } catch (e: any) {
@@ -1123,6 +1151,8 @@ const QuotationsPage: React.FC = () => {
         try {
           const updated = await revokePushQuotation(record.id!);
           messageApi.success('已撤回下推');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
           setQuotationDetail((prev) => (prev?.id === record.id ? updated : prev));
         } catch (e: any) {
@@ -1262,6 +1292,8 @@ const QuotationsPage: React.FC = () => {
     setModalVisible(false);
     setEffectiveRuleCode(null);
     setEffectiveAutoGen(null);
+    invalidateMenuBadgeCounts();
+
     actionRef.current?.reload();
   };
 
@@ -1306,6 +1338,8 @@ const QuotationsPage: React.FC = () => {
     setEditingId(null);
     setEffectiveRuleCode(null);
     setEffectiveAutoGen(null);
+    invalidateMenuBadgeCounts();
+
     actionRef.current?.reload();
   };
 

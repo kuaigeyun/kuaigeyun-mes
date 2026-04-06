@@ -5,8 +5,9 @@
  * 支持 待处理 -> 配料中 -> 已完成 的状态流转。
  */
 import React, { useRef } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Space, Modal, Typography } from 'antd';
+import { App, Button, Space, Modal, Typography, Table } from 'antd';
 import { CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
@@ -20,6 +21,7 @@ const MaterialCallsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
 
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   /**
    * 处理叫料请求状态流转
    */
@@ -32,6 +34,8 @@ const MaterialCallsPage: React.FC = () => {
         cancelled: '叫料已取消',
       };
       messageApi.success(statusMap[status] || '操作成功');
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
@@ -76,7 +80,7 @@ const MaterialCallsPage: React.FC = () => {
       ellipsis: true,
       hideInSearch: true,
       render: (_, r: any) =>
-        r.call_type === 'SINGLE_MATERIAL' && r.call_reason ? (
+        (r.call_type === 'CUSTOM_SELECTION' || r.call_type === 'SINGLE_MATERIAL') && r.call_reason ? (
           <DictionaryLabel dictionaryCode="MATERIAL_CALL_REASON" value={r.call_reason} notFoundPlaceholder="—" />
         ) : (
           <Typography.Text type="secondary">—</Typography.Text>
@@ -239,6 +243,42 @@ const MaterialCallsPage: React.FC = () => {
         columns={columns}
         columnPersistenceId="kuaizhizao-wm-material-calls"
         showAdvancedSearch={true}
+        expandable={{
+          rowExpandable: (r: any) => Array.isArray(r?.items) && r.items.length > 0,
+          expandedRowRender: (r: any) => (
+            <Table
+              size="small"
+              pagination={false}
+              rowKey={(it: any) => String(it.id ?? `${it.material_id}-${it.line_no}`)}
+              dataSource={r.items ?? []}
+              columns={[
+                {
+                  title: '行',
+                  dataIndex: 'line_no',
+                  width: 56,
+                },
+                {
+                  title: '物料',
+                  key: 'mat',
+                  render: (_: unknown, it: any) =>
+                    `${it.material_code ?? ''} ${it.material_name ?? ''}`.trim() || '—',
+                },
+                {
+                  title: '需求',
+                  dataIndex: 'requested_quantity',
+                  align: 'right',
+                  width: 100,
+                },
+                {
+                  title: '已送',
+                  dataIndex: 'delivered_quantity',
+                  align: 'right',
+                  width: 100,
+                },
+              ]}
+            />
+          ),
+        }}
         request={async (params) => {
           try {
             const res = await warehouseApi.materialCall.list({

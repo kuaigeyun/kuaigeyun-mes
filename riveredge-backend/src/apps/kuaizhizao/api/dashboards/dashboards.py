@@ -31,7 +31,13 @@ router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 class TodoItem(BaseModel):
     """待办事项项"""
     id: str = Field(..., description="待办事项ID")
-    type: str = Field(..., description="待办事项类型（work_order/approval/exception）")
+    type: str = Field(
+        ...,
+        description=(
+            "待办类型：work_order / exception / quality_inspection / warehouse / outbound / "
+            "purchase / sales / equipment"
+        ),
+    )
     title: str = Field(..., description="待办事项标题")
     description: Optional[str] = Field(None, description="待办事项描述")
     priority: str = Field(..., description="优先级（high/medium/low）")
@@ -68,11 +74,9 @@ async def get_todos(
 ) -> TodoListResponse:
     """
     获取待办事项列表
-    
-    包括：
-    - 待处理工单
-    - 待审核单据
-    - 异常提醒
+
+    包括：待处理工单、生产异常、库存预警、入库/出库/借还料、收货发货通知、
+    采购申请待审核与采购退货、销售退货、叫料、设备故障待处理、各类检验待检验等。
     """
     todos = []
     
@@ -119,7 +123,7 @@ async def get_todos(
                 priority=exc.alert_level or "medium",
                 due_date=None,
                 status="pending",
-                link=f"/apps/kuaizhizao/material-shortage-exceptions/{exc.id}",
+                link="/apps/kuaizhizao/production-execution/material-shortage-exceptions",
                 created_at=exc.created_at,
             ))
         
@@ -138,7 +142,7 @@ async def get_todos(
                 priority="high",
                 due_date=None,
                 status="pending",
-                link=f"/apps/kuaizhizao/delivery-delay-exceptions/{exc.id}",
+                link="/apps/kuaizhizao/production-execution/delivery-delay-exceptions",
                 created_at=exc.created_at,
             ))
         
@@ -157,17 +161,465 @@ async def get_todos(
                 priority=exc.severity or "medium",
                 due_date=None,
                 status="pending",
-                link=f"/apps/kuaizhizao/quality-exceptions/{exc.id}",
+                link="/apps/kuaizhizao/production-execution/quality-exceptions",
                 created_at=exc.created_at,
             ))
     except Exception as e:
         logger.error(f"获取异常提醒失败: {e}")
-    
-    # 3. TODO: 获取待审核单据（需要审批流程模块支持）
+
+    # 3. 仓库待办：库存预警、采购/成品待入库
+    try:
+        inv_alerts = await InventoryAlert.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            status__in=["pending", "processing"],
+        ).order_by("-triggered_at").limit(limit)
+        for row in inv_alerts:
+            lvl = (row.alert_level or "warning").lower()
+            if lvl == "critical":
+                prio = "high"
+            elif lvl == "warning":
+                prio = "medium"
+            else:
+                prio = "low"
+            msg = (row.alert_message or "")[:200] if row.alert_message else ""
+            todos.append(TodoItem(
+                id=f"inventory_alert_{row.id}",
+                type="warehouse",
+                title=f"库存预警：{row.material_name or row.material_code}",
+                description=msg or f"{row.warehouse_name} · 当前 {row.current_quantity}",
+                priority=prio,
+                due_date=None,
+                status="pending",
+                link="/apps/kuaizhizao/warehouse-management/inventory-alert",
+                created_at=row.created_at,
+            ))
+    except Exception as e:
+        logger.error(f"获取库存预警待办失败: {e}")
+
+    try:
+        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+
+        pending_receipts = await PurchaseReceipt.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            status="待入库",
+        ).order_by("-created_at").limit(limit)
+        for pr in pending_receipts:
+            todos.append(TodoItem(
+                id=f"purchase_receipt_{pr.id}",
+                type="warehouse",
+                title=f"待入库：{pr.receipt_code}",
+                description=f"{pr.supplier_name} · {pr.warehouse_name}",
+                priority="medium",
+                due_date=None,
+                status="pending",
+                link="/apps/kuaizhizao/warehouse-management/inbound",
+                created_at=pr.created_at,
+            ))
+    except Exception as e:
+        logger.error(f"获取待入库待办失败: {e}")
+
+    try:
+        from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
+
+        pending_fg = await FinishedGoodsReceipt.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            status="待入库",
+        ).order_by("-created_at").limit(limit)
+        for fg in pending_fg:
+            todos.append(TodoItem(
+                id=f"finished_goods_receipt_{fg.id}",
+                type="warehouse",
+                title=f"成品待入库：{fg.receipt_code}",
+                description=f"{fg.work_order_code} · {fg.warehouse_name}",
+                priority="medium",
+                due_date=None,
+                status="pending",
+                link="/apps/kuaizhizao/warehouse-management/inbound",
+                created_at=fg.created_at,
+            ))
+    except Exception as e:
+        logger.error(f"获取成品待入库待办失败: {e}")
+
+    # 3b. 仓储：生产退料、其他入库、借料、还料、叫料、收货通知（待收货）
+    try:
+        from apps.kuaizhizao.models.production_return import ProductionReturn
+
+        for row in await ProductionReturn.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True, status="待退料"
+        ).order_by("-created_at").limit(limit):
+            todos.append(TodoItem(
+                id=f"production_return_{row.id}",
+                type="warehouse",
+                title=f"生产退料待确认：{row.return_code}",
+                description=f"{row.work_order_code} · {row.warehouse_name}",
+                priority="medium",
+                due_date=None,
+                status="pending",
+                link="/apps/kuaizhizao/warehouse-management/inbound",
+                created_at=row.created_at,
+            ))
+    except Exception as e:
+        logger.error(f"获取生产退料待办失败: {e}")
+
+    try:
+        from apps.kuaizhizao.models.other_inbound import OtherInbound
+
+        for row in await OtherInbound.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True, status="待入库"
+        ).order_by("-created_at").limit(limit):
+            todos.append(TodoItem(
+                id=f"other_inbound_{row.id}",
+                type="warehouse",
+                title=f"其他入库待确认：{row.inbound_code}",
+                description=f"{row.reason_type} · {row.warehouse_name}",
+                priority="low",
+                due_date=None,
+                status="pending",
+                link="/apps/kuaizhizao/warehouse-management/other-inbound",
+                created_at=row.created_at,
+            ))
+    except Exception as e:
+        logger.error(f"获取其他入库待办失败: {e}")
+
+    try:
+        from apps.kuaizhizao.models.material_borrow import MaterialBorrow
+
+        for row in await MaterialBorrow.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True, status="待借出"
+        ).order_by("-created_at").limit(limit):
+            todos.append(TodoItem(
+                id=f"material_borrow_{row.id}",
+                type="warehouse",
+                title=f"借料待确认：{row.borrow_code}",
+                description=f"{row.borrower_name or ''} · {row.warehouse_name or ''}".strip(" ·") or None,
+                priority="medium",
+                due_date=None,
+                status="pending",
+                link="/apps/kuaizhizao/warehouse-management/material-borrows",
+                created_at=row.created_at,
+            ))
+    except Exception as e:
+        logger.error(f"获取借料待办失败: {e}")
+
+    try:
+        from apps.kuaizhizao.models.material_return import MaterialReturn
+
+        for row in await MaterialReturn.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True, status="待归还"
+        ).order_by("-created_at").limit(limit):
+            todos.append(TodoItem(
+                id=f"material_return_{row.id}",
+                type="warehouse",
+                title=f"还料待确认：{row.return_code}",
+                description=f"借料单 {row.borrow_code} · {row.warehouse_name}",
+                priority="medium",
+                due_date=None,
+                status="pending",
+                link="/apps/kuaizhizao/warehouse-management/material-returns",
+                created_at=row.created_at,
+            ))
+    except Exception as e:
+        logger.error(f"获取还料待办失败: {e}")
+
+    try:
+        from apps.kuaizhizao.models.material_call_request import MaterialCallRequest
+
+        for row in await MaterialCallRequest.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True, status="pending"
+        ).order_by("-created_at").limit(limit):
+            pr = (row.priority or "normal").lower()
+            if pr == "urgent":
+                prio = "high"
+            elif pr == "high":
+                prio = "high"
+            elif pr == "low":
+                prio = "low"
+            else:
+                prio = "medium"
+            todos.append(TodoItem(
+                id=f"material_call_{row.id}",
+                type="warehouse",
+                title=f"叫料待处理：{row.code}",
+                description=f"{row.work_order_code} · {row.material_name}",
+                priority=prio,
+                due_date=row.needed_at,
+                status="pending",
+                link="/apps/kuaizhizao/warehouse-management/material-calls",
+                created_at=row.created_at,
+            ))
+    except Exception as e:
+        logger.error(f"获取叫料待办失败: {e}")
+
+    try:
+        from apps.kuaizhizao.models.receipt_notice import ReceiptNotice
+
+        for row in await ReceiptNotice.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True, status="待收货"
+        ).order_by("-created_at").limit(limit):
+            todos.append(TodoItem(
+                id=f"receipt_notice_{row.id}",
+                type="purchase",
+                title=f"收货通知待收货：{row.notice_code}",
+                description=f"{row.supplier_name} · {row.purchase_order_code}",
+                priority="medium",
+                due_date=None,
+                status="pending",
+                link="/apps/kuaizhizao/purchase-management/receipt-notices",
+                created_at=row.created_at,
+            ))
+    except Exception as e:
+        logger.error(f"获取收货通知待办失败: {e}")
+
+    # 3c. 出库作业：生产领料、销售出库、其他出库
+    try:
+        from apps.kuaizhizao.models.production_picking import ProductionPicking
+
+        for row in await ProductionPicking.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True, status="待领料"
+        ).order_by("-created_at").limit(limit):
+            todos.append(TodoItem(
+                id=f"production_picking_{row.id}",
+                type="outbound",
+                title=f"生产领料待确认：{row.picking_code}",
+                description=f"工单 {row.work_order_code}",
+                priority="medium",
+                due_date=None,
+                status="pending",
+                link="/apps/kuaizhizao/warehouse-management/outbound",
+                created_at=row.created_at,
+            ))
+    except Exception as e:
+        logger.error(f"获取生产领料待办失败: {e}")
+
+    try:
+        from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+
+        for row in await SalesDelivery.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True, status="待出库"
+        ).order_by("-created_at").limit(limit):
+            todos.append(TodoItem(
+                id=f"sales_delivery_{row.id}",
+                type="outbound",
+                title=f"销售出库待确认：{row.delivery_code}",
+                description=f"{row.customer_name} · {row.warehouse_name}",
+                priority="medium",
+                due_date=None,
+                status="pending",
+                link="/apps/kuaizhizao/warehouse-management/outbound",
+                created_at=row.created_at,
+            ))
+    except Exception as e:
+        logger.error(f"获取销售出库待办失败: {e}")
+
+    try:
+        from apps.kuaizhizao.models.other_outbound import OtherOutbound
+
+        for row in await OtherOutbound.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True, status="待出库"
+        ).order_by("-created_at").limit(limit):
+            todos.append(TodoItem(
+                id=f"other_outbound_{row.id}",
+                type="outbound",
+                title=f"其他出库待确认：{row.outbound_code}",
+                description=f"{row.reason_type} · {row.warehouse_name}",
+                priority="low",
+                due_date=None,
+                status="pending",
+                link="/apps/kuaizhizao/warehouse-management/other-outbound",
+                created_at=row.created_at,
+            ))
+    except Exception as e:
+        logger.error(f"获取其他出库待办失败: {e}")
+
+    # 3d. 采购：申请待审核、采购退货待退货
+    try:
+        from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
+        from apps.kuaizhizao.constants import DocumentStatus
+
+        pr_pending = await PurchaseRequisition.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            status__in=(
+                DocumentStatus.PENDING_REVIEW.value,
+                "待审核",
+                "PENDING_REVIEW",
+                "PENDING",
+            ),
+        ).order_by("-created_at").limit(limit)
+        for row in pr_pending:
+            todos.append(TodoItem(
+                id=f"purchase_requisition_{row.id}",
+                type="purchase",
+                title=f"采购申请待审核：{row.requisition_code}",
+                description=row.requisition_name or row.applicant_name,
+                priority="medium",
+                due_date=None,
+                status="pending",
+                link="/apps/kuaizhizao/purchase-management/purchase-requisitions",
+                created_at=row.created_at,
+            ))
+    except Exception as e:
+        logger.error(f"获取采购申请待办失败: {e}")
+
+    try:
+        from apps.kuaizhizao.models.purchase_return import PurchaseReturn
+
+        for row in await PurchaseReturn.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True, status="待退货"
+        ).order_by("-created_at").limit(limit):
+            todos.append(TodoItem(
+                id=f"purchase_return_{row.id}",
+                type="purchase",
+                title=f"采购退货待确认：{row.return_code}",
+                description=f"{row.supplier_name} · {row.warehouse_name}",
+                priority="medium",
+                due_date=None,
+                status="pending",
+                link="/apps/kuaizhizao/purchase-management/purchase-returns",
+                created_at=row.created_at,
+            ))
+    except Exception as e:
+        logger.error(f"获取采购退货待办失败: {e}")
+
+    # 3e. 销售：发货通知、销售退货
+    try:
+        from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
+
+        for row in await ShipmentNotice.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True, status="待发货"
+        ).order_by("-created_at").limit(limit):
+            todos.append(TodoItem(
+                id=f"shipment_notice_{row.id}",
+                type="sales",
+                title=f"发货通知待发货：{row.notice_code}",
+                description=f"{row.customer_name} · {row.sales_order_code}",
+                priority="medium",
+                due_date=None,
+                status="pending",
+                link="/apps/kuaizhizao/sales-management/shipment-notices",
+                created_at=row.created_at,
+            ))
+    except Exception as e:
+        logger.error(f"获取发货通知待办失败: {e}")
+
+    try:
+        from apps.kuaizhizao.models.sales_return import SalesReturn
+
+        for row in await SalesReturn.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True, status="待退货"
+        ).order_by("-created_at").limit(limit):
+            todos.append(TodoItem(
+                id=f"sales_return_{row.id}",
+                type="sales",
+                title=f"销售退货待确认：{row.return_code}",
+                description=f"{row.customer_name} · {row.warehouse_name}",
+                priority="medium",
+                due_date=None,
+                status="pending",
+                link="/apps/kuaizhizao/sales-management/sales-returns",
+                created_at=row.created_at,
+            ))
+    except Exception as e:
+        logger.error(f"获取销售退货待办失败: {e}")
+
+    # 3f. 设备：故障待处理
+    try:
+        from apps.kuaizhizao.models.equipment_fault import EquipmentFault
+
+        for row in await EquipmentFault.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True, status="待处理"
+        ).order_by("-created_at").limit(limit):
+            lvl = (row.fault_level or "").strip()
+            if "紧急" in lvl or "严重" in lvl:
+                prio = "high"
+            elif "一般" in lvl or "轻微" in lvl:
+                prio = "low"
+            else:
+                prio = "medium"
+            todos.append(TodoItem(
+                id=f"equipment_fault_{row.id}",
+                type="equipment",
+                title=f"设备故障待处理：{row.fault_no}",
+                description=f"{row.equipment_name} · {row.fault_type}",
+                priority=prio,
+                due_date=None,
+                status="pending",
+                link="/apps/kuaizhizao/equipment-management/equipment-faults",
+                created_at=row.created_at,
+            ))
+    except Exception as e:
+        logger.error(f"获取设备故障待办失败: {e}")
+
+    # 4. 质检待办：来料 / 过程 / 成品检验待检验
+    try:
+        from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
+        from apps.kuaizhizao.models.process_inspection import ProcessInspection
+        from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
+
+        incoming_list = await IncomingInspection.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            status="待检验",
+        ).order_by("-created_at").limit(limit)
+        for ins in incoming_list:
+            todos.append(TodoItem(
+                id=f"inspection_incoming_{ins.id}",
+                type="quality_inspection",
+                title=f"来料待检：{ins.inspection_code}",
+                description=f"{ins.material_name} · {ins.supplier_name}",
+                priority="medium",
+                due_date=None,
+                status="pending",
+                link="/apps/kuaizhizao/quality-management/incoming-inspection",
+                created_at=ins.created_at,
+            ))
+
+        process_list = await ProcessInspection.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            status="待检验",
+        ).order_by("-created_at").limit(limit)
+        for ins in process_list:
+            todos.append(TodoItem(
+                id=f"inspection_process_{ins.id}",
+                type="quality_inspection",
+                title=f"过程待检：{ins.inspection_code}",
+                description=f"{ins.operation_name} · 工单 {ins.work_order_code}",
+                priority="medium",
+                due_date=None,
+                status="pending",
+                link="/apps/kuaizhizao/quality-management/process-inspection",
+                created_at=ins.created_at,
+            ))
+
+        finished_list = await FinishedGoodsInspection.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            status="待检验",
+        ).order_by("-created_at").limit(limit)
+        for ins in finished_list:
+            todos.append(TodoItem(
+                id=f"inspection_finished_{ins.id}",
+                type="quality_inspection",
+                title=f"成品待检：{ins.inspection_code}",
+                description=f"{ins.material_name} · 工单 {ins.work_order_code}",
+                priority="medium",
+                due_date=None,
+                status="pending",
+                link="/apps/kuaizhizao/quality-management/finished-goods-inspection",
+                created_at=ins.created_at,
+            ))
+    except Exception as e:
+        logger.error(f"获取质检待办失败: {e}")
+
+    # 5. TODO: 获取待审核单据（需要审批流程模块支持）
     
     # 按优先级和创建时间排序
     todos.sort(key=lambda x: (
-        {"high": 0, "medium": 1, "low": 2}.get(x.priority, 3),
+        {"high": 0, "critical": 0, "medium": 1, "low": 2}.get((x.priority or "medium").lower(), 3),
         x.created_at
     ))
     
@@ -204,31 +656,165 @@ async def handle_todo(
             "redirect": f"/apps/kuaizhizao/production-execution/work-orders/{work_order_id}",
         }
     elif todo_id.startswith("exception_material_"):
-        # 缺料异常：返回跳转链接
-        exception_id = int(todo_id.replace("exception_material_", ""))
         return {
             "success": True,
-            "message": "请前往缺料异常详情页进行处理",
+            "message": "请前往缺料异常列表处理",
             "todo_id": todo_id,
-            "redirect": f"/apps/kuaizhizao/exceptions/material-shortage/{exception_id}",
+            "redirect": "/apps/kuaizhizao/production-execution/material-shortage-exceptions",
         }
     elif todo_id.startswith("exception_delay_"):
-        # 延期异常：返回跳转链接
-        exception_id = int(todo_id.replace("exception_delay_", ""))
         return {
             "success": True,
-            "message": "请前往延期异常详情页进行处理",
+            "message": "请前往延期异常列表处理",
             "todo_id": todo_id,
-            "redirect": f"/apps/kuaizhizao/exceptions/delivery-delay/{exception_id}",
+            "redirect": "/apps/kuaizhizao/production-execution/delivery-delay-exceptions",
         }
     elif todo_id.startswith("exception_quality_"):
-        # 质量异常：返回跳转链接
-        exception_id = int(todo_id.replace("exception_quality_", ""))
         return {
             "success": True,
             "message": "请前往质量异常详情页进行处理",
             "todo_id": todo_id,
-            "redirect": f"/apps/kuaizhizao/exceptions/quality/{exception_id}",
+            "redirect": "/apps/kuaizhizao/production-execution/quality-exceptions",
+        }
+    elif todo_id.startswith("inventory_alert_"):
+        return {
+            "success": True,
+            "message": "请前往库存预警处理",
+            "todo_id": todo_id,
+            "redirect": "/apps/kuaizhizao/warehouse-management/inventory-alert",
+        }
+    elif todo_id.startswith("purchase_receipt_"):
+        return {
+            "success": True,
+            "message": "请前往采购入库处理",
+            "todo_id": todo_id,
+            "redirect": "/apps/kuaizhizao/warehouse-management/inbound",
+        }
+    elif todo_id.startswith("finished_goods_receipt_"):
+        return {
+            "success": True,
+            "message": "请前往入库管理处理成品入库",
+            "todo_id": todo_id,
+            "redirect": "/apps/kuaizhizao/warehouse-management/inbound",
+        }
+    elif todo_id.startswith("production_return_"):
+        return {
+            "success": True,
+            "message": "请前往入库管理处理生产退料",
+            "todo_id": todo_id,
+            "redirect": "/apps/kuaizhizao/warehouse-management/inbound",
+        }
+    elif todo_id.startswith("other_inbound_"):
+        return {
+            "success": True,
+            "message": "请前往其他入库处理",
+            "todo_id": todo_id,
+            "redirect": "/apps/kuaizhizao/warehouse-management/other-inbound",
+        }
+    elif todo_id.startswith("material_borrow_"):
+        return {
+            "success": True,
+            "message": "请前往借料单处理",
+            "todo_id": todo_id,
+            "redirect": "/apps/kuaizhizao/warehouse-management/material-borrows",
+        }
+    elif todo_id.startswith("material_return_"):
+        return {
+            "success": True,
+            "message": "请前往还料单处理",
+            "todo_id": todo_id,
+            "redirect": "/apps/kuaizhizao/warehouse-management/material-returns",
+        }
+    elif todo_id.startswith("material_call_"):
+        return {
+            "success": True,
+            "message": "请前往叫料处理",
+            "todo_id": todo_id,
+            "redirect": "/apps/kuaizhizao/warehouse-management/material-calls",
+        }
+    elif todo_id.startswith("receipt_notice_"):
+        return {
+            "success": True,
+            "message": "请前往收货通知处理",
+            "todo_id": todo_id,
+            "redirect": "/apps/kuaizhizao/purchase-management/receipt-notices",
+        }
+    elif todo_id.startswith("production_picking_"):
+        return {
+            "success": True,
+            "message": "请前往出库管理处理生产领料",
+            "todo_id": todo_id,
+            "redirect": "/apps/kuaizhizao/warehouse-management/outbound",
+        }
+    elif todo_id.startswith("sales_delivery_"):
+        return {
+            "success": True,
+            "message": "请前往出库管理处理销售出库",
+            "todo_id": todo_id,
+            "redirect": "/apps/kuaizhizao/warehouse-management/outbound",
+        }
+    elif todo_id.startswith("other_outbound_"):
+        return {
+            "success": True,
+            "message": "请前往其他出库处理",
+            "todo_id": todo_id,
+            "redirect": "/apps/kuaizhizao/warehouse-management/other-outbound",
+        }
+    elif todo_id.startswith("purchase_requisition_"):
+        return {
+            "success": True,
+            "message": "请前往采购申请审核",
+            "todo_id": todo_id,
+            "redirect": "/apps/kuaizhizao/purchase-management/purchase-requisitions",
+        }
+    elif todo_id.startswith("purchase_return_"):
+        return {
+            "success": True,
+            "message": "请前往采购退货处理",
+            "todo_id": todo_id,
+            "redirect": "/apps/kuaizhizao/purchase-management/purchase-returns",
+        }
+    elif todo_id.startswith("shipment_notice_"):
+        return {
+            "success": True,
+            "message": "请前往发货通知处理",
+            "todo_id": todo_id,
+            "redirect": "/apps/kuaizhizao/sales-management/shipment-notices",
+        }
+    elif todo_id.startswith("sales_return_"):
+        return {
+            "success": True,
+            "message": "请前往销售退货处理",
+            "todo_id": todo_id,
+            "redirect": "/apps/kuaizhizao/sales-management/sales-returns",
+        }
+    elif todo_id.startswith("equipment_fault_"):
+        return {
+            "success": True,
+            "message": "请前往设备故障处理",
+            "todo_id": todo_id,
+            "redirect": "/apps/kuaizhizao/equipment-management/equipment-faults",
+        }
+    elif todo_id.startswith("inspection_incoming_"):
+        return {
+            "success": True,
+            "message": "请前往来料检验处理",
+            "todo_id": todo_id,
+            "redirect": "/apps/kuaizhizao/quality-management/incoming-inspection",
+        }
+    elif todo_id.startswith("inspection_process_"):
+        return {
+            "success": True,
+            "message": "请前往过程检验处理",
+            "todo_id": todo_id,
+            "redirect": "/apps/kuaizhizao/quality-management/process-inspection",
+        }
+    elif todo_id.startswith("inspection_finished_"):
+        return {
+            "success": True,
+            "message": "请前往成品检验处理",
+            "todo_id": todo_id,
+            "redirect": "/apps/kuaizhizao/quality-management/finished-goods-inspection",
         }
     else:
         return {
@@ -696,6 +1282,7 @@ class ProductionBroadcastItem(BaseModel):
     """生产实时播报项"""
     id: str = Field(..., description="播报ID")
     operator_name: str = Field(..., description="操作员姓名")
+    operator_avatar: Optional[str] = Field(None, description="操作员头像文件UUID（关联文件管理）")
     process_name: str = Field(..., description="工序名称")
     date: str = Field(..., description="日期")
     work_order_no: str = Field(..., description="工单号")
@@ -746,7 +1333,13 @@ async def get_production_broadcast(
                 id__in=work_order_ids,
             ).all()
             work_orders = {wo.id: wo for wo in wo_list}
-        
+
+        worker_ids = list({r.worker_id for r in reporting_records if getattr(r, "worker_id", None)})
+        avatar_by_worker_id: dict[int, Optional[str]] = {}
+        if worker_ids:
+            user_rows = await User.filter(id__in=worker_ids).only("id", "avatar").all()
+            avatar_by_worker_id = {u.id: u.avatar for u in user_rows}
+
         items = []
         for record in reporting_records:
             work_order = work_orders.get(record.work_order_id) if record.work_order_id else None
@@ -754,6 +1347,7 @@ async def get_production_broadcast(
             items.append(ProductionBroadcastItem(
                 id=str(record.id),
                 operator_name=record.worker_name or "未知操作员",
+                operator_avatar=avatar_by_worker_id.get(record.worker_id),
                 process_name=record.operation_name or "未知工序",
                 date=record.reported_at.strftime("%Y-%m-%d") if record.reported_at else datetime.now().strftime("%Y-%m-%d"),
                 work_order_no=record.work_order_code or (work_order.code if work_order else "未知工单"),
@@ -902,13 +1496,15 @@ async def get_menu_badge_counts(
         logger.warning(f"menu-badge-counts sales_forecast: {e}")
         counts["sales_forecast"] = 0
     try:
-        # 采购入库：待入库
+        # 采购入库：待审核 / 待入库（已审）— 与销售订单侧栏徽标三态一致
         from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
-        counts["inbound"] = await PurchaseReceipt.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-            status="待入库",
+        _rv_pending = ["待审核", "PENDING", "PENDING_REVIEW"]
+        _pr = PurchaseReceipt.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        pr_pending = await _pr.filter(review_status__in=_rv_pending).exclude(
+            status__in=["已完成", "COMPLETED", "已取消", "CANCELLED", "关闭"]
         ).count()
+        pr_exec = await _pr.filter(status="待入库").exclude(review_status__in=_rv_pending).count()
+        counts["inbound"] = {"overdue": 0, "pending": pr_pending, "in_progress": pr_exec}
     except Exception as e:
         logger.warning(f"menu-badge-counts inbound: {e}")
         counts["inbound"] = 0
@@ -929,10 +1525,10 @@ async def get_menu_badge_counts(
             tenant_id=tenant_id, deleted_at__isnull=True,
             status="待检验",
         ).count()
-        counts["incoming_inspection"] = c1
-        counts["process_inspection"] = c2
-        counts["finished_goods_inspection"] = c3
-        counts["quality_inspection"] = c1 + c2 + c3
+        counts["incoming_inspection"] = {"overdue": 0, "pending": c1, "in_progress": 0}
+        counts["process_inspection"] = {"overdue": 0, "pending": c2, "in_progress": 0}
+        counts["finished_goods_inspection"] = {"overdue": 0, "pending": c3, "in_progress": 0}
+        counts["quality_inspection"] = {"overdue": 0, "pending": c1 + c2 + c3, "in_progress": 0}
     except Exception as e:
         logger.warning(f"menu-badge-counts quality_inspection: {e}")
         counts["quality_inspection"] = 0
@@ -942,33 +1538,36 @@ async def get_menu_badge_counts(
     try:
         # 生产计划：未执行
         from apps.kuaizhizao.models.production_plan import ProductionPlan
-        counts["production_plan"] = await ProductionPlan.filter(
+        _pp_cnt = await ProductionPlan.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
             execution_status="未执行",
         ).count()
+        counts["production_plan"] = {"overdue": 0, "pending": _pp_cnt, "in_progress": 0}
     except Exception as e:
         logger.warning(f"menu-badge-counts production_plan: {e}")
         counts["production_plan"] = 0
     try:
         # 设备：维修中、校验中
         from apps.kuaizhizao.models.equipment import Equipment
-        counts["equipment"] = await Equipment.filter(
+        _eq_cnt = await Equipment.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
             status__in=["维修中", "校验中"],
         ).count()
+        counts["equipment"] = {"overdue": 0, "pending": 0, "in_progress": _eq_cnt}
     except Exception as e:
         logger.warning(f"menu-badge-counts equipment: {e}")
         counts["equipment"] = 0
     try:
         # 模具：维修中、校验中
         from apps.kuaizhizao.models.mold import Mold
-        counts["mold"] = await Mold.filter(
+        _mold_cnt = await Mold.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
             status__in=["维修中", "校验中"],
         ).count()
+        counts["mold"] = {"overdue": 0, "pending": 0, "in_progress": _mold_cnt}
     except Exception as e:
         logger.warning(f"menu-badge-counts mold: {e}")
         counts["mold"] = 0
@@ -991,13 +1590,14 @@ async def get_menu_badge_counts(
             "通过",
             "已通过",
         ]
-        counts["demand_computation"] = await Demand.filter(
+        _dc_cnt = await Demand.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
             pushed_to_computation=False,
             status__in=_audited_status,
             review_status__in=_approved_review,
         ).count()
+        counts["demand_computation"] = {"overdue": 0, "pending": _dc_cnt, "in_progress": 0}
     except Exception as e:
         logger.warning(f"menu-badge-counts demand_computation: {e}")
         counts["demand_computation"] = 0
@@ -1005,11 +1605,12 @@ async def get_menu_badge_counts(
     try:
         # 设备点检：待点检数量
         from apps.kuaizhizao.models.equipment_point_inspection import EquipmentPointInspectionRecord
-        counts["equipment_inspection"] = await EquipmentPointInspectionRecord.filter(
+        _epi = await EquipmentPointInspectionRecord.filter(
             tenant_id=tenant_id,
             status="待点检",
             deleted_at__isnull=True
         ).count()
+        counts["equipment_inspection"] = {"overdue": 0, "pending": _epi, "in_progress": 0}
     except Exception as e:
         logger.warning(f"menu-badge-counts equipment_inspection: {e}")
         counts["equipment_inspection"] = 0
@@ -1034,10 +1635,402 @@ async def get_menu_badge_counts(
             total_stock = (total_stock_data[0]["total"] or 0) if total_stock_data else 0
             if total_stock < part.safety_stock:
                 alert_count += 1
-        counts["spare_part"] = alert_count
+        counts["spare_part"] = {"overdue": 0, "pending": alert_count, "in_progress": 0}
     except Exception as e:
         logger.warning(f"menu-badge-counts spare_part: {e}")
         counts["spare_part"] = 0
+
+    _rv_pending = ["待审核", "PENDING", "PENDING_REVIEW"]
+
+    try:
+        # 其他入库单
+        from apps.kuaizhizao.models.other_inbound import OtherInbound
+        oi = OtherInbound.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        oi_p = await oi.filter(review_status__in=_rv_pending).exclude(
+            status__in=["已完成", "已取消", "CANCELLED"]
+        ).count()
+        oi_x = await oi.filter(status="待入库").exclude(review_status__in=_rv_pending).count()
+        counts["other_inbound"] = {"overdue": 0, "pending": oi_p, "in_progress": oi_x}
+    except Exception as e:
+        logger.warning(f"menu-badge-counts other_inbound: {e}")
+        counts["other_inbound"] = 0
+
+    try:
+        # 还料单
+        from apps.kuaizhizao.models.material_return import MaterialReturn
+        mr = MaterialReturn.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        mr_p = await mr.filter(review_status__in=_rv_pending).exclude(status__in=["已完成", "已取消"]).count()
+        mr_x = await mr.filter(status="待归还").exclude(review_status__in=_rv_pending).count()
+        counts["material_return"] = {"overdue": 0, "pending": mr_p, "in_progress": mr_x}
+    except Exception as e:
+        logger.warning(f"menu-badge-counts material_return: {e}")
+        counts["material_return"] = 0
+
+    try:
+        # 销售出库单（出库管理）
+        from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+        sd = SalesDelivery.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        sd_p = await sd.filter(review_status__in=_rv_pending).exclude(
+            status__in=["已完成", "COMPLETED", "已取消", "CANCELLED"]
+        ).count()
+        sd_x = await sd.filter(status="待出库").exclude(review_status__in=_rv_pending).count()
+        counts["sales_outbound"] = {"overdue": 0, "pending": sd_p, "in_progress": sd_x}
+    except Exception as e:
+        logger.warning(f"menu-badge-counts sales_outbound: {e}")
+        counts["sales_outbound"] = 0
+
+    try:
+        # 其他出库单
+        from apps.kuaizhizao.models.other_outbound import OtherOutbound
+        oo = OtherOutbound.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        oo_p = await oo.filter(review_status__in=_rv_pending).exclude(status__in=["已完成", "已取消"]).count()
+        oo_x = await oo.filter(status="待出库").exclude(review_status__in=_rv_pending).count()
+        counts["other_outbound"] = {"overdue": 0, "pending": oo_p, "in_progress": oo_x}
+    except Exception as e:
+        logger.warning(f"menu-badge-counts other_outbound: {e}")
+        counts["other_outbound"] = 0
+
+    try:
+        # 借料单
+        from apps.kuaizhizao.models.material_borrow import MaterialBorrow
+        mb = MaterialBorrow.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        mb_p = await mb.filter(review_status__in=_rv_pending).exclude(status__in=["已归还", "已取消", "已完成"]).count()
+        mb_x = await mb.filter(status="待借出").exclude(review_status__in=_rv_pending).count()
+        counts["material_borrow"] = {"overdue": 0, "pending": mb_p, "in_progress": mb_x}
+    except Exception as e:
+        logger.warning(f"menu-badge-counts material_borrow: {e}")
+        counts["material_borrow"] = 0
+
+    try:
+        # 送货单：待发送 / 已发送未签收
+        from apps.kuaizhizao.models.delivery_notice import DeliveryNotice
+        dn = DeliveryNotice.filter(tenant_id=tenant_id, deleted_at__isnull=True, is_active=True)
+        dn_p = await dn.filter(status="待发送").count()
+        dn_x = await dn.filter(status="已发送").count()
+        dn_od = await dn.filter(
+            planned_delivery_date__lt=now_date,
+            planned_delivery_date__isnull=False,
+        ).exclude(status__in=["已签收", "已取消"]).count()
+        counts["delivery_notice"] = {"overdue": dn_od, "pending": dn_p, "in_progress": dn_x}
+    except Exception as e:
+        logger.warning(f"menu-badge-counts delivery_notice: {e}")
+        counts["delivery_notice"] = 0
+
+    try:
+        # 叫料请求
+        from apps.kuaizhizao.models.material_call_request import MaterialCallRequest
+        mc_pending = await MaterialCallRequest.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True, is_active=True,
+            status__in=["pending", "processing", "partial"],
+        ).count()
+        counts["material_call"] = {"overdue": 0, "pending": mc_pending, "in_progress": 0}
+    except Exception as e:
+        logger.warning(f"menu-badge-counts material_call: {e}")
+        counts["material_call"] = 0
+
+    try:
+        # 盘点单：进行中
+        from apps.kuaizhizao.models.stocktaking import Stocktaking
+        st_cnt = await Stocktaking.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True, status__in=["draft", "in_progress"],
+        ).count()
+        counts["stocktaking"] = {"overdue": 0, "pending": st_cnt, "in_progress": 0}
+    except Exception as e:
+        logger.warning(f"menu-badge-counts stocktaking: {e}")
+        counts["stocktaking"] = 0
+
+    try:
+        # 库存调拨：未完成
+        from apps.kuaizhizao.models.inventory_transfer import InventoryTransfer
+        it_cnt = await InventoryTransfer.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True,
+            status__in=["draft", "in_progress"],
+        ).count()
+        counts["inventory_transfer"] = {"overdue": 0, "pending": it_cnt, "in_progress": 0}
+    except Exception as e:
+        logger.warning(f"menu-badge-counts inventory_transfer: {e}")
+        counts["inventory_transfer"] = 0
+
+    try:
+        # 组装单 / 拆卸单
+        from apps.kuaizhizao.models.assembly_order import AssemblyOrder
+        from apps.kuaizhizao.models.disassembly_order import DisassemblyOrder
+        ao_cnt = await AssemblyOrder.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True, status__in=["draft", "in_progress"],
+        ).count()
+        do_cnt = await DisassemblyOrder.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True, status__in=["draft", "in_progress"],
+        ).count()
+        counts["assembly_order"] = {"overdue": 0, "pending": ao_cnt, "in_progress": 0}
+        counts["disassembly_order"] = {"overdue": 0, "pending": do_cnt, "in_progress": 0}
+    except Exception as e:
+        logger.warning(f"menu-badge-counts assembly/disassembly: {e}")
+        counts["assembly_order"] = 0
+        counts["disassembly_order"] = 0
+
+    try:
+        # 配料中心
+        from apps.kuaizhizao.models.batching_order import BatchingOrder
+        bo_cnt = await BatchingOrder.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True, status__in=["draft", "picking"],
+        ).count()
+        counts["batching_order"] = {"overdue": 0, "pending": bo_cnt, "in_progress": 0}
+    except Exception as e:
+        logger.warning(f"menu-badge-counts batching_order: {e}")
+        counts["batching_order"] = 0
+
+    try:
+        # 客户来料登记 pending
+        from apps.kuaizhizao.models.customer_material_registration import CustomerMaterialRegistration
+        cm_cnt = await CustomerMaterialRegistration.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True, status="pending",
+        ).count()
+        counts["customer_material_registration"] = {"overdue": 0, "pending": cm_cnt, "in_progress": 0}
+    except Exception as e:
+        logger.warning(f"menu-badge-counts customer_material_registration: {e}")
+        counts["customer_material_registration"] = 0
+
+    try:
+        # 报价单（与销售订单徽标语义对齐）
+        from apps.kuaizhizao.models.quotation import Quotation
+        qb = Quotation.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        counts["quotation"] = {
+            "overdue": await qb.filter(
+                valid_until__lt=now_date,
+                valid_until__isnull=False,
+            ).exclude(status__in=["已接受", "已拒绝", "已转订单", "CANCELLED", "已取消"]).count(),
+            "pending": await qb.filter(review_status__in=_rv_pending).exclude(
+                status__in=["已拒绝", "CANCELLED", "已取消"]
+            ).count(),
+            "in_progress": await qb.filter(status="已发送").exclude(review_status__in=_rv_pending).count(),
+        }
+    except Exception as e:
+        logger.warning(f"menu-badge-counts quotation: {e}")
+        counts["quotation"] = 0
+
+    try:
+        from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
+        from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
+        prq = PurchaseRequisition.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        prq_term = [
+            DocumentStatus.CANCELLED.value,
+            DocumentStatus.REJECTED.value,
+            DocumentStatus.FULL_CONVERTED.value,
+            "已取消",
+            "已驳回",
+            "全部转单",
+        ]
+        counts["purchase_requisition"] = {
+            "overdue": await prq.filter(
+                required_date__lt=now_date,
+                required_date__isnull=False,
+            ).exclude(status__in=prq_term).count(),
+            "pending": await prq.filter(
+                review_status__in=[
+                    ReviewStatus.PENDING.value,
+                    "待审核",
+                    "PENDING",
+                    "PENDING_REVIEW",
+                ]
+            ).exclude(status__in=prq_term).count(),
+            "in_progress": await prq.filter(
+                status__in=[
+                    DocumentStatus.APPROVED.value,
+                    "已通过",
+                    DocumentStatus.PARTIAL_CONVERTED.value,
+                    "部分转单",
+                    DocumentStatus.AUDITED.value,
+                    "已审核",
+                ]
+            ).count(),
+        }
+    except Exception as e:
+        logger.warning(f"menu-badge-counts purchase_requisition: {e}")
+        counts["purchase_requisition"] = 0
+
+    try:
+        from apps.kuaizhizao.models.receipt_notice import ReceiptNotice
+        rn = ReceiptNotice.filter(tenant_id=tenant_id, deleted_at__isnull=True, is_active=True)
+        counts["receipt_notice"] = {
+            "overdue": await rn.filter(
+                planned_receipt_date__lt=now_date,
+                planned_receipt_date__isnull=False,
+            ).exclude(status__in=["已入库", "已完成", "已取消"]).count(),
+            "pending": await rn.filter(status="待收货").count(),
+            "in_progress": await rn.filter(status="已通知").count(),
+        }
+    except Exception as e:
+        logger.warning(f"menu-badge-counts receipt_notice: {e}")
+        counts["receipt_notice"] = 0
+
+    try:
+        from apps.kuaizhizao.models.purchase_return import PurchaseReturn
+        prt = PurchaseReturn.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        counts["purchase_return"] = {
+            "overdue": 0,
+            "pending": await prt.filter(review_status__in=_rv_pending).exclude(
+                status__in=["已完成", "已取消", "CANCELLED"]
+            ).count(),
+            "in_progress": await prt.filter(status="待退货").exclude(review_status__in=_rv_pending).count(),
+        }
+    except Exception as e:
+        logger.warning(f"menu-badge-counts purchase_return: {e}")
+        counts["purchase_return"] = 0
+
+    try:
+        from apps.kuaizhizao.models.purchase_logistics import PurchaseLogistics
+        pl = PurchaseLogistics.filter(tenant_id=tenant_id)
+        pl_over = await pl.filter(
+            status="在途",
+            expected_arrival__lt=now_date,
+            expected_arrival__isnull=False,
+        ).count()
+        pl_exc = await pl.filter(status="异常").count()
+        pl_transit = await pl.filter(status="在途").filter(
+            Q(expected_arrival__isnull=True) | Q(expected_arrival__gte=now_date)
+        ).count()
+        counts["purchase_logistics"] = {
+            "overdue": pl_over,
+            "pending": pl_exc,
+            "in_progress": pl_transit,
+        }
+    except Exception as e:
+        logger.warning(f"menu-badge-counts purchase_logistics: {e}")
+        counts["purchase_logistics"] = 0
+
+    try:
+        from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
+        sn = ShipmentNotice.filter(tenant_id=tenant_id, deleted_at__isnull=True, is_active=True)
+        counts["shipment_notice"] = {
+            "overdue": await sn.filter(
+                planned_ship_date__lt=now_date,
+                planned_ship_date__isnull=False,
+            ).exclude(status__in=["已出库", "已完成", "已取消"]).count(),
+            "pending": await sn.filter(status="待发货").count(),
+            "in_progress": await sn.filter(status="已通知").count(),
+        }
+    except Exception as e:
+        logger.warning(f"menu-badge-counts shipment_notice: {e}")
+        counts["shipment_notice"] = 0
+
+    try:
+        from apps.kuaizhizao.models.sales_return import SalesReturn
+        sr = SalesReturn.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        counts["sales_return"] = {
+            "overdue": 0,
+            "pending": await sr.filter(review_status__in=_rv_pending).exclude(
+                status__in=["已完成", "已取消", "CANCELLED"]
+            ).count(),
+            "in_progress": await sr.filter(status="待退货").exclude(review_status__in=_rv_pending).count(),
+        }
+    except Exception as e:
+        logger.warning(f"menu-badge-counts sales_return: {e}")
+        counts["sales_return"] = 0
+
+    try:
+        from apps.kuaizhizao.models.customer_follow_up import CustomerFollowUp
+        _now_dt = datetime.now()
+        cfu_od = await CustomerFollowUp.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            next_follow_up_at__isnull=False,
+            next_follow_up_at__lt=_now_dt,
+        ).count()
+        counts["customer_follow_up"] = {"overdue": cfu_od, "pending": 0, "in_progress": 0}
+    except Exception as e:
+        logger.warning(f"menu-badge-counts customer_follow_up: {e}")
+        counts["customer_follow_up"] = 0
+
+    try:
+        from apps.kuaizhizao.models.sample_trial import SampleTrial
+        stl = SampleTrial.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        counts["sample_trial"] = {
+            "overdue": await stl.filter(
+                trial_period_end__lt=now_date,
+                trial_period_end__isnull=False,
+            ).exclude(status__in=["已归还", "已转订单", "已关闭", "CANCELLED", "已取消"]).count(),
+            "pending": await stl.filter(status__in=["草稿", "已提交"]).count(),
+            "in_progress": await stl.filter(status__in=["已审核", "试用中"]).count(),
+        }
+    except Exception as e:
+        logger.warning(f"menu-badge-counts sample_trial: {e}")
+        counts["sample_trial"] = 0
+
+    try:
+        from apps.kuaizhizao.models.outsource_work_order import OutsourceWorkOrder
+        ow = OutsourceWorkOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        ow_term = ["completed", "cancelled", "已完成", "已取消", "COMPLETED", "CANCELLED"]
+        counts["outsource_work_order"] = {
+            "overdue": await ow.filter(
+                planned_end_date__lt=now,
+                planned_end_date__isnull=False,
+            ).exclude(status__in=ow_term).count(),
+            "pending": await ow.filter(status="draft").count(),
+            "in_progress": await ow.filter(status__in=["released", "in_progress", "已下达", "进行中"]).count(),
+        }
+    except Exception as e:
+        logger.warning(f"menu-badge-counts outsource_work_order: {e}")
+        counts["outsource_work_order"] = 0
+
+    try:
+        # 装箱打包：与待出库销售出库队列一致（同一执行口径）
+        from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+        sd2 = SalesDelivery.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        pb_p = await sd2.filter(review_status__in=_rv_pending).exclude(
+            status__in=["已完成", "COMPLETED", "已取消", "CANCELLED"]
+        ).count()
+        pb_x = await sd2.filter(status="待出库").exclude(review_status__in=_rv_pending).count()
+        counts["packing_binding"] = {"overdue": 0, "pending": pb_p, "in_progress": pb_x}
+    except Exception as e:
+        logger.warning(f"menu-badge-counts packing_binding: {e}")
+        counts["packing_binding"] = 0
+
+    try:
+        from apps.kuaizhizao.models.equipment_fault import EquipmentFault
+        ef = EquipmentFault.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        counts["equipment_fault"] = {
+            "overdue": 0,
+            "pending": await ef.filter(status="待处理").count(),
+            "in_progress": await ef.filter(status="处理中").count(),
+        }
+    except Exception as e:
+        logger.warning(f"menu-badge-counts equipment_fault: {e}")
+        counts["equipment_fault"] = 0
+
+    try:
+        from apps.kuaizhizao.models.maintenance_plan import MaintenancePlan
+        mp = MaintenancePlan.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        counts["maintenance_plan"] = {
+            "overdue": await mp.filter(
+                planned_end_date__lt=now,
+                planned_end_date__isnull=False,
+            ).exclude(status__in=["已完成", "已取消"]).count(),
+            "pending": await mp.filter(status__in=["草稿", "已发布"]).count(),
+            "in_progress": await mp.filter(status="执行中").count(),
+        }
+    except Exception as e:
+        logger.warning(f"menu-badge-counts maintenance_plan: {e}")
+        counts["maintenance_plan"] = 0
+
+    try:
+        from apps.kuaizhizao.models.maintenance_reminder import MaintenanceReminder
+        mrem = await MaintenanceReminder.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True, is_handled=False
+        ).count()
+        counts["maintenance_reminder"] = {"overdue": 0, "pending": mrem, "in_progress": 0}
+    except Exception as e:
+        logger.warning(f"menu-badge-counts maintenance_reminder: {e}")
+        counts["maintenance_reminder"] = 0
+
+    try:
+        from apps.kuaizhizao.models.inspection_plan import InspectionPlan
+        ip_cnt = await InspectionPlan.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True, is_active=False,
+        ).count()
+        counts["inspection_plan"] = {"overdue": 0, "pending": ip_cnt, "in_progress": 0}
+    except Exception as e:
+        logger.warning(f"menu-badge-counts inspection_plan: {e}")
+        counts["inspection_plan"] = 0
 
     try:
         # 财务核算：应收/应付待审核 + 逾期 + 对账单待确认

@@ -1241,12 +1241,15 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         .uni-tabs-content.uni-tabs-content-dashboard {
           overflow: hidden !important;
         }
-        /* 仅 /system/dashboard/workplace：无标签栏下 16px；高度 calc 去掉原 margin 对应的 −16px，避免页面变矮 */
+        /* 仅 /system/dashboard/workplace：高度随内容；本页无 margin-top:16px，max-height 不再减 16px，避免底部多出一截空白 */
         .uni-tabs-content.uni-tabs-content-workplace {
           margin-top: 0 !important;
-          /* 使用 flex 自适应，避免标签栏高度变更后在底部留下空白 */
+          flex: 0 1 auto !important;
           height: auto !important;
-          max-height: none !important;
+          max-height: calc(100vh - ${isFullscreen ? '0px' : '56px'} - 56px) !important;
+          min-height: 0 !important;
+          overflow-y: auto !important;
+          overflow-x: hidden !important;
         }
         /* 运营看板（非全屏）：至少占满视口 − 顶栏 − 标签栏；border-box 内含上下各 16px padding */
         ${!isFullscreen
@@ -1808,17 +1811,26 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
               </div>
             </div>
           ) : (
-            <div style={{
-              /* 左右边距由各页面/组件（UniTable、PAGE_SPACING 等）统一管理，避免与 UniTabs 重复导致双 16px */
-              padding: isDashboardOrAnalysisPage ? 0 : '0 16px 0 16px',
-              width: '100%',
-              flex: 1,
-              minHeight: 0,
-              boxSizing: 'border-box',
-              display: 'flex',
-              flexDirection: 'column',
-            }}>
-              <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            <div
+              style={{
+                /* 左右边距由各页面/组件（UniTable、PAGE_SPACING 等）统一管理，避免与 UniTabs 重复导致双 16px */
+                padding: isDashboardOrAnalysisPage ? 0 : '0 16px 0 16px',
+                width: '100%',
+                flex: isWorkplaceDashboardPage ? '0 0 auto' : 1,
+                minHeight: 0,
+                boxSizing: 'border-box',
+                display: 'flex',
+                flexDirection: 'column',
+              }}
+            >
+              <div
+                style={{
+                  flex: isWorkplaceDashboardPage ? '0 0 auto' : 1,
+                  minHeight: 0,
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}
+              >
                 <RouteTransition>{children}</RouteTransition>
               </div>
             </div>

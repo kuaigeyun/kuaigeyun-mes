@@ -9,6 +9,7 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form as AntForm, InputNumber, Input, Row, Col, Select, Typography } from 'antd';
@@ -103,6 +104,7 @@ const OtherInboundPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
 
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [inboundDetail, setInboundDetail] = useState<OtherInboundDetail | null>(null);
 
@@ -242,6 +244,8 @@ const OtherInboundPage: React.FC = () => {
         try {
           await warehouseApi.otherInbound.confirm(record.id!.toString());
           messageApi.success('入库确认成功');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '入库确认失败');
@@ -258,6 +262,8 @@ const OtherInboundPage: React.FC = () => {
         try {
           await warehouseApi.otherInbound.delete(record.id!.toString());
           messageApi.success('删除成功');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '删除失败');
@@ -274,6 +280,8 @@ const OtherInboundPage: React.FC = () => {
         try {
           await warehouseApi.otherInbound.withdraw(record.id!.toString());
           messageApi.success('已成功撤销并扣减库存');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '撤销失败');
@@ -336,6 +344,8 @@ const OtherInboundPage: React.FC = () => {
       });
       messageApi.success('创建成功');
       setCreateModalVisible(false);
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       if (error.message !== '请至少添加一条有效明细') messageApi.error(error.message || '创建失败');
@@ -481,6 +491,8 @@ const OtherInboundPage: React.FC = () => {
                     await warehouseApi.otherInbound.delete(String(id));
                   }
                   messageApi.success(`成功删除 ${keys.length} 条记录`);
+                  invalidateMenuBadgeCounts();
+
                   actionRef.current?.reload();
                 } catch (error: any) {
                   messageApi.error(error.message || '删除失败');

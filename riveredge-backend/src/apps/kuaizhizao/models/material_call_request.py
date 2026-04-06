@@ -22,15 +22,15 @@ class MaterialCallRequest(BaseModel):
     work_order_id = fields.IntField(description="关联工单ID")
     work_order_code = fields.CharField(max_length=50, description="工单编码")
     
-    # 物料信息
-    material_id = fields.IntField(description="物料ID")
-    material_code = fields.CharField(max_length=50, description="物料编码")
-    material_name = fields.CharField(max_length=200, description="物料名称")
+    # 物料信息（多行明细时可为空，以 material_call_request_items 为准）
+    material_id = fields.IntField(null=True, description="物料ID（汇总/兼容单列历史）")
+    material_code = fields.CharField(max_length=50, null=True, description="物料编码")
+    material_name = fields.CharField(max_length=200, null=True, description="物料名称")
     material_unit = fields.CharField(max_length=20, null=True, description="单位")
     
-    # 数量信息
-    requested_quantity = fields.DecimalField(max_digits=12, decimal_places=4, description="请求数量")
-    delivered_quantity = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="已送达数量")
+    # 数量信息（明细汇总）
+    requested_quantity = fields.DecimalField(max_digits=12, decimal_places=4, description="请求数量合计")
+    delivered_quantity = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="已送达数量合计")
     
     # 仓库信息
     source_warehouse_id = fields.IntField(null=True, description="来源仓库ID（通常为主仓）")
@@ -38,10 +38,10 @@ class MaterialCallRequest(BaseModel):
     
     # 状态：pending(待处理), processing(配料中), partial(部分送达), completed(已完成), cancelled(已取消)
     status = fields.CharField(max_length=20, default="pending", description="状态")
-    # 叫料类型：数据字典 MATERIAL_CALL_TYPE（如 SINGLE_MATERIAL 单物料叫料、FULL_ORDER 整单叫料）
-    call_type = fields.CharField(max_length=64, default="SINGLE_MATERIAL", description="叫料类型")
-    # 单物料叫料原因：数据字典 MATERIAL_CALL_REASON；整单叫料可为空
-    call_reason = fields.CharField(max_length=64, null=True, description="叫料原因（单物料）")
+    # 叫料类型：FULL_ORDER 整单；CUSTOM_SELECTION 单独叫料（自选多物料）；兼容历史 SINGLE_MATERIAL
+    call_type = fields.CharField(max_length=64, default="CUSTOM_SELECTION", description="叫料类型")
+    # 单独叫料原因：数据字典 MATERIAL_CALL_REASON；整单叫料可为空
+    call_reason = fields.CharField(max_length=64, null=True, description="叫料原因（单独叫料）")
     priority = fields.CharField(max_length=20, default="normal", description="优先级（low/normal/high/urgent）")
     
     # 人员与时间

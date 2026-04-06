@@ -92,6 +92,23 @@ PARAMETER_REGISTRY_CATEGORY_META: Dict[str, Dict[str, str]] = {
 
 # 参数控件元数据（默认 boolean，可按 full key 覆盖为 number/string/color 并附 min/max）
 REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
+    "parameters.work_order.last_operation_auto_inbound_mode": {
+        "type": "select",
+        "options": [
+            {
+                "value": "none",
+                "labelKey": "pages.system.configCenter.param.work_order_last_operation_auto_inbound_mode_opt_none",
+            },
+            {
+                "value": "direct_inbound",
+                "labelKey": "pages.system.configCenter.param.work_order_last_operation_auto_inbound_mode_opt_direct",
+            },
+            {
+                "value": "inbound_notice",
+                "labelKey": "pages.system.configCenter.param.work_order_last_operation_auto_inbound_mode_opt_notice",
+            },
+        ],
+    },
     "parameters.purchase.tolerance_percentage": {"type": "number", "min": 0, "max": 100},
     "parameters.purchase.price_fluctuation_limit_percent": {"type": "number", "min": 0, "max": 100},
     "parameters.work_order.material_shortage_block_level": {"type": "number", "min": 0, "max": 3},
@@ -143,6 +160,7 @@ PARAMETER_KEYS = {
     "parameters.work_order.priority",
     "parameters.work_order.split",
     "parameters.work_order.merge",
+    "parameters.work_order.last_operation_auto_inbound_mode",
     "parameters.reporting.quick_reporting",
     "parameters.reporting.parameter_reporting",
     "parameters.reporting.auto_fill",
@@ -189,6 +207,7 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.work_order.priority",
     "parameters.work_order.split",
     "parameters.work_order.merge",
+    "parameters.work_order.last_operation_auto_inbound_mode",
     "parameters.reporting.quick_reporting",
     "parameters.reporting.parameter_reporting",
     "parameters.reporting.data_correction",
@@ -365,6 +384,8 @@ def _build_registry_control_meta_schema(
                 item["min"] = override["min"]
             if "max" in override:
                 item["max"] = override["max"]
+            if "options" in override:
+                item["options"] = override["options"]
             result[category][key] = item
     return result
 
@@ -502,6 +523,8 @@ class BusinessConfigService:
                 "picking_confirm_allowed_role_codes": [],
                 "require_confirmed_picking_before_operation_start": False,
                 "require_confirmed_picking_before_reporting": False,
+                # 末道工序完工后是否自动入库：none / direct_inbound / inbound_notice（入库通知预留成品检）
+                "last_operation_auto_inbound_mode": "none",
             },
             "reporting": {
                 "quick_reporting": True,     # 开启快捷报工
@@ -761,7 +784,18 @@ class BusinessConfigService:
             "effective_allowed_role_codes": sorted(allowed_codes),
         }
 
-    
+    async def get_last_operation_auto_inbound_mode(self, tenant_id: int) -> str:
+        """
+        末道工序自动入库策略：none | direct_inbound | inbound_notice（入库通知预留成品入库检验）。
+        """
+        config = await self.get_business_config(tenant_id)
+        wo_params = config.get("parameters", {}).get("work_order", {})
+        raw = wo_params.get("last_operation_auto_inbound_mode", "none")
+        v = str(raw or "none").strip()
+        if v not in ("none", "direct_inbound", "inbound_notice"):
+            return "none"
+        return v
+
     # 全流程模式默认配置
     FULL_MODE_CONFIG = {
         "industry": "general",
@@ -845,6 +879,7 @@ class BusinessConfigService:
                 "picking_confirm_allowed_role_codes": [],
                 "require_confirmed_picking_before_operation_start": False,
                 "require_confirmed_picking_before_reporting": False,
+                "last_operation_auto_inbound_mode": "none",
             },
             "reporting": {
                 "quick_reporting": True,

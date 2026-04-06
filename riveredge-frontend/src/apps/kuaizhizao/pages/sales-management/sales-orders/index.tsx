@@ -10,6 +10,7 @@
 
 import { getBusinessConfig } from '../../../../../services/businessConfig';
 import React, { useRef, useState, useEffect } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormUploadButton } from '@ant-design/pro-components';
 import { App, Button, Space, Modal, Drawer, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Progress, Tooltip, Dropdown, Select, Tag, theme as AntdTheme } from 'antd';
 import { EyeOutlined, EditOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, ImportOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, AppstoreAddOutlined, CommentOutlined } from '@ant-design/icons';
@@ -357,7 +358,7 @@ const SalesOrdersPage: React.FC = () => {
   const lastOrdersCacheRef = useRef<{ orders: SalesOrder[]; total: number; paramsKey: string } | null>(null);
   const invalidateOrdersCache = () => { lastOrdersCacheRef.current = null; };
   /** 刷新左侧菜单销售订单数量徽章 */
-  const invalidateMenuBadge = () => { queryClient.invalidateQueries({ queryKey: ['menuBadgeCounts'] }); };
+  const invalidateMenuBadge = useInvalidateMenuBadgeCounts();
   /** 刷新销售订单统计（指标卡片） */
   const invalidateStatistics = () => {
     queryClient.invalidateQueries({ queryKey: ['salesOrderStatistics'] });
@@ -780,6 +781,7 @@ const SalesOrdersPage: React.FC = () => {
           invalidateOrdersCache();
           invalidateMenuBadge();
           invalidateStatistics();
+
           actionRef.current?.reload();
           // 清除选中项
           if (actionRef.current?.clearSelected) {
@@ -822,7 +824,8 @@ const SalesOrdersPage: React.FC = () => {
       invalidateOrdersCache();
       invalidateMenuBadge();
       invalidateStatistics();
-      actionRef.current?.reload();
+
+          actionRef.current?.reload();
       if (actionRef.current?.clearSelected) actionRef.current.clearSelected();
       // ⚠️ 关键：受控模式下手动清空选中状态，确保下拉按钮状态刷新
       setSelectedRowKeys([]);
@@ -853,6 +856,7 @@ const SalesOrdersPage: React.FC = () => {
           invalidateOrdersCache();
           invalidateMenuBadge();
           invalidateStatistics();
+
           actionRef.current?.reload();
           if (currentSalesOrder?.id === id) {
             setDrawerVisible(false);
@@ -885,7 +889,8 @@ const SalesOrdersPage: React.FC = () => {
       invalidateOrdersCache();
       invalidateMenuBadge();
       invalidateStatistics();
-      actionRef.current?.reload();
+
+          actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error?.message || t('app.kuaizhizao.salesOrder.syncFailed'));
     }
@@ -1034,7 +1039,8 @@ const SalesOrdersPage: React.FC = () => {
       invalidateOrdersCache();
       invalidateMenuBadge();
       invalidateStatistics();
-      actionRef.current?.reload();
+
+          actionRef.current?.reload();
       if (orderId && drawerVisible && currentSalesOrder?.id === orderId) {
         refreshDrawerOrder(orderId);
       }
@@ -1328,7 +1334,7 @@ const SalesOrdersPage: React.FC = () => {
       }
     }
     invalidateOrdersCache();
-    actionRef.current?.reload();
+          actionRef.current?.reload();
   };
 
 
@@ -1433,7 +1439,8 @@ const SalesOrdersPage: React.FC = () => {
         invalidateOrdersCache();
         invalidateMenuBadge();
         invalidateStatistics();
-        actionRef.current?.reload();
+
+          actionRef.current?.reload();
       } else {
         messageApi.warning(
           t('app.kuaizhizao.salesOrder.importPartialSuccess', { success: successCount, failed: failureCount })
@@ -1453,7 +1460,8 @@ const SalesOrdersPage: React.FC = () => {
         invalidateOrdersCache();
         invalidateMenuBadge();
         invalidateStatistics();
-        actionRef.current?.reload();
+
+          actionRef.current?.reload();
       }
     } catch (error: any) {
       messageApi.error(error.message || t('app.kuaizhizao.salesOrder.batchImportFailed'));
@@ -1872,7 +1880,8 @@ const SalesOrdersPage: React.FC = () => {
               invalidateOrdersCache();
               invalidateMenuBadge();
               invalidateStatistics();
-              actionRef.current?.reload();
+
+          actionRef.current?.reload();
               if (actionRef.current?.clearSelected) actionRef.current.clearSelected();
             } catch (error: any) {
               messageApi.error(error.message || t('app.kuaizhizao.salesOrder.deleteFailed'));

@@ -5,9 +5,18 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProFormItem } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Row, Col, Form as AntForm, InputNumber, Input, Typography, Select, Spin, Descriptions, Dropdown, Empty } from 'antd';
-import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, InboxOutlined, ShoppingOutlined } from '@ant-design/icons';
+import {
+  PlusOutlined,
+  EyeOutlined,
+  CheckCircleOutlined,
+  DeleteOutlined,
+  InboxOutlined,
+  ShoppingOutlined,
+  RollbackOutlined,
+} from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
@@ -243,6 +252,15 @@ function inboundDocumentTrackingType(
   return 'production_return';
 }
 
+/** 已入账库存的入库类单据（可撤回冲减库存） */
+function isInboundStockPosted(record: InboundOrder): boolean {
+  const s = String(record.status ?? '');
+  if (record.receipt_type === 'production_return') {
+    return s === '已退料';
+  }
+  return s === '已入库' || s === '已完成' || s === 'completed';
+}
+
 function renderInboundRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
   const wrapped = nodes.map((node, i) => (
     <span key={`${keyPrefix}-${i}`}>{node}</span>
@@ -276,6 +294,7 @@ const InboundPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   // Modal 相关状态（创建入库单）
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const formRef = useRef<any>(null);
@@ -597,6 +616,8 @@ const InboundPage: React.FC = () => {
       }
       setBatchModalVisible(false);
       batchForm.resetFields();
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (e: any) {
       messageApi.error(e?.message || e?.response?.data?.detail || '批量入库失败');
@@ -698,6 +719,8 @@ const InboundPage: React.FC = () => {
       });
       setEditableReceiptQuantities(quantities);
       messageApi.success('实际数量已保存');
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error?.message || error?.response?.data?.detail || '保存失败');
@@ -859,6 +882,8 @@ const InboundPage: React.FC = () => {
       await warehouseApi.purchaseReceipt.confirm(String(order.id));
       messageApi.success('入库确认成功，库存已更新');
       resetPurchaseConfirmPreview();
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
       if (currentOrder?.id === order.id && currentOrder.receipt_type === 'purchase') {
         try {
@@ -905,6 +930,8 @@ const InboundPage: React.FC = () => {
             await warehouseApi.productionReturn.confirm(record.id!.toString());
           }
           messageApi.success(record.receipt_type === 'production_return' ? '退料确认成功' : '入库确认成功，库存已更新');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
           if (currentOrder?.id === record.id) {
             try {
@@ -927,21 +954,90 @@ const InboundPage: React.FC = () => {
   };
 
   /**
-   * 处理删除（仅生产退料支持）
+   * 撤回已入库/已退料：后端按明细冲减即时库存
    */
-  const handleDelete = async (record: InboundOrder) => {
-    if (record.receipt_type !== 'production_return') return;
-    const code = record.return_code || record.receipt_code || '';
+  const handleWithdrawInbound = async (record: InboundOrder) => {
+    const code = record.receipt_code || record.return_code || '';
+    const isReturn = record.receipt_type === 'production_return';
     Modal.confirm({
-      title: '删除退料单',
-      content: `确定要删除退料单 "${code}" 吗？`,
+      title: isReturn ? '撤回退料' : '撤回入库',
+      content: `确定撤回单据「${code}」吗？将按明细冲减即时库存；若某批次库存不足将无法撤回。`,
+      okText: '撤回',
+      okType: 'danger',
       onOk: async () => {
         try {
-          await warehouseApi.productionReturn.delete(record.id!.toString());
+          if (record.receipt_type === 'finished_goods') {
+            await warehouseApi.finishedGoodsReceipt.withdraw(String(record.id));
+          } else if (record.receipt_type === 'purchase') {
+            await warehouseApi.purchaseReceipt.withdraw(String(record.id));
+          } else {
+            await warehouseApi.productionReturn.withdraw(String(record.id));
+          }
+          messageApi.success(isReturn ? '已撤回退料，库存已冲减' : '已撤回入库，库存已冲减');
+          invalidateMenuBadgeCounts();
+
+          actionRef.current?.reload();
+          if (currentOrder?.id === record.id && currentOrder.receipt_type === record.receipt_type) {
+            try {
+              let detailData: any;
+              if (record.receipt_type === 'finished_goods') {
+                detailData = await warehouseApi.finishedGoodsReceipt.get(String(record.id));
+              } else if (record.receipt_type === 'purchase') {
+                detailData = await warehouseApi.purchaseReceipt.get(String(record.id));
+              } else {
+                detailData = await warehouseApi.productionReturn.get(String(record.id));
+              }
+              if (detailData) {
+                setCurrentOrder({ ...detailData, receipt_type: record.receipt_type });
+              }
+            } catch {
+              /* ignore */
+            }
+          }
+        } catch (error: any) {
+          messageApi.error(error?.message || error?.response?.data?.detail || '撤回失败');
+        }
+      },
+    });
+  };
+
+  /**
+   * 处理删除：采购/成品仅草稿或待入库；生产退料为待退料（与行内按钮一致）
+   */
+  const handleDelete = async (record: InboundOrder) => {
+    const code = String(record.receipt_code || record.return_code || '');
+    const typeLabel =
+      record.receipt_type === 'purchase'
+        ? '采购入库单'
+        : record.receipt_type === 'finished_goods'
+          ? '成品入库单'
+          : '生产退料单';
+    Modal.confirm({
+      title: `删除${typeLabel}`,
+      content: `确定要删除「${code || '-'}」吗？删除后不可恢复（未确认入库的单据不涉及库存冲减）。`,
+      okType: 'danger',
+      onOk: async () => {
+        try {
+          if (record.receipt_type === 'purchase') {
+            await warehouseApi.purchaseReceipt.delete(String(record.id));
+          } else if (record.receipt_type === 'finished_goods') {
+            await warehouseApi.finishedGoodsReceipt.delete(String(record.id));
+          } else if (record.receipt_type === 'production_return') {
+            await warehouseApi.productionReturn.delete(String(record.id));
+          } else {
+            return;
+          }
           messageApi.success('删除成功');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '删除失败');
+          const msg =
+            error?.response?.data?.detail ??
+            error?.response?.data?.message ??
+            error?.message ??
+            '删除失败';
+          messageApi.error(typeof msg === 'string' ? msg : '删除失败');
         }
       },
     });
@@ -1060,6 +1156,7 @@ const InboundPage: React.FC = () => {
           record.status === '草稿' ||
           record.status === '待入库' ||
           record.status === '待退料';
+        const posted = isInboundStockPosted(record);
         const nodes: React.ReactNode[] = [
           <Button
             key="detail"
@@ -1084,7 +1181,11 @@ const InboundPage: React.FC = () => {
               {record.receipt_type === 'production_return' ? '确认退料' : '确认入库'}
             </Button>
           );
-          if (record.receipt_type === 'production_return') {
+          if (
+            record.receipt_type === 'production_return' ||
+            record.receipt_type === 'purchase' ||
+            record.receipt_type === 'finished_goods'
+          ) {
             nodes.push(
               <Button
                 key="delete"
@@ -1098,6 +1199,20 @@ const InboundPage: React.FC = () => {
               </Button>
             );
           }
+        }
+        if (posted) {
+          nodes.push(
+            <Button
+              key="withdraw"
+              type="link"
+              size="small"
+              danger
+              icon={<RollbackOutlined />}
+              onClick={() => handleWithdrawInbound(record)}
+            >
+              {record.receipt_type === 'production_return' ? '撤回退料' : '撤回入库'}
+            </Button>
+          );
         }
         return renderInboundRowActions(nodes, `inbound-${record.receipt_type}-${record.id}`);
       },
@@ -1147,6 +1262,8 @@ const InboundPage: React.FC = () => {
       messageApi.success('入库单创建成功');
       setCreateModalVisible(false);
       formRef.current?.resetFields();
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       if (error?.message !== '请至少添加一条有效物料明细') {
@@ -1231,9 +1348,16 @@ const InboundPage: React.FC = () => {
                   }
                 }
                 messageApi.success(`成功删除 ${keys.length} 条记录`);
+                invalidateMenuBadgeCounts();
+
                 actionRef.current?.reload();
               } catch (error: any) {
-                messageApi.error(error?.message || '删除失败');
+                const msg =
+                  error?.response?.data?.detail ??
+                  error?.response?.data?.message ??
+                  error?.message ??
+                  '删除失败';
+                messageApi.error(typeof msg === 'string' ? msg : '删除失败');
               }
             },
           });
@@ -1799,22 +1923,38 @@ const InboundPage: React.FC = () => {
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
         extra={
-          currentOrder && (currentOrder.status === 'draft' || currentOrder.status === '待退料' || currentOrder.status === '草稿' || currentOrder.status === '待入库') && (
+          currentOrder ? (
             <Space>
-              {isEditablePurchaseReceipt(currentOrder) && (
-                <Button onClick={handleSavePurchaseReceiptQuantities} loading={savingPurchaseReceipt}>
-                  保存实际数量
+              {(currentOrder.status === 'draft' ||
+                currentOrder.status === '待退料' ||
+                currentOrder.status === '草稿' ||
+                currentOrder.status === '待入库') && (
+                <>
+                  {isEditablePurchaseReceipt(currentOrder) && (
+                    <Button onClick={handleSavePurchaseReceiptQuantities} loading={savingPurchaseReceipt}>
+                      保存实际数量
+                    </Button>
+                  )}
+                  <Button
+                    type="primary"
+                    icon={<CheckCircleOutlined />}
+                    onClick={() => handleConfirm(currentOrder)}
+                  >
+                    {currentOrder.receipt_type === 'production_return' ? '确认退料' : '确认入库'}
+                  </Button>
+                </>
+              )}
+              {isInboundStockPosted(currentOrder) && (
+                <Button
+                  danger
+                  icon={<RollbackOutlined />}
+                  onClick={() => handleWithdrawInbound(currentOrder)}
+                >
+                  {currentOrder.receipt_type === 'production_return' ? '撤回退料' : '撤回入库'}
                 </Button>
               )}
-              <Button
-                type="primary"
-                icon={<CheckCircleOutlined />}
-                onClick={() => handleConfirm(currentOrder)}
-              >
-                {currentOrder.receipt_type === 'production_return' ? '确认退料' : '确认入库'}
-              </Button>
             </Space>
-          )
+          ) : null
         }
         customContent={
           currentOrder ? (
@@ -1860,7 +2000,9 @@ const InboundPage: React.FC = () => {
                       children: (
                         <Tag
                           color={
-                            currentOrder.status === '已完成' || currentOrder.status === '已退料'
+                            currentOrder.status === '已完成' ||
+                            currentOrder.status === '已入库' ||
+                            currentOrder.status === '已退料'
                               ? 'success'
                               : currentOrder.status === '已确认' || currentOrder.status === '待退料'
                                 ? 'processing'

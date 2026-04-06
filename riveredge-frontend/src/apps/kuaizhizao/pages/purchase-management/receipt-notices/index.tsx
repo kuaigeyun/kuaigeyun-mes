@@ -9,6 +9,7 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
 import type { DescriptionsProps } from 'antd';
@@ -167,6 +168,7 @@ const ReceiptNoticesPage: React.FC = () => {
   const { token } = theme.useToken();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [statsVersion, setStatsVersion] = useState(0);
   const [localStats, setLocalStats] = useState({ total: 0, pending: 0, notified: 0, received: 0 });
 
@@ -426,6 +428,8 @@ const ReceiptNoticesPage: React.FC = () => {
             const fresh = await receiptNoticeApi.get(record.id!.toString());
             setNoticeDetail(fresh as ReceiptNoticeDetail);
           }
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '通知失败');
@@ -447,6 +451,8 @@ const ReceiptNoticesPage: React.FC = () => {
             setDetailDrawerVisible(false);
           }
           setStatsVersion((v) => v + 1);
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '删除失败');
@@ -468,6 +474,8 @@ const ReceiptNoticesPage: React.FC = () => {
           messageApi.success(`已删除 ${keys.length} 条收货通知单`);
           setSelectedRowKeys([]);
           setStatsVersion((v) => v + 1);
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error?.message || '批量删除失败');
@@ -593,6 +601,8 @@ const ReceiptNoticesPage: React.FC = () => {
       setCreateModalVisible(false);
       setEffectiveRuleCode(null);
       setStatsVersion((v) => v + 1);
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '创建失败');
@@ -617,6 +627,8 @@ const ReceiptNoticesPage: React.FC = () => {
         const fresh = await receiptNoticeApi.get(editingId.toString());
         setNoticeDetail(fresh as ReceiptNoticeDetail);
       }
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '更新失败');

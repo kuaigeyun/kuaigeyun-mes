@@ -14,6 +14,7 @@ import { apiRequest } from './api';
  */
 export interface TodoItem {
   id: string;
+  /** work_order | exception | quality_inspection | warehouse | outbound | purchase | sales | equipment */
   type: string;
   title: string;
   description?: string;
@@ -111,8 +112,18 @@ export async function getDashboard(): Promise<DashboardResponse> {
 /**
  * 左侧菜单业务单据未完成数量（用于报表/大屏/业务单据小徽标）
  * key 与菜单 path 映射见 BasicLayout 中的 MENU_BADGE_PATH_KEY
+ *
+ * 与销售订单一致的三态：逾期(红) > 待审核(橙) > 进行中(绿)；亦可为单一数字。
  */
-export type MenuBadgeCounts = Record<string, number>;
+export interface MenuBadgeTriState {
+  overdue: number;
+  pending: number;
+  in_progress: number;
+}
+
+export type MenuBadgeEntry = number | MenuBadgeTriState;
+
+export type MenuBadgeCounts = Record<string, MenuBadgeEntry>;
 
 export async function getMenuBadgeCounts(): Promise<MenuBadgeCounts> {
   try {
@@ -233,6 +244,8 @@ export async function getProcessProgress(includeUnstarted: boolean = false): Pro
 export interface ProductionBroadcastItem {
   id: string;
   operator_name: string;
+  /** 操作员头像文件 UUID，无则前端用姓名首字 */
+  operator_avatar?: string | null;
   process_name: string;
   date: string;
   work_order_no: string;

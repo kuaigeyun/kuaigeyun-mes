@@ -29,15 +29,15 @@ async def create_material_call(
 
 @router.post(
     "/batch-from-work-order",
-    response_model=List[MaterialCallRequestResponse],
-    summary="整单叫料（按工单齐套缺料批量生成）",
+    response_model=MaterialCallRequestResponse,
+    summary="整单叫料（齐套缺料生成一张叫料单及多行明细）",
 )
 async def batch_material_calls_from_work_order(
     body: MaterialCallBatchFromWorkOrderRequest,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> List[MaterialCallRequestResponse]:
-    """按工单 BOM 齐套分析，对 shortage_quantity>0 的物料逐条生成叫料单（call_type=FULL_ORDER）。"""
+) -> MaterialCallRequestResponse:
+    """按工单 BOM 齐套分析，对 shortage_quantity>0 的物料生成 **一张** 叫料单、多行明细（call_type=FULL_ORDER）。"""
     return await MaterialCallService().batch_create_from_work_order_kitting(
         tenant_id=tenant_id,
         work_order_id=body.work_order_id,
@@ -84,6 +84,6 @@ async def cancel_material_call(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """取消尚未处理的叫料请求"""
+    """撤回叫料：仅待处理且已送达数量为 0（仓库监控页仍可用 PATCH 取消其他状态）"""
     success = await MaterialCallService().cancel_call_request(tenant_id, call_id, current_user.id)
     return {"success": success}

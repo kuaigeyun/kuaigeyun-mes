@@ -427,6 +427,23 @@ async def confirm_production_return(
     )
 
 
+@router.post(
+    "/production-returns/{return_id}/withdraw",
+    response_model=ProductionReturnResponse,
+    summary="撤回生产退料（已退料→待退料，冲减库存）",
+)
+async def withdraw_production_return(
+    return_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ProductionReturnResponse:
+    return await ProductionReturnService().withdraw_return_confirmation(
+        tenant_id=tenant_id,
+        return_id=return_id,
+        updated_by=current_user.id,
+    )
+
+
 @router.get("/production-returns/{return_id}/print", summary="打印生产退料单")
 async def print_production_return(
     return_id: int,
@@ -968,7 +985,7 @@ async def quick_receipt_from_work_order(
     work_order_id: int = Query(..., description="工单ID"),
     warehouse_id: Optional[int] = Query(None, description="仓库ID（必填）"),
     warehouse_name: Optional[str] = Query(None, description="仓库名称（可选）"),
-    receipt_quantity: Optional[float] = Query(None, description="入库数量（可选，如果不提供则使用报工合格数量）"),
+    receipt_quantity: Optional[float] = Query(None, description="入库数量（可选；未传时优先质检合格数，否则末道工序合格数）"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> FinishedGoodsReceiptResponse:
@@ -978,13 +995,13 @@ async def quick_receipt_from_work_order(
     - **work_order_id**: 工单ID
     - **warehouse_id**: 仓库ID（必填）
     - **warehouse_name**: 仓库名称（可选）
-    - **receipt_quantity**: 入库数量（可选，如果不提供则使用报工合格数量）
+    - **receipt_quantity**: 入库数量（可选；未传时优先质检合格数，否则末道工序合格数）
     - **current_user**: 当前用户
     - **tenant_id**: 当前组织ID
 
     系统会自动：
     1. 获取工单信息
-    2. 从报工记录获取合格数量（如果未指定入库数量）
+    2. 若未指定入库数量：优先成品检验合格数；否则取末道工序累计合格数（不按全工序报工相加）
     3. 创建成品入库单和明细
 
     返回创建的成品入库单信息。
@@ -1107,6 +1124,57 @@ async def confirm_finished_goods_receipt(
         tenant_id=tenant_id,
         receipt_id=receipt_id,
         confirmed_by=current_user.id
+    )
+
+
+@router.post(
+    "/finished-goods-receipts/{receipt_id}/withdraw",
+    response_model=FinishedGoodsReceiptWithItemsResponse,
+    summary="撤回成品入库（已入库→待入库，冲减库存）",
+)
+async def withdraw_finished_goods_receipt(
+    receipt_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> FinishedGoodsReceiptWithItemsResponse:
+    return await FinishedGoodsReceiptService().withdraw_receipt_confirmation(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id,
+        updated_by=current_user.id,
+    )
+
+
+@router.delete(
+    "/finished-goods-receipts/{receipt_id}",
+    status_code=http_status.HTTP_204_NO_CONTENT,
+    summary="删除成品入库单",
+)
+async def delete_finished_goods_receipt(
+    receipt_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """软删除成品入库单（仅草稿/待入库可删；已入库不可删）"""
+    await FinishedGoodsReceiptService().delete_finished_goods_receipt(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id,
+    )
+
+
+@router.post(
+    "/finished-goods-receipts/{receipt_id}/delete",
+    status_code=http_status.HTTP_204_NO_CONTENT,
+    summary="删除成品入库单（POST，兼容网关/代理禁用 DELETE 的场景）",
+)
+async def delete_finished_goods_receipt_post(
+    receipt_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """与 DELETE 同逻辑，供前端统一使用 POST，避免 405 Method Not Allowed。"""
+    await FinishedGoodsReceiptService().delete_finished_goods_receipt(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id,
     )
 
 
@@ -2458,6 +2526,57 @@ async def confirm_purchase_receipt(
         tenant_id=tenant_id,
         receipt_id=receipt_id,
         confirmed_by=current_user.id
+    )
+
+
+@router.post(
+    "/purchase-receipts/{receipt_id}/withdraw",
+    response_model=PurchaseReceiptWithItemsResponse,
+    summary="撤回采购入库（已入库→待入库，冲减库存）",
+)
+async def withdraw_purchase_receipt(
+    receipt_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PurchaseReceiptWithItemsResponse:
+    return await PurchaseReceiptService().withdraw_receipt_confirmation(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id,
+        updated_by=current_user.id,
+    )
+
+
+@router.delete(
+    "/purchase-receipts/{receipt_id}",
+    status_code=http_status.HTTP_204_NO_CONTENT,
+    summary="删除采购入库单",
+)
+async def delete_purchase_receipt(
+    receipt_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """软删除采购入库单（仅草稿/待入库可删；已入库不可删）"""
+    await PurchaseReceiptService().delete_purchase_receipt(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id,
+    )
+
+
+@router.post(
+    "/purchase-receipts/{receipt_id}/delete",
+    status_code=http_status.HTTP_204_NO_CONTENT,
+    summary="删除采购入库单（POST，兼容网关/代理禁用 DELETE 的场景）",
+)
+async def delete_purchase_receipt_post(
+    receipt_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """与 DELETE 同逻辑，供前端统一使用 POST，避免 405 Method Not Allowed。"""
+    await PurchaseReceiptService().delete_purchase_receipt(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id,
     )
 
 

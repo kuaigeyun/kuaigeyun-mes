@@ -8,6 +8,7 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form as AntForm, InputNumber, Input, Row, Col, Typography } from 'antd';
@@ -81,6 +82,7 @@ const OtherOutboundPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
 
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [outboundDetail, setOutboundDetail] = useState<OtherOutboundDetail | null>(null);
 
@@ -209,6 +211,8 @@ const OtherOutboundPage: React.FC = () => {
         try {
           await warehouseApi.otherOutbound.confirm(record.id!.toString());
           messageApi.success('出库确认成功');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '出库确认失败');
@@ -225,6 +229,8 @@ const OtherOutboundPage: React.FC = () => {
         try {
           await warehouseApi.otherOutbound.delete(record.id!.toString());
           messageApi.success('删除成功');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '删除失败');
@@ -282,6 +288,8 @@ const OtherOutboundPage: React.FC = () => {
       });
       messageApi.success('创建成功');
       setCreateModalVisible(false);
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       if (error.message !== '请至少添加一条有效明细') messageApi.error(error.message || '创建失败');
@@ -355,6 +363,8 @@ const OtherOutboundPage: React.FC = () => {
                     await warehouseApi.otherOutbound.delete(String(id));
                   }
                   messageApi.success(`成功删除 ${keys.length} 条记录`);
+                  invalidateMenuBadgeCounts();
+
                   actionRef.current?.reload();
                 } catch (error: any) {
                   messageApi.error(error.message || '删除失败');

@@ -8,6 +8,7 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormUploadButton } from '@ant-design/pro-components';
@@ -348,6 +349,7 @@ const PurchaseOrdersPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const queryClient = useQueryClient();
   const actionRef = useRef<ActionType>(null);
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const tableSearchFormRef = useRef<any>(null);
   const [, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
@@ -651,6 +653,8 @@ const PurchaseOrdersPage: React.FC = () => {
             }}
             onSuccess={() => {
               invalidateStatistics();
+              invalidateMenuBadgeCounts();
+
               actionRef.current?.reload();
             }}
           />
@@ -796,6 +800,8 @@ const PurchaseOrdersPage: React.FC = () => {
       setPushToReceiptQuantities({});
       setPushToReceiptBatchNumbers({});
       invalidateStatistics();
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
       if (detailDrawerVisible && orderDetail?.id === pushToReceiptOrder.id) {
         getPurchaseOrder(pushToReceiptOrder.id).then(setOrderDetail);
@@ -850,6 +856,8 @@ const PurchaseOrdersPage: React.FC = () => {
       setPushToNoticeOrder(null);
       setPushToNoticeQuantities({});
       invalidateStatistics();
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
       if (detailDrawerVisible && orderDetail?.id === pushToNoticeOrder.id) {
         getPurchaseOrder(pushToNoticeOrder.id).then(setOrderDetail);
@@ -868,6 +876,8 @@ const PurchaseOrdersPage: React.FC = () => {
       const result = await pushPurchaseOrderToInvoice(record.id!);
       messageApi.success(`成功生成采购发票：${result.invoice_code || '已创建'}，请前往财务管理完善发票号码等信息`);
       invalidateStatistics();
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
       if (detailDrawerVisible && orderDetail?.id === record.id) {
         getPurchaseOrder(record.id!).then(setOrderDetail);
@@ -931,6 +941,8 @@ const PurchaseOrdersPage: React.FC = () => {
       setPushToReturnWarehouseId(undefined);
       setPushToReturnWarehouseName('');
       invalidateStatistics();
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
       if (detailDrawerVisible && orderDetail?.id === pushToReturnOrder.id) {
         getPurchaseOrder(pushToReturnOrder.id).then(setOrderDetail);
@@ -953,6 +965,8 @@ const PurchaseOrdersPage: React.FC = () => {
           await deletePurchaseOrder(record.id!);
           messageApi.success('采购订单删除成功');
           invalidateStatistics();
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '采购订单删除失败');
@@ -975,6 +989,8 @@ const PurchaseOrdersPage: React.FC = () => {
           messageApi.success(`已删除 ${keys.length} 条采购订单`);
           setSelectedRowKeys([]);
           invalidateStatistics();
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error?.message || '批量删除失败');
@@ -1001,6 +1017,8 @@ const PurchaseOrdersPage: React.FC = () => {
       }
       messageApi.success(`已同步 ${successCount} 条采购订单`);
       invalidateStatistics();
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error?.message || '同步失败');
@@ -1161,6 +1179,8 @@ const PurchaseOrdersPage: React.FC = () => {
       }
       if (result.successCount > 0) {
         invalidateStatistics();
+        invalidateMenuBadgeCounts();
+
         actionRef.current?.reload();
       }
     } catch (error: any) {
@@ -1327,6 +1347,8 @@ const PurchaseOrdersPage: React.FC = () => {
 
       setModalVisible(false);
       invalidateStatistics();
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       submitAfterSaveRef.current = false;
@@ -2221,6 +2243,8 @@ const PurchaseOrdersPage: React.FC = () => {
         onSuccess={() => {
           setLandingCostModalVisible(false);
           setLandingCostOrder(null);
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         }}
         orderId={landingCostOrder?.id || 0}

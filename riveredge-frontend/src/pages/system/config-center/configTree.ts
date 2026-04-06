@@ -5,7 +5,13 @@
  */
 
 export type ConfigSource = 'business_config' | 'site_setting' | 'system_parameter';
-export type ParamType = 'boolean' | 'number' | 'string' | 'color';
+export type ParamType = 'boolean' | 'number' | 'string' | 'color' | 'select';
+
+/** 下拉选项（label 使用 i18n key，由页面 t(labelKey) 渲染） */
+export interface ParamSelectOption {
+  value: string;
+  labelKey: string;
+}
 
 export interface ParamMeta {
   /** 参数唯一标识（用于 form 字段） */
@@ -24,6 +30,8 @@ export interface ParamMeta {
   min?: number;
   /** 数字类型：最大值 */
   max?: number;
+  /** type 为 select 时的选项 */
+  selectOptions?: ParamSelectOption[];
 }
 
 export interface ConfigCategory {
@@ -95,6 +103,19 @@ export const PARAMETER_CATEGORIES: ConfigCategory[] = [
       { key: 'work_order.priority', nameKey: 'pages.system.configCenter.param.work_order_priority', descriptionKey: 'pages.system.configCenter.param.work_order_priority_desc', source: 'business_config', sourcePath: 'parameters.work_order.priority', type: 'boolean' },
       { key: 'work_order.split', nameKey: 'pages.system.configCenter.param.work_order_split', descriptionKey: 'pages.system.configCenter.param.work_order_split_desc', source: 'business_config', sourcePath: 'parameters.work_order.split', type: 'boolean' },
       { key: 'work_order.merge', nameKey: 'pages.system.configCenter.param.work_order_merge', descriptionKey: 'pages.system.configCenter.param.work_order_merge_desc', source: 'business_config', sourcePath: 'parameters.work_order.merge', type: 'boolean' },
+      {
+        key: 'work_order.last_operation_auto_inbound_mode',
+        nameKey: 'pages.system.configCenter.param.work_order_last_operation_auto_inbound_mode',
+        descriptionKey: 'pages.system.configCenter.param.work_order_last_operation_auto_inbound_mode_desc',
+        source: 'business_config',
+        sourcePath: 'parameters.work_order.last_operation_auto_inbound_mode',
+        type: 'select',
+        selectOptions: [
+          { value: 'none', labelKey: 'pages.system.configCenter.param.work_order_last_operation_auto_inbound_mode_opt_none' },
+          { value: 'direct_inbound', labelKey: 'pages.system.configCenter.param.work_order_last_operation_auto_inbound_mode_opt_direct' },
+          { value: 'inbound_notice', labelKey: 'pages.system.configCenter.param.work_order_last_operation_auto_inbound_mode_opt_notice' },
+        ],
+      },
       { key: 'reporting.quick_reporting', nameKey: 'pages.system.configCenter.param.reporting_quick_reporting', descriptionKey: 'pages.system.configCenter.param.reporting_quick_reporting_desc', source: 'business_config', sourcePath: 'parameters.reporting.quick_reporting', type: 'boolean' },
       { key: 'reporting.parameter_reporting', nameKey: 'pages.system.configCenter.param.reporting_parameter_reporting', descriptionKey: 'pages.system.configCenter.param.reporting_parameter_reporting_desc', source: 'business_config', sourcePath: 'parameters.reporting.parameter_reporting', type: 'boolean' },
       { key: 'reporting.data_correction', nameKey: 'pages.system.configCenter.param.reporting_data_correction', descriptionKey: 'pages.system.configCenter.param.reporting_data_correction_desc', source: 'business_config', sourcePath: 'parameters.reporting.data_correction', type: 'boolean' },

@@ -5,6 +5,7 @@
  */
 
 import React, { useRef, useState, useEffect, useMemo } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import type { DescriptionsProps } from 'antd';
 import {
   ActionType,
@@ -82,6 +83,7 @@ import { sopApi } from '../../../../master-data/services/process';
 import { getUserInfo } from '../../../../../utils/auth';
 import { usePageMetrics } from '../../../../../hooks/usePageMetrics';
 import { getRemainingReportableQuantity } from '../../../utils/workOrderReporting';
+import { coerceReportingCreateStrings } from '../../../utils/reportingPayload';
 import dayjs from 'dayjs';
 
 /** 报工记录（后端返回 snake_case） */
@@ -159,10 +161,18 @@ function renderReportingRowActions(nodes: React.ReactNode[], keyPrefix: string):
 
 /** 获取报工员工信息：优先使用工序派工的 assigned_worker，否则使用当前登录用户 */
 const getWorkerInfo = (operation?: any) => {
-  const { worker_id, worker_name } = getUserInfo() || {};
+  const user = getUserInfo();
+  if (operation?.assigned_worker_id) {
+    return {
+      worker_id: operation.assigned_worker_id,
+      worker_name: String(
+        operation.assigned_worker_name || user?.full_name || user?.username || '操作员'
+      ),
+    };
+  }
   return {
-    worker_id: operation?.assigned_worker_id || worker_id || 0,
-    worker_name: operation?.assigned_worker_name || worker_name || '未知',
+    worker_id: user?.id ?? 0,
+    worker_name: String(user?.full_name || user?.username || '当前用户'),
   };
 };
 
@@ -353,7 +363,7 @@ const SubOperationReportingForm: React.FC<{
             sop_parameters: Object.keys(sopParams).length > 0 ? sopParams : undefined,
           };
 
-          await reportingApi.create(reportingData);
+          await reportingApi.create(coerceReportingCreateStrings(reportingData, workOrder));
           onSuccess();
         } catch (error: any) {
           messageApi.error(error.message || '子工序报工失败');
@@ -477,6 +487,7 @@ const ReportingPage: React.FC = () => {
   const location = useLocation();
   const actionRef = useRef<ActionType>(null);
 
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [reportingDetail, setReportingDetail] = useState<ReportingRecord | null>(null);
   const [detailMaterialBindings, setDetailMaterialBindings] = useState<any[]>([]);
@@ -551,15 +562,6 @@ const ReportingPage: React.FC = () => {
     queryFn: () => workOrderApi.getExecutionConfig(),
     staleTime: 60_000,
   });
-
-  /** 获取报工员工信息：优先使用工序派工的 assigned_worker，否则使用当前登录用户 */
-  const getWorkerInfo = (operation?: any) => {
-    const user = getUserInfo();
-    if (operation?.assigned_worker_id) {
-      return { worker_id: operation.assigned_worker_id, worker_name: operation.assigned_worker_name || user?.full_name || user?.username || '操作员' };
-    }
-    return { worker_id: user?.id ?? 0, worker_name: user?.full_name || user?.username || '当前用户' };
-  };
 
   /**
    * 处理扫码报工
@@ -1147,7 +1149,7 @@ const ReportingPage: React.FC = () => {
           remarks: values.remarks,
         };
 
-        await reportingApi.quickCreate(reportingData);
+        await reportingApi.quickCreate(coerceReportingCreateStrings(reportingData, currentWorkOrder));
         messageApi.success('报工成功');
         setScanModalVisible(false);
         setCurrentWorkOrder(null);
@@ -1155,6 +1157,8 @@ const ReportingPage: React.FC = () => {
         setCurrentOperation(null);
         setScanWorkOrderCode('');
         invalidateStatistics();
+        invalidateMenuBadgeCounts();
+
         actionRef.current?.reload();
         return;
       }
@@ -1192,13 +1196,15 @@ const ReportingPage: React.FC = () => {
         reportingData.qualified_quantity = values.qualified_quantity ?? values.reported_quantity ?? 0;
         reportingData.unqualified_quantity = (values.reported_quantity || 0) - (values.qualified_quantity ?? values.reported_quantity ?? 0);
       }
-      await reportingApi.create(reportingData);
+      await reportingApi.create(coerceReportingCreateStrings(reportingData, workOrder));
       messageApi.success('报工成功');
       setReportingModalVisible(false);
       formRef.current?.resetFields();
       setReportOperations([]);
       setReportWorkOrderId(null);
       setReportOperationId(null);
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '报工失败');
@@ -1238,6 +1244,8 @@ const ReportingPage: React.FC = () => {
       setScrapModalVisible(false);
       setCurrentReportingRecord(null);
       scrapFormRef.current?.resetFields();
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '创建报废记录失败');
@@ -1278,6 +1286,8 @@ const ReportingPage: React.FC = () => {
       setDefectModalVisible(false);
       setCurrentReportingRecordForDefect(null);
       defectFormRef.current?.resetFields();
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '创建不良品记录失败');
@@ -1323,14 +1333,24 @@ const ReportingPage: React.FC = () => {
 
       const correctedId = currentReportingRecordForCorrect.id;
 
+      const correctPayload = { ...values };
+      const wh = correctPayload.work_hours;
+      if (wh === undefined || wh === null || wh === '') {
+        delete correctPayload.work_hours;
+      } else {
+        correctPayload.work_hours = Number(wh);
+      }
+
       await reportingApi.correct(
         currentReportingRecordForCorrect.id.toString(),
-        values
+        correctPayload
       );
       messageApi.success('报工数据修正成功');
       setCorrectModalVisible(false);
       setCurrentReportingRecordForCorrect(null);
       correctFormRef.current?.resetFields();
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
       invalidateStatistics();
       if (reportingDetail?.id === correctedId) {
@@ -1398,6 +1418,8 @@ const ReportingPage: React.FC = () => {
                 reportingApi.approve(id.toString(), {}, { rejection_reason: reason || undefined }),
             }}
             onSuccess={() => {
+              invalidateMenuBadgeCounts();
+
               actionRef.current?.reload();
               invalidateStatistics();
               if (reportingDetail?.id === record.id) {
@@ -1444,6 +1466,8 @@ const ReportingPage: React.FC = () => {
                     setDetailDrawerVisible(false);
                     setReportingDetail(null);
                   }
+                  invalidateMenuBadgeCounts();
+
                   actionRef.current?.reload();
                   invalidateStatistics();
                 } catch (error: any) {
@@ -1479,6 +1503,8 @@ const ReportingPage: React.FC = () => {
                       .then((d) => setReportingDetail(d as ReportingRecord))
                       .catch(() => {});
                   }
+                  invalidateMenuBadgeCounts();
+
                   actionRef.current?.reload();
                   invalidateStatistics();
                 } catch (error: any) {
@@ -1557,6 +1583,8 @@ const ReportingPage: React.FC = () => {
                     setDetailDrawerVisible(false);
                     setReportingDetail(null);
                   }
+                  invalidateMenuBadgeCounts();
+
                   actionRef.current?.reload();
                   invalidateStatistics();
                 } catch (error: any) {
@@ -1899,6 +1927,8 @@ const ReportingPage: React.FC = () => {
                   setDetailDrawerVisible(false);
                   setReportingDetail(null);
                 }
+                invalidateMenuBadgeCounts();
+
                 actionRef.current?.reload();
                 invalidateStatistics();
               } catch (error: any) {
@@ -1930,6 +1960,8 @@ const ReportingPage: React.FC = () => {
                       if (res.failed > 0) {
                         messageApi.warning(`${res.failed} 条记录操作失败`);
                       }
+                      invalidateMenuBadgeCounts();
+
                       actionRef.current?.reload();
                       invalidateStatistics();
                       setSelectedRowKeys([]);
@@ -2052,8 +2084,7 @@ const ReportingPage: React.FC = () => {
         <ProFormDigit
           name="work_hours"
           label="工时(小时)"
-          placeholder="工时"
-          rules={[{ required: true, message: '请输入工时' }]}
+          placeholder="选填，默认按 0"
           min={0}
           fieldProps={{ step: 0.1 }}
           colProps={{ span: 8 }}
@@ -2333,7 +2364,9 @@ const ReportingPage: React.FC = () => {
                         sop_parameters: Object.keys(sopParams).length > 0 ? sopParams : undefined,
                       };
 
-                      const reportingRecord = await reportingApi.quickCreate(reportingData);
+                      const reportingRecord = await reportingApi.quickCreate(
+                        coerceReportingCreateStrings(reportingData, currentWorkOrder)
+                      );
                       messageApi.success('报工成功');
 
                       // 保存上料下料绑定记录（如果存在）
@@ -2397,6 +2430,8 @@ const ReportingPage: React.FC = () => {
                         setDischargingList([]);
                         setSubOperations([]);
                         scanFormRef.current?.resetFields();
+                        invalidateMenuBadgeCounts();
+
                         actionRef.current?.reload();
                       }
                     } catch (error: any) {
@@ -2859,8 +2894,7 @@ const ReportingPage: React.FC = () => {
             <ProFormDigit
               name="work_hours"
               label="工时（小时）"
-              placeholder="请输入工时"
-              rules={[{ required: true, message: '请输入工时' }]}
+              placeholder="选填，默认按 0"
               min={0}
               fieldProps={{ precision: 2, step: 0.1 }}
             />

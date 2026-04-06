@@ -9,6 +9,7 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import type { DescriptionsProps } from 'antd';
 import { useSearchParams, useLocation } from 'react-router-dom';
 import {
@@ -146,6 +147,7 @@ const PackingBindingPage: React.FC = () => {
   const { token } = AntdTheme.useToken();
   const location = useLocation();
   const actionRef = useRef<ActionType>(null);
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -292,6 +294,8 @@ const PackingBindingPage: React.FC = () => {
       setCurrentBindingId(null);
       formRef.current?.resetFields();
       setStatsVersion((v) => v + 1);
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
       if (oid != null && currentBinding?.id === oid) {
         try {
@@ -317,6 +321,8 @@ const PackingBindingPage: React.FC = () => {
       }
       setSelectedRowKeys([]);
       setStatsVersion((v) => v + 1);
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '删除装箱绑定记录失败');
@@ -337,6 +343,8 @@ const PackingBindingPage: React.FC = () => {
         setCurrentBinding(null);
       }
       setStatsVersion((v) => v + 1);
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '批量删除失败');

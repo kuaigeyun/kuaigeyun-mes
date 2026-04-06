@@ -59,6 +59,7 @@ import {
   List,
   Switch,
   Statistic,
+  Alert,
 } from 'antd'
 import type { MenuProps } from 'antd'
 import {
@@ -157,6 +158,7 @@ const LazyUniLifecycleStepper = lazy(() =>
 const LazyUniMaterialSelect = lazy(() => import('../../../../../components/uni-material-select'))
 import { getWorkOrderLifecycle } from '../../../utils/workOrderLifecycle'
 import { getRemainingReportableQuantity } from '../../../utils/workOrderReporting'
+import { coerceReportingCreateStrings } from '../../../utils/reportingPayload'
 import { getUserInfo } from '../../../../../utils/auth'
 
 /** 列表行展开工序：TanStack 缓存键前缀（与派工/开工后 invalidate 一致） */
@@ -631,6 +633,7 @@ const WorkOrdersPage: React.FC = () => {
   const [quickReportingModalVisible, setQuickReportingModalVisible] = useState(false)
   const [quickReportingWorkOrder, setQuickReportingWorkOrder] = useState<WorkOrder | null>(null)
   const [quickReportingOperation, setQuickReportingOperation] = useState<any>(null)
+  const [quickReportingRouteOperations, setQuickReportingRouteOperations] = useState<any[]>([])
   const quickReportingFormRef = useRef<any>(null)
 
   /** 快速报工：通过 ProForm initialValues 在挂载时填入（避免 destroyOnHidden 下 setFieldsValue 早于表单挂载导致空白） */
@@ -661,6 +664,43 @@ const WorkOrdersPage: React.FC = () => {
       remarks: undefined,
     }
   }, [quickReportingModalVisible, quickReportingWorkOrder, quickReportingOperation])
+
+  /** 快速报工：解析路线工序列表（用于判断是否末道） */
+  useEffect(() => {
+    if (!quickReportingModalVisible || !quickReportingWorkOrder?.id) {
+      setQuickReportingRouteOperations([])
+      return
+    }
+    const wid = quickReportingWorkOrder.id
+    const cached = expandedOperationsMap[wid]
+    if (cached?.length) {
+      setQuickReportingRouteOperations(cached)
+      return
+    }
+    let cancelled = false
+    workOrderApi.getOperations(wid.toString()).then((ops) => {
+      if (!cancelled) setQuickReportingRouteOperations(ops || [])
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [quickReportingModalVisible, quickReportingWorkOrder?.id, expandedOperationsMap])
+
+  const quickReportingIsLastOperation = useMemo(() => {
+    if (!quickReportingOperation || quickReportingRouteOperations.length === 0) return false
+    const seq = Number(quickReportingOperation.sequence)
+    const maxSeq = Math.max(...quickReportingRouteOperations.map((o: any) => Number(o.sequence) || 0))
+    if (!Number.isFinite(seq) || !Number.isFinite(maxSeq)) return false
+    return seq === maxSeq
+  }, [quickReportingOperation, quickReportingRouteOperations])
+
+  const quickReportingLastInboundHint = useMemo(() => {
+    if (!quickReportingIsLastOperation) return ''
+    const mode = executionConfig?.last_operation_auto_inbound_mode ?? 'none'
+    if (mode === 'direct_inbound') return t('apps.kuaizhizao.workOrder.quickReport.lastOpDirectInbound')
+    if (mode === 'inbound_notice') return t('apps.kuaizhizao.workOrder.quickReport.lastOpInboundNotice')
+    return t('apps.kuaizhizao.workOrder.quickReport.lastOpNoAutoInbound')
+  }, [quickReportingIsLastOperation, executionConfig?.last_operation_auto_inbound_mode, t])
 
   // 工序派工弹窗：打开时拉取派工下拉数据（含车间/工作中心），不依赖新建工单弹窗是否打开过
   useEffect(() => {
@@ -1091,10 +1131,18 @@ const WorkOrdersPage: React.FC = () => {
   }
 
   const getWorkerInfoForReporting = (operation?: any) => {
-    const { worker_id, worker_name } = getUserInfo() || {}
+    const user = getUserInfo() || {}
+    if (operation?.assigned_worker_id) {
+      return {
+        worker_id: operation.assigned_worker_id,
+        worker_name: String(
+          operation.assigned_worker_name || user.full_name || user.username || '操作员'
+        ),
+      }
+    }
     return {
-      worker_id: operation?.assigned_worker_id || worker_id || 0,
-      worker_name: operation?.assigned_worker_name || worker_name || '未知',
+      worker_id: user.id ?? 0,
+      worker_name: String(user.full_name || user.username || '未知'),
     }
   }
 
@@ -1232,7 +1280,9 @@ const WorkOrdersPage: React.FC = () => {
         reportingData.unqualified_quantity = uq
       }
       const wid = quickReportingWorkOrder.id
-      const created = await reportingApi.create(reportingData)
+      const created = await reportingApi.create(
+        coerceReportingCreateStrings(reportingData, quickReportingWorkOrder)
+      )
       if (
         quickReportingOperation.reporting_type === 'quantity' &&
         Number(values.unqualified_quantity) > 0 &&
@@ -4160,6 +4210,7 @@ const WorkOrdersPage: React.FC = () => {
           setQuickReportingModalVisible(false)
           setQuickReportingWorkOrder(null)
           setQuickReportingOperation(null)
+          setQuickReportingRouteOperations([])
           quickReportingFormRef.current?.resetFields()
         }}
         onFinish={handleQuickReportingSubmit}
@@ -4169,6 +4220,12 @@ const WorkOrdersPage: React.FC = () => {
         formRef={quickReportingFormRef}
         grid
       >
+        <>
+          {!!quickReportingLastInboundHint && (
+            <Col span={24} style={{ marginBottom: 12 }}>
+              <Alert type="info" showIcon message={quickReportingLastInboundHint} />
+            </Col>
+          )}
         {quickReportingOperation?.reporting_type === 'status' ? (
           <>
             <ProFormRadio.Group
@@ -4344,6 +4401,7 @@ const WorkOrdersPage: React.FC = () => {
             />
           </>
         )}
+        </>
       </FormModalTemplate>
 
       {/* 创建/编辑工单 Modal — 智能建议面板懒加载，避免拖慢列表首屏 */}

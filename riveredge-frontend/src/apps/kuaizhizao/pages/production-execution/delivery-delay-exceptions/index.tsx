@@ -8,6 +8,7 @@
  */
 
 import React, { useRef, useState } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Tag, Button, Space } from 'antd';
 import { EyeOutlined, CheckCircleOutlined, ClockCircleOutlined, ToolOutlined, CloseCircleOutlined, UserAddOutlined } from '@ant-design/icons';
@@ -41,6 +42,7 @@ interface DeliveryDelayException {
 const DeliveryDelayExceptionsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentRecord, setCurrentRecord] = useState<DeliveryDelayException | null>(null);
   const [handleModalVisible, setHandleModalVisible] = useState(false);
@@ -92,6 +94,8 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
       setHandleModalVisible(false);
       setCurrentRecord(null);
       setCurrentAction('');
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '处理失败');

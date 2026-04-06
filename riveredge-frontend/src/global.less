@@ -1002,7 +1002,7 @@ code {
   display: flex;
 }
 
-/* 工作台主区：左侧快捷+版本与右侧 KPI 等高 */
+/* 工作台主区：左侧快捷+版本与右侧 KPI 等高；高度随内容，整页超高由外层 overflow-y:auto 滚动 */
 .dashboard-main-body.ant-row {
   align-items: stretch;
 }
@@ -1036,6 +1036,13 @@ code {
 .dashboard-bento-left-quick .ant-card .ant-card-extra,
 .dashboard-four-cards-row .ant-card .ant-card-extra {
   padding: 8px 0;
+}
+/* 底部三卡为固定高度，Row 不参与吃掉剩余视口 flex */
+.dashboard-four-cards-row.dashboard-bento-main-row.ant-row {
+  flex: 0 0 auto;
+}
+.dashboard-four-cards-row > .ant-col {
+  min-height: 0;
 }
 .dashboard-date-strip {
   min-height: 0;

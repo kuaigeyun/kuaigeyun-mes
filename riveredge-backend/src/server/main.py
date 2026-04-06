@@ -313,8 +313,15 @@ def load_plugin_routes():
         route_manager = get_route_manager()
         
         if route_manager:
-            # 使用路由管理器注册路由
+            # initialize() 内 _register_app_routes 已调用过 register_app_routes；此处若再注册会 unregister 后二次 include_router，
+            # FastAPI 无法卸载旧路由，导致重复挂载。已注册则跳过。
             for app_code, routers in registered_routes.items():
+                if route_manager.is_app_registered(app_code):
+                    logger.debug(
+                        "应用 {} 路由已在路由管理器中注册，跳过 load_plugin_routes 重复注册",
+                        app_code,
+                    )
+                    continue
                 route_manager.register_app_routes(app_code, routers)
                 logger.info(f"✅ 通过路由管理器注册应用 {app_code} 的路由（{len(routers)} 个路由器）")
         else:
@@ -755,6 +762,12 @@ try:
     app.include_router(kuaireport_router, prefix="/api/v1/apps/kuaireport")
 except ImportError as e:
     logger.warning(f"⚠️ 无法加载 kuaireport 路由: {e}")
+# kuaizhizao：快制造（车间执行、销售采购、仓储等）— 与 master-data 同级静态挂载，避免动态注册失败导致整前缀 404
+try:
+    from apps.kuaizhizao.api.router import router as kuaizhizao_router
+    app.include_router(kuaizhizao_router, prefix="/api/v1/apps/kuaizhizao")
+except ImportError as e:
+    logger.warning(f"⚠️ 无法加载 kuaizhizao 路由: {e}")
 
 # Inngest 测试端点 - 暂时禁用
 # @app.post("/api/v1/test/inngest")

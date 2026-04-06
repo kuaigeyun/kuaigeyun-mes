@@ -9,7 +9,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { App, Card, Form, Switch, Button, Space, Typography, Modal, Input, List, Popconfirm } from 'antd';
+import { App, Card, Form, Switch, Button, Space, Typography, Modal, Input, List, Popconfirm, Select } from 'antd';
 import { SaveOutlined, ControlOutlined, FileTextOutlined, DeleteOutlined, CheckOutlined, CodeSandboxOutlined } from '@ant-design/icons';
 import { MultiTabListPageTemplate } from '../../../components/layout-templates';
 import BusinessFlowConfig from './BusinessFlowConfig';
@@ -30,7 +30,14 @@ const { Title, Text, Paragraph } = Typography;
 
 /** 流程参数配置：从 API 获取，fallback 仅用于 API 未就绪时 */
 const FALLBACK_PARAMETER_KEYS: Record<string, string[]> = {
-  work_order: ['auto_generate', 'priority', 'split', 'merge', 'allow_production_without_material'],
+  work_order: [
+    'auto_generate',
+    'priority',
+    'split',
+    'merge',
+    'allow_production_without_material',
+    'last_operation_auto_inbound_mode',
+  ],
   reporting: ['quick_reporting', 'parameter_reporting', 'auto_fill', 'data_correction', 'auto_approve'],
   warehouse: ['batch_management', 'serial_management', 'multi_unit', 'fifo', 'lifo'],
   quality: ['incoming_inspection', 'process_inspection', 'finished_inspection', 'defect_handling'],
@@ -51,6 +58,9 @@ const BusinessConfigPage: React.FC = () => {
   const [templateForm] = Form.useForm();
   const [activeTab, setActiveTab] = useState('graphical');
   const [parameterKeys, setParameterKeys] = useState<Record<string, string[]>>(FALLBACK_PARAMETER_KEYS);
+  const [parameterControlMeta, setParameterControlMeta] = useState<
+    Record<string, Record<string, { type?: string; options?: { value: string; labelKey: string }[] }>>
+  >({});
 
 
   /**
@@ -81,7 +91,10 @@ const BusinessConfigPage: React.FC = () => {
 
   useEffect(() => {
     getBusinessConfigSchema()
-      .then((schema) => setParameterKeys(schema.parameterKeys))
+      .then((schema) => {
+        setParameterKeys(schema.parameterKeys);
+        setParameterControlMeta(schema.parameterRegistryControlMeta || {});
+      })
       .catch(() => {});
   }, []);
 
@@ -293,23 +306,37 @@ const BusinessConfigPage: React.FC = () => {
           {Object.entries(parameterKeys).map(([category, keys]) => (
             <Card key={category} title={t(`pages.system.businessConfig.paramCategory.${category}`)} size="small">
               <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-                {keys.map((key) => (
-                  <Form.Item
-                    key={key}
-                    name={['parameters', category, key]}
-                    label={
-                      <Space direction="vertical" size={0}>
-                        <Text strong>{t(`pages.system.businessConfig.param.${category}.${key}.name`)}</Text>
-                        <Text type="secondary" style={{ fontSize: '12px' }}>
-                          {t(`pages.system.businessConfig.param.${category}.${key}.description`)}
-                        </Text>
-                      </Space>
-                    }
-                    valuePropName="checked"
-                  >
-                    <Switch />
-                  </Form.Item>
-                ))}
+                {keys.map((key) => {
+                  const ctrl = parameterControlMeta[category]?.[key];
+                  const isSelect = ctrl?.type === 'select' && ctrl.options?.length;
+                  return (
+                    <Form.Item
+                      key={key}
+                      name={['parameters', category, key]}
+                      label={
+                        <Space direction="vertical" size={0}>
+                          <Text strong>{t(`pages.system.businessConfig.param.${category}.${key}.name`)}</Text>
+                          <Text type="secondary" style={{ fontSize: '12px' }}>
+                            {t(`pages.system.businessConfig.param.${category}.${key}.description`)}
+                          </Text>
+                        </Space>
+                      }
+                      valuePropName={isSelect ? undefined : 'checked'}
+                    >
+                      {isSelect ? (
+                        <Select
+                          style={{ minWidth: 280 }}
+                          options={ctrl!.options!.map((o) => ({
+                            value: o.value,
+                            label: t(o.labelKey),
+                          }))}
+                        />
+                      ) : (
+                        <Switch />
+                      )}
+                    </Form.Item>
+                  );
+                })}
               </Space>
             </Card>
           ))}

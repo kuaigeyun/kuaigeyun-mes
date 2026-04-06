@@ -8,6 +8,7 @@
  */
 
 import React, { useRef } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Space, Modal, Typography } from 'antd';
 import { PlusOutlined, EyeOutlined } from '@ant-design/icons';
@@ -39,6 +40,7 @@ const AssemblyOrdersPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
 
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const columns: ProColumns<AssemblyOrder>[] = [
     {
       title: '组装单号',
@@ -154,6 +156,8 @@ const AssemblyOrdersPage: React.FC = () => {
                   await assemblyOrderApi.delete(String(key));
                 }
                 messageApi.success(`成功删除 ${keys.length} 条记录`);
+                invalidateMenuBadgeCounts();
+
                 actionRef.current?.reload();
               } catch (error: any) {
                 messageApi.error(error?.message || '删除失败');

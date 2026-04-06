@@ -8,6 +8,7 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Tag, Button, Space } from 'antd';
 import { EyeOutlined, CheckCircleOutlined, ShoppingOutlined, SwapOutlined, CloseCircleOutlined } from '@ant-design/icons';
@@ -46,6 +47,7 @@ interface MaterialShortageException {
 const MaterialShortageExceptionsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentRecord, setCurrentRecord] = useState<MaterialShortageException | null>(null);
   const [handleModalVisible, setHandleModalVisible] = useState(false);
@@ -115,6 +117,8 @@ const MaterialShortageExceptionsPage: React.FC = () => {
       setHandleModalVisible(false);
       setCurrentRecord(null);
       setCurrentAction('');
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '处理失败');

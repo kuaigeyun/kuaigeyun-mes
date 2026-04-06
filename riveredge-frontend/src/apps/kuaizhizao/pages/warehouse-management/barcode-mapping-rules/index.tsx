@@ -8,6 +8,7 @@
  */
 
 import React, { useRef, useState } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormSwitch, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Tag, Button, Space, Popconfirm, Modal, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, EyeOutlined } from '@ant-design/icons';
@@ -42,6 +43,7 @@ interface BarcodeMappingRule {
 const BarcodeMappingRulesPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const formRef = useRef<any>(null);
 
   // Modal 相关状态
@@ -99,6 +101,8 @@ const BarcodeMappingRulesPage: React.FC = () => {
       try {
         await warehouseApi.barcodeMappingRule.delete(record.id.toString());
         messageApi.success('删除成功');
+        invalidateMenuBadgeCounts();
+
         actionRef.current?.reload();
       } catch (error) {
         messageApi.error('删除失败');
@@ -256,6 +260,8 @@ const BarcodeMappingRulesPage: React.FC = () => {
       }
       setModalVisible(false);
       formRef.current?.resetFields();
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
@@ -288,6 +294,8 @@ const BarcodeMappingRulesPage: React.FC = () => {
                   await warehouseApi.barcodeMappingRule.delete(String(id));
                 }
                 messageApi.success(`成功删除 ${keys.length} 条记录`);
+                invalidateMenuBadgeCounts();
+
                 actionRef.current?.reload();
               } catch (error: any) {
                 messageApi.error(error.message || '删除失败');

@@ -1,7 +1,7 @@
 /**
  * RiverEdge SaaS 多组织框架 - 工作台页面
  *
- * 用户工作台，提供快捷入口、消息通知、待办事项等功能
+ * 用户工作台，提供快捷入口、待办事项等功能（消息入口在顶栏）
  * 参考 Ant Design Pro 工作台最佳实践
  * 按照工作台设计规划文档实现
  *
@@ -49,7 +49,6 @@ import {
   getStatistics, 
   handleTodo, 
   getUserMessages,
-  markMessagesRead,
   getProductionBroadcast,
   type TodoListResponse,
   type NotificationItem,
@@ -67,7 +66,7 @@ import {
 import { getUserPreference, type UserPreference } from '../../../services/userPreference';
 import { useUserPreferenceStore } from '../../../stores/userPreferenceStore';
 import { ManufacturingIcons } from '../../../utils/manufacturingIcons';
-import { getAvatarUrl, getAvatarText } from '../../../utils/avatar';
+import { getAvatarUrl, getAvatarText, getCachedAvatarUrl } from '../../../utils/avatar';
 import { useGlobalStore } from '../../../stores';
 import { useThemeStore } from '../../../stores/themeStore';
 import { getUserInfo } from '../../../utils/auth';
@@ -530,6 +529,50 @@ function formatDashboardRate(n: number | undefined | null): string {
   return Number.isInteger(v) ? String(v) : v.toFixed(1);
 }
 
+/** 指标卡主数值语义（用于配色） */
+type DashboardKpiMainSemantic =
+  | 'work_order_total'
+  | 'work_order_wip'
+  | 'completion_rate'
+  | 'output_quantity'
+  | 'inventory_alert'
+  | 'quality_rate';
+
+function resolveDashboardKpiMainColor(
+  semantic: DashboardKpiMainSemantic | undefined,
+  rawNumeric: number | undefined | null,
+  isDark: boolean,
+  token: ReturnType<typeof theme.useToken>['token'],
+): string {
+  if (!semantic) {
+    return isDark ? '#ffffff' : '#0f172a';
+  }
+  const n = rawNumeric == null || Number.isNaN(Number(rawNumeric)) ? 0 : Number(rawNumeric);
+
+  switch (semantic) {
+    case 'work_order_total':
+      return isDark ? '#93c5fd' : token.colorPrimary;
+    case 'work_order_wip':
+      return isDark ? '#5eead4' : '#0891b2';
+    case 'completion_rate':
+      if (n >= 85) return isDark ? '#86efac' : token.colorSuccess;
+      if (n >= 50) return isDark ? '#fcd34d' : token.colorWarning;
+      return isDark ? '#fca5a5' : token.colorError;
+    case 'output_quantity':
+      return isDark ? '#fdba74' : '#ea580c';
+    case 'inventory_alert':
+      if (n > 0) return isDark ? '#fca5a5' : token.colorError;
+      return isDark ? '#86efac' : token.colorSuccess;
+    case 'quality_rate':
+      if (n >= 95) return isDark ? '#86efac' : '#15803d';
+      if (n >= 80) return isDark ? '#bef264' : token.colorSuccess;
+      if (n >= 60) return isDark ? '#fcd34d' : token.colorWarning;
+      return isDark ? '#fca5a5' : token.colorError;
+    default:
+      return isDark ? '#ffffff' : '#0f172a';
+  }
+}
+
 type KpiRichSide = { label: string; value: React.ReactNode };
 
 /** 指标卡：左主数值 + 说明、竖线、右侧两项副指标（与设计稿一致） */
@@ -543,6 +586,8 @@ function DashboardKpiRichCard({
   rightBottom,
   onClick,
   isDark,
+  mainSemantic,
+  mainNumeric,
 }: {
   gradient: string;
   title: string;
@@ -553,11 +598,16 @@ function DashboardKpiRichCard({
   rightBottom: KpiRichSide;
   onClick?: () => void;
   isDark?: boolean;
+  /** 主指标语义色（与业务含义一致：总量/在制/达成/预警/质量等） */
+  mainSemantic?: DashboardKpiMainSemantic;
+  /** 用于阈值配色（完成率%、质量%、预警条数等） */
+  mainNumeric?: number | null;
 }) {
   const { token } = useToken();
+  const mainColor = resolveDashboardKpiMainColor(mainSemantic, mainNumeric, !!isDark, token);
   const text = {
     title: isDark ? 'rgba(255,255,255,0.8)' : '#64748b',
-    main: isDark ? '#ffffff' : '#0f172a',
+    main: mainColor,
     secondary: isDark ? 'rgba(255,255,255,0.9)' : '#475569',
     muted: isDark ? 'rgba(255,255,255,0.6)' : '#94a3b8',
     divider: isDark ? 'rgba(255,255,255,0.16)' : 'rgba(15, 23, 42, 0.1)',
@@ -617,13 +667,23 @@ function DashboardKpiRichCard({
               color: text.main,
               fontWeight: 700,
               fontVariantNumeric: 'tabular-nums',
-              lineHeight: 1.15,
+              lineHeight: 1.12,
+              letterSpacing: '-0.02em',
             }}
           >
             {mainValue}
           </span>
           {mainSuffix ? (
-            <span style={{ fontSize: 14, color: text.secondary }}>{mainSuffix}</span>
+            <span
+              style={{
+                fontSize: 15,
+                color: text.main,
+                fontWeight: 600,
+                opacity: isDark ? 0.92 : 0.88,
+              }}
+            >
+              {mainSuffix}
+            </span>
           ) : null}
         </div>
         <Text
@@ -697,6 +757,62 @@ function DashboardKpiRichCard({
   );
 }
 
+/** 生产播报列表行：操作员头像（优先已上传头像，否则姓名首字） */
+function ProductionBroadcastOperatorAvatar({
+  avatarUuid,
+  displayName,
+}: {
+  avatarUuid?: string | null;
+  displayName: string;
+}) {
+  const { token } = useToken();
+  const [src, setSrc] = useState<string | undefined>(() =>
+    avatarUuid ? getCachedAvatarUrl(avatarUuid) : undefined,
+  );
+
+  useEffect(() => {
+    if (!avatarUuid) {
+      setSrc(undefined);
+      return;
+    }
+    const cached = getCachedAvatarUrl(avatarUuid);
+    if (cached) {
+      setSrc(cached);
+      return;
+    }
+    let cancelled = false;
+    getAvatarUrl(avatarUuid)
+      .then((url) => {
+        if (!cancelled) setSrc(url);
+      })
+      .catch(() => {
+        if (!cancelled) setSrc(undefined);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [avatarUuid]);
+
+  return (
+    <Avatar
+      size={30}
+      src={src}
+      style={{
+        backgroundColor: token.colorPrimaryBg,
+        color: token.colorPrimary,
+        flexShrink: 0,
+      }}
+    >
+      {getAvatarText(displayName)}
+    </Avatar>
+  );
+}
+
+/** 待办 Tabs：数量为 0 时不展示括号与数字，仅保留分类名 */
+function formatDashboardTodoTabLabel(title: string, count: number): string {
+  return count > 0 ? `${title} (${count})` : title;
+}
+
 /**
  * 工作台页面组件
  */
@@ -717,16 +833,18 @@ export default function DashboardPage() {
   const dashboardCardShadow = token.boxShadowTertiary;
   // 首行四卡统一固定高度
   const dashboardTopCardHeight = 126;
+  /** 底部待办 / 最新操作两卡统一固定高度（整张 Card，含标题栏），列表在卡片内滚动 */
+  const dashboardBottomThreeCardsFixedHeight = 500;
+  /** 卡片内列表区：占满 body 剩余空间并滚动 */
+  const bottomCardListScrollBoxStyle: React.CSSProperties = {
+    flex: '1 1 0%',
+    minHeight: 0,
+    overflowX: 'hidden',
+    overflowY: 'auto',
+  };
   const currentUser = useGlobalStore((s) => s.currentUser);
   const [currentTime, setCurrentTime] = useState(dayjs());
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
-  /**
-   * 三列底部卡片最小高度（待办/消息/最新报工）：
-   * 视口高度 - 顶栏 - 标签栏 - 页面上下边距 - 顶部便当行 - 指标+日历行 - 行间距
-   */
-  const dashboardBottomCardsMinHeight =
-    'calc(100vh - var(--header-height, 56px) - var(--tabs-height, 56px) - 452px)';
-
   /** 天气数据：用于首行天气区块背景渐变 */
   const [weatherForDashboard, setWeatherForDashboard] = useState<WeatherData | null>(null);
 
@@ -859,7 +977,7 @@ export default function DashboardPage() {
   }, [currentUser]);
 
   // 获取用户消息通知（接入真实API）
-  const { data: notificationsData, isLoading: notificationsLoading, refetch: refetchNotifications } = useQuery<NotificationItem[]>({
+  const { data: notificationsData } = useQuery<NotificationItem[]>({
     queryKey: ['user-messages'],
     queryFn: () => getUserMessages(1, 20, false), // 获取前20条消息，包括已读和未读
     refetchInterval: 60000, // 每60秒自动刷新
@@ -871,11 +989,19 @@ export default function DashboardPage() {
   // 获取待办事项（使用真实API）
   const { data: todosResult, isLoading: todosLoading, refetch: refetchTodos } = useQuery<TodoListResponse>({
     queryKey: ['dashboard-todos'],
-    queryFn: () => getTodos(20),
+    queryFn: () => getTodos(100),
     refetchInterval: 30000,
   });
 
   const todos = useMemo(() => todosResult?.items || [], [todosResult]);
+  const todosWorkOrder = useMemo(() => todos.filter((x) => x.type === 'work_order'), [todos]);
+  const todosQualityInspection = useMemo(() => todos.filter((x) => x.type === 'quality_inspection'), [todos]);
+  const todosWarehouse = useMemo(() => todos.filter((x) => x.type === 'warehouse'), [todos]);
+  const todosOutbound = useMemo(() => todos.filter((x) => x.type === 'outbound'), [todos]);
+  const todosPurchase = useMemo(() => todos.filter((x) => x.type === 'purchase'), [todos]);
+  const todosSales = useMemo(() => todos.filter((x) => x.type === 'sales'), [todos]);
+  const todosEquipment = useMemo(() => todos.filter((x) => x.type === 'equipment'), [todos]);
+  const todosException = useMemo(() => todos.filter((x) => x.type === 'exception'), [todos]);
 
   // 计算时间范围
   const getDateRange = useMemo(() => {
@@ -956,11 +1082,14 @@ export default function DashboardPage() {
   // 获取生产播报（使用真实API）
   const { data: productionBroadcastData, isLoading: productionBroadcastLoading } = useQuery<ProductionBroadcastItem[]>({
     queryKey: ['production-broadcast'],
-    queryFn: () => getProductionBroadcast(5),
+    queryFn: () => getProductionBroadcast(10),
     refetchInterval: 60000,
   });
 
-  const productionBroadcast = useMemo(() => Array.isArray(productionBroadcastData) ? productionBroadcastData : [], [productionBroadcastData]);
+  const productionBroadcast = useMemo(() => {
+    if (!Array.isArray(productionBroadcastData)) return [];
+    return productionBroadcastData.slice(0, 10);
+  }, [productionBroadcastData]);
 
   // 获取用户偏好设置
   const { data: userPreference, isLoading: userPreferenceLoading } = useQuery<UserPreference>({
@@ -1024,6 +1153,7 @@ export default function DashboardPage() {
   // 优先级颜色映射
   const priorityColorMap: Record<string, string> = {
     high: 'error',
+    critical: 'error',
     medium: 'warning',
     low: 'default',
   };
@@ -1031,6 +1161,7 @@ export default function DashboardPage() {
   // 优先级文本映射（i18n）
   const priorityTextMap: Record<string, string> = useMemo(() => ({
     high: t('pages.dashboard.priorityHigh'),
+    critical: t('pages.dashboard.priorityHigh'),
     medium: t('pages.dashboard.priorityMedium'),
     low: t('pages.dashboard.priorityLow'),
   }), [t]);
@@ -1126,19 +1257,29 @@ export default function DashboardPage() {
       <DashboardTemplate
         quickActions={[]}
         showConfigButton={false}
+        style={{ flex: '0 0 auto', minHeight: 0 }}
       >
-      {/* 欢迎条+指标条+4卡 占满 uni-tabs-content 高度，不滚动，布局固定 */}
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* 边距在 overflow 内侧，避免略超出卡片的装饰（灯泡等）被裁切 */}
+      {/* 高度随内容，避免 flex:1 在固定高度标签区内撑出底部留白；超高由 uni-tabs-content 滚动 */}
       <div
         style={{
-          flex: 1,
+          flex: '0 0 auto',
+          width: '100%',
           minHeight: 0,
           display: 'flex',
           flexDirection: 'column',
+          overflowX: 'hidden',
+          overflowY: 'visible',
+        }}
+      >
+      {/* 边距在滚动层内侧，避免略超出卡片的装饰（灯泡等）被裁切 */}
+      <div
+        style={{
+          flex: '0 0 auto',
+          display: 'flex',
+          flexDirection: 'column',
           boxSizing: 'border-box',
-          /* 顶略小于左右：标签区已有 margin-top，这里只补够防裁切（灯泡 top:-9px、阴影） */
-          padding: `16px ${PAGE_SPACING.PADDING}px ${PAGE_SPACING.PADDING}px ${PAGE_SPACING.PADDING}px`,
+          /* 顶/左右留白；底边 0 贴内容区底，避免底部两卡下方大块留白 */
+          padding: `16px ${PAGE_SPACING.PADDING}px 0 ${PAGE_SPACING.PADDING}px`,
         }}
       >
       {/* 第一行便当：人员 / 操作提示 / 日期+钟 / 天气；xl 栅格 9+5+5+5=24 */}
@@ -1401,7 +1542,7 @@ export default function DashboardPage() {
       </Row>
 
       {/* 主区：左侧快捷+版本 | 右侧 KPI + 日期条 + 三列表（示意图） */}
-      <Row gutter={[16, 16]} align="stretch" className="dashboard-main-body" style={{ flex: 1, minHeight: 0 }}>
+      <Row gutter={[16, 16]} align="stretch" className="dashboard-main-body" style={{ flexShrink: 0 }}>
         <Col xs={24} lg={5} style={{ display: 'flex', flexDirection: 'column', gap: 16, minHeight: 0, minWidth: 0 }}>
           <div
             className="dashboard-bento-left-quick"
@@ -1478,7 +1619,7 @@ export default function DashboardPage() {
 
         {/* 主体第二块：19；内部再分两层 7773 / 7710 */}
         <Col xs={24} lg={19} style={{ display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: '0 0 auto', minWidth: 0 }}>
             <Row
               gutter={[16, 16]}
               wrap={!screens.lg}
@@ -1504,6 +1645,8 @@ export default function DashboardPage() {
                       value: `${formatDashboardMetric(statistics?.production?.in_progress)}${t('pages.dashboard.unitOrder')}`,
                     }}
                     isDark={isDark}
+                    mainSemantic="work_order_total"
+                    mainNumeric={statistics?.production?.total ?? null}
                     onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders')}
                   />
                 </div>
@@ -1524,6 +1667,8 @@ export default function DashboardPage() {
                       value: `${formatDashboardMetric(statistics?.production?.completed)}${t('pages.dashboard.unitOrder')}`,
                     }}
                     isDark={isDark}
+                    mainSemantic="output_quantity"
+                    mainNumeric={statistics?.production?.completed_quantity ?? null}
                     onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders')}
                   />
                 </div>
@@ -1546,6 +1691,8 @@ export default function DashboardPage() {
                       value: `${formatDashboardRate(statistics?.production?.completion_rate)}%`,
                     }}
                     isDark={isDark}
+                    mainSemantic="work_order_wip"
+                    mainNumeric={statistics?.production?.in_progress ?? null}
                     onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders?status=in_progress')}
                   />
                 </div>
@@ -1566,6 +1713,8 @@ export default function DashboardPage() {
                       value: formatDashboardMetric(statistics?.inventory?.total_quantity),
                     }}
                     isDark={isDark}
+                    mainSemantic="inventory_alert"
+                    mainNumeric={statistics?.inventory?.alert_count ?? null}
                     onClick={() => navigate('/apps/kuaizhizao/warehouse-management/inventory')}
                   />
                 </div>
@@ -1608,6 +1757,8 @@ export default function DashboardPage() {
                       value: formatDashboardMetric(statistics?.quality?.total_exceptions),
                     }}
                     isDark={isDark}
+                    mainSemantic="quality_rate"
+                    mainNumeric={statistics?.quality?.quality_rate ?? null}
                     onClick={() => navigate('/apps/kuaizhizao/quality-management')}
                   />
                 </div>
@@ -1666,29 +1817,65 @@ export default function DashboardPage() {
               className="dashboard-four-cards-row dashboard-bento-main-row"
               wrap={!screens.lg}
               style={{
-                flex: 1,
+                flexShrink: 0,
                 display: 'flex',
                 alignItems: 'stretch',
                 marginTop: 16,
-                // 强制底部三卡占满剩余工作区高度，避免出现底部大片空白
-                height: 'auto',
-                maxHeight: 'none',
-                minHeight: dashboardBottomCardsMinHeight,
               }}
             >
         <style>{`
-          .dashboard-four-cards-row .ant-col { display: flex; height: 100%; }
-          .dashboard-four-cards-row .ant-card { height: 100%; display: flex; flex-direction: column; }
-          .dashboard-four-cards-row .ant-card .ant-card-body { flex: 1; overflow: auto; min-height: 0; }
+          .dashboard-four-cards-row .ant-col { display: flex; align-items: stretch; min-height: 0; }
+          .dashboard-four-cards-row .ant-card { min-height: 0; display: flex; flex-direction: column; }
+          .dashboard-four-cards-row .ant-card .ant-card-body { flex: 1 1 0%; overflow: hidden; min-height: 0; display: flex; flex-direction: column; }
+          /* 待办 Tabs：占满 body 剩余高度，仅在内容区滚动，不顶破卡片 */
+          .dashboard-four-cards-row .dashboard-bottom-card-tabs.ant-tabs {
+            flex: 1 1 0%;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+          }
+          .dashboard-four-cards-row .dashboard-bottom-card-tabs .ant-tabs-nav { flex-shrink: 0; margin-bottom: 0; }
+          .dashboard-four-cards-row .dashboard-bottom-card-tabs .ant-tabs-content-holder {
+            flex: 1 1 0%;
+            min-height: 0;
+            overflow: hidden !important;
+          }
+          .dashboard-four-cards-row .dashboard-bottom-card-tabs .ant-tabs-content,
+          .dashboard-four-cards-row .dashboard-bottom-card-tabs .ant-tabs-content-top {
+            height: 100%;
+            overflow: hidden;
+          }
+          .dashboard-four-cards-row .dashboard-bottom-card-tabs .ant-tabs-tabpane {
+            height: 100%;
+            overflow: auto;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+          }
+          .dashboard-four-cards-row .dashboard-bottom-card-tabs .ant-tabs-tabpane::-webkit-scrollbar {
+            display: none;
+            width: 0;
+            height: 0;
+          }
+          /* 最新操作列表：可滚动但不显示滚动条 */
+          .dashboard-four-cards-row .dashboard-bottom-card-scroll {
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+          }
+          .dashboard-four-cards-row .dashboard-bottom-card-scroll::-webkit-scrollbar {
+            display: none;
+            width: 0;
+            height: 0;
+          }
         `}</style>
 
         {/* 待办事项 */}
         <Col
           xs={24}
           sm={12}
-          md={8}
-          lg={7}
-          style={{ display: 'flex' }}
+          md={14}
+          lg={14}
+          style={{ display: 'flex', minHeight: 0 }}
         >
           <Card
             title={
@@ -1716,12 +1903,13 @@ export default function DashboardPage() {
               width: '100%',
               borderRadius: dashboardCardRadius,
               boxShadow: dashboardCardShadow,
-              minHeight: dashboardBottomCardsMinHeight,
-              height: '100%',
+              height: dashboardBottomThreeCardsFixedHeight,
+              minHeight: dashboardBottomThreeCardsFixedHeight,
+              maxHeight: dashboardBottomThreeCardsFixedHeight,
             }}
             styles={{ 
               body: {
-                flex: 1,
+                flex: '1 1 0%',
                 display: 'flex',
                 flexDirection: 'column',
                 overflow: 'hidden',
@@ -1730,25 +1918,33 @@ export default function DashboardPage() {
               }
             }}
           >
+            {/*
+              待办分类 Tab 顺序与 `src/apps/kuaizhizao/manifest.json` → menu_config.children 的 sort_order 一致：
+              销售(1) → 采购(3) → 生产执行(4)：工单、异常 → 质量(5) → 设备(6) → 仓储(7)：入库侧、出库。
+              计划(2)、绩效(10) 等模块无对应待办类型，不占用 Tab。
+            */}
             <Tabs
+              className="dashboard-bottom-card-tabs"
+              style={{ flex: '1 1 0%', minHeight: 0, overflow: 'hidden' }}
               defaultActiveKey="all"
               items={[
                 {
                   key: 'all',
-                  label: `${t('pages.dashboard.tabAll')} (${todos.length})`,
+                  label: formatDashboardTodoTabLabel(t('pages.dashboard.tabAll'), todos.length),
                   children: (
-                    <div style={{ flex: 1, overflow: 'auto', maxHeight: '400px' }}>
+                    <div>
                       {todos.length > 0 ? (
                         <div>
                           {todos.slice(0, 5).map((item, index) => (
                             <div
-                              key={index}
+                              key={item.id}
                               style={{
                                 padding: '12px 0',
                                 borderBottom: index < Math.min(todos.length, 5) - 1 ? `1px solid ${token.colorBorder}` : 'none',
                                 cursor: 'pointer',
                                 display: 'flex',
-                                alignItems: 'flex-start',
+                                alignItems: 'center',
+                                gap: 12,
                               }}
                               onClick={() => {
                                 if (item.link) {
@@ -1760,16 +1956,26 @@ export default function DashboardPage() {
                                 style={{
                                   backgroundColor: token.colorPrimaryBg,
                                   color: token.colorPrimary,
-                                  marginRight: 12,
                                   flexShrink: 0,
                                 }}
                               >
                                 <ClockCircleOutlined />
                               </Avatar>
                               <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                  <Text strong={item.priority === 'high'}>{item.title}</Text>
-                                  <Tag color={priorityColorMap[item.priority]}>
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    flexWrap: 'wrap',
+                                    alignItems: 'center',
+                                    gap: 8,
+                                    rowGap: 4,
+                                    marginBottom: item.description || item.due_date ? 4 : 0,
+                                  }}
+                                >
+                                  <Text strong={item.priority === 'high'} style={{ marginBottom: 0 }}>
+                                    {item.title}
+                                  </Text>
+                                  <Tag color={priorityColorMap[item.priority]} style={{ margin: 0 }}>
                                     {priorityTextMap[item.priority]}{t('pages.dashboard.priorityLabel')}
                                   </Tag>
                                 </div>
@@ -1783,19 +1989,18 @@ export default function DashboardPage() {
                                     {t('pages.dashboard.dueDate')}：{dayjs(item.due_date).format('YYYY-MM-DD')}
                                   </Text>
                                 )}
-                                <div style={{ marginTop: 8 }}>
-                                  <Button
-                                    size="small"
-                                    type="primary"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleTodoMutation.mutate({ todoId: item.id, action: 'handle' });
-                                    }}
-                                  >
-                                    {t('pages.dashboard.handle')}
-                                  </Button>
-                                </div>
                               </div>
+                              <Button
+                                size="small"
+                                type="primary"
+                                style={{ flexShrink: 0 }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleTodoMutation.mutate({ todoId: item.id, action: 'handle' });
+                                }}
+                              >
+                                {t('pages.dashboard.handle')}
+                              </Button>
                             </div>
                           ))}
                         </div>
@@ -1806,18 +2011,72 @@ export default function DashboardPage() {
                   ),
                 },
                 {
-                  key: 'work_order',
-                  label: `${t('pages.dashboard.tabWorkOrder')} (${todos.filter(t => t.type === 'work_order').length})`,
+                  key: 'sales',
+                  label: formatDashboardTodoTabLabel(t('pages.dashboard.tabSales'), todosSales.length),
                   children: (
                     <div>
-                      {todos.filter(t => t.type === 'work_order').length > 0 ? (
+                      {todosSales.length > 0 ? (
                         <div>
-                          {todos.filter(t => t.type === 'work_order').slice(0, 5).map((item, index) => (
+                          {todosSales.slice(0, 5).map((item, index) => (
                             <div
-                              key={index}
+                              key={item.id}
                               style={{
                                 padding: '12px 0',
-                                borderBottom: index < Math.min(todos.filter(t => t.type === 'work_order').length, 5) - 1 ? `1px solid ${token.colorBorder}` : 'none',
+                                borderBottom: index < Math.min(todosSales.length, 5) - 1 ? `1px solid ${token.colorBorder}` : 'none',
+                                cursor: 'pointer',
+                              }}
+                              onClick={() => item.link && navigate(item.link)}
+                            >
+                              <Text>{item.title}</Text>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <Empty description={t('pages.dashboard.emptySalesTodo')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                      )}
+                    </div>
+                  ),
+                },
+                {
+                  key: 'purchase',
+                  label: formatDashboardTodoTabLabel(t('pages.dashboard.tabPurchase'), todosPurchase.length),
+                  children: (
+                    <div>
+                      {todosPurchase.length > 0 ? (
+                        <div>
+                          {todosPurchase.slice(0, 5).map((item, index) => (
+                            <div
+                              key={item.id}
+                              style={{
+                                padding: '12px 0',
+                                borderBottom: index < Math.min(todosPurchase.length, 5) - 1 ? `1px solid ${token.colorBorder}` : 'none',
+                                cursor: 'pointer',
+                              }}
+                              onClick={() => item.link && navigate(item.link)}
+                            >
+                              <Text>{item.title}</Text>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <Empty description={t('pages.dashboard.emptyPurchaseTodo')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                      )}
+                    </div>
+                  ),
+                },
+                {
+                  key: 'work_order',
+                  label: formatDashboardTodoTabLabel(t('pages.dashboard.tabWorkOrder'), todosWorkOrder.length),
+                  children: (
+                    <div>
+                      {todosWorkOrder.length > 0 ? (
+                        <div>
+                          {todosWorkOrder.slice(0, 5).map((item, index) => (
+                            <div
+                              key={item.id}
+                              style={{
+                                padding: '12px 0',
+                                borderBottom: index < Math.min(todosWorkOrder.length, 5) - 1 ? `1px solid ${token.colorBorder}` : 'none',
                                 cursor: 'pointer',
                               }}
                               onClick={() => item.link && navigate(item.link)}
@@ -1834,17 +2093,17 @@ export default function DashboardPage() {
                 },
                 {
                   key: 'exception',
-                  label: `${t('pages.dashboard.tabException')} (${todos.filter(t => t.type === 'exception').length})`,
+                  label: formatDashboardTodoTabLabel(t('pages.dashboard.tabException'), todosException.length),
                   children: (
                     <div>
-                      {todos.filter(t => t.type === 'exception').length > 0 ? (
+                      {todosException.length > 0 ? (
                         <div>
-                          {todos.filter(t => t.type === 'exception').slice(0, 5).map((item, index) => (
+                          {todosException.slice(0, 5).map((item, index) => (
                             <div
-                              key={index}
+                              key={item.id}
                               style={{
                                 padding: '12px 0',
-                                borderBottom: index < Math.min(todos.filter(t => t.type === 'exception').length, 5) - 1 ? `1px solid ${token.colorBorder}` : 'none',
+                                borderBottom: index < Math.min(todosException.length, 5) - 1 ? `1px solid ${token.colorBorder}` : 'none',
                                 cursor: 'pointer',
                               }}
                               onClick={() => item.link && navigate(item.link)}
@@ -1859,114 +2118,127 @@ export default function DashboardPage() {
                     </div>
                   ),
                 },
+                {
+                  key: 'quality_inspection',
+                  label: formatDashboardTodoTabLabel(t('pages.dashboard.tabQualityInspection'), todosQualityInspection.length),
+                  children: (
+                    <div>
+                      {todosQualityInspection.length > 0 ? (
+                        <div>
+                          {todosQualityInspection.slice(0, 5).map((item, index) => (
+                            <div
+                              key={item.id}
+                              style={{
+                                padding: '12px 0',
+                                borderBottom: index < Math.min(todosQualityInspection.length, 5) - 1 ? `1px solid ${token.colorBorder}` : 'none',
+                                cursor: 'pointer',
+                              }}
+                              onClick={() => item.link && navigate(item.link)}
+                            >
+                              <Text>{item.title}</Text>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <Empty description={t('pages.dashboard.emptyQualityInspectionTodo')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                      )}
+                    </div>
+                  ),
+                },
+                {
+                  key: 'equipment',
+                  label: formatDashboardTodoTabLabel(t('pages.dashboard.tabEquipment'), todosEquipment.length),
+                  children: (
+                    <div>
+                      {todosEquipment.length > 0 ? (
+                        <div>
+                          {todosEquipment.slice(0, 5).map((item, index) => (
+                            <div
+                              key={item.id}
+                              style={{
+                                padding: '12px 0',
+                                borderBottom: index < Math.min(todosEquipment.length, 5) - 1 ? `1px solid ${token.colorBorder}` : 'none',
+                                cursor: 'pointer',
+                              }}
+                              onClick={() => item.link && navigate(item.link)}
+                            >
+                              <Text>{item.title}</Text>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <Empty description={t('pages.dashboard.emptyEquipmentTodo')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                      )}
+                    </div>
+                  ),
+                },
+                {
+                  key: 'warehouse',
+                  label: formatDashboardTodoTabLabel(t('pages.dashboard.tabWarehouse'), todosWarehouse.length),
+                  children: (
+                    <div>
+                      {todosWarehouse.length > 0 ? (
+                        <div>
+                          {todosWarehouse.slice(0, 5).map((item, index) => (
+                            <div
+                              key={item.id}
+                              style={{
+                                padding: '12px 0',
+                                borderBottom: index < Math.min(todosWarehouse.length, 5) - 1 ? `1px solid ${token.colorBorder}` : 'none',
+                                cursor: 'pointer',
+                              }}
+                              onClick={() => item.link && navigate(item.link)}
+                            >
+                              <Text>{item.title}</Text>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <Empty description={t('pages.dashboard.emptyWarehouseTodo')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                      )}
+                    </div>
+                  ),
+                },
+                {
+                  key: 'outbound',
+                  label: formatDashboardTodoTabLabel(t('pages.dashboard.tabOutbound'), todosOutbound.length),
+                  children: (
+                    <div>
+                      {todosOutbound.length > 0 ? (
+                        <div>
+                          {todosOutbound.slice(0, 5).map((item, index) => (
+                            <div
+                              key={item.id}
+                              style={{
+                                padding: '12px 0',
+                                borderBottom: index < Math.min(todosOutbound.length, 5) - 1 ? `1px solid ${token.colorBorder}` : 'none',
+                                cursor: 'pointer',
+                              }}
+                              onClick={() => item.link && navigate(item.link)}
+                            >
+                              <Text>{item.title}</Text>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <Empty description={t('pages.dashboard.emptyOutboundTodo')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                      )}
+                    </div>
+                  ),
+                },
               ]}
             />
           </Card>
         </Col>
 
-        {/* 消息通知 */}
-        <Col
-          xs={24}
-          sm={12}
-          md={8}
-          lg={7}
-          style={{ display: 'flex' }}
-        >
-          <Card
-            title={
-              <Space>
-                <BellOutlined />
-                <span>{t('pages.dashboard.messageNotify')}</span>
-                {unreadCount > 0 && (
-                  <Badge count={unreadCount} />
-                )}
-              </Space>
-            }
-            loading={notificationsLoading}
-            extra={
-              <Button
-                type="link"
-                size="small"
-                onClick={() => {
-                  navigate('/personal/messages');
-                }}
-              >
-                {t('pages.dashboard.viewAll')} <RightOutlined />
-              </Button>
-            }
-            style={{
-              width: '100%',
-              borderRadius: dashboardCardRadius,
-              boxShadow: dashboardCardShadow,
-              minHeight: dashboardBottomCardsMinHeight,
-              height: '100%',
-            }}
-            styles={{ 
-              body: {
-                flex: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                overflow: 'hidden',
-                padding: '0 24px 24px 24px',
-                minHeight: 0,
-              }
-            }}
-          >
-            {notifications && notifications.length > 0 ? (
-              <div>
-                {notifications.slice(0, 5).map((item, index) => (
-                  <div
-                    key={index}
-                    style={{
-                      padding: '12px 0',
-                      borderBottom: index < Math.min(notifications.length, 5) - 1 ? `1px solid ${token.colorBorder}` : 'none',
-                      cursor: 'pointer',
-                    }}
-                    onClick={async () => {
-                      // 点击通知时标记为已读
-                      if (!item.read) {
-                        try {
-                          await markMessagesRead([item.id]);
-                          // 刷新通知列表
-                          refetchNotifications();
-                        } catch (error) {
-                          console.error('标记消息已读失败:', error);
-                        }
-                      }
-                    }}
-                  >
-                    <div style={{ marginBottom: 4 }}>
-                      <Space>
-                        <Text strong={!item.read} style={{ fontSize: 14 }}>{item.title}</Text>
-                        {!item.read && <Badge dot />}
-                      </Space>
-                    </div>
-                    <Text type="secondary" style={{ fontSize: 14, display: 'block', marginBottom: 4 }}>
-                      {item.content}
-                    </Text>
-                    <Text type="secondary" style={{ fontSize: 14 }}>
-                      {dayjs(item.time).format('MM-DD HH:mm')}
-                    </Text>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <Empty
-                description="暂无消息通知"
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                style={{ padding: '40px 0' }}
-              />
-            )}
-          </Card>
-        </Col>
 
         {/* 最新操作（生产播报） */}
         <Col
           xs={24}
           sm={12}
-          md={8}
+          md={10}
           lg={10}
-          style={{ display: 'flex' }}
+          style={{ display: 'flex', minHeight: 0 }}
         >
           <Card
             title={
@@ -1991,12 +2263,13 @@ export default function DashboardPage() {
               width: '100%',
               borderRadius: dashboardCardRadius,
               boxShadow: dashboardCardShadow,
-              minHeight: dashboardBottomCardsMinHeight,
-              height: '100%',
+              height: dashboardBottomThreeCardsFixedHeight,
+              minHeight: dashboardBottomThreeCardsFixedHeight,
+              maxHeight: dashboardBottomThreeCardsFixedHeight,
             }}
             styles={{ 
               body: {
-                flex: 1,
+                flex: '1 1 0%',
                 display: 'flex',
                 flexDirection: 'column',
                 overflow: 'hidden',
@@ -2006,57 +2279,88 @@ export default function DashboardPage() {
             }}
           >
             {productionBroadcast && productionBroadcast.length > 0 ? (
-              <div>
+              <div className="dashboard-bottom-card-scroll" style={bottomCardListScrollBoxStyle}>
                 {productionBroadcast.map((item, index) => (
                   <div
                     key={item.id}
                     style={{
-                      padding: '12px 0',
+                      padding: '10px 0',
                       borderBottom: index < productionBroadcast.length - 1 ? `1px solid ${token.colorBorder}` : 'none',
                       cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: 12,
                     }}
                     onClick={() => {
                       navigate(`/apps/kuaizhizao/production-execution/reporting?work_order=${item.work_order_no}`);
                     }}
                   >
-                    <div style={{ marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Space>
-                        <Text strong style={{ fontSize: 14 }}>
+                    <ProductionBroadcastOperatorAvatar
+                      avatarUuid={item.operator_avatar}
+                      displayName={item.operator_name}
+                    />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {/* 第 1 行：人员/工序 + 时间 */}
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          gap: 8,
+                          marginBottom: 4,
+                          minWidth: 0,
+                        }}
+                      >
+                        <Text strong style={{ fontSize: 14, flex: 1, minWidth: 0 }} ellipsis>
                           {item.operator_name} | {item.process_name}
                         </Text>
-                      </Space>
-                      <Text type="secondary" style={{ fontSize: 14 }}>
-                        {item.created_at ? dayjs(item.created_at).format('MM-DD HH:mm') : item.date}
-                      </Text>
-                    </div>
-                    <Text type="secondary" style={{ fontSize: 14, display: 'block', marginBottom: 4 }}>
-                      {t('pages.dashboard.labelWorkOrderNo')}：{item.work_order_no}
-                    </Text>
-                    <Text type="secondary" style={{ fontSize: 14, display: 'block', marginBottom: 4 }}>
-                      {t('pages.dashboard.labelProduct')}：{item.product_code} | {item.product_name}
-                    </Text>
-                    <Space>
-                      <Text type="success" style={{ fontSize: 14 }}>
-                        {t('pages.dashboard.qualified')} {item.qualified_quantity.toFixed(0)}
-                      </Text>
-                      {item.unqualified_quantity > 0 && (
-                        <Text type="danger" style={{ fontSize: 14 }}>
-                          {t('pages.dashboard.unqualified')} {item.unqualified_quantity.toFixed(0)}
+                        <Text type="secondary" style={{ fontSize: 13, flexShrink: 0 }}>
+                          {item.created_at ? dayjs(item.created_at).format('MM-DD HH:mm') : item.date}
                         </Text>
-                      )}
-                    </Space>
+                      </div>
+                      {/* 第 2 行：工单 + 产品（省略） + 合格/不合格 */}
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          gap: 10,
+                          minWidth: 0,
+                        }}
+                      >
+                        <Text
+                          type="secondary"
+                          style={{ fontSize: 13, flex: 1, minWidth: 0, lineHeight: 1.45 }}
+                          ellipsis={{ tooltip: true }}
+                        >
+                          {`${item.work_order_no}${item.product_name ? ` · ${item.product_name}` : ''}`}
+                        </Text>
+                        <Space size={6} style={{ flexShrink: 0 }}>
+                          <Text type="success" style={{ fontSize: 13, whiteSpace: 'nowrap' }}>
+                            {t('pages.dashboard.qualified')} {item.qualified_quantity.toFixed(0)}
+                          </Text>
+                          {item.unqualified_quantity > 0 && (
+                            <Text type="danger" style={{ fontSize: 13, whiteSpace: 'nowrap' }}>
+                              {t('pages.dashboard.unqualified')} {item.unqualified_quantity.toFixed(0)}
+                            </Text>
+                          )}
+                        </Space>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <Empty 
-                description={t('pages.dashboard.emptyBroadcast')} 
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                style={{ padding: '40px 0' }}
-              />
+              <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Empty 
+                  description={t('pages.dashboard.emptyBroadcast')} 
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                />
+              </div>
             )}
           </Card>
         </Col>
+
       </Row>
           </div>
         </Col>

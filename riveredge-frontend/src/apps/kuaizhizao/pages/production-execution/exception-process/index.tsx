@@ -8,6 +8,7 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Tag, Button, Space, Modal, message, Steps, Timeline, Card, Divider } from 'antd';
 import { ProDescriptions } from '@ant-design/pro-components';
@@ -58,6 +59,7 @@ interface ExceptionProcessHistory {
 const ExceptionProcessPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentRecord, setCurrentRecord] = useState<ExceptionProcessRecord | null>(null);
   const [startModalVisible, setStartModalVisible] = useState(false);
@@ -135,6 +137,8 @@ const ExceptionProcessPage: React.FC = () => {
       });
       messageApi.success('异常处理流程启动成功');
       setStartModalVisible(false);
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error?.message || '启动异常处理流程失败');
@@ -163,6 +167,8 @@ const ExceptionProcessPage: React.FC = () => {
       });
       messageApi.success('分配成功');
       setAssignModalVisible(false);
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
       if (detailDrawerVisible) {
         handleDetail(currentRecord);
@@ -194,6 +200,8 @@ const ExceptionProcessPage: React.FC = () => {
       });
       messageApi.success('步骤流转成功');
       setStepTransitionModalVisible(false);
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
       if (detailDrawerVisible) {
         handleDetail(currentRecord);
@@ -225,6 +233,8 @@ const ExceptionProcessPage: React.FC = () => {
       });
       messageApi.success('异常已解决');
       setResolveModalVisible(false);
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
       setDetailDrawerVisible(false);
     } catch (error: any) {
@@ -243,6 +253,8 @@ const ExceptionProcessPage: React.FC = () => {
         try {
           await exceptionApi.process.cancel(String(record.id));
           messageApi.success('已取消');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
           setDetailDrawerVisible(false);
         } catch (error: any) {
@@ -455,6 +467,8 @@ const ExceptionProcessPage: React.FC = () => {
                     await exceptionApi.process.cancel(String(id));
                   }
                   messageApi.success(`成功取消 ${keys.length} 条记录`);
+                  invalidateMenuBadgeCounts();
+
                   actionRef.current?.reload();
                 } catch (error: any) {
                   messageApi.error(error?.message || '取消失败');

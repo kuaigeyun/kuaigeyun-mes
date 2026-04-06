@@ -72,11 +72,17 @@ export interface BusinessConfigSchema {
   processRegistry?: Record<string, string[]>;
   processRegistryMeta?: Record<string, { labelKey?: string; descriptionKey?: string }>;
   processRegistryParamMeta?: Record<string, Record<string, { labelKey?: string; descriptionKey?: string }>>;
-  processRegistryControlMeta?: Record<string, Record<string, { type?: 'boolean' | 'number' | 'string' | 'color'; min?: number; max?: number }>>;
+  processRegistryControlMeta?: Record<
+    string,
+    Record<string, { type?: 'boolean' | 'number' | 'string' | 'color' | 'select'; min?: number; max?: number; options?: { value: string; labelKey: string }[] }>
+  >;
   parameterRegistry?: Record<string, string[]>;
   parameterRegistryMeta?: Record<string, { labelKey?: string; descriptionKey?: string }>;
   parameterRegistryParamMeta?: Record<string, Record<string, { labelKey?: string; descriptionKey?: string }>>;
-  parameterRegistryControlMeta?: Record<string, Record<string, { type?: 'boolean' | 'number' | 'string' | 'color'; min?: number; max?: number }>>;
+  parameterRegistryControlMeta?: Record<
+    string,
+    Record<string, { type?: 'boolean' | 'number' | 'string' | 'color' | 'select'; min?: number; max?: number; options?: { value: string; labelKey: string }[] }>
+  >;
   parameterKeys: Record<string, string[]>;
   parameterImplementation?: Record<string, Record<string, boolean>>;
   allNodes: string[];

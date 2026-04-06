@@ -1,29 +1,31 @@
 /**
  * 工单列表「齐套率」列：点击打开 Modal，展示库位分布与叫料申请（Tab）
  * - 叫料：生产现场 → 仓库；仓库在配料中心备货（仓储关联配置）
- * - 叫料类型：数据字典 MATERIAL_CALL_TYPE（单物料 / 整单）；单物料叫料原因：MATERIAL_CALL_REASON
+ * - 叫料类型：整单（一张单多行明细）/ 单独叫料（自选多物料）；单独叫料原因：MATERIAL_CALL_REASON
  * - 发起叫料为独立 Modal（zIndex 更高），挂在主 Modal 同级，避免嵌套 Dialog 事件问题
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import type { SelectProps } from 'antd'
 import { Spin, Empty, Typography, Table, Space, Modal, Form, Button, InputNumber, Input, App, Select, Tabs } from 'antd'
+import { PlusOutlined, MinusCircleOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { workOrderApi } from '../../../../services/production'
 import { warehouseApi } from '../../../../services/warehouse-execution'
 import { getMaterialCallLifecycle } from '../../../../utils/materialCallLifecycle'
-import { getUserInfo } from '../../../../../../utils/auth'
 import UniMaterialSelect from '../../../../../../components/uni-material-select'
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../../services/dataDictionary'
+import { useInvalidateMenuBadgeCounts } from '../../../../../../hooks/useInvalidateMenuBadgeCounts'
 
 const FALLBACK_CALL_TYPE_OPTIONS = [
-  { label: '单物料叫料', value: 'SINGLE_MATERIAL' },
+  { label: '单独叫料', value: 'CUSTOM_SELECTION' },
   { label: '整单叫料', value: 'FULL_ORDER' },
 ]
 
 /** 叫料类型码 → 中文（与字典兜底一致；表格内同步展示，不依赖字典异步加载） */
-const MATERIAL_CALL_TYPE_ZH: Record<string, string> = Object.fromEntries(
-  FALLBACK_CALL_TYPE_OPTIONS.map((o) => [o.value, o.label])
-) as Record<string, string>
+const MATERIAL_CALL_TYPE_ZH: Record<string, string> = {
+  ...Object.fromEntries(FALLBACK_CALL_TYPE_OPTIONS.map((o) => [o.value, o.label])),
+  SINGLE_MATERIAL: '单独叫料',
+}
 
 function formatMaterialCallTypeZh(code: unknown): string {
   const s = String(code ?? '').trim()
@@ -92,6 +94,14 @@ function isDeliveredMeetsRequested(delivered: unknown, requested: unknown): bool
   const q = Number(requested ?? 0)
   if (!Number.isFinite(d) || !Number.isFinite(q)) return false
   return d + QTY_CMP_EPS >= q
+}
+
+/** 未处理：待处理且尚无送达数量，可调用撤回接口 */
+function canWithdrawMaterialCall(r: Record<string, unknown>): boolean {
+  const st = String((r.status as string) ?? '').trim()
+  if (st !== 'pending') return false
+  const d = Number(r.delivered_quantity ?? 0)
+  return Number.isFinite(d) && d <= 0
 }
 
 const CALL_TABLE_CELL_NOWRAP: React.HTMLAttributes<HTMLTableCellElement> = {
@@ -181,14 +191,14 @@ const WorkOrderMaterialCallModal: React.FC<{
   )
 
   const callTypeWatch = Form.useWatch('call_type', form)
-  const callType = callTypeWatch ?? 'SINGLE_MATERIAL'
+  const callType = callTypeWatch ?? 'CUSTOM_SELECTION'
 
   const kittingWoCode = String((kittingData as { work_order_code?: string } | undefined)?.work_order_code ?? '')
 
   useEffect(() => {
     if (!open) return
     form.resetFields()
-    form.setFieldsValue({ call_type: 'SINGLE_MATERIAL' })
+    form.setFieldsValue({ call_type: 'CUSTOM_SELECTION', items: [{}] })
   }, [open, form])
 
   const closeModal = useCallback(() => {
@@ -209,15 +219,17 @@ const WorkOrderMaterialCallModal: React.FC<{
   }
 
   const handleSubmitCall = async () => {
-    const ct = (form.getFieldValue('call_type') as string) || 'SINGLE_MATERIAL'
+    const ct = (form.getFieldValue('call_type') as string) || 'CUSTOM_SELECTION'
     if (ct === 'FULL_ORDER') {
       await form.validateFields(['call_type'])
       setSubmitting(true)
       try {
-        const list = (await warehouseApi.materialCall.batchFromWorkOrder({
+        const res = (await warehouseApi.materialCall.batchFromWorkOrder({
           work_order_id: workOrderId,
-        })) as unknown[]
-        messageApi.success(`已按整单发起 ${Array.isArray(list) ? list.length : 0} 条叫料`)
+        })) as { code?: string }
+        messageApi.success(
+          res?.code ? `整单叫料已生成：${res.code}（含多行明细）` : '整单叫料已生成（一张叫料单）'
+        )
         queryClient.invalidateQueries({ queryKey: ['materialCallsByWorkOrder', workOrderId] })
         queryClient.invalidateQueries({ queryKey: ['workOrderKittingAnalysis', workOrderId] })
         closeModal()
@@ -235,11 +247,18 @@ const WorkOrderMaterialCallModal: React.FC<{
       messageApi.error('无法获取工单编号，请稍后重试')
       return
     }
-    const u = getUserInfo() as Record<string, unknown> | null
-    const callerId = Number(u?.id ?? u?.user_id ?? u?.worker_id ?? 0)
-    const callerName = String(u?.name ?? u?.username ?? u?.worker_name ?? '未知')
-    if (!callerId) {
-      messageApi.error('无法获取当前登录用户，请重新登录后重试')
+    const rawItems = (values.items ?? []) as Array<Record<string, unknown>>
+    const items = rawItems
+      .filter((it) => it?.material_id != null && it?.requested_quantity != null)
+      .map((it) => ({
+        material_id: Number(it.material_id),
+        material_code: String(it.material_code ?? ''),
+        material_name: String(it.material_name ?? ''),
+        material_unit: it.material_unit != null ? String(it.material_unit) : undefined,
+        requested_quantity: Number(it.requested_quantity),
+      }))
+    if (!items.length) {
+      messageApi.error('请至少添加一行物料并填写数量')
       return
     }
     setSubmitting(true)
@@ -247,17 +266,11 @@ const WorkOrderMaterialCallModal: React.FC<{
       await warehouseApi.materialCall.create({
         work_order_id: workOrderId,
         work_order_code: woCode,
-        material_id: values.material_id,
-        material_code: String(values.material_code ?? ''),
-        material_name: String(values.material_name ?? ''),
-        material_unit: values.material_unit != null ? String(values.material_unit) : undefined,
-        requested_quantity: values.requested_quantity,
-        call_type: values.call_type || 'SINGLE_MATERIAL',
+        call_type: 'CUSTOM_SELECTION',
         call_reason: String(values.call_reason ?? ''),
         priority: 'normal',
         remarks: '生产现场通过工单列表齐套率发起叫料',
-        caller_id: callerId,
-        caller_name: callerName,
+        items,
       })
       messageApi.success('叫料申请已提交')
       queryClient.invalidateQueries({ queryKey: ['materialCallsByWorkOrder', workOrderId] })
@@ -286,7 +299,7 @@ const WorkOrderMaterialCallModal: React.FC<{
       maskClosable={false}
       centered
     >
-      <Form form={form} layout="vertical" preserve={false} initialValues={{ call_type: 'SINGLE_MATERIAL' }}>
+      <Form form={form} layout="vertical" preserve={false} initialValues={{ call_type: 'CUSTOM_SELECTION', items: [{}] }}>
         <Form.Item name="call_type" label="叫料类型" rules={[{ required: true, message: '请选择叫料类型' }]}>
           <Select
             options={callTypeOptions}
@@ -297,11 +310,7 @@ const WorkOrderMaterialCallModal: React.FC<{
               if (v === 'FULL_ORDER') {
                 form.setFieldsValue({
                   call_reason: undefined,
-                  material_id: undefined,
-                  material_code: undefined,
-                  material_name: undefined,
-                  material_unit: undefined,
-                  requested_quantity: undefined,
+                  items: [{}],
                 })
               }
             }}
@@ -309,7 +318,7 @@ const WorkOrderMaterialCallModal: React.FC<{
         </Form.Item>
         {callType === 'FULL_ORDER' ? (
           <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 0 }}>
-            将按工单齐套分析结果，对缺料数量大于 0 的物料逐条生成叫料单（叫料类型为「整单叫料」）。
+            将按工单齐套分析，对缺料数量大于 0 的物料生成<strong>一张</strong>叫料单，每行一种缺料物料（整单叫料）。
           </Typography.Paragraph>
         ) : (
           <>
@@ -321,42 +330,83 @@ const WorkOrderMaterialCallModal: React.FC<{
             >
               <Select
                 options={callReasonOptions}
-                placeholder="请选择单物料叫料原因"
+                placeholder="请选择叫料原因"
                 getPopupContainer={getPopupContainerInModal}
                 styles={materialCallSelectPopupStyles}
                 allowClear={false}
               />
             </Form.Item>
-            <UniMaterialSelect
-              name="material_id"
-              label="物料"
-              required
-              showQuickCreate={false}
-              getPopupContainer={getPopupContainerInModal}
-              fillMapping={{
-                material_code: 'mainCode',
-                material_name: 'name',
-                material_unit: 'baseUnit',
-              }}
-              formItemProps={{ style: { marginBottom: 16 } }}
-            />
-            <Form.Item name="material_code" hidden>
-              <Input />
-            </Form.Item>
-            <Form.Item name="material_name" hidden>
-              <Input />
-            </Form.Item>
-            <Form.Item name="material_unit" hidden>
-              <Input />
-            </Form.Item>
-            <Form.Item
-              name="requested_quantity"
-              label="叫料数量"
-              rules={[{ required: true, message: '请输入叫料数量' }]}
-              style={{ marginBottom: 0 }}
+            <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+              可添加多行，自选物料与数量。
+            </Typography.Text>
+            <Form.List
+              name="items"
+              rules={[
+                {
+                  validator: async (_, rows) => {
+                    const arr = (rows ?? []) as unknown[]
+                    if (!arr.length) {
+                      throw new Error('至少保留一行物料')
+                    }
+                  },
+                },
+              ]}
             >
-              <InputNumber min={0.0001} style={{ width: '100%' }} placeholder="请输入数量" />
-            </Form.Item>
+              {(fields, { add, remove }) => (
+                <Space orientation="vertical" size={10} style={{ width: '100%' }}>
+                  {fields.map((field, index) => (
+                    <Space key={field.key} align="start" wrap style={{ width: '100%' }}>
+                      <UniMaterialSelect
+                        name={[field.name, 'material_id']}
+                        label={index === 0 ? '物料' : ' '}
+                        required
+                        showQuickCreate={false}
+                        getPopupContainer={getPopupContainerInModal}
+                        fillMapping={{
+                          material_code: 'mainCode',
+                          material_name: 'name',
+                          material_unit: 'baseUnit',
+                        }}
+                        formItemProps={{
+                          style: { marginBottom: 0, minWidth: 220 },
+                          ...(index > 0 ? { label: ' ', colon: false } : {}),
+                        }}
+                      />
+                      <Form.Item name={[field.name, 'material_code']} hidden>
+                        <Input />
+                      </Form.Item>
+                      <Form.Item name={[field.name, 'material_name']} hidden>
+                        <Input />
+                      </Form.Item>
+                      <Form.Item name={[field.name, 'material_unit']} hidden>
+                        <Input />
+                      </Form.Item>
+                      <Form.Item
+                        name={[field.name, 'requested_quantity']}
+                        label={index === 0 ? '数量' : ' '}
+                        rules={[{ required: true, message: '必填' }]}
+                        style={{ marginBottom: 0 }}
+                        {...(index > 0 ? { label: ' ', colon: false } : {})}
+                      >
+                        <InputNumber min={0.0001} style={{ width: 128 }} placeholder="数量" />
+                      </Form.Item>
+                      {fields.length > 1 ? (
+                        <Button
+                          type="text"
+                          danger
+                          icon={<MinusCircleOutlined />}
+                          onClick={() => remove(field.name)}
+                          style={{ marginTop: index === 0 ? 30 : 4 }}
+                        />
+                      ) : null}
+                    </Space>
+                  ))}
+                  <Button type="dashed" onClick={() => add({})} block icon={<PlusOutlined />}>
+                    添加物料
+                  </Button>
+                </Space>
+              )}
+            </Form.List>
           </>
         )}
       </Form>
@@ -368,6 +418,9 @@ const WorkOrderReadinessPopoverContent: React.FC<{
   workOrderId: number
   setCallModalOpen: (v: boolean) => void
 }> = ({ workOrderId, setCallModalOpen }) => {
+  const { message: messageApi } = App.useApp()
+  const queryClient = useQueryClient()
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts()
   const {
     data: kittingData,
     isLoading: kittingLoading,
@@ -508,7 +561,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
       key: 'calls',
       label: '叫料申请',
       children: (
-        <Space direction="vertical" size={8} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={8} style={{ width: '100%' }}>
           <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 0 }}>
             由生产现场向仓库发起；仓库部门在<strong>配料中心</strong>主动备货、配送。配料中心及可用仓库范围以<strong>仓储关联</strong>中的配置为准。
           </Typography.Paragraph>
@@ -524,6 +577,49 @@ const WorkOrderReadinessPopoverContent: React.FC<{
               rowKey={(r) => String((r as { id?: number }).id)}
               dataSource={callList}
               tableLayout="fixed"
+              expandable={{
+                rowExpandable: (r) => {
+                  const items = (r as { items?: unknown[] }).items
+                  return Array.isArray(items) && items.length > 0
+                },
+                expandedRowRender: (r) => {
+                  const items = ((r as { items?: Record<string, unknown>[] }).items ?? []) as Record<
+                    string,
+                    unknown
+                  >[]
+                  return (
+                    <Table<Record<string, unknown>>
+                      size="small"
+                      pagination={false}
+                      rowKey={(it) => String(it.id ?? `${it.material_id}-${it.line_no}`)}
+                      dataSource={items}
+                      columns={[
+                        {
+                          title: '行',
+                          key: 'line_no',
+                          width: 48,
+                          render: (_: unknown, it) => String(it.line_no ?? '—'),
+                        },
+                        {
+                          title: '物料',
+                          key: 'mn',
+                          ellipsis: true,
+                          render: (_: unknown, it) =>
+                            `${String(it.material_code ?? '')} ${String(it.material_name ?? '')}`.trim() || '—',
+                        },
+                        {
+                          title: '已/需',
+                          key: 'dq',
+                          width: 120,
+                          align: 'right',
+                          render: (_: unknown, it) =>
+                            formatCallDeliveredRequested(it.delivered_quantity, it.requested_quantity),
+                        },
+                      ]}
+                    />
+                  )
+                },
+              }}
               columns={[
                 {
                   title: '单号',
@@ -567,11 +663,58 @@ const WorkOrderReadinessPopoverContent: React.FC<{
                 {
                   title: '状态',
                   key: 'status',
-                  width: '20%',
+                  width: '16%',
                   ellipsis: false,
                   onCell: () => CALL_TABLE_CELL_NOWRAP,
                   render: (_: unknown, r: Record<string, unknown>) =>
                     getMaterialCallLifecycle(r).stageName ?? String(r.status ?? ''),
+                },
+                {
+                  title: '操作',
+                  key: 'actions',
+                  width: 72,
+                  align: 'center',
+                  render: (_: unknown, r: Record<string, unknown>) => {
+                    const id = r.id as number | undefined
+                    if (id == null || !canWithdrawMaterialCall(r)) return null
+                    return (
+                      <Button
+                        type="link"
+                        size="small"
+                        danger
+                        onClick={(e) => {
+                          stopRowToggle(e)
+                          Modal.confirm({
+                            title: '确认撤回叫料',
+                            content: '确定撤回该叫料申请吗？仅仓库未开始处理时可撤回。',
+                            okText: '撤回',
+                            okButtonProps: { danger: true },
+                            cancelText: '取消',
+                            onOk: async () => {
+                              try {
+                                await warehouseApi.materialCall.cancel(id)
+                                messageApi.success('已撤回叫料申请')
+                                await queryClient.invalidateQueries({
+                                  queryKey: ['materialCallsByWorkOrder', workOrderId],
+                                })
+                                invalidateMenuBadgeCounts()
+                              } catch (err: unknown) {
+                                const msg =
+                                  (err as { response?: { data?: { detail?: string } }; message?: string })?.response
+                                    ?.data?.detail ??
+                                  (err as Error)?.message ??
+                                  '撤回失败'
+                                messageApi.error(String(msg))
+                                throw err
+                              }
+                            },
+                          })
+                        }}
+                      >
+                        撤回
+                      </Button>
+                    )
+                  },
                 },
               ]}
             />

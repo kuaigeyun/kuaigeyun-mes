@@ -9,6 +9,7 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form as AntForm, Select, InputNumber, Input, DatePicker, Dropdown, Row, Col, Typography, Spin, Empty, Descriptions } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, PrinterOutlined, MoreOutlined, ShoppingOutlined } from '@ant-design/icons';
@@ -68,6 +69,7 @@ const DeliveryNotesPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [noticeDetail, setNoticeDetail] = useState<DeliveryNoticeDetail | null>(null);
 
@@ -253,6 +255,8 @@ const DeliveryNotesPage: React.FC = () => {
         try {
           await deliveryNoticeApi.send(record.id!.toString());
           messageApi.success('发送成功');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '发送失败');
@@ -269,6 +273,8 @@ const DeliveryNotesPage: React.FC = () => {
         try {
           await deliveryNoticeApi.delete(record.id!.toString());
           messageApi.success('删除成功');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '删除失败');
@@ -289,6 +295,8 @@ const DeliveryNotesPage: React.FC = () => {
           }
           messageApi.success(`已删除 ${keys.length} 条发货通知`);
           setSelectedRowKeys([]);
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error?.message || '批量删除失败');
@@ -312,6 +320,8 @@ const DeliveryNotesPage: React.FC = () => {
         successCount += 1;
       }
       messageApi.success(`已同步 ${successCount} 条发货通知`);
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error?.message || '同步失败');
@@ -383,6 +393,8 @@ const DeliveryNotesPage: React.FC = () => {
       });
       messageApi.success('创建成功');
       setCreateModalVisible(false);
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '创建失败');
@@ -420,6 +432,8 @@ const DeliveryNotesPage: React.FC = () => {
       });
       messageApi.success('更新成功');
       setEditModalVisible(false);
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '更新失败');

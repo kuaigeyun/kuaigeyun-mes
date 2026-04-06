@@ -61,6 +61,27 @@ function getCurrentTenantId(): string | null {
 }
 
 /**
+ * 将接口错误里的 detail / message 等统一为字符串（避免对数组、对象调用 .includes 报错）
+ */
+function formatApiErrorDetail(raw: unknown): string {
+  if (raw === undefined || raw === null || raw === '') return '';
+  if (typeof raw === 'string') return raw;
+  if (Array.isArray(raw)) {
+    const first = raw[0] as { msg?: string } | undefined;
+    return first?.msg != null ? String(first.msg) : JSON.stringify(raw);
+  }
+  if (typeof raw === 'object') {
+    const d = raw as { message?: string; trace_id?: string };
+    if (d.message != null) {
+      const m = String(d.message);
+      return d.trace_id ? `${m} (trace_id: ${d.trace_id})` : m;
+    }
+    return JSON.stringify(raw);
+  }
+  return String(raw);
+}
+
+/**
  * 通用 API 响应接口
  */
 export interface ApiResponse<T = any> {
@@ -389,14 +410,16 @@ export async function apiRequest<T = any>(
       
       // 处理 400 错误（可能是组织上下文未设置或其他验证错误）
       if (response.status === 400) {
-        const errorDetail =
+        const rawErrorDetail =
           data?.detail ||
           data?.message ||
           (data?.success === false && data?.error?.message ? data.error.message : '');
+        const errorDetail = formatApiErrorDetail(rawErrorDetail);
         if (import.meta.env.DEV) {
           console.error('❌ 400 错误详情:', {
             url,
             errorDetail,
+            rawErrorDetail,
             fullResponse: data,
             localStorage_tenant_id: localStorage.getItem('tenant_id'),
             user_info: localStorage.getItem('user_info'),

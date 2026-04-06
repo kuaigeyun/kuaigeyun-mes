@@ -7,7 +7,7 @@ Author: Luigi Lu
 Date: 2025-12-30
 """
 
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime, timedelta
 from decimal import Decimal
 import json
@@ -1026,12 +1026,104 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
                 await ProductionReturn.get(tenant_id=tenant_id, id=return_id)
             )
 
+    async def withdraw_return_confirmation(
+        self,
+        tenant_id: int,
+        return_id: int,
+        updated_by: int,
+    ) -> ProductionReturnResponse:
+        """撤回已确认的生产退料：冲减即时库存，单据回到待退料。"""
+        async with in_transaction():
+            ret = await self.get_production_return_by_id(tenant_id, return_id)
+            if ret.status != "已退料":
+                raise BusinessLogicError("只有已退料状态的生产退料单才能撤回退料")
+
+            try:
+                from apps.kuaizhizao.services.inventory_service import InventoryService
+
+                ret_obj = await ProductionReturn.get(tenant_id=tenant_id, id=return_id)
+                for item in ret.items:
+                    qty = item.return_quantity or Decimal(0)
+                    if qty <= 0:
+                        continue
+                    wh_id = item.warehouse_id if item.warehouse_id else None
+                    await InventoryService.decrease_stock(
+                        tenant_id=tenant_id,
+                        material_id=item.material_id,
+                        quantity=qty,
+                        warehouse_id=wh_id,
+                        batch_no=getattr(item, "batch_number", None) or None,
+                        source_type="production_return_revoke",
+                        source_doc_id=return_id,
+                        source_doc_code=ret_obj.return_code,
+                    )
+
+                await ProductionReturn.filter(tenant_id=tenant_id, id=return_id).update(
+                    status="待退料",
+                    returner_id=None,
+                    returner_name=None,
+                    return_time=None,
+                    updated_by=updated_by,
+                )
+                await ProductionReturnItem.filter(tenant_id=tenant_id, return_id=return_id).update(
+                    status="待退料",
+                    return_time=None,
+                )
+            except BusinessLogicError:
+                raise
+            except Exception as e:
+                logger.error("撤回生产退料-库存冲减失败: %s", e)
+                raise BusinessLogicError(f"撤回失败: {str(e)}")
+
+            return ProductionReturnResponse.model_validate(
+                await ProductionReturn.get(tenant_id=tenant_id, id=return_id)
+            )
+
 
 class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
     """成品入库单服务"""
 
     def __init__(self):
         super().__init__(FinishedGoodsReceipt)
+
+    async def resolve_default_inbound_warehouse_for_work_order(
+        self,
+        tenant_id: int,
+        work_order: WorkOrder,
+    ) -> Optional[Tuple[int, str]]:
+        """
+        为工单解析成品入库默认仓库（用于末道工序自动入库等场景）。
+
+        优先级：关联工作中心的启用仓库 > 关联车间的启用仓库 > 首个启用的普通仓 > 任意启用仓库。
+        """
+        from apps.master_data.models.warehouse import Warehouse
+
+        base = Warehouse.filter(
+            tenant_id=tenant_id,
+            is_active=True,
+            deleted_at__isnull=True,
+        )
+
+        wc_id = getattr(work_order, "work_center_id", None)
+        if wc_id:
+            wh = await base.filter(work_center_id=wc_id).order_by("id").first()
+            if wh:
+                return (wh.id, wh.name)
+
+        ws_id = getattr(work_order, "workshop_id", None)
+        if ws_id:
+            wh = await base.filter(workshop_id=ws_id).order_by("id").first()
+            if wh:
+                return (wh.id, wh.name)
+
+        wh = await base.filter(warehouse_type="normal").order_by("id").first()
+        if wh:
+            return (wh.id, wh.name)
+
+        wh = await base.order_by("id").first()
+        if wh:
+            return (wh.id, wh.name)
+        return None
 
     async def create_finished_goods_receipt(self, tenant_id: int, receipt_data: FinishedGoodsReceiptCreate, created_by: int, items: Optional[List[FinishedGoodsReceiptItemCreate]] = None) -> FinishedGoodsReceiptResponse:
         """创建成品入库单"""
@@ -1232,6 +1324,228 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
             updated_receipt = await self.get_finished_goods_receipt_by_id(tenant_id, receipt_id)
             return updated_receipt
 
+    async def withdraw_receipt_confirmation(
+        self,
+        tenant_id: int,
+        receipt_id: int,
+        updated_by: int,
+    ) -> FinishedGoodsReceiptWithItemsResponse:
+        """撤回已确认的成品入库：冲减即时库存，单据回到待入库。"""
+        async with in_transaction():
+            receipt = await FinishedGoodsReceipt.get_or_none(
+                tenant_id=tenant_id, id=receipt_id, deleted_at__isnull=True
+            )
+            if not receipt:
+                raise NotFoundError(f"成品入库单不存在: {receipt_id}")
+            if receipt.status != "已入库":
+                raise BusinessLogicError("只有已入库状态的成品入库单才能撤回入库")
+
+            try:
+                from apps.kuaizhizao.services.inventory_service import InventoryService
+
+                items = await FinishedGoodsReceiptItem.filter(
+                    tenant_id=tenant_id, receipt_id=receipt_id
+                ).all()
+                wh_id = receipt.warehouse_id if receipt.warehouse_id else None
+                for item in items:
+                    qty = item.receipt_quantity or item.qualified_quantity or Decimal(0)
+                    if qty <= 0:
+                        continue
+                    await InventoryService.decrease_stock(
+                        tenant_id=tenant_id,
+                        material_id=item.material_id,
+                        quantity=qty,
+                        warehouse_id=wh_id,
+                        batch_no=item.batch_number or None,
+                        source_type="finished_goods_receipt_revoke",
+                        source_doc_id=receipt_id,
+                        source_doc_code=receipt.receipt_code,
+                    )
+
+                await FinishedGoodsReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(
+                    status="待入库",
+                    receiver_id=None,
+                    receiver_name=None,
+                    receipt_time=None,
+                    updated_by=updated_by,
+                )
+                await FinishedGoodsReceiptItem.filter(
+                    tenant_id=tenant_id, receipt_id=receipt_id
+                ).update(status="待入库", receipt_time=None)
+            except BusinessLogicError:
+                raise
+            except Exception as e:
+                logger.error("撤回成品入库-库存冲减失败: %s", e)
+                raise BusinessLogicError(f"撤回失败: {str(e)}")
+
+            return await self.get_finished_goods_receipt_by_id(tenant_id, receipt_id)
+
+    async def delete_finished_goods_receipt(self, tenant_id: int, receipt_id: int) -> bool:
+        """
+        软删除成品入库单（仅草稿/待入库；未确认入库不影响库存）。
+        若存在未删除的装箱绑定则禁止删除。
+        """
+        deletable_statuses = ("草稿", "draft", "DRAFT", "待入库")
+        async with in_transaction():
+            receipt = await FinishedGoodsReceipt.get_or_none(
+                tenant_id=tenant_id, id=receipt_id, deleted_at__isnull=True
+            )
+            if not receipt:
+                raise NotFoundError(f"成品入库单不存在: {receipt_id}")
+            if receipt.status not in deletable_statuses:
+                raise BusinessLogicError(
+                    f"仅草稿或待入库状态的成品入库单可删除，当前状态：{receipt.status}"
+                )
+
+            from apps.kuaizhizao.models.packing_binding import PackingBinding
+
+            pb_count = await PackingBinding.filter(
+                tenant_id=tenant_id,
+                finished_goods_receipt_id=receipt_id,
+                deleted_at__isnull=True,
+            ).count()
+            if pb_count > 0:
+                raise BusinessLogicError("已存在装箱绑定记录，请先删除绑定后再删除成品入库单")
+
+            from apps.kuaizhizao.models.document_relation import DocumentRelation
+
+            await DocumentRelation.filter(
+                tenant_id=tenant_id,
+                target_type="finished_goods_receipt",
+                target_id=receipt_id,
+            ).delete()
+            await DocumentRelation.filter(
+                tenant_id=tenant_id,
+                source_type="finished_goods_receipt",
+                source_id=receipt_id,
+            ).delete()
+
+            await FinishedGoodsReceiptItem.filter(tenant_id=tenant_id, receipt_id=receipt_id).delete()
+            now = datetime.now()
+            await FinishedGoodsReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(
+                deleted_at=now,
+                is_active=False,
+            )
+        return True
+
+    # 未确认入库前可与末道报工联动调整数量（与 delete_finished_goods_receipt 可删状态一致）
+    _PENDING_FINISHED_GOODS_RECEIPT_STATUSES = ("待入库", "草稿", "draft", "DRAFT")
+
+    async def sync_pending_finished_goods_receipts_for_work_order(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+    ) -> None:
+        """
+        末道工序已审核报工的合格数变化后，将关联工单、且尚未确认入库的成品入库单单头/主行数量对齐。
+
+        目标数量 = 末道工序上所有「已审核」报工记录的合格数量之和（与一键入库缺省口径一致）。
+        目标为 0 时按规则尝试软删除此类入库单（若存在装箱绑定等则跳过并打日志）。
+        """
+        from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
+        from apps.kuaizhizao.models.reporting_record import ReportingRecord
+
+        work_order = await WorkOrder.get_or_none(
+            id=work_order_id, tenant_id=tenant_id, deleted_at__isnull=True
+        )
+        if not work_order:
+            return
+
+        operations = await WorkOrderOperation.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            deleted_at__isnull=True,
+        ).all()
+        if not operations:
+            return
+
+        last_op = max(operations, key=lambda op: (op.sequence or 0, op.id or 0))
+        approved_last = await ReportingRecord.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            operation_id=last_op.operation_id,
+            status="approved",
+            deleted_at__isnull=True,
+        ).all()
+        target_qty = sum(
+            (Decimal(str(r.qualified_quantity or 0)) for r in approved_last),
+            start=Decimal("0"),
+        )
+
+        receipts = await FinishedGoodsReceipt.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            deleted_at__isnull=True,
+            status__in=self._PENDING_FINISHED_GOODS_RECEIPT_STATUSES,
+        ).all()
+        if not receipts:
+            return
+
+        product_id = work_order.product_id
+        for receipt in receipts:
+            if receipt.status not in self._PENDING_FINISHED_GOODS_RECEIPT_STATUSES:
+                continue
+            if target_qty <= 0:
+                try:
+                    await self.delete_finished_goods_receipt(tenant_id, receipt.id)
+                    logger.info(
+                        "末道报工合格数为 0，已删除待入库成品入库单 receipt_id=%s work_order_id=%s",
+                        receipt.id,
+                        work_order_id,
+                    )
+                except BusinessLogicError as e:
+                    logger.warning(
+                        "末道报工合格数为 0，但无法删除成品入库单 receipt_id=%s：%s",
+                        receipt.id,
+                        e,
+                    )
+                continue
+
+            items = await FinishedGoodsReceiptItem.filter(
+                tenant_id=tenant_id,
+                receipt_id=receipt.id,
+            ).all()
+            if not items:
+                continue
+
+            primary = None
+            product_lines = [it for it in items if int(it.material_id) == int(product_id)]
+            if len(product_lines) == 1:
+                primary = product_lines[0]
+            elif len(items) == 1:
+                primary = items[0]
+            else:
+                logger.warning(
+                    "成品入库单 receipt_id=%s 明细行数=%s 且无法唯一匹配工单成品，跳过报工联动同步",
+                    receipt.id,
+                    len(items),
+                )
+                continue
+
+            others_sum = sum(
+                (Decimal(str(it.receipt_quantity or 0)) for it in items if it.id != primary.id),
+                start=Decimal("0"),
+            )
+            new_total = target_qty + others_sum
+
+            await FinishedGoodsReceiptItem.filter(
+                tenant_id=tenant_id,
+                id=primary.id,
+            ).update(
+                receipt_quantity=target_qty,
+                qualified_quantity=target_qty,
+            )
+            await FinishedGoodsReceipt.filter(tenant_id=tenant_id, id=receipt.id).update(
+                total_quantity=new_total
+            )
+            logger.info(
+                "已同步待入库成品入库单 receipt_id=%s work_order_id=%s total=%s 主行合格=%s",
+                receipt.id,
+                work_order_id,
+                new_total,
+                target_qty,
+            )
+
     async def quick_receipt_from_work_order(
         self,
         tenant_id: int,
@@ -1250,7 +1564,7 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
             created_by: 创建人ID
             warehouse_id: 仓库ID（可选，如果不提供则使用物料默认仓库）
             warehouse_name: 仓库名称（可选）
-            receipt_quantity: 入库数量（可选，如果不提供则使用报工合格数量）
+            receipt_quantity: 入库数量（可选，如果不提供则优先质检合格数，否则使用末道工序合格数量）
             
         Returns:
             FinishedGoodsReceiptResponse: 创建的成品入库单
@@ -1270,8 +1584,8 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
             if not work_order:
                 raise NotFoundError(f"工单不存在: {work_order_id}")
             
-            # 检查工单状态
-            if work_order.status not in ['进行中', '已完成']:
+            # 检查工单状态（库内工单状态为英文枚举，兼容历史中文）
+            if work_order.status not in ("in_progress", "completed", "进行中", "已完成"):
                 raise BusinessLogicError(f"工单状态为 {work_order.status}，无法创建入库单")
             
             # 2. 获取入库数量（优先从成品检验单获取合格数量）
@@ -1293,34 +1607,60 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                         logger.info(f"工单一键入库：自动从成品检验单获取合格数量 {receipt_quantity}")
                 
                 if receipt_quantity is None:
-                    # 如果没有合格的质检单，回退到从报工记录获取（可能适用于免检物料）
-                    reporting_records = await ReportingRecord.filter(
+                    # 如果没有合格的质检单，回退到末道工序合格数量（与工单头 qualified_quantity、报工逻辑一致），不按全工序报工相加
+                    from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
+
+                    operations = await WorkOrderOperation.filter(
                         tenant_id=tenant_id,
-                        work_order_id=work_order_id
+                        work_order_id=work_order_id,
+                        deleted_at__isnull=True,
                     ).all()
-                    
-                    if not reporting_records:
-                        raise ValidationError("工单没有质检合格记录或报工记录，无法自动获取入库数量")
-                    
-                    # 汇总所有报工记录的合格数量
-                    total_qualified = sum(
-                        float(record.qualified_quantity or 0) 
-                        for record in reporting_records
-                    )
-                    
-                    if total_qualified <= 0:
-                        raise ValidationError("报工合格数量为0，无法创建入库单")
-                    
-                    receipt_quantity = total_qualified
-                    logger.info(f"工单一键入库：未找到质检单，从报工记录获取合格数量 {receipt_quantity}")
+                    if not operations:
+                        raise ValidationError("工单无工序记录，无法自动获取入库数量")
+
+                    last_op = max(operations, key=lambda op: (op.sequence or 0, op.id or 0))
+                    lo_q = float(last_op.qualified_quantity or 0)
+                    if lo_q > 0:
+                        receipt_quantity = lo_q
+                        logger.info(
+                            f"工单一键入库：未找到质检单，使用末道工序「{last_op.operation_name}」累计合格数量 {receipt_quantity}"
+                        )
+                    else:
+                        # ReportingRecord.operation_id 为主数据工序 ID，与 WorkOrderOperation.operation_id 一致
+                        reporting_records = await ReportingRecord.filter(
+                            tenant_id=tenant_id,
+                            work_order_id=work_order_id,
+                            operation_id=last_op.operation_id,
+                            status="approved",
+                            deleted_at__isnull=True,
+                        ).all()
+                        if not reporting_records:
+                            raise ValidationError(
+                                "工单没有质检合格记录，且末道工序无已审核报工记录，无法自动获取入库数量"
+                            )
+                        total_qualified = sum(
+                            float(record.qualified_quantity or 0) for record in reporting_records
+                        )
+                        if total_qualified <= 0:
+                            raise ValidationError("末道工序报工合格数量为0，无法创建入库单")
+                        receipt_quantity = total_qualified
+                        logger.info(
+                            f"工单一键入库：未找到质检单，从末道工序已审核报工汇总合格数量 {receipt_quantity}"
+                        )
             else:
                 receipt_quantity = float(receipt_quantity)
             
-            # 3. 获取仓库信息（如果未指定）
+            # 3. 获取仓库信息（如果未指定：按工单工作中心/车间/普通仓解析）
             if not warehouse_id:
-                # TODO: 从物料主数据获取默认仓库
-                # 暂时需要用户指定仓库
-                raise ValidationError("请指定入库仓库")
+                resolved = await self.resolve_default_inbound_warehouse_for_work_order(
+                    tenant_id=tenant_id,
+                    work_order=work_order,
+                )
+                if not resolved:
+                    raise ValidationError(
+                        "请指定入库仓库，或在主数据中维护与工单工作中心/车间关联的启用仓库"
+                    )
+                warehouse_id, warehouse_name = resolved[0], resolved[1]
             
             # 4. 生成入库单编码
             today = datetime.now().strftime("%Y%m%d")
@@ -1360,13 +1700,14 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                     item_data=_ItemData(),
                     supplier_code=None,
                 )
+            material_unit = (getattr(material, "base_unit", None) or "个") if material else "个"
             await FinishedGoodsReceiptItem.create(
                 tenant_id=tenant_id,
                 receipt_id=receipt.id,
                 material_id=work_order.product_id,
                 material_code=work_order.product_code,
                 material_name=work_order.product_name,
-                material_unit='个',  # TODO: 从物料主数据获取单位
+                material_unit=material_unit,
                 receipt_quantity=Decimal(str(receipt_quantity)),
                 qualified_quantity=Decimal(str(receipt_quantity)),
                 unqualified_quantity=Decimal('0'),
@@ -2966,6 +3307,118 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
 
             updated_receipt = await self.get_purchase_receipt_by_id(tenant_id, receipt_id)
             return updated_receipt
+
+    async def withdraw_receipt_confirmation(
+        self,
+        tenant_id: int,
+        receipt_id: int,
+        updated_by: int,
+    ) -> PurchaseReceiptWithItemsResponse:
+        """撤回已确认的采购入库：按明细冲减即时库存，单据回到待入库。"""
+        async with in_transaction():
+            receipt = await PurchaseReceipt.get_or_none(
+                tenant_id=tenant_id, id=receipt_id, deleted_at__isnull=True
+            )
+            if not receipt:
+                raise NotFoundError(f"采购入库单不存在: {receipt_id}")
+            if receipt.status not in ("已入库", "已完成", "completed"):
+                raise BusinessLogicError("只有已入库状态的采购入库单才能撤回入库")
+
+            try:
+                from apps.kuaizhizao.services.inventory_service import InventoryService
+
+                receipt_obj = await PurchaseReceipt.get(tenant_id=tenant_id, id=receipt_id)
+                items = await PurchaseReceiptItem.filter(
+                    tenant_id=tenant_id, receipt_id=receipt_id
+                ).all()
+                for item in items:
+                    qty = item.receipt_quantity or Decimal(0)
+                    if qty <= 0:
+                        continue
+                    line_wh = await _resolve_purchase_receipt_line_warehouse_id_for_stock(
+                        tenant_id, item, receipt_obj
+                    )
+                    if line_wh is None:
+                        raise BusinessLogicError(
+                            "撤回失败：无法解析明细行仓库，请检查原入库单仓库/库位配置"
+                        )
+                    await InventoryService.decrease_stock(
+                        tenant_id=tenant_id,
+                        material_id=item.material_id,
+                        quantity=qty,
+                        warehouse_id=line_wh,
+                        batch_no=item.batch_number or None,
+                        source_type="purchase_receipt_revoke",
+                        source_doc_id=receipt_id,
+                        source_doc_code=receipt_obj.receipt_code,
+                    )
+
+                await PurchaseReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(
+                    status="待入库",
+                    receiver_id=None,
+                    receiver_name=None,
+                    receipt_time=None,
+                    updated_by=updated_by,
+                )
+                await PurchaseReceiptItem.filter(tenant_id=tenant_id, receipt_id=receipt_id).update(
+                    status="待入库",
+                    receipt_time=None,
+                )
+            except BusinessLogicError:
+                raise
+            except Exception as e:
+                logger.error("撤回采购入库-库存冲减失败: %s", e)
+                raise BusinessLogicError(f"撤回失败: {str(e)}")
+
+            return await self.get_purchase_receipt_by_id(tenant_id, receipt_id)
+
+    async def delete_purchase_receipt(self, tenant_id: int, receipt_id: int) -> bool:
+        """
+        软删除采购入库单（仅草稿/待入库；未确认入库不影响库存）。
+        若已创建未删除的来料检验单则禁止删除。
+        """
+        deletable_statuses = ("草稿", "draft", "DRAFT", "待入库")
+        async with in_transaction():
+            receipt = await PurchaseReceipt.get_or_none(
+                tenant_id=tenant_id, id=receipt_id, deleted_at__isnull=True
+            )
+            if not receipt:
+                raise NotFoundError(f"采购入库单不存在: {receipt_id}")
+            if receipt.status not in deletable_statuses:
+                raise BusinessLogicError(
+                    f"仅草稿或待入库状态的采购入库单可删除，当前状态：{receipt.status}"
+                )
+
+            from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
+
+            ins_count = await IncomingInspection.filter(
+                tenant_id=tenant_id,
+                purchase_receipt_id=receipt_id,
+                deleted_at__isnull=True,
+            ).count()
+            if ins_count > 0:
+                raise BusinessLogicError("已存在关联的来料检验单，请先处理检验单后再删除入库单")
+
+            from apps.kuaizhizao.models.document_relation import DocumentRelation
+
+            await DocumentRelation.filter(
+                tenant_id=tenant_id,
+                target_type="purchase_receipt",
+                target_id=receipt_id,
+            ).delete()
+            await DocumentRelation.filter(
+                tenant_id=tenant_id,
+                source_type="purchase_receipt",
+                source_id=receipt_id,
+            ).delete()
+
+            await PurchaseReceiptItem.filter(tenant_id=tenant_id, receipt_id=receipt_id).delete()
+            now = datetime.now()
+            await PurchaseReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(
+                deleted_at=now,
+                is_active=False,
+            )
+        return True
 
     async def import_from_data(
         self,

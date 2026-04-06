@@ -9,6 +9,7 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form as AntForm, Select, InputNumber, Input, Row, Col, Typography, Dropdown, Spin, Empty, Descriptions } from 'antd';
@@ -76,6 +77,7 @@ const ShipmentNoticesPage: React.FC = () => {
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [noticeDetail, setNoticeDetail] = useState<ShipmentNoticeDetail | null>(null);
 
@@ -268,6 +270,8 @@ const ShipmentNoticesPage: React.FC = () => {
         try {
           await shipmentNoticeApi.notify(record.id!.toString());
           messageApi.success('已通知仓库');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '通知失败');
@@ -284,6 +288,8 @@ const ShipmentNoticesPage: React.FC = () => {
         try {
           await shipmentNoticeApi.withdraw(record.id!.toString());
           messageApi.success('已撤回到待发货');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '撤回失败');
@@ -300,6 +306,8 @@ const ShipmentNoticesPage: React.FC = () => {
         try {
           await shipmentNoticeApi.delete(record.id!.toString());
           messageApi.success('删除成功');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '删除失败');
@@ -319,6 +327,8 @@ const ShipmentNoticesPage: React.FC = () => {
             await shipmentNoticeApi.delete(String(k));
           }
           messageApi.success(`已删除 ${keys.length} 条发货通知单`);
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error?.message || '批量删除失败');
@@ -450,6 +460,8 @@ const ShipmentNoticesPage: React.FC = () => {
       messageApi.success('创建成功');
       setCreateModalVisible(false);
       setEffectiveRuleCode(null);
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '创建失败');
@@ -474,6 +486,8 @@ const ShipmentNoticesPage: React.FC = () => {
       });
       messageApi.success('更新成功');
       setEditModalVisible(false);
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '更新失败');

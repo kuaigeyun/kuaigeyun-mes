@@ -3,6 +3,7 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Table, Form as AntForm, Input, InputNumber, Select, Dropdown, Row, Col, Checkbox, Descriptions, Empty, Spin, Typography, DatePicker } from 'antd';
@@ -113,6 +114,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const navigate = useNavigate();
   const { message: messageApi, modal: modalApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [detailVisible, setDetailVisible] = useState(false);
   const [currentReq, setCurrentReq] = useState<PurchaseRequisition | null>(null);
   const [supplierList, setSupplierList] = useState<Array<{ id: number; code?: string; name: string }>>([]);
@@ -587,6 +589,8 @@ const PurchaseRequisitionsPage: React.FC = () => {
         setEffectiveRuleCode(null);
         setEffectiveAutoGen(null);
         createFormRef.current?.resetFields();
+        invalidateMenuBadgeCounts();
+
         actionRef.current?.reload();
       } catch (e: any) {
         const d = e?.response?.data?.detail;
@@ -620,6 +624,8 @@ const PurchaseRequisitionsPage: React.FC = () => {
       setEffectiveRuleCode(null);
       setEffectiveAutoGen(null);
       createFormRef.current?.resetFields();
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (e: any) {
       const d = e?.response?.data?.detail;
@@ -745,6 +751,8 @@ const PurchaseRequisitionsPage: React.FC = () => {
               ),
               duration: 6,
             });
+            invalidateMenuBadgeCounts();
+
             actionRef.current?.reload();
           } catch (e: any) {
             messageApi.error(e?.response?.data?.detail || '下推失败');
@@ -766,6 +774,8 @@ const PurchaseRequisitionsPage: React.FC = () => {
         try {
           await deletePurchaseRequisition(record.id!);
           messageApi.success('删除成功');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (e: any) {
           messageApi.error(e?.response?.data?.detail || '删除失败');
@@ -797,6 +807,8 @@ const PurchaseRequisitionsPage: React.FC = () => {
         try {
           await urgentPurchase(record.id!, { urgent_reason: reason.trim() });
           messageApi.success('紧急采购完成');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (e: any) {
           messageApi.error(e?.response?.data?.detail || '操作失败');
@@ -851,6 +863,8 @@ const PurchaseRequisitionsPage: React.FC = () => {
                     await deletePurchaseRequisition(Number(id));
                   }
                   messageApi.success(`成功删除 ${keys.length} 条记录`);
+                  invalidateMenuBadgeCounts();
+
                   actionRef.current?.reload();
                 } catch (e: any) {
                   messageApi.error(e?.response?.data?.detail || '删除失败');
@@ -1310,6 +1324,8 @@ const PurchaseRequisitionsPage: React.FC = () => {
                       revoke: (id) => withdrawPurchaseRequisition(id),
                     }}
                     onSuccess={async () => {
+                      invalidateMenuBadgeCounts();
+
                       actionRef.current?.reload();
                       if (currentReq?.id) {
                         try {
@@ -1333,6 +1349,8 @@ const PurchaseRequisitionsPage: React.FC = () => {
                         try {
                           const res = await fixPurchaseRequisitionStatus(currentReq.id);
                           setCurrentReq(res);
+                          invalidateMenuBadgeCounts();
+
                           actionRef.current?.reload();
                           messageApi.success('状态已修正为部分转单');
                         } catch (e: any) {

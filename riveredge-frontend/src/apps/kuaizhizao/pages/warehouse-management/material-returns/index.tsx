@@ -8,6 +8,7 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Space, Modal, Table, Form, InputNumber, Input, Row, Col, Typography, Dropdown } from 'antd';
 import { EyeOutlined, CheckCircleOutlined, DeleteOutlined, PrinterOutlined, MoreOutlined } from '@ant-design/icons';
@@ -68,6 +69,7 @@ const MaterialReturnsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
 
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [returnDetail, setReturnDetail] = useState<MaterialReturnDetail | null>(null);
 
@@ -268,6 +270,8 @@ const MaterialReturnsPage: React.FC = () => {
         try {
           await warehouseApi.materialReturn.confirm(record.id!.toString());
           messageApi.success('归还确认成功');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '归还确认失败');
@@ -284,6 +288,8 @@ const MaterialReturnsPage: React.FC = () => {
         try {
           await warehouseApi.materialReturn.delete(record.id!.toString());
           messageApi.success('删除成功');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '删除失败');
@@ -352,6 +358,8 @@ const MaterialReturnsPage: React.FC = () => {
       });
       messageApi.success('创建成功');
       setCreateModalVisible(false);
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '创建失败');
@@ -428,6 +436,8 @@ const MaterialReturnsPage: React.FC = () => {
                     await warehouseApi.materialReturn.delete(String(id));
                   }
                   messageApi.success(`成功删除 ${keys.length} 条记录`);
+                  invalidateMenuBadgeCounts();
+
                   actionRef.current?.reload();
                 } catch (error: any) {
                   messageApi.error(error.message || '删除失败');

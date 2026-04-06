@@ -88,6 +88,7 @@ class ResetDataService:
         "apps_kuaizhizao_inventory_transfers",
         "apps_kuaizhizao_inventory_transfer_items",
         "apps_kuaizhizao_backflush_records",
+        "apps_kuaizhizao_material_call_request_items",
         "apps_kuaizhizao_material_call_requests",
         "apps_kuaizhizao_replenishment_suggestions",
         "apps_kuaizhizao_wave_pickings",

@@ -8,6 +8,7 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Space, Modal, Table, Row, Col, Form as AntForm, InputNumber, Input, Dropdown, Tag, Card, Typography, Spin, Empty } from 'antd';
@@ -114,6 +115,7 @@ const SalesReturnsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
 
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [returnDetail, setReturnDetail] = useState<SalesReturnDetail | null>(null);
@@ -335,6 +337,8 @@ const SalesReturnsPage: React.FC = () => {
         try {
           await warehouseApi.salesReturn.confirm(record.id!.toString());
           messageApi.success('销售退货确认成功');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '销售退货确认失败');
@@ -351,6 +355,8 @@ const SalesReturnsPage: React.FC = () => {
         try {
           await warehouseApi.salesReturn.withdraw(record.id!.toString());
           messageApi.success('已撤回到待退货');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '撤回失败');
@@ -370,6 +376,8 @@ const SalesReturnsPage: React.FC = () => {
             await warehouseApi.salesReturn.delete(String(id));
           }
           messageApi.success(`成功删除 ${keys.length} 条记录`);
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '删除失败');
@@ -389,6 +397,8 @@ const SalesReturnsPage: React.FC = () => {
         messageApi.success('销售退货单创建成功');
       }
       setModalVisible(false);
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
       return true;
     } catch (error: any) {

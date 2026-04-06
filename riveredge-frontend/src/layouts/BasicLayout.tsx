@@ -122,27 +122,58 @@ import { useThemeStore } from '../stores/themeStore';
 import { getMenuBadgeCounts } from '../services/dashboard';
 import { verifyCopyright } from '../utils/copyrightIntegrity';
 
-/** 左侧菜单 path 与业务单据未完成数量 key 的映射（用于数量徽标） */
+/**
+ * 左侧菜单 path → menu-badge-counts 的 key（与后端 get_menu_badge_counts 一致）
+ * 销售式三态：逾期(红) > 待审核(橙) > 进行中(绿)，见 menuItemRender
+ */
 const MENU_BADGE_PATH_KEY: Record<string, string> = {
   '/apps/kuaizhizao/production-execution/work-orders': 'work_order',
   '/apps/kuaizhizao/production-execution/rework-orders': 'rework_order',
   '/apps/kuaizhizao/production-execution/material-shortage-exceptions': 'exception',
   '/apps/kuaizhizao/production-execution/delivery-delay-exceptions': 'exception',
   '/apps/kuaizhizao/production-execution/quality-exceptions': 'exception',
+  '/apps/kuaizhizao/production-execution/outsource-management': 'outsource_work_order',
+  '/apps/kuaizhizao/production-execution/packing-binding': 'packing_binding',
   '/apps/kuaizhizao/purchase-management/purchase-orders': 'purchase_order',
+  '/apps/kuaizhizao/purchase-management/purchase-requisitions': 'purchase_requisition',
+  '/apps/kuaizhizao/purchase-management/receipt-notices': 'receipt_notice',
+  '/apps/kuaizhizao/purchase-management/logistics-tracking': 'purchase_logistics',
+  '/apps/kuaizhizao/purchase-management/purchase-returns': 'purchase_return',
   '/apps/kuaizhizao/sales-management/sales-orders': 'sales_order',
   '/apps/kuaizhizao/sales-management/sales-forecasts': 'sales_forecast',
+  '/apps/kuaizhizao/sales-management/quotations': 'quotation',
+  '/apps/kuaizhizao/sales-management/customer-follow-ups': 'customer_follow_up',
+  '/apps/kuaizhizao/sales-management/sample-trials': 'sample_trial',
+  '/apps/kuaizhizao/sales-management/shipment-notices': 'shipment_notice',
+  '/apps/kuaizhizao/sales-management/sales-returns': 'sales_return',
   '/apps/kuaizhizao/warehouse-management/inbound': 'inbound',
+  '/apps/kuaizhizao/warehouse-management/other-inbound': 'other_inbound',
+  '/apps/kuaizhizao/warehouse-management/material-returns': 'material_return',
+  '/apps/kuaizhizao/warehouse-management/outbound': 'sales_outbound',
+  '/apps/kuaizhizao/warehouse-management/other-outbound': 'other_outbound',
+  '/apps/kuaizhizao/warehouse-management/material-borrows': 'material_borrow',
+  '/apps/kuaizhizao/warehouse-management/delivery-notes': 'delivery_notice',
+  '/apps/kuaizhizao/warehouse-management/batching-center': 'batching_order',
+  '/apps/kuaizhizao/warehouse-management/material-calls': 'material_call',
+  '/apps/kuaizhizao/warehouse-management/stocktaking': 'stocktaking',
+  '/apps/kuaizhizao/warehouse-management/inventory-transfer': 'inventory_transfer',
+  '/apps/kuaizhizao/warehouse-management/assembly-orders': 'assembly_order',
+  '/apps/kuaizhizao/warehouse-management/disassembly-orders': 'disassembly_order',
+  '/apps/kuaizhizao/warehouse-management/customer-material-registration': 'customer_material_registration',
   '/apps/kuaizhizao/quality-management/inspection-center': 'quality_inspection',
   '/apps/kuaizhizao/quality-management/incoming-inspection': 'incoming_inspection',
   '/apps/kuaizhizao/quality-management/process-inspection': 'process_inspection',
   '/apps/kuaizhizao/quality-management/finished-goods-inspection': 'finished_goods_inspection',
+  '/apps/kuaizhizao/quality-management/inspection-plans': 'inspection_plan',
   '/apps/kuaizhizao/plan-management/production-plans': 'production_plan',
   '/apps/kuaizhizao/plan-management/demand-computation': 'demand_computation',
   '/apps/kuaizhizao/equipment-management/equipment': 'equipment',
   '/apps/kuaizhizao/equipment-management/molds': 'mold',
   '/apps/kuaizhizao/equipment-management/inspection': 'equipment_inspection',
   '/apps/kuaizhizao/equipment-management/spare-parts': 'spare_part',
+  '/apps/kuaizhizao/equipment-management/equipment-faults': 'equipment_fault',
+  '/apps/kuaizhizao/equipment-management/maintenance-plans': 'maintenance_plan',
+  '/apps/kuaizhizao/equipment-management/maintenance-reminders': 'maintenance_reminder',
   '/apps/kuaicaiwu/finance-management/settlement': 'finance_settlement',
 };
 

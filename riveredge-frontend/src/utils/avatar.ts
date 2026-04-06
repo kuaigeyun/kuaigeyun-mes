@@ -31,7 +31,7 @@ function getAvatarCacheKey(avatarUuid: string): string {
 }
 
 /** 从缓存读取头像 URL（含 TTL 校验），自动将 localhost 绝对 URL 转为相对路径 */
-export function getCachedAvatarUrl(avatarUuid: string | undefined): string | undefined {
+export function getCachedAvatarUrl(avatarUuid: string | undefined | null): string | undefined {
   if (!avatarUuid || typeof window === 'undefined') return undefined;
   try {
     const raw = localStorage.getItem(getAvatarCacheKey(avatarUuid));

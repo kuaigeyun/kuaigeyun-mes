@@ -12,6 +12,7 @@
  */
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import type { DescriptionsProps } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -186,6 +187,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
   const { token } = AntdTheme.useToken();
   const actionRef = useRef<ActionType>(null);
 
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [statsVersion, setStatsVersion] = useState(0);
   const [localStats, setLocalStats] = useState({ total: 0, draft: 0, inProgress: 0 });
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -598,6 +600,8 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
             setWorkOrderDetail(null);
           }
           setStatsVersion((v) => v + 1);
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '删除失败');
@@ -705,6 +709,8 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       }
       setModalVisible(false);
       setSelectedMaterialSourceInfo(null);
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
       setStatsVersion((v) => v + 1);
       if (wid && workOrderDetail?.id === wid) {
@@ -768,6 +774,8 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       setCurrentWorkOrderForIssue(null);
       issueFormRef.current?.resetFields();
       setStatsVersion((v) => v + 1);
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '创建委外发料单失败');
@@ -825,6 +833,8 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       setCurrentWorkOrderForReceipt(null);
       receiptFormRef.current?.resetFields();
       setStatsVersion((v) => v + 1);
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '创建委外收货单失败');

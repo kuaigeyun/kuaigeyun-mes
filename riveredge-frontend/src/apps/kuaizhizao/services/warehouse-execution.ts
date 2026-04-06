@@ -35,6 +35,8 @@ export const warehouseApi = {
     delete: async (id: string) => apiRequest(`/apps/kuaizhizao/production-returns/${id}`, { method: 'DELETE' }),
     get: async (id: string) => apiRequest(`/apps/kuaizhizao/production-returns/${id}`, { method: 'GET' }),
     confirm: async (id: string) => apiRequest(`/apps/kuaizhizao/production-returns/${id}/confirm`, { method: 'POST' }),
+    withdraw: async (id: string) =>
+      apiRequest(`/apps/kuaizhizao/production-returns/${id}/withdraw`, { method: 'POST' }),
     print: async (id: string, templateUuid?: string) =>
       apiRequest(`/apps/kuaizhizao/production-returns/${id}/print`, {
         method: 'GET',
@@ -111,9 +113,13 @@ export const warehouseApi = {
     list: async (params?: any) => apiRequest('/apps/kuaizhizao/finished-goods-receipts', { method: 'GET', params }),
     create: async (data: any) => apiRequest('/apps/kuaizhizao/finished-goods-receipts', { method: 'POST', data }),
     update: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/finished-goods-receipts/${id}`, { method: 'PUT', data }),
-    delete: async (id: string) => apiRequest(`/apps/kuaizhizao/finished-goods-receipts/${id}`, { method: 'DELETE' }),
+    /** POST /delete：避免部分环境对 DELETE 返回 405 */
+    delete: async (id: string) =>
+      apiRequest(`/apps/kuaizhizao/finished-goods-receipts/${id}/delete`, { method: 'POST' }),
     get: async (id: string) => apiRequest(`/apps/kuaizhizao/finished-goods-receipts/${id}`, { method: 'GET' }),
     confirm: async (id: string) => apiRequest(`/apps/kuaizhizao/finished-goods-receipts/${id}/confirm`, { method: 'POST' }),
+    withdraw: async (id: string) =>
+      apiRequest(`/apps/kuaizhizao/finished-goods-receipts/${id}/withdraw`, { method: 'POST' }),
     /** 批量入库：从多个工单下推创建成品入库单 */
     batchReceipt: async (params: { work_order_ids: number[]; warehouse_id?: number; warehouse_name?: string }) =>
       apiRequest('/apps/kuaizhizao/finished-goods-receipts/batch-receipt', {
@@ -226,9 +232,12 @@ export const warehouseApi = {
     list: async (params?: any) => apiRequest('/apps/kuaizhizao/purchase-receipts', { method: 'GET', params }),
     create: async (data: any) => apiRequest('/apps/kuaizhizao/purchase-receipts', { method: 'POST', data }),
     update: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/purchase-receipts/${id}`, { method: 'PUT', data }),
-    delete: async (id: string) => apiRequest(`/apps/kuaizhizao/purchase-receipts/${id}`, { method: 'DELETE' }),
+    /** POST /delete：避免部分环境对 DELETE 返回 405 */
+    delete: async (id: string) =>
+      apiRequest(`/apps/kuaizhizao/purchase-receipts/${id}/delete`, { method: 'POST' }),
     get: async (id: string) => apiRequest(`/apps/kuaizhizao/purchase-receipts/${id}`, { method: 'GET' }),
     confirm: async (id: string) => apiRequest(`/apps/kuaizhizao/purchase-receipts/${id}/confirm`, { method: 'POST' }),
+    withdraw: async (id: string) => apiRequest(`/apps/kuaizhizao/purchase-receipts/${id}/withdraw`, { method: 'POST' }),
     import: async (data: any[][]) =>
       apiRequest('/apps/kuaizhizao/purchase-receipts/import', { method: 'POST', data: { data } }),
     export: async (params?: any) =>

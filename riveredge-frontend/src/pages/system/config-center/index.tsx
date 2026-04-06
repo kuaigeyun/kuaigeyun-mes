@@ -8,7 +8,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
-import { App, Form, Card, Button, Space, Layout, Menu, InputNumber, ColorPicker, Typography, Spin, Modal, Input, Switch, theme } from 'antd';
+import { App, Form, Card, Button, Space, Layout, Menu, InputNumber, ColorPicker, Typography, Spin, Modal, Input, Switch, Select, theme } from 'antd';
 import { SaveOutlined, ReloadOutlined, SettingOutlined, ControlOutlined, ApartmentOutlined, NodeIndexOutlined } from '@ant-design/icons';
 import { useSearchParams } from 'react-router-dom';
 import { MultiTabListPageTemplate } from '../../../components/layout-templates';
@@ -20,7 +20,20 @@ import {
   saveConfigTemplate,
 } from '../../../services/businessConfig';
 import BusinessFlowConfig from '../business-config/BusinessFlowConfig';
-import { PARAMETER_CATEGORIES, PROCESS_CATEGORIES, type ConfigCategory, type ParamMeta } from './configTree';
+import {
+  PARAMETER_CATEGORIES,
+  PROCESS_CATEGORIES,
+  type ConfigCategory,
+  type ParamMeta,
+  type ParamSelectOption,
+} from './configTree';
+
+type RegistryControlField = {
+  type?: ParamMeta['type'];
+  min?: number;
+  max?: number;
+  options?: ParamSelectOption[];
+};
 import type { Color } from 'antd/es/color-picker';
 
 const { Sider, Content } = Layout;
@@ -79,7 +92,7 @@ function buildProcessCategoriesFromRegistry(
   fallbackCategories: ConfigCategory[],
   categoryMeta?: Record<string, { labelKey?: string; descriptionKey?: string }>,
   paramMeta?: Record<string, Record<string, { labelKey?: string; descriptionKey?: string }>>,
-  controlMeta?: Record<string, Record<string, { type?: ParamMeta['type']; min?: number; max?: number }>>
+  controlMeta?: Record<string, Record<string, RegistryControlField>>
 ): ConfigCategory[] {
   if (!registry || Object.keys(registry).length === 0) return fallbackCategories;
 
@@ -115,6 +128,7 @@ function buildProcessCategoriesFromRegistry(
           type: currentControl?.type || fallbackParam.type,
           min: currentControl?.min ?? fallbackParam.min,
           max: currentControl?.max ?? fallbackParam.max,
+          selectOptions: currentControl?.options ?? fallbackParam.selectOptions,
         };
       }
       return {
@@ -126,6 +140,7 @@ function buildProcessCategoriesFromRegistry(
         type: currentControl?.type || 'boolean',
         min: currentControl?.min,
         max: currentControl?.max,
+        selectOptions: currentControl?.options,
       };
     });
 
@@ -151,7 +166,7 @@ function buildParameterCategoriesFromRegistry(
   fallbackCategories: ConfigCategory[],
   categoryMeta?: Record<string, { labelKey?: string; descriptionKey?: string }>,
   paramMeta?: Record<string, Record<string, { labelKey?: string; descriptionKey?: string }>>,
-  controlMeta?: Record<string, Record<string, { type?: ParamMeta['type']; min?: number; max?: number }>>
+  controlMeta?: Record<string, Record<string, RegistryControlField>>
 ): ConfigCategory[] {
   if (!registry || Object.keys(registry).length === 0) return fallbackCategories;
 
@@ -189,6 +204,7 @@ function buildParameterCategoriesFromRegistry(
           type: currentControl?.type || fallbackParam.type,
           min: currentControl?.min ?? fallbackParam.min,
           max: currentControl?.max ?? fallbackParam.max,
+          selectOptions: currentControl?.options ?? fallbackParam.selectOptions,
         };
       }
       return {
@@ -200,6 +216,7 @@ function buildParameterCategoriesFromRegistry(
         type: currentControl?.type || 'boolean',
         min: currentControl?.min,
         max: currentControl?.max,
+        selectOptions: currentControl?.options,
       };
     });
 
@@ -527,6 +544,15 @@ const ConfigCenterPage: React.FC = () => {
                           <Switch disabled={!implemented} />
                         ) : param.type === 'number' ? (
                           <InputNumber min={param.min} max={param.max} precision={0} style={{ width: 140 }} disabled={!implemented} />
+                        ) : param.type === 'select' && param.selectOptions?.length ? (
+                          <Select
+                            style={{ minWidth: 200 }}
+                            disabled={!implemented}
+                            options={param.selectOptions.map((o) => ({
+                              value: o.value,
+                              label: renderText(o.labelKey, o.value),
+                            }))}
+                          />
                         ) : param.type === 'color' ? (
                           <ColorPicker showText disabled={!implemented} />
                         ) : null}
@@ -653,6 +679,15 @@ const ConfigCenterPage: React.FC = () => {
                           <Switch disabled={!implemented} />
                         ) : param.type === 'number' ? (
                           <InputNumber min={param.min} max={param.max} precision={0} style={{ width: 140 }} disabled={!implemented} />
+                        ) : param.type === 'select' && param.selectOptions?.length ? (
+                          <Select
+                            style={{ minWidth: 200 }}
+                            disabled={!implemented}
+                            options={param.selectOptions.map((o) => ({
+                              value: o.value,
+                              label: renderText(o.labelKey, o.value),
+                            }))}
+                          />
                         ) : param.type === 'color' ? (
                           <ColorPicker showText disabled={!implemented} />
                         ) : null}

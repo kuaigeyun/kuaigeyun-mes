@@ -8,6 +8,7 @@
  */
 
 import React, { useRef, useState } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit } from '@ant-design/pro-components';
 import { App, Button, Space, Modal, message, Card, Table, Row, Col, Typography } from 'antd';
 import { PlusOutlined, EyeOutlined, PlayCircleOutlined } from '@ant-design/icons';
@@ -68,6 +69,7 @@ const InventoryTransferPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
 
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   // Modal 相关状态
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [itemModalVisible, setItemModalVisible] = useState(false);
@@ -134,6 +136,8 @@ const InventoryTransferPage: React.FC = () => {
       messageApi.success('调拨单创建成功');
       setCreateModalVisible(false);
       formRef.current?.resetFields();
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       if (error.message !== '调出仓库和调入仓库不能相同') {
@@ -167,6 +171,8 @@ const InventoryTransferPage: React.FC = () => {
         try {
           await inventoryTransferApi.execute(record.id!.toString());
           messageApi.success('调拨执行成功');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '执行调拨失败');
@@ -225,6 +231,8 @@ const InventoryTransferPage: React.FC = () => {
       setItemModalVisible(false);
       setCurrentTransferId(null);
       itemFormRef.current?.resetFields();
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '添加调拨明细失败');
@@ -413,6 +421,8 @@ const InventoryTransferPage: React.FC = () => {
                   await inventoryTransferApi.delete(String(id));
                 }
                 messageApi.success(`成功删除 ${keys.length} 条记录`);
+                invalidateMenuBadgeCounts();
+
                 actionRef.current?.reload();
               } catch (error: any) {
                 messageApi.error(error.message || '删除失败');

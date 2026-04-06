@@ -5,6 +5,7 @@
  */
 
 import React, { useEffect, useRef, useState, useMemo } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Modal, Space, Switch } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
@@ -38,6 +39,7 @@ const CustomerFollowUpsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [activityOptions, setActivityOptions] = useState<{ label: string; value: string }[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
@@ -84,6 +86,8 @@ const CustomerFollowUpsPage: React.FC = () => {
   }, []);
 
   const reloadTable = () => {
+    invalidateMenuBadgeCounts();
+
     actionRef.current?.reload();
   };
 

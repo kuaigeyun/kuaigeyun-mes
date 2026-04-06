@@ -64,6 +64,7 @@ from .replenishment_suggestion import ReplenishmentSuggestion
 from .line_side_inventory import LineSideInventory
 from .backflush_record import BackflushRecord
 from .material_call_request import MaterialCallRequest
+from .material_call_request_item import MaterialCallRequestItem
 
 # 采购管理模块
 from .purchase_order import PurchaseOrder, PurchaseOrderItem
@@ -188,6 +189,7 @@ __all__ = [
     'BatchingOrder',
     'BatchingOrderItem',
     'MaterialCallRequest',
+    'MaterialCallRequestItem',
 
     # 采购管理模块
     'PurchaseOrder',

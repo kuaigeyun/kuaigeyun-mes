@@ -5,6 +5,7 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, message, Card, Table, Row, Col, Form, Tooltip, Typography } from 'antd';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined, InboxOutlined } from '@ant-design/icons';
@@ -61,6 +62,7 @@ interface OutboundOrderItem {
 const OutboundPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   // Modal 相关状态（创建出库单）
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const formRef = useRef<any>(null);
@@ -195,6 +197,8 @@ const OutboundPage: React.FC = () => {
       }
       setBatchModalVisible(false);
       batchForm.resetFields();
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (e: any) {
       messageApi.error(e?.message || e?.response?.data?.detail || '批量出库失败');
@@ -251,6 +255,8 @@ const OutboundPage: React.FC = () => {
             await warehouseApi.salesDelivery.confirm(record.id!.toString());
           }
           messageApi.success('出库确认成功，库存已更新');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
           if (currentOrder?.id === record.id) {
             try {
@@ -422,6 +428,8 @@ const OutboundPage: React.FC = () => {
       messageApi.success('出库单创建成功');
       setCreateModalVisible(false);
       formRef.current?.resetFields();
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
@@ -509,6 +517,8 @@ const OutboundPage: React.FC = () => {
                   }
                 }
                 messageApi.success(`成功删除 ${keys.length} 条记录`);
+                invalidateMenuBadgeCounts();
+
                 actionRef.current?.reload();
               } catch (error: any) {
                 messageApi.error(error?.message || '删除失败');

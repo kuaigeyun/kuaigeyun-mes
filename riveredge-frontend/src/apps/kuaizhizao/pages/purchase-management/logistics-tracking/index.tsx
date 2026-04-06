@@ -9,6 +9,7 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useLocation } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import type { DescriptionsProps } from 'antd';
@@ -131,6 +132,7 @@ const LogisticsTrackingPage: React.FC = () => {
   const { token } = theme.useToken();
   const location = useLocation();
   const actionRef = useRef<ActionType>(null);
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [statsVersion, setStatsVersion] = useState(0);
   const [localStats, setLocalStats] = useState({ total: 0, inTransit: 0, delivered: 0, exception: 0 });
 
@@ -337,6 +339,8 @@ const LogisticsTrackingPage: React.FC = () => {
             setDetailDrawerVisible(false);
           }
           setStatsVersion((v) => v + 1);
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (e: any) {
           messageApi.error(e?.message || '删除失败');
@@ -378,6 +382,8 @@ const LogisticsTrackingPage: React.FC = () => {
       messageApi.success('创建成功');
       setCreateModalVisible(false);
       setStatsVersion((v) => v + 1);
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (e: any) {
       messageApi.error(e?.message || '创建失败');
@@ -399,6 +405,8 @@ const LogisticsTrackingPage: React.FC = () => {
       messageApi.success('更新成功');
       setEditModalVisible(false);
       setStatsVersion((v) => v + 1);
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
       if (detailRecord?.id === editingId) {
         const fresh = await purchaseLogisticsApi.get(editingId.toString());

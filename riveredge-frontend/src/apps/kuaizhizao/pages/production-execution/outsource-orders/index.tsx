@@ -10,6 +10,7 @@
  */
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import type { DescriptionsProps } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -166,6 +167,7 @@ export const OutsourceOrdersTable: React.FC = () => {
   const { token } = AntdTheme.useToken();
   const actionRef = useRef<ActionType>(null);
 
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [statsVersion, setStatsVersion] = useState(0);
   const [localStats, setLocalStats] = useState({ total: 0, draft: 0, inProgress: 0 });
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -332,6 +334,8 @@ export const OutsourceOrdersTable: React.FC = () => {
             setOutsourceOrderDetail(null);
           }
           setStatsVersion((v) => v + 1);
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '删除失败');
@@ -386,6 +390,8 @@ export const OutsourceOrdersTable: React.FC = () => {
             setOutsourceOrderDetail(null);
           }
           setStatsVersion((v) => v + 1);
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '删除失败');
@@ -424,6 +430,8 @@ export const OutsourceOrdersTable: React.FC = () => {
         throw new Error('请从工单详情页创建工序委外单');
       }
       setModalVisible(false);
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
       setStatsVersion((v) => v + 1);
       if (oid && outsourceOrderDetail?.id === oid) {

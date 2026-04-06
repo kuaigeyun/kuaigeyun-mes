@@ -8,6 +8,7 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Row, Col, Select, Typography, Dropdown, Empty, Descriptions, Input } from 'antd';
@@ -217,6 +218,7 @@ const SampleTrialsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [trialDetail, setTrialDetail] = useState<SampleTrialDetail | null>(null);
   const trialTracking = useDocumentTracking(
@@ -454,6 +456,8 @@ const SampleTrialsPage: React.FC = () => {
         try {
           await sampleTrialApi.delete(record.id!.toString());
           messageApi.success('删除成功');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '删除失败');
@@ -474,6 +478,8 @@ const SampleTrialsPage: React.FC = () => {
           }
           messageApi.success(`已删除 ${keys.length} 条样品试用单`);
           setSelectedRowKeys([]);
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error?.message || '批量删除失败');
@@ -504,6 +510,8 @@ const SampleTrialsPage: React.FC = () => {
           messageApi.warning(`已转订单 ${successCount} 条，失败 ${failedCount} 条`);
         }
         setSelectedRowKeys([]);
+        invalidateMenuBadgeCounts();
+
         actionRef.current?.reload();
       },
     });
@@ -524,6 +532,8 @@ const SampleTrialsPage: React.FC = () => {
         successCount += 1;
       }
       messageApi.success(`已同步 ${successCount} 条样品试用单`);
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error?.message || '同步失败');
@@ -657,6 +667,8 @@ const SampleTrialsPage: React.FC = () => {
     });
     if (result.successCount > 0) {
       messageApi.success(`成功导入 ${result.successCount} 条样品试用单`);
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     }
     if (result.failureCount > 0) {
@@ -672,6 +684,8 @@ const SampleTrialsPage: React.FC = () => {
         try {
           await sampleTrialApi.convertToOrder(record.id!.toString());
           messageApi.success('转换成功');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '转换失败');
@@ -688,6 +702,8 @@ const SampleTrialsPage: React.FC = () => {
         try {
           await sampleTrialApi.submit(String(record.id));
           messageApi.success('提交成功');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error?.message || '提交失败');
@@ -704,6 +720,8 @@ const SampleTrialsPage: React.FC = () => {
         try {
           await sampleTrialApi.withdraw(String(record.id));
           messageApi.success('撤回成功');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error?.message || '撤回失败');
@@ -720,6 +738,8 @@ const SampleTrialsPage: React.FC = () => {
         try {
           await sampleTrialApi.approve(String(record.id));
           messageApi.success('审核通过');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error?.message || '审核失败');
@@ -736,6 +756,8 @@ const SampleTrialsPage: React.FC = () => {
         try {
           await sampleTrialApi.reject(String(record.id));
           messageApi.success('已驳回并退回草稿');
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error?.message || '驳回失败');
@@ -762,6 +784,8 @@ const SampleTrialsPage: React.FC = () => {
         try {
           const res = await pushSalesOrderToShipmentNotice(record.sales_order_id!);
           messageApi.success(`下推成功：${res.notice_code || res.notice_id || ''}`);
+          invalidateMenuBadgeCounts();
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error?.message || '下推发货通知单失败');
@@ -783,6 +807,8 @@ const SampleTrialsPage: React.FC = () => {
       messageApi.success('样品出库单创建成功');
       setCreateOutboundModalVisible(false);
       setCreateOutboundTrialId(null);
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       if (error.errorFields) messageApi.error('请选择出库仓库');
@@ -946,6 +972,8 @@ const SampleTrialsPage: React.FC = () => {
       setModalVisible(false);
       setEffectiveRuleCode(null);
       setEffectiveAutoGen(null);
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '创建失败');
@@ -986,6 +1014,8 @@ const SampleTrialsPage: React.FC = () => {
       setEditingId(null);
       setEffectiveRuleCode(null);
       setEffectiveAutoGen(null);
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '更新失败');

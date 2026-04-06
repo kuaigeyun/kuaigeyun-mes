@@ -8,6 +8,7 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormText, ProFormDigit, ProFormTextArea, ProFormSelect, ProFormSwitch } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, message, Popconfirm, Badge, Card, Row, Col, Statistic, Typography } from 'antd';
 import { EyeOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined, CloseCircleOutlined, WarningOutlined } from '@ant-design/icons';
@@ -67,6 +68,7 @@ interface InventoryAlertRule {
 const InventoryAlertPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [activeTab, setActiveTab] = useState<'alerts' | 'rules'>('alerts');
 
@@ -184,6 +186,8 @@ const InventoryAlertPage: React.FC = () => {
       setRuleModalVisible(false);
       setCurrentRuleId(null);
       formRef.current?.resetFields();
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
@@ -198,6 +202,8 @@ const InventoryAlertPage: React.FC = () => {
     try {
       await inventoryAlertApi.deleteRule(record.id!.toString());
       messageApi.success('预警规则删除成功');
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '删除预警规则失败');
@@ -247,6 +253,8 @@ const InventoryAlertPage: React.FC = () => {
       setHandleModalVisible(false);
       setCurrentAlertId(null);
       handleFormRef.current?.resetFields();
+      invalidateMenuBadgeCounts();
+
       actionRef.current?.reload();
       loadStatistics();
     } catch (error: any) {
@@ -595,6 +603,8 @@ const InventoryAlertPage: React.FC = () => {
             type={activeTab === 'alerts' ? 'primary' : 'default'}
             onClick={() => {
               setActiveTab('alerts');
+              invalidateMenuBadgeCounts();
+
               actionRef.current?.reload();
             }}
           >
@@ -605,6 +615,8 @@ const InventoryAlertPage: React.FC = () => {
             type={activeTab === 'rules' ? 'primary' : 'default'}
             onClick={() => {
               setActiveTab('rules');
+              invalidateMenuBadgeCounts();
+
               actionRef.current?.reload();
             }}
           >
