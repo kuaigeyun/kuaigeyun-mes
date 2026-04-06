@@ -365,6 +365,21 @@ const ReceiptNoticesPage: React.FC = () => {
             </Button>
           );
         }
+        if (record.status === '已通知') {
+          parts.push(
+            <Button
+              key="w"
+              type="link"
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleWithdraw(record);
+              }}
+            >
+              撤回通知
+            </Button>
+          );
+        }
         return renderReceiptNoticeRowActions(parts, `rn-${record.id ?? 'row'}`);
       },
     },
@@ -433,6 +448,28 @@ const ReceiptNoticesPage: React.FC = () => {
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '通知失败');
+        }
+      },
+    });
+  };
+
+  const handleWithdraw = (record: ReceiptNotice) => {
+    Modal.confirm({
+      title: '撤回通知',
+      content: `确定将「${record.notice_code}」撤回到待收货吗？将移除关联的采购入库草稿（若尚未确认入库）。`,
+      onOk: async () => {
+        try {
+          await receiptNoticeApi.withdraw(record.id!.toString());
+          messageApi.success('已撤回到待收货');
+          setStatsVersion((v) => v + 1);
+          if (noticeDetail?.id === record.id) {
+            const fresh = await receiptNoticeApi.get(record.id!.toString());
+            setNoticeDetail(fresh as ReceiptNoticeDetail);
+          }
+          invalidateMenuBadgeCounts();
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '撤回失败');
         }
       },
     });
@@ -1028,6 +1065,15 @@ const ReceiptNoticesPage: React.FC = () => {
                       onClick={() => handleNotify(noticeDetail)}
                     >
                       通知仓库
+                    </Button>
+                  ),
+                },
+                {
+                  key: 'withdraw',
+                  visible: noticeDetail.status === '已通知',
+                  render: () => (
+                    <Button type="link" size="small" onClick={() => handleWithdraw(noticeDetail)}>
+                      撤回通知
                     </Button>
                   ),
                 },

@@ -23,6 +23,10 @@ import {
   deleteConfigTemplate,
   type ConfigTemplate,
 } from '../../../services/businessConfig';
+import {
+  qualityApi,
+  type QualityInspectionStageToggles,
+} from '../../../apps/kuaizhizao/services/quality-execution';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -61,6 +65,8 @@ const BusinessConfigPage: React.FC = () => {
   const [parameterControlMeta, setParameterControlMeta] = useState<
     Record<string, Record<string, { type?: string; options?: { value: string; labelKey: string }[] }>>
   >({});
+  const [stageToggles, setStageToggles] = useState<QualityInspectionStageToggles | null>(null);
+  const [stageSaving, setStageSaving] = useState(false);
 
 
   /**
@@ -74,6 +80,12 @@ const BusinessConfigPage: React.FC = () => {
         modules: data.modules,
         parameters: data.parameters,
       });
+
+      try {
+        setStageToggles(await qualityApi.stageToggles.get());
+      } catch {
+        setStageToggles(null);
+      }
 
       // 加载配置模板列表
       const templatesData = await getConfigTemplates();
@@ -289,6 +301,22 @@ const BusinessConfigPage: React.FC = () => {
     }
   };
 
+  const handleSaveQualityStageToggles = async () => {
+    if (!stageToggles) {
+      return;
+    }
+    try {
+      setStageSaving(true);
+      const saved = await qualityApi.stageToggles.update(stageToggles);
+      setStageToggles(saved);
+      messageApi.success(t('pages.system.businessConfig.qualityStageToggles.saveSuccess'));
+    } catch (error: any) {
+      messageApi.error(error.message || t('pages.system.businessConfig.qualityStageToggles.saveFailed'));
+    } finally {
+      setStageSaving(false);
+    }
+  };
+
   /**
    * 渲染流程参数配置
    */
@@ -302,6 +330,49 @@ const BusinessConfigPage: React.FC = () => {
               {t('pages.system.businessConfig.flowParamsDesc')}
             </Paragraph>
           </div>
+
+          <Card title={t('pages.system.businessConfig.qualityStageTogglesTitle')} size="small" style={{ width: '100%' }}>
+            <Paragraph type="secondary" style={{ marginBottom: 12 }}>
+              {t('pages.system.businessConfig.qualityStageTogglesDesc')}
+            </Paragraph>
+            {stageToggles ? (
+              <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text>{t('pages.system.businessConfig.qualityStageToggles.iqc')}</Text>
+                  <Switch
+                    checked={stageToggles.iqc_enabled}
+                    onChange={(v) => setStageToggles({ ...stageToggles, iqc_enabled: v })}
+                  />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text>{t('pages.system.businessConfig.qualityStageToggles.ipqc')}</Text>
+                  <Switch
+                    checked={stageToggles.ipqc_enabled}
+                    onChange={(v) => setStageToggles({ ...stageToggles, ipqc_enabled: v })}
+                  />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text>{t('pages.system.businessConfig.qualityStageToggles.fqc')}</Text>
+                  <Switch
+                    checked={stageToggles.fqc_enabled}
+                    onChange={(v) => setStageToggles({ ...stageToggles, fqc_enabled: v })}
+                  />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text>{t('pages.system.businessConfig.qualityStageToggles.oqc')}</Text>
+                  <Switch
+                    checked={stageToggles.oqc_enabled}
+                    onChange={(v) => setStageToggles({ ...stageToggles, oqc_enabled: v })}
+                  />
+                </div>
+                <Button type="default" loading={stageSaving} onClick={handleSaveQualityStageToggles} block>
+                  {t('pages.system.businessConfig.qualityStageToggles.save')}
+                </Button>
+              </Space>
+            ) : (
+              <Text type="secondary">—</Text>
+            )}
+          </Card>
 
           {Object.entries(parameterKeys).map(([category, keys]) => (
             <Card key={category} title={t(`pages.system.businessConfig.paramCategory.${category}`)} size="small">

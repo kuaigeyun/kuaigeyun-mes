@@ -322,7 +322,7 @@ class MaterialBatchService:
                 tenant_id=tenant_id,
                 rule=batch_rule,
                 context=context,
-                scope_key=str(material.id),
+                scope_key="",  # 全局自增，避免不同物料产生相同的如 -001 批号
                 preview=preview,
                 preview_offset=preview_offset,
             )
@@ -333,7 +333,7 @@ class MaterialBatchService:
             tenant_id=tenant_id,
             rule=default_rule,
             context=context,
-            scope_key=str(material.id),
+            scope_key="",  # 全局自增
             preview=preview,
             preview_offset=preview_offset,
         )

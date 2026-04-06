@@ -142,14 +142,16 @@ export interface PriceComparisonItem {
   supplier_name: string;
   last_price: number;
   last_order_date?: string;
-  reliability_level: string;
+  reliability_rating: string;
+  delivery_lead_time: number;
 }
 
 export interface MaterialPriceComparison {
   material_id: number;
-  material_code: string;
+  material_code?: string;
   material_name: string;
-  comparisons: PriceComparisonItem[];
+  /** 后端字段名 comparison */
+  comparison: PriceComparisonItem[];
 }
 
 export interface PriceComparisonResponse {

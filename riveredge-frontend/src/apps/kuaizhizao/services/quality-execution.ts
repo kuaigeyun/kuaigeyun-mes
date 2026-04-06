@@ -47,6 +47,14 @@ export interface QualityAnomaliesResponse {
   anomalies: QualityAnomalyItem[];
 }
 
+/** 组织级质检环节总开关（与后端 TenantConfig quality_inspection_stages 一致） */
+export interface QualityInspectionStageToggles {
+  iqc_enabled: boolean;
+  ipqc_enabled: boolean;
+  fqc_enabled: boolean;
+  oqc_enabled: boolean;
+}
+
 export const qualityApi = {
   incomingInspection: {
     list: async (params?: any) => apiRequest('/apps/kuaizhizao/incoming-inspections', { method: 'GET', params }),
@@ -122,6 +130,18 @@ export const qualityApi = {
         method: 'GET',
         params,
         responseType: 'blob',
+      }),
+  },
+  /** IQC/IPQC/FQC/OQC 环节是否允许下推/创建对应质检单（关闭后服务端直接拒绝） */
+  stageToggles: {
+    get: async () =>
+      apiRequest<QualityInspectionStageToggles>('/apps/kuaizhizao/quality-inspection-stage-toggles', {
+        method: 'GET',
+      }),
+    update: async (data: Partial<QualityInspectionStageToggles>) =>
+      apiRequest<QualityInspectionStageToggles>('/apps/kuaizhizao/quality-inspection-stage-toggles', {
+        method: 'PUT',
+        data,
       }),
   },
   qualityStatistics: {

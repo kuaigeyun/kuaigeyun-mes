@@ -98,6 +98,47 @@ async def list_receipt_notices(
     )
 
 
+# 固定子路径需注册在 /{notice_id} 之前，避免个别 ASGI/匹配顺序下误配
+@router.post("/{notice_id}/notify", response_model=ReceiptNoticeResponse, summary="通知仓库")
+async def notify_warehouse(
+    notice_id: int = Path(..., description="通知单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """通知仓库（标记为已通知）"""
+    try:
+        return await receipt_notice_service.notify_warehouse(
+            tenant_id=tenant_id,
+            notice_id=notice_id,
+            notified_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/{notice_id}/withdraw", response_model=ReceiptNoticeResponse, summary="撤回通知")
+async def withdraw_receipt_notice(
+    notice_id: int = Path(..., description="通知单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """撤回通知（已通知 -> 待收货），并软删通知生成的采购入库草稿"""
+    try:
+        return await receipt_notice_service.withdraw_notice(
+            tenant_id=tenant_id,
+            notice_id=notice_id,
+            withdrawn_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
 @router.get("/{notice_id}", response_model=ReceiptNoticeWithItemsResponse, summary="获取收货通知单详情")
 async def get_receipt_notice(
     notice_id: int = Path(..., description="通知单ID"),
@@ -151,25 +192,4 @@ async def delete_receipt_notice(
     except NotFoundError as e:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
     except BusinessLogicError as e:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
-@router.post("/{notice_id}/notify", response_model=ReceiptNoticeResponse, summary="通知仓库")
-async def notify_warehouse(
-    notice_id: int = Path(..., description="通知单ID"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """通知仓库（标记为已通知）"""
-    try:
-        return await receipt_notice_service.notify_warehouse(
-            tenant_id=tenant_id,
-            notice_id=notice_id,
-            notified_by=current_user.id,
-        )
-    except NotFoundError as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
-    except BusinessLogicError as e:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except ValidationError as e:
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))

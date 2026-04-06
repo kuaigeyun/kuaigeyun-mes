@@ -135,35 +135,22 @@ class InventoryService:
             await batch.save()
 
     @staticmethod
-    @atomic()
-    async def increase_stock(
+    async def _increase_stock_no_atomic(
         tenant_id: int,
         material_id: int,
         quantity: Decimal,
         warehouse_id: Optional[int] = None,
         batch_no: Optional[str] = None,
+        serial_nos: Optional[list[str]] = None,
         source_type: Optional[str] = None,
         source_doc_id: Optional[int] = None,
         source_doc_code: Optional[str] = None,
     ) -> bool:
         """
-        增加库存
-
-        Args:
-            tenant_id: 租户ID
-            material_id: 物料ID
-            quantity: 增加数量
-            warehouse_id: 仓库ID。根据 warehouse_type 决定：line_side→LineSideInventory，normal/wip→MaterialBatch
-            batch_no: 批号（主仓必填，线边仓可选）
-            source_type: 来源类型（如 production_picking, sales_delivery）
-            source_doc_id: 来源单据ID
-            source_doc_code: 来源单据编码
-
-        Returns:
-            是否成功
+        增加库存（不开启独立事务）。
         """
         try:
-            # 根据 warehouse_type 决定写入目标：line_side → LineSideInventory，否则 → MaterialBatch
+            # 根据 warehouse_type 决定写入目标
             use_line_side = False
             if warehouse_id is not None:
                 from apps.master_data.models.warehouse import Warehouse
@@ -171,23 +158,31 @@ class InventoryService:
                 if wh and wh.warehouse_type == "line_side":
                     use_line_side = True
 
-            if not use_line_side:
-                # 主仓（normal/wip 或 warehouse_id 为空）：使用 MaterialBatch
-                from apps.master_data.models.material import Material
-                from infra.exceptions.exceptions import BusinessLogicError
+            from apps.master_data.models.material import Material
+            from infra.exceptions.exceptions import BusinessLogicError
 
-                batch_management_enabled, _ = await InventoryService._get_warehouse_management_flags(tenant_id)
+            batch_management_enabled, serial_management_enabled = False, False
+            try:
+                batch_management_enabled, serial_management_enabled = await InventoryService._get_warehouse_management_flags(tenant_id)
+            except Exception as _flag_exc:
+                logger.warning(f"获取仓库管理标志失败（跳过批号/序列号强制校验）: {_flag_exc}")
+            material = await Material.get_or_none(tenant_id=tenant_id, id=material_id, deleted_at__isnull=True)
+
+            if not use_line_side:
+                # 批号管理校验
                 if batch_management_enabled:
-                    material = await Material.get_or_none(
-                        tenant_id=tenant_id,
-                        id=material_id,
-                        deleted_at__isnull=True,
-                    )
                     if material and getattr(material, "batch_managed", False) and not (batch_no and str(batch_no).strip()):
                         material_code = getattr(material, "main_code", None) or getattr(material, "code", "")
-                        raise BusinessLogicError(
-                            f"物料 {material.name}（{material_code}）启用了批号管理，入库必须提供批号"
-                        )
+                        raise BusinessLogicError(f"物料 {material.name}（{material_code}）启用了批号管理，入库必须提供批号")
+
+                # 序列号管理校验
+                if serial_management_enabled:
+                    if material and getattr(material, "serial_managed", False):
+                        if not serial_nos or len(serial_nos) <= 0:
+                            material_code = getattr(material, "main_code", None) or getattr(material, "code", "")
+                            raise BusinessLogicError(f"物料 {material.name}（{material_code}）启用了序列号管理，入库必须提供序列号")
+                        if abs(float(quantity) - len(serial_nos)) > 0.001:
+                            raise BusinessLogicError(f"入库数量（{quantity}）与序列号数量（{len(serial_nos)}）不一致")
 
                 logger.info(f"Adding stock for material_id={material_id}, batch_no={batch_no}, qty={quantity}")
                 await InventoryService._material_batch_increase_or_restore(
@@ -196,12 +191,34 @@ class InventoryService:
                     batch_no=batch_no or "DEFAULT",
                     quantity=quantity,
                 )
+                
+                # 记录序列号
+                if serial_nos:
+                    from apps.master_data.models.material_serial import MaterialSerial
+                    for s_no in serial_nos:
+                        # 检查序列号是否已在库或存在
+                        existing = await MaterialSerial.filter(tenant_id=tenant_id, serial_no=s_no).first()
+                        if existing:
+                            if existing.status == "in_stock":
+                                raise BusinessLogicError(f"序列号 {s_no} 已在库，不可重复入库")
+                            existing.status = "in_stock"
+                            existing.material_id = material_id
+                            # 可补充来源信息
+                            await existing.save()
+                        else:
+                            await MaterialSerial.create(
+                                tenant_id=tenant_id,
+                                material_id=material_id,
+                                serial_no=s_no,
+                                status="in_stock"
+                            )
+
                 logger.info(
                     f"InventoryService.increase_stock: tenant={tenant_id} material={material_id} "
                     f"qty={quantity} warehouse={warehouse_id} batch={batch_no} source={source_type}"
                 )
             else:
-                # 线边仓（warehouse_type=line_side）：使用 LineSideInventory
+                # 线边仓处理
                 from apps.kuaizhizao.models.line_side_inventory import LineSideInventory
 
                 inv_filter = dict(
@@ -218,9 +235,7 @@ class InventoryService:
                     inv.quantity = (inv.quantity or Decimal(0)) + quantity
                     await inv.save()
                 else:
-                    from apps.master_data.models.material import Material
-
-                    mat = await Material.get_or_none(id=material_id)
+                    mat = material or await Material.get_or_none(id=material_id)
                     await LineSideInventory.create(
                         tenant_id=tenant_id,
                         warehouse_id=warehouse_id,
@@ -235,10 +250,6 @@ class InventoryService:
                         source_doc_id=source_doc_id,
                         source_doc_code=source_doc_code or "",
                     )
-                logger.info(
-                    f"InventoryService.increase_stock(line_side): tenant={tenant_id} "
-                    f"warehouse={warehouse_id} material={material_id} qty={quantity}"
-                )
             return True
         except Exception as e:
             logger.error(f"InventoryService.increase_stock 失败: {e}")
@@ -246,7 +257,35 @@ class InventoryService:
 
     @staticmethod
     @atomic()
-    async def decrease_stock(
+    async def increase_stock(
+        tenant_id: int,
+        material_id: int,
+        quantity: Decimal,
+        warehouse_id: Optional[int] = None,
+        batch_no: Optional[str] = None,
+        serial_nos: Optional[list[str]] = None,
+        # ... rest stay same if possible, but I'll update all for consistency
+        source_type: Optional[str] = None,
+        source_doc_id: Optional[int] = None,
+        source_doc_code: Optional[str] = None,
+    ) -> bool:
+        """
+        增加库存（独立事务包装）。
+        """
+        return await InventoryService._increase_stock_no_atomic(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            quantity=quantity,
+            warehouse_id=warehouse_id,
+            batch_no=batch_no,
+            serial_nos=serial_nos,
+            source_type=source_type,
+            source_doc_id=source_doc_id,
+            source_doc_code=source_doc_code,
+        )
+
+    @staticmethod
+    async def _decrease_stock_no_atomic(
         tenant_id: int,
         material_id: int,
         quantity: Decimal,
@@ -258,14 +297,7 @@ class InventoryService:
         enforce_fifo: bool = False,
     ) -> bool:
         """
-        扣减库存
-
-        Args:
-            同 increase_stock
-            enforce_fifo: 是否强校验先进先出（拦截）
-
-        Returns:
-            是否成功
+        扣减库存（不开启独立事务）。见 `_increase_stock_no_atomic` 说明。
         """
         try:
             quantity = Decimal(str(quantity or 0))
@@ -435,6 +467,36 @@ class InventoryService:
         except Exception as e:
             logger.error(f"InventoryService.decrease_stock 失败: {e}")
             raise
+
+    @staticmethod
+    @atomic()
+    async def decrease_stock(
+        tenant_id: int,
+        material_id: int,
+        quantity: Decimal,
+        warehouse_id: Optional[int] = None,
+        batch_no: Optional[str] = None,
+        source_type: Optional[str] = None,
+        source_doc_id: Optional[int] = None,
+        source_doc_code: Optional[str] = None,
+        enforce_fifo: bool = False,
+    ) -> bool:
+        """
+        扣减库存（独立事务包装）。
+
+        若调用方已在 `in_transaction()` 内，请改用 `_decrease_stock_no_atomic`。
+        """
+        return await InventoryService._decrease_stock_no_atomic(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            quantity=quantity,
+            warehouse_id=warehouse_id,
+            batch_no=batch_no,
+            source_type=source_type,
+            source_doc_id=source_doc_id,
+            source_doc_code=source_doc_code,
+            enforce_fifo=enforce_fifo,
+        )
 
     @staticmethod
     async def get_quantity(

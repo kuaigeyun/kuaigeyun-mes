@@ -232,6 +232,7 @@ async def calculate_material_requirements_from_bom(
     as_of_date: Optional[datetime] = None,
     variant_attributes: Optional[Dict[str, Any]] = None,
     configurable_selections: Optional[Dict[str, int]] = None,
+    for_kitting_analysis: bool = False,
 ) -> List[Any]:
     """
     根据BOM计算物料需求（从master_data）
@@ -244,6 +245,7 @@ async def calculate_material_requirements_from_bom(
         as_of_date: 基准日期（可选），仅使用该日期生效的 BOM
         variant_attributes: 配置件属性（可选），当产品为 Configure 时用于 BOM 匹配
         configurable_selections: 配置位选择（可选），格式 {"parentMaterialId_configurableGroupId": componentId}
+        for_kitting_analysis: True 时自制/委外子件不拆子 BOM（工单齐套）；False 时多阶展开（缺料/MRP 等）
 
     Returns:
         物料需求列表，返回MaterialRequirement对象列表（兼容原BOMService的返回格式）
@@ -261,6 +263,7 @@ async def calculate_material_requirements_from_bom(
         variant_attributes=variant_attributes,
         configurable_selections=configurable_selections,
         as_of_date=as_of_date,
+        flatten_intermediate_subassemblies=for_kitting_analysis,
     )
 
     if expanded:

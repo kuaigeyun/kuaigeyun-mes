@@ -17,7 +17,7 @@ export const getReceiptNoticeLifecycle = createLifecycleResolver({
   },
   nextStepSuggestions: {
     pending: ['通知仓库'],
-    notified: ['入库'],
+    notified: ['撤回通知（回到待收货）', '入库'],
     received: [],
   },
   successKeys: ['received'],

@@ -52,6 +52,9 @@ class PurchaseReceiptItem(BaseModel):
     expiry_date = fields.DateField(null=True, description="到期日期")
     manufacturing_date = fields.DateField(null=True, description="生产日期")
 
+    # 序列号信息
+    serial_numbers = fields.JSONField(null=True, description="序列号列表（JSON格式，存储多个序列号）")
+
     # 状态
     status = fields.CharField(max_length=20, default="待入库", description="入库状态")
     receipt_time = fields.DatetimeField(null=True, description="实际入库时间")

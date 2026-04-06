@@ -1694,12 +1694,21 @@ const ConvertForm: React.FC<{
           { title: '物料名称', dataIndex: 'material_name', width: 160 },
           {
             title: '供应商',
-            width: 320,
+            width: 380,
             render: (_: unknown, record: PurchaseRequisitionItem) =>
               record.id != null && !record.purchase_order_id ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8,
+                    flexWrap: 'nowrap',
+                    minWidth: 0,
+                  }}
+                >
                   <Select
-                    style={{ width: '100%' }}
+                    style={{ flex: '1 1 auto', minWidth: 0 }}
                     placeholder="选择供应商"
                     value={rowSuppliers[record.id] || undefined}
                     onChange={(v: number) => setRowSuppliers((prev) => ({ ...prev, [record.id!]: v }))}
@@ -1707,11 +1716,11 @@ const ConvertForm: React.FC<{
                     showSearch
                     optionFilterProp="label"
                   />
-                  {rowSuppliers[record.id] && (
-                    <div style={{ transform: 'scale(0.85)', transformOrigin: 'left' }}>
+                  {rowSuppliers[record.id] ? (
+                    <span style={{ flexShrink: 0, whiteSpace: 'nowrap', lineHeight: 1 }}>
                       <SupplierPerformanceTag supplierId={rowSuppliers[record.id]} />
-                    </div>
-                  )}
+                    </span>
+                  ) : null}
                 </div>
               ) : record.purchase_order_id ? (
                 '-'
@@ -1765,7 +1774,7 @@ const ConvertForm: React.FC<{
         dataSource={items}
         pagination={false}
         rowKey="id"
-        scroll={{ x: 1100 }}
+        scroll={{ x: 1160 }}
       />
     </div>
   );

@@ -14,4 +14,6 @@ export const receiptNoticeApi = {
   get: async (id: string) => apiRequest(`/apps/kuaizhizao/receipt-notices/${id}`, { method: 'GET' }),
   notify: async (id: string) =>
     apiRequest(`/apps/kuaizhizao/receipt-notices/${id}/notify`, { method: 'POST' }),
+  withdraw: async (id: string) =>
+    apiRequest(`/apps/kuaizhizao/receipt-notices/${id}/withdraw`, { method: 'POST' }),
 };

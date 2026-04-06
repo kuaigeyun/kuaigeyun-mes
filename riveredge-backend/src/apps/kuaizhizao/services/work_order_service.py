@@ -2935,7 +2935,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 required_quantity=float(wo.quantity),
                 only_approved=True,
                 variant_attributes=wo.variant_attributes,
-                configurable_selections=wo.configurable_selections
+                configurable_selections=wo.configurable_selections,
+                for_kitting_analysis=True,
             )
         except Exception as e:
             logger.warning(f"BOM 展开失败: {e}")

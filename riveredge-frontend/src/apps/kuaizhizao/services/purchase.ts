@@ -305,15 +305,14 @@ export interface PurchaseTrackingResponse {
   }>;
 }
 
-/** 供应商表现评分响应接口 */
+/** 供应商表现评分响应接口（与后端 SupplierPerformanceResponse 一致） */
 export interface SupplierPerformanceResponse {
   supplier_id: number;
   supplier_name: string;
-  otif_rate: number;
+  on_time_delivery_rate: number;
   quality_pass_rate: number;
-  avg_lead_time_days: number;
-  reliability_score: number;
-  reliability_level: string;
+  average_lead_time_days: number;
+  reliability_rating: string;
 }
 
 /** 获取物料历史成交价 */

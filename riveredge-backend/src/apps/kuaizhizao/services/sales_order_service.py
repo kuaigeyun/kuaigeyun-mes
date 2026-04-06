@@ -1863,6 +1863,7 @@ class SalesOrderService:
                     use_default_bom=True,
                     variant_attributes=variant_attrs,
                     configurable_selections=cfg_selections,
+                    flatten_intermediate_subassemblies=True,
                 )
                 for req in requirements:
                     st = req.get("source_type")
@@ -2015,6 +2016,7 @@ class SalesOrderService:
                     use_default_bom=True,
                     variant_attributes=variant_attrs,
                     configurable_selections=cfg_selections,
+                    flatten_intermediate_subassemblies=True,
                 )
                 for req in requirements:
                     st = req.get("source_type")

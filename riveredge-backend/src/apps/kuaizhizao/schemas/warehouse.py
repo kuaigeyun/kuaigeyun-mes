@@ -473,6 +473,7 @@ class PurchaseReceiptItemBase(BaseSchema):
     location_id: Optional[int] = Field(None, description="库位ID")
     location_code: Optional[str] = Field(None, max_length=50, description="库位编码")
     batch_number: Optional[str] = Field(None, max_length=50, description="批次号")
+    serial_numbers: Optional[List[str]] = Field(None, description="序列号列表")
     expiry_date: Optional[datetime] = Field(None, description="到期日期")
     manufacturing_date: Optional[datetime] = Field(None, description="生产日期")
     status: str = Field("待入库", max_length=20, description="入库状态")

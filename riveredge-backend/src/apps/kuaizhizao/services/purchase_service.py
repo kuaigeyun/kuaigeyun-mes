@@ -1115,7 +1115,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             return SupplierPerformanceResponse(
                 supplier_id=supplier_id,
                 supplier_name=supplier.name,
-                reliability_level="N/A"
+                reliability_rating="N/A",
             )
 
         # 1. 计算 OTIF (到货及时率)
@@ -1123,11 +1123,21 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
         on_time_count = 0
         for o in orders:
-            receipt = await PurchaseReceipt.filter(purchase_order_id=o.id).order_by("receipt_time").first()
-            if receipt and receipt.receipt_time and receipt.receipt_time.date() <= o.delivery_date:
+            receipt = (
+                await PurchaseReceipt.filter(tenant_id=tenant_id, purchase_order_id=o.id)
+                .order_by("receipt_time")
+                .first()
+            )
+            due = o.delivery_date
+            if (
+                receipt
+                and receipt.receipt_time
+                and due is not None
+                and receipt.receipt_time.date() <= due
+            ):
                 on_time_count += 1
-        
-        otif_rate = (on_time_count / len(orders)) * 100
+
+        on_time_delivery_rate = (on_time_count / len(orders)) * 100
 
         # 2. 质量合格率
         inspections = await IncomingInspection.filter(
@@ -1143,25 +1153,28 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         # 3. 平均提前期
         lead_times = []
         for o in orders:
-            receipt = await PurchaseReceipt.filter(purchase_order_id=o.id).order_by("receipt_time").first()
-            if receipt and receipt.receipt_time:
+            receipt = (
+                await PurchaseReceipt.filter(tenant_id=tenant_id, purchase_order_id=o.id)
+                .order_by("receipt_time")
+                .first()
+            )
+            if receipt and receipt.receipt_time and o.order_date:
                 delta = (receipt.receipt_time.date() - o.order_date).days
                 lead_times.append(max(0, delta))
-        
-        avg_lead_time = sum(lead_times) / len(lead_times) if lead_times else 0
+
+        average_lead_time_days = sum(lead_times) / len(lead_times) if lead_times else 0.0
 
         # 4. 综合评分
-        score = int(otif_rate * 0.5 + quality_pass_rate * 0.5)
-        level = "S" if score >= 95 else "A" if score >= 85 else "B" if score >= 70 else "C"
+        score = int(on_time_delivery_rate * 0.5 + quality_pass_rate * 0.5)
+        rating = "S" if score >= 95 else "A" if score >= 85 else "B" if score >= 70 else "C"
 
         return SupplierPerformanceResponse(
             supplier_id=supplier_id,
             supplier_name=supplier.name,
-            otif_rate=round(otif_rate, 1),
+            on_time_delivery_rate=round(on_time_delivery_rate, 1),
             quality_pass_rate=round(quality_pass_rate, 1),
-            avg_lead_time_days=round(avg_lead_time, 1),
-            reliability_score=score,
-            reliability_level=level
+            average_lead_time_days=round(average_lead_time_days, 1),
+            reliability_rating=rating,
         )
 
     async def expedite_purchase_order(self, tenant_id: int, order_id: int, remarks: Optional[str] = None) -> ExpediteResponse:
@@ -1223,82 +1236,39 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             
             comparisons = []
             for sid, item in supplier_latest.items():
-                # 获取供应商表现评级
+                rating = "N/A"
+                delivery_lead_days = 0
                 try:
                     perf = await self.get_supplier_performance_metrics(tenant_id, sid)
-                    level = perf.reliability_level
+                    rating = perf.reliability_rating
+                    delivery_lead_days = int(round(float(perf.average_lead_time_days or 0)))
                 except Exception:
-                    level = "N/A"
-                
-                comparisons.append(PriceComparisonItem(
-                    supplier_id=sid,
-                    supplier_name=item.order.supplier_name,
-                    last_price=item.unit_price,
-                    last_order_date=item.order.order_date,
-                    reliability_level=level
-                ))
-            
+                    pass
+
+                comparisons.append(
+                    PriceComparisonItem(
+                        supplier_id=sid,
+                        supplier_name=item.order.supplier_name,
+                        last_price=item.unit_price,
+                        last_order_date=item.order.order_date,
+                        reliability_rating=rating,
+                        delivery_lead_time=max(0, delivery_lead_days),
+                    )
+                )
+
             # 按价格升序排列（便宜优先）
             comparisons.sort(key=lambda x: x.last_price)
-            
-            results.append(MaterialPriceComparison(
-                material_id=mid,
-                material_code=material.material_code,
-                material_name=material.name,
-                comparisons=comparisons
-            ))
-            
+
+            results.append(
+                MaterialPriceComparison(
+                    material_id=mid,
+                    material_name=material.name,
+                    material_code=material.main_code or material.code or None,
+                    comparison=comparisons,
+                )
+            )
+
         return PriceComparisonResponse(results=results)
-        from apps.master_data.models.warehouse import Warehouse
-        default_warehouse = await Warehouse.filter(tenant_id=tenant_id, is_active=True).first()
-        if default_warehouse:
-            warehouse_id = default_warehouse.id
-            warehouse_name = default_warehouse.name
-        
-        if not warehouse_id:
-            raise BusinessLogicError("未指定入库仓库，且未找到可用仓库")
-        
-        # 生成入库单编码
-        today = datetime.now().strftime("%Y%m%d")
-        receipt_code = await self.generate_code(tenant_id, "PURCHASE_RECEIPT_CODE", prefix=f"PR{today}")
-        
-        # 创建入库单
-        receipt_data = PurchaseReceiptCreate(
-            receipt_code=receipt_code,
-            purchase_order_id=order_id,
-            purchase_order_code=order.order_code,
-            supplier_id=order.supplier_id,
-            supplier_name=order.supplier_name,
-            receipt_date=datetime.now().date(),
-            warehouse_id=warehouse_id,
-            warehouse_name=warehouse_name,
-            status="待入库",
-            items=receipt_items
-        )
-        
-        receipt = await receipt_service.create_purchase_receipt(
-            tenant_id=tenant_id,
-            receipt_data=receipt_data,
-            created_by=created_by
-        )
-        
-        # 获取入库单详情（含明细及批号），供前端展示
-        receipt_id = receipt.id if hasattr(receipt, 'id') else None
-        receipt_code = receipt.receipt_code if hasattr(receipt, 'receipt_code') else None
-        receipt_with_items = await receipt_service.get_purchase_receipt_by_id(tenant_id, receipt_id) if receipt_id else None
-        items_with_batch = [
-            {"material_code": i.material_code, "material_name": i.material_name, "batch_number": getattr(i, "batch_number", None)}
-            for i in (receipt_with_items.items or [])
-        ] if receipt_with_items else []
-        
-        return {
-            "order_id": order_id,
-            "order_code": order.order_code,
-            "receipt_id": receipt_id,
-            "receipt_code": receipt_code,
-            "items": items_with_batch,
-            "message": "采购入库单创建成功"
-        }
 
     async def push_to_receipt_notice(
         self,

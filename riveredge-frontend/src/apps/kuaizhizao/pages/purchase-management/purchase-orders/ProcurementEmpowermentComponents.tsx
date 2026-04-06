@@ -25,23 +25,28 @@ export const MultiSupplierPriceComparison: React.FC<{ materialId: number; onSele
     <div style={{ width: 550 }}>
       {isLoading ? (
         <div style={{ padding: 20, textAlign: 'center' }}><Spin size="small" /></div>
-      ) : !comparison || comparison.comparisons.length === 0 ? (
+      ) : !comparison || !comparison.comparison?.length ? (
         <Empty description="暂无其他供应商历史成交记录" />
       ) : (
         <>
           <div style={{ marginBottom: 12, fontSize: 13, color: 'rgba(0,0,0,0.65)' }}>
-            为物料 <Text strong>{comparison.material_name} ({comparison.material_code})</Text> 找到以下成交记录：
+            为物料{' '}
+            <Text strong>
+              {comparison.material_name}
+              {comparison.material_code ? ` (${comparison.material_code})` : ''}
+            </Text>{' '}
+            找到以下成交记录：
           </div>
           <Table
             size="small"
-            dataSource={comparison.comparisons}
+            dataSource={comparison.comparison}
             pagination={false}
             rowKey="supplier_id"
             columns={[
               { title: '供应商', dataIndex: 'supplier_name', key: 'supplier', ellipsis: true },
               { 
                 title: '绩效', 
-                dataIndex: 'reliability_level', 
+                dataIndex: 'reliability_rating', 
                 key: 'level',
                 width: 70,
                 render: (l) => {
@@ -224,32 +229,35 @@ export const SupplierPerformanceTag: React.FC<{ supplierId: number }> = ({ suppl
   });
 
   if (isLoading) return <Tag icon={<ClockCircleOutlined spin />}>计算中</Tag>;
-  if (!data || data.reliability_level === 'N/A') return null;
+  if (!data || data.reliability_rating === 'N/A') return null;
 
   const colorMap: Record<string, string> = { 'S': '#fadb14', 'A': '#52c41a', 'B': '#1890ff', 'C': '#ff4d4f' };
-  
+  const otif = data.on_time_delivery_rate ?? 0;
+  const quality = data.quality_pass_rate ?? 0;
+  const compositeScore = Math.round(otif * 0.5 + quality * 0.5);
+
   const content = (
     <div style={{ width: 280 }}>
       <div style={{ textAlign: 'center', marginBottom: 16 }}>
-        <div style={{ fontSize: 36, fontWeight: 'bold', color: colorMap[data.reliability_level] }}>{data.reliability_level}</div>
-        <div style={{ fontSize: 14 }}>等级 (综合得分: {data.reliability_score})</div>
+        <div style={{ fontSize: 36, fontWeight: 'bold', color: colorMap[data.reliability_rating] }}>{data.reliability_rating}</div>
+        <div style={{ fontSize: 14 }}>等级 (综合得分: {compositeScore})</div>
       </div>
       <Space direction="vertical" style={{ width: '100%' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           <span>到货及时率 (OTIF):</span>
-          <Text strong>{data.otif_rate}%</Text>
+          <Text strong>{otif}%</Text>
         </div>
-        <Progress percent={data.otif_rate} size="small" strokeColor={data.otif_rate >= 90 ? '#52c41a' : '#faad14'} />
+        <Progress percent={otif} size="small" strokeColor={otif >= 90 ? '#52c41a' : '#faad14'} />
         
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           <span>一次合格率:</span>
-          <Text strong>{data.quality_pass_rate}%</Text>
+          <Text strong>{quality}%</Text>
         </div>
-        <Progress percent={data.quality_pass_rate} size="small" strokeColor={data.quality_pass_rate >= 95 ? '#52c41a' : '#ff4d4f'} />
+        <Progress percent={quality} size="small" strokeColor={quality >= 95 ? '#52c41a' : '#ff4d4f'} />
         
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           <span>平均到货周期:</span>
-          <Text strong>{data.avg_lead_time_days} 天</Text>
+          <Text strong>{data.average_lead_time_days} 天</Text>
         </div>
       </Space>
     </div>
@@ -257,8 +265,8 @@ export const SupplierPerformanceTag: React.FC<{ supplierId: number }> = ({ suppl
 
   return (
     <Popover content={content} title="供应商绩效" trigger="hover">
-      <Tag color={colorMap[data.reliability_level]} style={{ cursor: 'pointer' }}>
-        表现: {data.reliability_level}级
+      <Tag color={colorMap[data.reliability_rating]} style={{ cursor: 'pointer' }}>
+        表现: {data.reliability_rating}级
       </Tag>
     </Popover>
   );

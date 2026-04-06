@@ -305,7 +305,7 @@ class MaterialSerialService:
                 tenant_id=tenant_id,
                 rule=serial_rule,
                 context=context,
-                scope_key=str(material.id),
+                scope_key="",  # 全局自增，避免不同物料产生相同的序列号
                 count=count,
             )
 
@@ -315,7 +315,7 @@ class MaterialSerialService:
             tenant_id=tenant_id,
             rule=default_rule,
             context=context,
-            scope_key=str(material.id),
+            scope_key="",  # 全局自增
             count=count,
         )
     

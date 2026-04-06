@@ -176,10 +176,10 @@ class SupplierPerformanceResponse(BaseModel):
     """供应商绩效响应"""
     supplier_id: int
     supplier_name: str
-    on_time_delivery_rate: float
-    quality_pass_rate: float
-    average_lead_time_days: float
-    reliability_rating: str  # S/A/B/C
+    on_time_delivery_rate: float = 0.0
+    quality_pass_rate: float = 0.0
+    average_lead_time_days: float = 0.0
+    reliability_rating: str = "N/A"  # S/A/B/C 或 N/A
 
 
 # === V2 增强：比价与分摊 ===
@@ -197,7 +197,8 @@ class MaterialPriceComparison(BaseModel):
     """物料比价汇总"""
     material_id: int
     material_name: str
-    comparison: List[PriceComparisonItem]
+    material_code: Optional[str] = None
+    comparison: List[PriceComparisonItem] = Field(default_factory=list)
 
 
 class PriceComparisonResponse(BaseModel):

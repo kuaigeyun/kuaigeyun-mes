@@ -317,3 +317,46 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
         return ReceiptNoticeResponse.model_validate(
             await ReceiptNotice.get(tenant_id=tenant_id, id=notice_id)
         )
+
+    async def withdraw_notice(
+        self,
+        tenant_id: int,
+        notice_id: int,
+        withdrawn_by: int,
+    ) -> ReceiptNoticeResponse:
+        """撤回通知（已通知 -> 待收货）。已确认入库或关联采购入库单已处理则不允许撤回。"""
+        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+        from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
+
+        notice = await ReceiptNotice.get_or_none(tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True)
+        if not notice:
+            raise NotFoundError(f"收货通知单不存在: {notice_id}")
+
+        if notice.status != "已通知":
+            raise BusinessLogicError("只有已通知状态的收货通知单才能撤回")
+
+        allowed_receipt_statuses = ("草稿", "draft", "DRAFT", "待入库")
+        if getattr(notice, "purchase_receipt_id", None):
+            receipt = await PurchaseReceipt.get_or_none(
+                tenant_id=tenant_id, id=notice.purchase_receipt_id, deleted_at__isnull=True
+            )
+            if receipt and receipt.status not in allowed_receipt_statuses:
+                raise BusinessLogicError(
+                    f"该通知单关联的采购入库单 ({receipt.receipt_code}) 已经在处理（{receipt.status}），无法撤回。"
+                    "请先作废或撤回该入库单。"
+                )
+            if receipt:
+                await PurchaseReceipt.filter(tenant_id=tenant_id, id=receipt.id).update(
+                    deleted_at=datetime.now()
+                )
+                await PurchaseReceiptItem.filter(tenant_id=tenant_id, receipt_id=receipt.id).delete()
+
+        await ReceiptNotice.filter(tenant_id=tenant_id, id=notice_id).update(
+            status="待收货",
+            notified_at=None,
+            updated_by=withdrawn_by,
+            purchase_receipt_id=None,
+            purchase_receipt_code=None,
+        )
+        updated = await ReceiptNotice.get(tenant_id=tenant_id, id=notice_id)
+        return ReceiptNoticeResponse.model_validate(updated)

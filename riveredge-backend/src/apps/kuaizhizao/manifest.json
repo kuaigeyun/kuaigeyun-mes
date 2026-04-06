@@ -1496,6 +1496,7 @@
     "kuaizhizao:receipt-notice:create",
     "kuaizhizao:receipt-notice:delete",
     "kuaizhizao:receipt-notice:notify",
+    "kuaizhizao:receipt-notice:withdraw",
     "kuaizhizao:receipt-notice:update",
     "kuaizhizao:receipt-notice:view",
     "kuaizhizao:replenishment-suggestion:view",

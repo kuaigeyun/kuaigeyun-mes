@@ -252,13 +252,25 @@ function inboundDocumentTrackingType(
   return 'production_return';
 }
 
+/** 列表行状态（兼容大小写/空格） */
+function inboundRowStatus(record: InboundOrder): string {
+  const v = record?.status ?? (record as Record<string, unknown>)?.document_status;
+  return String(v ?? '').trim();
+}
+
 /** 已入账库存的入库类单据（可撤回冲减库存） */
 function isInboundStockPosted(record: InboundOrder): boolean {
-  const s = String(record.status ?? '');
+  const s = inboundRowStatus(record);
+  const sl = s.toLowerCase();
   if (record.receipt_type === 'production_return') {
     return s === '已退料';
   }
-  return s === '已入库' || s === '已完成' || s === 'completed';
+  return (
+    s === '已入库' ||
+    s === '已完成' ||
+    sl === 'completed' ||
+    sl === 'posted'
+  );
 }
 
 function renderInboundRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
@@ -907,10 +919,89 @@ const InboundPage: React.FC = () => {
           notes: order.notes || undefined,
           items: mappedItems,
         });
+        // 后端 update 会全量删除并重建明细，明细 id 会变；确认入库须用最新 id，否则 confirm 内按 item_id 更新无法命中
+        const refreshed = await warehouseApi.purchaseReceipt.get(String(order.id));
+        const refItems = (refreshed as any)?.items || [];
+        const orderedSource = items.filter((it) => it.material_id != null);
+        if (refItems.length !== orderedSource.length) {
+          // #region agent log
+          fetch('http://127.0.0.1:7807/ingest/b117966e-dad0-4d01-bd6a-e3ba9296abb4', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '2f32a1' },
+            body: JSON.stringify({
+              sessionId: '2f32a1',
+              runId: 'pre-fix',
+              hypothesisId: 'H6',
+              location: 'inbound/index.tsx:submitConfirmPreview',
+              message: 'early_exit_row_count',
+              data: { receiptId: order.id, refLen: refItems.length, srcLen: orderedSource.length },
+              timestamp: Date.now(),
+            }),
+          }).catch(() => {});
+          // #endregion
+          messageApi.error('保存后明细行数不一致，请关闭预览后重试');
+          return;
+        }
+        if (refItems.some((it: any) => it?.id == null || !(Number(it.id) > 0))) {
+          // #region agent log
+          fetch('http://127.0.0.1:7807/ingest/b117966e-dad0-4d01-bd6a-e3ba9296abb4', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '2f32a1' },
+            body: JSON.stringify({
+              sessionId: '2f32a1',
+              runId: 'pre-fix',
+              hypothesisId: 'H6',
+              location: 'inbound/index.tsx:submitConfirmPreview',
+              message: 'early_exit_bad_item_id',
+              data: { receiptId: order.id },
+              timestamp: Date.now(),
+            }),
+          }).catch(() => {});
+          // #endregion
+          messageApi.error('保存后明细 id 异常，请关闭预览后重试');
+          return;
+        }
+        const confirmItems = orderedSource.map((src, idx) => {
+          const refIt = refItems[idx];
+          const rowId = Number(src.id);
+          const lineWh = purchaseConfirmLineWh[rowId];
+          const whOpt = purchaseConfirmWarehouseOptions.find((o) => o.value === lineWh);
+          const batchStr = (purchaseConfirmPreviewBatch[rowId] ?? '').trim();
+          const locId = purchaseConfirmLineLoc[rowId];
+          const locCode = purchaseConfirmLineLocCode[rowId];
+          return {
+            item_id: Number(refIt.id),
+            warehouse_id: lineWh,
+            warehouse_name: whOpt?.name ?? '',
+            location_id: locId != null && locId > 0 ? locId : undefined,
+            location_code: locCode || undefined,
+            batch_number: batchStr || undefined,
+          };
+        });
+        // #region agent log
+        fetch('http://127.0.0.1:7807/ingest/b117966e-dad0-4d01-bd6a-e3ba9296abb4', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '2f32a1' },
+          body: JSON.stringify({
+            sessionId: '2f32a1',
+            runId: 'pre-fix',
+            hypothesisId: 'H1',
+            location: 'inbound/index.tsx:submitConfirmPreview',
+            message: 'before_confirm',
+            data: {
+              receiptId: order.id,
+              headerWh,
+              confirmItemIds: confirmItems.map((c: any) => c.item_id),
+              lineWhs: confirmItems.map((c: any) => c.warehouse_id),
+            },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
         await warehouseApi.purchaseReceipt.confirm(String(order.id), {
-           warehouse_id: headerWh,
-           warehouse_name: headerWhName,
-           items: mappedItems,
+          warehouse_id: headerWh,
+          warehouse_name: headerWhName,
+          items: confirmItems,
         });
       } else if (order.receipt_type === 'finished_goods') {
         await warehouseApi.finishedGoodsReceipt.confirm(String(order.id), {
@@ -929,7 +1020,7 @@ const InboundPage: React.FC = () => {
       resetPurchaseConfirmPreview();
       invalidateMenuBadgeCounts();
 
-      actionRef.current?.reload();
+      await actionRef.current?.reload?.();
       if (currentOrder?.id === order.id && currentOrder?.receipt_type === order.receipt_type) {
         try {
           let detailData: any;
@@ -948,6 +1039,28 @@ const InboundPage: React.FC = () => {
         }
       }
     } catch (error: any) {
+      // #region agent log
+      const det = error?.response?.data?.detail;
+      const detailStr =
+        typeof det === 'string' ? det : Array.isArray(det) ? JSON.stringify(det).slice(0, 500) : det != null ? JSON.stringify(det).slice(0, 500) : '';
+      fetch('http://127.0.0.1:7807/ingest/b117966e-dad0-4d01-bd6a-e3ba9296abb4', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '2f32a1' },
+        body: JSON.stringify({
+          sessionId: '2f32a1',
+          runId: 'pre-fix',
+          hypothesisId: 'H6',
+          location: 'inbound/index.tsx:submitConfirmPreview',
+          message: 'confirm_catch',
+          data: {
+            errMsg: String(error?.message || '').slice(0, 400),
+            status: error?.response?.status,
+            detail: detailStr.slice(0, 500),
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
       messageApi.error(error?.message || error?.response?.data?.detail || '确认失败');
       throw error;
     } finally {
@@ -985,7 +1098,7 @@ const InboundPage: React.FC = () => {
           messageApi.success(isReturn ? '已撤回退料，库存已冲减' : '已撤回入库，库存已冲减');
           invalidateMenuBadgeCounts();
 
-          actionRef.current?.reload();
+          await actionRef.current?.reload?.();
           if (currentOrder?.id === record.id && currentOrder?.receipt_type === record.receipt_type) {
             try {
               let detailData: any;
@@ -1039,7 +1152,7 @@ const InboundPage: React.FC = () => {
           messageApi.success('删除成功');
           invalidateMenuBadgeCounts();
 
-          actionRef.current?.reload();
+          await actionRef.current?.reload?.();
         } catch (error: any) {
           const msg =
             error?.response?.data?.detail ??
@@ -1160,12 +1273,15 @@ const InboundPage: React.FC = () => {
       width: 200,
       fixed: 'right',
       render: (_, record) => {
-        const pending =
-          record.status === 'draft' ||
-          record.status === '草稿' ||
-          record.status === '待入库' ||
-          record.status === '待退料';
+        const st = inboundRowStatus(record);
+        const stLower = st.toLowerCase();
         const posted = isInboundStockPosted(record);
+        const pending =
+          !posted &&
+          (stLower === 'draft' ||
+            st === '草稿' ||
+            st === '待入库' ||
+            st === '待退料');
         const nodes: React.ReactNode[] = [
           <Button
             key="detail"

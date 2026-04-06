@@ -30,6 +30,7 @@ from apps.kuaizhizao.schemas.shipment_notice import (
     ShipmentNoticeItemResponse,
 )
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
+from apps.kuaizhizao.services.inspection_policy_service import assert_oqc_for_outbound_lines
 from infra.services.business_config_service import BusinessConfigService
 from apps.kuaizhizao.utils.inventory_helper import get_material_available_quantity
 
@@ -354,11 +355,18 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             notice=notice,
         )
 
+        notice_items = await ShipmentNoticeItem.filter(tenant_id=tenant_id, notice_id=notice_id).all()
+        await assert_oqc_for_outbound_lines(
+            tenant_id,
+            sales_order_id=notice.sales_order_id,
+            customer_id=notice.customer_id,
+            lines=list(notice_items),
+            quantity_attr="notice_quantity",
+        )
+
         # 生成相应的销售出库单
         from apps.kuaizhizao.services.warehouse_service import SalesDeliveryService
         from apps.kuaizhizao.schemas.warehouse import SalesDeliveryCreate, SalesDeliveryItemCreate
-
-        notice_items = await ShipmentNoticeItem.filter(tenant_id=tenant_id, notice_id=notice_id).all()
         delivery_items = []
         for item in notice_items:
             unit_price = getattr(item, "unit_price", None)

@@ -7,7 +7,7 @@ Author: Luigi Lu
 Date: 2025-12-30
 """
 
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 from datetime import datetime
 from tortoise.transactions import in_transaction
 from tortoise.expressions import Q
@@ -27,6 +27,10 @@ from apps.kuaizhizao.schemas.quality import (
 )
 
 from apps.base_service import AppBaseService
+from apps.kuaizhizao.services.inspection_policy_service import (
+    get_quality_inspection_stage_toggles,
+    resolve_inspection_policy,
+)
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from datetime import timedelta
 from decimal import Decimal
@@ -50,6 +54,45 @@ async def _is_finished_inspection_enabled(tenant_id: int) -> bool:
     return bool(quality.get("finished_inspection", False))
 
 
+async def _require_iqc_stage_enabled(tenant_id: int) -> None:
+    """组织级 IQC 总开关（TenantConfig）；关闭时禁止创建/下推来料检。"""
+    t = await get_quality_inspection_stage_toggles(tenant_id)
+    if not t.get("iqc_enabled", True):
+        raise BusinessLogicError("当前组织已关闭来料检验（IQC）环节，禁止创建或下推来料检验单")
+
+
+async def _require_ipqc_stage_enabled(tenant_id: int) -> None:
+    """组织级 IPQC 总开关。"""
+    t = await get_quality_inspection_stage_toggles(tenant_id)
+    if not t.get("ipqc_enabled", True):
+        raise BusinessLogicError("当前组织已关闭过程检验（IPQC）环节，禁止创建或下推过程检验单")
+
+
+async def _require_fqc_stage_enabled(tenant_id: int) -> None:
+    """组织级 FQC 总开关。"""
+    t = await get_quality_inspection_stage_toggles(tenant_id)
+    if not t.get("fqc_enabled", True):
+        raise BusinessLogicError("当前组织已关闭成品检验（FQC）环节，禁止创建或下推成品检验单")
+
+
+def _work_order_product_fields(work_order: Any) -> Dict[str, Any]:
+    """工单产品物料字段（product_* 与历史 material_* 兼容）。"""
+    mid = getattr(work_order, "product_id", None) or getattr(work_order, "material_id", None)
+    code = getattr(work_order, "product_code", None) or getattr(work_order, "material_code", None)
+    name = getattr(work_order, "product_name", None) or getattr(work_order, "material_name", None)
+    spec = getattr(work_order, "material_spec", None) or getattr(work_order, "product_spec", None)
+    batch = getattr(work_order, "batch_number", None)
+    qty = getattr(work_order, "quantity", None) or getattr(work_order, "planned_quantity", None)
+    return {
+        "material_id": mid,
+        "material_code": code,
+        "material_name": name,
+        "material_spec": spec,
+        "batch_number": batch,
+        "planned_qty": qty,
+    }
+
+
 class IncomingInspectionService(AppBaseService[IncomingInspection]):
     """来料检验单服务"""
 
@@ -58,6 +101,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
 
     async def create_incoming_inspection(self, tenant_id: int, inspection_data: IncomingInspectionCreate, created_by: int) -> IncomingInspectionResponse:
         """创建来料检验单"""
+        await _require_iqc_stage_enabled(tenant_id)
         incoming_enabled, _ = await _get_quality_policy_flags(tenant_id)
         if not incoming_enabled:
             raise BusinessLogicError("当前组织未开启来料检验，禁止创建来料检验单")
@@ -292,12 +336,14 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         
         为采购入库单的每个明细项创建一个来料检验单
         """
+        await _require_iqc_stage_enabled(tenant_id)
         incoming_enabled, _ = await _get_quality_policy_flags(tenant_id)
         if not incoming_enabled:
             raise BusinessLogicError("当前组织未开启来料检验，禁止从采购入库单下推来料检验")
         from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
         from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
-        
+        from apps.master_data.models.material import Material
+
         async with in_transaction():
             # 获取采购入库单
             receipt = await PurchaseReceipt.get_or_none(tenant_id=tenant_id, id=purchase_receipt_id)
@@ -316,7 +362,13 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             
             if not receipt_items:
                 raise BusinessLogicError("采购入库单没有明细项")
-            
+
+            mids = [it.material_id for it in receipt_items if it.material_id]
+            mat_rows = await Material.filter(
+                tenant_id=tenant_id, id__in=mids, deleted_at__isnull=True
+            ).all()
+            mat_by_id = {m.id: m for m in mat_rows}
+
             # 为每个明细项创建来料检验单
             inspections = []
             for item in receipt_items:
@@ -329,6 +381,15 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 
                 if existing:
                     # 如果已存在，跳过
+                    continue
+
+                mat = mat_by_id.get(item.material_id)
+                eff, _reason = await resolve_inspection_policy(
+                    tenant_id,
+                    "iqc",
+                    material_inspection_mode=getattr(mat, "inspection_mode", None) if mat else None,
+                )
+                if eff == "none":
                     continue
                 
                 # 创建检验单
@@ -382,7 +443,12 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                     )
                 except Exception as rel_e:
                     logger.warning("创建采购入库→来料检验 单据关联失败: %s", rel_e)
-            
+
+            if not inspections:
+                raise BusinessLogicError(
+                    "未生成任何来料检验单：各明细可能已有检验单，或物料质检模式为无质检（与组织 IQC 总开关、业务参数「来料检验」共同生效）"
+                )
+
             return inspections
 
     async def import_from_data(
@@ -404,7 +470,9 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         """
         if not data or len(data) < 2:
             raise ValidationError("导入数据格式错误：至少需要表头和示例数据行")
-        
+
+        await _require_iqc_stage_enabled(tenant_id)
+
         # 解析表头（第一行）
         headers = [str(cell).strip() if cell is not None else '' for cell in data[0]]
         
@@ -467,7 +535,15 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 
                 if existing:
                     continue  # 跳过已存在的检验单
-                
+
+                eff_iqc, _ = await resolve_inspection_policy(
+                    tenant_id,
+                    "iqc",
+                    material_inspection_mode=getattr(material, "inspection_mode", None),
+                )
+                if eff_iqc == "none":
+                    continue
+
                 # 创建检验单
                 today = datetime.now().strftime("%Y%m%d")
                 code = await self.generate_code(tenant_id, "INCOMING_INSPECTION_CODE", prefix=f"IQ{today}")
@@ -593,6 +669,7 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
 
     async def create_process_inspection(self, tenant_id: int, inspection_data: ProcessInspectionCreate, created_by: int) -> ProcessInspectionResponse:
         """创建过程检验单"""
+        await _require_ipqc_stage_enabled(tenant_id)
         _, process_enabled = await _get_quality_policy_flags(tenant_id)
         if not process_enabled:
             raise BusinessLogicError("当前组织未开启过程检验，禁止创建过程检验单")
@@ -770,28 +847,72 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
         Returns:
             ProcessInspectionResponse: 创建的过程检验单
         """
+        await _require_ipqc_stage_enabled(tenant_id)
         _, process_enabled = await _get_quality_policy_flags(tenant_id)
         if not process_enabled:
             raise BusinessLogicError("当前组织未开启过程检验，禁止从工单下推过程检验")
         from apps.kuaizhizao.models.work_order import WorkOrder
-        from apps.master_data.models.routing import RoutingOperation
-        
+        from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
+        from apps.master_data.models.material import Material
+        from apps.master_data.models.process import Operation as MasterOperation
+
         async with in_transaction():
             # 获取工单
-            work_order = await WorkOrder.get_or_none(tenant_id=tenant_id, id=work_order_id)
+            work_order = await WorkOrder.get_or_none(
+                tenant_id=tenant_id, id=work_order_id, deleted_at__isnull=True
+            )
             if not work_order:
                 raise NotFoundError(f"工单不存在: {work_order_id}")
-            
-            # 获取工序
-            operation = await RoutingOperation.get_or_none(tenant_id=tenant_id, id=operation_id)
-            if not operation:
-                raise NotFoundError(f"工序不存在: {operation_id}")
-            
-            # 检查是否已存在检验单
-            existing = await ProcessInspection.filter(
+
+            # operation_id 与报工一致：主数据工序 ID；兼容传入工单工序行主键
+            woo = await WorkOrderOperation.get_or_none(
                 tenant_id=tenant_id,
                 work_order_id=work_order_id,
                 operation_id=operation_id,
+                deleted_at__isnull=True,
+            )
+            master_op_id = operation_id
+            if not woo:
+                woo = await WorkOrderOperation.get_or_none(
+                    tenant_id=tenant_id,
+                    work_order_id=work_order_id,
+                    id=operation_id,
+                    deleted_at__isnull=True,
+                )
+                if woo:
+                    master_op_id = int(woo.operation_id)
+            if not woo:
+                raise NotFoundError(
+                    f"工单工序不存在: 工单ID={work_order_id}, 工序ID={operation_id}"
+                )
+
+            master_op = await MasterOperation.get_or_none(
+                tenant_id=tenant_id, id=master_op_id, deleted_at__isnull=True
+            )
+            wf = _work_order_product_fields(work_order)
+            mid = wf.get("material_id")
+            mat = None
+            if mid:
+                mat = await Material.get_or_none(
+                    tenant_id=tenant_id, id=mid, deleted_at__isnull=True
+                )
+
+            eff, _reason = await resolve_inspection_policy(
+                tenant_id,
+                "ipqc",
+                material_inspection_mode=getattr(mat, "inspection_mode", None) if mat else None,
+                operation_inspection_mode=getattr(master_op, "inspection_mode", None) if master_op else None,
+            )
+            if eff == "none":
+                raise BusinessLogicError(
+                    "当前工单工序未配置过程检验（工序/成品质检模式均为无质检），无需下推过程检验单"
+                )
+
+            # 检查是否已存在检验单（与报工相同的工序主键）
+            existing = await ProcessInspection.filter(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                operation_id=master_op_id,
                 status='待检验'
             ).first()
             
@@ -807,26 +928,27 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
             reporting = await ReportingRecord.filter(
                 tenant_id=tenant_id,
                 work_order_id=work_order_id,
-                operation_id=operation_id
+                operation_id=master_op_id
             ).order_by('-created_at').first()
             
-            inspection_quantity = reporting.completed_quantity if reporting else work_order.planned_quantity
+            planned_qty = wf.get("planned_qty") or work_order.quantity
+            inspection_quantity = reporting.completed_quantity if reporting else planned_qty
             
             inspection = await ProcessInspection.create(
                 tenant_id=tenant_id,
                 inspection_code=code,
                 work_order_id=work_order_id,
                 work_order_code=work_order.code,
-                operation_id=operation_id,
-                operation_code=operation.operation_code,
-                operation_name=operation.operation_name,
+                operation_id=master_op_id,
+                operation_code=woo.operation_code,
+                operation_name=woo.operation_name,
                 workshop_id=work_order.workshop_id,
                 workshop_name=work_order.workshop_name,
-                material_id=work_order.material_id,
-                material_code=work_order.material_code,
-                material_name=work_order.material_name,
-                material_spec=work_order.material_spec,
-                batch_number=work_order.batch_number,
+                material_id=wf["material_id"],
+                material_code=wf["material_code"],
+                material_name=wf["material_name"],
+                material_spec=wf["material_spec"],
+                batch_number=wf["batch_number"],
                 inspection_quantity=inspection_quantity,
                 qualified_quantity=0,
                 unqualified_quantity=0,
@@ -889,57 +1011,96 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
         
         if 'work_order_code' not in header_index_map or 'operation_code' not in header_index_map:
             raise ValidationError("导入数据必须包含'工单编码'和'工序编码'字段")
-        
+
+        await _require_ipqc_stage_enabled(tenant_id)
+
         success_count = 0
         failure_count = 0
         errors = []
-        
+
+        from apps.kuaizhizao.models.work_order import WorkOrder
+        from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
+        from apps.master_data.models.material import Material
+        from apps.master_data.models.process import Operation as MasterOperation
+
         for row_idx, row in enumerate(data[2:], start=3):
             try:
                 work_order_code = str(row[header_index_map['work_order_code']]).strip()
-                from apps.kuaizhizao.models.work_order import WorkOrder
-                work_order = await WorkOrder.get_or_none(tenant_id=tenant_id, code=work_order_code)
+                work_order = await WorkOrder.get_or_none(
+                    tenant_id=tenant_id, code=work_order_code, deleted_at__isnull=True
+                )
                 if not work_order:
                     raise ValidationError(f"工单不存在: {work_order_code}")
-                
+
                 operation_code = str(row[header_index_map['operation_code']]).strip()
-                from apps.master_data.models.routing import RoutingOperation
-                operation = await RoutingOperation.get_or_none(tenant_id=tenant_id, operation_code=operation_code)
-                if not operation:
-                    raise ValidationError(f"工序不存在: {operation_code}")
-                
+                woo = await WorkOrderOperation.get_or_none(
+                    tenant_id=tenant_id,
+                    work_order_id=work_order.id,
+                    operation_code=operation_code,
+                    deleted_at__isnull=True,
+                )
+                if not woo:
+                    raise ValidationError(f"工单上不存在工序编码: {operation_code}")
+
+                master_op_id = int(woo.operation_id)
+                master_op = await MasterOperation.get_or_none(
+                    tenant_id=tenant_id, id=master_op_id, deleted_at__isnull=True
+                )
+                wf = _work_order_product_fields(work_order)
+                mid = wf.get("material_id")
+                mat = None
+                if mid:
+                    mat = await Material.get_or_none(
+                        tenant_id=tenant_id, id=mid, deleted_at__isnull=True
+                    )
+
+                eff, _ = await resolve_inspection_policy(
+                    tenant_id,
+                    "ipqc",
+                    material_inspection_mode=getattr(mat, "inspection_mode", None) if mat else None,
+                    operation_inspection_mode=getattr(master_op, "inspection_mode", None) if master_op else None,
+                )
+                if eff == "none":
+                    continue
+
                 existing = await ProcessInspection.filter(
                     tenant_id=tenant_id,
                     work_order_id=work_order.id,
-                    operation_id=operation.id
+                    operation_id=master_op_id,
                 ).first()
-                
+
                 if existing:
                     continue
-                
+
                 today = datetime.now().strftime("%Y%m%d")
                 code = await self.generate_code(tenant_id, "PROCESS_INSPECTION_CODE", prefix=f"PQ{today}")
-                
-                inspection_quantity = float(row[header_index_map.get('inspection_quantity', -1)]) if header_index_map.get('inspection_quantity', -1) >= 0 and row[header_index_map.get('inspection_quantity', -1)] else work_order.planned_quantity
+
+                base_qty = wf.get("planned_qty") or work_order.quantity
+                inspection_quantity = (
+                    float(row[header_index_map.get('inspection_quantity', -1)])
+                    if header_index_map.get('inspection_quantity', -1) >= 0
+                    and row[header_index_map.get('inspection_quantity', -1)]
+                    else base_qty
+                )
                 qualified_quantity = float(row[header_index_map.get('qualified_quantity', -1)]) if header_index_map.get('qualified_quantity', -1) >= 0 and row[header_index_map.get('qualified_quantity', -1)] else 0
                 unqualified_quantity = float(row[header_index_map.get('unqualified_quantity', -1)]) if header_index_map.get('unqualified_quantity', -1) >= 0 and row[header_index_map.get('unqualified_quantity', -1)] else 0
                 notes = str(row[header_index_map.get('notes', -1)]) if header_index_map.get('notes', -1) >= 0 and row[header_index_map.get('notes', -1)] else None
-                
+
                 await ProcessInspection.create(
                     tenant_id=tenant_id,
                     inspection_code=code,
                     work_order_id=work_order.id,
                     work_order_code=work_order.code,
-                    operation_id=operation.id,
-                    operation_code=operation.operation_code,
-                    operation_name=operation.operation_name,
+                    operation_id=master_op_id,
+                    operation_code=woo.operation_code,
+                    operation_name=woo.operation_name,
                     workshop_id=work_order.workshop_id,
                     workshop_name=work_order.workshop_name,
-                    material_id=work_order.material_id,
-                    material_code=work_order.material_code,
-                    material_name=work_order.material_name,
-                    material_spec=work_order.material_spec,
-                    batch_number=work_order.batch_number,
+                    material_id=wf["material_id"],
+                    material_code=wf["material_code"],
+                    material_name=wf["material_name"],
+                    material_spec=wf["material_spec"],
+                    batch_number=wf["batch_number"],
                     inspection_quantity=inspection_quantity,
                     qualified_quantity=qualified_quantity,
                     unqualified_quantity=unqualified_quantity,
@@ -953,7 +1114,7 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
             except Exception as e:
                 failure_count += 1
                 errors.append({"row": row_idx, "message": str(e)})
-        
+
         return {
             "success": True,
             "message": f"导入完成：成功 {success_count} 条，失败 {failure_count} 条",
@@ -1023,6 +1184,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
 
     async def create_finished_goods_inspection(self, tenant_id: int, inspection_data: FinishedGoodsInspectionCreate, created_by: int) -> FinishedGoodsInspectionResponse:
         """创建成品检验单"""
+        await _require_fqc_stage_enabled(tenant_id)
         finished_enabled = await _is_finished_inspection_enabled(tenant_id)
         if not finished_enabled:
             raise BusinessLogicError("当前组织未开启成品检验，禁止创建成品检验单")
@@ -1284,16 +1446,38 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
         Returns:
             FinishedGoodsInspectionResponse: 创建的成品检验单
         """
+        await _require_fqc_stage_enabled(tenant_id)
         finished_enabled = await _is_finished_inspection_enabled(tenant_id)
         if not finished_enabled:
             raise BusinessLogicError("当前组织未开启成品检验，禁止从工单下推成品检验")
         from apps.kuaizhizao.models.work_order import WorkOrder
-        
+        from apps.master_data.models.material import Material
+
         async with in_transaction():
             # 获取工单
-            work_order = await WorkOrder.get_or_none(tenant_id=tenant_id, id=work_order_id)
+            work_order = await WorkOrder.get_or_none(
+                tenant_id=tenant_id, id=work_order_id, deleted_at__isnull=True
+            )
             if not work_order:
                 raise NotFoundError(f"工单不存在: {work_order_id}")
+
+            wf = _work_order_product_fields(work_order)
+            mid = wf.get("material_id")
+            mat = None
+            if mid:
+                mat = await Material.get_or_none(
+                    tenant_id=tenant_id, id=mid, deleted_at__isnull=True
+                )
+
+            eff, _ = await resolve_inspection_policy(
+                tenant_id,
+                "fqc",
+                material_inspection_mode=getattr(mat, "inspection_mode", None) if mat else None,
+            )
+            if eff == "none":
+                raise BusinessLogicError(
+                    "当前成品物料未配置成品检验（质检模式为无质检），无需下推成品检验单"
+                )
             
             # 检查是否已存在检验单
             existing = await FinishedGoodsInspection.filter(
@@ -1308,6 +1492,8 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
             # 创建检验单
             today = datetime.now().strftime("%Y%m%d")
             code = await self.generate_code(tenant_id, "FINISHED_GOODS_INSPECTION_CODE", prefix=f"FQ{today}")
+
+            inspection_qty = wf.get("planned_qty") or work_order.quantity
             
             inspection = await FinishedGoodsInspection.create(
                 tenant_id=tenant_id,
@@ -1319,14 +1505,14 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 work_order_code=work_order.code,
                 sales_order_id=work_order.sales_order_id,
                 sales_order_code=work_order.sales_order_code,
-                customer_id=work_order.customer_id,
-                customer_name=work_order.customer_name,
-                material_id=work_order.material_id,
-                material_code=work_order.material_code,
-                material_name=work_order.material_name,
-                material_spec=work_order.material_spec,
-                batch_number=work_order.batch_number,
-                inspection_quantity=work_order.planned_quantity,
+                customer_id=getattr(work_order, "customer_id", None),
+                customer_name=getattr(work_order, "customer_name", None),
+                material_id=wf["material_id"],
+                material_code=wf["material_code"],
+                material_name=wf["material_name"],
+                material_spec=wf["material_spec"],
+                batch_number=wf["batch_number"],
+                inspection_quantity=inspection_qty,
                 qualified_quantity=0,
                 unqualified_quantity=0,
                 inspection_result="待检验",
@@ -1387,35 +1573,63 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
         
         if 'work_order_code' not in header_index_map:
             raise ValidationError("导入数据必须包含'工单编码'字段")
-        
+
+        await _require_fqc_stage_enabled(tenant_id)
+
         success_count = 0
         failure_count = 0
         errors = []
-        
+
+        from apps.kuaizhizao.models.work_order import WorkOrder
+        from apps.master_data.models.material import Material
+
         for row_idx, row in enumerate(data[2:], start=3):
             try:
                 work_order_code = str(row[header_index_map['work_order_code']]).strip()
-                from apps.kuaizhizao.models.work_order import WorkOrder
-                work_order = await WorkOrder.get_or_none(tenant_id=tenant_id, code=work_order_code)
+                work_order = await WorkOrder.get_or_none(
+                    tenant_id=tenant_id, code=work_order_code, deleted_at__isnull=True
+                )
                 if not work_order:
                     raise ValidationError(f"工单不存在: {work_order_code}")
-                
+
+                wf = _work_order_product_fields(work_order)
+                mid = wf.get("material_id")
+                mat = None
+                if mid:
+                    mat = await Material.get_or_none(
+                        tenant_id=tenant_id, id=mid, deleted_at__isnull=True
+                    )
+
+                eff, _ = await resolve_inspection_policy(
+                    tenant_id,
+                    "fqc",
+                    material_inspection_mode=getattr(mat, "inspection_mode", None) if mat else None,
+                )
+                if eff == "none":
+                    continue
+
                 existing = await FinishedGoodsInspection.filter(
                     tenant_id=tenant_id,
                     work_order_id=work_order.id
                 ).first()
-                
+
                 if existing:
                     continue
-                
+
                 today = datetime.now().strftime("%Y%m%d")
                 code = await self.generate_code(tenant_id, "FINISHED_GOODS_INSPECTION_CODE", prefix=f"FQ{today}")
-                
-                inspection_quantity = float(row[header_index_map.get('inspection_quantity', -1)]) if header_index_map.get('inspection_quantity', -1) >= 0 and row[header_index_map.get('inspection_quantity', -1)] else work_order.planned_quantity
+
+                base_qty = wf.get("planned_qty") or work_order.quantity
+                inspection_quantity = (
+                    float(row[header_index_map.get('inspection_quantity', -1)])
+                    if header_index_map.get('inspection_quantity', -1) >= 0
+                    and row[header_index_map.get('inspection_quantity', -1)]
+                    else base_qty
+                )
                 qualified_quantity = float(row[header_index_map.get('qualified_quantity', -1)]) if header_index_map.get('qualified_quantity', -1) >= 0 and row[header_index_map.get('qualified_quantity', -1)] else 0
                 unqualified_quantity = float(row[header_index_map.get('unqualified_quantity', -1)]) if header_index_map.get('unqualified_quantity', -1) >= 0 and row[header_index_map.get('unqualified_quantity', -1)] else 0
                 notes = str(row[header_index_map.get('notes', -1)]) if header_index_map.get('notes', -1) >= 0 and row[header_index_map.get('notes', -1)] else None
-                
+
                 await FinishedGoodsInspection.create(
                     tenant_id=tenant_id,
                     inspection_code=code,
@@ -1426,13 +1640,13 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                     work_order_code=work_order.code,
                     sales_order_id=work_order.sales_order_id,
                     sales_order_code=work_order.sales_order_code,
-                    customer_id=work_order.customer_id,
-                    customer_name=work_order.customer_name,
-                    material_id=work_order.material_id,
-                    material_code=work_order.material_code,
-                    material_name=work_order.material_name,
-                    material_spec=work_order.material_spec,
-                    batch_number=work_order.batch_number,
+                    customer_id=getattr(work_order, "customer_id", None),
+                    customer_name=getattr(work_order, "customer_name", None),
+                    material_id=wf["material_id"],
+                    material_code=wf["material_code"],
+                    material_name=wf["material_name"],
+                    material_spec=wf["material_spec"],
+                    batch_number=wf["batch_number"],
                     inspection_quantity=inspection_quantity,
                     qualified_quantity=qualified_quantity,
                     unqualified_quantity=unqualified_quantity,
@@ -1446,7 +1660,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
             except Exception as e:
                 failure_count += 1
                 errors.append({"row": row_idx, "message": str(e)})
-        
+
         return {
             "success": True,
             "message": f"导入完成：成功 {success_count} 条，失败 {failure_count} 条",

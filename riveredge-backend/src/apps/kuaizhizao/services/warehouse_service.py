@@ -11,10 +11,33 @@ from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime, timedelta
 from decimal import Decimal
 import json
+import time
 import uuid
+from pathlib import Path
 from tortoise.transactions import in_transaction
 from tortoise.expressions import Q
 from loguru import logger
+
+
+def _agent_debug_ndjson(location: str, message: str, data: dict, hypothesis_id: str, run_id: str = "pre-fix") -> None:
+    # #region agent log
+    try:
+        p = Path(__file__).resolve().parents[5] / "debug-2f32a1.log"
+        line = {
+            "sessionId": "2f32a1",
+            "runId": run_id,
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data,
+            "timestamp": int(time.time() * 1000),
+        }
+        with open(p, "a", encoding="utf-8") as f:
+            f.write(json.dumps(line, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+    # #endregion
+
 
 from apps.kuaizhizao.models.production_picking import ProductionPicking
 from apps.kuaizhizao.models.production_picking_item import ProductionPickingItem
@@ -88,6 +111,7 @@ from apps.kuaizhizao.schemas.warehouse import (
 )
 
 from apps.base_service import AppBaseService
+from apps.kuaizhizao.services.inspection_policy_service import assert_oqc_before_sales_delivery_confirm
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
 from infra.models.user import User
@@ -622,7 +646,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                     if qty <= 0:
                         continue
                     wh_id = item.warehouse_id if item.warehouse_id else None
-                    await InventoryService.decrease_stock(
+                    await InventoryService._decrease_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
                         quantity=qty,
@@ -1068,7 +1092,7 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
                     if qty <= 0:
                         continue
                     wh_id = item.warehouse_id if item.warehouse_id else ret.warehouse_id
-                    await InventoryService.increase_stock(
+                    await InventoryService._increase_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
                         quantity=qty,
@@ -1107,7 +1131,7 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
                     if qty <= 0:
                         continue
                     wh_id = item.warehouse_id if item.warehouse_id else None
-                    await InventoryService.decrease_stock(
+                    await InventoryService._decrease_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
                         quantity=qty,
@@ -1460,7 +1484,7 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                     # 优先使用行仓库，若无则使用表头仓库
                     wh_id = item.warehouse_id if getattr(item, "warehouse_id", None) else receipt.warehouse_id
                     
-                    await InventoryService.increase_stock(
+                    await InventoryService._increase_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
                         quantity=qty,
@@ -1504,7 +1528,7 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                     qty = item.receipt_quantity or item.qualified_quantity or Decimal(0)
                     if qty <= 0:
                         continue
-                    await InventoryService.decrease_stock(
+                    await InventoryService._decrease_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
                         quantity=qty,
@@ -2558,6 +2582,13 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             if delivery.status != '待出库':
                 raise BusinessLogicError("只有待出库状态的销售出库单才能确认出库")
 
+            await assert_oqc_before_sales_delivery_confirm(
+                tenant_id,
+                sales_order_id=delivery.sales_order_id,
+                customer_id=delivery.customer_id,
+                delivery_items=list(delivery.items or []),
+            )
+
             confirmer_name = await self.get_user_name(confirmed_by)
 
             await SalesDelivery.filter(tenant_id=tenant_id, id=delivery_id).update(
@@ -2600,7 +2631,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                         material_unit=getattr(item, "material_unit", None),
                         material=material_by_id.get(item.material_id),
                     )
-                    await InventoryService.decrease_stock(
+                    await InventoryService._decrease_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
                         quantity=base_qty,
@@ -3146,11 +3177,31 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         receipt = await PurchaseReceipt.get_or_none(tenant_id=tenant_id, id=receipt_id)
         if not receipt:
             raise NotFoundError(f"采购入库单不存在: {receipt_id}")
+        await receipt.refresh_from_db()
+        # 库内真实状态（独立 SELECT）：避免实例缓存/validate_assignment 导致响应 status 仍为旧值
+        _st_rows = await PurchaseReceipt.filter(tenant_id=tenant_id, id=receipt_id).values("status")
+        if _st_rows and _st_rows[0].get("status") is not None:
+            receipt.status = _st_rows[0]["status"]
         items = await PurchaseReceiptItem.filter(tenant_id=tenant_id, receipt_id=receipt_id).all()
         resp = PurchaseReceiptWithItemsResponse.model_validate(receipt)
         milestones = await get_document_milestones(receipt.tenant_id, "purchase_receipt", receipt.id)
         resp.lifecycle = get_purchase_receipt_lifecycle(receipt, milestones=milestones)
         resp.items = [PurchaseReceiptItemResponse.model_validate(i) for i in items]
+        if _st_rows and _st_rows[0].get("status") is not None:
+            resp = resp.model_copy(update={"status": _st_rows[0]["status"]})
+        # #region agent log
+        _agent_debug_ndjson(
+            "get_purchase_receipt_by_id:status_sync",
+            "db_vs_resp_status",
+            {
+                "receipt_id": receipt_id,
+                "from_values": (_st_rows[0]["status"] if _st_rows else None),
+                "resp_status_final": getattr(resp, "status", None),
+            },
+            "H10",
+            run_id="post-fix",
+        )
+        # #endregion
         return resp
 
     async def update_purchase_receipt(
@@ -3304,6 +3355,8 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
 
     async def list_purchase_receipts(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[PurchaseReceiptResponse]:
         """获取采购入库单列表"""
+        from apps.kuaizhizao.services.document_lifecycle_service import get_purchase_receipt_lifecycle
+
         query = PurchaseReceipt.filter(tenant_id=tenant_id, deleted_at__isnull=True)
 
         # 应用过滤条件
@@ -3313,7 +3366,13 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
             query = query.filter(purchase_order_id=filters['purchase_order_id'])
 
         receipts = await query.offset(skip).limit(limit).order_by('-created_at')
-        return [PurchaseReceiptResponse.model_validate(receipt) for receipt in receipts]
+        out: List[PurchaseReceiptResponse] = []
+        for receipt in receipts:
+            resp = PurchaseReceiptResponse.model_validate(receipt)
+            # 列表与详情共用生命周期计算，避免前端仅按 status 兜底时与「已入库」不一致
+            resp.lifecycle = get_purchase_receipt_lifecycle(receipt, milestones=[])
+            out.append(resp)
+        return out
 
     async def confirm_receipt(
         self,
@@ -3328,8 +3387,23 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
             if not receipt:
                 raise NotFoundError(f"采购入库单不存在: {receipt_id}")
 
-            if receipt.status not in ('待入库', '草稿'):
+            if receipt.status not in ("待入库", "草稿", "draft", "DRAFT"):
                 raise BusinessLogicError("只有草稿或待入库状态的采购入库单才能确认入库")
+
+            # #region agent log
+            _agent_debug_ndjson(
+                "warehouse_service.confirm_receipt:entry",
+                "confirm_start",
+                {
+                    "receipt_id": receipt_id,
+                    "tenant_id": tenant_id,
+                    "status": getattr(receipt, "status", None),
+                    "n_confirm_items": len(confirmation_data.items) if confirmation_data and confirmation_data.items else 0,
+                    "header_wh_in_body": getattr(confirmation_data, "warehouse_id", None) if confirmation_data else None,
+                },
+                "H2",
+            )
+            # #endregion
 
             # 1. 如果提供了确认数据，先更新表头和明细
             if confirmation_data:
@@ -3356,6 +3430,8 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                             item_update["location_code"] = item_data.location_code or f"库位{item_data.location_id}"
                         if item_data.batch_number:
                             item_update["batch_number"] = item_data.batch_number
+                        if item_data.serial_numbers:
+                            item_update["serial_numbers"] = _parse_serial_numbers(item_data.serial_numbers)
                         if item_data.expiry_date:
                             item_update["expiry_date"] = item_data.expiry_date
                         if item_data.manufacturing_date:
@@ -3365,6 +3441,23 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                             await PurchaseReceiptItem.filter(
                                 tenant_id=tenant_id, id=item_data.item_id, receipt_id=receipt_id
                             ).update(**item_update)
+
+            # #region agent log
+            if confirmation_data and confirmation_data.items:
+                _db_rows = await PurchaseReceiptItem.filter(tenant_id=tenant_id, receipt_id=receipt_id).all()
+                _db_ids = [int(x.id) for x in _db_rows]
+                _req_ids = [int(x.item_id) for x in confirmation_data.items]
+                _agent_debug_ndjson(
+                    "warehouse_service.confirm_receipt:after_item_patch",
+                    "item_id_alignment",
+                    {
+                        "db_ids": _db_ids,
+                        "req_ids": _req_ids,
+                        "req_subset_db": set(_req_ids).issubset(set(_db_ids)),
+                    },
+                    "H1",
+                )
+            # #endregion
 
             # 2. 补齐缺失的批号 (根据物料配置自动生成)
             from apps.master_data.models.material import Material
@@ -3409,21 +3502,55 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     raise BusinessLogicError(
                         "已启用「质检合格才入库」，来料检验须审核通过且质量状态为合格后才能确认入库"
                     )
+                # #region agent log
+                _agent_debug_ndjson(
+                    "warehouse_service.confirm_receipt:after_qc",
+                    "quality_gate",
+                    {"require_iqc": True, "inspection_count": len(inspections), "qc_passed": bool(passed)},
+                    "H3",
+                )
+                # #endregion
+            else:
+                # #region agent log
+                _agent_debug_ndjson(
+                    "warehouse_service.confirm_receipt:after_qc",
+                    "quality_gate",
+                    {"require_iqc": False},
+                    "H3",
+                )
+                # #endregion
 
             confirmer_name = await self.get_user_name(confirmed_by)
 
             now = (confirmation_data.receipt_time if confirmation_data and confirmation_data.receipt_time else None) or datetime.now()
-            await PurchaseReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(
+            _hdr_upd_rows = await PurchaseReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(
                 status='已入库',
                 receiver_id=confirmed_by,
                 receiver_name=confirmer_name,
                 receipt_time=now,
                 updated_by=confirmed_by
             )
-            await PurchaseReceiptItem.filter(tenant_id=tenant_id, receipt_id=receipt_id).update(
+            _it_upd_rows = await PurchaseReceiptItem.filter(tenant_id=tenant_id, receipt_id=receipt_id).update(
                 status='已入库',
                 receipt_time=now,
             )
+            # #region agent log
+            _st_after = await PurchaseReceipt.filter(tenant_id=tenant_id, id=receipt_id).values("status")
+            _agent_debug_ndjson(
+                "warehouse_service.confirm_receipt:status_update",
+                "header_item_rowcount_and_db_status",
+                {
+                    "hdr_upd_rows": int(_hdr_upd_rows),
+                    "it_upd_rows": int(_it_upd_rows),
+                    "db_status_after_update": (_st_after[0]["status"] if _st_after else None),
+                },
+                "H9",
+                run_id="pre-fix",
+            )
+            # #endregion
+
+            # 过账前重载表头，避免仅内存对象与库内表头仓库等不一致
+            receipt = await PurchaseReceipt.get(tenant_id=tenant_id, id=receipt_id)
 
             # 更新库存（增加）
             try:
@@ -3433,6 +3560,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 items = await PurchaseReceiptItem.filter(
                     tenant_id=tenant_id, receipt_id=receipt_id
                 ).all()
+                _stock_snap = []
                 for item in items:
                     qty = item.receipt_quantity or Decimal(0)
                     if qty <= 0:
@@ -3440,50 +3568,88 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     line_wh = await _resolve_purchase_receipt_line_warehouse_id_for_stock(
                         tenant_id, item, receipt
                     )
+                    _stock_snap.append(
+                        {
+                            "item_id": int(item.id),
+                            "material_id": int(item.material_id),
+                            "qty": str(qty),
+                            "resolved_wh": line_wh,
+                            "item_wh": getattr(item, "warehouse_id", None),
+                            "header_wh": getattr(receipt, "warehouse_id", None),
+                        }
+                    )
                     if line_wh is None:
+                        # #region agent log
+                        _agent_debug_ndjson(
+                            "warehouse_service.confirm_receipt:stock",
+                            "warehouse_unresolved",
+                            {"snap": _stock_snap[-3:]},
+                            "H4",
+                        )
+                        # #endregion
                         raise BusinessLogicError(
                             f"无法确定入库仓库：物料 {getattr(item, 'material_name', '') or getattr(item, 'material_code', '')} "
                             "请为明细指定行仓库或库位，或为入库单指定表头仓库"
                         )
-                    await InventoryService.increase_stock(
+                    await InventoryService._increase_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
                         quantity=qty,
                         warehouse_id=line_wh,
                         batch_no=item.batch_number or None,
+                        serial_nos=getattr(item, "serial_numbers", None),
                         source_type="purchase_receipt",
                         source_doc_id=receipt_id,
                         source_doc_code=receipt.receipt_code,
                     )
+                # #region agent log
+                _agent_debug_ndjson(
+                    "warehouse_service.confirm_receipt:stock",
+                    "stock_loop_ok",
+                    {"lines": _stock_snap[:20], "n_lines": len(_stock_snap)},
+                    "H5",
+                )
+                # #endregion
             except Exception as inv_e:
+                # #region agent log
+                _agent_debug_ndjson(
+                    "warehouse_service.confirm_receipt:stock",
+                    "stock_failed",
+                    {"exc_type": type(inv_e).__name__, "exc": str(inv_e)[:800]},
+                    "H5",
+                )
+                # #endregion
                 logger.error("采购入库确认-更新库存失败: %s", inv_e)
                 raise
 
-            # 自动生成应付单
-            try:
-                from apps.kuaicaiwu.services.finance_service import PayableService
-                from apps.kuaicaiwu.schemas.finance import PayableCreate
-                
-                payable_service = PayableService()
-                
-                # 获取入库单信息
-                receipt = await PurchaseReceipt.get(tenant_id=tenant_id, id=receipt_id)
-                
-                # 创建应付单
-                total_amount = Decimal(str(receipt.total_amount))
+        # 详单/生命周期组装在事务提交之后：避免 model_validate 或里程碑查询失败导致整笔入库与库存回滚
+
+        # 自动生成应付单（在事务提交后执行，避免嵌套 in_transaction() 干扰外层事务）
+        try:
+            from apps.kuaicaiwu.services.finance_service import PayableService
+            from apps.kuaicaiwu.schemas.finance import PayableCreate
+            
+            payable_service = PayableService()
+            
+            # 获取入库单信息（事务外重新fetch）
+            receipt_for_payable = await PurchaseReceipt.get(tenant_id=tenant_id, id=receipt_id)
+            
+            # 创建应付单
+            total_amount = Decimal(str(receipt_for_payable.total_amount or 0))
+            if total_amount > 0:
                 payable_data = PayableCreate(
                     source_type="采购入库",
                     source_id=receipt_id,
-                    source_code=receipt.receipt_code,
-                    supplier_id=receipt.supplier_id,
-                    supplier_name=receipt.supplier_name,
+                    source_code=receipt_for_payable.receipt_code,
+                    supplier_id=receipt_for_payable.supplier_id,
+                    supplier_name=receipt_for_payable.supplier_name,
                     total_amount=float(total_amount),
                     paid_amount=0.0,
                     remaining_amount=float(total_amount),
-                    due_date=(datetime.now() + timedelta(days=30)).date(),  # 默认30天账期
+                    due_date=(datetime.now() + timedelta(days=30)).date(),
                     business_date=datetime.now().date(),
                     status="未付款",
-                    notes=f"由采购入库单 {receipt.receipt_code} 自动生成"
+                    notes=f"由采购入库单 {receipt_for_payable.receipt_code} 自动生成"
                 )
                 
                 payable = await payable_service.create_payable(
@@ -3491,7 +3657,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     payable_data=payable_data,
                     created_by=confirmed_by
                 )
-                # 建立采购入库→应付单 的 DocumentRelation（支持单据追溯）
+                # 建立采购入库→应付单 的 DocumentRelation
                 try:
                     from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
                     from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
@@ -3502,7 +3668,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                         relation_data=DocumentRelationCreate(
                             source_type="purchase_receipt",
                             source_id=receipt_id,
-                            source_code=receipt.receipt_code,
+                            source_code=receipt_for_payable.receipt_code,
                             source_name=None,
                             target_type="payable",
                             target_id=payable.id,
@@ -3516,12 +3682,28 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     )
                 except Exception as rel_e:
                     logger.warning("创建采购入库→应付单 单据关联失败: %s", rel_e)
-            except Exception as e:
-                logger.error(f"自动生成应付单失败: {str(e)}")
-                # 不抛出异常，避免影响入库确认
-
-            updated_receipt = await self.get_purchase_receipt_by_id(tenant_id, receipt_id)
-            return updated_receipt
+        except Exception as e:
+            logger.warning(f"自动生成应付单失败（不影响入库确认结果）: {str(e)}")
+        # #region agent log
+        _agent_debug_ndjson(
+            "warehouse_service.confirm_receipt:after_tx",
+            "tx_committed_before_detail_fetch",
+            {"receipt_id": receipt_id},
+            "H7",
+            run_id="post-fix",
+        )
+        # #endregion
+        updated_receipt = await self.get_purchase_receipt_by_id(tenant_id, receipt_id)
+        # #region agent log
+        _agent_debug_ndjson(
+            "warehouse_service.confirm_receipt:exit",
+            "confirm_return_ok",
+            {"receipt_id": receipt_id, "status": getattr(updated_receipt, "status", None)},
+            "H7",
+            run_id="post-fix",
+        )
+        # #endregion
+        return updated_receipt
 
     async def withdraw_receipt_confirmation(
         self,
@@ -3557,7 +3739,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                         raise BusinessLogicError(
                             "撤回失败：无法解析明细行仓库，请检查原入库单仓库/库位配置"
                         )
-                    await InventoryService.decrease_stock(
+                    await InventoryService._decrease_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
                         quantity=qty,
@@ -4295,7 +4477,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                     if qty <= 0:
                         continue
                     wh_id = item.warehouse_id if item.warehouse_id else return_obj.warehouse_id
-                    await InventoryService.increase_stock(
+                    await InventoryService._increase_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
                         quantity=qty,
@@ -4370,7 +4552,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                 qty = item.return_quantity or Decimal(0)
                 if qty <= 0:
                     continue
-                await InventoryService.decrease_stock(
+                await InventoryService._decrease_stock_no_atomic(
                     tenant_id=tenant_id,
                     material_id=item.material_id,
                     quantity=qty,
@@ -4734,7 +4916,7 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                     qty = item.return_quantity or Decimal(0)
                     if qty <= 0:
                         continue
-                    await InventoryService.decrease_stock(
+                    await InventoryService._decrease_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
                         quantity=qty,
@@ -4975,7 +5157,7 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                 qty = Decimal(str(item.inbound_quantity or 0))
                 if qty <= 0:
                     continue
-                await InventoryService.decrease_stock(
+                await InventoryService._decrease_stock_no_atomic(
                     tenant_id=tenant_id,
                     material_id=item.material_id,
                     quantity=qty,
@@ -5102,7 +5284,7 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                     if qty <= 0:
                         continue
                     wh_id = getattr(item, "warehouse_id", None) or inbound.warehouse_id
-                    await InventoryService.increase_stock(
+                    await InventoryService._increase_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
                         quantity=qty,
@@ -5148,7 +5330,7 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                         continue
                     
                     # 反向扣减库存（decrease_stock 内部会校验余量，如果已被领用，这里会报错拦截）
-                    await InventoryService.decrease_stock(
+                    await InventoryService._decrease_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
                         quantity=qty,
@@ -5373,7 +5555,7 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
                     qty = Decimal(str(item.outbound_quantity or 0))
                     if qty <= 0:
                         continue
-                    await InventoryService.decrease_stock(
+                    await InventoryService._decrease_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
                         quantity=qty,
@@ -5571,7 +5753,7 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
                     if qty <= 0:
                         continue
                     wh_id = item.warehouse_id if item.warehouse_id else None
-                    await InventoryService.decrease_stock(
+                    await InventoryService._decrease_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
                         quantity=qty,
@@ -5760,7 +5942,7 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
                     if qty <= 0:
                         continue
                     wh_id = item.warehouse_id if item.warehouse_id else None
-                    await InventoryService.increase_stock(
+                    await InventoryService._increase_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
                         quantity=qty,

@@ -35,6 +35,14 @@ from apps.kuaizhizao.schemas.quality import (
     FinishedGoodsInspectionResponse,
     FinishedGoodsInspectionListResponse,
 )
+from apps.kuaizhizao.schemas.inspection_policy import (
+    QualityInspectionStageTogglesResponse,
+    QualityInspectionStageTogglesUpdate,
+)
+from apps.kuaizhizao.services.inspection_policy_service import (
+    get_quality_inspection_stage_toggles,
+    set_quality_inspection_stage_toggles,
+)
 
 defect_record_service = DefectRecordService()
 
@@ -853,3 +861,44 @@ async def create_defect_from_finished_goods_inspection(
         raise HTTPException(status_code=400, detail=str(e))
     except BusinessLogicError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ============ 组织级质检环节总开关（IQC / IPQC / FQC / OQC）============
+
+
+@router.get(
+    "/quality-inspection-stage-toggles",
+    response_model=QualityInspectionStageTogglesResponse,
+    summary="获取组织质检环节总开关",
+)
+async def api_get_quality_inspection_stage_toggles(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> QualityInspectionStageTogglesResponse:
+    """返回当前租户是否启用各质检环节；未配置时默认全部启用。"""
+    data = await get_quality_inspection_stage_toggles(tenant_id)
+    return QualityInspectionStageTogglesResponse.model_validate(data)
+
+
+@router.put(
+    "/quality-inspection-stage-toggles",
+    response_model=QualityInspectionStageTogglesResponse,
+    summary="更新组织质检环节总开关",
+)
+async def api_put_quality_inspection_stage_toggles(
+    body: QualityInspectionStageTogglesUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> QualityInspectionStageTogglesResponse:
+    """部分更新：仅对请求体中出现的字段覆盖，其余保持原值。"""
+    current = await get_quality_inspection_stage_toggles(tenant_id)
+    for key in ("iqc_enabled", "ipqc_enabled", "fqc_enabled", "oqc_enabled"):
+        v = getattr(body, key, None)
+        if v is not None:
+            current[key] = bool(v)
+    saved = await set_quality_inspection_stage_toggles(
+        tenant_id,
+        current,
+        description="API 更新质检环节开关",
+    )
+    return QualityInspectionStageTogglesResponse.model_validate(saved)

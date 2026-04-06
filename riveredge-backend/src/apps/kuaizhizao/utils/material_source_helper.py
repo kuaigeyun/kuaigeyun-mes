@@ -279,6 +279,22 @@ async def validate_material_source_config(
     return len(errors) == 0, errors
 
 
+async def _child_has_any_approved_bom_row(
+    tenant_id: int,
+    material_id: int,
+    only_approved: bool,
+    as_of_date: Optional[datetime],
+) -> bool:
+    """是否存在任意一条生效/已审核的 BOM 明细行（与历史 MRP 展开前的 exists 判断一致）。"""
+    q = BOM.filter(tenant_id=tenant_id, material_id=material_id, deleted_at__isnull=True)
+    eff = _bom_effective_filter(as_of_date)
+    if eff:
+        q = q.filter(eff)
+    if only_approved:
+        q = q.filter(approval_status="approved")
+    return await q.exists()
+
+
 async def expand_bom_with_source_control(
     tenant_id: int,
     material_id: int,
@@ -292,14 +308,14 @@ async def expand_bom_with_source_control(
     variant_attributes: Optional[Dict[str, Any]] = None,
     configurable_selections: Optional[Dict[str, int]] = None,
     as_of_date: Optional[datetime] = None,
+    flatten_intermediate_subassemblies: bool = False,
 ) -> List[Dict[str, Any]]:
     """
     展开BOM（物料来源控制）
-    
-    - **虚拟件（Phantom）**：不生成自身需求，展开子项；子项中仅虚拟件/配置件继续向下展开。
-    - **自制件（Make）、采购件（Buy）等**：只生成**一行**需求，**不再**按子 BOM 展开（齐套按半成品/采购件库存计）。
-    - **配置件（Configure）**：仍递归展开（需 variant / 配置位匹配 BOM）。
-    
+
+    - **flatten_intermediate_subassemblies=False**（MRP/缺料等）：与历史逻辑一致——虚拟件穿透；非虚拟子件先记一行，若存在 BOM 再递归展开下层（子件为虚拟件则只展开不重复本行逻辑）。
+    - **flatten_intermediate_subassemblies=True**（工单齐套/叫料）：虚拟件下仅虚拟件/配置件继续穿透，其余子件单行不拆子 BOM；非虚拟父件下同理。
+
     Args:
         tenant_id: 租户ID
         material_id: 物料ID
@@ -313,9 +329,10 @@ async def expand_bom_with_source_control(
         variant_attributes: 配置件属性（可选），格式 {attr: value}，用于匹配 bom_variants
         configurable_selections: 配置位选择（可选），格式 {"parentMaterialId_configurableGroupId": componentId}
         as_of_date: 基准日期（可选），仅使用该日期生效的 BOM（effective_date<=as_of_date 且 expiry_date>=as_of_date 或 null）
-        
+        flatten_intermediate_subassemblies: True=齐套；False=MRP
+
     Returns:
-        List[Dict]: 展开后的物料需求列表（虚拟件穿透；非虚拟子件不拆子 BOM）
+        List[Dict]: 展开后的物料需求列表
     """
     if level >= max_level:
         logger.warning(f"BOM展开达到最大层级 {max_level}，物料ID: {material_id}")
@@ -375,36 +392,97 @@ async def expand_bom_with_source_control(
         bom_items = await bom_items_query.prefetch_related("component").order_by("priority", "id").all()
         bom_items = _select_alternatives(bom_items)
         bom_items = _select_configurable(bom_items, material_id, configurable_selections)
-        
-        # 虚拟件下层：仅虚拟件/配置件继续递归；自制件、采购件等单行计入（不拆子 BOM）
+
         requirements = []
-        for bom_item in bom_items:
-            component = await bom_item.component
-            if not component:
-                continue
+        _kw = dict(
+            only_approved=only_approved,
+            level=level + 1,
+            max_level=max_level,
+            bom_version=bom_version,
+            use_default_bom=use_default_bom,
+            material_bom_versions=effective_material_bom_versions,
+            variant_attributes=variant_attributes,
+            configurable_selections=configurable_selections,
+            as_of_date=as_of_date,
+        )
 
-            component_qty = float(bom_item.quantity) * required_quantity
-            if bom_item.waste_rate:
-                component_qty = component_qty * (1 + float(bom_item.waste_rate) / 100)
-
-            ct = component.source_type
-            _expand_kw = dict(
-                tenant_id=tenant_id,
-                material_id=component.id,
-                required_quantity=component_qty,
-                only_approved=only_approved,
-                level=level + 1,
-                max_level=max_level,
-                bom_version=bom_version,
-                use_default_bom=use_default_bom,
-                material_bom_versions=effective_material_bom_versions,
-                variant_attributes=variant_attributes,
-                configurable_selections=configurable_selections,
-                as_of_date=as_of_date,
-            )
-
-            if ct == SOURCE_TYPE_PHANTOM:
-                child_requirements = await expand_bom_with_source_control(**_expand_kw)
+        if flatten_intermediate_subassemblies:
+            # 齐套：仅虚拟件/配置件穿透，其余子件单行
+            for bom_item in bom_items:
+                component = await bom_item.component
+                if not component:
+                    continue
+                component_qty = float(bom_item.quantity) * required_quantity
+                if bom_item.waste_rate:
+                    component_qty = component_qty * (1 + float(bom_item.waste_rate) / 100)
+                ct = component.source_type
+                _expand_kw = dict(
+                    tenant_id=tenant_id,
+                    material_id=component.id,
+                    required_quantity=component_qty,
+                    flatten_intermediate_subassemblies=True,
+                    **_kw,
+                )
+                if ct == SOURCE_TYPE_PHANTOM:
+                    child_requirements = await expand_bom_with_source_control(**_expand_kw)
+                    if child_requirements:
+                        requirements.extend(child_requirements)
+                    else:
+                        requirements.append({
+                            "material_id": component.id,
+                            "material_code": component.main_code or component.code,
+                            "material_name": component.name,
+                            "source_type": component.source_type,
+                            "required_quantity": component_qty,
+                            "unit": bom_item.unit or component.base_unit,
+                            "level": level + 1,
+                            "from_phantom": True,
+                            "phantom_material_id": material_id,
+                        })
+                elif ct == SOURCE_TYPE_CONFIGURE:
+                    child_requirements = await expand_bom_with_source_control(**_expand_kw)
+                    if child_requirements:
+                        requirements.extend(child_requirements)
+                    else:
+                        requirements.append({
+                            "material_id": component.id,
+                            "material_code": component.main_code or component.code,
+                            "material_name": component.name,
+                            "source_type": component.source_type,
+                            "required_quantity": component_qty,
+                            "unit": bom_item.unit or component.base_unit,
+                            "level": level + 1,
+                            "from_phantom": True,
+                            "phantom_material_id": material_id,
+                        })
+                else:
+                    requirements.append({
+                        "material_id": component.id,
+                        "material_code": component.main_code or component.code,
+                        "material_name": component.name,
+                        "source_type": component.source_type,
+                        "required_quantity": component_qty,
+                        "unit": bom_item.unit or component.base_unit,
+                        "level": level + 1,
+                        "from_phantom": True,
+                        "phantom_material_id": material_id,
+                    })
+        else:
+            # MRP（历史）：虚拟件下对每个子件递归展开；无展开结果则记叶
+            for bom_item in bom_items:
+                component = await bom_item.component
+                if not component:
+                    continue
+                component_qty = float(bom_item.quantity) * required_quantity
+                if bom_item.waste_rate:
+                    component_qty = component_qty * (1 + float(bom_item.waste_rate) / 100)
+                child_requirements = await expand_bom_with_source_control(
+                    tenant_id=tenant_id,
+                    material_id=component.id,
+                    required_quantity=component_qty,
+                    flatten_intermediate_subassemblies=False,
+                    **_kw,
+                )
                 if child_requirements:
                     requirements.extend(child_requirements)
                 else:
@@ -419,34 +497,6 @@ async def expand_bom_with_source_control(
                         "from_phantom": True,
                         "phantom_material_id": material_id,
                     })
-            elif ct == SOURCE_TYPE_CONFIGURE:
-                child_requirements = await expand_bom_with_source_control(**_expand_kw)
-                if child_requirements:
-                    requirements.extend(child_requirements)
-                else:
-                    requirements.append({
-                        "material_id": component.id,
-                        "material_code": component.main_code or component.code,
-                        "material_name": component.name,
-                        "source_type": component.source_type,
-                        "required_quantity": component_qty,
-                        "unit": bom_item.unit or component.base_unit,
-                        "level": level + 1,
-                        "from_phantom": True,
-                        "phantom_material_id": material_id,
-                    })
-            else:
-                requirements.append({
-                    "material_id": component.id,
-                    "material_code": component.main_code or component.code,
-                    "material_name": component.name,
-                    "source_type": component.source_type,
-                    "required_quantity": component_qty,
-                    "unit": bom_item.unit or component.base_unit,
-                    "level": level + 1,
-                    "from_phantom": True,
-                    "phantom_material_id": material_id,
-                })
 
         return requirements
     
@@ -484,51 +534,86 @@ async def expand_bom_with_source_control(
     bom_items = _select_configurable(bom_items, material_id, configurable_selections)
 
     requirements = []
-    for bom_item in bom_items:
-        component = await bom_item.component
-        if not component:
-            continue
-        
-        # 计算子物料的需求数量（考虑损耗率）
-        component_qty = float(bom_item.quantity) * required_quantity
-        if bom_item.waste_rate:
-            component_qty = component_qty * (1 + float(bom_item.waste_rate) / 100)
-        
-        # 获取子物料的来源类型
-        component_source_type = component.source_type
-        
-        if component_source_type == SOURCE_TYPE_PHANTOM:
-            child_requirements = await expand_bom_with_source_control(
-                tenant_id=tenant_id,
-                material_id=component.id,
-                required_quantity=component_qty,
-                only_approved=only_approved,
-                level=level + 1,
-                max_level=max_level,
-                bom_version=bom_version,
-                use_default_bom=use_default_bom,
-                material_bom_versions=effective_material_bom_versions,
-                variant_attributes=variant_attributes,
-                configurable_selections=configurable_selections,
-                as_of_date=as_of_date,
-            )
-            requirements.extend(child_requirements)
-        elif component_source_type == SOURCE_TYPE_CONFIGURE:
-            child_requirements = await expand_bom_with_source_control(
-                tenant_id=tenant_id,
-                material_id=component.id,
-                required_quantity=component_qty,
-                only_approved=only_approved,
-                level=level + 1,
-                max_level=max_level,
-                bom_version=bom_version,
-                use_default_bom=use_default_bom,
-                material_bom_versions=effective_material_bom_versions,
-                variant_attributes=variant_attributes,
-                configurable_selections=configurable_selections,
-                as_of_date=as_of_date,
-            )
-            if child_requirements:
+    _kw = dict(
+        only_approved=only_approved,
+        level=level + 1,
+        max_level=max_level,
+        bom_version=bom_version,
+        use_default_bom=use_default_bom,
+        material_bom_versions=effective_material_bom_versions,
+        variant_attributes=variant_attributes,
+        configurable_selections=configurable_selections,
+        as_of_date=as_of_date,
+    )
+
+    if flatten_intermediate_subassemblies:
+        for bom_item in bom_items:
+            component = await bom_item.component
+            if not component:
+                continue
+            component_qty = float(bom_item.quantity) * required_quantity
+            if bom_item.waste_rate:
+                component_qty = component_qty * (1 + float(bom_item.waste_rate) / 100)
+            component_source_type = component.source_type
+            if component_source_type == SOURCE_TYPE_PHANTOM:
+                child_requirements = await expand_bom_with_source_control(
+                    tenant_id=tenant_id,
+                    material_id=component.id,
+                    required_quantity=component_qty,
+                    flatten_intermediate_subassemblies=True,
+                    **_kw,
+                )
+                requirements.extend(child_requirements)
+            elif component_source_type == SOURCE_TYPE_CONFIGURE:
+                child_requirements = await expand_bom_with_source_control(
+                    tenant_id=tenant_id,
+                    material_id=component.id,
+                    required_quantity=component_qty,
+                    flatten_intermediate_subassemblies=True,
+                    **_kw,
+                )
+                if child_requirements:
+                    requirements.extend(child_requirements)
+                else:
+                    requirements.append({
+                        "material_id": component.id,
+                        "material_code": component.main_code or component.code,
+                        "material_name": component.name,
+                        "source_type": component_source_type,
+                        "required_quantity": component_qty,
+                        "unit": bom_item.unit or component.base_unit,
+                        "level": level + 1,
+                        "from_phantom": False,
+                    })
+            else:
+                requirements.append({
+                    "material_id": component.id,
+                    "material_code": component.main_code or component.code,
+                    "material_name": component.name,
+                    "source_type": component_source_type,
+                    "required_quantity": component_qty,
+                    "unit": bom_item.unit or component.base_unit,
+                    "level": level + 1,
+                    "from_phantom": False,
+                })
+    else:
+        # MRP（历史）：子件为虚拟件则整段展开；否则先记一行再按是否存在 BOM 行递归展开
+        for bom_item in bom_items:
+            component = await bom_item.component
+            if not component:
+                continue
+            component_qty = float(bom_item.quantity) * required_quantity
+            if bom_item.waste_rate:
+                component_qty = component_qty * (1 + float(bom_item.waste_rate) / 100)
+            component_source_type = component.source_type
+            if component_source_type == SOURCE_TYPE_PHANTOM:
+                child_requirements = await expand_bom_with_source_control(
+                    tenant_id=tenant_id,
+                    material_id=component.id,
+                    required_quantity=component_qty,
+                    flatten_intermediate_subassemblies=False,
+                    **_kw,
+                )
                 requirements.extend(child_requirements)
             else:
                 requirements.append({
@@ -541,18 +626,17 @@ async def expand_bom_with_source_control(
                     "level": level + 1,
                     "from_phantom": False,
                 })
-        else:
-            # 自制件/采购件/委外件等：单行需求，不按子 BOM 展开（齐套用半成品或采购件库存）
-            requirements.append({
-                "material_id": component.id,
-                "material_code": component.main_code or component.code,
-                "material_name": component.name,
-                "source_type": component_source_type,
-                "required_quantity": component_qty,
-                "unit": bom_item.unit or component.base_unit,
-                "level": level + 1,
-                "from_phantom": False,
-            })
+                if await _child_has_any_approved_bom_row(
+                    tenant_id, component.id, only_approved, as_of_date
+                ):
+                    child_requirements = await expand_bom_with_source_control(
+                        tenant_id=tenant_id,
+                        material_id=component.id,
+                        required_quantity=component_qty,
+                        flatten_intermediate_subassemblies=False,
+                        **_kw,
+                    )
+                    requirements.extend(child_requirements)
 
     return requirements
 
