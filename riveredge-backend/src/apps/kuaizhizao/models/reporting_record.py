@@ -73,9 +73,13 @@ class ReportingRecord(BaseModel):
     operation_code = fields.CharField(max_length=50, description="工序编码")
     operation_name = fields.CharField(max_length=200, description="工序名称")
 
-    # 操作工信息
+    # 操作工信息（生产人员：实际完成工序的人员）
     worker_id = fields.IntField(description="操作工ID")
     worker_name = fields.CharField(max_length=100, description="操作工姓名")
+
+    # 记录人员：提交报工的用户；自报工时通常与生产人员为同一人，代报工时为录入人
+    recorded_by = fields.IntField(null=True, description="记录人用户ID（提交报工者）")
+    recorded_by_name = fields.CharField(max_length=100, null=True, description="记录人姓名")
 
     # 报工数据
     reported_quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="报工数量")

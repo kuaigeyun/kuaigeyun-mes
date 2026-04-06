@@ -41,6 +41,7 @@ from apps.kuaizhizao.schemas.work_order import (
     WorkOrderMergeResponse,
     WorkOrderOperationDispatch,
     DefectTypeMinimal,
+    DefaultOperatorSnapshot,
     WorkOrderKittingAnalysisResponse,
     MaterialKittingItem,
     MaterialLocationInfo,
@@ -74,6 +75,63 @@ from apps.kuaizhizao.utils.material_source_helper import (
 from loguru import logger
 from infra.services.business_config_service import BusinessConfigService
 from infra.models.user import User
+
+
+async def _batch_default_operators_snapshots_by_master_operation_id(
+    tenant_id: int,
+    master_operation_ids: List[int],
+) -> Dict[int, List[DefaultOperatorSnapshot]]:
+    """按 master Operation.id 批量解析工序档案中的默认生产人员（含 uuid，供前端下拉与默认选中）。"""
+    if not master_operation_ids:
+        return {}
+    uniq = list({int(x) for x in master_operation_ids if x is not None})
+    if not uniq:
+        return {}
+    master_ops = await Operation.filter(
+        tenant_id=tenant_id,
+        id__in=uniq,
+        deleted_at__isnull=True,
+    ).all()
+    all_user_ids: List[int] = []
+    raw_ids_by_master: Dict[int, List[int]] = {}
+    for mo in master_ops:
+        raw = getattr(mo, "default_operator_ids", None) or []
+        ids: List[int] = []
+        if isinstance(raw, list):
+            for x in raw:
+                try:
+                    ids.append(int(x))
+                except (TypeError, ValueError):
+                    continue
+        raw_ids_by_master[mo.id] = ids
+        all_user_ids.extend(ids)
+    uid_set = list({i for i in all_user_ids if i})
+    users = (
+        await User.filter(
+            tenant_id=tenant_id,
+            id__in=uid_set,
+            deleted_at__isnull=True,
+        ).all()
+        if uid_set
+        else []
+    )
+    user_by_id = {u.id: u for u in users}
+    out: Dict[int, List[DefaultOperatorSnapshot]] = {}
+    for mo in master_ops:
+        snaps: List[DefaultOperatorSnapshot] = []
+        for uid in raw_ids_by_master.get(mo.id, []):
+            u = user_by_id.get(uid)
+            if not u:
+                continue
+            snaps.append(
+                DefaultOperatorSnapshot(
+                    id=u.id,
+                    uuid=str(getattr(u, "uuid", "") or ""),
+                    name=str(u.full_name or u.username or str(u.id)),
+                )
+            )
+        out[mo.id] = snaps
+    return out
 
 
 async def _resolve_sales_order_snapshot_fields(
@@ -2223,6 +2281,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         ).all()
         sop_by_op = {s.operation_id: s for s in sops}
 
+        default_snap_by_master = await _batch_default_operators_snapshots_by_master_operation_id(
+            tenant_id, op_ids
+        )
+
         prev_qualified = Decimal(str(plan_qty))
         result = []
         for idx, op in enumerate(operations):
@@ -2254,6 +2316,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 op_data["sop_name"] = sop.name
 
             op_data["max_reportable_quantity"] = _max_reportable_quantity_for_op(work_order, op)
+            op_data["default_operators"] = default_snap_by_master.get(op.operation_id, [])
 
             prev_qualified = qualified
             result.append(WorkOrderOperationResponse.model_validate(op_data))
@@ -2583,6 +2646,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 if hasattr(work_order_operation, f)
             }
             op_payload["max_reportable_quantity"] = _max_reportable_quantity_for_op(wo, work_order_operation)
+            dmap = await _batch_default_operators_snapshots_by_master_operation_id(
+                tenant_id, [work_order_operation.operation_id]
+            )
+            op_payload["default_operators"] = dmap.get(work_order_operation.operation_id, [])
             return WorkOrderOperationResponse.model_validate(op_payload)
 
     async def start_work_order_operation(
@@ -2716,6 +2783,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 if hasattr(work_order_operation, f)
             }
             op_payload["max_reportable_quantity"] = _max_reportable_quantity_for_op(work_order, work_order_operation)
+            dmap = await _batch_default_operators_snapshots_by_master_operation_id(
+                tenant_id, [work_order_operation.operation_id]
+            )
+            op_payload["default_operators"] = dmap.get(work_order_operation.operation_id, [])
             return WorkOrderOperationResponse.model_validate(op_payload)
 
     async def freeze_work_order(

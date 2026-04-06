@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { App } from 'antd';
+import { App, Space, Tag } from 'antd';
 import { ProFormSelect } from '@ant-design/pro-components';
 import { useDebounceFn } from 'ahooks';
 import { NamePath } from 'antd/es/form/interface';
@@ -30,6 +30,8 @@ interface UniUserSelectProps {
   width?: number | 'sm' | 'md' | 'xl' | 'xs' | 'lg';
   /** 值改变时的回调，返回完整的 User 对象以供业务表单进一步同步字段 */
   onChange?: (value: any, user: User | User[] | undefined) => void;
+  /** 下拉中对这些用户 ID 展示「默认」徽章（如工序档案默认生产人员） */
+  defaultBadgeUserIds?: number[];
   /** 透传其他 ProFormSelect 属性 */
   [key: string]: any;
 }
@@ -54,6 +56,7 @@ export const UniUserSelect: React.FC<UniUserSelectProps> = ({
   mode,
   width,
   onChange,
+  defaultBadgeUserIds,
   ...restProps
 }) => {
   const { message } = App.useApp();
@@ -104,6 +107,11 @@ export const UniUserSelect: React.FC<UniUserSelectProps> = ({
     }
   };
 
+  const defaultIdSet = useMemo(
+    () => new Set((defaultBadgeUserIds || []).filter((n) => typeof n === 'number')),
+    [defaultBadgeUserIds]
+  );
+
   const options = useMemo(() => {
     return data.map((item) => ({
       label: item.full_name ? `${item.full_name} (${item.username})` : item.username,
@@ -129,6 +137,23 @@ export const UniUserSelect: React.FC<UniUserSelectProps> = ({
         filterOption: false, // 禁用默认前端过滤，配合关键字查询后端结果
         onSearch: debounceFetch,
         onChange: handleChange,
+        optionRender: (ori) => {
+          const u = data.find((item) => item.uuid === ori.value);
+          const text =
+            typeof ori.label === 'string'
+              ? ori.label
+              : u
+                ? u.full_name
+                  ? `${u.full_name} (${u.username})`
+                  : u.username
+                : '';
+          return (
+            <Space size={6} wrap>
+              <span>{text}</span>
+              {u && defaultIdSet.has(u.id) ? <Tag color="blue">默认</Tag> : null}
+            </Space>
+          );
+        },
       }}
       {...restProps}
     />

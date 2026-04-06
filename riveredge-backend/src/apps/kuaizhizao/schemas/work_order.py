@@ -124,6 +124,16 @@ class WorkOrderBatchUpdateDatesRequest(BaseModel):
     updates: list[WorkOrderBatchUpdateDatesItem] = Field(..., description="更新项列表")
 
 
+class DefaultOperatorSnapshot(BaseModel):
+    """工序档案默认生产人员（用于报工默认与下拉「默认」标记）"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int = Field(..., description="用户ID")
+    uuid: str = Field(..., description="用户UUID")
+    name: str = Field(..., description="展示名称")
+
+
 class WorkOrderOperationBatchUpdateDatesItem(BaseModel):
     """批量更新工序计划日期项"""
     operation_id: int = Field(..., description="工序ID（WorkOrderOperation.id）")
@@ -444,6 +454,10 @@ class WorkOrderOperationResponse(WorkOrderOperationBase):
     reporting_type: str = Field("quantity", description="报工类型（quantity/status）")
     allow_jump: bool = Field(False, description="已废弃：不参与跳转判断，恒为 False（新数据）")
     is_node_operation: bool = Field(False, description="是否节点工序（允许跳转时前序节点仍不可跳过）")
+    default_operators: List[DefaultOperatorSnapshot] = Field(
+        default_factory=list,
+        description="工序档案配置的默认生产人员（报工默认与下拉标记）",
+    )
     over_report_mode: str = Field("none", alias="overReportMode", description="超报模式（none/fixed/percent）")
     over_report_value: Decimal = Field(Decimal("0"), alias="overReportValue", description="超报值")
     max_reportable_quantity: Decimal = Field(

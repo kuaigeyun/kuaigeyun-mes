@@ -4349,6 +4349,12 @@ export default {
   'pages.system.configCenter.param.reporting_parameter_reporting_desc': '是否支持带参数报工',
   'pages.system.configCenter.param.reporting_auto_fill': '自动填充',
   'pages.system.configCenter.param.reporting_auto_fill_desc': '是否自动填充报工数据',
+  'pages.system.configCenter.param.reporting_default_production_worker_mode': '报工默认生产人员',
+  'pages.system.configCenter.param.reporting_default_production_worker_mode_desc':
+    '代报工或快捷报工打开表单时，生产人员字段的默认策略：当前用户、工序派工人员，或自动（派工优先，否则工序档案默认人员，再否则当前用户）。工序档案默认人员在人员下拉中显示「默认」标记。',
+  'pages.system.configCenter.param.reporting_default_production_worker_mode_opt_current_user': '默认当前登录用户',
+  'pages.system.configCenter.param.reporting_default_production_worker_mode_opt_operation_assigned': '默认工序派工人员',
+  'pages.system.configCenter.param.reporting_default_production_worker_mode_opt_auto': '自动（派工 → 工序默认 → 当前用户）',
   'pages.system.configCenter.param.reporting_data_correction': '报工数据修正',
   'pages.system.configCenter.param.reporting_data_correction_desc': '是否允许修正已提交的报工数据',
   'pages.system.configCenter.param.bom_bom_multi_version_allowed': 'BOM 允许多版本共存',

@@ -5,17 +5,17 @@ RUN_IN_TRANSACTION = True
 
 async def upgrade(db: BaseDBAsyncClient) -> str:
     return """
-        ALTER TABLE "apps_master_data_operations" ADD "default_equipment_ids" JSONB;
-        ALTER TABLE "apps_master_data_operations" ADD "default_station_ids" JSONB;
-        ALTER TABLE "apps_master_data_operations" ADD "default_workshop_ids" JSONB;
-        ALTER TABLE "apps_master_data_operations" ADD "default_team_ids" JSONB;
-        ALTER TABLE "apps_master_data_operations" ADD "default_work_center_ids" JSONB;
+        ALTER TABLE "apps_master_data_operations" ADD COLUMN IF NOT EXISTS "default_equipment_ids" JSONB;
+        ALTER TABLE "apps_master_data_operations" ADD COLUMN IF NOT EXISTS "default_station_ids" JSONB;
+        ALTER TABLE "apps_master_data_operations" ADD COLUMN IF NOT EXISTS "default_workshop_ids" JSONB;
+        ALTER TABLE "apps_master_data_operations" ADD COLUMN IF NOT EXISTS "default_team_ids" JSONB;
+        ALTER TABLE "apps_master_data_operations" ADD COLUMN IF NOT EXISTS "default_work_center_ids" JSONB;
         COMMENT ON COLUMN "apps_master_data_operations"."default_operator_ids" IS '默认生产人员（用户ID列表）';
-        ALTER TABLE "apps_kuaizhizao_work_order_operations" ADD "assigned_station_id" INT;
-        ALTER TABLE "apps_kuaizhizao_work_order_operations" ADD "assigned_team_name" VARCHAR(100);
-        ALTER TABLE "apps_kuaizhizao_work_order_operations" ADD "assigned_station_name" VARCHAR(200);
-        ALTER TABLE "apps_kuaizhizao_work_order_operations" ADD "assigned_team_id" INT;
-        ALTER TABLE "apps_kuaizhizao_material_call_requests" ADD "production_picking_id" INT;
+        ALTER TABLE "apps_kuaizhizao_work_order_operations" ADD COLUMN IF NOT EXISTS "assigned_station_id" INT;
+        ALTER TABLE "apps_kuaizhizao_work_order_operations" ADD COLUMN IF NOT EXISTS "assigned_team_name" VARCHAR(100);
+        ALTER TABLE "apps_kuaizhizao_work_order_operations" ADD COLUMN IF NOT EXISTS "assigned_station_name" VARCHAR(200);
+        ALTER TABLE "apps_kuaizhizao_work_order_operations" ADD COLUMN IF NOT EXISTS "assigned_team_id" INT;
+        ALTER TABLE "apps_kuaizhizao_material_call_requests" ADD COLUMN IF NOT EXISTS "production_picking_id" INT;
         COMMENT ON COLUMN "apps_master_data_operations"."default_equipment_ids" IS '默认设备（设备ID列表）';
 COMMENT ON COLUMN "apps_master_data_operations"."default_station_ids" IS '默认工位（工位ID列表）';
 COMMENT ON COLUMN "apps_master_data_operations"."default_workshop_ids" IS '默认车间（车间ID列表）';

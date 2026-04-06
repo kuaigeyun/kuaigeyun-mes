@@ -109,6 +109,23 @@ REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
             },
         ],
     },
+    "parameters.reporting.default_production_worker_mode": {
+        "type": "select",
+        "options": [
+            {
+                "value": "current_user",
+                "labelKey": "pages.system.configCenter.param.reporting_default_production_worker_mode_opt_current_user",
+            },
+            {
+                "value": "operation_assigned",
+                "labelKey": "pages.system.configCenter.param.reporting_default_production_worker_mode_opt_operation_assigned",
+            },
+            {
+                "value": "auto",
+                "labelKey": "pages.system.configCenter.param.reporting_default_production_worker_mode_opt_auto",
+            },
+        ],
+    },
     "parameters.purchase.tolerance_percentage": {"type": "number", "min": 0, "max": 100},
     "parameters.purchase.price_fluctuation_limit_percent": {"type": "number", "min": 0, "max": 100},
     "parameters.work_order.material_shortage_block_level": {"type": "number", "min": 0, "max": 3},
@@ -164,6 +181,7 @@ PARAMETER_KEYS = {
     "parameters.reporting.quick_reporting",
     "parameters.reporting.parameter_reporting",
     "parameters.reporting.auto_fill",
+    "parameters.reporting.default_production_worker_mode",
     "parameters.reporting.data_correction",
     "parameters.warehouse.batch_management",
     "parameters.warehouse.serial_management",
@@ -210,6 +228,7 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.work_order.last_operation_auto_inbound_mode",
     "parameters.reporting.quick_reporting",
     "parameters.reporting.parameter_reporting",
+    "parameters.reporting.default_production_worker_mode",
     "parameters.reporting.data_correction",
     "parameters.warehouse.batch_management",
     "parameters.warehouse.serial_management",
@@ -530,6 +549,8 @@ class BusinessConfigService:
                 "quick_reporting": True,     # 开启快捷报工
                 "parameter_reporting": False, # 关闭参数报工
                 "auto_fill": True,           # 开启自动填充
+                # 报工生产人员默认：current_user | operation_assigned | auto（派工优先，否则工序默认人员，否则当前用户）
+                "default_production_worker_mode": "auto",
                 "data_correction": False,    # 关闭数据修正
                 "auto_approve": False,       # 开启后，提交的报工记录将自动通过审核
             },
@@ -796,6 +817,21 @@ class BusinessConfigService:
             return "none"
         return v
 
+    async def get_reporting_default_production_worker_mode(self, tenant_id: int) -> str:
+        """
+        报工表单生产人员默认策略：
+        current_user — 默认当前登录用户；
+        operation_assigned — 默认工序派工人员（无派工则回退当前用户）；
+        auto — 有派工用派工，否则用工序档案默认人员，再否则当前用户。
+        """
+        config = await self.get_business_config(tenant_id)
+        rp = config.get("parameters", {}).get("reporting", {})
+        raw = rp.get("default_production_worker_mode", "auto")
+        v = str(raw or "auto").strip()
+        if v not in ("current_user", "operation_assigned", "auto"):
+            return "auto"
+        return v
+
     # 全流程模式默认配置
     FULL_MODE_CONFIG = {
         "industry": "general",
@@ -885,6 +921,7 @@ class BusinessConfigService:
                 "quick_reporting": True,
                 "parameter_reporting": True,
                 "auto_fill": True,
+                "default_production_worker_mode": "auto",
                 "data_correction": True,
                 "auto_approve": False,       # 开启后，提交的报工记录将自动通过审核
             },

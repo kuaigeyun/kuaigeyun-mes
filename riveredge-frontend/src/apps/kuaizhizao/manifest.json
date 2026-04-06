@@ -1500,6 +1500,7 @@
     "kuaizhizao:receipt-notice:view",
     "kuaizhizao:replenishment-suggestion:view",
     "kuaizhizao:reporting:create",
+    "kuaizhizao:reporting:proxy",
     "kuaizhizao:reporting:delete",
     "kuaizhizao:reporting:update",
     "kuaizhizao:reporting:view",

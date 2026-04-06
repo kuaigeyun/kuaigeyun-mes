@@ -43,6 +43,8 @@ from apps.kuaizhizao.schemas.defect_record import (
 from apps.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
+from infra.models.user import User
+from core.services.authorization.user_permission_service import UserPermissionService
 
 
 class ReportingService(AppBaseService[ReportingRecord]):
@@ -160,13 +162,29 @@ class ReportingService(AppBaseService[ReportingRecord]):
             if not work_order:
                 raise NotFoundError(f"工单不存在: {reporting_data.work_order_id}")
 
-            # 报工人身份一致性：提交人必须与报工操作工一致，避免代填绕过
             try:
                 worker_id_int = int(getattr(reporting_data, "worker_id"))
             except Exception:
                 raise ValidationError("报工操作工ID无效")
+
+            # 代报工：生产人员(worker)可与记录人员(当前登录用户)不同，需具备 kuaizhizao:reporting:proxy
             if worker_id_int != int(reported_by):
-                raise BusinessLogicError("报工人身份不一致：提交人与操作工不匹配")
+                can_proxy = await UserPermissionService.has_permission(
+                    int(reported_by),
+                    tenant_id,
+                    "kuaizhizao:reporting:proxy",
+                )
+                if not can_proxy:
+                    raise BusinessLogicError(
+                        "无「代报工」权限时，生产人员须与当前登录用户一致；如需代他人报工，请由管理员授予代报工权限。"
+                    )
+
+            recorder = await User.get_or_none(id=int(reported_by))
+            recorder_name = ""
+            if recorder:
+                recorder_name = (recorder.full_name or recorder.username or "").strip() or str(recorder.username or "")
+            if not recorder_name:
+                recorder_name = reporting_data.worker_name or "用户"
 
             block_level = await BusinessConfigService().get_material_shortage_block_level(tenant_id)
             if block_level >= 3:
@@ -346,7 +364,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 reporting_data.status = 'approved'
                 approved_at = datetime.now()
                 approved_by = reported_by
-                approved_by_name = reporting_data.worker_name or "自动审核"
+                approved_by_name = recorder_name or reporting_data.worker_name or "自动审核"
 
             # 关键主数据标识以后端查询结果为准，避免前端篡改编码/名称
             trusted_work_order_code = getattr(work_order, "code", None) or reporting_data.work_order_code
@@ -366,6 +384,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 operation_name=trusted_operation_name,
                 worker_id=reporting_data.worker_id,
                 worker_name=reporting_data.worker_name,
+                recorded_by=int(reported_by),
+                recorded_by_name=recorder_name,
                 reported_quantity=reporting_data.reported_quantity,
                 qualified_quantity=reporting_data.qualified_quantity,
                 unqualified_quantity=reporting_data.unqualified_quantity,

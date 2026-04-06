@@ -527,6 +527,9 @@ async def get_work_order_execution_config(
 
     policy = await BusinessConfigService().get_work_order_picking_policy(tenant_id)
     last_inbound_mode = await BusinessConfigService().get_last_operation_auto_inbound_mode(tenant_id)
+    default_production_worker_mode = await BusinessConfigService().get_reporting_default_production_worker_mode(
+        tenant_id
+    )
     can_confirm_picking, role_codes = await ProductionPickingService().can_user_confirm_picking(
         tenant_id=tenant_id,
         user_id=current_user.id,
@@ -534,6 +537,7 @@ async def get_work_order_execution_config(
     return {
         **policy,
         "last_operation_auto_inbound_mode": last_inbound_mode,
+        "default_production_worker_mode": default_production_worker_mode,
         "current_user_role_codes": sorted(role_codes),
         "current_user_can_confirm_picking": can_confirm_picking,
     }

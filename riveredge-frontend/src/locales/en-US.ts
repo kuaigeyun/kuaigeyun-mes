@@ -4320,6 +4320,12 @@ export default {
   'pages.system.configCenter.param.reporting_parameter_reporting_desc': 'Support parameter reporting',
   'pages.system.configCenter.param.reporting_auto_fill': 'Auto fill',
   'pages.system.configCenter.param.reporting_auto_fill_desc': 'Auto fill reporting data',
+  'pages.system.configCenter.param.reporting_default_production_worker_mode': 'Default production worker for reporting',
+  'pages.system.configCenter.param.reporting_default_production_worker_mode_desc':
+    'When opening proxy/quick reporting, how the production worker field is prefilled: current user, operation assignee, or auto (assignee first, else operation default operators from master data, else current user). Default operators show a “Default” tag in the dropdown.',
+  'pages.system.configCenter.param.reporting_default_production_worker_mode_opt_current_user': 'Default to current user',
+  'pages.system.configCenter.param.reporting_default_production_worker_mode_opt_operation_assigned': 'Default to operation assignee',
+  'pages.system.configCenter.param.reporting_default_production_worker_mode_opt_auto': 'Auto (assignee → operation default → current user)',
   'pages.system.configCenter.param.reporting_data_correction': 'Data correction',
   'pages.system.configCenter.param.reporting_data_correction_desc': 'Allow correcting submitted reporting data',
   'pages.system.configCenter.param.bom_bom_multi_version_allowed': 'BOM multi-version',

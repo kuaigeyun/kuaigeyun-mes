@@ -74,6 +74,8 @@ export interface WorkOrderExecutionConfig {
   current_user_can_confirm_picking: boolean;
   /** 末道工序自动入库：none | direct_inbound | inbound_notice */
   last_operation_auto_inbound_mode?: string;
+  /** 报工生产人员默认：current_user | operation_assigned | auto */
+  default_production_worker_mode?: string;
 }
 
 export const workOrderApi = {

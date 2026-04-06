@@ -81,6 +81,11 @@ import {
 import { materialApi } from '../../../../master-data/services/material';
 import { sopApi } from '../../../../master-data/services/process';
 import { getUserInfo } from '../../../../../utils/auth';
+import { hasPermission } from '../../../../../utils/permission';
+import { useGlobalStore } from '../../../../../stores';
+import { UniUserSelect } from '../../../../../components/uni-user-select';
+import type { User } from '../../../../../services/user';
+import type { CurrentUser } from '../../../../../types/api';
 import { usePageMetrics } from '../../../../../hooks/usePageMetrics';
 import { getRemainingReportableQuantity } from '../../../utils/workOrderReporting';
 import { coerceReportingCreateStrings } from '../../../utils/reportingPayload';
@@ -93,6 +98,8 @@ interface ReportingRecord {
   work_order_name: string;
   operation_name: string;
   worker_name: string;
+  /** 提交报工的用户姓名（代报工时为录入人） */
+  recorded_by_name?: string | null;
   reported_quantity: number;
   qualified_quantity: number;
   unqualified_quantity: number;
@@ -176,6 +183,21 @@ const getWorkerInfo = (operation?: any) => {
   };
 };
 
+/** 代报工：若选择了「生产人员」则以其为准，否则与 getWorkerInfo 一致 */
+function resolveProductionWorker(
+  operation: any,
+  proxyUser: Pick<User, 'id' | 'full_name' | 'username'> | null | undefined,
+): { worker_id: number; worker_name: string } {
+  const base = getWorkerInfo(operation);
+  if (proxyUser?.id) {
+    return {
+      worker_id: proxyUser.id,
+      worker_name: String(proxyUser.full_name || proxyUser.username || base.worker_name),
+    };
+  }
+  return base;
+}
+
 /** 与后端一致：仅工单快照 allow_operation_jump */
 const effectiveAllowJump = (workOrder: any, _operation?: any) => {
   return !!workOrder?.allow_operation_jump;
@@ -191,10 +213,23 @@ const SubOperationReportingForm: React.FC<{
   onSuccess: () => void;
   onCancel: () => void;
   formRef: React.RefObject<any>;
-}> = ({ subOperation, workOrder, subOperations, onSuccess, onCancel, formRef }) => {
+  canProxyReporting: boolean;
+  currentUserForProxy: CurrentUser | null | undefined;
+}> = ({ subOperation, workOrder, subOperations, onSuccess, onCancel, formRef, canProxyReporting, currentUserForProxy }) => {
   const { message: messageApi } = App.useApp();
   const [subOpSopConfig, setSubOpSopConfig] = useState<any>(null);
   const [loadingSubOpSOP, setLoadingSubOpSOP] = useState(false);
+  const subOpProxyWorkerRef = useRef<Pick<User, 'id' | 'full_name' | 'username'> | null>(null);
+
+  useEffect(() => {
+    if (!canProxyReporting) {
+      subOpProxyWorkerRef.current = null;
+      return;
+    }
+    const b = getWorkerInfo(subOperation);
+    subOpProxyWorkerRef.current = { id: b.worker_id, full_name: b.worker_name, username: '' };
+    setTimeout(() => formRef.current?.setFieldsValue({ proxy_worker_uuid: undefined }), 0);
+  }, [subOperation?.operation_id, canProxyReporting, subOperation, formRef]);
 
   // 加载子工序的SOP配置（按工单+工序匹配，支持不同产品相同工序不同SOP）
   useEffect(() => {
@@ -341,7 +376,7 @@ const SubOperationReportingForm: React.FC<{
             });
           }
 
-          const { worker_id, worker_name } = getWorkerInfo(subOperation);
+          const { worker_id, worker_name } = resolveProductionWorker(subOperation, subOpProxyWorkerRef.current);
           const reportingData = {
             work_order_id: workOrder.id,
             work_order_code: workOrder.code,
@@ -370,6 +405,24 @@ const SubOperationReportingForm: React.FC<{
         }
       }}
     >
+      {canProxyReporting && (
+        <>
+          <UniUserSelect
+            name="proxy_worker_uuid"
+            label="生产人员"
+            placeholder="选择实际完成报工的生产人员（不选则按派工/本人默认）"
+            onChange={(_uuid, u) => {
+              subOpProxyWorkerRef.current =
+                u && !Array.isArray(u) ? { id: u.id, full_name: u.full_name, username: u.username } : null;
+            }}
+          />
+          {currentUserForProxy ? (
+            <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
+              记录人员（本次登录）：{currentUserForProxy.full_name || currentUserForProxy.username || '—'}
+            </Typography.Text>
+          ) : null}
+        </>
+      )}
       {subOperation.reporting_type === 'status' ? (
         // 按状态报工
         <>
@@ -562,6 +615,43 @@ const ReportingPage: React.FC = () => {
     queryFn: () => workOrderApi.getExecutionConfig(),
     staleTime: 60_000,
   });
+
+  const currentUser = useGlobalStore((s) => s.currentUser);
+  const canProxyReporting = useMemo(
+    () => hasPermission(currentUser ?? undefined, 'kuaizhizao:reporting:proxy'),
+    [currentUser],
+  );
+  const createModalProxyWorkerRef = useRef<Pick<User, 'id' | 'full_name' | 'username'> | null>(null);
+  const scanModalProxyWorkerRef = useRef<Pick<User, 'id' | 'full_name' | 'username'> | null>(null);
+
+  useEffect(() => {
+    if (!reportingModalVisible || !canProxyReporting) {
+      createModalProxyWorkerRef.current = null;
+      return;
+    }
+    if (!reportOperationId) {
+      createModalProxyWorkerRef.current = null;
+      setTimeout(() => formRef.current?.setFieldsValue({ proxy_worker_uuid: undefined }), 0);
+      return;
+    }
+    const operation = (Array.isArray(reportOperations) ? reportOperations : []).find(
+      (op: any) => op.operation_id === reportOperationId,
+    );
+    if (!operation) return;
+    const b = getWorkerInfo(operation);
+    createModalProxyWorkerRef.current = { id: b.worker_id, full_name: b.worker_name, username: '' };
+    setTimeout(() => formRef.current?.setFieldsValue({ proxy_worker_uuid: undefined }), 0);
+  }, [reportingModalVisible, canProxyReporting, reportOperationId, reportOperations]);
+
+  useEffect(() => {
+    if (!scanModalVisible || !canProxyReporting || !currentOperation) {
+      if (!scanModalVisible) scanModalProxyWorkerRef.current = null;
+      return;
+    }
+    const b = getWorkerInfo(currentOperation);
+    scanModalProxyWorkerRef.current = { id: b.worker_id, full_name: b.worker_name, username: '' };
+    setTimeout(() => scanFormRef.current?.setFieldsValue({ proxy_worker_uuid: undefined }), 0);
+  }, [scanModalVisible, canProxyReporting, currentOperation]);
 
   /**
    * 处理扫码报工
@@ -1130,7 +1220,10 @@ const ReportingPage: React.FC = () => {
       if (scanModalVisible && currentWorkOrder && currentOperation) {
         const canContinue = await ensurePickingGate(currentWorkOrder.id);
         if (!canContinue) return;
-        const { worker_id, worker_name } = getWorkerInfo(currentOperation);
+        const { worker_id, worker_name } = resolveProductionWorker(
+          currentOperation,
+          scanModalProxyWorkerRef.current,
+        );
         const reportingData = {
           work_order_id: currentWorkOrder.id,
           work_order_code: currentWorkOrder.code,
@@ -1172,7 +1265,7 @@ const ReportingPage: React.FC = () => {
       }
       const canContinue = await ensurePickingGate(workOrder.id);
       if (!canContinue) return;
-      const { worker_id, worker_name } = getWorkerInfo(operation);
+      const { worker_id, worker_name } = resolveProductionWorker(operation, createModalProxyWorkerRef.current);
       const reportingData: any = {
         work_order_id: workOrder.id,
         work_order_code: workOrder.code,
@@ -1630,10 +1723,22 @@ const ReportingPage: React.FC = () => {
       ellipsis: true,
     },
     {
-      title: '操作工',
+      title: '生产人员',
       dataIndex: 'worker_name',
       width: 100,
       ellipsis: true,
+    },
+    {
+      title: '记录人员',
+      dataIndex: 'recorded_by_name',
+      width: 100,
+      ellipsis: true,
+      hideInSearch: true,
+      render: (_, r) => {
+        const rec = (r as ReportingRecord).recorded_by_name;
+        if (rec) return rec;
+        return (r as ReportingRecord).worker_name ?? '—';
+      },
     },
     {
       title: '报工数量',
@@ -1837,7 +1942,13 @@ const ReportingPage: React.FC = () => {
       },
       { title: '工单名称', dataIndex: 'work_order_name' },
       { title: '工序', dataIndex: 'operation_name' },
-      { title: '操作工', dataIndex: 'worker_name' },
+      { title: '生产人员', dataIndex: 'worker_name' },
+      {
+        title: '记录人员',
+        dataIndex: 'recorded_by_name',
+        render: (_: any, r: ReportingRecord) =>
+          r.recorded_by_name || r.worker_name || '—',
+      },
       {
         title: '审核状态',
         dataIndex: 'status',
@@ -2050,6 +2161,24 @@ const ReportingPage: React.FC = () => {
             />
           </ProFormItem>
         </Col>
+        {canProxyReporting && (
+          <Col span={24}>
+            <UniUserSelect
+              name="proxy_worker_uuid"
+              label="生产人员"
+              placeholder="选择实际完成报工的生产人员（不选则按派工/本人默认）"
+              onChange={(_uuid, u) => {
+                createModalProxyWorkerRef.current =
+                  u && !Array.isArray(u) ? { id: u.id, full_name: u.full_name, username: u.username } : null;
+              }}
+            />
+            {currentUser ? (
+              <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
+                记录人员（本次登录）：{currentUser.full_name || currentUser.username || '—'}
+              </Typography.Text>
+            ) : null}
+          </Col>
+        )}
         {(Array.isArray(reportOperations) ? reportOperations : []).find((op: any) => op.operation_id === reportOperationId)?.reporting_type === 'status' ? (
           <ProFormRadio.Group
             name="completed_status"
@@ -2341,7 +2470,10 @@ const ReportingPage: React.FC = () => {
                         });
                       }
 
-                      const { worker_id, worker_name } = getWorkerInfo(currentOperation);
+                      const { worker_id, worker_name } = resolveProductionWorker(
+                        currentOperation,
+                        scanModalProxyWorkerRef.current,
+                      );
                       const reportingData = {
                         work_order_id: currentWorkOrder.id,
                         work_order_code: currentWorkOrder.code,
@@ -2439,6 +2571,24 @@ const ReportingPage: React.FC = () => {
                     }
                   }}
                 >
+                  {canProxyReporting && (
+                    <>
+                      <UniUserSelect
+                        name="proxy_worker_uuid"
+                        label="生产人员"
+                        placeholder="选择实际完成报工的生产人员（不选则按派工/本人默认）"
+                        onChange={(_uuid, u) => {
+                          scanModalProxyWorkerRef.current =
+                            u && !Array.isArray(u) ? { id: u.id, full_name: u.full_name, username: u.username } : null;
+                        }}
+                      />
+                      {currentUser ? (
+                        <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
+                          记录人员（本次登录）：{currentUser.full_name || currentUser.username || '—'}
+                        </Typography.Text>
+                      ) : null}
+                    </>
+                  )}
                   {currentOperation.reporting_type === 'status' ? (
                     // 按状态报工
                     <>
@@ -3003,6 +3153,8 @@ const ReportingPage: React.FC = () => {
             subOperation={currentSubOperation}
             workOrder={currentWorkOrder}
             subOperations={subOperations}
+            canProxyReporting={canProxyReporting}
+            currentUserForProxy={currentUser}
             onSuccess={async () => {
               // 刷新工单工序列表
               const updatedOperations = await workOrderApi.getOperations(currentWorkOrder.id.toString());

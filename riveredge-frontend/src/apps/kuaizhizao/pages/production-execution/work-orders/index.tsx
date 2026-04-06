@@ -135,7 +135,7 @@ import { materialApi } from '../../../../master-data/services/material'
 import { useNavigate, useLocation } from 'react-router-dom'
 import dayjs from 'dayjs'
 import CodeField from '../../../../../components/code-field'
-import { getUserList } from '../../../../../services/user'
+import { getUserList, type User } from '../../../../../services/user'
 import { getEquipmentList } from '../../../../../services/equipment'
 import { getMoldList } from '../../../../../services/mold'
 import { toolApi } from '../../../services/equipment'
@@ -160,6 +160,10 @@ import { getWorkOrderLifecycle } from '../../../utils/workOrderLifecycle'
 import { getRemainingReportableQuantity } from '../../../utils/workOrderReporting'
 import { coerceReportingCreateStrings } from '../../../utils/reportingPayload'
 import { getUserInfo } from '../../../../../utils/auth'
+import type { CurrentUser } from '../../../../../types/api'
+import { hasPermission } from '../../../../../utils/permission'
+import { useGlobalStore } from '../../../../../stores'
+import { UniUserSelect } from '../../../../../components/uni-user-select'
 
 /** 列表行展开工序：TanStack 缓存键前缀（与派工/开工后 invalidate 一致） */
 const WORK_ORDER_ROW_EXPAND_QK = 'workOrderRowExpand' as const
@@ -218,6 +222,100 @@ function isBlankNumericInput(value: unknown): boolean {
   if (value === undefined || value === null || value === '') return true
   if (typeof value === 'number' && Number.isNaN(value)) return true
   return false
+}
+
+/** 报工默认生产人员：优先工序派工，否则当前登录用户 */
+function getWorkerInfoForReporting(operation?: any) {
+  const user = getUserInfo() || {}
+  if (operation?.assigned_worker_id) {
+    return {
+      worker_id: operation.assigned_worker_id,
+      worker_name: String(
+        operation.assigned_worker_name || user.full_name || user.username || '操作员'
+      ),
+    }
+  }
+  return {
+    worker_id: user.id ?? 0,
+    worker_name: String(user.full_name || user.username || '未知'),
+  }
+}
+
+/** 与业务配置 parameters.reporting.default_production_worker_mode 对齐 */
+function pickDefaultProductionWorker(
+  mode: string | undefined,
+  operation: any,
+  currentUser: CurrentUser | null | undefined
+): { id: number; full_name: string; username?: string; uuid?: string } {
+  const gu = getUserInfo() || {}
+  const curId = Number(currentUser?.id ?? gu.id ?? 0) || 0
+  const curName = String(
+    currentUser?.full_name || gu.full_name || currentUser?.username || gu.username || '当前用户'
+  )
+  const curUuid = currentUser?.uuid
+
+  const m = mode || 'auto'
+  if (m === 'current_user') {
+    return {
+      id: curId,
+      full_name: curName,
+      username: currentUser?.username || gu.username,
+      uuid: curUuid,
+    }
+  }
+
+  if (m === 'operation_assigned') {
+    if (operation?.assigned_worker_id) {
+      return {
+        id: Number(operation.assigned_worker_id),
+        full_name: String(operation.assigned_worker_name || curName),
+      }
+    }
+    return {
+      id: curId,
+      full_name: curName,
+      username: currentUser?.username || gu.username,
+      uuid: curUuid,
+    }
+  }
+
+  if (operation?.assigned_worker_id) {
+    return {
+      id: Number(operation.assigned_worker_id),
+      full_name: String(operation.assigned_worker_name || curName),
+    }
+  }
+  const defs = operation?.default_operators
+  if (Array.isArray(defs) && defs.length > 0) {
+    const d = defs[0]
+    return {
+      id: Number(d.id),
+      full_name: String(d.name || curName),
+      uuid: d.uuid,
+    }
+  }
+  return {
+    id: curId,
+    full_name: curName,
+    username: currentUser?.username || gu.username,
+    uuid: curUuid,
+  }
+}
+
+function getQuickReportWorkerPayload(
+  operation: any,
+  proxy: Pick<User, 'id' | 'full_name' | 'username'> | null,
+  mode: string | undefined,
+  currentUser: CurrentUser | null | undefined
+): { worker_id: number; worker_name: string } {
+  if (proxy?.id) {
+    return {
+      worker_id: proxy.id,
+      worker_name: String(proxy.full_name || proxy.username || ''),
+    }
+  }
+  const picked = pickDefaultProductionWorker(mode, operation, currentUser)
+  return { worker_id: picked.id, worker_name: picked.full_name }
 }
 
 /** 列表展示：值由后端按工单 product_id → 产品物料上的制造模式定义解析 */
@@ -639,6 +737,12 @@ const WorkOrdersPage: React.FC = () => {
   const [quickReportingOperation, setQuickReportingOperation] = useState<any>(null)
   const [quickReportingRouteOperations, setQuickReportingRouteOperations] = useState<any[]>([])
   const quickReportingFormRef = useRef<any>(null)
+  const quickReportingProxyWorkerRef = useRef<Pick<User, 'id' | 'full_name' | 'username'> | null>(null)
+  const currentUser = useGlobalStore((s) => s.currentUser)
+  const canProxyReporting = useMemo(
+    () => hasPermission(currentUser ?? undefined, 'kuaizhizao:reporting:proxy'),
+    [currentUser]
+  )
 
   /** 快速报工：通过 ProForm initialValues 在挂载时填入（避免 destroyOnHidden 下 setFieldsValue 早于表单挂载导致空白） */
   const quickReportingInitialValues = useMemo(() => {
@@ -705,6 +809,56 @@ const WorkOrdersPage: React.FC = () => {
     if (mode === 'inbound_notice') return t('apps.kuaizhizao.workOrder.quickReport.lastOpInboundNotice')
     return t('apps.kuaizhizao.workOrder.quickReport.lastOpNoAutoInbound')
   }, [quickReportingIsLastOperation, executionConfig?.last_operation_auto_inbound_mode, t])
+
+  useEffect(() => {
+    if (!quickReportingModalVisible || !canProxyReporting || !quickReportingOperation) {
+      if (!quickReportingModalVisible) quickReportingProxyWorkerRef.current = null
+      return
+    }
+    let cancelled = false
+    const mode = executionConfig?.default_production_worker_mode
+    ;(async () => {
+      const picked = pickDefaultProductionWorker(mode, quickReportingOperation, currentUser)
+      let uuid = picked.uuid
+      if (!uuid && picked.id) {
+        try {
+          const res = await getUserList({ is_active: true, page_size: 500 })
+          const u = res.items?.find((x) => x.id === picked.id)
+          uuid = u?.uuid
+        } catch {
+          /* ignore */
+        }
+      }
+      if (cancelled) return
+      quickReportingProxyWorkerRef.current = {
+        id: picked.id,
+        full_name: picked.full_name,
+        username: picked.username || '',
+      }
+      setTimeout(() => {
+        quickReportingFormRef.current?.setFieldsValue({
+          proxy_worker_uuid: uuid || undefined,
+        })
+      }, 0)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [
+    quickReportingModalVisible,
+    canProxyReporting,
+    quickReportingOperation?.operation_id,
+    quickReportingOperation?.assigned_worker_id,
+    quickReportingOperation?.assigned_worker_name,
+    // 工序档案默认人员变化时需重算默认选中
+    JSON.stringify(quickReportingOperation?.default_operators || []),
+    quickReportingWorkOrder?.id,
+    executionConfig?.default_production_worker_mode,
+    currentUser?.id,
+    currentUser?.uuid,
+    currentUser?.full_name,
+    currentUser?.username,
+  ])
 
   // 工序派工弹窗：打开时拉取派工下拉数据（含车间/工作中心），不依赖新建工单弹窗是否打开过
   useEffect(() => {
@@ -1177,22 +1331,6 @@ const WorkOrdersPage: React.FC = () => {
     }
   }
 
-  const getWorkerInfoForReporting = (operation?: any) => {
-    const user = getUserInfo() || {}
-    if (operation?.assigned_worker_id) {
-      return {
-        worker_id: operation.assigned_worker_id,
-        worker_name: String(
-          operation.assigned_worker_name || user.full_name || user.username || '操作员'
-        ),
-      }
-    }
-    return {
-      worker_id: user.id ?? 0,
-      worker_name: String(user.full_name || user.username || '未知'),
-    }
-  }
-
   /** 与触屏终端一致：工序档案「简易质检」或已绑定不良品项时，不合格需说明原因 */
   const operationHasSimpleInspection = (operation: any) => {
     if (!operation) return false
@@ -1279,7 +1417,14 @@ const WorkOrdersPage: React.FC = () => {
           return
         }
       }
-      const { worker_id, worker_name } = getWorkerInfoForReporting(quickReportingOperation)
+      const { worker_id, worker_name } = canProxyReporting
+        ? getQuickReportWorkerPayload(
+            quickReportingOperation,
+            quickReportingProxyWorkerRef.current,
+            executionConfig?.default_production_worker_mode,
+            currentUser
+          )
+        : getWorkerInfoForReporting(quickReportingOperation)
       const reportingData: any = {
         work_order_id: quickReportingWorkOrder.id,
         work_order_code: quickReportingWorkOrder.code,
@@ -4285,14 +4430,50 @@ const WorkOrdersPage: React.FC = () => {
               ]}
               colProps={{ span: 24 }}
             />
-            <ProFormDigit
-              name="work_hours"
-              label="工时(小时)"
-              placeholder="选填"
-              min={0}
-              fieldProps={{ step: 0.1 }}
-              colProps={{ span: 24 }}
-            />
+            {canProxyReporting && (
+              <>
+                <UniUserSelect
+                  name="proxy_worker_uuid"
+                  label="生产人员"
+                  placeholder="选择实际完成报工的生产人员"
+                  colProps={{ span: 12 }}
+                  defaultBadgeUserIds={(quickReportingOperation?.default_operators || [])
+                    .map((d: { id?: number }) => d.id)
+                    .filter((n: number | undefined): n is number => typeof n === 'number')}
+                  onChange={(_uuid, u) => {
+                    quickReportingProxyWorkerRef.current =
+                      u && !Array.isArray(u)
+                        ? { id: u.id, full_name: u.full_name, username: u.username }
+                        : null
+                  }}
+                />
+                <ProFormDigit
+                  name="work_hours"
+                  label="工时(小时)"
+                  placeholder="选填"
+                  min={0}
+                  fieldProps={{ step: 0.1 }}
+                  colProps={{ span: 12 }}
+                />
+                <Col span={24}>
+                  {currentUser ? (
+                    <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
+                      记录人员（本次登录）：{currentUser.full_name || currentUser.username || '—'}
+                    </Typography.Text>
+                  ) : null}
+                </Col>
+              </>
+            )}
+            {!canProxyReporting && (
+              <ProFormDigit
+                name="work_hours"
+                label="工时(小时)"
+                placeholder="选填"
+                min={0}
+                fieldProps={{ step: 0.1 }}
+                colProps={{ span: 24 }}
+              />
+            )}
             <ProFormTextArea
               name="remarks"
               label="备注"
@@ -4431,14 +4612,50 @@ const WorkOrdersPage: React.FC = () => {
                 )
               }}
             </ProFormDependency>
-            <ProFormDigit
-              name="work_hours"
-              label="工时(小时)"
-              placeholder="选填"
-              min={0}
-              fieldProps={{ step: 0.1 }}
-              colProps={{ span: 24 }}
-            />
+            {canProxyReporting && (
+              <>
+                <UniUserSelect
+                  name="proxy_worker_uuid"
+                  label="生产人员"
+                  placeholder="选择实际完成报工的生产人员"
+                  colProps={{ span: 12 }}
+                  defaultBadgeUserIds={(quickReportingOperation?.default_operators || [])
+                    .map((d: { id?: number }) => d.id)
+                    .filter((n: number | undefined): n is number => typeof n === 'number')}
+                  onChange={(_uuid, u) => {
+                    quickReportingProxyWorkerRef.current =
+                      u && !Array.isArray(u)
+                        ? { id: u.id, full_name: u.full_name, username: u.username }
+                        : null
+                  }}
+                />
+                <ProFormDigit
+                  name="work_hours"
+                  label="工时(小时)"
+                  placeholder="选填"
+                  min={0}
+                  fieldProps={{ step: 0.1 }}
+                  colProps={{ span: 12 }}
+                />
+                <Col span={24}>
+                  {currentUser ? (
+                    <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
+                      记录人员（本次登录）：{currentUser.full_name || currentUser.username || '—'}
+                    </Typography.Text>
+                  ) : null}
+                </Col>
+              </>
+            )}
+            {!canProxyReporting && (
+              <ProFormDigit
+                name="work_hours"
+                label="工时(小时)"
+                placeholder="选填"
+                min={0}
+                fieldProps={{ step: 0.1 }}
+                colProps={{ span: 24 }}
+              />
+            )}
             <ProFormTextArea
               name="remarks"
               label="备注"
