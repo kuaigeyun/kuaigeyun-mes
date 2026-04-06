@@ -354,9 +354,62 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             notice=notice,
         )
 
+        # 生成相应的销售出库单
+        from apps.kuaizhizao.services.warehouse_service import SalesDeliveryService
+        from apps.kuaizhizao.schemas.warehouse import SalesDeliveryCreate, SalesDeliveryItemCreate
+
+        notice_items = await ShipmentNoticeItem.filter(tenant_id=tenant_id, notice_id=notice_id).all()
+        delivery_items = []
+        for item in notice_items:
+            unit_price = getattr(item, "unit_price", None)
+            total_amount = getattr(item, "total_amount", None)
+            so_item_id = getattr(item, "sales_order_item_id", None)
+            
+            delivery_items.append(SalesDeliveryItemCreate(
+                sales_order_item_id=int(so_item_id) if so_item_id else 0,
+                material_id=item.material_id,
+                material_code=item.material_code,
+                material_name=item.material_name,
+                material_spec=getattr(item, "material_spec", None),
+                material_unit=item.material_unit,
+                delivery_quantity=float(item.notice_quantity),
+                unit_price=float(unit_price) if unit_price is not None else 0.0,
+                total_amount=float(total_amount) if total_amount is not None else 0.0,
+                notes=getattr(item, "notes", None)
+            ))
+            
+        delivery_data = SalesDeliveryCreate(
+            sales_order_id=notice.sales_order_id,
+            sales_order_code=notice.sales_order_code,
+            demand_id=notice.sales_order_id,
+            demand_code=notice.sales_order_code,
+            demand_type="sales_order",
+            customer_id=notice.customer_id,
+            customer_name=notice.customer_name,
+            customer_contact=getattr(notice, "customer_contact", None),
+            customer_phone=getattr(notice, "customer_phone", None),
+            warehouse_id=notice.warehouse_id or 1,
+            warehouse_name=notice.warehouse_name or "默认仓库",
+            delivery_time=notice.planned_ship_date,
+            shipping_address=getattr(notice, "shipping_address", None),
+            notes=getattr(notice, "notes", None),
+            items=delivery_items,
+            status="待出库",
+            review_status="已通过",
+        )
+        
+        delivery_service = SalesDeliveryService()
+        delivery = await delivery_service.create_sales_delivery(
+            tenant_id=tenant_id,
+            delivery_data=delivery_data,
+            created_by=notified_by
+        )
+
         await ShipmentNotice.filter(tenant_id=tenant_id, id=notice_id).update(
             status="已通知",
             notified_at=datetime.now(),
+            sales_delivery_id=delivery.id,
+            sales_delivery_code=delivery.delivery_code,
             updated_by=notified_by
         )
         return ShipmentNoticeResponse.model_validate(
@@ -377,12 +430,26 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
         if notice.status != "已通知":
             raise BusinessLogicError("只有已通知状态的发货通知单才能撤回")
         if getattr(notice, "sales_delivery_id", None):
-            raise BusinessLogicError("该通知单已关联销售出库单，不能撤回")
+            from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+            from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
+            
+            delivery = await SalesDelivery.get_or_none(tenant_id=tenant_id, id=notice.sales_delivery_id, deleted_at__isnull=True)
+            if delivery and delivery.status not in ["草稿", "draft", "待出库"]:
+                raise BusinessLogicError(f"该通知单关联的销售出库单 ({delivery.delivery_code}) 已经在处理（{delivery.status}），无法撤回。请先作废或撤回该出库单。")
+                
+            if delivery:
+                # 软删除关联的出库单
+                await SalesDelivery.filter(tenant_id=tenant_id, id=delivery.id).update(deleted_at=datetime.now())
+                
+                # 若需要物理删除明细则执行 .delete()，BaseModel包含 delete() 方法，这里进行物理删除即可
+                await SalesDeliveryItem.filter(tenant_id=tenant_id, delivery_id=delivery.id).delete()
 
         await ShipmentNotice.filter(tenant_id=tenant_id, id=notice_id).update(
             status="待发货",
             notified_at=None,
             updated_by=withdrawn_by,
+            sales_delivery_id=None,
+            sales_delivery_code=None
         )
         updated = await ShipmentNotice.get(tenant_id=tenant_id, id=notice_id)
         return ShipmentNoticeResponse.model_validate(updated)

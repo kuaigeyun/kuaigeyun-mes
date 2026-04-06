@@ -23,7 +23,7 @@ interface MaterialUnitSelectProps {
 
 // 全局简单缓存，避免同一页面内多次并发请求同一个物料。
 // 实际生产中可考虑更完善的缓存机制。
-const materialCache: Record<string, Material> = {};
+export const materialCache: Record<string, Material> = {};
 
 /** 单位字典标签：全应用共享一次 in-flight 请求，避免表格每行各打一遍字典接口 */
 let materialUnitDisplayMapPromise: Promise<Record<string, string>> | null = null;

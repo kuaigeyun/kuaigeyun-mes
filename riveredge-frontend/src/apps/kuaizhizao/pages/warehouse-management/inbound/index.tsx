@@ -20,7 +20,7 @@ import {
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
-import { MaterialUnitSelect, prefetchMaterialsForUnitSelect } from '../../../../../components/material-unit-select';
+import { MaterialUnitSelect, prefetchMaterialsForUnitSelect, materialCache } from '../../../../../components/material-unit-select';
 import type { Material } from '../../../../master-data/types/material';
 import { useTranslation } from 'react-i18next';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -662,7 +662,7 @@ const InboundPage: React.FC = () => {
     order?.receipt_type === 'purchase' && ['草稿', 'draft', 'DRAFT', '待入库'].includes(String(order?.status || ''));
 
   const handleSavePurchaseReceiptQuantities = async () => {
-    if (!currentOrder?.id || currentOrder.receipt_type !== 'purchase') return;
+    if (!currentOrder?.id || currentOrder?.receipt_type !== 'purchase') return;
     const items = (currentOrder.items || []) as InboundOrderItem[];
     if (!items.length) {
       messageApi.warning('暂无可编辑明细');
@@ -741,14 +741,21 @@ const InboundPage: React.FC = () => {
   };
 
   /** 打开采购入库确认预览（加载最新详情，合并抽屉内未保存的实际数量） */
-  const openPurchaseConfirmPreview = async (record: InboundOrder) => {
+  const openConfirmPreview = async (record: InboundOrder) => {
     if (!record.id) return;
     setPurchaseConfirmPreviewOpen(true);
     setPurchaseConfirmPreviewLoading(true);
     try {
+      const fetchDetail = async () => {
+        const idStr = String(record.id);
+        if (record.receipt_type === 'finished_goods') return warehouseApi.finishedGoodsReceipt.get(idStr);
+        if (record.receipt_type === 'production_return') return warehouseApi.productionReturn.get(idStr);
+        return warehouseApi.purchaseReceipt.get(idStr);
+      };
+
       const [whRes, detailData] = await Promise.all([
         masterWarehouseApi.list({ isActive: true, limit: 500 }),
-        warehouseApi.purchaseReceipt.get(String(record.id)),
+        fetchDetail(),
       ]);
       const whList = Array.isArray(whRes) ? whRes : (whRes as any)?.data ?? (whRes as any)?.items ?? whRes ?? [];
       await prefetchMaterialsForUnitSelect((detailData.items || []).map((it: any) => it?.material_id));
@@ -772,18 +779,34 @@ const InboundPage: React.FC = () => {
         if (it?.id == null) return;
         const id = Number(it.id);
         const fromDrawer =
-          currentOrder?.id === record.id && currentOrder.receipt_type === 'purchase'
+          currentOrder?.id === record.id && currentOrder?.receipt_type === 'purchase'
             ? editableReceiptQuantities[id]
             : undefined;
         qty[id] = fromDrawer != null ? Number(fromDrawer) : Number(it.receipt_quantity ?? 0);
         batch[id] = String(it.batch_number ?? '');
-        const rowWh =
-          it.warehouse_id != null && Number(it.warehouse_id) > 0 ? Number(it.warehouse_id) : headerWh;
+        let rowWh =
+          it.warehouse_id != null && Number(it.warehouse_id) > 0 ? Number(it.warehouse_id) : undefined;
+        
+        if (rowWh == null && it.material_id) {
+          const material = materialCache[String(it.material_id)];
+          const defWhs = material?.defaults?.defaultWarehouses;
+          if (defWhs && defWhs.length > 0) {
+            const sortedWhs = [...defWhs].sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999));
+            if (sortedWhs.length > 0 && sortedWhs[0].warehouseId > 0) {
+              rowWh = sortedWhs[0].warehouseId;
+            }
+          }
+        }
+
+        if (rowWh == null) {
+          rowWh = headerWh;
+        }
+
         if (rowWh != null) lineWh[id] = rowWh;
         if (it.location_id != null && Number(it.location_id) > 0) lineLoc[id] = Number(it.location_id);
         if (it.location_code) lineLocLb[id] = String(it.location_code);
       });
-      setPurchaseConfirmPreviewDetail({ ...detailData, receipt_type: 'purchase' });
+      setPurchaseConfirmPreviewDetail({ ...detailData, receipt_type: record.receipt_type });
       setPurchaseConfirmLineWh(lineWh);
       setPurchaseConfirmLineLoc(lineLoc);
       setPurchaseConfirmLineLocCode(lineLocLb);
@@ -806,7 +829,7 @@ const InboundPage: React.FC = () => {
     }
   };
 
-  const submitPurchaseConfirmPreview = async () => {
+  const submitConfirmPreview = async () => {
     const order = purchaseConfirmPreviewDetail;
     if (!order?.id) return;
     const items = (order.items || []) as InboundOrderItem[];
@@ -835,8 +858,8 @@ const InboundPage: React.FC = () => {
           const whOpt = purchaseConfirmWarehouseOptions.find((o) => o.value === lineWh);
           const locId = purchaseConfirmLineLoc[rowId];
           const locCode = purchaseConfirmLineLocCode[rowId];
-          return {
-            purchase_order_item_id: Number(it.purchase_order_item_id ?? 0),
+          const mapped: any = {
+            item_id: rowId,
             material_id: Number(it.material_id),
             material_code: it.material_code || '',
             material_name: it.material_name || '',
@@ -855,6 +878,10 @@ const InboundPage: React.FC = () => {
             status: it.status || order.status || '草稿',
             notes: it.notes || undefined,
           };
+          if (order.receipt_type === 'purchase') {
+            mapped.purchase_order_item_id = Number(it.purchase_order_item_id ?? 0);
+          }
+          return mapped;
         });
     } catch (e: any) {
       messageApi.error(e?.message || '请检查明细');
@@ -867,28 +894,50 @@ const InboundPage: React.FC = () => {
 
     setPurchaseConfirmPreviewSubmitting(true);
     try {
-      await warehouseApi.purchaseReceipt.update(String(order.id), {
-        purchase_order_id: Number(order.purchase_order_id || 0),
-        purchase_order_code: order.purchase_order_code || '',
-        supplier_id: Number(order.supplier_id || 0),
-        supplier_name: order.supplier_name || '',
-        warehouse_id: headerWh > 0 ? headerWh : Number(order.warehouse_id || 0),
-        warehouse_name: headerWhName,
-        status: order.status || '草稿',
-        review_status: order.review_status || '待审核',
-        notes: order.notes || undefined,
-        items: mappedItems,
-      });
-      await warehouseApi.purchaseReceipt.confirm(String(order.id));
+      if (order.receipt_type === 'purchase') {
+        await warehouseApi.purchaseReceipt.update(String(order.id), {
+          purchase_order_id: Number(order.purchase_order_id || 0),
+          purchase_order_code: order.purchase_order_code || '',
+          supplier_id: Number(order.supplier_id || 0),
+          supplier_name: order.supplier_name || '',
+          warehouse_id: headerWh > 0 ? headerWh : Number(order.warehouse_id || 0),
+          warehouse_name: headerWhName,
+          status: order.status || '草稿',
+          review_status: order.review_status || '待审核',
+          notes: order.notes || undefined,
+          items: mappedItems,
+        });
+        await warehouseApi.purchaseReceipt.confirm(String(order.id), {
+           warehouse_id: headerWh,
+           warehouse_name: headerWhName,
+           items: mappedItems,
+        });
+      } else if (order.receipt_type === 'finished_goods') {
+        await warehouseApi.finishedGoodsReceipt.confirm(String(order.id), {
+           warehouse_id: headerWh,
+           warehouse_name: headerWhName,
+           items: mappedItems,
+        });
+      } else if (order.receipt_type === 'production_return') {
+        await warehouseApi.productionReturn.confirm(String(order.id), {
+           warehouse_id: headerWh,
+           warehouse_name: headerWhName,
+           items: mappedItems,
+        });
+      }
       messageApi.success('入库确认成功，库存已更新');
       resetPurchaseConfirmPreview();
       invalidateMenuBadgeCounts();
 
       actionRef.current?.reload();
-      if (currentOrder?.id === order.id && currentOrder.receipt_type === 'purchase') {
+      if (currentOrder?.id === order.id && currentOrder?.receipt_type === order.receipt_type) {
         try {
-          const detailData = await warehouseApi.purchaseReceipt.get(String(order.id));
-          setCurrentOrder({ ...detailData, receipt_type: 'purchase' });
+          let detailData: any;
+          if (order.receipt_type === 'purchase') detailData = await warehouseApi.purchaseReceipt.get(String(order.id));
+          else if (order.receipt_type === 'finished_goods') detailData = await warehouseApi.finishedGoodsReceipt.get(String(order.id));
+          else detailData = await warehouseApi.productionReturn.get(String(order.id));
+
+          setCurrentOrder({ ...detailData, receipt_type: order.receipt_type });
           const quantities: Record<number, number> = {};
           (detailData.items || []).forEach((it: any) => {
             if (it?.id != null) quantities[it.id] = Number(it.receipt_quantity ?? 0);
@@ -899,7 +948,7 @@ const InboundPage: React.FC = () => {
         }
       }
     } catch (error: any) {
-      messageApi.error(error?.message || error?.response?.data?.detail || '入库确认失败');
+      messageApi.error(error?.message || error?.response?.data?.detail || '确认失败');
       throw error;
     } finally {
       setPurchaseConfirmPreviewSubmitting(false);
@@ -910,47 +959,7 @@ const InboundPage: React.FC = () => {
    * 处理确认入库/退料
    */
   const handleConfirm = async (record: InboundOrder) => {
-    if (record.receipt_type === 'purchase') {
-      await openPurchaseConfirmPreview(record);
-      return;
-    }
-    const code = record.receipt_code || record.return_code || '';
-    const title = record.receipt_type === 'production_return' ? '确认退料' : '确认入库';
-    const content = record.receipt_type === 'production_return'
-      ? `确定要确认退料单 "${code}" 吗？确认后将更新库存。`
-      : `确定要确认入库单 "${code}" 吗？确认后将更新库存。`;
-    Modal.confirm({
-      title,
-      content,
-      onOk: async () => {
-        try {
-          if (record.receipt_type === 'finished_goods') {
-            await warehouseApi.finishedGoodsReceipt.confirm(record.id!.toString());
-          } else if (record.receipt_type === 'production_return') {
-            await warehouseApi.productionReturn.confirm(record.id!.toString());
-          }
-          messageApi.success(record.receipt_type === 'production_return' ? '退料确认成功' : '入库确认成功，库存已更新');
-          invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
-          if (currentOrder?.id === record.id) {
-            try {
-              let detailData: any;
-              if (record.receipt_type === 'finished_goods') {
-                detailData = await warehouseApi.finishedGoodsReceipt.get(record.id!.toString());
-              } else if (record.receipt_type === 'production_return') {
-                detailData = await warehouseApi.productionReturn.get(record.id!.toString());
-              }
-              if (detailData) {
-                setCurrentOrder({ ...detailData, receipt_type: record.receipt_type });
-              }
-            } catch { /* ignore */ }
-          }
-        } catch (error) {
-          messageApi.error(record.receipt_type === 'production_return' ? '退料确认失败' : '入库确认失败');
-        }
-      },
-    });
+    await openConfirmPreview(record);
   };
 
   /**
@@ -977,7 +986,7 @@ const InboundPage: React.FC = () => {
           invalidateMenuBadgeCounts();
 
           actionRef.current?.reload();
-          if (currentOrder?.id === record.id && currentOrder.receipt_type === record.receipt_type) {
+          if (currentOrder?.id === record.id && currentOrder?.receipt_type === record.receipt_type) {
             try {
               let detailData: any;
               if (record.receipt_type === 'finished_goods') {
@@ -1754,7 +1763,7 @@ const InboundPage: React.FC = () => {
         onCancel={() => {
           if (!purchaseConfirmPreviewSubmitting) resetPurchaseConfirmPreview();
         }}
-        onOk={submitPurchaseConfirmPreview}
+        onOk={submitConfirmPreview}
         confirmLoading={purchaseConfirmPreviewSubmitting}
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
         okText="确认入库"

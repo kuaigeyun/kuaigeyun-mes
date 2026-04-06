@@ -131,8 +131,8 @@ VALID_SOURCE_TYPES = [
 ]
 
 # 自制件制造模式（存于 source_config.manufacturing_mode）
-MANUFACTURING_MODE_FABRICATION = "fabrication"  # 加工型：材料+工艺→零件
-MANUFACTURING_MODE_ASSEMBLY = "assembly"  # 装配型：原材料组装→成品/半成品
+MANUFACTURING_MODE_FABRICATION = "fabrication"  # 工艺型：材料+工艺→零件
+MANUFACTURING_MODE_ASSEMBLY = "assembly"  # 组合型：原材料组装→成品/半成品
 VALID_MANUFACTURING_MODES = [MANUFACTURING_MODE_FABRICATION, MANUFACTURING_MODE_ASSEMBLY]
 
 
@@ -182,7 +182,7 @@ async def validate_material_source_config(
     source_config = material.source_config or {}
     
     if source_type == SOURCE_TYPE_MAKE:
-        # 自制件根据制造模式区分校验：加工型工艺路线必填、BOM可选；装配型BOM必填、工艺路线可选
+        # 自制件根据制造模式区分校验：工艺型工艺路线必填、BOM可选；组合型BOM必填、工艺路线可选
         from apps.master_data.models.material import BOM
         manufacturing_mode = source_config.get("manufacturing_mode")
         bom_count = await BOM.filter(
@@ -194,15 +194,15 @@ async def validate_material_source_config(
         has_process_route = bool(material.process_route_id)
 
         if manufacturing_mode == MANUFACTURING_MODE_FABRICATION:
-            # 加工型：工艺路线必填，BOM 可选（不强制）
+            # 工艺型：工艺路线必填，BOM 可选（不强制）
             if not has_process_route:
-                errors.append(f"加工型自制件必须有工艺路线配置，物料: {material.main_code} ({material.name})")
+                errors.append(f"工艺型自制件必须有工艺路线配置，物料: {material.main_code} ({material.name})")
         elif manufacturing_mode == MANUFACTURING_MODE_ASSEMBLY:
-            # 装配型：BOM 必填，工艺路线可选
+            # 组合型：BOM 必填，工艺路线可选
             if bom_count == 0:
-                errors.append(f"装配型自制件必须有BOM配置，物料: {material.main_code} ({material.name})")
+                errors.append(f"组合型自制件必须有BOM配置，物料: {material.main_code} ({material.name})")
             if not has_process_route:
-                errors.append(f"装配型自制件建议配置工艺路线（装配工序），物料: {material.main_code} ({material.name})")
+                errors.append(f"组合型自制件建议配置工艺路线（装配工序），物料: {material.main_code} ({material.name})")
         else:
             # 未设置制造模式：沿用原逻辑，BOM 和工艺路线都建议配置
             if bom_count == 0:
@@ -294,7 +294,11 @@ async def expand_bom_with_source_control(
     as_of_date: Optional[datetime] = None,
 ) -> List[Dict[str, Any]]:
     """
-    展开BOM，自动跳过虚拟件（物料来源控制）
+    展开BOM（物料来源控制）
+    
+    - **虚拟件（Phantom）**：不生成自身需求，展开子项；子项中仅虚拟件/配置件继续向下展开。
+    - **自制件（Make）、采购件（Buy）等**：只生成**一行**需求，**不再**按子 BOM 展开（齐套按半成品/采购件库存计）。
+    - **配置件（Configure）**：仍递归展开（需 variant / 配置位匹配 BOM）。
     
     Args:
         tenant_id: 租户ID
@@ -311,7 +315,7 @@ async def expand_bom_with_source_control(
         as_of_date: 基准日期（可选），仅使用该日期生效的 BOM（effective_date<=as_of_date 且 expiry_date>=as_of_date 或 null）
         
     Returns:
-        List[Dict]: 展开后的物料需求列表，虚拟件已跳过
+        List[Dict]: 展开后的物料需求列表（虚拟件穿透；非虚拟子件不拆子 BOM）
     """
     if level >= max_level:
         logger.warning(f"BOM展开达到最大层级 {max_level}，物料ID: {material_id}")
@@ -372,20 +376,19 @@ async def expand_bom_with_source_control(
         bom_items = _select_alternatives(bom_items)
         bom_items = _select_configurable(bom_items, material_id, configurable_selections)
         
-        # 递归展开下层物料
+        # 虚拟件下层：仅虚拟件/配置件继续递归；自制件、采购件等单行计入（不拆子 BOM）
         requirements = []
         for bom_item in bom_items:
             component = await bom_item.component
             if not component:
                 continue
-            
-            # 计算子物料的需求数量（考虑损耗率）
+
             component_qty = float(bom_item.quantity) * required_quantity
             if bom_item.waste_rate:
                 component_qty = component_qty * (1 + float(bom_item.waste_rate) / 100)
-            
-            # 递归展开子物料（传递版本参数和属性）
-            child_requirements = await expand_bom_with_source_control(
+
+            ct = component.source_type
+            _expand_kw = dict(
                 tenant_id=tenant_id,
                 material_id=component.id,
                 required_quantity=component_qty,
@@ -399,12 +402,40 @@ async def expand_bom_with_source_control(
                 configurable_selections=configurable_selections,
                 as_of_date=as_of_date,
             )
-            
-            # 合并需求（如果有子物料展开的结果，使用子物料的结果；否则添加当前物料）
-            if child_requirements:
-                requirements.extend(child_requirements)
+
+            if ct == SOURCE_TYPE_PHANTOM:
+                child_requirements = await expand_bom_with_source_control(**_expand_kw)
+                if child_requirements:
+                    requirements.extend(child_requirements)
+                else:
+                    requirements.append({
+                        "material_id": component.id,
+                        "material_code": component.main_code or component.code,
+                        "material_name": component.name,
+                        "source_type": component.source_type,
+                        "required_quantity": component_qty,
+                        "unit": bom_item.unit or component.base_unit,
+                        "level": level + 1,
+                        "from_phantom": True,
+                        "phantom_material_id": material_id,
+                    })
+            elif ct == SOURCE_TYPE_CONFIGURE:
+                child_requirements = await expand_bom_with_source_control(**_expand_kw)
+                if child_requirements:
+                    requirements.extend(child_requirements)
+                else:
+                    requirements.append({
+                        "material_id": component.id,
+                        "material_code": component.main_code or component.code,
+                        "material_name": component.name,
+                        "source_type": component.source_type,
+                        "required_quantity": component_qty,
+                        "unit": bom_item.unit or component.base_unit,
+                        "level": level + 1,
+                        "from_phantom": True,
+                        "phantom_material_id": material_id,
+                    })
             else:
-                # 子物料没有BOM，直接添加
                 requirements.append({
                     "material_id": component.id,
                     "material_code": component.main_code or component.code,
@@ -413,10 +444,10 @@ async def expand_bom_with_source_control(
                     "required_quantity": component_qty,
                     "unit": bom_item.unit or component.base_unit,
                     "level": level + 1,
-                    "from_phantom": True,  # 标记来自虚拟件
-                    "phantom_material_id": material_id,  # 记录原始虚拟件ID
+                    "from_phantom": True,
+                    "phantom_material_id": material_id,
                 })
-        
+
         return requirements
     
     # 非虚拟件，正常展开BOM
@@ -466,7 +497,6 @@ async def expand_bom_with_source_control(
         # 获取子物料的来源类型
         component_source_type = component.source_type
         
-        # 如果子物料是虚拟件，递归展开
         if component_source_type == SOURCE_TYPE_PHANTOM:
             child_requirements = await expand_bom_with_source_control(
                 tenant_id=tenant_id,
@@ -483,8 +513,36 @@ async def expand_bom_with_source_control(
                 as_of_date=as_of_date,
             )
             requirements.extend(child_requirements)
+        elif component_source_type == SOURCE_TYPE_CONFIGURE:
+            child_requirements = await expand_bom_with_source_control(
+                tenant_id=tenant_id,
+                material_id=component.id,
+                required_quantity=component_qty,
+                only_approved=only_approved,
+                level=level + 1,
+                max_level=max_level,
+                bom_version=bom_version,
+                use_default_bom=use_default_bom,
+                material_bom_versions=effective_material_bom_versions,
+                variant_attributes=variant_attributes,
+                configurable_selections=configurable_selections,
+                as_of_date=as_of_date,
+            )
+            if child_requirements:
+                requirements.extend(child_requirements)
+            else:
+                requirements.append({
+                    "material_id": component.id,
+                    "material_code": component.main_code or component.code,
+                    "material_name": component.name,
+                    "source_type": component_source_type,
+                    "required_quantity": component_qty,
+                    "unit": bom_item.unit or component.base_unit,
+                    "level": level + 1,
+                    "from_phantom": False,
+                })
         else:
-            # 非虚拟件，直接添加
+            # 自制件/采购件/委外件等：单行需求，不按子 BOM 展开（齐套用半成品或采购件库存）
             requirements.append({
                 "material_id": component.id,
                 "material_code": component.main_code or component.code,
@@ -495,37 +553,6 @@ async def expand_bom_with_source_control(
                 "level": level + 1,
                 "from_phantom": False,
             })
-            
-            # 如果子物料还有BOM，递归展开
-            child_bom_query = BOM.filter(
-                tenant_id=tenant_id,
-                material_id=component.id,
-                deleted_at__isnull=True
-            )
-            child_eff_filter = _bom_effective_filter(as_of_date)
-            if child_eff_filter:
-                child_bom_query = child_bom_query.filter(child_eff_filter)
-            if only_approved:
-                child_bom_query = child_bom_query.filter(approval_status="approved")
-            # EXISTS 比 COUNT(*) 轻量，避免大表全量计数
-            has_child_bom = await child_bom_query.exists()
-
-            if has_child_bom:
-                child_requirements = await expand_bom_with_source_control(
-                    tenant_id=tenant_id,
-                    material_id=component.id,
-                    required_quantity=component_qty,
-                    only_approved=only_approved,
-                    level=level + 1,
-                    max_level=max_level,
-                    bom_version=bom_version,
-                    use_default_bom=use_default_bom,
-                    material_bom_versions=effective_material_bom_versions,
-                variant_attributes=variant_attributes,
-                configurable_selections=configurable_selections,
-                as_of_date=as_of_date,
-            )
-                requirements.extend(child_requirements)
 
     return requirements
 
@@ -557,7 +584,7 @@ async def get_material_source_config(
     }
     
     if source_type == SOURCE_TYPE_MAKE:
-        # 自制件配置（含制造模式：fabrication 加工型 / assembly 装配型）
+        # 自制件配置（含制造模式：fabrication 工艺型 / assembly 组合型）
         config.update({
             "manufacturing_mode": source_config.get("manufacturing_mode"),
             "process_route_id": material.process_route_id,

@@ -383,11 +383,11 @@ class MaterialSourceSuggestionService:
                 has_process_route = bool(material.process_route_id)
                 if bom_count > 1 and not has_process_route:
                     result["suggested_manufacturing_mode"] = MANUFACTURING_MODE_ASSEMBLY
-                    result["manufacturing_mode_reason"] = "已配置多组件BOM，建议选择装配型"
+                    result["manufacturing_mode_reason"] = "已配置多组件BOM，建议选择组合型"
                     result["reasons"] = reasons + [result["manufacturing_mode_reason"]]
                 elif has_process_route and bom_count <= 1:
                     result["suggested_manufacturing_mode"] = MANUFACTURING_MODE_FABRICATION
-                    result["manufacturing_mode_reason"] = "已配置工艺路线且BOM较简单，建议选择加工型"
+                    result["manufacturing_mode_reason"] = "已配置工艺路线且BOM较简单，建议选择工艺型"
                     result["reasons"] = reasons + [result["manufacturing_mode_reason"]]
             return result
         else:
@@ -447,12 +447,12 @@ class MaterialSourceSuggestionService:
                     if not has_process_route:
                         missing_configs.append("工艺路线配置")
                     if bom_count == 0:
-                        warnings.append("加工型建议配置BOM（材料清单）")
+                        warnings.append("工艺型建议配置BOM（材料清单）")
                 elif manufacturing_mode == MANUFACTURING_MODE_ASSEMBLY:
                     if bom_count == 0:
                         missing_configs.append("BOM配置")
                     if not has_process_route:
-                        warnings.append("装配型建议配置工艺路线（装配工序）")
+                        warnings.append("组合型建议配置工艺路线（装配工序）")
                 else:
                     # 未设置制造模式：沿用原逻辑
                     if bom_count == 0:

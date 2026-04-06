@@ -5,10 +5,11 @@
 """
 
 import uuid
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from datetime import datetime
 from decimal import Decimal
 from tortoise.transactions import in_transaction
+from loguru import logger
 
 from apps.base_service import AppBaseService
 from infra.models.user import User
@@ -23,6 +24,7 @@ from apps.kuaizhizao.schemas.material_call import (
 )
 from core.timezone_utils import now_utc
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+from infra.services.business_config_service import BusinessConfigService
 
 
 def _user_display_name(user: User) -> str:
@@ -101,6 +103,7 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
             call_reason=header.call_reason,
             source_warehouse_id=header.source_warehouse_id,
             target_warehouse_id=header.target_warehouse_id,
+            production_picking_id=getattr(header, "production_picking_id", None),
             priority=header.priority,
             needed_at=header.needed_at,
             remarks=header.remarks,
@@ -285,6 +288,231 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
             out.append(await self._build_response(r, by_req.get(r.id, [])))
         return out
 
+    async def _resolve_warehouses_for_material_call(
+        self, tenant_id: int, call_req: MaterialCallRequest, wo
+    ) -> Tuple[int, str, int, str]:
+        """解析主仓（扣减）与线边仓（增存）；优先叫料单显式字段，其次车间/工作中心关联。"""
+        from apps.master_data.models.warehouse import Warehouse
+
+        src_id = call_req.source_warehouse_id
+        src_name = ""
+        if src_id:
+            wh = await Warehouse.get_or_none(id=src_id, tenant_id=tenant_id, deleted_at__isnull=True)
+            if wh:
+                src_name = wh.name or ""
+            else:
+                src_id = None
+        if not src_id:
+            qn = Warehouse.filter(
+                tenant_id=tenant_id, is_active=True, deleted_at__isnull=True, warehouse_type="normal"
+            )
+            wh = None
+            if wo and getattr(wo, "workshop_id", None):
+                wh = await qn.filter(workshop_id=wo.workshop_id).order_by("id").first()
+            if not wh:
+                wh = await qn.order_by("id").first()
+            if not wh:
+                wh = (
+                    await Warehouse.filter(
+                        tenant_id=tenant_id,
+                        is_active=True,
+                        deleted_at__isnull=True,
+                        warehouse_type__in=["normal", "wip"],
+                    )
+                    .order_by("id")
+                    .first()
+                )
+            if wh:
+                src_id, src_name = wh.id, wh.name or ""
+        if not src_id:
+            raise BusinessLogicError(
+                "叫料过账需要来源仓库：请在叫料单指定 source_warehouse_id，或维护普通仓"
+            )
+
+        tgt_id = call_req.target_warehouse_id
+        tgt_name = ""
+        if tgt_id:
+            wh = await Warehouse.get_or_none(id=tgt_id, tenant_id=tenant_id, deleted_at__isnull=True)
+            if wh:
+                tgt_name = wh.name or ""
+            else:
+                tgt_id = None
+        if not tgt_id:
+            ql = Warehouse.filter(
+                tenant_id=tenant_id, is_active=True, deleted_at__isnull=True, warehouse_type="line_side"
+            )
+            wh = None
+            if wo and getattr(wo, "work_center_id", None):
+                wh = await ql.filter(work_center_id=wo.work_center_id).order_by("id").first()
+            if not wh and wo and getattr(wo, "workshop_id", None):
+                wh = await ql.filter(workshop_id=wo.workshop_id).order_by("id").first()
+            if not wh:
+                wh = await ql.order_by("id").first()
+            if wh:
+                tgt_id, tgt_name = wh.id, wh.name or ""
+        if not tgt_id:
+            raise BusinessLogicError(
+                "叫料过账需要线边仓：请指定 target_warehouse_id，或维护 warehouse_type=line_side 的仓库"
+            )
+        if int(src_id) == int(tgt_id):
+            raise BusinessLogicError("来源仓库与线边仓不能相同")
+        return int(src_id), src_name, int(tgt_id), tgt_name
+
+    async def _create_picking_and_line_side_transfer_for_completed_call(
+        self,
+        tenant_id: int,
+        call_req: MaterialCallRequest,
+        user: User,
+    ) -> None:
+        """
+        叫料标记完成后：生成已确认的生产领料单，主仓扣减 + 线边仓增加（与配料业务一致）。
+        """
+        from apps.kuaizhizao.models.work_order import WorkOrder
+        from apps.kuaizhizao.models.production_picking import ProductionPicking
+        from apps.kuaizhizao.models.production_picking_item import ProductionPickingItem
+        from apps.kuaizhizao.services.inventory_service import InventoryService
+
+        if getattr(call_req, "production_picking_id", None):
+            return
+
+        items = await MaterialCallRequestItem.filter(
+            tenant_id=tenant_id, request_id=call_req.id
+        ).order_by("line_no", "id").all()
+        lines_to_move: List[Tuple[MaterialCallRequestItem, Decimal]] = []
+        for i in items:
+            dq = i.delivered_quantity or Decimal("0")
+            if dq > 0:
+                lines_to_move.append((i, dq))
+        if not lines_to_move:
+            logger.warning("叫料单 {} 已完成但明细送达数量均为 0，跳过领料过账", call_req.code)
+            return
+
+        wo = await WorkOrder.get_or_none(
+            tenant_id=tenant_id, id=call_req.work_order_id, deleted_at__isnull=True
+        )
+        if not wo:
+            raise BusinessLogicError(f"工单不存在，无法生成领料单: {call_req.work_order_id}")
+
+        src_wh_id, src_wh_name, tgt_wh_id, tgt_wh_name = await self._resolve_warehouses_for_material_call(
+            tenant_id, call_req, wo
+        )
+
+        biz_config = await BusinessConfigService().get_business_config(tenant_id)
+        enforce_fifo = bool(biz_config.get("parameters", {}).get("warehouse", {}).get("fifo", False))
+
+        today = datetime.now().strftime("%Y%m%d")
+        picking_code = await self.generate_code(tenant_id, "PRODUCTION_PICKING_CODE", prefix=f"PP{today}")
+        picker_name = _user_display_name(user)
+
+        picking = await ProductionPicking.create(
+            tenant_id=tenant_id,
+            picking_code=picking_code,
+            work_order_id=wo.id,
+            work_order_code=wo.code,
+            workshop_id=getattr(wo, "workshop_id", None),
+            workshop_name=getattr(wo, "workshop_name", None),
+            status="已领料",
+            picker_id=user.id,
+            picker_name=picker_name,
+            picking_time=datetime.now(),
+            created_by=user.id,
+            updated_by=user.id,
+            notes=f"由叫料单 {call_req.code} 完成自动生成（主仓→线边）",
+        )
+
+        for it, dq in lines_to_move:
+            unit = it.material_unit or ""
+            await ProductionPickingItem.create(
+                tenant_id=tenant_id,
+                picking_id=picking.id,
+                material_id=it.material_id,
+                material_code=it.material_code or "",
+                material_name=it.material_name or "",
+                material_spec=None,
+                material_unit=unit,
+                required_quantity=dq,
+                picked_quantity=dq,
+                remaining_quantity=Decimal("0"),
+                warehouse_id=src_wh_id,
+                warehouse_name=src_wh_name or "",
+                status="已领料",
+                picking_time=datetime.now(),
+            )
+            await InventoryService.decrease_stock(
+                tenant_id=tenant_id,
+                material_id=it.material_id,
+                quantity=Decimal(str(dq)),
+                warehouse_id=src_wh_id,
+                batch_no=None,
+                source_type="production_picking",
+                source_doc_id=picking.id,
+                source_doc_code=picking.picking_code,
+                enforce_fifo=enforce_fifo,
+            )
+            await InventoryService.increase_stock(
+                tenant_id=tenant_id,
+                material_id=it.material_id,
+                quantity=Decimal(str(dq)),
+                warehouse_id=tgt_wh_id,
+                batch_no=None,
+                source_type="production_picking",
+                source_doc_id=picking.id,
+                source_doc_code=picking.picking_code,
+            )
+
+        call_req.production_picking_id = picking.id
+        await call_req.save()
+
+        try:
+            from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+            from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+            rel_svc = DocumentRelationNewService()
+            await rel_svc.create_relation(
+                tenant_id=tenant_id,
+                relation_data=DocumentRelationCreate(
+                    source_type="work_order",
+                    source_id=wo.id,
+                    source_code=wo.code,
+                    source_name=getattr(wo, "name", None),
+                    target_type="production_picking",
+                    target_id=picking.id,
+                    target_code=picking.picking_code,
+                    target_name=None,
+                    relation_type="source",
+                    relation_mode="push",
+                    relation_desc=f"叫料单 {call_req.code} 完成生成生产领料",
+                ),
+                created_by=user.id,
+            )
+        except Exception as e:
+            logger.warning("建立工单→生产领料关联失败: {}", e)
+
+        try:
+            from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+            from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+            rel_svc = DocumentRelationNewService()
+            await rel_svc.create_relation(
+                tenant_id=tenant_id,
+                relation_data=DocumentRelationCreate(
+                    source_type="material_call_request",
+                    source_id=call_req.id,
+                    source_code=call_req.code,
+                    source_name=call_req.work_order_code,
+                    target_type="production_picking",
+                    target_id=picking.id,
+                    target_code=picking.picking_code,
+                    target_name=None,
+                    relation_type="source",
+                    relation_mode="push",
+                    relation_desc="叫料完成生成生产领料出库",
+                ),
+                created_by=user.id,
+            )
+        except Exception as e:
+            logger.warning("建立叫料→生产领料关联失败: {}", e)
+
     async def update_call_request(
         self,
         tenant_id: int,
@@ -297,6 +525,8 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
             call_req = await MaterialCallRequest.get_or_none(tenant_id=tenant_id, id=call_id)
             if not call_req:
                 raise NotFoundError(f"叫料请求不存在: {call_id}")
+
+            existing_picking_id = getattr(call_req, "production_picking_id", None)
 
             data = update_data.model_dump(exclude_unset=True)
 
@@ -335,6 +565,13 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
             await call_req.save()
             await self._sync_header_from_items(tenant_id, call_id)
             call_req = await MaterialCallRequest.get(id=call_id, tenant_id=tenant_id)
+
+            if call_req.status == "completed" and not existing_picking_id:
+                await self._create_picking_and_line_side_transfer_for_completed_call(
+                    tenant_id, call_req, user
+                )
+                call_req = await MaterialCallRequest.get(id=call_id, tenant_id=tenant_id)
+
             return await self._build_response(call_req)
 
     async def cancel_call_request(

@@ -57,6 +57,8 @@ from apps.kuaizhizao.models.scrap_record import ScrapRecord
 from apps.kuaizhizao.services.document_timing_service import DocumentTimingService
 from apps.master_data.models.material import Material, MaterialGroup
 from apps.master_data.models.process import ProcessRoute, Operation, SOP
+from apps.master_data.models.factory import Workshop, WorkCenter, Workstation, WorkGroup
+from apps.kuaizhizao.models.equipment import Equipment
 from apps.master_data.services.process_service import batch_get_operation_defect_types_via_table
 from core.services.business.code_generation_service import CodeGenerationService
 from apps.kuaizhizao.utils.material_source_helper import (
@@ -71,6 +73,7 @@ from apps.kuaizhizao.utils.material_source_helper import (
 )
 from loguru import logger
 from infra.services.business_config_service import BusinessConfigService
+from infra.models.user import User
 
 
 async def _resolve_sales_order_snapshot_fields(
@@ -368,6 +371,29 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         
         operation_map = {op.id: op for op in operations}
 
+        # 批量获取默认资源名称
+        all_user_ids = set()
+        all_team_ids = set()
+        all_workshop_ids = set()
+        all_work_center_ids = set()
+        all_station_ids = set()
+        all_eq_ids = set()
+
+        for op in operations:
+            if op.default_operator_ids: all_user_ids.update(op.default_operator_ids)
+            if op.default_team_ids: all_team_ids.update(op.default_team_ids)
+            if op.default_workshop_ids: all_workshop_ids.update(op.default_workshop_ids)
+            if op.default_work_center_ids: all_work_center_ids.update(op.default_work_center_ids)
+            if hasattr(op, "default_station_ids") and op.default_station_ids: all_station_ids.update(op.default_station_ids)
+            if op.default_equipment_ids: all_eq_ids.update(op.default_equipment_ids)
+
+        user_names = {u.id: (u.full_name or u.username) for u in await User.filter(id__in=list(all_user_ids)).all()} if all_user_ids else {}
+        team_names = {t.id: t.name for t in await WorkGroup.filter(id__in=list(all_team_ids)).all()} if all_team_ids else {}
+        workshop_names = {w.id: w.name for w in await Workshop.filter(id__in=list(all_workshop_ids)).all()} if all_workshop_ids else {}
+        center_names = {c.id: c.name for c in await WorkCenter.filter(id__in=list(all_work_center_ids)).all()} if all_work_center_ids else {}
+        station_names = {s.id: s.name for s in await Workstation.filter(id__in=list(all_station_ids)).all()} if all_station_ids else {}
+        eq_names = {e.id: e.name for e in await Equipment.filter(id__in=list(all_eq_ids)).all()} if all_eq_ids else {}
+
         from apps.kuaizhizao.services.over_report_rules import (
             OVER_REPORT_NONE,
             merge_over_report_layers,
@@ -400,11 +426,25 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             operation = operation_map[op_id]
             extra_data = op_data.get("extra_data", {})
             
-            # 从额外数据中获取车间、工作中心等信息（如果工艺路线中配置了）
-            workshop_id = extra_data.get("workshop_id") or work_order.workshop_id
-            workshop_name = extra_data.get("workshop_name") or work_order.workshop_name
-            work_center_id = extra_data.get("work_center_id") or work_order.work_center_id
-            work_center_name = extra_data.get("work_center_name") or work_order.work_center_name
+            # 默认资源绑定逻辑：工艺路线实例数据 > 工序主数据默认设置 > 工单整单设置
+            workshop_id = extra_data.get("workshop_id") or (operation.default_workshop_ids[0] if operation.default_workshop_ids else None) or work_order.workshop_id
+            workshop_name = extra_data.get("workshop_name") or workshop_names.get(workshop_id) or work_order.workshop_name
+            
+            work_center_id = extra_data.get("work_center_id") or (operation.default_work_center_ids[0] if operation.default_work_center_ids else None) or work_order.work_center_id
+            work_center_name = extra_data.get("work_center_name") or center_names.get(work_center_id) or work_order.work_center_name
+
+            assigned_worker_id = extra_data.get("assigned_worker_id") or (operation.default_operator_ids[0] if operation.default_operator_ids else None)
+            assigned_worker_name = extra_data.get("assigned_worker_name") or user_names.get(assigned_worker_id)
+
+            assigned_team_id = extra_data.get("assigned_team_id") or (operation.default_team_ids[0] if operation.default_team_ids else None)
+            assigned_team_name = extra_data.get("assigned_team_name") or team_names.get(assigned_team_id)
+
+            assigned_station_id = extra_data.get("assigned_station_id") or (getattr(operation, "default_station_ids", [])[0] if getattr(operation, "default_station_ids", None) else None)
+            assigned_station_name = extra_data.get("assigned_station_name") or station_names.get(assigned_station_id)
+
+            assigned_equipment_id = extra_data.get("assigned_equipment_id") or (operation.default_equipment_ids[0] if operation.default_equipment_ids else None)
+            assigned_equipment_name = extra_data.get("assigned_equipment_name") or eq_names.get(assigned_equipment_id)
+
             standard_time = extra_data.get("standard_time")
             setup_time = extra_data.get("setup_time")
             
@@ -456,6 +496,14 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 workshop_name=workshop_name,
                 work_center_id=work_center_id,
                 work_center_name=work_center_name,
+                assigned_worker_id=assigned_worker_id,
+                assigned_worker_name=assigned_worker_name,
+                assigned_team_id=assigned_team_id,
+                assigned_team_name=assigned_team_name,
+                assigned_station_id=assigned_station_id,
+                assigned_station_name=assigned_station_name,
+                assigned_equipment_id=assigned_equipment_id,
+                assigned_equipment_name=assigned_equipment_name,
                 planned_start_date=planned_start_date,
                 planned_end_date=planned_end_date,
                 standard_time=Decimal(str(standard_hours_per_unit)) if standard_hours_per_unit else None,
@@ -2501,6 +2549,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 work_order_operation.work_center_name = dispatch_data.work_center_name
             work_order_operation.assigned_worker_id = dispatch_data.assigned_worker_id
             work_order_operation.assigned_worker_name = dispatch_data.assigned_worker_name
+            work_order_operation.assigned_team_id = dispatch_data.assigned_team_id
+            work_order_operation.assigned_team_name = dispatch_data.assigned_team_name
+            work_order_operation.assigned_station_id = dispatch_data.assigned_station_id
+            work_order_operation.assigned_station_name = dispatch_data.assigned_station_name
             work_order_operation.assigned_equipment_id = dispatch_data.assigned_equipment_id
             work_order_operation.assigned_equipment_name = dispatch_data.assigned_equipment_name
             work_order_operation.assigned_mold_id = dispatch_data.assigned_mold_id

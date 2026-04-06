@@ -84,6 +84,7 @@ from apps.kuaizhizao.schemas.warehouse import (
     MaterialReturnWithItemsResponse, MaterialReturnItemCreate, MaterialReturnItemUpdate,
     MaterialReturnItemResponse,
     MaterialPrepReminderResponse, MaterialPrepReminderItem,
+    InboundConfirmationRequest,
 )
 
 from apps.base_service import AppBaseService
@@ -976,47 +977,106 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
         self,
         tenant_id: int,
         return_id: int,
-        confirmed_by: int
+        confirmed_by: int,
+        confirmation_data: Optional[InboundConfirmationRequest] = None,
     ) -> ProductionReturnResponse:
         """确认退料"""
         async with in_transaction():
-            ret = await self.get_production_return_by_id(tenant_id, return_id)
+            ret = await ProductionReturn.get_or_none(tenant_id=tenant_id, id=return_id)
+            if not ret:
+                raise NotFoundError(f"生产退料单不存在: {return_id}")
+
             if ret.status != "待退料":
                 raise BusinessLogicError("只有待退料状态的生产退料单才能确认退料")
 
+            # 1. 更新确认数据
+            if confirmation_data:
+                update_dict = {}
+                if confirmation_data.warehouse_id:
+                    update_dict["warehouse_id"] = confirmation_data.warehouse_id
+                    update_dict["warehouse_name"] = confirmation_data.warehouse_name or f"仓库{confirmation_data.warehouse_id}"
+                if confirmation_data.notes:
+                    update_dict["notes"] = confirmation_data.notes
+                
+                if update_dict:
+                    await ProductionReturn.filter(tenant_id=tenant_id, id=return_id).update(**update_dict)
+                    ret = await ProductionReturn.get(tenant_id=tenant_id, id=return_id)
+
+                if confirmation_data.items:
+                    for item_data in confirmation_data.items:
+                        item_update = {}
+                        if item_data.warehouse_id:
+                            item_update["warehouse_id"] = item_data.warehouse_id
+                            item_update["warehouse_name"] = item_data.warehouse_name or f"仓库{item_data.warehouse_id}"
+                        if item_data.location_id:
+                            item_update["location_id"] = item_data.location_id
+                            item_update["location_code"] = item_data.location_code or f"库位{item_data.location_id}"
+                        if item_data.batch_number:
+                            item_update["batch_number"] = item_data.batch_number
+                        if item_data.expiry_date:
+                            item_update["expiry_date"] = item_data.expiry_date
+                        
+                        if item_update:
+                            await ProductionReturnItem.filter(
+                                tenant_id=tenant_id, id=item_data.item_id, return_id=return_id
+                            ).update(**item_update)
+
+            # 2. 补齐批号/序列号
+            from apps.master_data.models.material import Material
+            from apps.kuaizhizao.services.batch_serial_helper import ensure_batch_no_for_item, ensure_serial_nos_for_item
+
+            items = await ProductionReturnItem.filter(tenant_id=tenant_id, return_id=return_id).all()
+            for item in items:
+                material = await Material.get_or_none(tenant_id=tenant_id, id=item.material_id)
+                if not material:
+                    continue
+                if material.batch_managed and not item.batch_number:
+                    batch_no = await ensure_batch_no_for_item(tenant_id, material, item)
+                    if batch_no:
+                        item.batch_number = batch_no
+                        await item.save()
+                # 序列号同理 (生产退料可能也需要序列号)
+                if material.serial_managed:
+                    count = int(item.return_quantity or 0)
+                    serial_nos = await ensure_serial_nos_for_item(tenant_id, material, item, count)
+                    if serial_nos and hasattr(item, "serial_numbers"):
+                        setattr(item, "serial_numbers", json.dumps(serial_nos))
+                        await item.save()
+
             returner_name = await self.get_user_name(confirmed_by)
+            receipt_time = (confirmation_data.receipt_time if confirmation_data and confirmation_data.receipt_time else None) or datetime.now()
+
             await ProductionReturn.filter(tenant_id=tenant_id, id=return_id).update(
                 status="已退料",
                 returner_id=confirmed_by,
                 returner_name=returner_name,
-                return_time=datetime.now(),
+                return_time=receipt_time,
                 updated_by=confirmed_by
             )
-            for item in ret.items:
-                await ProductionReturnItem.filter(
-                    tenant_id=tenant_id,
-                    id=item.id
-                ).update(status="已退料", return_time=datetime.now())
+            await ProductionReturnItem.filter(tenant_id=tenant_id, return_id=return_id).update(
+                status="已退料", 
+                return_time=receipt_time
+            )
 
-            # 更新库存（增加）
+            # 4. 更新库存（增加）
             try:
                 from apps.kuaizhizao.services.inventory_service import InventoryService
-
-                ret_obj = await ProductionReturn.get(tenant_id=tenant_id, id=return_id)
-                for item in ret.items:
+                # 重新获取 items 以确保获得最新批号
+                reload_items = await ProductionReturnItem.filter(tenant_id=tenant_id, return_id=return_id).all()
+                for item in reload_items:
                     qty = item.return_quantity or Decimal(0)
                     if qty <= 0:
                         continue
-                    wh_id = item.warehouse_id if item.warehouse_id else None
+                    wh_id = item.warehouse_id if item.warehouse_id else ret.warehouse_id
                     await InventoryService.increase_stock(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
                         quantity=qty,
                         warehouse_id=wh_id,
-                        batch_no=getattr(item, "batch_number", None) or None,
+                        batch_no=item.batch_number or None,
                         source_type="production_return",
                         source_doc_id=return_id,
-                        source_doc_code=ret_obj.return_code,
+                        source_doc_code=ret.return_code,
                     )
             except Exception as inv_e:
                 logger.error("生产退料确认-更新库存失败: %s", inv_e)
@@ -1276,37 +1336,130 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
         receipts = await query.offset(skip).limit(limit).order_by('-created_at')
         return [FinishedGoodsReceiptResponse.model_validate(receipt) for receipt in receipts]
 
-    async def confirm_receipt(self, tenant_id: int, receipt_id: int, confirmed_by: int) -> FinishedGoodsReceiptResponse:
+    async def confirm_receipt(
+        self,
+        tenant_id: int,
+        receipt_id: int,
+        confirmed_by: int,
+        confirmation_data: Optional[InboundConfirmationRequest] = None,
+    ) -> FinishedGoodsReceiptResponse:
         """确认入库"""
         async with in_transaction():
-            receipt = await self.get_finished_goods_receipt_by_id(tenant_id, receipt_id)
+            receipt = await FinishedGoodsReceipt.get_or_none(tenant_id=tenant_id, id=receipt_id)
+            if not receipt:
+                raise NotFoundError(f"成品入库单不存在: {receipt_id}")
 
             if receipt.status != '待入库':
                 raise BusinessLogicError("只有待入库状态的成品入库单才能确认入库")
 
+            # 1. 如果提供了确认数据，先更新表头和明细
+            if confirmation_data:
+                update_dict = {}
+                if confirmation_data.warehouse_id:
+                    update_dict["warehouse_id"] = confirmation_data.warehouse_id
+                    update_dict["warehouse_name"] = confirmation_data.warehouse_name or f"仓库{confirmation_data.warehouse_id}"
+                if confirmation_data.notes:
+                    update_dict["notes"] = confirmation_data.notes
+                
+                if update_dict:
+                    await FinishedGoodsReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(**update_dict)
+                    # 重新加载 receipt 以获取最新仓库信息
+                    receipt = await FinishedGoodsReceipt.get(tenant_id=tenant_id, id=receipt_id)
+
+                if confirmation_data.items:
+                    for item_data in confirmation_data.items:
+                        item_update = {}
+                        # FinishedGoodsReceiptItem has no warehouse_id; the warehouse is stored on the header.
+                        if item_data.location_id:
+                            item_update["location_id"] = item_data.location_id
+                            item_update["location_code"] = item_data.location_code or f"库位{item_data.location_id}"
+                        if item_data.batch_number:
+                            item_update["batch_number"] = item_data.batch_number
+                        if item_data.expiry_date:
+                            item_update["expiry_date"] = item_data.expiry_date
+                        if item_data.serial_numbers and hasattr(FinishedGoodsReceiptItem, "serial_numbers"):
+                            item_update["serial_numbers"] = json.dumps(item_data.serial_numbers)
+                        
+                        if item_update:
+                            await FinishedGoodsReceiptItem.filter(
+                                tenant_id=tenant_id, receipt_id=receipt_id, id=item_data.item_id
+                            ).update(**item_update)
+
+            # 2. 补齐缺失的批号/序列号 (根据物料配置自动生成)
+            from apps.master_data.models.material import Material
+            from apps.kuaizhizao.services.batch_serial_helper import (
+                ensure_batch_no_for_item,
+                ensure_serial_nos_for_item,
+            )
+
+            items = await FinishedGoodsReceiptItem.filter(
+                tenant_id=tenant_id, receipt_id=receipt_id
+            ).all()
+            
+            for item in items:
+                material = await Material.get_or_none(tenant_id=tenant_id, id=item.material_id)
+                if not material:
+                    continue
+                
+                # 自动生成批号
+                if material.batch_managed and not item.batch_number:
+                    batch_no = await ensure_batch_no_for_item(tenant_id, material, item)
+                    if batch_no:
+                        item.batch_number = batch_no
+                        await item.save()
+                
+                # 自动生成序列号
+                if material.serial_managed:
+                    count = int(item.receipt_quantity or item.qualified_quantity or 0)
+                    existing_serials = []
+                    item_serials = getattr(item, "serial_numbers", None)
+                    if item_serials:
+                        try:
+                            existing_serials = json.loads(item_serials)
+                        except:
+                            pass
+                    
+                    if len(existing_serials) < count:
+                        serial_nos = await ensure_serial_nos_for_item(tenant_id, material, item, count)
+                        if serial_nos and hasattr(item, "serial_numbers"):
+                            setattr(item, "serial_numbers", json.dumps(serial_nos))
+                            await item.save()
+
+            # 3. 执行入库确认（更新状态和时间）
             confirmer_name = await self.get_user_name(confirmed_by)
+            receipt_time = (confirmation_data.receipt_time if confirmation_data and confirmation_data.receipt_time else None) or datetime.now()
 
             await FinishedGoodsReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(
                 status='已入库',
                 receiver_id=confirmed_by,
                 receiver_name=confirmer_name,
-                receipt_time=datetime.now(),
+                receipt_time=receipt_time,
                 updated_by=confirmed_by
             )
+            
+            # 同时更新明细状态
+            await FinishedGoodsReceiptItem.filter(tenant_id=tenant_id, receipt_id=receipt_id).update(
+                status='已入库',
+                receipt_time=receipt_time,
+            )
 
-            # 更新库存（增加）
+            # 4. 更新库存（增加）
             try:
                 from apps.kuaizhizao.services.inventory_service import InventoryService
 
-                receipt = await FinishedGoodsReceipt.get(tenant_id=tenant_id, id=receipt_id)
+                # 重新加载明细以获取最新的批号
                 items = await FinishedGoodsReceiptItem.filter(
                     tenant_id=tenant_id, receipt_id=receipt_id
                 ).all()
-                wh_id = receipt.warehouse_id if receipt.warehouse_id else None
+                
                 for item in items:
                     qty = item.receipt_quantity or item.qualified_quantity or Decimal(0)
                     if qty <= 0:
                         continue
+                    
+                    # 优先使用行仓库，若无则使用表头仓库
+                    wh_id = item.warehouse_id if getattr(item, "warehouse_id", None) else receipt.warehouse_id
+                    
                     await InventoryService.increase_stock(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
@@ -3162,13 +3315,75 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         receipts = await query.offset(skip).limit(limit).order_by('-created_at')
         return [PurchaseReceiptResponse.model_validate(receipt) for receipt in receipts]
 
-    async def confirm_receipt(self, tenant_id: int, receipt_id: int, confirmed_by: int) -> PurchaseReceiptResponse:
+    async def confirm_receipt(
+        self,
+        tenant_id: int,
+        receipt_id: int,
+        confirmed_by: int,
+        confirmation_data: Optional[InboundConfirmationRequest] = None,
+    ) -> PurchaseReceiptResponse:
         """确认入库"""
         async with in_transaction():
-            receipt = await self.get_purchase_receipt_by_id(tenant_id, receipt_id)
+            receipt = await PurchaseReceipt.get_or_none(tenant_id=tenant_id, id=receipt_id)
+            if not receipt:
+                raise NotFoundError(f"采购入库单不存在: {receipt_id}")
 
             if receipt.status not in ('待入库', '草稿'):
                 raise BusinessLogicError("只有草稿或待入库状态的采购入库单才能确认入库")
+
+            # 1. 如果提供了确认数据，先更新表头和明细
+            if confirmation_data:
+                update_dict = {}
+                if confirmation_data.warehouse_id:
+                    update_dict["warehouse_id"] = confirmation_data.warehouse_id
+                    update_dict["warehouse_name"] = confirmation_data.warehouse_name or f"仓库{confirmation_data.warehouse_id}"
+                if confirmation_data.notes:
+                    update_dict["notes"] = confirmation_data.notes
+                
+                if update_dict:
+                    await PurchaseReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(**update_dict)
+                    # 重新加载 receipt 以获取最新仓库信息
+                    receipt = await PurchaseReceipt.get(tenant_id=tenant_id, id=receipt_id)
+
+                if confirmation_data.items:
+                    for item_data in confirmation_data.items:
+                        item_update = {}
+                        if item_data.warehouse_id:
+                            item_update["warehouse_id"] = item_data.warehouse_id
+                            item_update["warehouse_name"] = item_data.warehouse_name or f"仓库{item_data.warehouse_id}"
+                        if item_data.location_id:
+                            item_update["location_id"] = item_data.location_id
+                            item_update["location_code"] = item_data.location_code or f"库位{item_data.location_id}"
+                        if item_data.batch_number:
+                            item_update["batch_number"] = item_data.batch_number
+                        if item_data.expiry_date:
+                            item_update["expiry_date"] = item_data.expiry_date
+                        if item_data.manufacturing_date:
+                            item_update["manufacturing_date"] = item_data.manufacturing_date
+                        
+                        if item_update:
+                            await PurchaseReceiptItem.filter(
+                                tenant_id=tenant_id, id=item_data.item_id, receipt_id=receipt_id
+                            ).update(**item_update)
+
+            # 2. 补齐缺失的批号 (根据物料配置自动生成)
+            from apps.master_data.models.material import Material
+            from apps.kuaizhizao.services.batch_serial_helper import ensure_batch_no_for_item
+
+            items = await PurchaseReceiptItem.filter(
+                tenant_id=tenant_id, receipt_id=receipt_id
+            ).all()
+            
+            for item in items:
+                material = await Material.get_or_none(tenant_id=tenant_id, id=item.material_id)
+                if not material:
+                    continue
+                
+                if material.batch_managed and not item.batch_number:
+                    batch_no = await ensure_batch_no_for_item(tenant_id, material, item)
+                    if batch_no:
+                        item.batch_number = batch_no
+                        await item.save()
 
             # 质检合格才入库：若配置了 require_incoming_inspection_for_receipt，需先完成来料检验且合格
             config = await self.business_config_service.get_business_config(tenant_id)
@@ -3197,7 +3412,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
 
             confirmer_name = await self.get_user_name(confirmed_by)
 
-            now = datetime.now()
+            now = (confirmation_data.receipt_time if confirmation_data and confirmation_data.receipt_time else None) or datetime.now()
             await PurchaseReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(
                 status='已入库',
                 receiver_id=confirmed_by,
@@ -3214,7 +3429,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
             try:
                 from apps.kuaizhizao.services.inventory_service import InventoryService
 
-                receipt = await PurchaseReceipt.get(tenant_id=tenant_id, id=receipt_id)
+                # 重新加载明细以获取最新的批号
                 items = await PurchaseReceiptItem.filter(
                     tenant_id=tenant_id, receipt_id=receipt_id
                 ).all()
@@ -3986,37 +4201,100 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             out.append(resp)
         return out
 
-    async def confirm_return(self, tenant_id: int, return_id: int, confirmed_by: int) -> SalesReturnResponse:
+    async def confirm_return(
+        self,
+        tenant_id: int,
+        return_id: int,
+        confirmed_by: int,
+        confirmation_data: Optional[InboundConfirmationRequest] = None,
+    ) -> SalesReturnResponse:
         """确认退货"""
         async with in_transaction():
-            return_obj = await self.get_sales_return_by_id(tenant_id, return_id)
+            return_obj = await SalesReturn.get_or_none(tenant_id=tenant_id, id=return_id)
+            if not return_obj:
+                raise NotFoundError(f"销售退货单不存在: {return_id}")
 
             if return_obj.status != '待退货':
                 raise BusinessLogicError("只有待退货状态的销售退货单才能确认退货")
 
+            # 1. 更新确认数据
+            if confirmation_data:
+                update_dict = {}
+                if confirmation_data.warehouse_id:
+                    update_dict["warehouse_id"] = confirmation_data.warehouse_id
+                    update_dict["warehouse_name"] = confirmation_data.warehouse_name or f"仓库{confirmation_data.warehouse_id}"
+                if confirmation_data.notes:
+                    update_dict["notes"] = confirmation_data.notes
+                
+                if update_dict:
+                    await SalesReturn.filter(tenant_id=tenant_id, id=return_id).update(**update_dict)
+                    return_obj = await SalesReturn.get(tenant_id=tenant_id, id=return_id)
+
+                if confirmation_data.items:
+                    for item_data in confirmation_data.items:
+                        item_update = {}
+                        # SalesReturnItem has no warehouse_id; the warehouse is stored on the header.
+                        if item_data.location_id:
+                            item_update["location_id"] = item_data.location_id
+                            item_update["location_code"] = item_data.location_code or f"库位{item_data.location_id}"
+                        if item_data.batch_number:
+                            item_update["batch_number"] = item_data.batch_number
+                        if item_data.expiry_date:
+                            item_update["expiry_date"] = item_data.expiry_date
+                        if item_data.serial_numbers:
+                            item_update["serial_numbers"] = json.dumps(item_data.serial_numbers)
+                        
+                        if item_update:
+                            await SalesReturnItem.filter(
+                                tenant_id=tenant_id, id=item_data.item_id, return_id=return_id
+                            ).update(**item_update)
+
+            # 2. 补齐批号/序列号
+            from apps.master_data.models.material import Material
+            from apps.kuaizhizao.services.batch_serial_helper import ensure_batch_no_for_item, ensure_serial_nos_for_item
+
+            items = await SalesReturnItem.filter(tenant_id=tenant_id, return_id=return_id).all()
+            for item in items:
+                material = await Material.get_or_none(tenant_id=tenant_id, id=item.material_id)
+                if not material:
+                    continue
+                if material.batch_managed and not item.batch_number:
+                    batch_no = await ensure_batch_no_for_item(tenant_id, material, item)
+                    if batch_no:
+                        item.batch_number = batch_no
+                        await item.save()
+                if material.serial_managed:
+                    count = int(item.return_quantity or 0)
+                    serial_nos = await ensure_serial_nos_for_item(tenant_id, material, item, count)
+                    if serial_nos:
+                        item.serial_numbers = json.dumps(serial_nos)
+                        await item.save()
+
             returner_name = await self.get_user_name(confirmed_by)
+            receipt_time = (confirmation_data.receipt_time if confirmation_data and confirmation_data.receipt_time else None) or datetime.now()
 
             await SalesReturn.filter(tenant_id=tenant_id, id=return_id).update(
                 status='已退货',
                 returner_id=confirmed_by,
                 returner_name=returner_name,
-                return_time=datetime.now(),
+                return_time=receipt_time,
                 updated_by=confirmed_by
             )
+            await SalesReturnItem.filter(tenant_id=tenant_id, return_id=return_id).update(
+                status='已退货', 
+                return_time=receipt_time
+            )
 
-            # 更新库存（增加，销售退货入库）
+            # 4. 更新库存（增加）
             try:
                 from apps.kuaizhizao.services.inventory_service import InventoryService
-
-                ret_obj = await SalesReturn.get(tenant_id=tenant_id, id=return_id)
-                items = await SalesReturnItem.filter(
-                    tenant_id=tenant_id, return_id=return_id
-                ).all()
-                wh_id = ret_obj.warehouse_id if ret_obj.warehouse_id else None
-                for item in items:
+                # 重新加载明细
+                reload_items = await SalesReturnItem.filter(tenant_id=tenant_id, return_id=return_id).all()
+                for item in reload_items:
                     qty = item.return_quantity or Decimal(0)
                     if qty <= 0:
                         continue
+                    wh_id = item.warehouse_id if item.warehouse_id else return_obj.warehouse_id
                     await InventoryService.increase_stock(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
@@ -4025,7 +4303,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                         batch_no=item.batch_number or None,
                         source_type="sales_return",
                         source_doc_id=return_id,
-                        source_doc_code=ret_obj.return_code,
+                        source_doc_code=return_obj.return_code,
                     )
             except Exception as inv_e:
                 logger.error("销售退货确认-更新库存失败: %s", inv_e)
@@ -4733,40 +5011,97 @@ class OtherInboundService(AppBaseService[OtherInbound]):
         self,
         tenant_id: int,
         inbound_id: int,
-        confirmed_by: int
+        confirmed_by: int,
+        confirmation_data: Optional[InboundConfirmationRequest] = None,
     ) -> OtherInboundResponse:
         """确认入库"""
         async with in_transaction():
-            inbound = await self.get_other_inbound_by_id(tenant_id, inbound_id)
+            inbound = await OtherInbound.get_or_none(tenant_id=tenant_id, id=inbound_id)
+            if not inbound:
+                raise NotFoundError(f"其他入库单不存在: {inbound_id}")
+
             if inbound.status != "待入库":
                 raise BusinessLogicError("只有待入库状态的其他入库单才能确认入库")
-            if not inbound.items or all((item.inbound_quantity or Decimal(0)) <= 0 for item in inbound.items):
+
+            # 1. 更新确认数据
+            if confirmation_data:
+                update_dict = {}
+                if confirmation_data.warehouse_id:
+                    update_dict["warehouse_id"] = confirmation_data.warehouse_id
+                    update_dict["warehouse_name"] = confirmation_data.warehouse_name or f"仓库{confirmation_data.warehouse_id}"
+                if confirmation_data.notes:
+                    update_dict["notes"] = confirmation_data.notes
+                
+                if update_dict:
+                    await OtherInbound.filter(tenant_id=tenant_id, id=inbound_id).update(**update_dict)
+                    inbound = await OtherInbound.get(tenant_id=tenant_id, id=inbound_id)
+
+                if confirmation_data.items:
+                    for item_data in confirmation_data.items:
+                        item_update = {}
+                        # OtherInboundItem has no warehouse_id; the warehouse is stored on the header.
+                        if item_data.location_id:
+                            item_update["location_id"] = item_data.location_id
+                            item_update["location_code"] = item_data.location_code or f"库位{item_data.location_id}"
+                        if item_data.batch_number:
+                            item_update["batch_number"] = item_data.batch_number
+                        if item_data.expiry_date:
+                            item_update["expiry_date"] = item_data.expiry_date
+                        
+                        if item_update:
+                            await OtherInboundItem.filter(
+                                tenant_id=tenant_id, id=item_data.item_id, inbound_id=inbound_id
+                            ).update(**item_update)
+
+            # 2. 补齐批号/序列号
+            from apps.master_data.models.material import Material
+            from apps.kuaizhizao.services.batch_serial_helper import ensure_batch_no_for_item, ensure_serial_nos_for_item
+
+            items = await OtherInboundItem.filter(tenant_id=tenant_id, inbound_id=inbound_id).all()
+            if not items or all((item.inbound_quantity or Decimal(0)) <= 0 for item in items):
                 raise BusinessLogicError("请至少添加一条有效入库明细（数量大于0）")
 
+            for item in items:
+                material = await Material.get_or_none(tenant_id=tenant_id, id=item.material_id)
+                if not material:
+                    continue
+                if material.batch_managed and not item.batch_number:
+                    batch_no = await ensure_batch_no_for_item(tenant_id, material, item)
+                    if batch_no:
+                        item.batch_number = batch_no
+                        await item.save()
+                if material.serial_managed:
+                    count = int(item.inbound_quantity or 0)
+                    serial_nos = await ensure_serial_nos_for_item(tenant_id, material, item, count)
+                    if serial_nos and hasattr(item, "serial_numbers"):
+                        setattr(item, "serial_numbers", json.dumps(serial_nos))
+                        await item.save()
+
             receiver_name = await self.get_user_name(confirmed_by)
+            receipt_time = (confirmation_data.receipt_time if confirmation_data and confirmation_data.receipt_time else None) or datetime.now()
+
             await OtherInbound.filter(tenant_id=tenant_id, id=inbound_id).update(
                 status="已入库",
                 receiver_id=confirmed_by,
                 receiver_name=receiver_name,
-                receipt_time=datetime.now(),
+                receipt_time=receipt_time,
                 updated_by=confirmed_by
             )
-            for item in inbound.items:
-                await OtherInboundItem.filter(
-                    tenant_id=tenant_id,
-                    id=item.id
-                ).update(status="已入库", receipt_time=datetime.now())
+            await OtherInboundItem.filter(tenant_id=tenant_id, inbound_id=inbound_id).update(
+                status="已入库", 
+                receipt_time=receipt_time
+            )
 
-            # 更新库存（增加仓库库存）
+            # 4. 更新库存（增加）
             try:
                 from apps.kuaizhizao.services.inventory_service import InventoryService
-
-                inbound_obj = await OtherInbound.get(tenant_id=tenant_id, id=inbound_id)
-                wh_id = inbound_obj.warehouse_id if inbound_obj.warehouse_id else None
-                for item in inbound.items:
+                # 重新加载明细
+                reload_items = await OtherInboundItem.filter(tenant_id=tenant_id, inbound_id=inbound_id).all()
+                for item in reload_items:
                     qty = Decimal(str(item.inbound_quantity or 0))
                     if qty <= 0:
                         continue
+                    wh_id = getattr(item, "warehouse_id", None) or inbound.warehouse_id
                     await InventoryService.increase_stock(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
@@ -4775,7 +5110,7 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                         batch_no=item.batch_number or None,
                         source_type="other_inbound",
                         source_doc_id=inbound_id,
-                        source_doc_code=inbound_obj.inbound_code,
+                        source_doc_code=inbound.inbound_code,
                     )
             except Exception as inv_e:
                 logger.error("其他入库确认-更新库存失败: %s", inv_e)

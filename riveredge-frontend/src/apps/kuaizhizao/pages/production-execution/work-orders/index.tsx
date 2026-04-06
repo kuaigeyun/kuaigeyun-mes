@@ -128,7 +128,7 @@ import {
 } from '../../../services/sales-forecast'
 import { listDemands, getDemand } from '../../../services/demand'
 import { operationApi, processRouteApi } from '../../../../master-data/services/process'
-import { workshopApi, workCenterApi } from '../../../../master-data/services/factory'
+import { workshopApi, workCenterApi, workGroupApi, workstationApi } from '../../../../master-data/services/factory'
 import { supplierApi } from '../../../../master-data/services/supply-chain'
 import { warehouseApi } from '../../../services/warehouse-execution'
 import { materialApi } from '../../../../master-data/services/material'
@@ -621,11 +621,15 @@ const WorkOrdersPage: React.FC = () => {
     null
   )
   const [workerList, setWorkerList] = useState<any[]>([])
+  const [teamList, setTeamList] = useState<any[]>([])
+  const [stationList, setStationList] = useState<any[]>([])
   const [equipmentList, setEquipmentList] = useState<any[]>([])
   const [moldList, setMoldList] = useState<any[]>([])
   const [toolList, setToolList] = useState<any[]>([])
   const [workshopList, setWorkshopList] = useState<any[]>([])
   const [workCenterList, setWorkCenterList] = useState<any[]>([])
+  const [personnelOptions, setPersonnelOptions] = useState<any[]>([])
+  const [resourceOptions, setResourceOptions] = useState<any[]>([])
   const [dispatchPickListsLoading, setDispatchPickListsLoading] = useState(false)
   const dispatchFormRef = useRef<any>(null)
 
@@ -709,8 +713,10 @@ const WorkOrdersPage: React.FC = () => {
     const load = async () => {
       setDispatchPickListsLoading(true)
       try {
-        const [users, equipment, molds, tools, workshops, workCenters] = await Promise.all([
+        const [users, teams, stations, equipment, molds, tools, workshops, workCenters] = await Promise.all([
           getUserList({ is_active: true, page_size: 200 }).catch(() => ({ items: [] })),
+          workGroupApi.list({ isActive: true, limit: 500 }).catch(() => []),
+          workstationApi.list({ isActive: true, limit: 1000 }).catch(() => []),
           getEquipmentList({ is_active: true, limit: 300 }).catch(() => ({ items: [] })),
           getMoldList({ is_active: true, limit: 300 }).catch(() => ({ items: [] })),
           toolApi.list({ limit: 300 }).catch(() => ({ items: [] })),
@@ -719,6 +725,8 @@ const WorkOrdersPage: React.FC = () => {
         ])
         if (cancelled) return
         setWorkerList((users as any)?.items ?? [])
+        setTeamList(Array.isArray(teams) ? teams : [])
+        setStationList(Array.isArray(stations) ? stations : [])
         setEquipmentList(equipment?.items ?? [])
         setMoldList(molds?.items ?? [])
         setToolList(
@@ -726,6 +734,16 @@ const WorkOrdersPage: React.FC = () => {
         )
         setWorkshopList(Array.isArray(workshops) ? workshops : [])
         setWorkCenterList(Array.isArray(workCenters) ? workCenters : [])
+
+        const pOpts: any[] = [];
+        ((users as any)?.items || []).forEach((u: any) => pOpts.push({ label: `[人员] ${u.full_name || u.username}`, value: `U_${u.id}` }));
+        (Array.isArray(teams) ? teams : []).forEach((t: any) => pOpts.push({ label: `[小组] ${t.name}`, value: `T_${t.id}` }));
+        setPersonnelOptions(pOpts);
+
+        const rOpts: any[] = [];
+        (Array.isArray(workCenters) ? workCenters : []).forEach((wc: any) => rOpts.push({ label: `[中心] ${wc.code || ''} ${wc.name || ''}`.trim(), value: `WC_${wc.id}` }));
+        (Array.isArray(stations) ? stations : []).forEach((s: any) => rOpts.push({ label: `[工位] ${s.code || ''} ${s.name || ''}`.trim(), value: `S_${s.id}` }));
+        setResourceOptions(rOpts);
       } finally {
         if (!cancelled) setDispatchPickListsLoading(false)
       }
@@ -1058,10 +1076,18 @@ const WorkOrdersPage: React.FC = () => {
     // 如果已有派工信息，设置初始值
     setTimeout(() => {
       if (dispatchFormRef.current) {
+        const combinedPersonnelValues: string[] = [];
+        if (operation.assigned_worker_id) combinedPersonnelValues.push(`U_${operation.assigned_worker_id}`);
+        if (operation.assigned_team_id) combinedPersonnelValues.push(`T_${operation.assigned_team_id}`);
+
+        const combinedResourceValues: string[] = [];
+        if (operation.work_center_id) combinedResourceValues.push(`WC_${operation.work_center_id}`);
+        if (operation.assigned_station_id) combinedResourceValues.push(`S_${operation.assigned_station_id}`);
+
         dispatchFormRef.current.setFieldsValue({
           workshop_id: operation.workshop_id ?? operation.workshopId,
-          work_center_id: operation.work_center_id ?? operation.workCenterId,
-          assigned_worker_id: operation.assigned_worker_id,
+          assigned_personnel: combinedPersonnelValues.length > 0 ? combinedPersonnelValues : undefined,
+          assigned_resource: combinedResourceValues.length > 0 ? combinedResourceValues : undefined,
           assigned_equipment_id: operation.assigned_equipment_id,
           assigned_mold_id: operation.assigned_mold_id,
           assigned_tool_id: operation.assigned_tool_id,
@@ -1081,27 +1107,48 @@ const WorkOrdersPage: React.FC = () => {
       const workshop = workshopList.find(
         (w: any) => w.id === values.workshop_id || w.id === values.workshopId
       )
-      const workCenter = workCenterList.find(
-        (w: any) => w.id === values.work_center_id || w.id === values.workCenterId
-      )
-      const worker = workerList.find(w => w.id === values.assigned_worker_id)
+      
+      let assigned_worker_id: number | undefined;
+      let assigned_team_id: number | undefined;
+      const personnel = Array.isArray(values.assigned_personnel) ? values.assigned_personnel : [values.assigned_personnel].filter(Boolean);
+      personnel.forEach((p: string) => {
+        if (p.startsWith('U_')) assigned_worker_id = Number(p.substring(2));
+        if (p.startsWith('T_')) assigned_team_id = Number(p.substring(2));
+      });
+
+      let work_center_id: number | undefined;
+      let assigned_station_id: number | undefined;
+      const resources = Array.isArray(values.assigned_resource) ? values.assigned_resource : [values.assigned_resource].filter(Boolean);
+      resources.forEach((r: string) => {
+        if (r.startsWith('WC_')) work_center_id = Number(r.substring(3));
+        if (r.startsWith('S_')) assigned_station_id = Number(r.substring(2));
+      });
+
+      const worker = workerList.find(w => w.id === assigned_worker_id)
+      const team = teamList.find(t => t.id === assigned_team_id)
       const equipment = equipmentList.find(e => e.id === values.assigned_equipment_id)
       const mold = moldList.find(m => m.id === values.assigned_mold_id)
       const tool = toolList.find(t => t.id === values.assigned_tool_id)
+      const station = stationList.find(s => s.id === assigned_station_id)
+      const workCenter = workCenterList.find(w => w.id === work_center_id)
 
       const dispatchData = {
         workshop_id: values.workshop_id ?? null,
         workshop_name: workshop?.name ?? null,
         work_center_id: values.work_center_id ?? null,
         work_center_name: workCenter?.name ?? null,
-        assigned_worker_id: values.assigned_worker_id,
-        assigned_worker_name: worker?.full_name || worker?.username || '-',
-        assigned_equipment_id: values.assigned_equipment_id,
-        assigned_equipment_name: equipment?.name || '-',
-        assigned_mold_id: values.assigned_mold_id,
-        assigned_mold_name: mold?.name || '-',
-        assigned_tool_id: values.assigned_tool_id,
-        assigned_tool_name: tool?.name || '-',
+        assigned_station_id: values.assigned_station_id ?? null,
+        assigned_station_name: station?.name ?? null,
+        assigned_worker_id: values.assigned_worker_id ?? null,
+        assigned_worker_name: worker?.full_name || worker?.username || null,
+        assigned_team_id: values.assigned_team_id ?? null,
+        assigned_team_name: team?.name ?? null,
+        assigned_equipment_id: values.assigned_equipment_id ?? null,
+        assigned_equipment_name: equipment?.name || null,
+        assigned_mold_id: values.assigned_mold_id ?? null,
+        assigned_mold_name: mold?.name || null,
+        assigned_tool_id: values.assigned_tool_id ?? null,
+        assigned_tool_name: tool?.name || null,
         remarks: values.remarks,
       }
 
@@ -5423,82 +5470,55 @@ const WorkOrdersPage: React.FC = () => {
               </Col>
 
               <Col xs={24} sm={12}>
-            <ProFormItem
-              name="work_center_id"
-              label="分配工作中心"
-            >
-              <UniDropdown
-                placeholder="请选择工作中心（可选）"
-                allowClear
-                showSearch
-                options={workCenterList.map((w: any) => ({
-                  label: `${w.code ?? ''} - ${w.name ?? ''}`.trim() || String(w.id),
-                  value: w.id,
-                }))}
-                advancedSearch={{
-                  label: '高级搜索工作中心',
-                  fields: [
-                    { name: 'code', label: '编号', type: 'text' },
-                    { name: 'name', label: '名称', type: 'text' },
-                  ],
-                  onSearch: async (params: Record<string, string>) => {
-                    const list = await workCenterApi.list({ isActive: true, limit: 500 }).catch(() => [])
-                    const arr = Array.isArray(list) ? list : []
-                    const codeQ = (params?.code || '').toString().trim().toLowerCase()
-                    const nameQ = (params?.name || '').toString().trim().toLowerCase()
-                    return arr
-                      .filter((w: any) => {
-                        const c = String(w.code ?? '').toLowerCase()
-                        const n = String(w.name ?? '').toLowerCase()
-                        if (codeQ && !c.includes(codeQ)) return false
-                        if (nameQ && !n.includes(nameQ)) return false
-                        return true
-                      })
-                      .map((w: any) => ({
-                        value: w.id,
-                        label: `${w.code ?? ''} - ${w.name ?? ''}`.trim() || String(w.id),
-                      }))
-                  },
-                }}
-              />
-            </ProFormItem>
+                <ProFormItem
+                  name="assigned_personnel"
+                  label="分配人员/小组"
+                  tooltip="可同时选择具体的生产人员或整个工作小组"
+                >
+                  <UniDropdown
+                    placeholder="请选择人员或小组"
+                    allowClear
+                    showSearch
+                    mode="multiple"
+                    options={personnelOptions}
+                    advancedSearch={{
+                      label: '高级搜索',
+                      fields: [
+                        { name: 'name', label: '名称/用户名', type: 'text' },
+                      ],
+                      onSearch: async (params: Record<string, string>) => {
+                        const nameQ = (params?.name || '').toString().trim().toLowerCase();
+                        return personnelOptions.filter(opt => opt.label.toLowerCase().includes(nameQ));
+                      },
+                    }}
+                  />
+                </ProFormItem>
               </Col>
 
               <Col xs={24} sm={12}>
-            <ProFormItem
-              name="assigned_worker_id"
-              label="分配人员"
-            >
-              <UniDropdown
-                placeholder="请选择执行人员"
-                allowClear
-                showSearch
-                options={workerList.map((item: any) => ({
-                  label: `${item.full_name || item.username} (${item.username})`,
-                  value: item.id,
-                }))}
-                advancedSearch={{
-                  label: '高级搜索用户',
-                  fields: [
-                    { name: 'username', label: '用户名', type: 'text' },
-                    { name: 'full_name', label: '姓名', type: 'text' },
-                  ],
-                  onSearch: async (params: Record<string, string>) => {
-                    const res = await getUserList({
-                      is_active: true,
-                      page_size: 200,
-                      username: params?.username,
-                      full_name: params?.full_name,
-                    } as any).catch(() => ({ items: [] }))
-                    const items = (res as any)?.items ?? []
-                    return items.map((u: any) => ({
-                      value: u.id,
-                      label: `${u.full_name || u.username} (${u.username})`,
-                    }))
-                  },
-                }}
-              />
-            </ProFormItem>
+                <ProFormItem
+                  name="assigned_resource"
+                  label="分配工位/工作中心"
+                  tooltip="可同时选择具体的工作中心或具体的工位"
+                >
+                  <UniDropdown
+                    placeholder="请选择工位或工作中心"
+                    allowClear
+                    showSearch
+                    mode="multiple"
+                    options={resourceOptions}
+                    advancedSearch={{
+                      label: '高级搜索',
+                      fields: [
+                        { name: 'name', label: '名称/编号', type: 'text' },
+                      ],
+                      onSearch: async (params: Record<string, string>) => {
+                        const nameQ = (params?.name || '').toString().trim().toLowerCase();
+                        return resourceOptions.filter(opt => opt.label.toLowerCase().includes(nameQ));
+                      },
+                    }}
+                  />
+                </ProFormItem>
               </Col>
 
               <Col xs={24} sm={12}>

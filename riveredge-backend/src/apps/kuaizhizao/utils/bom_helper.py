@@ -251,23 +251,19 @@ async def calculate_material_requirements_from_bom(
     from apps.kuaizhizao.schemas.bom import MaterialRequirement
     from apps.kuaizhizao.utils.material_source_helper import expand_bom_with_source_control
 
-    # 当提供 variant_attributes 或 configurable_selections 时，使用 expand_bom_with_source_control（支持 Configure、Phantom、配置位等）
-    use_expand = (variant_attributes and isinstance(variant_attributes, dict) and len(variant_attributes) > 0) or (
-        configurable_selections and isinstance(configurable_selections, dict) and len(configurable_selections) > 0
+    # 始终优先按来源控制展开 BOM：穿透虚拟件（Phantom）、处理配置件/配置位与子件递归。
+    # 此前仅在传入 variant/config 时才展开，导致齐套/叫料等界面把虚拟件当作单行实体、库存为 0。
+    expanded = await expand_bom_with_source_control(
+        tenant_id=tenant_id,
+        material_id=material_id,
+        required_quantity=required_quantity,
+        only_approved=only_approved,
+        variant_attributes=variant_attributes,
+        configurable_selections=configurable_selections,
+        as_of_date=as_of_date,
     )
-    if use_expand:
-        expanded = await expand_bom_with_source_control(
-            tenant_id=tenant_id,
-            material_id=material_id,
-            required_quantity=required_quantity,
-            only_approved=only_approved,
-            variant_attributes=variant_attributes,
-            configurable_selections=configurable_selections,
-            as_of_date=as_of_date,
-        )
-        if not expanded:
-            raise NotFoundError(f"物料 {material_id} 的BOM不存在或未审核（配置件需匹配属性）")
 
+    if expanded:
         # 按 component_id 聚合（同一物料可能从多路径展开）
         by_component: Dict[int, Dict[str, Any]] = {}
         for item in expanded:
@@ -300,6 +296,13 @@ async def calculate_material_requirements_from_bom(
                 lead_time=0,
             ))
         return requirements
+
+    strict_configure = (
+        (variant_attributes and isinstance(variant_attributes, dict) and len(variant_attributes) > 0)
+        or (configurable_selections and isinstance(configurable_selections, dict) and len(configurable_selections) > 0)
+    )
+    if strict_configure:
+        raise NotFoundError(f"物料 {material_id} 的BOM不存在或未审核（配置件需匹配属性）")
 
     bom_items = await get_bom_items_by_material_id(
         tenant_id=tenant_id,

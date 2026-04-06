@@ -35,6 +35,8 @@ class MaterialCallRequest(BaseModel):
     # 仓库信息
     source_warehouse_id = fields.IntField(null=True, description="来源仓库ID（通常为主仓）")
     target_warehouse_id = fields.IntField(null=True, description="目标仓库ID（通常为线边仓）")
+    # 叫料完成时生成的生产领料单（主仓扣减 + 线边入库），避免重复执行
+    production_picking_id = fields.IntField(null=True, description="关联生产领料单ID")
     
     # 状态：pending(待处理), processing(配料中), partial(部分送达), completed(已完成), cancelled(已取消)
     status = fields.CharField(max_length=20, default="pending", description="状态")

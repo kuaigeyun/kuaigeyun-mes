@@ -218,7 +218,12 @@ class Operation(BaseModel):
     is_active = fields.BooleanField(default=True, description="是否启用")
     
     # 默认生产人员（用户ID列表，JSON格式存储，同组织）
-    default_operator_ids = fields.JSONField(null=True, description="默认生产人员（用户ID列表，JSON数组）")
+    default_operator_ids = fields.JSONField(null=True, description="默认生产人员（用户ID列表）")
+    default_team_ids = fields.JSONField(null=True, description="默认工作小组（小组ID列表）")
+    default_workshop_ids = fields.JSONField(null=True, description="默认车间（车间ID列表）")
+    default_work_center_ids = fields.JSONField(null=True, description="默认工作中心（工作中心ID列表）")
+    default_station_ids = fields.JSONField(null=True, description="默认工位（工位ID列表）")
+    default_equipment_ids = fields.JSONField(null=True, description="默认设备（设备ID列表）")
     
     # 绑定不良品项（M2M，通过 OperationDefectType）
     defect_types = fields.ManyToManyField(

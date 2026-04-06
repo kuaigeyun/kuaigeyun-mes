@@ -112,6 +112,10 @@ class WorkOrderOperation(BaseModel):
     # 派工信息
     assigned_worker_id = fields.IntField(null=True, description="分配的员工ID")
     assigned_worker_name = fields.CharField(max_length=100, null=True, description="分配的员工姓名")
+    assigned_team_id = fields.IntField(null=True, description="分配的工作小组ID")
+    assigned_team_name = fields.CharField(max_length=100, null=True, description="分配的工作小组名称")
+    assigned_station_id = fields.IntField(null=True, description="分配的工位ID")
+    assigned_station_name = fields.CharField(max_length=200, null=True, description="分配的工位名称")
     assigned_equipment_id = fields.IntField(null=True, description="分配的设备ID")
     assigned_equipment_name = fields.CharField(max_length=100, null=True, description="分配的设备姓名")
     assigned_mold_id = fields.IntField(null=True, description="分配的模具ID")

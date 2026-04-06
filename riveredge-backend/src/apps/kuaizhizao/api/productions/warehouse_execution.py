@@ -98,6 +98,7 @@ from apps.kuaizhizao.schemas.warehouse import (
     MaterialReturnListResponse,
     MaterialReturnWithItemsResponse,
     MaterialPrepReminderResponse,
+    InboundConfirmationRequest,
 )
 from apps.kuaizhizao.schemas.replenishment_suggestion import (
     ReplenishmentSuggestionResponse,
@@ -416,6 +417,7 @@ async def delete_production_return(
 @router.post("/production-returns/{return_id}/confirm", response_model=ProductionReturnResponse, summary="确认退料")
 async def confirm_production_return(
     return_id: int,
+    confirmation_data: Optional[InboundConfirmationRequest] = Body(None),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> ProductionReturnResponse:
@@ -423,7 +425,8 @@ async def confirm_production_return(
     return await ProductionReturnService().confirm_return(
         tenant_id=tenant_id,
         return_id=return_id,
-        confirmed_by=current_user.id
+        confirmed_by=current_user.id,
+        confirmation_data=confirmation_data
     )
 
 
@@ -590,6 +593,7 @@ async def delete_other_inbound(
 @router.post("/other-inbounds/{inbound_id}/confirm", response_model=OtherInboundResponse, summary="确认入库")
 async def confirm_other_inbound(
     inbound_id: int,
+    confirmation_data: Optional[InboundConfirmationRequest] = Body(None),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -597,7 +601,8 @@ async def confirm_other_inbound(
     return await OtherInboundService().confirm_inbound(
         tenant_id=tenant_id,
         inbound_id=inbound_id,
-        confirmed_by=current_user.id
+        confirmed_by=current_user.id,
+        confirmation_data=confirmation_data
     )
 
 
@@ -1112,6 +1117,7 @@ async def get_finished_goods_receipt(
 @router.post("/finished-goods-receipts/{receipt_id}/confirm", response_model=FinishedGoodsReceiptResponse, summary="确认成品入库")
 async def confirm_finished_goods_receipt(
     receipt_id: int,
+    confirmation_data: Optional[InboundConfirmationRequest] = Body(None),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> FinishedGoodsReceiptResponse:
@@ -1123,7 +1129,8 @@ async def confirm_finished_goods_receipt(
     return await FinishedGoodsReceiptService().confirm_receipt(
         tenant_id=tenant_id,
         receipt_id=receipt_id,
-        confirmed_by=current_user.id
+        confirmed_by=current_user.id,
+        confirmation_data=confirmation_data
     )
 
 
@@ -2387,6 +2394,7 @@ async def get_sales_return(
 @router.post("/sales-returns/{return_id}/confirm", response_model=SalesReturnResponse, summary="确认销售退货")
 async def confirm_sales_return(
     return_id: int,
+    confirmation_data: Optional[InboundConfirmationRequest] = Body(None),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> SalesReturnResponse:
@@ -2398,7 +2406,8 @@ async def confirm_sales_return(
     return await SalesReturnService().confirm_return(
         tenant_id=tenant_id,
         return_id=return_id,
-        confirmed_by=current_user.id
+        confirmed_by=current_user.id,
+        confirmation_data=confirmation_data
     )
 
 
@@ -2514,6 +2523,7 @@ async def update_purchase_receipt(
 @router.post("/purchase-receipts/{receipt_id}/confirm", response_model=PurchaseReceiptResponse, summary="确认采购入库")
 async def confirm_purchase_receipt(
     receipt_id: int,
+    confirmation_data: Optional[InboundConfirmationRequest] = Body(None),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> PurchaseReceiptResponse:
@@ -2525,7 +2535,8 @@ async def confirm_purchase_receipt(
     return await PurchaseReceiptService().confirm_receipt(
         tenant_id=tenant_id,
         receipt_id=receipt_id,
-        confirmed_by=current_user.id
+        confirmed_by=current_user.id,
+        confirmation_data=confirmation_data
     )
 
 

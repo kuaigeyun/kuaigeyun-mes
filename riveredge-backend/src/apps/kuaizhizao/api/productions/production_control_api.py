@@ -3,6 +3,7 @@
 """
 
 from fastapi import APIRouter, Depends, Query
+from loguru import logger
 from typing import List
 from core.api.deps import get_current_user
 from apps.kuaizhizao.services.production_control_service import ProductionControlService
@@ -90,7 +91,11 @@ async def bulk_release_kitted_orders(
     current_user=Depends(get_current_user)
 ):
     """批量下达齐套工单"""
-    return await service.release_kitted_work_orders(current_user.tenant_id, req.work_order_ids)
+    return await service.release_kitted_work_orders(
+        current_user.tenant_id, 
+        req.work_order_ids, 
+        operator_id=current_user.id
+    )
 
 
 @router.post("/simulate-impact", response_model=SimulationResult)

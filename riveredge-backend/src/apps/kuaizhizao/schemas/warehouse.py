@@ -1179,3 +1179,27 @@ class MaterialPrepReminderResponse(BaseSchema):
     """物料备料提醒响应"""
     items: List[MaterialPrepReminderItem] = Field(default_factory=list, description="提醒项列表")
     total_count: int = Field(0, description="总条数")
+
+
+# === 入库确认通用 Schema ===
+
+class InboundConfirmationItem(BaseSchema):
+    """入库确认明细字段（支持在确认时补齐或修改批号/库位/仓库）"""
+    item_id: int = Field(..., description="明细ID")
+    warehouse_id: Optional[int] = Field(None, description="入库仓库ID")
+    warehouse_name: Optional[str] = Field(None, description="入库仓库名称")
+    location_id: Optional[int] = Field(None, description="库位ID")
+    location_code: Optional[str] = Field(None, description="库位编码")
+    batch_number: Optional[str] = Field(None, description="批次号")
+    serial_numbers: Optional[List[str]] = Field(None, description="序列号列表")
+    expiry_date: Optional[datetime] = Field(None, description="到期日期")
+    manufacturing_date: Optional[datetime] = Field(None, description="生产日期")
+
+
+class InboundConfirmationRequest(BaseSchema):
+    """入库确认通用请求"""
+    warehouse_id: Optional[int] = Field(None, description="总入库仓库ID（若提供则覆盖表头和明细未指定者）")
+    warehouse_name: Optional[str] = Field(None, description="入库仓库名称")
+    receipt_time: Optional[datetime] = Field(None, description="入库时间")
+    notes: Optional[str] = Field(None, description="确认备注")
+    items: Optional[List[InboundConfirmationItem]] = Field(None, description="明细更新（可选，用于补全批号/序列号等）")

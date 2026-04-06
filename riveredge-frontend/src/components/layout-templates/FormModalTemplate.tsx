@@ -30,6 +30,8 @@ export interface FormModalTemplateProps {
   className?: string;
   modalRender?: (modal: React.ReactNode) => React.ReactNode;
   extraFooter?: ReactNode;
+  /** Modal 打开/关闭动画结束后的回调（open 为当前是否打开） */
+  afterOpenChange?: (open: boolean) => void;
 }
 
 export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
@@ -50,6 +52,7 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
   className,
   modalRender,
   extraFooter,
+  afterOpenChange,
 }) => {
   const { message: messageApi } = App.useApp();
   const internalFormRef = useRef<ProFormInstance>();
@@ -62,6 +65,7 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
       title={title}
       open={open}
       onCancel={onClose}
+      afterOpenChange={afterOpenChange}
       width={width}
       destroyOnHidden
       className={[className, 'form-modal-template'].filter(Boolean).join(' ')}

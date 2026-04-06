@@ -1529,7 +1529,7 @@ const BOMPage: React.FC = () => {
       width: 140,
       hideInSearch: true,
       render: (_: any, r: any) => {
-        // 根行：显示主件工艺路线；子件行（含半成品、加工型等）：显示该行对应物料的工艺路线（componentId）
+        // 根行：显示主件工艺路线；子件行（含半成品、工艺型等）：显示该行对应物料的工艺路线（componentId）
         const materialId = isRootRow(r) ? r.materialId : (r.componentId ?? r.materialId);
         if (materialId == null) return '-';
         const material = materials.find((m) => m.id === materialId);

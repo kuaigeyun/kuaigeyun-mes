@@ -90,6 +90,9 @@ class MaterialCallRequestResponse(BaseModel):
     call_reason: Optional[str] = None
     source_warehouse_id: Optional[int] = None
     target_warehouse_id: Optional[int] = None
+    production_picking_id: Optional[int] = Field(
+        default=None, description="叫料完成生成的生产领料单ID"
+    )
     priority: str = "normal"
     needed_at: Optional[datetime] = None
     remarks: Optional[str] = None

@@ -222,42 +222,65 @@ class ProductionControlService:
                             
         return results
 
-    async def release_kitted_work_orders(self, tenant_id: int, work_order_ids: List[int]) -> dict:
+    async def release_kitted_work_orders(self, tenant_id: int, work_order_ids: List[int], operator_id: int = None) -> dict:
         """
         批量下达齐套工单
         :param tenant_id: 租户ID
-        :param work_order_ids: 待下达工单ID列表
-        :return: {success_count: int, fail_count: int, messages: List[str]}
+        :param work_order_ids: 待下达工单ID列表。若为空，则自动扫描全组织所有草稿状态工单。
+        :param operator_id: 操作人ID
+        :return: {count: int, fail_count: int, messages: List[str]}
         """
         success_count = 0
         fail_count = 0
         messages = []
 
-        # 仅处理状态为'草稿'或'已审核'且未删除的工单
-        work_orders = await WorkOrder.filter(
-            id__in=work_order_ids,
+        # 构造工单查询：仅处理状态为'草稿'且未删除的工单 (通常只有草稿能下达)
+        query = WorkOrder.filter(
             tenant_id=tenant_id,
-            status__in=['draft', 'approved'],
+            status='draft',
             deleted_at__isnull=True
-        ).all()
+        )
+        
+        # 如果指定了 ID 列表，则按 ID 过滤
+        if work_order_ids:
+            query = query.filter(id__in=work_order_ids)
+
+        work_orders = await query.all()
+        
+        if not work_orders:
+            return {
+                "count": 0,
+                "fail_count": 0,
+                "messages": ["未发现符合条件的待下达工单"]
+            }
 
         for wo in work_orders:
-            # 检查齐套性
-            shortage_results = await self.work_order_service.check_material_shortage(wo.id)
-            is_kitted = all(item['shortage_quantity'] <= 0 for item in shortage_results)
+            try:
+                # 检查齐套性
+                shortage_info = await self.work_order_service.check_material_shortage(tenant_id, wo.id)
+                is_kitted = not shortage_info.get("has_shortage", True)
 
-            if is_kitted:
-                wo.status = 'released'
-                # 如果有实际开始时间则不覆盖，通常下达时设置计划开始
-                await wo.save()
-                success_count += 1
-                messages.append(f"工单 {wo.work_order_code} 已下达")
-            else:
+                if is_kitted:
+                    # 使用标准下达逻辑以录入完整的节点、日志和审计信息
+                    # 注意：如果不需要拦截缺料，这里 check_shortage 设为 False，因为我们已经手动检查过了
+                    await self.work_order_service.release_work_order(
+                        tenant_id=tenant_id,
+                        work_order_id=wo.id,
+                        released_by=operator_id or wo.created_by,
+                        check_shortage=False
+                    )
+                    success_count += 1
+                    messages.append(f"工单 {wo.code} 已成功下达")
+                else:
+                    # 自动下达场景，不满足则跳过，不计入 fail_count（前端通常只想知道成功了多少）
+                    pass
+            except Exception as e:
+                # 除非发生真正的异常（如数据库错误），否则不算失败
                 fail_count += 1
-                messages.append(f"工单 {wo.work_order_code} 开启校验失败：缺料未齐套")
+                messages.append(f"工单 {wo.code} 自动下达异常: {str(e)}")
 
         return {
-            "success_count": success_count,
+            "count": success_count,
             "fail_count": fail_count,
             "messages": messages
         }

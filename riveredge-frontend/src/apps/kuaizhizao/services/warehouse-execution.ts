@@ -34,7 +34,7 @@ export const warehouseApi = {
     update: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/production-returns/${id}`, { method: 'PUT', data }),
     delete: async (id: string) => apiRequest(`/apps/kuaizhizao/production-returns/${id}`, { method: 'DELETE' }),
     get: async (id: string) => apiRequest(`/apps/kuaizhizao/production-returns/${id}`, { method: 'GET' }),
-    confirm: async (id: string) => apiRequest(`/apps/kuaizhizao/production-returns/${id}/confirm`, { method: 'POST' }),
+    confirm: async (id: string, data?: any) => apiRequest(`/apps/kuaizhizao/production-returns/${id}/confirm`, { method: 'POST', data }),
     withdraw: async (id: string) =>
       apiRequest(`/apps/kuaizhizao/production-returns/${id}/withdraw`, { method: 'POST' }),
     print: async (id: string, templateUuid?: string) =>
@@ -58,7 +58,7 @@ export const warehouseApi = {
     update: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/other-inbounds/${id}`, { method: 'PUT', data }),
     delete: async (id: string) => apiRequest(`/apps/kuaizhizao/other-inbounds/${id}`, { method: 'DELETE' }),
     get: async (id: string) => apiRequest(`/apps/kuaizhizao/other-inbounds/${id}`, { method: 'GET' }),
-    confirm: async (id: string) => apiRequest(`/apps/kuaizhizao/other-inbounds/${id}/confirm`, { method: 'POST' }),
+    confirm: async (id: string, data?: any) => apiRequest(`/apps/kuaizhizao/other-inbounds/${id}/confirm`, { method: 'POST', data }),
     print: async (id: string, templateUuid?: string) =>
       apiRequest(`/apps/kuaizhizao/other-inbounds/${id}/print`, {
         method: 'GET',
@@ -117,7 +117,7 @@ export const warehouseApi = {
     delete: async (id: string) =>
       apiRequest(`/apps/kuaizhizao/finished-goods-receipts/${id}/delete`, { method: 'POST' }),
     get: async (id: string) => apiRequest(`/apps/kuaizhizao/finished-goods-receipts/${id}`, { method: 'GET' }),
-    confirm: async (id: string) => apiRequest(`/apps/kuaizhizao/finished-goods-receipts/${id}/confirm`, { method: 'POST' }),
+    confirm: async (id: string, data?: any) => apiRequest(`/apps/kuaizhizao/finished-goods-receipts/${id}/confirm`, { method: 'POST', data }),
     withdraw: async (id: string) =>
       apiRequest(`/apps/kuaizhizao/finished-goods-receipts/${id}/withdraw`, { method: 'POST' }),
     /** 批量入库：从多个工单下推创建成品入库单 */
@@ -164,7 +164,7 @@ export const warehouseApi = {
     create: async (data: any) => apiRequest('/apps/kuaizhizao/sales-returns', { method: 'POST', data }),
     delete: async (id: string) => apiRequest(`/apps/kuaizhizao/sales-returns/${id}`, { method: 'DELETE' }),
     get: async (id: string) => apiRequest(`/apps/kuaizhizao/sales-returns/${id}`, { method: 'GET' }),
-    confirm: async (id: string) => apiRequest(`/apps/kuaizhizao/sales-returns/${id}/confirm`, { method: 'POST' }),
+    confirm: async (id: string, data?: any) => apiRequest(`/apps/kuaizhizao/sales-returns/${id}/confirm`, { method: 'POST', data }),
     withdraw: async (id: string) => apiRequest(`/apps/kuaizhizao/sales-returns/${id}/withdraw`, { method: 'POST' }),
     pullFromSalesOrder: async (data: {
       sales_order_id: number;
@@ -236,7 +236,7 @@ export const warehouseApi = {
     delete: async (id: string) =>
       apiRequest(`/apps/kuaizhizao/purchase-receipts/${id}/delete`, { method: 'POST' }),
     get: async (id: string) => apiRequest(`/apps/kuaizhizao/purchase-receipts/${id}`, { method: 'GET' }),
-    confirm: async (id: string) => apiRequest(`/apps/kuaizhizao/purchase-receipts/${id}/confirm`, { method: 'POST' }),
+    confirm: async (id: string, data?: any) => apiRequest(`/apps/kuaizhizao/purchase-receipts/${id}/confirm`, { method: 'POST', data }),
     withdraw: async (id: string) => apiRequest(`/apps/kuaizhizao/purchase-receipts/${id}/withdraw`, { method: 'POST' }),
     import: async (data: any[][]) =>
       apiRequest('/apps/kuaizhizao/purchase-receipts/import', { method: 'POST', data: { data } }),

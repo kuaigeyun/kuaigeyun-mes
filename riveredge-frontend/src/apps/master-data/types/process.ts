@@ -86,6 +86,12 @@ export interface Operation {
   default_operator_uuids?: string[];
   defaultOperatorNames?: string[];
   default_operator_names?: string[];
+  defaultTeamIds?: number[];
+  defaultWorkshopIds?: number[];
+  defaultWorkCenterIds?: number[];
+  defaultStationIds?: number[];
+  default_station_ids?: number[];
+  defaultEquipmentIds?: number[];
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;
@@ -105,6 +111,11 @@ export interface OperationCreate {
   defaultInspectionPlanId?: number | null;
   defectTypeUuids?: string[];
   defaultOperatorUuids?: string[];
+  defaultTeamIds?: number[];
+  defaultWorkshopIds?: number[];
+  defaultWorkCenterIds?: number[];
+  defaultStationIds?: number[];
+  defaultEquipmentIds?: number[];
 }
 
 export interface OperationUpdate {
@@ -121,6 +132,11 @@ export interface OperationUpdate {
   defaultInspectionPlanId?: number | null;
   defectTypeUuids?: string[];
   defaultOperatorUuids?: string[];
+  defaultTeamIds?: number[];
+  defaultWorkshopIds?: number[];
+  defaultWorkCenterIds?: number[];
+  defaultStationIds?: number[];
+  defaultEquipmentIds?: number[];
 }
 
 export interface OperationListParams {

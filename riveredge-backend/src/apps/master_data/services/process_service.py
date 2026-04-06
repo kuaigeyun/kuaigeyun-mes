@@ -157,6 +157,16 @@ async def _operation_to_response_data(op: Operation) -> Dict[str, Any]:
                         default_operator_names.append(u.full_name or u.username)
         except Exception:
             pass
+    plan_id = getattr(op, "default_inspection_plan_id", None)
+    # 质检模式字段后加：旧数据库中可能为 NULL/none，但有绑定不良品或默认方案，响应中按关联推断以便前后端一致
+    _im_raw = getattr(op, "inspection_mode", None)
+    _im_s = (str(_im_raw).strip().lower() if _im_raw is not None and str(_im_raw).strip() else "") or "none"
+    if _im_s not in ("none", "simple", "plan"):
+        _im_s = "none"
+    if _im_s == "none" and plan_id:
+        _im_s = "plan"
+    elif _im_s == "none" and defect_types:
+        _im_s = "simple"
     result = {
         "id": op.id,
         "uuid": str(op.uuid),
@@ -177,11 +187,15 @@ async def _operation_to_response_data(op: Operation) -> Dict[str, Any]:
         "default_operator_ids": default_operator_ids,
         "default_operator_uuids": default_operator_uuids,
         "default_operator_names": default_operator_names,
-        "inspection_mode": getattr(op, "inspection_mode", None) or "none",
-        "default_inspection_plan_id": getattr(op, "default_inspection_plan_id", None),
+        "default_team_ids": getattr(op, "default_team_ids", []) or [],
+        "default_workshop_ids": getattr(op, "default_workshop_ids", []) or [],
+        "default_work_center_ids": getattr(op, "default_work_center_ids", []) or [],
+        "default_station_ids": getattr(op, "default_station_ids", []) or [],
+        "default_equipment_ids": getattr(op, "default_equipment_ids", []) or [],
+        "inspection_mode": _im_s,
+        "default_inspection_plan_id": plan_id,
         "default_inspection_plan_name": None,
     }
-    plan_id = getattr(op, "default_inspection_plan_id", None)
     if plan_id:
         try:
             from apps.kuaizhizao.models.inspection_plan import InspectionPlan
@@ -601,6 +615,11 @@ class ProcessService:
             existing_deleted.is_active = getattr(data, "is_active", None) or getattr(data, "isActive", None) or True
             existing_deleted.inspection_mode = getattr(data, "inspection_mode", None) or getattr(data, "inspectionMode", None) or "none"
             existing_deleted.default_inspection_plan_id = getattr(data, "default_inspection_plan_id", None) or getattr(data, "defaultInspectionPlanId", None)
+            existing_deleted.default_team_ids = getattr(data, "default_team_ids", None) or getattr(data, "defaultTeamIds", None)
+            existing_deleted.default_workshop_ids = getattr(data, "default_workshop_ids", None) or getattr(data, "defaultWorkshopIds", None)
+            existing_deleted.default_work_center_ids = getattr(data, "default_work_center_ids", None) or getattr(data, "defaultWorkCenterIds", None)
+            existing_deleted.default_station_ids = getattr(data, "default_station_ids", None) or getattr(data, "defaultStationIds", None)
+            existing_deleted.default_equipment_ids = getattr(data, "default_equipment_ids", None) or getattr(data, "defaultEquipmentIds", None)
             _apply_default_operator_ids(existing_deleted, oids)
             await _sync_operation_defect_types(existing_deleted.id, getattr(data, "defect_type_uuids", None) or [], tenant_id)
             await existing_deleted.save()
@@ -662,6 +681,10 @@ class ProcessService:
                     retry.is_active = getattr(data, "is_active", None) or getattr(data, "isActive", None) or True
                     retry.inspection_mode = getattr(data, "inspection_mode", None) or getattr(data, "inspectionMode", None) or "none"
                     retry.default_inspection_plan_id = getattr(data, "default_inspection_plan_id", None) or getattr(data, "defaultInspectionPlanId", None)
+                    retry.default_team_ids = getattr(data, "default_team_ids", None) or getattr(data, "defaultTeamIds", None)
+                    retry.default_workshop_ids = getattr(data, "default_workshop_ids", None) or getattr(data, "defaultWorkshopIds", None)
+                    retry.default_work_center_ids = getattr(data, "default_work_center_ids", None) or getattr(data, "defaultWorkCenterIds", None)
+                    retry.default_equipment_ids = getattr(data, "default_equipment_ids", None) or getattr(data, "defaultEquipmentIds", None)
                     _apply_default_operator_ids(retry, oids)
                     await _sync_operation_defect_types(retry.id, getattr(data, "defect_type_uuids", None) or [], tenant_id)
                     await retry.save()
