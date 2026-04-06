@@ -41,6 +41,8 @@ riveredge-backend/backups/
 # ===== IDE / Agent 本地产物 =====
 .agent/
 .cursor/
+# CI：工作流在团队仓库中不跟踪（本地可自建 .github/workflows）
+.github/workflows/
 # .vscode/ 已排除，推送到远程仓库供团队共享配置
 nul
 *.swp
