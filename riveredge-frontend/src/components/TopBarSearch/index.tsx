@@ -228,10 +228,10 @@ const TopBarSearch: React.FC<TopBarSearchProps> = ({
             onOpenChange={(visible) => {
                 if (!visible) setOpen(false);
             }}
-            styles={{ root: { width: triggerWidth } }}
+            styles={{ root: { width: '100%', minWidth: 0 } }}
             destroyOnHidden
         >
-            <div ref={triggerRef} style={{ width: triggerWidth }}>
+            <div ref={triggerRef} style={{ width: '100%', minWidth: 0 }}>
                 <Input
                     prefix={
                         <SearchOutlined

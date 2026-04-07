@@ -45,6 +45,7 @@
 import React, { ReactNode } from 'react';
 import { Input, Space, Spin, Tree, theme } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import type { DataNode, TreeProps } from 'antd/es/tree';
 import { TWO_COLUMN_LAYOUT } from './constants';
 
@@ -193,6 +194,7 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
   className,
   style,
 }) => {
+  const { t } = useTranslation();
   const { token } = useToken();
 
   const {
@@ -274,7 +276,7 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
             }}
           >
             <Input
-              placeholder={search.placeholder || '搜索'}
+              placeholder={search.placeholder || t('components.layoutTemplates.twoColumn.searchPlaceholder')}
               prefix={<SearchOutlined />}
               value={search.value}
               onChange={(e) => search.onChange?.(e.target.value)}

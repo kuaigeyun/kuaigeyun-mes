@@ -2,7 +2,7 @@
  * 按页面路径获取指标卡（列表页指标「三层模式」之一）
  *
  * **标准做法（与快制造销售订单页一致）：**
- * 1. **数据集层**：`usePageMetrics()` → `GET /core/datasets/metrics/by-page`，租户在「页面指标」中配置时
+ * 1. **数据集层**：`usePageMetrics()` → `GET /core/datasets/metrics/by-page`（默认在首屏绘制后再请求，见 `deferAfterPaint`），租户在「页面指标」中配置时
  *    `hasConfig` 为 true，`stat_cards` 来自配置。
  * 2. **领域统计层**：`useQuery` + `getXxxStatistics` → 后端 `GET .../statistics` 聚合（趋势、金额等）。
  * 3. **合并**：`hasConfig` 为 true 时，用业务 `statistics` 按 `card.key` 补 `backgroundChart` / `description` / `onClick`；
@@ -16,6 +16,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useLocation } from 'react-router-dom';
 import { getPageMetrics, type StatCardItem } from '../services/dataset';
 import type { StatCard } from '../components/layout-templates/ListPageTemplate';
+import { useDeferAfterPaint } from './useDeferAfterPaint';
 
 function mapToStatCard(item: StatCardItem): StatCard {
   return {
@@ -35,21 +36,33 @@ export interface UsePageMetricsResult {
   hasConfig: boolean;
 }
 
+export interface UsePageMetricsOptions {
+  /**
+   * 为 true（默认）时，首屏先完成主内容绘制后再请求页面指标，避免与 UniTable 列表请求抢带宽。
+   * 纯指标页、无表格时可传 false 立即拉取。
+   */
+  deferAfterPaint?: boolean;
+}
+
 /**
  * 按当前页面路径获取指标卡
  *
  * @param pagePath - 可选，默认使用 location.pathname
+ * @param options - deferAfterPaint 默认 true（列表页推荐）
  * @returns 有配置时返回 { statCards, loading, error, hasConfig }，无配置时 statCards 为空、hasConfig 为 false
  */
-export function usePageMetrics(pagePath?: string): UsePageMetricsResult {
+export function usePageMetrics(pagePath?: string, options?: UsePageMetricsOptions): UsePageMetricsResult {
   const location = useLocation();
   const path = pagePath ?? location.pathname;
+  const deferAfterPaint = options?.deferAfterPaint !== false;
+  const paintReady = useDeferAfterPaint(deferAfterPaint);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['pageMetrics', path],
     queryFn: () => getPageMetrics(path),
     /** 与全局 5min 策略一致：返回列表页时多用缓存，减少首屏二次等待 */
     staleTime: 5 * 60 * 1000,
+    enabled: paintReady,
   });
 
   const hasConfig = !!(data?.dataset_code || (data?.stat_cards && data.stat_cards.length > 0));
@@ -57,7 +70,7 @@ export function usePageMetrics(pagePath?: string): UsePageMetricsResult {
 
   return {
     statCards,
-    loading: isLoading,
+    loading: deferAfterPaint ? !paintReady || isLoading : isLoading,
     error: error as Error | null,
     hasConfig,
   };

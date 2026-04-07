@@ -11,6 +11,7 @@
 import React, { ReactNode } from 'react';
 import { Card, Checkbox, Space, Button, Divider, theme, Typography } from 'antd';
 import { ProForm, ProFormCheckbox } from '@ant-design/pro-components';
+import { useTranslation } from 'react-i18next';
 import { PAGE_SPACING, ANT_DESIGN_TOKENS } from './constants';
 
 const { useToken } = theme;
@@ -97,6 +98,7 @@ export const ParameterConfigTemplate: React.FC<ParameterConfigTemplateProps> = (
   className,
   style,
 }) => {
+  const { t } = useTranslation();
   const { token } = useToken();
 
   return (
@@ -127,13 +129,13 @@ export const ParameterConfigTemplate: React.FC<ParameterConfigTemplateProps> = (
                   <Button onClick={() => {
                     // 模板选择逻辑
                   }}>
-                    加载模板
+                    {t('components.layoutTemplates.parameter.loadTemplate')}
                   </Button>
                 )}
               </Space>
               <Space>
                 <Button onClick={() => props.form?.resetFields()}>
-                  重置
+                  {t('components.layoutTemplates.parameter.reset')}
                 </Button>
                 {onSave && (
                   <Button
@@ -144,22 +146,21 @@ export const ParameterConfigTemplate: React.FC<ParameterConfigTemplateProps> = (
                       });
                     }}
                   >
-                    保存配置
+                    {t('components.layoutTemplates.parameter.saveConfig')}
                   </Button>
                 )}
                 {onSaveAsTemplate && (
                   <Button
                     onClick={() => {
                       props.form?.validateFields().then((values) => {
-                        // 弹出输入框输入模板名称
-                        const templateName = prompt('请输入模板名称');
+                        const templateName = prompt(t('components.layoutTemplates.parameter.promptTemplateName'));
                         if (templateName) {
                           onSaveAsTemplate(templateName, values);
                         }
                       });
                     }}
                   >
-                    保存为模板
+                    {t('components.layoutTemplates.parameter.saveAsTemplate')}
                   </Button>
                 )}
               </Space>

@@ -8,6 +8,7 @@
 import React, { ReactNode, useRef } from 'react';
 import { Modal, Button, App, Space } from 'antd';
 import { ProForm, ProFormInstance } from '@ant-design/pro-components';
+import { useTranslation } from 'react-i18next';
 import { MODAL_CONFIG, FORM_LAYOUT } from './constants';
 import { useSubmitShortcut } from '../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../utils/globalSubmitShortcut';
@@ -54,6 +55,7 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
   extraFooter,
   afterOpenChange,
 }) => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const internalFormRef = useRef<ProFormInstance>();
   const formRef = externalFormRef || internalFormRef;
@@ -72,9 +74,11 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
       modalRender={modalRender}
       footer={
         <Space wrap>
-          <Button onClick={onClose}>取消</Button>
+          <Button onClick={onClose}>{t('common.cancel')}</Button>
           <Button type="primary" loading={loading} onClick={() => formRef.current?.submit()}>
-            {(isEdit ? '更新' : '创建') + SUBMIT_SHORTCUT_HINT}
+            {(isEdit
+              ? t('components.layoutTemplates.formModal.submitUpdate')
+              : t('components.layoutTemplates.formModal.submitCreate')) + SUBMIT_SHORTCUT_HINT}
           </Button>
           {extraFooter}
         </Space>
@@ -89,7 +93,7 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
           onFinishFailed={({ errorFields }) => {
             const first = errorFields?.[0];
             const text = first?.errors?.filter(Boolean)[0];
-            messageApi.error(text || '请检查表单填写是否完整');
+            messageApi.error(text || t('components.layoutTemplates.formModal.checkFormHint'));
           }}
           scrollToFirstError
           onValuesChange={onValuesChange}

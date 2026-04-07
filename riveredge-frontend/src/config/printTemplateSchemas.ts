@@ -254,6 +254,20 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
       { key: 'created_at', label: '创建时间', type: 'date' },
     ],
   },
+  semi_finished_goods_receipt: {
+    type: 'semi_finished_goods_receipt',
+    name: '半成品入库单',
+    fields: [
+      { key: 'code', label: '入库单号', type: 'string' },
+      { key: 'work_order_code', label: '工单编号', type: 'string' },
+      { key: 'warehouse_name', label: '仓库名称', type: 'string' },
+      { key: 'total_quantity', label: '总数量', type: 'number' },
+      { key: 'status', label: '状态', type: 'string' },
+      { key: 'receiver_name', label: '收货人', type: 'string' },
+      { key: 'receipt_time', label: '入库时间', type: 'date' },
+      { key: 'created_at', label: '创建时间', type: 'date' },
+    ],
+  },
   sales_delivery: {
     type: 'sales_delivery',
     name: '销售出库单',
@@ -410,6 +424,7 @@ export const DOCUMENT_TYPE_TO_CODE: Record<string, string> = {
   material_borrow: 'MATERIAL_BORROW_PRINT',
   material_return: 'MATERIAL_RETURN_PRINT',
   finished_goods_receipt: 'FINISHED_GOODS_RECEIPT_PRINT',
+  semi_finished_goods_receipt: 'FINISHED_GOODS_RECEIPT_PRINT',
   sales_delivery: 'SALES_DELIVERY_PRINT',
   purchase_order: 'PURCHASE_ORDER_PRINT',
   purchase_receipt: 'PURCHASE_RECEIPT_PRINT',

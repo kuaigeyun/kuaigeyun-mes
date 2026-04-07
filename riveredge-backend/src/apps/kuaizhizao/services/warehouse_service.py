@@ -1754,12 +1754,32 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
         from apps.kuaizhizao.models.reporting_record import ReportingRecord
         from apps.kuaizhizao.models.finished_goods_receipt_item import FinishedGoodsReceiptItem
         from decimal import Decimal
-        
+        from apps.kuaizhizao.services.work_order_inbound_bom_role import (
+            is_semi_finished_product_by_bom_role,
+        )
+
+        work_order = await WorkOrder.get_or_none(tenant_id=tenant_id, id=work_order_id)
+        if not work_order:
+            raise NotFoundError(f"工单不存在: {work_order_id}")
+        if await is_semi_finished_product_by_bom_role(tenant_id, work_order.product_id):
+            from apps.kuaizhizao.services.semi_finished_goods_receipt_service import (
+                SemiFinishedGoodsReceiptService,
+            )
+
+            semi = await SemiFinishedGoodsReceiptService().quick_receipt_from_work_order(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                created_by=created_by,
+                warehouse_id=warehouse_id,
+                warehouse_name=warehouse_name,
+                receipt_quantity=receipt_quantity,
+            )
+            payload = semi.model_dump()
+            payload["inbound_doc_kind"] = "semi_finished_goods"
+            return FinishedGoodsReceiptResponse.model_validate(payload)
+
         async with in_transaction():
-            # 1. 获取工单信息
-            work_order = await WorkOrder.get_or_none(tenant_id=tenant_id, id=work_order_id)
-            if not work_order:
-                raise NotFoundError(f"工单不存在: {work_order_id}")
+            # 1. 获取工单信息（成品入库路径）
             
             # 检查工单状态（库内工单状态为英文枚举，兼容历史中文）
             if work_order.status not in ("in_progress", "completed", "进行中", "已完成"):

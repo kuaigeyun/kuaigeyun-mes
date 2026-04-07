@@ -31,6 +31,7 @@ from apps.kuaizhizao.services.warehouse_service import (
     MaterialBorrowService,
     MaterialReturnService,
 )
+from apps.kuaizhizao.services.semi_finished_goods_receipt_service import SemiFinishedGoodsReceiptService
 from apps.kuaizhizao.services.inventory_analysis_service import InventoryAnalysisService
 from apps.kuaizhizao.services.inventory_alert_service import InventoryAlertRuleService, InventoryAlertService
 from apps.kuaizhizao.services.packing_binding_service import PackingBindingService
@@ -66,6 +67,9 @@ from apps.kuaizhizao.schemas.warehouse import (
     FinishedGoodsReceiptCreate,
     FinishedGoodsReceiptResponse,
     FinishedGoodsReceiptWithItemsResponse,
+    SemiFinishedGoodsReceiptCreate,
+    SemiFinishedGoodsReceiptResponse,
+    SemiFinishedGoodsReceiptWithItemsResponse,
     SalesDeliveryCreate,
     SalesDeliveryResponse,
     SalesDeliveryWithItemsResponse,
@@ -1180,6 +1184,125 @@ async def delete_finished_goods_receipt_post(
 ):
     """与 DELETE 同逻辑，供前端统一使用 POST，避免 405 Method Not Allowed。"""
     await FinishedGoodsReceiptService().delete_finished_goods_receipt(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id,
+    )
+
+
+# ============ 半成品入库管理 API（结构同成品入库，独立单据类型） ============
+
+@router.post("/semi-finished-goods-receipts", response_model=SemiFinishedGoodsReceiptResponse, summary="创建半成品入库单")
+async def create_semi_finished_goods_receipt(
+    receipt: SemiFinishedGoodsReceiptCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SemiFinishedGoodsReceiptResponse:
+    items = getattr(receipt, "items", None)
+    return await SemiFinishedGoodsReceiptService().create_semi_finished_goods_receipt(
+        tenant_id=tenant_id,
+        receipt_data=receipt,
+        created_by=current_user.id,
+        items=items,
+    )
+
+
+@router.get("/semi-finished-goods-receipts", response_model=List[SemiFinishedGoodsReceiptResponse], summary="获取半成品入库单列表")
+async def list_semi_finished_goods_receipts(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    status: Optional[str] = Query(None, description="入库状态"),
+    work_order_id: Optional[int] = Query(None, description="工单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[SemiFinishedGoodsReceiptResponse]:
+    return await SemiFinishedGoodsReceiptService().list_semi_finished_goods_receipts(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        status=status,
+        work_order_id=work_order_id,
+    )
+
+
+@router.get(
+    "/semi-finished-goods-receipts/{receipt_id}",
+    response_model=SemiFinishedGoodsReceiptWithItemsResponse,
+    summary="获取半成品入库单详情",
+)
+async def get_semi_finished_goods_receipt(
+    receipt_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SemiFinishedGoodsReceiptWithItemsResponse:
+    return await SemiFinishedGoodsReceiptService().get_semi_finished_goods_receipt_by_id(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id,
+    )
+
+
+@router.post(
+    "/semi-finished-goods-receipts/{receipt_id}/confirm",
+    response_model=SemiFinishedGoodsReceiptWithItemsResponse,
+    summary="确认半成品入库",
+)
+async def confirm_semi_finished_goods_receipt(
+    receipt_id: int,
+    confirmation_data: Optional[InboundConfirmationRequest] = Body(None),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SemiFinishedGoodsReceiptWithItemsResponse:
+    return await SemiFinishedGoodsReceiptService().confirm_receipt(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id,
+        confirmed_by=current_user.id,
+        confirmation_data=confirmation_data,
+    )
+
+
+@router.post(
+    "/semi-finished-goods-receipts/{receipt_id}/withdraw",
+    response_model=SemiFinishedGoodsReceiptWithItemsResponse,
+    summary="撤回半成品入库（已入库→待入库，冲减库存）",
+)
+async def withdraw_semi_finished_goods_receipt(
+    receipt_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SemiFinishedGoodsReceiptWithItemsResponse:
+    return await SemiFinishedGoodsReceiptService().withdraw_receipt_confirmation(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id,
+        updated_by=current_user.id,
+    )
+
+
+@router.delete(
+    "/semi-finished-goods-receipts/{receipt_id}",
+    status_code=http_status.HTTP_204_NO_CONTENT,
+    summary="删除半成品入库单",
+)
+async def delete_semi_finished_goods_receipt(
+    receipt_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    await SemiFinishedGoodsReceiptService().delete_semi_finished_goods_receipt(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id,
+    )
+
+
+@router.post(
+    "/semi-finished-goods-receipts/{receipt_id}/delete",
+    status_code=http_status.HTTP_204_NO_CONTENT,
+    summary="删除半成品入库单（POST）",
+)
+async def delete_semi_finished_goods_receipt_post(
+    receipt_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    await SemiFinishedGoodsReceiptService().delete_semi_finished_goods_receipt(
         tenant_id=tenant_id,
         receipt_id=receipt_id,
     )

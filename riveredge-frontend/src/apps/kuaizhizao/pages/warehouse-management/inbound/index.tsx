@@ -52,7 +52,7 @@ interface InboundOrder {
   tenant_id?: number;
   receipt_code?: string;
   return_code?: string;
-  receipt_type?: 'purchase' | 'finished_goods' | 'production_return';
+  receipt_type?: 'purchase' | 'finished_goods' | 'semi_finished_goods' | 'production_return';
   status?: string;
   receipt_date?: string;
   return_time?: string;
@@ -246,9 +246,14 @@ const INBOUND_DETAIL_ITEMS_MIN_WIDTH = 1100;
 
 function inboundDocumentTrackingType(
   order: InboundOrder
-): 'purchase_receipt' | 'finished_goods_receipt' | 'production_return' {
+):
+  | 'purchase_receipt'
+  | 'finished_goods_receipt'
+  | 'semi_finished_goods_receipt'
+  | 'production_return' {
   if (order.receipt_type === 'purchase') return 'purchase_receipt';
   if (order.receipt_type === 'finished_goods') return 'finished_goods_receipt';
+  if (order.receipt_type === 'semi_finished_goods') return 'semi_finished_goods_receipt';
   return 'production_return';
 }
 
@@ -624,7 +629,11 @@ const InboundPage: React.FC = () => {
           warehouse_name: wh?.name,
         });
         const list = Array.isArray(result) ? result : (result as any)?.data ?? (result as any)?.items ?? [];
-        messageApi.success(`批量成品入库成功，共创建 ${list.length} 张成品入库单`);
+        const semiN = list.filter((r: any) => r?.inbound_doc_kind === 'semi_finished_goods').length;
+        const fgN = list.length - semiN;
+        messageApi.success(
+          `批量生产入库成功，共 ${list.length} 张（成品 ${fgN}、半成品 ${semiN}，按 BOM 子件角色自动分流）`
+        );
       }
       setBatchModalVisible(false);
       batchForm.resetFields();
@@ -648,6 +657,8 @@ const InboundPage: React.FC = () => {
         detailData = await warehouseApi.purchaseReceipt.get(record.id!.toString());
       } else if (record.receipt_type === 'finished_goods') {
         detailData = await warehouseApi.finishedGoodsReceipt.get(record.id!.toString());
+      } else if (record.receipt_type === 'semi_finished_goods') {
+        detailData = await warehouseApi.semiFinishedGoodsReceipt.get(record.id!.toString());
       } else if (record.receipt_type === 'production_return') {
         detailData = await warehouseApi.productionReturn.get(record.id!.toString());
       }
@@ -761,6 +772,8 @@ const InboundPage: React.FC = () => {
       const fetchDetail = async () => {
         const idStr = String(record.id);
         if (record.receipt_type === 'finished_goods') return warehouseApi.finishedGoodsReceipt.get(idStr);
+        if (record.receipt_type === 'semi_finished_goods')
+          return warehouseApi.semiFinishedGoodsReceipt.get(idStr);
         if (record.receipt_type === 'production_return') return warehouseApi.productionReturn.get(idStr);
         return warehouseApi.purchaseReceipt.get(idStr);
       };
@@ -1009,6 +1022,12 @@ const InboundPage: React.FC = () => {
            warehouse_name: headerWhName,
            items: mappedItems,
         });
+      } else if (order.receipt_type === 'semi_finished_goods') {
+        await warehouseApi.semiFinishedGoodsReceipt.confirm(String(order.id), {
+          warehouse_id: headerWh,
+          warehouse_name: headerWhName,
+          items: mappedItems,
+        });
       } else if (order.receipt_type === 'production_return') {
         await warehouseApi.productionReturn.confirm(String(order.id), {
            warehouse_id: headerWh,
@@ -1025,7 +1044,10 @@ const InboundPage: React.FC = () => {
         try {
           let detailData: any;
           if (order.receipt_type === 'purchase') detailData = await warehouseApi.purchaseReceipt.get(String(order.id));
-          else if (order.receipt_type === 'finished_goods') detailData = await warehouseApi.finishedGoodsReceipt.get(String(order.id));
+          else if (order.receipt_type === 'finished_goods')
+            detailData = await warehouseApi.finishedGoodsReceipt.get(String(order.id));
+          else if (order.receipt_type === 'semi_finished_goods')
+            detailData = await warehouseApi.semiFinishedGoodsReceipt.get(String(order.id));
           else detailData = await warehouseApi.productionReturn.get(String(order.id));
 
           setCurrentOrder({ ...detailData, receipt_type: order.receipt_type });
@@ -1090,6 +1112,8 @@ const InboundPage: React.FC = () => {
         try {
           if (record.receipt_type === 'finished_goods') {
             await warehouseApi.finishedGoodsReceipt.withdraw(String(record.id));
+          } else if (record.receipt_type === 'semi_finished_goods') {
+            await warehouseApi.semiFinishedGoodsReceipt.withdraw(String(record.id));
           } else if (record.receipt_type === 'purchase') {
             await warehouseApi.purchaseReceipt.withdraw(String(record.id));
           } else {
@@ -1104,6 +1128,8 @@ const InboundPage: React.FC = () => {
               let detailData: any;
               if (record.receipt_type === 'finished_goods') {
                 detailData = await warehouseApi.finishedGoodsReceipt.get(String(record.id));
+              } else if (record.receipt_type === 'semi_finished_goods') {
+                detailData = await warehouseApi.semiFinishedGoodsReceipt.get(String(record.id));
               } else if (record.receipt_type === 'purchase') {
                 detailData = await warehouseApi.purchaseReceipt.get(String(record.id));
               } else {
@@ -1133,7 +1159,9 @@ const InboundPage: React.FC = () => {
         ? '采购入库单'
         : record.receipt_type === 'finished_goods'
           ? '成品入库单'
-          : '生产退料单';
+          : record.receipt_type === 'semi_finished_goods'
+            ? '半成品入库单'
+            : '生产退料单';
     Modal.confirm({
       title: `删除${typeLabel}`,
       content: `确定要删除「${code || '-'}」吗？删除后不可恢复（未确认入库的单据不涉及库存冲减）。`,
@@ -1144,6 +1172,8 @@ const InboundPage: React.FC = () => {
             await warehouseApi.purchaseReceipt.delete(String(record.id));
           } else if (record.receipt_type === 'finished_goods') {
             await warehouseApi.finishedGoodsReceipt.delete(String(record.id));
+          } else if (record.receipt_type === 'semi_finished_goods') {
+            await warehouseApi.semiFinishedGoodsReceipt.delete(String(record.id));
           } else if (record.receipt_type === 'production_return') {
             await warehouseApi.productionReturn.delete(String(record.id));
           } else {
@@ -1191,6 +1221,7 @@ const InboundPage: React.FC = () => {
       valueEnum: {
         purchase: { text: '采购入库', status: 'processing' },
         finished_goods: { text: '成品入库', status: 'success' },
+        semi_finished_goods: { text: '半成品入库', status: 'default' },
         production_return: { text: '生产退料', status: 'warning' },
       },
     },
@@ -1309,7 +1340,8 @@ const InboundPage: React.FC = () => {
           if (
             record.receipt_type === 'production_return' ||
             record.receipt_type === 'purchase' ||
-            record.receipt_type === 'finished_goods'
+            record.receipt_type === 'finished_goods' ||
+            record.receipt_type === 'semi_finished_goods'
           ) {
             nodes.push(
               <Button
@@ -1413,10 +1445,11 @@ const InboundPage: React.FC = () => {
             const limit = params.pageSize || 20;
             const listParams = { skip, limit, ...params, keyword: (params as any).keyword };
 
-            // 并行获取采购入库单、成品入库单、生产退料单
-            const [purchaseRes, finishedRes, returnRes] = await Promise.all([
+            // 并行获取采购入库单、成品/半成品入库单、生产退料单
+            const [purchaseRes, finishedRes, semiRes, returnRes] = await Promise.all([
               warehouseApi.purchaseReceipt.list(listParams),
               warehouseApi.finishedGoodsReceipt.list(listParams),
+              warehouseApi.semiFinishedGoodsReceipt.list(listParams),
               warehouseApi.productionReturn.list(listParams),
             ]);
 
@@ -1430,18 +1463,23 @@ const InboundPage: React.FC = () => {
               ...item,
               receipt_type: 'finished_goods' as const,
             }));
+            const semiData = toList(semiRes).map((item: any) => ({
+              ...item,
+              receipt_type: 'semi_finished_goods' as const,
+            }));
             const returnData = toList(returnRes).map((item: any) => ({
               ...item,
               receipt_type: 'production_return' as const,
               receipt_code: item.return_code,
             }));
 
-            const combinedData = [...purchaseData, ...finishedData, ...returnData];
+            const combinedData = [...purchaseData, ...finishedData, ...semiData, ...returnData];
             combinedData.sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime());
 
             const total =
               (typeof purchaseRes?.total === 'number' ? purchaseRes.total : purchaseData.length) +
               (typeof finishedRes?.total === 'number' ? finishedRes.total : finishedData.length) +
+              (typeof semiRes?.total === 'number' ? semiRes.total : semiData.length) +
               (typeof returnRes?.total === 'number' ? returnRes.total : returnData.length);
 
             return {
@@ -1468,6 +1506,8 @@ const InboundPage: React.FC = () => {
                     await warehouseApi.purchaseReceipt.delete(id);
                   } else if (type === 'finished_goods') {
                     await warehouseApi.finishedGoodsReceipt.delete(id);
+                  } else if (type === 'semi_finished_goods') {
+                    await warehouseApi.semiFinishedGoodsReceipt.delete(id);
                   } else if (type === 'production_return') {
                     await warehouseApi.productionReturn.delete(id);
                   }
@@ -1811,7 +1851,7 @@ const InboundPage: React.FC = () => {
         okText="确认入库"
       >
         <p style={{ marginBottom: 16, color: '#666' }}>
-          根据上游单据批量创建入库单。成品入库：从工单下推；采购入库：从采购订单下推。
+          根据上游单据批量创建入库单。生产入库：从工单下推（按 BOM 子件角色自动分为成品/半成品入库单）；采购入库：从采购订单下推。
         </p>
         <AntForm form={batchForm} layout="vertical" initialValues={{ batch_inbound_type: 'finished_goods' }}>
           <AntForm.Item
@@ -1821,7 +1861,7 @@ const InboundPage: React.FC = () => {
           >
             <ProFormSelect
               options={[
-                { label: '成品入库（从工单）', value: 'finished_goods' },
+                { label: '生产入库（从工单，成品/半成品自动分流）', value: 'finished_goods' },
                 { label: '采购入库（从采购订单）', value: 'purchase' },
               ]}
               fieldProps={{
@@ -2108,14 +2148,18 @@ const InboundPage: React.FC = () => {
                               ? 'processing'
                               : currentOrder.receipt_type === 'finished_goods'
                                 ? 'success'
-                                : 'warning'
+                                : currentOrder.receipt_type === 'semi_finished_goods'
+                                  ? 'blue'
+                                  : 'warning'
                           }
                         >
                           {currentOrder.receipt_type === 'purchase'
                             ? '采购入库'
                             : currentOrder.receipt_type === 'finished_goods'
                               ? '成品入库'
-                              : '生产退料'}
+                              : currentOrder.receipt_type === 'semi_finished_goods'
+                                ? '半成品入库'
+                                : '生产退料'}
                         </Tag>
                       ),
                     },

@@ -1291,6 +1291,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                             except (TypeError, ValueError):
                                 cfg_selections = None
 
+                        # 与 get_work_order_kitting_analysis / 库位与叫料 一致：齐套按「不拆中间自制件子 BOM」展开，
+                        # 否则列表会把子阶物料逐行计入，多数无独立库存 → 齐套率虚低（如 5/12≈41.67%）。
                         requirements = await calculate_material_requirements_from_bom(
                             tenant_id=tenant_id,
                             material_id=wo.product_id,
@@ -1298,6 +1300,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                             only_approved=True,
                             variant_attributes=variant_attrs,
                             configurable_selections=cfg_selections,
+                            for_kitting_analysis=True,
                         )
                         wo_requirements_map[wo.id] = requirements
                         for r in requirements:
@@ -3041,13 +3044,15 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             if not picking_id_list:
                 picked_qty = Decimal("0")
             else:
-                agg_picked = await ProductionPickingItem.filter(
+                # Tortoise QuerySet 无 Django 式 .aggregate()，用 annotate + values 汇总
+                agg_rows = await ProductionPickingItem.filter(
                     tenant_id=tenant_id,
                     picking_id__in=picking_id_list,
                     material_id=req.component_id,
                     status__in=["已领料", "已确认", "picked", "confirmed"],
-                ).aggregate(total=Sum("picked_quantity"))
-                picked_qty = Decimal(str(agg_picked.get("total") or 0))
+                ).annotate(total=Sum("picked_quantity")).values("total")
+                raw_total = (agg_rows[0]["total"] if agg_rows else None) or 0
+                picked_qty = Decimal(str(raw_total))
 
             # 3.2 获取实时库位分布
             locations_data = await get_material_detailed_locations(tenant_id, req.component_id)

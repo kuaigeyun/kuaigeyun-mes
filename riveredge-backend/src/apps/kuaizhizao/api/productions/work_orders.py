@@ -381,6 +381,85 @@ async def list_work_orders(
         raise
 
 
+# 静态子路径须注册在 /work-orders/{work_order_id} 之前，否则 execution-config 会被当成整数 ID 解析（422）
+@router.get("/work-orders/execution-config", summary="获取工单执行配置（领料确认策略）")
+async def get_work_order_execution_config(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    from infra.services.business_config_service import BusinessConfigService
+    from apps.kuaizhizao.services.warehouse_service import ProductionPickingService
+
+    policy = await BusinessConfigService().get_work_order_picking_policy(tenant_id)
+    last_inbound_mode = await BusinessConfigService().get_last_operation_auto_inbound_mode(tenant_id)
+    default_production_worker_mode = await BusinessConfigService().get_reporting_default_production_worker_mode(
+        tenant_id
+    )
+    can_confirm_picking, role_codes = await ProductionPickingService().can_user_confirm_picking(
+        tenant_id=tenant_id,
+        user_id=current_user.id,
+    )
+    return {
+        **policy,
+        "last_operation_auto_inbound_mode": last_inbound_mode,
+        "default_production_worker_mode": default_production_worker_mode,
+        "current_user_role_codes": sorted(role_codes),
+        "current_user_can_confirm_picking": can_confirm_picking,
+    }
+
+
+@router.get("/work-orders/delayed", summary="查询延期工单")
+async def get_delayed_work_orders(
+    days_threshold: int = Query(0, ge=0, description="延期天数阈值（默认0，即只要超过计划结束日期就算延期）"),
+    status: Optional[str] = Query(None, description="工单状态过滤（可选）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> JSONResponse:
+    """
+    查询延期工单
+
+    根据计划结束日期和当前日期，查询所有延期的工单。
+
+    - **days_threshold**: 延期天数阈值（默认0）
+    - **status**: 工单状态过滤（可选）
+    """
+    delayed_orders = await WorkOrderService().check_delayed_work_orders(
+        tenant_id=tenant_id,
+        days_threshold=days_threshold,
+        status=status
+    )
+    return JSONResponse(
+        content={
+            "total": len(delayed_orders),
+            "delayed_orders": delayed_orders
+        },
+        status_code=http_status.HTTP_200_OK
+    )
+
+
+@router.get("/work-orders/delay-analysis", summary="延期原因分析")
+async def analyze_delay_reasons(
+    work_order_id: Optional[int] = Query(None, description="工单ID（可选，如果为None则分析所有延期工单）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> JSONResponse:
+    """
+    分析延期原因
+
+    分析工单延期的原因，包括缺料、产能不足、质量问题等。
+
+    - **work_order_id**: 工单ID（可选，如果为None则分析所有延期工单）
+    """
+    result = await WorkOrderService().analyze_delay_reasons(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id
+    )
+    return JSONResponse(
+        content=result,
+        status_code=http_status.HTTP_200_OK
+    )
+
+
 @router.get("/work-orders/{work_order_id}", response_model=WorkOrderResponse, summary="获取工单详情")
 async def get_work_order(
     work_order_id: int,
@@ -515,32 +594,6 @@ async def start_work_order_operation(
         operation_id=operation_id,
         started_by=current_user.id
     )
-
-
-@router.get("/work-orders/execution-config", summary="获取工单执行配置（领料确认策略）")
-async def get_work_order_execution_config(
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    from infra.services.business_config_service import BusinessConfigService
-    from apps.kuaizhizao.services.warehouse_service import ProductionPickingService
-
-    policy = await BusinessConfigService().get_work_order_picking_policy(tenant_id)
-    last_inbound_mode = await BusinessConfigService().get_last_operation_auto_inbound_mode(tenant_id)
-    default_production_worker_mode = await BusinessConfigService().get_reporting_default_production_worker_mode(
-        tenant_id
-    )
-    can_confirm_picking, role_codes = await ProductionPickingService().can_user_confirm_picking(
-        tenant_id=tenant_id,
-        user_id=current_user.id,
-    )
-    return {
-        **policy,
-        "last_operation_auto_inbound_mode": last_inbound_mode,
-        "default_production_worker_mode": default_production_worker_mode,
-        "current_user_role_codes": sorted(role_codes),
-        "current_user_can_confirm_picking": can_confirm_picking,
-    }
 
 
 @router.get("/work-orders/{work_order_id}/picking-confirmation-status", summary="检查工单领料确认状态")
@@ -1160,56 +1213,4 @@ async def manually_complete_work_order(
         tenant_id=tenant_id,
         work_order_id=work_order_id,
         completed_by=current_user.id
-    )
-
-
-@router.get("/work-orders/delayed", summary="查询延期工单")
-async def get_delayed_work_orders(
-    days_threshold: int = Query(0, ge=0, description="延期天数阈值（默认0，即只要超过计划结束日期就算延期）"),
-    status: Optional[str] = Query(None, description="工单状态过滤（可选）"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> JSONResponse:
-    """
-    查询延期工单
-
-    根据计划结束日期和当前日期，查询所有延期的工单。
-
-    - **days_threshold**: 延期天数阈值（默认0）
-    - **status**: 工单状态过滤（可选）
-    """
-    delayed_orders = await WorkOrderService().check_delayed_work_orders(
-        tenant_id=tenant_id,
-        days_threshold=days_threshold,
-        status=status
-    )
-    return JSONResponse(
-        content={
-            "total": len(delayed_orders),
-            "delayed_orders": delayed_orders
-        },
-        status_code=http_status.HTTP_200_OK
-    )
-
-
-@router.get("/work-orders/delay-analysis", summary="延期原因分析")
-async def analyze_delay_reasons(
-    work_order_id: Optional[int] = Query(None, description="工单ID（可选，如果为None则分析所有延期工单）"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> JSONResponse:
-    """
-    分析延期原因
-
-    分析工单延期的原因，包括缺料、产能不足、质量问题等。
-
-    - **work_order_id**: 工单ID（可选，如果为None则分析所有延期工单）
-    """
-    result = await WorkOrderService().analyze_delay_reasons(
-        tenant_id=tenant_id,
-        work_order_id=work_order_id
-    )
-    return JSONResponse(
-        content=result,
-        status_code=http_status.HTTP_200_OK
     )

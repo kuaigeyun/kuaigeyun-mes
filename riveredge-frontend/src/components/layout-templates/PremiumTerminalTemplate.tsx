@@ -15,7 +15,16 @@ import { createPortal } from 'react-dom';
 import { Layout, Button, Divider, theme, ConfigProvider, Tag } from 'antd';
 import { FullscreenOutlined, FullscreenExitOutlined, UserOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import { useTranslation } from 'react-i18next';
 import { HMI_DESIGN_TOKENS, HMI_LAYOUT, HMI_ANTD_TOKEN_OVERRIDE } from './constants';
+
+/** 与语言无关地识别管理员角色，避免仅匹配中文「管理员」 */
+function isAdminRoleBadge(role?: string): boolean {
+  if (!role?.trim()) return false;
+  const r = role.trim();
+  const lower = r.toLowerCase();
+  return r === '管理员' || lower === 'admin' || lower === 'administrator' || lower === 'root';
+}
 
 const { Header, Content } = Layout;
 
@@ -47,17 +56,20 @@ export interface PremiumTerminalTemplateProps {
 }
 
 const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
-  operatorName = '未登录',
+  operatorName,
   operatorAvatar,
   operatorRole,
   operatorEmail,
-  stationName = '未绑定',
+  stationName,
   stationArea,
   stationWorkshop,
   stationLine,
   children,
   headerExtra,
 }) => {
+  const { t } = useTranslation();
+  const displayOperatorName = operatorName ?? t('components.layoutTemplates.premiumTerminal.notLoggedIn');
+  const displayStationFallback = stationName ?? t('components.layoutTemplates.premiumTerminal.notBound');
   const [time, setTime] = useState(dayjs().format('YYYY-MM-DD HH:mm:ss'));
   const [isTerminalFullscreen, setTerminalFullscreen] = useState(false);
   const fullscreenWrapRef = useRef<HTMLDivElement>(null);
@@ -211,7 +223,11 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
                       {item}
                     </span>
                   ))
-                : <span className="header-station-segment header-station-segment-current">未绑定</span>}
+                : (
+                  <span className="header-station-segment header-station-segment-current">
+                    {displayStationFallback}
+                  </span>
+                )}
             </div>
             <Divider orientation="vertical" className="header-divider-v" />
             <div className="header-operator-block">
@@ -224,13 +240,13 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
               </span>
               <div className="header-operator-info">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span className="header-operator-name">{operatorName}</span>
+                    <span className="header-operator-name">{displayOperatorName}</span>
                     {operatorRole && (
                         <Tag 
                             bordered={false} 
                             style={{ 
                                 margin: 0, 
-                                background: operatorRole === '管理员' ? 'linear-gradient(135deg, #FF9000 0%, #F56A00 100%)' : 'rgba(255,255,255,0.15)',
+                                background: isAdminRoleBadge(operatorRole) ? 'linear-gradient(135deg, #FF9000 0%, #F56A00 100%)' : 'rgba(255,255,255,0.15)',
                                 color: '#fff',
                                 border: '1px solid rgba(255,255,255,0.2)',
                                 fontSize: 10,
@@ -259,7 +275,9 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
                 icon={isTerminalFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />} 
                 onClick={toggleTerminalFullscreen}
               >
-                {isTerminalFullscreen ? '退出全屏' : '全屏'}
+                {isTerminalFullscreen
+                  ? t('components.layoutTemplates.premiumTerminal.exitFullscreen')
+                  : t('components.layoutTemplates.premiumTerminal.fullscreen')}
               </Button>
               {headerExtra}
             </div>

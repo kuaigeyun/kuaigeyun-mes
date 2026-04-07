@@ -653,6 +653,18 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "rule_code": "FINISHED_GOODS_RECEIPT_CODE",
         "allow_manual_edit": True,
     },
+    {
+        "page_code": "kuaizhizao-warehouse-semi-finished-inbound",
+        "page_name": "半成品入库",
+        "page_path": "/apps/kuaizhizao/warehouse-management/product-inbound",
+        "code_field": "receipt_code",
+        "code_field_label": "半成品入库单编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "SEMI_FINISHED_GOODS_RECEIPT_CODE",
+        "allow_manual_edit": True,
+    },
     # 快格轻制造 - 质量管理
     {
         "page_code": "kuaizhizao-quality-incoming-inspection",

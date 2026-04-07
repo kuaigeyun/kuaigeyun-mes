@@ -256,9 +256,19 @@ class ProductionControlService:
 
         for wo in work_orders:
             try:
-                # 检查齐套性
-                shortage_info = await self.work_order_service.check_material_shortage(tenant_id, wo.id)
-                is_kitted = not shortage_info.get("has_shortage", True)
+                if getattr(wo, "is_frozen", False):
+                    continue
+
+                # 与工单列表齐套率、齐套分析 API 同一口径：get_work_order_kitting_analysis（for_kitting_analysis BOM）。
+                # check_material_shortage 为全阶 BOM 展开，会把中间自制件逐行比库存，常误判缺料 → 自动下达一直为 0。
+                analysis = await self.work_order_service.get_work_order_kitting_analysis(tenant_id, wo.id)
+                if analysis.status == "fully_kitted":
+                    is_kitted = True
+                elif analysis.status == "no_bom":
+                    shortage_info = await self.work_order_service.check_material_shortage(tenant_id, wo.id)
+                    is_kitted = not shortage_info.get("has_shortage", True)
+                else:
+                    is_kitted = False
 
                 if is_kitted:
                     # 使用标准下达逻辑以录入完整的节点、日志和审计信息

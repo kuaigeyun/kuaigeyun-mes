@@ -11,6 +11,7 @@
 import React, { ReactNode } from 'react';
 import { Row, Col, Card, Button, Badge, theme, Space } from 'antd';
 import { SettingOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { DASHBOARD_CONFIG, PAGE_SPACING, ANT_DESIGN_TOKENS } from './constants';
 
 const { useToken } = theme;
@@ -129,6 +130,7 @@ export const DashboardTemplate: React.FC<DashboardTemplateProps> = ({
   showConfigButton = false,
   onConfigClick,
 }) => {
+  const { t } = useTranslation();
   const { token } = useToken();
   const showLegacyBoardRow =
     todos.length > 0 || stats.length > 0 || quickEntries.length > 0;
@@ -153,7 +155,7 @@ export const DashboardTemplate: React.FC<DashboardTemplateProps> = ({
       {/* 快捷操作区 - 图标化显示 */}
       {quickActions.length > 0 && (
         <Card
-          title="快捷操作"
+          title={t('components.layoutTemplates.dashboard.quickActions')}
           style={{ marginBottom: PAGE_SPACING.BLOCK_GAP }}
           extra={
             showConfigButton && onConfigClick ? (
@@ -166,7 +168,7 @@ export const DashboardTemplate: React.FC<DashboardTemplateProps> = ({
                   onConfigClick();
                 }}
               >
-                配置
+                {t('components.layoutTemplates.dashboard.configure')}
               </Button>
             ) : undefined
           }
@@ -228,7 +230,7 @@ export const DashboardTemplate: React.FC<DashboardTemplateProps> = ({
           {/* 待办事项区 */}
           {todos.length > 0 && (
             <Card
-              title="待办事项"
+              title={t('components.layoutTemplates.dashboard.todos')}
               style={{ marginBottom: PAGE_SPACING.BLOCK_GAP }}
             >
               <Row gutter={ANT_DESIGN_TOKENS.SPACING.MD}>
@@ -266,7 +268,7 @@ export const DashboardTemplate: React.FC<DashboardTemplateProps> = ({
 
           {/* 数据看板区 */}
           {stats.length > 0 && (
-            <Card title="数据看板">
+            <Card title={t('components.layoutTemplates.dashboard.statsBoard')}>
               <Row gutter={ANT_DESIGN_TOKENS.SPACING.MD}>
                 {stats.map((stat, index) => (
                   <Col
@@ -322,7 +324,7 @@ export const DashboardTemplate: React.FC<DashboardTemplateProps> = ({
         {/* 右侧：快捷入口 */}
         <Col xs={24} lg={8}>
           {quickEntries.length > 0 && (
-            <Card title="快捷入口">
+            <Card title={t('components.layoutTemplates.dashboard.quickEntries')}>
               <Row gutter={ANT_DESIGN_TOKENS.SPACING.MD}>
                 {quickEntries.map((entry, index) => (
                   <Col

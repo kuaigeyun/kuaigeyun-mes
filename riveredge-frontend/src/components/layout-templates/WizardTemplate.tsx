@@ -10,6 +10,7 @@
 
 import React, { ReactNode } from 'react';
 import { Steps, Card, Button, Space, theme } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { ANT_DESIGN_TOKENS, PAGE_SPACING } from './constants';
 
 const { useToken } = theme;
@@ -98,17 +99,22 @@ export const WizardTemplate: React.FC<WizardTemplateProps> = ({
   showPrev = true,
   showNext = true,
   showFinish = true,
-  prevText = '上一步',
-  nextText = '下一步',
-  finishText = '完成',
+  prevText,
+  nextText,
+  finishText,
   nextDisabled = false,
   finishDisabled = false,
   onSkip,
-  skipText = '稍后完成',
+  skipText,
   className,
   style,
 }) => {
+  const { t } = useTranslation();
   const { token } = useToken();
+  const prevLabel = prevText ?? t('components.layoutTemplates.wizard.prev');
+  const nextLabel = nextText ?? t('components.layoutTemplates.wizard.next');
+  const finishLabel = finishText ?? t('components.layoutTemplates.wizard.finish');
+  const skipLabel = skipText ?? t('components.layoutTemplates.wizard.skipLater');
 
   const isFirstStep = current === 0;
   const isLastStep = current === steps.length - 1;
@@ -175,12 +181,12 @@ export const WizardTemplate: React.FC<WizardTemplateProps> = ({
         <Space>
           {showPrev && !isFirstStep && (
             <Button onClick={handlePrev}>
-              {prevText}
+              {prevLabel}
             </Button>
           )}
           {onSkip && (
             <Button onClick={onSkip}>
-              {skipText}
+              {skipLabel}
             </Button>
           )}
         </Space>
@@ -191,7 +197,7 @@ export const WizardTemplate: React.FC<WizardTemplateProps> = ({
               onClick={handleNext}
               disabled={nextDisabled}
             >
-              {nextText}
+              {nextLabel}
             </Button>
           )}
           {showFinish && isLastStep && (
@@ -200,7 +206,7 @@ export const WizardTemplate: React.FC<WizardTemplateProps> = ({
               onClick={handleFinish}
               disabled={finishDisabled}
             >
-              {finishText}
+              {finishLabel}
             </Button>
           )}
         </Space>

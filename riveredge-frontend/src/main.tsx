@@ -12,6 +12,17 @@ import './global.less'
 import './config/i18n'
 import './config/dayjs'
 
+// ⚠️ 抑制 Three.js / R3F 已知的不兼容警告 (THREE.Clock 弃用)
+if (typeof console !== 'undefined') {
+  const originalWarn = console.warn;
+  console.warn = (...args: any[]) => {
+    if (args[0] && typeof args[0] === 'string' && args[0].includes('Please use THREE.Timer instead.')) {
+      return;
+    }
+    originalWarn(...args);
+  };
+}
+
 // 性能监控：延后加载，不阻塞首屏（requestIdleCallback 后动态 import）
 if (typeof window !== 'undefined') {
   const schedule = (cb: () => void) => {

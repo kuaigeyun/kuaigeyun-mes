@@ -44,6 +44,8 @@ from .production_return import ProductionReturn
 from .production_return_item import ProductionReturnItem
 from .finished_goods_receipt import FinishedGoodsReceipt
 from .finished_goods_receipt_item import FinishedGoodsReceiptItem
+from .semi_finished_goods_receipt import SemiFinishedGoodsReceipt
+from .semi_finished_goods_receipt_item import SemiFinishedGoodsReceiptItem
 from .sales_delivery import SalesDelivery
 from .sales_delivery_item import SalesDeliveryItem
 from .sales_return import SalesReturn

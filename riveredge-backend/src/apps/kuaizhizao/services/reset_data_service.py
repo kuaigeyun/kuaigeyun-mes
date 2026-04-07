@@ -66,6 +66,8 @@ class ResetDataService:
         "apps_kuaizhizao_production_return_items",
         "apps_kuaizhizao_finished_goods_receipts",
         "apps_kuaizhizao_finished_goods_receipt_items",
+        "apps_kuaizhizao_semi_finished_goods_receipts",
+        "apps_kuaizhizao_semi_finished_goods_receipt_items",
         "apps_kuaizhizao_sales_deliveries",
         "apps_kuaizhizao_sales_delivery_items",
         "apps_kuaizhizao_sales_returns",

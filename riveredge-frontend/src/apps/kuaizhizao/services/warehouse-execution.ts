@@ -131,6 +131,20 @@ export const warehouseApi = {
         },
       }),
   },
+  semiFinishedGoodsReceipt: {
+    list: async (params?: any) =>
+      apiRequest('/apps/kuaizhizao/semi-finished-goods-receipts', { method: 'GET', params }),
+    create: async (data: any) =>
+      apiRequest('/apps/kuaizhizao/semi-finished-goods-receipts', { method: 'POST', data }),
+    delete: async (id: string) =>
+      apiRequest(`/apps/kuaizhizao/semi-finished-goods-receipts/${id}/delete`, { method: 'POST' }),
+    get: async (id: string) =>
+      apiRequest(`/apps/kuaizhizao/semi-finished-goods-receipts/${id}`, { method: 'GET' }),
+    confirm: async (id: string, data?: any) =>
+      apiRequest(`/apps/kuaizhizao/semi-finished-goods-receipts/${id}/confirm`, { method: 'POST', data }),
+    withdraw: async (id: string) =>
+      apiRequest(`/apps/kuaizhizao/semi-finished-goods-receipts/${id}/withdraw`, { method: 'POST' }),
+  },
   salesDelivery: {
     list: async (params?: any) => apiRequest('/apps/kuaizhizao/sales-deliveries', { method: 'GET', params }),
     create: async (data: any) => apiRequest('/apps/kuaizhizao/sales-deliveries', { method: 'POST', data }),

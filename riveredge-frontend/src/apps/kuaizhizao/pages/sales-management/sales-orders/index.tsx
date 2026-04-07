@@ -88,6 +88,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePageMetrics } from '../../../../../hooks/usePageMetrics';
+import { useDeferAfterPaint } from '../../../../../hooks/useDeferAfterPaint';
 import { CustomerFollowUpFormModal, type CustomerFollowUpPreset } from '../../../components/CustomerFollowUpFormModal';
 
 /** 销售明细行（订单 + 明细合并，用于平铺表格） */
@@ -366,10 +367,12 @@ const SalesOrdersPage: React.FC = () => {
   };
 
   const { statCards: pageMetricCards, hasConfig: hasPageMetricConfig } = usePageMetrics();
+  const secondaryStatsReady = useDeferAfterPaint();
   const { data: statistics } = useQuery({
     queryKey: ['salesOrderStatistics'],
     queryFn: getSalesOrderStatistics,
-    enabled: true, // 始终拉取，用于 page metric 时合并折线图/description
+    /** 与页面指标错开：先让列表请求发起，再拉聚合统计（趋势图等） */
+    enabled: secondaryStatsReady,
   });
 
   const { token } = AntdTheme.useToken();

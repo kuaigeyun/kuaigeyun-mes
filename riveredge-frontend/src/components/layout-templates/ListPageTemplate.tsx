@@ -55,6 +55,11 @@ export interface ListPageTemplateProps {
   className?: string;
   /** 自定义样式 */
   style?: React.CSSProperties;
+  /**
+   * 为 true（默认）时：在 DOM 中先挂载 children（表格），再挂载工具栏与指标卡，通过 flex `order` 保持「指标卡在上、表格在下」的视觉顺序。
+   * 便于浏览器优先布局/绘制主内容；无表格的纯列表页可设 false。
+   */
+  prioritizeMainContentPaint?: boolean;
 }
 
 /**
@@ -82,126 +87,147 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
   toolbarExtra,
   className,
   style,
+  prioritizeMainContentPaint = true,
 }) => {
   const { token } = AntdTheme.useToken();
+
+  const statCardsRow =
+    statCards && statCards.length > 0 ? (
+      <div style={{ marginBottom: 16 }}>
+        <Row gutter={STAT_CARD_CONFIG.GUTTER} wrap={true}>
+          {statCards.map((card, index) => (
+            <Col
+              key={index}
+              style={{ flex: '1 1 240px', minWidth: 240 }} // flexible equal width, wraps if too narrow
+            >
+              <Card
+                hoverable={!!card.onClick}
+                onClick={card.onClick}
+                style={{
+                  cursor: card.onClick ? 'pointer' : 'default',
+                  height: '100%',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02)',
+                  border: `1px solid ${token.colorBorderSecondary}`,
+                  transition: 'all 0.3s cubic-bezier(0.645, 0.045, 0.355, 1)',
+                }}
+                styles={{
+                  body: {
+                    padding: 16,
+                    position: 'relative',
+                    zIndex: 1,
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                  },
+                }}
+              >
+                {card.description && (
+                  <div
+                    className="stat-card-extra"
+                    style={{
+                      position: 'absolute',
+                      top: 16,
+                      right: 16,
+                      fontSize: 12,
+                      lineHeight: '22px',
+                      zIndex: 10,
+                      pointerEvents: 'none',
+                    }}
+                  >
+                    {card.description}
+                  </div>
+                )}
+
+                <Statistic
+                  title={card.title}
+                  value={typeof card.value === 'number' || typeof card.value === 'string' ? card.value : 0}
+                  formatter={typeof card.value === 'number' || typeof card.value === 'string' ? undefined : () => card.value as ReactNode}
+                  prefix={card.prefix}
+                  suffix={card.suffix}
+                  precision={card.precision}
+                  styles={{
+                    content: {
+                      fontSize: '24px',
+                      fontWeight: 600,
+                      ...card.valueStyle,
+                      position: 'relative',
+                      zIndex: 2,
+                    },
+                    title: {
+                      marginBottom: 4,
+                      color: token.colorTextSecondary,
+                      position: 'relative',
+                      zIndex: 2,
+                    },
+                  }}
+                  style={{ marginBottom: 0 }}
+                />
+
+                {card.footer && (
+                  <div style={{ marginTop: 'auto', paddingTop: 8, zIndex: 2 }}>
+                    {card.footer}
+                  </div>
+                )}
+
+                {card.backgroundChart && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      bottom: -18,
+                      left: -18,
+                      right: -18,
+                      height: 76,
+                      zIndex: 0,
+                      pointerEvents: 'none',
+                      opacity: 0.8,
+                    }}
+                  >
+                    {card.backgroundChart}
+                  </div>
+                )}
+              </Card>
+            </Col>
+          ))}
+        </Row>
+      </div>
+    ) : null;
+
+  const toolbarRow = toolbarExtra ? <div style={{ marginBottom: 16 }}>{toolbarExtra}</div> : null;
+
+  const mainRow = <div style={prioritizeMainContentPaint ? { minWidth: 0 } : undefined}>{children}</div>;
+
+  if (!prioritizeMainContentPaint) {
+    return (
+      <div
+        className={className}
+        style={{
+          padding: 0,
+          ...style,
+        }}
+      >
+        {statCardsRow}
+        {toolbarRow}
+        {mainRow}
+      </div>
+    );
+  }
 
   return (
     <div
       className={className}
       style={{
         padding: 0,
+        display: 'flex',
+        flexDirection: 'column',
         ...style,
       }}
     >
-      {/* 统计卡片区域 - 显示所有提供的指标卡并在一行均分 */}
-      {statCards && statCards.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
-          <Row gutter={STAT_CARD_CONFIG.GUTTER} wrap={true}>
-            {statCards.map((card, index) => (
-              <Col
-                key={index}
-                style={{ flex: '1 1 240px', minWidth: 240 }} // flexible equal width, wraps if too narrow
-              >
-                <Card
-                  hoverable={!!card.onClick}
-                  onClick={card.onClick}
-                  style={{
-                    cursor: card.onClick ? 'pointer' : 'default',
-                    height: '100%',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02)',
-                    border: `1px solid ${token.colorBorderSecondary}`,
-                    transition: 'all 0.3s cubic-bezier(0.645, 0.045, 0.355, 1)',
-                  }}
-                  styles={{
-                    body: {
-                      padding: 16,
-                      position: 'relative',
-                      zIndex: 1,
-                      height: '100%',
-                      display: 'flex',
-                      flexDirection: 'column',
-                    },
-                  }}
-                >
-                  {/* Top Right Extra Info - Standardized class for easier management */}
-                  {card.description && (
-                    <div 
-                      className="stat-card-extra"
-                      style={{ 
-                        position: 'absolute', 
-                        top: 16, // Aligned with card body padding
-                        right: 16, 
-                        fontSize: 12, 
-                        lineHeight: '22px', // Align with ant-statistic-title line height approx
-                        zIndex: 10,
-                        pointerEvents: 'none',
-                      }}
-                    >
-                      {card.description}
-                    </div>
-                  )}
-
-                  <Statistic
-                    title={card.title}
-                    value={typeof card.value === 'number' || typeof card.value === 'string' ? card.value : 0}
-                    formatter={typeof card.value === 'number' || typeof card.value === 'string' ? undefined : () => card.value as ReactNode}
-                    prefix={card.prefix}
-                    suffix={card.suffix}
-                    precision={card.precision}
-                    styles={{
-                      content: {
-                        fontSize: '24px',
-                        fontWeight: 600,
-                        ...card.valueStyle,
-                        position: 'relative',
-                        zIndex: 2,
-                      },
-                      title: {
-                        marginBottom: 4,
-                        color: token.colorTextSecondary,
-                        position: 'relative',
-                        zIndex: 2,
-                      }
-                    }}
-                    style={{ marginBottom: 0 }}
-                  />
-
-                  {card.footer && (
-                    <div style={{ marginTop: 'auto', paddingTop: 8, zIndex: 2 }}>
-                      {card.footer}
-                    </div>
-                  )}
-
-                  {card.backgroundChart && (
-                    <div style={{ 
-                      position: 'absolute', 
-                      bottom: -18, 
-                      left: -18, 
-                      right: -18, 
-                      height: 76, 
-                      zIndex: 0, 
-                      pointerEvents: 'none',
-                      opacity: 0.8,
-                    }}>
-                      {card.backgroundChart}
-                    </div>
-                  )}
-                </Card>
-              </Col>
-            ))}
-          </Row>
-        </div>
-      )}
-
-      {/* 工具栏扩展区（导入、导出等，由 UniImport、UniExport 在页面层管理） */}
-      {toolbarExtra && (
-        <div style={{ marginBottom: 16 }}>{toolbarExtra}</div>
-      )}
-
-      {/* 主要内容区域 */}
-      <div>{children}</div>
+      {/* DOM 顺序：主内容 → 工具栏 → 指标卡；flex order 保持视觉仍为 指标卡 / 工具栏 / 表格 */}
+      <div style={{ order: 3 }}>{mainRow}</div>
+      {toolbarRow ? <div style={{ order: 2 }}>{toolbarRow}</div> : null}
+      {statCardsRow ? <div style={{ order: 1 }}>{statCardsRow}</div> : null}
     </div>
   );
 };

@@ -45,6 +45,8 @@ export interface MultiTabListPageTemplateProps {
      * 默认 false，保持仅渲染当前标签（兼容既有页面性能）。
      */
     preserveMounted?: boolean;
+    /** 透传 ListPageTemplate：主内容优先挂载，见 ListPageTemplate 说明 */
+    prioritizeMainContentPaint?: boolean;
 }
 
 /**
@@ -61,6 +63,7 @@ export const MultiTabListPageTemplate: React.FC<MultiTabListPageTemplateProps> =
     header,
     tabBarExtraContent,
     preserveMounted = false,
+    prioritizeMainContentPaint,
 }) => {
     const currentTab = tabs.find(tab => tab.key === activeTabKey);
 
@@ -87,6 +90,7 @@ export const MultiTabListPageTemplate: React.FC<MultiTabListPageTemplateProps> =
             statCards={statCards}
             className={className}
             style={style}
+            prioritizeMainContentPaint={prioritizeMainContentPaint}
         >
             {header && <div style={{ marginBottom: 16 }}>{header}</div>}
             <Card

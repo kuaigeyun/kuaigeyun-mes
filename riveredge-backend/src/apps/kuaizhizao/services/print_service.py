@@ -19,6 +19,7 @@ from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
 from apps.kuaizhizao.models.production_picking import ProductionPicking
 from apps.kuaizhizao.models.production_return import ProductionReturn
 from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
+from apps.kuaizhizao.models.semi_finished_goods_receipt import SemiFinishedGoodsReceipt
 from apps.kuaizhizao.models.sales_delivery import SalesDelivery
 from apps.kuaizhizao.models.purchase_order import PurchaseOrder
 from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
@@ -45,6 +46,7 @@ class DocumentPrintService:
         "production_picking": "PRODUCTION_PICKING_PRINT",
         "production_return": "PRODUCTION_RETURN_PRINT",
         "finished_goods_receipt": "FINISHED_GOODS_RECEIPT_PRINT",
+        "semi_finished_goods_receipt": "FINISHED_GOODS_RECEIPT_PRINT",
         "sales_delivery": "SALES_DELIVERY_PRINT",
         "purchase_order": "PURCHASE_ORDER_PRINT",
         "purchase_receipt": "PURCHASE_RECEIPT_PRINT",
@@ -169,6 +171,12 @@ class DocumentPrintService:
             if not document:
                 raise NotFoundError(f"成品入库单不存在: {document_id}")
             return await self._format_finished_goods_receipt_data(document)
+
+        elif document_type == "semi_finished_goods_receipt":
+            document = await SemiFinishedGoodsReceipt.get_or_none(tenant_id=tenant_id, id=document_id)
+            if not document:
+                raise NotFoundError(f"半成品入库单不存在: {document_id}")
+            return await self._format_semi_finished_goods_receipt_data(document)
         
         elif document_type == "sales_delivery":
             document = await SalesDelivery.get_or_none(tenant_id=tenant_id, id=document_id)
@@ -332,6 +340,20 @@ class DocumentPrintService:
         # TODO: 加载明细数据
         return {
             "document_type": "finished_goods_receipt",
+            "code": receipt.receipt_code,
+            "work_order_code": receipt.work_order_code,
+            "warehouse_name": receipt.warehouse_name,
+            "total_quantity": str(receipt.total_quantity),
+            "status": receipt.status,
+            "receiver_name": receipt.receiver_name,
+            "receipt_time": receipt.receipt_time.isoformat() if receipt.receipt_time else None,
+            "created_at": receipt.created_at.isoformat() if receipt.created_at else None,
+        }
+
+    async def _format_semi_finished_goods_receipt_data(self, receipt: SemiFinishedGoodsReceipt) -> Dict[str, Any]:
+        """格式化半成品入库单数据（字段与成品入库单一致，便于共用打印模板）"""
+        return {
+            "document_type": "semi_finished_goods_receipt",
             "code": receipt.receipt_code,
             "work_order_code": receipt.work_order_code,
             "warehouse_name": receipt.warehouse_name,

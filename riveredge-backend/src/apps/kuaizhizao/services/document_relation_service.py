@@ -15,6 +15,7 @@ from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.production_picking import ProductionPicking
 from apps.kuaizhizao.models.production_return import ProductionReturn
 from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
+from apps.kuaizhizao.models.semi_finished_goods_receipt import SemiFinishedGoodsReceipt
 from apps.kuaizhizao.models.reporting_record import ReportingRecord
 from apps.kuaizhizao.models.sales_forecast import SalesForecast
 from apps.kuaizhizao.models.sales_order import SalesOrder
@@ -63,6 +64,11 @@ class DocumentRelationService:
         "production_return": {"model": ProductionReturn, "code_field": "return_code", "name_field": None},
         "reporting_record": {"model": ReportingRecord, "code_field": "work_order_code", "name_field": None},
         "finished_goods_receipt": {"model": FinishedGoodsReceipt, "code_field": "receipt_code", "name_field": None},
+        "semi_finished_goods_receipt": {
+            "model": SemiFinishedGoodsReceipt,
+            "code_field": "receipt_code",
+            "name_field": None,
+        },
         "sales_delivery": {"model": SalesDelivery, "code_field": "delivery_code", "name_field": None},
         "delivery_notice": {"model": DeliveryNotice, "code_field": "notice_code", "name_field": None},
         "purchase_order": {"model": PurchaseOrder, "code_field": "order_code", "name_field": "order_name"},
@@ -159,6 +165,10 @@ class DocumentRelationService:
             # 成品入库的上游：工单、报工记录，下游：销售出库单
             upstream_documents = await self._get_finished_goods_receipt_upstream(tenant_id, document_id)
             downstream_documents = await self._get_finished_goods_receipt_downstream(tenant_id, document_id)
+
+        elif document_type == "semi_finished_goods_receipt":
+            upstream_documents = await self._get_semi_finished_goods_receipt_upstream(tenant_id, document_id)
+            downstream_documents = await self._get_semi_finished_goods_receipt_downstream(tenant_id, document_id)
 
         elif document_type == "purchase_order":
             # 采购单的上游：MRP/LRP运算，下游：采购入库单
@@ -519,6 +529,45 @@ class DocumentRelationService:
                 "created_at": record.created_at.isoformat() if record.created_at else None
             })
 
+        return upstream
+
+    async def _get_semi_finished_goods_receipt_upstream(
+        self,
+        tenant_id: int,
+        receipt_id: int,
+    ) -> List[Dict[str, Any]]:
+        """获取半成品入库的上游单据（工单、报工记录）"""
+        receipt = await SemiFinishedGoodsReceipt.get_or_none(tenant_id=tenant_id, id=receipt_id)
+        if not receipt:
+            return []
+        upstream = []
+        work_order = await WorkOrder.get_or_none(tenant_id=tenant_id, id=receipt.work_order_id)
+        if work_order:
+            upstream.append(
+                {
+                    "document_type": "work_order",
+                    "document_id": work_order.id,
+                    "document_code": work_order.code,
+                    "document_name": work_order.name,
+                    "status": work_order.status,
+                    "created_at": work_order.created_at.isoformat() if work_order.created_at else None,
+                }
+            )
+        reporting_records = await ReportingRecord.filter(
+            tenant_id=tenant_id,
+            work_order_id=receipt.work_order_id,
+        ).limit(10)
+        for record in reporting_records:
+            upstream.append(
+                {
+                    "document_type": "reporting_record",
+                    "document_id": record.id,
+                    "document_code": record.work_order_code if hasattr(record, "work_order_code") else None,
+                    "document_name": None,
+                    "status": record.status if hasattr(record, "status") else None,
+                    "created_at": record.created_at.isoformat() if record.created_at else None,
+                }
+            )
         return upstream
 
     async def _get_purchase_order_upstream(
@@ -1976,6 +2025,21 @@ class DocumentRelationService:
                 "created_at": receipt.created_at.isoformat() if receipt.created_at else None
             })
 
+        semi_receipts = await SemiFinishedGoodsReceipt.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            deleted_at__isnull=True,
+        ).limit(10)
+        for receipt in semi_receipts:
+            downstream.append({
+                "document_type": "semi_finished_goods_receipt",
+                "document_id": receipt.id,
+                "document_code": receipt.receipt_code,
+                "document_name": None,
+                "status": receipt.status,
+                "created_at": receipt.created_at.isoformat() if receipt.created_at else None
+            })
+
         # 销售出库单（通过成品入库单关联）
         for receipt in receipts:
             if receipt.sales_order_id:
@@ -2152,6 +2216,32 @@ class DocumentRelationService:
                     "created_at": delivery.created_at.isoformat() if delivery.created_at else None
                 })
 
+        return downstream
+
+    async def _get_semi_finished_goods_receipt_downstream(
+        self,
+        tenant_id: int,
+        receipt_id: int,
+    ) -> List[Dict[str, Any]]:
+        """获取半成品入库的下游单据（销售出库单，与成品入库一致按销售订单关联）"""
+        receipt = await SemiFinishedGoodsReceipt.get_or_none(tenant_id=tenant_id, id=receipt_id)
+        if not receipt:
+            return []
+        downstream = []
+        if receipt.sales_order_id:
+            deliveries = await SalesDelivery.filter(
+                tenant_id=tenant_id,
+                sales_order_id=receipt.sales_order_id
+            ).limit(10)
+            for delivery in deliveries:
+                downstream.append({
+                    "document_type": "sales_delivery",
+                    "document_id": delivery.id,
+                    "document_code": delivery.delivery_code if hasattr(delivery, 'delivery_code') else None,
+                    "document_name": None,
+                    "status": delivery.status if hasattr(delivery, 'status') else None,
+                    "created_at": delivery.created_at.isoformat() if delivery.created_at else None
+                })
         return downstream
 
     async def _get_purchase_order_downstream(

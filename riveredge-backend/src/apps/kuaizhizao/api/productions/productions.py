@@ -1008,6 +1008,31 @@ async def print_production_picking(
     return JSONResponse(content=result, status_code=200)
 
 
+@router.get("/semi-finished-goods-receipts/{id}/print", summary="打印半成品入库单")
+async def print_semi_finished_goods_receipt(
+    id: int = Path(..., description="半成品入库单ID"),
+    template_code: Optional[str] = Query(None, description="打印模板代码"),
+    template_uuid: Optional[str] = Query(None, description="打印模板UUID"),
+    output_format: str = Query("html", description="输出格式"),
+    response_format: str = Query("json", description="响应格式"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """打印半成品入库单（默认可共用成品入库打印模板）"""
+    result = await DocumentPrintService().print_document(
+        tenant_id=tenant_id,
+        document_type="semi_finished_goods_receipt",
+        document_id=id,
+        template_code=template_code,
+        template_uuid=template_uuid,
+        output_format=output_format
+    )
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    from fastapi.responses import JSONResponse
+    return JSONResponse(content=result, status_code=200)
+
+
 @router.get("/finished-goods-receipts/{id}/print", summary="打印成品入库单")
 async def print_finished_goods_receipt(
     id: int = Path(..., description="成品入库单ID"),

@@ -1321,45 +1321,127 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 updated_by=issued_by
             )
 
-            # 自动推送至成品入库（待审核/待入库状态）
+            # 自动推送至成品/半成品入库（待审核/待入库状态，按 BOM 子件角色分流）
             try:
                 if inspection.qualified_quantity > 0:
                     from apps.kuaizhizao.services.warehouse_service import FinishedGoodsReceiptService
-                    from apps.kuaizhizao.schemas.warehouse import FinishedGoodsReceiptCreate, FinishedGoodsReceiptItemCreate
-                    
-                    wh_svc = FinishedGoodsReceiptService()
-                    # 尝试从工单获取默认信息
-                    receipt_data = FinishedGoodsReceiptCreate(
-                        work_order_id=inspection.work_order_id,
-                        work_order_code=inspection.work_order_code,
-                        sales_order_id=inspection.sales_order_id,
-                        sales_order_code=inspection.sales_order_code,
-                        warehouse_id=None, # 默认由入库服务处理或前端指定
-                        receipt_time=datetime.now(),
-                        status="待入库",
-                        notes=f"由成品检验单 {inspection.inspection_code} 合格放行自动生成",
+                    from apps.kuaizhizao.services.semi_finished_goods_receipt_service import (
+                        SemiFinishedGoodsReceiptService,
                     )
-                    
-                    item_data = FinishedGoodsReceiptItemCreate(
-                        material_id=inspection.material_id,
-                        material_code=inspection.material_code,
-                        material_name=inspection.material_name,
-                        material_unit="个", # TODO: 从主数据获取
-                        receipt_quantity=inspection.qualified_quantity,
-                        qualified_quantity=inspection.qualified_quantity,
-                        unqualified_quantity=0,
-                        batch_number=inspection.batch_number,
-                        quality_inspection_id=inspection.id,
-                        quality_status="合格"
+                    from apps.kuaizhizao.schemas.warehouse import (
+                        FinishedGoodsReceiptCreate,
+                        FinishedGoodsReceiptItemCreate,
+                        SemiFinishedGoodsReceiptCreate,
+                        SemiFinishedGoodsReceiptItemCreate,
                     )
-                    
-                    await wh_svc.create_finished_goods_receipt(
+                    from apps.kuaizhizao.models.work_order import WorkOrder
+                    from apps.kuaizhizao.services.work_order_inbound_bom_role import (
+                        is_semi_finished_product_by_bom_role,
+                    )
+
+                    wo = await WorkOrder.get_or_none(
                         tenant_id=tenant_id,
-                        receipt_data=receipt_data,
-                        created_by=issued_by,
-                        items=[item_data]
+                        id=inspection.work_order_id,
+                        deleted_at__isnull=True,
                     )
-                    logger.info(f"成品检验合格 -> 自动生成成品入库单成功: {inspection.inspection_code}")
+                    wh_id: Optional[int] = None
+                    wh_name: str = ""
+                    if wo:
+                        resolved = await FinishedGoodsReceiptService().resolve_default_inbound_warehouse_for_work_order(
+                            tenant_id=tenant_id,
+                            work_order=wo,
+                        )
+                        if resolved:
+                            wh_id, wh_name = resolved[0], resolved[1]
+
+                    from apps.master_data.models.material import Material as _Mat
+
+                    mat = await _Mat.get_or_none(
+                        tenant_id=tenant_id, id=inspection.material_id, deleted_at__isnull=True
+                    )
+                    material_unit = (getattr(mat, "base_unit", None) or "个") if mat else "个"
+
+                    use_semi = await is_semi_finished_product_by_bom_role(tenant_id, inspection.material_id)
+                    if use_semi:
+                        sf_svc = SemiFinishedGoodsReceiptService()
+                        receipt_data = SemiFinishedGoodsReceiptCreate(
+                            work_order_id=inspection.work_order_id,
+                            work_order_code=inspection.work_order_code,
+                            sales_order_id=inspection.sales_order_id,
+                            sales_order_code=inspection.sales_order_code,
+                            warehouse_id=wh_id or 0,
+                            warehouse_name=wh_name or "",
+                            receipt_time=datetime.now(),
+                            status="待入库",
+                            notes=f"由成品检验单 {inspection.inspection_code} 合格放行自动生成（半成品入库）",
+                        )
+                        if not wh_id:
+                            logger.warning(
+                                "成品检验自动生成半成品入库单跳过：未解析到默认仓库 inspection=%s",
+                                inspection.inspection_code,
+                            )
+                        else:
+                            item_data = SemiFinishedGoodsReceiptItemCreate(
+                                material_id=inspection.material_id,
+                                material_code=inspection.material_code,
+                                material_name=inspection.material_name,
+                                material_unit=material_unit,
+                                receipt_quantity=inspection.qualified_quantity,
+                                qualified_quantity=inspection.qualified_quantity,
+                                unqualified_quantity=0,
+                                batch_number=inspection.batch_number,
+                                quality_inspection_id=inspection.id,
+                                quality_status="合格",
+                            )
+                            await sf_svc.create_semi_finished_goods_receipt(
+                                tenant_id=tenant_id,
+                                receipt_data=receipt_data,
+                                created_by=issued_by,
+                                items=[item_data],
+                            )
+                            logger.info(
+                                f"成品检验合格 -> 自动生成半成品入库单成功: {inspection.inspection_code}"
+                            )
+                    else:
+                        wh_svc = FinishedGoodsReceiptService()
+                        receipt_data = FinishedGoodsReceiptCreate(
+                            work_order_id=inspection.work_order_id,
+                            work_order_code=inspection.work_order_code,
+                            sales_order_id=inspection.sales_order_id,
+                            sales_order_code=inspection.sales_order_code,
+                            warehouse_id=wh_id or 0,
+                            warehouse_name=wh_name or "",
+                            receipt_time=datetime.now(),
+                            status="待入库",
+                            notes=f"由成品检验单 {inspection.inspection_code} 合格放行自动生成",
+                        )
+                        if not wh_id:
+                            logger.warning(
+                                "成品检验自动生成成品入库单跳过：未解析到默认仓库 inspection=%s",
+                                inspection.inspection_code,
+                            )
+                        else:
+                            item_data = FinishedGoodsReceiptItemCreate(
+                                material_id=inspection.material_id,
+                                material_code=inspection.material_code,
+                                material_name=inspection.material_name,
+                                material_unit=material_unit,
+                                receipt_quantity=inspection.qualified_quantity,
+                                qualified_quantity=inspection.qualified_quantity,
+                                unqualified_quantity=0,
+                                batch_number=inspection.batch_number,
+                                quality_inspection_id=inspection.id,
+                                quality_status="合格",
+                            )
+                            await wh_svc.create_finished_goods_receipt(
+                                tenant_id=tenant_id,
+                                receipt_data=receipt_data,
+                                created_by=issued_by,
+                                items=[item_data],
+                            )
+                            logger.info(
+                                f"成品检验合格 -> 自动生成成品入库单成功: {inspection.inspection_code}"
+                            )
             except Exception as e:
                 logger.warning(f"成品检验合格 -> 自动生成成品入库单失败: {e}")
 

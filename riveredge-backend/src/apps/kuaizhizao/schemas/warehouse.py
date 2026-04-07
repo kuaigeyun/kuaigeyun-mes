@@ -250,6 +250,10 @@ class FinishedGoodsReceiptResponse(FinishedGoodsReceiptBase):
     tenant_id: int = Field(..., description="租户ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    inbound_doc_kind: Literal["finished_goods", "semi_finished_goods"] = Field(
+        "finished_goods",
+        description="生产入库单据形态（成品/半成品），与物理表一致时下推接口可能返回 semi 以兼容旧客户端",
+    )
 
     class Config:
         from_attributes = True
@@ -295,6 +299,103 @@ class FinishedGoodsReceiptItemUpdate(FinishedGoodsReceiptItemBase):
 
 class FinishedGoodsReceiptItemResponse(FinishedGoodsReceiptItemBase):
     """成品入库单明细响应schema"""
+    id: int = Field(..., description="明细ID")
+    tenant_id: int = Field(..., description="租户ID")
+    receipt_id: int = Field(..., description="入库单ID")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+
+    class Config:
+        from_attributes = True
+
+
+# === 半成品入库单（结构同成品入库单，单据类型独立） ===
+
+class SemiFinishedGoodsReceiptBase(BaseSchema):
+    """半成品入库单基础 schema"""
+    receipt_code: Optional[str] = Field(None, max_length=50, description="入库单编码（可选，如果不提供则自动生成）")
+    work_order_id: int = Field(..., description="工单ID")
+    work_order_code: str = Field(..., max_length=50, description="工单编码")
+    sales_order_id: Optional[int] = Field(None, description="销售订单ID")
+    sales_order_code: Optional[str] = Field(None, max_length=50, description="销售订单编码")
+    warehouse_id: int = Field(..., description="入库仓库ID")
+    warehouse_name: str = Field(..., max_length=100, description="入库仓库名称")
+    receipt_time: Optional[datetime] = Field(None, description="实际入库时间")
+    receiver_id: Optional[int] = Field(None, description="入库人ID")
+    receiver_name: Optional[str] = Field(None, max_length=100, description="入库人姓名")
+    reviewer_id: Optional[int] = Field(None, description="审核人ID")
+    reviewer_name: Optional[str] = Field(None, max_length=100, description="审核人姓名")
+    review_time: Optional[datetime] = Field(None, description="审核时间")
+    review_status: str = Field("待审核", max_length=20, description="审核状态")
+    review_remarks: Optional[str] = Field(None, description="审核备注")
+    status: str = Field("待入库", max_length=20, description="入库状态")
+    total_quantity: float = Field(0, ge=0, description="总入库数量")
+    notes: Optional[str] = Field(None, description="备注")
+
+
+class SemiFinishedGoodsReceiptCreate(SemiFinishedGoodsReceiptBase):
+    """半成品入库单创建 schema"""
+    items: Optional[List["SemiFinishedGoodsReceiptItemCreate"]] = Field(None, description="入库明细列表")
+
+
+class SemiFinishedGoodsReceiptUpdate(SemiFinishedGoodsReceiptBase):
+    """半成品入库单更新 schema"""
+    receipt_code: Optional[str] = Field(None, max_length=50, description="入库单编码")
+
+
+class SemiFinishedGoodsReceiptResponse(SemiFinishedGoodsReceiptBase):
+    """半成品入库单响应 schema"""
+    id: int = Field(..., description="入库单ID")
+    tenant_id: int = Field(..., description="租户ID")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+    inbound_doc_kind: Literal["finished_goods", "semi_finished_goods"] = Field(
+        "semi_finished_goods",
+        description="固定为半成品入库单",
+    )
+
+    class Config:
+        from_attributes = True
+
+
+class SemiFinishedGoodsReceiptWithItemsResponse(SemiFinishedGoodsReceiptResponse):
+    """半成品入库单详情响应（含明细）"""
+    items: List["SemiFinishedGoodsReceiptItemResponse"] = Field(default_factory=list, description="入库明细列表")
+
+
+class SemiFinishedGoodsReceiptItemBase(BaseSchema):
+    """半成品入库单明细基础 schema"""
+    material_id: int = Field(..., description="物料ID")
+    material_code: str = Field(..., max_length=50, description="物料编码")
+    material_name: str = Field(..., max_length=200, description="物料名称")
+    material_spec: Optional[str] = Field(None, max_length=200, description="物料规格")
+    material_unit: str = Field(..., max_length=20, description="物料单位")
+    receipt_quantity: float = Field(..., gt=0, description="入库数量")
+    qualified_quantity: float = Field(..., ge=0, description="合格数量")
+    unqualified_quantity: float = Field(..., ge=0, description="不合格数量")
+    location_id: Optional[int] = Field(None, description="库位ID")
+    location_code: Optional[str] = Field(None, max_length=50, description="库位编码")
+    batch_number: Optional[str] = Field(None, max_length=50, description="批次号")
+    expiry_date: Optional[datetime] = Field(None, description="到期日期")
+    quality_status: str = Field("合格", max_length=20, description="质量状态")
+    quality_inspection_id: Optional[int] = Field(None, description="质量检验单ID")
+    status: str = Field("待入库", max_length=20, description="入库状态")
+    receipt_time: Optional[datetime] = Field(None, description="实际入库时间")
+    notes: Optional[str] = Field(None, description="备注")
+
+
+class SemiFinishedGoodsReceiptItemCreate(SemiFinishedGoodsReceiptItemBase):
+    """半成品入库单明细创建 schema"""
+    pass
+
+
+class SemiFinishedGoodsReceiptItemUpdate(SemiFinishedGoodsReceiptItemBase):
+    """半成品入库单明细更新 schema"""
+    pass
+
+
+class SemiFinishedGoodsReceiptItemResponse(SemiFinishedGoodsReceiptItemBase):
+    """半成品入库单明细响应 schema"""
     id: int = Field(..., description="明细ID")
     tenant_id: int = Field(..., description="租户ID")
     receipt_id: int = Field(..., description="入库单ID")

@@ -3691,7 +3691,7 @@ const WorkOrdersPage: React.FC = () => {
         } else {
           const p = Number(rate)
           inner = (
-            <Space direction="vertical" style={{ width: '100%' }}>
+            <Space orientation="vertical" style={{ width: '100%' }}>
               <Progress
                 percent={p}
                 size="small"
