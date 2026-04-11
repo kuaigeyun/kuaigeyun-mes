@@ -577,6 +577,46 @@ CREATE INDEX IF NOT EXISTS "idx_apps_kuaizh_mapped__02cc76" ON "apps_kuaizhizao_
 CREATE INDEX IF NOT EXISTS "idx_apps_kuaizh_registr_3134a3" ON "apps_kuaizhizao_customer_material_registrations" ("registration_date");
 CREATE INDEX IF NOT EXISTS "idx_apps_kuaizh_status_78022d" ON "apps_kuaizhizao_customer_material_registrations" ("status");
 CREATE INDEX IF NOT EXISTS "idx_apps_kuaizh_created_685efc" ON "apps_kuaizhizao_customer_material_registrations" ("created_at");
+-- 迁移 14 已创建旧表（列 code 等）；此处 CREATE TABLE IF NOT EXISTS 会跳过，但后续 COMMENT 仍执行，需先对齐列结构
+DO $cust_mat_reg_mig$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'apps_kuaizhizao_customer_material_registrations' AND column_name = 'code'
+  ) THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'apps_kuaizhizao_customer_material_registrations' AND column_name = 'registration_code'
+    ) THEN
+      ALTER TABLE "apps_kuaizhizao_customer_material_registrations" ADD COLUMN "registration_code" VARCHAR(50);
+    END IF;
+    UPDATE "apps_kuaizhizao_customer_material_registrations" SET "registration_code" = "code";
+    ALTER TABLE "apps_kuaizhizao_customer_material_registrations" ALTER COLUMN "registration_code" SET NOT NULL;
+    ALTER TABLE "apps_kuaizhizao_customer_material_registrations" DROP CONSTRAINT IF EXISTS "uid_apps_kuaizh_customer_mat_reg_tenant_code";
+    ALTER TABLE "apps_kuaizhizao_customer_material_registrations" DROP COLUMN "code";
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'apps_kuaizhizao_customer_material_registrations' AND column_name = 'parsed_data'
+    ) THEN
+      ALTER TABLE "apps_kuaizhizao_customer_material_registrations" ADD COLUMN "parsed_data" JSONB;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'apps_kuaizhizao_customer_material_registrations' AND column_name = 'processed_at'
+    ) THEN
+      ALTER TABLE "apps_kuaizhizao_customer_material_registrations" ADD COLUMN "processed_at" TIMESTAMPTZ;
+    END IF;
+    ALTER TABLE "apps_kuaizhizao_customer_material_registrations" ALTER COLUMN "barcode" TYPE VARCHAR(500);
+    UPDATE "apps_kuaizhizao_customer_material_registrations" SET "barcode" = COALESCE("barcode", '');
+    ALTER TABLE "apps_kuaizhizao_customer_material_registrations" ALTER COLUMN "barcode" SET NOT NULL;
+    UPDATE "apps_kuaizhizao_customer_material_registrations" SET "registered_by" = COALESCE("registered_by", 0);
+    UPDATE "apps_kuaizhizao_customer_material_registrations" SET "registered_by_name" = COALESCE("registered_by_name", '');
+    ALTER TABLE "apps_kuaizhizao_customer_material_registrations" ALTER COLUMN "registered_by" SET NOT NULL;
+    ALTER TABLE "apps_kuaizhizao_customer_material_registrations" ALTER COLUMN "registered_by_name" SET NOT NULL;
+    ALTER TABLE "apps_kuaizhizao_customer_material_registrations" ALTER COLUMN "quantity" TYPE DECIMAL(12,2);
+  END IF;
+END
+$cust_mat_reg_mig$;
 COMMENT ON COLUMN "apps_kuaizhizao_customer_material_registrations"."uuid" IS '业务ID（UUID，对外暴露，安全且唯一）';
 COMMENT ON COLUMN "apps_kuaizhizao_customer_material_registrations"."tenant_id" IS '组织 ID（用于多组织数据隔离）';
 COMMENT ON COLUMN "apps_kuaizhizao_customer_material_registrations"."created_at" IS '创建时间';
