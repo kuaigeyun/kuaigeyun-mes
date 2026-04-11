@@ -352,6 +352,8 @@ export async function apiRequest<T = any>(
         const isPublicEndpoint = 
           url === '/auth/login' ||
           url.startsWith('/auth/login?') ||
+          url === '/infra/auth/login' ||
+          url.startsWith('/infra/auth/login?') ||
           url === '/auth/guest-login' ||
           url.startsWith('/auth/guest-login?') ||
           (url === '/login' || url === '/infra/login') ||
