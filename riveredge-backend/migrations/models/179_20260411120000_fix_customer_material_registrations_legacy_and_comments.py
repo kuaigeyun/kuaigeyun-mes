@@ -29,6 +29,8 @@ BEGIN
 END $$;
 ALTER TABLE "apps_kuaizhizao_customer_material_registrations" ADD COLUMN IF NOT EXISTS "parsed_data" JSONB;
 ALTER TABLE "apps_kuaizhizao_customer_material_registrations" ADD COLUMN IF NOT EXISTS "processed_at" TIMESTAMPTZ;
+ALTER TABLE "apps_kuaizhizao_customer_material_registrations" ADD COLUMN IF NOT EXISTS "warehouse_id" INT;
+ALTER TABLE "apps_kuaizhizao_customer_material_registrations" ADD COLUMN IF NOT EXISTS "warehouse_name" VARCHAR(200);
 UPDATE "apps_kuaizhizao_customer_material_registrations" SET "barcode" = COALESCE("barcode", '');
 ALTER TABLE "apps_kuaizhizao_customer_material_registrations" ALTER COLUMN "barcode" TYPE VARCHAR(500);
 ALTER TABLE "apps_kuaizhizao_customer_material_registrations" ALTER COLUMN "barcode" SET NOT NULL;

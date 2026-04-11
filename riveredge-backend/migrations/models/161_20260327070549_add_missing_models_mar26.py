@@ -1381,6 +1381,8 @@ COMMENT ON TABLE "apps_kuaizhizao_inspection_plan_steps" IS '快格轻制造 - �
     "remarks" TEXT,
     "deleted_at" TIMESTAMPTZ
 );
+ALTER TABLE "apps_kuaizhizao_inventory_alert_rules" ADD COLUMN IF NOT EXISTS "warehouse_id" INT;
+ALTER TABLE "apps_kuaizhizao_inventory_alert_rules" ADD COLUMN IF NOT EXISTS "warehouse_name" VARCHAR(200);
 CREATE INDEX IF NOT EXISTS "idx_apps_kuaizh_tenant__4c81ad" ON "apps_kuaizhizao_inventory_alert_rules" ("tenant_id");
 CREATE INDEX IF NOT EXISTS "idx_apps_kuaizh_alert_t_768c92" ON "apps_kuaizhizao_inventory_alert_rules" ("alert_type");
 CREATE INDEX IF NOT EXISTS "idx_apps_kuaizh_materia_98472c" ON "apps_kuaizhizao_inventory_alert_rules" ("material_id");

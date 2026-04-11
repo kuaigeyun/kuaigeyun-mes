@@ -16,6 +16,8 @@ ALTER TABLE "apps_kuaizhizao_inventory_alerts" ADD COLUMN IF NOT EXISTS "handled
 ALTER TABLE "apps_kuaizhizao_inventory_alerts" ADD COLUMN IF NOT EXISTS "handled_at" TIMESTAMPTZ;
 ALTER TABLE "apps_kuaizhizao_inventory_alerts" ADD COLUMN IF NOT EXISTS "handling_notes" TEXT;
 ALTER TABLE "apps_kuaizhizao_inventory_alerts" ADD COLUMN IF NOT EXISTS "triggered_at" TIMESTAMPTZ;
+ALTER TABLE "apps_kuaizhizao_inventory_alerts" ADD COLUMN IF NOT EXISTS "warehouse_id" INT;
+ALTER TABLE "apps_kuaizhizao_inventory_alerts" ADD COLUMN IF NOT EXISTS "warehouse_name" VARCHAR(200);
 UPDATE "apps_kuaizhizao_inventory_alerts" SET "alert_message" = '' WHERE "alert_message" IS NULL;
 DO $$
 BEGIN
