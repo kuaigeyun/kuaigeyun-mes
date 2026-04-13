@@ -2,11 +2,15 @@
 编码生成服务模块
 
 提供根据编码规则生成编码的功能。
-支持导入数据后序列号校准：从库中取最大已用序号，使新生成的序号接着往后。
+支持序列号校准：从库中取当前最大已用序号，使新生成的序号为 max+1（按最大号往后排）。
+- 导入较大序号后会与序号表对齐，避免冲突。
+- 删除较大序号后序号表会随库中最大号回落；中间号删除后按当前最大号+1（不刻意填洞）。
+- 规则无固定前缀（仅流水/表单字段+流水）时，仍从物料 main_code 末尾解析数字做校准。
+- 物料主编码若含分组等表单字段：用「序号前完整前缀」（与生成规则一致，如分组码 0303）在库内取该分组下最大流水，再 +1；不按全库/不按洞填号。
 """
 
 from typing import Optional, Dict, List, Any
-from datetime import date
+from datetime import date, datetime
 import re
 import importlib
 
@@ -45,6 +49,54 @@ def _get_context_value(context: Dict, field: str) -> Any:
                 return val
             break
     return None
+
+
+def _render_prefix_before_auto_counter(
+    components: Optional[List[Dict[str, Any]]],
+    context: Optional[Dict[str, Any]],
+) -> Optional[str]:
+    """
+    与 render_components 一致，仅渲染「自动序号」之前的部分（固定字 + 表单字段 + 日期等）。
+    用于按分组/前缀在库中查询最大流水号；若某表单字段在 context 中无值则返回 None。
+    """
+    if not components:
+        return ""
+    sorted_components = sorted(components, key=lambda x: x.get("order", 0))
+    parts: List[str] = []
+    for comp in sorted_components:
+        ct = comp.get("type")
+        if ct == "auto_counter":
+            break
+        if ct == "fixed_text":
+            parts.append(comp.get("text") or "")
+        elif ct == "form_field":
+            fn = comp.get("field_name") or ""
+            val = _get_context_value(context or {}, fn) if context else None
+            if val is None or not str(val).strip():
+                return None
+            parts.append(str(val).strip())
+        elif ct == "date":
+            format_type = comp.get("format_type", "preset")
+            now = datetime.now()
+            if format_type == "preset":
+                preset_format = comp.get("preset_format", "YYYYMMDD")
+                format_map = {
+                    "YYYYMMDD": "%Y%m%d",
+                    "YYYYMM": "%Y%m",
+                    "YYYY": "%Y",
+                    "YYMMDD": "%y%m%d",
+                    "YYMM": "%y%m",
+                    "YY": "%y",
+                }
+                strftime_format = format_map.get(preset_format, "%Y%m%d")
+                parts.append(now.strftime(strftime_format))
+            else:
+                custom_format = comp.get("custom_format", "yMd")
+                strftime_format = custom_format.replace("yyyy", "%Y").replace("yy", "%y").replace("y", "%Y")
+                strftime_format = strftime_format.replace("MM", "%m").replace("M", "%m")
+                strftime_format = strftime_format.replace("dd", "%d").replace("d", "%d")
+                parts.append(now.strftime(strftime_format))
+    return "".join(parts)
 
 
 class CodeGenerationService:
@@ -163,6 +215,7 @@ class CodeGenerationService:
             sequence=sequence,
             seq_step=seq_step,
             components=components,
+            context=context,
         )
         
         # 递增序号（在外部事务中保存）
@@ -263,8 +316,17 @@ class CodeGenerationService:
             deleted_at__isnull=True
         )
         
-        # 计算预览序号，必须与正式生成逻辑完全一致
-        if not sequence:
+        # 计算预览序号，必须与正式生成逻辑完全一致（含库中最大号校准）
+        max_from_db = await CodeGenerationService._resolve_max_sequence_from_db_for_rule(
+            tenant_id=tenant_id,
+            rule=rule,
+            request_rule_code=rule_code,
+            components=components,
+            context=context,
+        )
+        if max_from_db is not None:
+            test_seq = max_from_db + seq_step
+        elif not sequence:
             test_seq = seq_start  # 正式生成会创建 seq_start-step 后自增得到 seq_start
         else:
             base_seq = sequence.current_seq
@@ -437,18 +499,57 @@ class CodeGenerationService:
         return None
 
     @staticmethod
+    def _parse_counter_suffix_int(code: Optional[str], prefix: str) -> Optional[int]:
+        """
+        从完整编码中解析流水号整数：prefix 之后若全为数字则取其值；
+        否则取末尾连续数字（如 WLPJ0003 -> 3，0003 -> 3）。
+        prefix 为空时表示整段编码参与解析。
+        """
+        s = (code or "").strip()
+        if not s:
+            return None
+        if prefix:
+            if not s.startswith(prefix):
+                return None
+            rest = s[len(prefix) :].strip()
+        else:
+            rest = s
+        if not rest:
+            return None
+        if rest.isdigit():
+            return int(rest)
+        m = re.search(r"(\d+)$", rest)
+        if m:
+            return int(m.group(1))
+        return None
+
+    @staticmethod
+    def _rule_code_key_for_seq_sync(rule_code: str) -> Optional[str]:
+        """与 RULE_CODE_ENTITY_FOR_SEQ_SYNC 匹配的 key（大小写不敏感）。"""
+        if not rule_code:
+            return None
+        if rule_code in RULE_CODE_ENTITY_FOR_SEQ_SYNC:
+            return rule_code
+        u = rule_code.upper()
+        for k in RULE_CODE_ENTITY_FOR_SEQ_SYNC:
+            if k.upper() == u:
+                return k
+        return None
+
+    @staticmethod
     async def _get_max_sequence_from_db(
         tenant_id: int,
         rule_code: str,
         prefix: str,
     ) -> Optional[int]:
         """
-        从库中查询该规则对应实体的编码字段，解析前缀后的数字部分，返回最大序号。
-        用于导入数据后校准序列号，使新生成的序号接着已有数据往后排。
+        从库中查询该规则对应实体的编码字段，解析流水号数字，返回当前最大序号。
+        用于校准 CodeSequence：删除记录后仍能根据库中最大号回落。
         """
-        if not prefix:
+        rc_key = CodeGenerationService._rule_code_key_for_seq_sync(rule_code)
+        if not rc_key:
             return None
-        entity_config = RULE_CODE_ENTITY_FOR_SEQ_SYNC.get(rule_code)
+        entity_config = RULE_CODE_ENTITY_FOR_SEQ_SYNC.get(rc_key)
         if not entity_config:
             return None
         module_path, class_name, attr_name = entity_config
@@ -457,24 +558,34 @@ class CodeGenerationService:
             model_class = getattr(mod, class_name, None)
             if not model_class:
                 return None
-            # 查询 tenant_id 下编码以 prefix 开头的记录（未软删）
-            filter_kw = {"tenant_id": tenant_id, f"{attr_name}__startswith": prefix}
-            if hasattr(model_class, "deleted_at"):
-                filter_kw["deleted_at__isnull"] = True
+            # 空前缀：仅物料 main_code 支持（纯流水、或序号前仅有表单字段无固定字符时）
+            if not prefix:
+                if class_name != "Material" or attr_name != "main_code":
+                    return None
+                filter_kw: Dict[str, Any] = {"tenant_id": tenant_id}
+                if hasattr(model_class, "deleted_at"):
+                    filter_kw["deleted_at__isnull"] = True
+            else:
+                filter_kw = {
+                    "tenant_id": tenant_id,
+                    f"{attr_name}__startswith": prefix,
+                }
+                if hasattr(model_class, "deleted_at"):
+                    filter_kw["deleted_at__isnull"] = True
             rows = await model_class.filter(**filter_kw).values_list(attr_name, flat=True)
             max_seq = None
             for code in rows:
-                if not code or not str(code).startswith(prefix):
+                n = CodeGenerationService._parse_counter_suffix_int(
+                    str(code) if code is not None else None, prefix
+                )
+                if n is None:
                     continue
-                suffix = str(code)[len(prefix):].strip()
-                if suffix.isdigit():
-                    n = int(suffix)
-                    if max_seq is None or n > max_seq:
-                        max_seq = n
+                if max_seq is None or n > max_seq:
+                    max_seq = n
             return max_seq
         except Exception as e:
             logger.warning(
-                "code_sequence_max_from_db_failed rule_code={} prefix={} error={}",
+                "code_sequence_max_from_db_failed rule_code={} prefix={!r} error={}",
                 rule_code,
                 prefix,
                 e,
@@ -482,28 +593,23 @@ class CodeGenerationService:
             return None
 
     @staticmethod
-    async def _recalibrate_sequence_from_db(
+    async def _resolve_max_sequence_from_db_for_rule(
         tenant_id: int,
         rule: CodeRule,
         request_rule_code: str,
-        scope_key: str,
-        sequence: CodeSequence,
-        seq_step: int,
         components: Optional[List[Dict[str, Any]]],
-    ) -> None:
+        context: Optional[Dict[str, Any]] = None,
+    ) -> Optional[int]:
         """
-        根据库中已有编码的最大序号校准 current_seq，避免导入数据后新生成的序号与已有编码冲突。
-        若库中最大序号大于当前 current_seq，则将 current_seq 设为该最大值（下次 += step 即为 max+1）。
-        查找实体时同时尝试 rule.code 与请求的 request_rule_code，以兼容不同配置来源。
+        解析规则对应实体在库中的最大流水序号。
+        物料等带分组（form_field）的规则：用与生成编码一致的「序号前完整前缀」（含 group_code）扫库，按分组取 max+1，避免填洞、避免跨分组串号。
         """
-        prefix = CodeGenerationService._get_prefix_for_rule(rule, components)
-        if not prefix:
-            logger.info(
-                "code_sequence_recalibrate_skip rule_code={} reason=no_prefix rule_has_components={}",
-                request_rule_code,
-                bool(components),
-            )
-            return
+        dyn_prefix = _render_prefix_before_auto_counter(components, context)
+        static_prefix = CodeGenerationService._get_prefix_for_rule(rule, components) or ""
+        if dyn_prefix is None:
+            scan_prefix = static_prefix
+        else:
+            scan_prefix = dyn_prefix if dyn_prefix else static_prefix
 
         def _entity_config_for(code: Optional[str]) -> Optional[tuple]:
             if not code:
@@ -519,12 +625,7 @@ class CodeGenerationService:
 
         entity_config = _entity_config_for(rule.code) or _entity_config_for(request_rule_code)
         if not entity_config:
-            logger.info(
-                "code_sequence_recalibrate_skip rule_code={} rule.code={} reason=no_entity_config",
-                request_rule_code,
-                getattr(rule, "code", None),
-            )
-            return
+            return None
         rule_code_for_lookup = (
             rule.code
             if _entity_config_for(rule.code)
@@ -535,23 +636,52 @@ class CodeGenerationService:
                 (k for k in RULE_CODE_ENTITY_FOR_SEQ_SYNC if k.upper() == (rule_code_for_lookup or "").upper()),
                 rule_code_for_lookup,
             )
-        max_from_db = await CodeGenerationService._get_max_sequence_from_db(
+        return await CodeGenerationService._get_max_sequence_from_db(
             tenant_id=tenant_id,
             rule_code=rule_code_for_lookup,
-            prefix=prefix,
+            prefix=scan_prefix,
+        )
+
+    @staticmethod
+    async def _recalibrate_sequence_from_db(
+        tenant_id: int,
+        rule: CodeRule,
+        request_rule_code: str,
+        scope_key: str,
+        sequence: CodeSequence,
+        seq_step: int,
+        components: Optional[List[Dict[str, Any]]],
+        context: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """
+        根据库中已有编码的最大序号校准 current_seq。
+        在能解析出 max_from_db 时，始终令 current_seq = max_from_db（下次 += step 即为 max+1），
+        这样删除最大序号后序号会回落；仅曾「只上调、不下调」时会在删除后仍发大号。
+        """
+        dyn = _render_prefix_before_auto_counter(components, context)
+        static_p = CodeGenerationService._get_prefix_for_rule(rule, components) or ""
+        log_prefix = (dyn if dyn is not None else static_p) or static_p
+
+        max_from_db = await CodeGenerationService._resolve_max_sequence_from_db_for_rule(
+            tenant_id=tenant_id,
+            rule=rule,
+            request_rule_code=request_rule_code,
+            components=components,
+            context=context,
         )
         if max_from_db is None:
             logger.info(
                 "code_sequence_recalibrate_skip rule_code={} prefix={} reason=max_from_db_is_none",
-                rule_code_for_lookup,
-                prefix,
+                request_rule_code,
+                log_prefix,
             )
             return
-        if sequence.current_seq < max_from_db:
+
+        if sequence.current_seq != max_from_db:
             logger.info(
                 "code_sequence_recalibrate rule_code={} prefix={} max_from_db={} current_seq_before={}",
-                rule_code_for_lookup,
-                prefix,
+                request_rule_code,
+                log_prefix,
                 max_from_db,
                 sequence.current_seq,
             )
@@ -560,8 +690,9 @@ class CodeGenerationService:
         else:
             logger.debug(
                 "code_sequence_recalibrate_skip rule_code={} current_seq={} max_from_db={} reason=already_ok",
-                rule_code_for_lookup,
+                request_rule_code,
                 sequence.current_seq,
                 max_from_db,
             )
+
 

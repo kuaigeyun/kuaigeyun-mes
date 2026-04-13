@@ -419,8 +419,11 @@ class MaterialService:
             if not group:
                 raise ValidationError(f"物料分组 {data.group_id} 不存在")
         
-        # 跟踪编码是否由用户手动输入
-        is_manual_code = bool(data.main_code and isinstance(data.main_code, str) and data.main_code.strip())
+        # 主编码：strip 后空串视为未提供（与前端一致），仅非空才视为用户/预览指定，避免走 generate_code 覆盖
+        if data.main_code is not None and isinstance(data.main_code, str):
+            _mc = data.main_code.strip()
+            data.main_code = _mc if _mc else None
+        is_manual_code = bool(data.main_code)
         
         # 生成主编码（如果未提供或为空字符串）
         if not is_manual_code:

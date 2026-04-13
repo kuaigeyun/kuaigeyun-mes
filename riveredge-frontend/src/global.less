@@ -603,6 +603,23 @@ code {
   margin: calc(var(--ant-padding-xs) / 2) !important;
 }
 
+/* 物料数据-分组树：减小每层缩进（默认约 24px），为深层子节点留出更多横向空间，减少标题换行 */
+.left-panel-scroll-container .material-group-tree.ant-tree .ant-tree-indent-unit {
+  width: 16px !important;
+}
+
+/* 若仍发生换行：允许节点增高，避免与下一行图标/文字叠在一起 */
+.left-panel-scroll-container .material-group-tree.ant-tree .ant-tree-treenode {
+  height: auto !important;
+  min-height: 32px !important;
+  align-items: center !important;
+  line-height: 1.35 !important;
+}
+.left-panel-scroll-container .material-group-tree.ant-tree .ant-tree-node-content-wrapper {
+  white-space: normal;
+  word-break: break-word;
+}
+
 /* 排除弹窗中的树组件 */
 .ant-popover .ant-tree .ant-tree-treenode,
 .ant-pro-table-column-setting-list .ant-tree .ant-tree-treenode,

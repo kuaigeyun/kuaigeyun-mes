@@ -73,7 +73,6 @@ import type {
   MaterialBulkTrackingPayload,
 } from '../../types/material'
 import { batchRuleApi, serialRuleApi } from '../../services/batchSerialRules'
-import { isAutoGenerateEnabled } from '../../../../utils/codeRulePage'
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../services/dataDictionary'
 import { SecureImage } from '../../../../components/secure-image'
 import { batchImport } from '../../../../utils/batchOperations'
@@ -939,14 +938,9 @@ const MaterialsManagementPage: React.FC = () => {
         })
         messageApi.success(t('app.master-data.materials.updateSuccessNotify'))
       } else {
-        // 新建物料时，如果启用了自动编号，不传递编号，让后端自动生成
-        // 这样序号只在真正创建成功时才更新（表单可能传 mainCode 或 main_code）
-        const submitValues = { ...values }
-        if (isAutoGenerateEnabled('master-data-material')) {
-          delete submitValues.mainCode
-          delete submitValues.main_code
-        }
-        await materialApi.create(submitValues as MaterialCreate)
+        // 主编码只由 MaterialForm 决定：有 main_code 则按用户/预览保存，无则省略由后端规则生成。
+        // 禁止在此处 delete main_code（曾导致预览/手填均被丢弃，只能累加序号）。
+        await materialApi.create(values as MaterialCreate)
         messageApi.success(t('common.createSuccess'))
       }
 
@@ -1238,7 +1232,7 @@ const MaterialsManagementPage: React.FC = () => {
               }
             },
           },
-          width: 300,
+          width: 320,
           minWidth: 200,
         }}
         rightPanel={{
