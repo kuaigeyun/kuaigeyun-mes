@@ -158,6 +158,15 @@ export const workOrderApi = {
     return `/api/v1/apps/kuaizhizao/work-orders/${id}/print?${params}`;
   },
 
+  /** 与后端 _format_work_order_data 一致，供 pdfme 前端渲染 */
+  getPrintVariables: async (workOrderId: number): Promise<Record<string, unknown>> => {
+    const res = await apiRequest<{ variables?: Record<string, unknown> }>(
+      `/apps/kuaizhizao/work-orders/${workOrderId}/print-variables`,
+      { method: 'GET' }
+    );
+    return res.variables ?? {};
+  },
+
   /** 获取工单齐套性分析 */
   getKittingAnalysis: async (id: string) =>
     apiRequest(`/apps/kuaizhizao/work-orders/${id}/kitting-analysis`, { method: 'GET' }),

@@ -10,10 +10,12 @@ import { handleError } from '../../../../../../utils/errorHandler';
 import { apiRequest } from '../../../../../../services/api';
 import { DOCUMENT_TYPE_TO_CODE } from '../../../../../../config/printTemplateSchemas';
 import { mapWorkOrderToTemplateVariables } from '../../../../../../utils/printTemplateDataMapper';
-import { isPdfmeTemplate, variablesToPdfmeInputs, sanitizeTemplate } from '../../../../../../utils/pdfmeTemplateUtils';
-import { generate } from '@pdfme/generator';
-import { PDFME_PLUGINS } from '../../../../../../components/pdfme-doc/plugins';
-import { getPdfmeChineseFont } from '../../../../../../components/pdfme-doc/fonts';
+import { isPdfmeTemplate } from '../../../../../../utils/pdfmeTemplateUtils';
+import {
+  generatePdfmePdfBlob,
+  preloadPdfmeChineseFont,
+  openPdfBlobInPrintWindow,
+} from '../../../../../../utils/pdfmeClientPrint';
 import { workOrderApi } from '../../../../services/production';
 import { MODAL_CONFIG } from '../../../../../../components/layout-templates';
 
@@ -36,8 +38,7 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>();
   const [previewHtml, setPreviewHtml] = useState<string>('');
   const [previewPdfUrl, setPreviewPdfUrl] = useState<string | null>(null);
-  const fontPromiseRef = useRef<Promise<Awaited<ReturnType<typeof getPdfmeChineseFont>>> | null>(null);
-  const templateCacheRef = useRef<Map<string, { template: any }>>(new Map());
+  const fontPromiseRef = useRef<Promise<Awaited<ReturnType<typeof preloadPdfmeChineseFont>>> | null>(null);
   const latestSelectionRef = useRef<{ selectedTemplateId?: string; effectiveWorkOrderId?: number }>({});
 
   const effectiveWorkOrderId = workOrderId ?? workOrderData?.id;
@@ -46,7 +47,7 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
   // Modal 打开时预加载字体，减少首次预览等待
   useEffect(() => {
     if (visible) {
-      fontPromiseRef.current = getPdfmeChineseFont();
+      fontPromiseRef.current = preloadPdfmeChineseFont();
     }
   }, [visible]);
 
@@ -100,28 +101,19 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
         getPrintTemplateByUuid(selectedTemplateId),
         workOrderApi.get(effectiveWorkOrderId.toString()),
         workOrderApi.getOperations(effectiveWorkOrderId.toString()),
-        fontPromiseRef.current ?? getPdfmeChineseFont(),
+        fontPromiseRef.current ?? preloadPdfmeChineseFont(),
       ]);
 
       const variables = mapWorkOrderToTemplateVariables(detail, operations || []);
 
       if (isPdfmeTemplate(templateDetail.content)) {
-        let template = templateCacheRef.current.get(selectedTemplateId)?.template;
-        if (!template) {
-          const rawTemplate = JSON.parse(templateDetail.content);
-          template = sanitizeTemplate(rawTemplate);
-          templateCacheRef.current.set(selectedTemplateId, { template });
-        }
-        const inputs = variablesToPdfmeInputs(template, variables);
-        const pdf = await generate({
-          template,
-          inputs,
-          plugins: PDFME_PLUGINS as any,
-          options: { font },
+        const blob = await generatePdfmePdfBlob({
+          templateJson: templateDetail.content,
+          variables,
+          font,
         });
         const current = latestSelectionRef.current;
         if (reqId !== `${current.selectedTemplateId}-${current.effectiveWorkOrderId}`) return;
-        const blob = new Blob([pdf.buffer], { type: 'application/pdf' });
         const url = URL.createObjectURL(blob);
         setPreviewPdfUrl(url);
         setPreviewHtml('');
@@ -175,35 +167,17 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
       const variables = mapWorkOrderToTemplateVariables(detail, operations || []);
 
       if (isPdfmeTemplate(templateDetail.content)) {
-        let template = templateCacheRef.current.get(selectedTemplateId)?.template;
-        if (!template) {
-          const rawTemplate = JSON.parse(templateDetail.content);
-          template = sanitizeTemplate(rawTemplate);
-          templateCacheRef.current.set(selectedTemplateId, { template });
-        }
-        const inputs = variablesToPdfmeInputs(template, variables);
-        const font = await (fontPromiseRef.current ?? getPdfmeChineseFont());
-        const pdf = await generate({
-          template,
-          inputs,
-          plugins: PDFME_PLUGINS as any,
-          options: { font },
+        const font = await (fontPromiseRef.current ?? preloadPdfmeChineseFont());
+        const blob = await generatePdfmePdfBlob({
+          templateJson: templateDetail.content,
+          variables,
+          font,
         });
-        const blob = new Blob([pdf.buffer], { type: 'application/pdf' });
-        const url = URL.createObjectURL(blob);
-        const printWindow = window.open(url, '_blank');
-        if (printWindow) {
-          printWindow.onload = () => {
-            printWindow.print();
-            printWindow.onafterprint = () => {
-              URL.revokeObjectURL(url);
-              printWindow.close();
-            };
-          };
-          message.success('打印已发送');
-        } else {
-          URL.revokeObjectURL(url);
+        const { revoked } = openPdfBlobInPrintWindow(blob);
+        if (revoked) {
           message.error('无法打开打印窗口，请检查浏览器弹窗设置');
+        } else {
+          message.success('打印已发送');
         }
       } else {
         const result = await apiRequest<{ content?: string }>(

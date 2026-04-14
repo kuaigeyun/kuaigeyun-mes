@@ -12,6 +12,7 @@ from datetime import date, datetime, timedelta
 import zoneinfo
 import uuid
 from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTPException, Body
+from fastapi.responses import HTMLResponse, JSONResponse
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
@@ -370,6 +371,61 @@ async def list_sales_orders(
     except Exception as e:
         logger.exception(f"获取销售订单列表失败: {e}")
         raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, f"获取销售订单列表失败: {str(e)}", "/sales-orders", tenant_id)
+
+
+@router.get("/{sales_order_id}/print", summary="打印销售订单")
+async def print_sales_order(
+    sales_order_id: int = Path(..., description="销售订单ID"),
+    template_code: Optional[str] = Query(None, description="打印模板代码"),
+    template_uuid: Optional[str] = Query(None, description="打印模板UUID"),
+    output_format: str = Query("html", description="输出格式"),
+    response_format: str = Query("json", description="响应格式"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """打印销售订单（与报价单打印入口一致，供详情页 PDF/打印）。"""
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+
+    try:
+        result = await DocumentPrintService().print_document(
+            tenant_id=tenant_id,
+            document_type="sales_order",
+            document_id=sales_order_id,
+            template_code=template_code,
+            template_uuid=template_uuid,
+            output_format=output_format,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(
+            http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}/print", tenant_id
+        )
+    except ValidationError as e:
+        raise _http_exception_with_trace(
+            http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/{sales_order_id}/print", tenant_id
+        )
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    return JSONResponse(content=result, status_code=200)
+
+
+@router.get("/{sales_order_id}/print-variables", summary="销售订单打印变量（供前端 pdfme 渲染）")
+async def get_sales_order_print_variables(
+    sales_order_id: int = Path(..., description="销售订单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """与 `_format_sales_order_data` 一致。"""
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+
+    try:
+        variables = await DocumentPrintService().get_document_variables_for_print(
+            tenant_id, "sales_order", sales_order_id
+        )
+        return {"success": True, "variables": variables}
+    except NotFoundError as e:
+        raise _http_exception_with_trace(
+            http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}/print-variables", tenant_id
+        )
 
 
 @router.get("/{sales_order_id}", response_model=SalesOrderResponse, summary="获取销售订单详情")

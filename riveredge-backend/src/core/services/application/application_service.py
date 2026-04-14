@@ -521,7 +521,8 @@ class ApplicationService:
                 tenant_id=tenant_id,
                 application_uuid=str(uuid),
                 menu_config=application['menu_config'],
-                is_active=True
+                is_active=True,
+                preserve_existing_is_active=False,
             )
         else:
             # 如果应用没有菜单配置，直接更新现有菜单状态

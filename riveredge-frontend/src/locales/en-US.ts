@@ -10,7 +10,7 @@ export default {
   'menu.dashboard.workplace': 'Workplace',
   'menu.dashboard.analysis': 'Operations Board',
 
-  'dashboard.businessBoard.title': 'KuaiGe Cloud Manufacturing Operations Board',
+  'dashboard.businessBoard.title': 'Operations Board',
   'dashboard.businessBoard.subtitle': 'Operations overview · KPIs & charts',
   'dashboard.businessBoard.fullscreen': 'Fullscreen',
   'dashboard.businessBoard.exitFullscreen': 'Exit fullscreen',
@@ -149,7 +149,7 @@ export default {
   'menu.system.appMenu': 'Application',
   'menu.system.systemMenu': 'System',
   'menu.system.appMenuTip': 'Application menus (source: Application) are synced from manifest.json and cannot be edited or deleted here. To modify, go to Application Center and sync menus. System menus can be edited here directly.',
-  'menu.system.appMenuSyncTip': 'Application menu synced from manifest; sync in Application Center to update',
+  'menu.system.appMenuSyncTip': 'Menu structure syncs from manifest; disabled items stay disabled (not reset by background sync). Use Enable application in Application Center to align all items with the app.',
   'menu.system.appMenuEditDisabled': 'Application menu synced from manifest; editing is disabled',
   'menu.system.appMenuAddDisabled': 'Application menu synced from manifest; adding child items is disabled',
   'menu.system.appMenuDeleteDisabled': 'Application menu synced from manifest; deletion is disabled',
@@ -1738,6 +1738,18 @@ export default {
   'app.kuaizhizao.menu.sales-management.shipment-notices': 'Shipment Notices',
   'app.kuaizhizao.menu.sales-management.sales-returns': 'Sales Returns',
   'app.kuaizhizao.menu.sales-management.quotations': 'Quotations',
+  'app.kuaizhizao.quotation.saveAsRevision': 'Save as new revision',
+  'app.kuaizhizao.quotation.saveAsRevisionHint':
+    'Copy the current head of this series to a new draft so you can change lines and prices. Continue?',
+  'app.kuaizhizao.quotation.formalPrint': 'Generate PDF quotation',
+  'app.kuaizhizao.quotation.formalPrintDenied':
+    'PDF generation is available after approval, customer acceptance, or conversion to sales order.',
+  'app.kuaizhizao.quotation.colSeries': 'Series code',
+  'app.kuaizhizao.quotation.colVersion': 'Revision',
+  'app.kuaizhizao.quotation.colVersionState': 'Revision state',
+  'app.kuaizhizao.quotation.latestTag': 'Latest',
+  'app.kuaizhizao.quotation.historyTag': 'Superseded',
+  'app.kuaizhizao.salesOrder.printPdf': 'Print / PDF',
   'app.kuaizhizao.menu.sales-management.sample-trials': 'Sample Trials',
   'app.kuaizhizao.menu.sales-management.customer-follow-ups': 'Customer Follow-up',
   'app.kuaizhizao.customerFollowUp.addFollowUpFromDocument': 'Add follow-up',
@@ -5608,7 +5620,8 @@ export default {
   'pages.system.printTemplatesDesign.save': 'Save',
   'pages.system.printTemplatesDesign.availableVariables': 'Available Variables',
   'pages.system.printTemplatesDesign.searchFieldPlaceholder': 'Search field name or key',
-  'pages.system.printTemplatesDesign.variableHint': 'Tip: Click a field above to add it to the page center.',
+  'pages.system.printTemplatesDesign.variableHint':
+    'Tip: Click to add to the canvas. Items tagged as a detail table insert a full table bound to items/operations — no need to add columns one by one.',
   'pages.system.printTemplatesDesign.modalPageSettings': 'Page Settings',
   'pages.system.printTemplatesDesign.apply': 'Apply',
   'pages.system.printTemplatesDesign.cancel': 'Cancel',
@@ -5637,6 +5650,41 @@ export default {
   'pages.system.printTemplatesDesign.documentTitle': 'Print Design',
   'pages.system.printTemplatesDesign.added': 'Added',
   'pages.system.printTemplatesDesign.noMatchField': 'No matching fields found',
+  'pages.system.printTemplatesDesign.lineColumns': 'Line columns',
+  'pages.system.printTemplatesDesign.lineColumnsModalTitle': 'Detail table columns',
+  'pages.system.printTemplatesDesign.lineColumnsTableLabel': 'Table',
+  'pages.system.printTemplatesDesign.lineColumnsHint':
+    'Configure visible columns, order, and row height here; click Apply to canvas before saving. Column text alignment is in the right panel under Column style; alignment follows each field after reorder.',
+  'pages.system.printTemplatesDesign.lineColumnsVisibilityOrderSection': 'Visible columns & order',
+  'pages.system.printTemplatesDesign.lineColumnsVisibilityOrderHint':
+    'Checked columns appear in the print table; Up/Down sets left-to-right order. Keep at least one column.',
+  'pages.system.printTemplatesDesign.lineColumnsCheckboxShowColumn': 'Show this column in the print table',
+  'pages.system.printTemplatesDesign.lineColumnsApply': 'Apply to canvas',
+  'pages.system.printTemplatesDesign.lineColumnsMoveUp': 'Up',
+  'pages.system.printTemplatesDesign.lineColumnsMoveDown': 'Down',
+  'pages.system.printTemplatesDesign.lineColumnsAtLeastOne': 'Keep at least one column',
+  'pages.system.printTemplatesDesign.lineColumnsApplied': 'Line columns applied to the canvas',
+  'pages.system.printTemplatesDesign.detailTableRowHeightSection': 'Table row height',
+  'pages.system.printTemplatesDesign.rowHeightModeAuto':
+    'Auto (row grows with content; values below are minimum row heights for header/body)',
+  'pages.system.printTemplatesDesign.rowHeightModeFixed':
+    'Fixed (uniform row height; compact layout)',
+  'pages.system.printTemplatesDesign.detailTableHeadRowMm': 'Header',
+  'pages.system.printTemplatesDesign.detailTableBodyRowMm': 'Body',
+  'pages.system.printTemplatesDesign.rowHeightAutoHint':
+    'Header and body can be set separately (mm). Multi-line text may still increase row height.',
+  'pages.system.printTemplatesDesign.rowHeightFixedHint':
+    'Header and body can be set separately (mm). Matches pdfme cell min height; best for single-line cells.',
+  'pages.system.printTemplatesDesign.detailTableBadge': 'Table',
+  'pages.system.printTemplatesDesign.detailTableAdded': 'Detail table inserted: {{label}}',
+  'pages.system.printTemplatesDesign.detailTableConfigMissing':
+    'No line-item columns are configured for this document type.',
+  'pages.system.printTemplatesDesign.detailTableDataBindingHint': 'full table · line array',
+  'pages.system.printTemplatesDesign.cleanupLegacyDetailTexts': 'Remove line-item text boxes',
+  'pages.system.printTemplatesDesign.cleanupLegacyDetailTextsConfirmTitle': 'Remove scattered line fields',
+  'pages.system.printTemplatesDesign.cleanupLegacyDetailTextsConfirmDesc':
+    'This removes all items.0.* / operations.0.* text schemas ({{count}}). Full tables are kept. Re-insert the detail table from the right panel if needed.',
+  'pages.system.printTemplatesDesign.cleanupLegacyDetailTextsDone': 'Scattered line fields removed',
 
   // Print templates
   'pages.system.printTemplates.getDetailFailed': 'Failed to load print template detail',

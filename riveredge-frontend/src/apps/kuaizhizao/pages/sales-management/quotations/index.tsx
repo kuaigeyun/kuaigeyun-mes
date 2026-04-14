@@ -11,9 +11,9 @@ import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspens
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, List, Typography, Alert, theme as AntdTheme, Descriptions, Empty, Spin, Dropdown } from 'antd';
+import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, List, Typography, Alert, theme as AntdTheme, Descriptions, Empty, Spin, Dropdown, Tooltip } from 'antd';
 import type { DescriptionsProps } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, AppstoreAddOutlined, SendOutlined, CommentOutlined, RollbackOutlined, CheckOutlined, CloseCircleOutlined, UndoOutlined, ArrowDownOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, AppstoreAddOutlined, SendOutlined, CommentOutlined, RollbackOutlined, CheckOutlined, CloseCircleOutlined, UndoOutlined, ArrowDownOutlined, BranchesOutlined } from '@ant-design/icons';
 import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
@@ -43,6 +43,8 @@ import {
   confirmCustomerQuotation,
   reopenQuotation,
   revokePushQuotation,
+  createQuotationRevision,
+  recordQuotationPrint,
   Quotation,
 } from '../../../services/quotation';
 import { getSalesOrder, type SalesOrder } from '../../../services/sales-order';
@@ -55,6 +57,9 @@ import {
   useDocumentTracking,
 } from '../../../../../components/document-tracking-panel';
 import { apiRequest } from '../../../../../services/api';
+import { tryQuotationPdfmePreviewBlob } from '../../../utils/quotationPdfmePreview';
+import type { DocumentPrintApiResult } from '../../../../../utils/printResponseHelpers';
+import { isClientPdfmePrint } from '../../../../../utils/printResponseHelpers';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import dayjs from 'dayjs';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
@@ -128,6 +133,7 @@ function canDeleteQuotation(q: Quotation): boolean {
 
 /** 允许「转订单」：已审核通过或已接受；或已转单但下游已删可重新下推 */
 function canConvertQuotation(q: Quotation): boolean {
+  if (q.is_latest_in_series === false) return false;
   if (q.status === '已拒绝') return false;
   if (q.status === '已转订单') {
     return q.conversion_downstream_missing === true;
@@ -135,6 +141,21 @@ function canConvertQuotation(q: Quotation): boolean {
   if (q.status === '已接受') return true;
   if (q.status === '已发送') return isApprovedReview(q.review_status);
   return false;
+}
+
+/** 生成PDF报价：与后端 print 门禁一致 */
+function canPrintFormalQuotation(q: Quotation): boolean {
+  const st = (q.status || '').trim();
+  if (st === '已接受' || st === '已转订单') return true;
+  if (st === '已发送' && isApprovedReview(q.review_status)) return true;
+  return false;
+}
+
+/** 另存为新版本：非草稿的最新系列行 */
+function canCreateRevision(q: Quotation): boolean {
+  if (q.is_latest_in_series === false) return false;
+  if ((q.status || '').trim() === '草稿') return false;
+  return true;
 }
 
 /** ProForm 提交时日期可能是 dayjs、字符串或 Date，避免直接调用 .format 报错 */
@@ -311,6 +332,9 @@ const QuotationsPage: React.FC = () => {
     quotationDetail?.id
   );
   const [syncModalVisible, setSyncModalVisible] = useState(false);
+  const [pdfPreviewVisible, setPdfPreviewVisible] = useState(false);
+  const [pdfPreviewBlobUrl, setPdfPreviewBlobUrl] = useState<string | null>(null);
+  const [pdfPreviewFileName, setPdfPreviewFileName] = useState<string>('报价单.pdf');
 
   const [modalVisible, setModalVisible] = useState(false);
   const [importModalVisible, setImportModalVisible] = useState(false);
@@ -411,6 +435,23 @@ const QuotationsPage: React.FC = () => {
       ),
     },
     {
+      title: t('app.kuaizhizao.quotation.colSeries'),
+      dataIndex: 'quotation_series_code',
+      width: 140,
+      ellipsis: true,
+      hideInSearch: true,
+      order: 12,
+      render: (_, r) => r.quotation_series_code || r.quotation_code || '-',
+    },
+    {
+      title: t('app.kuaizhizao.quotation.colVersion'),
+      dataIndex: 'version_no',
+      width: 88,
+      hideInSearch: true,
+      order: 13,
+      render: (_, r) => `Rev.${r.version_no ?? 1}`,
+    },
+    {
       title: '客户',
       dataIndex: 'customer_name',
       // 不设置 width 以便自适应响应式布局
@@ -475,18 +516,19 @@ const QuotationsPage: React.FC = () => {
       dataIndex: 'lifecycle',
       width: 132,
       fixed: 'right',
-      align: 'center',
+      align: 'left',
       hideInSearch: true,
       render: (_, record) => {
         const lifecycle = getQuotationLifecycle(record);
+        const activeStage = lifecycle.mainStages?.find((s) => s.status === 'active');
+        const displayLabel = activeStage?.label ?? lifecycle.stageName;
         return (
           <UniLifecycle
             percent={lifecycle.percent}
-            stageName={lifecycle.stageName}
+            stageName={displayLabel}
             status={lifecycle.status}
             subStages={lifecycle.subStages}
             showLabel
-            size="small"
             showCircleTooltip={false}
           />
         );
@@ -566,12 +608,36 @@ const QuotationsPage: React.FC = () => {
             </Button>
           );
         }
-        if (canConvertQuotation(record)) {
-          parts.push(
-            <Button key="cv" type="link" size="small" icon={<SwapOutlined />} onClick={() => handleConvert(record)}>
-              转销售订单
-            </Button>
-          );
+        {
+          const convertible = canConvertQuotation(record);
+          // 仅当 superseded_by_id 有值时才认为"真正被取代"，避免数据异常导致误判
+          const superseded =
+            record.is_latest_in_series === false &&
+            record.superseded_by_id != null &&
+            Number(record.superseded_by_id) > 0;
+          const showConvert =
+            convertible ||
+            (superseded &&
+              (record.status === '已接受' ||
+                (record.status === '已发送' && isApprovedReview(record.review_status))));
+          if (showConvert) {
+            parts.push(
+              <Tooltip
+                key="cv"
+                title={superseded ? '该报价单已有修订版，请从最新修订版转销售订单' : undefined}
+              >
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<SwapOutlined />}
+                  disabled={superseded}
+                  onClick={() => !superseded && handleConvert(record)}
+                >
+                  转销售订单
+                </Button>
+              </Tooltip>
+            );
+          }
         }
         if (canRevokePushQuotation(record)) {
           parts.push(
@@ -580,10 +646,38 @@ const QuotationsPage: React.FC = () => {
             </Button>
           );
         }
+        if (canCreateRevision(record)) {
+          parts.push(
+            <Button
+              key="rev"
+              type="link"
+              size="small"
+              icon={<BranchesOutlined />}
+              onClick={() => handleRevision(record)}
+            >
+              {t('app.kuaizhizao.quotation.saveAsRevision')}
+            </Button>
+          );
+        }
         parts.push(
-          <Button key="pr" type="link" size="small" icon={<PrinterOutlined />} onClick={() => handlePrint(record)}>
-            打印
-          </Button>
+          <Tooltip
+            key="pr"
+            title={
+              canPrintFormalQuotation(record)
+                ? t('app.kuaizhizao.quotation.formalPrint')
+                : t('app.kuaizhizao.quotation.formalPrintDenied')
+            }
+          >
+            <Button
+              type="link"
+              size="small"
+              icon={<PrinterOutlined />}
+              disabled={!canPrintFormalQuotation(record)}
+              onClick={() => canPrintFormalQuotation(record) && handlePrint(record)}
+            >
+              {t('app.kuaizhizao.quotation.formalPrint')}
+            </Button>
+          </Tooltip>
         );
         if (record.customer_id != null && Number.isFinite(Number(record.customer_id))) {
           parts.push(
@@ -1162,25 +1256,112 @@ const QuotationsPage: React.FC = () => {
     });
   };
 
-  const handlePrint = async (record: Quotation) => {
-    try {
-      const result = await apiRequest<{ content?: string }>(`/apps/kuaizhizao/quotations/${record.id}/print`, {
-        method: 'GET',
-        params: { response_format: 'html', output_format: 'html' },
-      });
-      const html = result?.content || '';
-      if (html) {
-        const printWindow = window.open('', '_blank');
-        if (printWindow) {
-          printWindow.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>报价单打印</title></head><body>${html}</body></html>`);
-          printWindow.document.close();
-          printWindow.onload = () => printWindow.print();
-        } else {
-          messageApi.warning('无法打开打印窗口，请检查浏览器弹窗设置');
+  const handleRevision = (record: Quotation) => {
+    Modal.confirm({
+      title: t('app.kuaizhizao.quotation.saveAsRevision'),
+      content: t('app.kuaizhizao.quotation.saveAsRevisionHint'),
+      onOk: async () => {
+        try {
+          const created = await createQuotationRevision(record.id!);
+          messageApi.success(
+            `已创建新版本${created.quotation_code ? `：${created.quotation_code}` : ''}`
+          );
+          invalidateMenuBadgeCounts();
+          actionRef.current?.reload();
+          setQuotationDetail(created);
+          setDetailDrawerVisible(true);
+        } catch (e: any) {
+          messageApi.error(e?.message || e?.detail || '操作失败');
         }
-      } else {
-        messageApi.warning('打印内容为空');
+      },
+    });
+  };
+
+  const handlePrint = async (record: Quotation) => {
+    const qid = record.id;
+    if (qid == null) {
+      messageApi.warning('报价单 ID 无效');
+      return;
+    }
+
+    const safeCode = String(record.quotation_code || record.id || 'quotation').replace(
+      /[/\\?%*:|"<>]/g,
+      '-',
+    );
+    const fileName = `生成PDF报价_${safeCode}.pdf`;
+
+    const openPdfPreview = (blobUrl: string) => {
+      setPdfPreviewBlobUrl(blobUrl);
+      setPdfPreviewFileName(fileName);
+      setPdfPreviewVisible(true);
+    };
+
+    /** pdfme 模板：浏览器内 @pdfme/generator（与 tryQuotationPdfmePreviewBlob 一致） */
+    try {
+      const pdfmeBlob = await tryQuotationPdfmePreviewBlob(qid);
+      if (pdfmeBlob) {
+        const blobUrl = URL.createObjectURL(pdfmeBlob);
+        openPdfPreview(blobUrl);
+        try {
+          await recordQuotationPrint(qid);
+        } catch {
+          /* 正式文档时间戳非阻断 */
+        }
+        messageApi.success('已打开预览（pdfme 模板）');
+        return;
       }
+    } catch (e) {
+      console.warn('[quotation print] pdfme branch skipped', e);
+    }
+
+    try {
+      const result = await apiRequest<DocumentPrintApiResult>(
+        `/apps/kuaizhizao/quotations/${record.id}/print`,
+        {
+          method: 'GET',
+          params: { response_format: 'json', output_format: 'pdf' },
+        }
+      );
+      if (isClientPdfmePrint(result)) {
+        try {
+          const blob = await tryQuotationPdfmePreviewBlob(qid);
+          if (blob) {
+            const blobUrl = URL.createObjectURL(blob);
+            openPdfPreview(blobUrl);
+            try {
+              await recordQuotationPrint(qid);
+            } catch {
+              /* ignore */
+            }
+            messageApi.success('已打开预览（pdfme 模板）');
+            return;
+          }
+        } catch (e: any) {
+          console.error('[quotation print] pdfme fallback failed', e);
+          messageApi.error(e?.message || 'pdfme 生成 PDF 失败，请检查模板或稍后重试');
+          return;
+        }
+        messageApi.warning(result?.message || '无法生成 pdfme 预览');
+        return;
+      }
+      const raw = result?.content || '';
+      if (
+        result?.content_encoding === 'base64' &&
+        result?.mime_type === 'application/pdf' &&
+        raw
+      ) {
+        const binary = atob(raw);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i += 1) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], { type: 'application/pdf' });
+        const blobUrl = URL.createObjectURL(blob);
+        openPdfPreview(blobUrl);
+        messageApi.success('已打开预览');
+        return;
+      }
+      messageApi.warning('打印内容为空');
     } catch (error: any) {
       messageApi.error(error.message || '打印失败');
     }
@@ -1346,6 +1527,26 @@ const QuotationsPage: React.FC = () => {
   /** 详情-基本信息（平铺，与抽屉四区块一致） */
   const detailSummaryColumns: ProDescriptionsItemProps<Quotation>[] = [
     { title: '报价单编号', dataIndex: 'quotation_code' },
+    {
+      title: t('app.kuaizhizao.quotation.colSeries'),
+      dataIndex: 'quotation_series_code',
+      render: (_: unknown, r: Quotation) => r.quotation_series_code || r.quotation_code || '-',
+    },
+    {
+      title: t('app.kuaizhizao.quotation.colVersion'),
+      dataIndex: 'version_no',
+      render: (_: unknown, r: Quotation) => `Rev.${r.version_no ?? 1}`,
+    },
+    {
+      title: t('app.kuaizhizao.quotation.colVersionState'),
+      dataIndex: 'is_latest_in_series',
+      render: (_: unknown, r: Quotation) =>
+        r.is_latest_in_series === false ? (
+          <Tag>{t('app.kuaizhizao.quotation.historyTag')}</Tag>
+        ) : (
+          <Tag color="blue">{t('app.kuaizhizao.quotation.latestTag')}</Tag>
+        ),
+    },
     { title: '客户', dataIndex: 'customer_name' },
     { title: '报价日期', dataIndex: 'quotation_date', valueType: 'date' },
     { title: '销售员', dataIndex: 'salesman_name' },
@@ -2089,6 +2290,28 @@ const QuotationsPage: React.FC = () => {
               {canRevokePushQuotation(quotationDetail) && (
                 <Button icon={<RollbackOutlined />} onClick={() => handleRevokePush(quotationDetail)}>撤回下推</Button>
               )}
+              {canCreateRevision(quotationDetail) && (
+                <Button icon={<BranchesOutlined />} onClick={() => handleRevision(quotationDetail)}>
+                  {t('app.kuaizhizao.quotation.saveAsRevision')}
+                </Button>
+              )}
+              <Tooltip
+                title={
+                  canPrintFormalQuotation(quotationDetail)
+                    ? t('app.kuaizhizao.quotation.formalPrint')
+                    : t('app.kuaizhizao.quotation.formalPrintDenied')
+                }
+              >
+                <Button
+                  icon={<PrinterOutlined />}
+                  disabled={!canPrintFormalQuotation(quotationDetail)}
+                  onClick={() =>
+                    canPrintFormalQuotation(quotationDetail) && handlePrint(quotationDetail)
+                  }
+                >
+                  {t('app.kuaizhizao.quotation.formalPrint')}
+                </Button>
+              </Tooltip>
             </Space>
           )
         }
@@ -2381,6 +2604,66 @@ const QuotationsPage: React.FC = () => {
           maxLength={500}
           showCount
         />
+      </Modal>
+
+      <Modal
+        open={pdfPreviewVisible}
+        title={pdfPreviewFileName}
+        width="90vw"
+        style={{ top: 20 }}
+        styles={{ body: { padding: 0, height: '80vh' } }}
+        footer={
+          <Space>
+            <Button
+              onClick={() => {
+                if (pdfPreviewBlobUrl) {
+                  const a = document.createElement('a');
+                  a.href = pdfPreviewBlobUrl;
+                  a.download = pdfPreviewFileName;
+                  a.rel = 'noopener';
+                  document.body.appendChild(a);
+                  a.click();
+                  a.remove();
+                }
+              }}
+            >
+              保存
+            </Button>
+            <Button
+              onClick={() => {
+                const iframe = document.getElementById('quotation-pdf-preview-frame') as HTMLIFrameElement | null;
+                try {
+                  iframe?.contentWindow?.focus();
+                  iframe?.contentWindow?.print();
+                } catch {
+                  window.print();
+                }
+              }}
+            >
+              打印
+            </Button>
+            <Button type="primary" onClick={() => setPdfPreviewVisible(false)}>
+              关闭
+            </Button>
+          </Space>
+        }
+        onCancel={() => setPdfPreviewVisible(false)}
+        afterClose={() => {
+          if (pdfPreviewBlobUrl) {
+            URL.revokeObjectURL(pdfPreviewBlobUrl);
+            setPdfPreviewBlobUrl(null);
+          }
+        }}
+        destroyOnHidden
+      >
+        {pdfPreviewBlobUrl && (
+          <iframe
+            id="quotation-pdf-preview-frame"
+            src={pdfPreviewBlobUrl}
+            title="PDF 预览"
+            style={{ border: 0, width: '100%', height: '100%', background: '#525659' }}
+          />
+        )}
       </Modal>
     </>
   );

@@ -18,7 +18,17 @@ class Quotation(BaseModel):
     用于记录销售前报价信息，结构与销售订单类似，可转销售订单
     """
     tenant_id = fields.IntField(description="租户ID")
-    quotation_code = fields.CharField(max_length=50, unique=True, description="报价单编码")
+    # 租户内未删除行唯一，见迁移 partial unique index；勿再使用表级 UNIQUE
+    quotation_code = fields.CharField(max_length=120, db_index=True, description="报价单编码（含修订后缀）")
+
+    # 版本与系列（同一商务谈判多条版本共用 quotation_series_code）
+    quotation_series_code = fields.CharField(max_length=120, db_index=True, description="报价系列编码")
+    root_quotation_id = fields.IntField(null=True, description="系列根报价单 ID")
+    version_no = fields.IntField(default=1, description="系列内版本号")
+    previous_quotation_id = fields.IntField(null=True, description="上一版本报价单 ID")
+    is_latest_in_series = fields.BooleanField(default=True, description="是否为系列最新版本")
+    superseded_by_id = fields.IntField(null=True, description="被替代为的新版本 ID")
+    formal_document_generated_at = fields.DatetimeField(null=True, description="首次正式报价 PDF 生成时间")
 
     # 客户信息
     customer_id = fields.IntField(description="客户ID")
@@ -71,6 +81,7 @@ class Quotation(BaseModel):
         indexes = [
             ("tenant_id",),
             ("quotation_code",),
+            ("tenant_id", "quotation_series_code"),
             ("customer_id",),
             ("status",),
             ("quotation_date",),

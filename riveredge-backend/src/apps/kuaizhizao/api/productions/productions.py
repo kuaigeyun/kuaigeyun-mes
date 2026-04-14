@@ -695,6 +695,22 @@ async def print_work_order(
     return JSONResponse(content=result, status_code=200)
 
 
+@router.get("/work-orders/{id}/print-variables", summary="工单打印变量（供前端 pdfme 渲染）")
+async def get_work_order_print_variables(
+    id: int = Path(..., description="工单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """与 `_format_work_order_data` 一致。"""
+    try:
+        variables = await DocumentPrintService().get_document_variables_for_print(
+            tenant_id, "work_order", id
+        )
+        return {"success": True, "variables": variables}
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
 # ============ 批量操作 API ============
 # (批量操作路由在文件后续部分定义)
 

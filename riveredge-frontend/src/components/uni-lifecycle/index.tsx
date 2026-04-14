@@ -19,9 +19,11 @@ export interface UniLifecycleProps extends LifecycleResult {
   expandSubStages?: boolean;
   /** 为 false 时圆环 hover 不展示 Tooltip（如列表列已有阶段文案） */
   showCircleTooltip?: boolean;
+  /** 是否在圆环内显示百分比数字，默认 true */
+  showPercent?: boolean;
 }
 
-const CIRCLE_SIZE = 32;
+const CIRCLE_SIZE = 22;
 
 function SubStageIcon({ status }: { status: SubStage['status'] }) {
   if (status === 'done') return <CheckCircleOutlined style={{ color: 'var(--ant-color-success)' }} />;
@@ -73,6 +75,7 @@ export const UniLifecycle: React.FC<UniLifecycleProps> = ({
   size = CIRCLE_SIZE,
   expandSubStages = false,
   showCircleTooltip = true,
+  showPercent = false,
 }) => {
   const sizeNum = size === 'small' ? CIRCLE_SIZE : typeof size === 'number' ? size : CIRCLE_SIZE;
 
@@ -94,6 +97,13 @@ export const UniLifecycle: React.FC<UniLifecycleProps> = ({
       strokeWidth={12}
       strokeColor={progressStatus === 'exception' ? 'var(--ant-color-error)' : undefined}
       railColor="var(--ant-color-border)"
+      format={
+        showPercent
+          ? undefined
+          : Math.min(100, Math.max(0, Math.round(percent))) >= 100 || progressStatus === 'success'
+            ? undefined
+            : () => null
+      }
     />
   );
 

@@ -596,3 +596,12 @@ export async function bulkUnapproveSalesOrders(ids: number[]): Promise<{
     data: ids,
   });
 }
+
+/** 与后端 _format_sales_order_data 一致，供 pdfme 前端渲染 */
+export async function getSalesOrderPrintVariables(salesOrderId: number): Promise<Record<string, unknown>> {
+  const res = await apiRequest<{ variables?: Record<string, unknown> }>(
+    `/apps/kuaizhizao/sales-orders/${salesOrderId}/print-variables`,
+    { method: 'GET' }
+  );
+  return res.variables ?? {};
+}

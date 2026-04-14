@@ -57,6 +57,14 @@ export interface Quotation {
   currency_code?: string;
   sales_order_id?: number;
   sales_order_code?: string;
+  /** 报价系列编码（首版通常与 quotation_code 相同） */
+  quotation_series_code?: string;
+  root_quotation_id?: number;
+  version_no?: number;
+  previous_quotation_id?: number;
+  is_latest_in_series?: boolean;
+  superseded_by_id?: number;
+  formal_document_generated_at?: string;
   /** 已转单但下游销售订单已不存在（如已删除） */
   conversion_downstream_missing?: boolean;
   notes?: string;
@@ -66,6 +74,7 @@ export interface Quotation {
   created_at?: string;
   updated_at?: string;
   items?: QuotationItem[];
+  lifecycle?: Record<string, unknown>;
 }
 
 export interface QuotationListParams {
@@ -79,6 +88,7 @@ export interface QuotationListParams {
   keyword?: string;
   quotation_code?: string;
   customer_name?: string;
+  quotation_series_code?: string;
 }
 
 export interface QuotationListResponse {
@@ -173,6 +183,17 @@ export async function revokePushQuotation(id: number): Promise<Quotation> {
   });
 }
 
+/** 另存为新版本（修订）：从系列当前最新版复制为草稿 */
+export async function createQuotationRevision(
+  quotationId: number,
+  data?: Record<string, unknown>
+): Promise<Quotation> {
+  return apiRequest<Quotation>(`/apps/kuaizhizao/quotations/${quotationId}/revision`, {
+    method: 'POST',
+    data: data ?? {},
+  });
+}
+
 export async function deleteQuotation(id: number): Promise<void> {
   return apiRequest<void>(`/apps/kuaizhizao/quotations/${id}`, {
     method: 'DELETE',
@@ -188,4 +209,18 @@ export async function convertQuotationToOrder(quotationId: number): Promise<Conv
   return apiRequest<ConvertToOrderResponse>(`/apps/kuaizhizao/quotations/${quotationId}/convert-to-order`, {
     method: 'POST',
   });
+}
+
+/** 与后端 _format_quotation_data 一致，供 pdfme 前端渲染 */
+export async function getQuotationPrintVariables(quotationId: number): Promise<Record<string, unknown>> {
+  const res = await apiRequest<{ variables?: Record<string, unknown> }>(
+    `/apps/kuaizhizao/quotations/${quotationId}/print-variables`,
+    { method: 'GET' }
+  );
+  return res.variables ?? {};
+}
+
+/** 与走服务端打印时的正式文档时间戳一致（pdfme 纯前端成稿后调用） */
+export async function recordQuotationPrint(quotationId: number): Promise<void> {
+  await apiRequest(`/apps/kuaizhizao/quotations/${quotationId}/record-print`, { method: 'POST' });
 }

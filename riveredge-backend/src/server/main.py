@@ -113,6 +113,7 @@ from core.api.launch_checklist.launch_checklist import router as launch_checklis
 from core.api.usage_analysis.usage_analysis import router as usage_analysis_router
 from core.api.optimization_suggestion.optimization_suggestion import router as optimization_suggestion_router
 from core.api.performance.performance import router as performance_router
+from core.api.dashboard.business_board_title import router as business_board_title_router
 
 # 插件管理器API
 from core.api.plugin_manager.plugin_manager import router as plugin_manager_router
@@ -744,6 +745,7 @@ app.include_router(launch_checklist_router, prefix="/api/v1/core")
 app.include_router(usage_analysis_router, prefix="/api/v1/core")
 app.include_router(optimization_suggestion_router, prefix="/api/v1/core")
 app.include_router(performance_router, prefix="/api/v1/core")
+app.include_router(business_board_title_router, prefix="/api/v1/core")
 
 # 插件管理器路由 (Plugin Manager APIs)
 app.include_router(plugin_manager_router, prefix="/api/v1/core")

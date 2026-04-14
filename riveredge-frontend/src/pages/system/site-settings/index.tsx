@@ -543,7 +543,7 @@ const SiteSettingsPage: React.FC = () => {
       }
 
       // 刷新 configStore 使日期格式、站点名称、LOGO 等配置立即生效（BasicLayout 等从 configStore 读取）
-      await fetchConfigs();
+      await fetchConfigs(true);
       // 重新加载设置
       await loadSiteSetting();
     } catch (error: any) {

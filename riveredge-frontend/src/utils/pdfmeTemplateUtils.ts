@@ -6,10 +6,11 @@
 
 import type { Template } from '@pdfme/common';
 
-/** 单变量项 */
+/** 单变量项（与 printTemplateSchemas 对齐） */
 export interface TemplateVariableItem {
   key: string;
   label: string;
+  kind?: 'detailTable';
 }
 
 /** 表格型模板配置 */
@@ -18,6 +19,188 @@ export interface ArrayTableTemplateConfig {
   label: string;
   maxRows?: number;
   columns: { key: string; label: string }[];
+}
+
+/** 明细表行高：表头/表体分开；与 pdfme table 的 headStyles/bodyStyles.minCellHeight 对应 */
+export type DetailTableRowHeightMode = 'auto' | 'fixed';
+
+export interface DetailTableRowHeightConfig {
+  /** auto：按内容撑开，行高不低于下方毫米值；fixed：行高固定为下方毫米值（单行优先） */
+  mode: DetailTableRowHeightMode;
+  /** 表头行高（mm） */
+  headMm: number;
+  /** 表体行高（mm） */
+  bodyMm: number;
+}
+
+export const DEFAULT_DETAIL_TABLE_ROW_HEIGHT: DetailTableRowHeightConfig = {
+  mode: 'auto',
+  headMm: 11,
+  bodyMm: 11,
+};
+
+const ROW_HEIGHT_MM_MIN = 4;
+const ROW_HEIGHT_MM_MAX = 80;
+
+export function clampDetailRowHeightMm(value: unknown, fallback: number): number {
+  const n = typeof value === 'number' && !Number.isNaN(value) ? value : Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(ROW_HEIGHT_MM_MAX, Math.max(ROW_HEIGHT_MM_MIN, n));
+}
+
+/** 从表格 schema 读取或推断行高配置（供设计器弹窗初始化） */
+export function getDetailTableRowHeightFromSchema(schema: {
+  detailTableRowHeight?: unknown;
+  headStyles?: { minCellHeight?: number };
+  bodyStyles?: { minCellHeight?: number };
+} | null | undefined): DetailTableRowHeightConfig {
+  const d = schema?.detailTableRowHeight as Partial<DetailTableRowHeightConfig> | undefined;
+  if (d && typeof d === 'object' && (d.mode === 'auto' || d.mode === 'fixed')) {
+    return {
+      mode: d.mode,
+      headMm: clampDetailRowHeightMm(d.headMm, DEFAULT_DETAIL_TABLE_ROW_HEIGHT.headMm),
+      bodyMm: clampDetailRowHeightMm(d.bodyMm, DEFAULT_DETAIL_TABLE_ROW_HEIGHT.bodyMm),
+    };
+  }
+  const h = (schema?.headStyles as { minCellHeight?: number } | undefined)?.minCellHeight;
+  const b = (schema?.bodyStyles as { minCellHeight?: number } | undefined)?.minCellHeight;
+  return {
+    mode: 'auto',
+    headMm: clampDetailRowHeightMm(h, DEFAULT_DETAIL_TABLE_ROW_HEIGHT.headMm),
+    bodyMm: clampDetailRowHeightMm(b, DEFAULT_DETAIL_TABLE_ROW_HEIGHT.bodyMm),
+  };
+}
+
+/**
+ * 明细列显示顺序或显隐变化后，按列 key 重映射 pdfme columnStyles.alignment（按列下标），
+ * 避免右侧「列样式」里设置的对齐在调序/删列后与真实列错位。
+ */
+export function remapTableColumnStylesAlignment(
+  oldSchema: {
+    columns?: { key?: string }[];
+    columnStyles?: { alignment?: Record<string, string> };
+  },
+  newColumns: { key: string }[]
+): Record<string, string> {
+  const oldCols = Array.isArray(oldSchema.columns) ? oldSchema.columns : [];
+  const oldAlign = oldSchema.columnStyles?.alignment;
+  if (!oldAlign || typeof oldAlign !== 'object') {
+    return {};
+  }
+
+  const pickAlign = (i: number) => oldAlign[i] ?? oldAlign[String(i)];
+
+  const keyToAlignment: Record<string, string> = {};
+  let allHaveKey = oldCols.length > 0;
+  for (let i = 0; i < oldCols.length; i++) {
+    const k = oldCols[i]?.key;
+    if (!k) {
+      allHaveKey = false;
+      break;
+    }
+    const a = pickAlign(i);
+    if (typeof a === 'string') keyToAlignment[k] = a;
+  }
+
+  const alignment: Record<string, string> = {};
+  if (allHaveKey && Object.keys(keyToAlignment).length > 0) {
+    newColumns.forEach((col, j) => {
+      const a = keyToAlignment[col.key];
+      if (typeof a === 'string') alignment[String(j)] = a;
+    });
+    return alignment;
+  }
+
+  // 无 key 的旧模板：列数不变时按原列下标保留对齐
+  if (oldCols.length === newColumns.length) {
+    for (let j = 0; j < newColumns.length; j++) {
+      const a = pickAlign(j);
+      if (typeof a === 'string') alignment[String(j)] = a;
+    }
+  }
+  return alignment;
+}
+
+/** 零散明细占位：旧版侧栏展开的 items.0.xxx / operations.0.xxx 文本框 */
+const DETAIL_LINE_SCALAR_NAME_RE = /^(items|operations)\.[0-9]+\./;
+
+/**
+ * 明细表默认宽高（mm）：占满版心宽度，行高足够避免设计器里表头与表体重叠
+ */
+export function getDetailTableDimensions(
+  columnCount: number,
+  sampleBodyRows: number,
+  rowHeight?: Pick<DetailTableRowHeightConfig, 'headMm' | 'bodyMm'>
+): { width: number; height: number } {
+  const n = Math.max(1, columnCount);
+  const width = Math.min(190, Math.max(150, n * 20));
+  const body = Math.max(1, Math.min(sampleBodyRows, 12));
+  const headMm = clampDetailRowHeightMm(rowHeight?.headMm, DEFAULT_DETAIL_TABLE_ROW_HEIGHT.headMm);
+  const bodyMm = clampDetailRowHeightMm(rowHeight?.bodyMm, DEFAULT_DETAIL_TABLE_ROW_HEIGHT.bodyMm);
+  // 设计器内表格外框高度需 ≥ 表头 + 示例行 * 表体行高，避免叠在一起
+  const height = Math.max(72, Math.ceil(headMm + body * bodyMm + 8));
+  return { width, height };
+}
+
+/** 是否存在 items.N.xxx / operations.N.xxx 零散文本 schema */
+export function countDetailLinePlaceholderSchemas(template: Template): number {
+  let count = 0;
+  for (const page of template.schemas || []) {
+    for (const s of page as any[]) {
+      const name = s?.name;
+      if (
+        (s?.type === 'text' || s?.type === 'multiVariableText') &&
+        typeof name === 'string' &&
+        DETAIL_LINE_SCALAR_NAME_RE.test(name)
+      ) {
+        count += 1;
+      }
+    }
+  }
+  return count;
+}
+
+/**
+ * 若页面上已有整块 items/operations 表格，则移除同名的零散行占位文本，避免与表格叠在一起「不像表」
+ */
+export function stripOverlappingDetailLineTextSchemas(template: Template): Template {
+  const next = JSON.parse(JSON.stringify(template)) as Template;
+  next.schemas = (next.schemas || []).map((page: any[]) => {
+    const hasItemsTable = page.some((s: any) => s?.type === 'table' && s?.name === 'items');
+    const hasOpsTable = page.some((s: any) => s?.type === 'table' && s?.name === 'operations');
+    return page.filter((s: any) => {
+      const name = s?.name;
+      if (
+        (s?.type === 'text' || s?.type === 'multiVariableText') &&
+        typeof name === 'string' &&
+        DETAIL_LINE_SCALAR_NAME_RE.test(name)
+      ) {
+        if (name.startsWith('items.') && hasItemsTable) return false;
+        if (name.startsWith('operations.') && hasOpsTable) return false;
+      }
+      return true;
+    });
+  });
+  return next;
+}
+
+/** 移除所有零散明细行占位（保留整块 table），用于用户一键清理旧模板 */
+export function removeAllDetailLinePlaceholderSchemas(template: Template): Template {
+  const next = JSON.parse(JSON.stringify(template)) as Template;
+  next.schemas = (next.schemas || []).map((page: any[]) =>
+    page.filter((s: any) => {
+      const name = s?.name;
+      if (
+        (s?.type === 'text' || s?.type === 'multiVariableText') &&
+        typeof name === 'string' &&
+        DETAIL_LINE_SCALAR_NAME_RE.test(name)
+      ) {
+        return false;
+      }
+      return true;
+    })
+  );
+  return next;
 }
 
 /**
@@ -33,11 +216,14 @@ export function buildTemplateWithFields(
   let y = 10;
 
   const arrayKeys = new Set(arrayTableConfigs.map((c) => c.arrayKey));
-  // 单变量：添加 text 或 qrcode schema（跳过数组子项如 operations.0.xxx）
+  // 单变量：添加 text 或 qrcode schema（整块明细表由下方 table 生成，不生成 {items} 文本）
   for (const item of variableItems) {
+    if (arrayKeys.has(item.key)) {
+      continue;
+    }
     const parts = item.key.split('.');
     if (parts.length >= 3 && /^\d+$/.test(parts[1]) && arrayKeys.has(parts[0])) {
-      continue; // 跳过 operations.0.xxx 这类，由表格覆盖
+      continue; // 兼容旧版：跳过 operations.0.xxx，由表格覆盖
     }
     if (item.key.endsWith('_qrcode')) {
       pageSchemas.push({
@@ -83,17 +269,20 @@ export function buildTemplateWithFields(
     const sampleRows = Array.from({ length: rowCount }, (_, i) =>
       config.columns.map((_, j) => `示例${i + 1}-${j + 1}`)
     );
+    const dim = getDetailTableDimensions(config.columns.length, rowCount, DEFAULT_DETAIL_TABLE_ROW_HEIGHT);
     pageSchemas.push({
       name: config.arrayKey,
       type: 'table',
+      columns: config.columns.map((c) => ({ key: c.key, label: c.label })),
       position: { x: 10, y },
-      width: 170,
-      height: 50,
+      width: dim.width,
+      height: dim.height,
       showHead: true,
       head: config.columns.map((c) => c.label),
       headWidthPercentages: config.columns.map(() => 100 / config.columns.length),
       content: JSON.stringify(sampleRows),
       tableStyles: { borderWidth: 0.3, borderColor: '#000000' },
+      detailTableRowHeight: { ...DEFAULT_DETAIL_TABLE_ROW_HEIGHT },
       headStyles: {
         fontSize: 10,
         alignment: 'center',
@@ -108,7 +297,7 @@ export function buildTemplateWithFields(
         padding: { top: 5, right: 5, bottom: 5, left: 5 },
       },
     });
-    y += 60;
+    y += dim.height + 12;
   }
 
   const newTemplate = JSON.parse(JSON.stringify(template)) as Template;
@@ -262,6 +451,7 @@ export function sanitizeTemplate(template: Template): Template {
         const defaultBorderWidth = { top: 0.1, right: 0.1, bottom: 0.1, left: 0.1 };
         const defaultCellStyle = {
           fontSize: 9,
+          lineHeight: 1.2,
           alignment: 'center' as const,
           verticalAlignment: 'middle' as const,
           fontName: 'NotoSansSC',
@@ -282,6 +472,7 @@ export function sanitizeTemplate(template: Template): Template {
         s.bodyStyles = {
           ...defaultCellStyle,
           fontSize: 8,
+          lineHeight: 1.25,
           alignment: 'left' as const,
           ...s.bodyStyles,
           padding: ensurePadding(s.bodyStyles?.padding ?? defaultCellPadding),
@@ -291,10 +482,38 @@ export function sanitizeTemplate(template: Template): Template {
           alternateBackgroundColor: s.bodyStyles?.alternateBackgroundColor ?? '',
         };
 
+        // 明细表行高：表头/表体可分别设置；写入 detailTableRowHeight 供设计器回显
+        const drhIn = getDetailTableRowHeightFromSchema(s);
+        s.detailTableRowHeight = {
+          mode: drhIn.mode,
+          headMm: clampDetailRowHeightMm(drhIn.headMm, DEFAULT_DETAIL_TABLE_ROW_HEIGHT.headMm),
+          bodyMm: clampDetailRowHeightMm(drhIn.bodyMm, DEFAULT_DETAIL_TABLE_ROW_HEIGHT.bodyMm),
+        };
+        const headMm = s.detailTableRowHeight.headMm;
+        const bodyMm = s.detailTableRowHeight.bodyMm;
+        (s.headStyles as any).minCellHeight = headMm;
+        (s.bodyStyles as any).minCellHeight = bodyMm;
+        if (s.detailTableRowHeight.mode === 'fixed') {
+          s.headStyles.lineHeight = 1;
+          s.bodyStyles.lineHeight = 1;
+        } else {
+          if (s.headStyles.lineHeight == null || (s.headStyles as any).lineHeight === 0) {
+            (s.headStyles as any).lineHeight = 1.2;
+          }
+          if (s.bodyStyles.lineHeight == null || (s.bodyStyles as any).lineHeight === 0) {
+            (s.bodyStyles as any).lineHeight = 1.25;
+          }
+        }
+
         // columnStyles 必须存在；pdfme 期望结构为 { alignment?: { [colIndex]: ALIGNMENT } }
         s.columnStyles = s.columnStyles && typeof s.columnStyles === 'object' ? s.columnStyles : {};
 
-        // 确保表格有足够高度显示多行：1 表头 + N 数据行，每行至少 8mm
+        // __bodyRange.end 为 null 时，pdfme 内部 arr.slice(start, null) 会把 null 当成 0，表体变空（仅表头可见）
+        if (s.__bodyRange && typeof s.__bodyRange === 'object' && s.__bodyRange.end === null) {
+          delete s.__bodyRange.end;
+        }
+
+        // 确保表格外框高度 ≥ 实际排版所需（过矮时 pdfme 设计器内单元格仍会绘制，与下方组件视觉糊成一团）
         const bodyRows = (() => {
           try {
             const c = s.content;
@@ -304,9 +523,24 @@ export function sanitizeTemplate(template: Template): Template {
             return 1;
           }
         })();
-        const minHeight = (1 + Math.max(1, bodyRows)) * 8;
+        const minHeight = Math.max(
+          48,
+          Math.ceil(headMm + Math.max(1, bodyRows) * bodyMm + 8)
+        );
         if (typeof s.height !== 'number' || s.height < minHeight) {
           s.height = minHeight;
+        }
+        // 列多时略缩表头字号，减少格内换行堆叠
+        const colCount = Array.isArray(s.head) ? s.head.length : 0;
+        if (colCount > 8 && s.headStyles && typeof s.headStyles.fontSize === 'number') {
+          s.headStyles.fontSize = Math.min(s.headStyles.fontSize, 8);
+        } else if (colCount > 8 && s.headStyles) {
+          s.headStyles.fontSize = 8;
+        }
+        if (colCount > 8 && s.bodyStyles && typeof s.bodyStyles.fontSize === 'number') {
+          s.bodyStyles.fontSize = Math.min(s.bodyStyles.fontSize, 8);
+        } else if (colCount > 8 && s.bodyStyles) {
+          s.bodyStyles.fontSize = 8;
         }
 
         // 若 content 首行与 head 相同（误将表头写入 body），移除首行避免重复/错乱
@@ -438,18 +672,36 @@ export function variablesToPdfmeInputs(
         const arrData = variables[name] ?? resolveValue(name, variables);
         if (Array.isArray(arrData)) {
           let tableRows: string[][] = [];
-          if (name === 'operations') {
+          const schemaCols = (schema as any).columns;
+          if (Array.isArray(schemaCols) && schemaCols.length > 0) {
+            const keys = schemaCols
+              .map((c: { key?: string }) => c?.key)
+              .filter(
+                (k: string | undefined): k is string =>
+                  typeof k === 'string' && k.length > 0 && k !== 'dummy'
+              );
+            if (keys.length > 0) {
+              tableRows = arrData.map((item) =>
+                typeof item === 'object' && item !== null
+                  ? keys.map((k) => formatValue((item as Record<string, unknown>)[k] ?? ''))
+                  : [formatValue(item)]
+              );
+            }
+          }
+          if (tableRows.length === 0 && name === 'operations') {
             tableRows = operationsToTableRows(arrData);
-          } else {
+          } else if (tableRows.length === 0) {
             tableRows = arrData.map((item) =>
               typeof item === 'object' && item !== null
-                ? Object.values(item).map(v => formatValue(v))
+                ? Object.values(item).map((v) => formatValue(v))
                 : [formatValue(item)]
             );
           }
           // 重要：PDFme Table 插件在 Generator 中通常要求 input 为 JSON 字符串
+          console.debug('[pdfme table]', name, '| arrData.length:', arrData.length, '| tableRows.length:', tableRows.length, '| colKeys:', (schema as any).columns?.map((c: any) => c?.key));
           pageInput[name] = JSON.stringify(tableRows);
         } else {
+          console.debug('[pdfme table]', name, '| arrData is NOT array:', typeof arrData, arrData);
           pageInput[name] = '[]';
         }
       } else {

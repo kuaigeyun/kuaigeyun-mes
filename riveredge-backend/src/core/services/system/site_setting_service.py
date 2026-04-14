@@ -105,7 +105,7 @@ class SiteSettingService:
         """
         site_settings = await SiteSettingService.get_settings(tenant_id)
         site_settings.update_settings(data.settings)
-        await site_settings.save()
+        await site_settings.save(update_fields=["settings"])
         return site_settings
 
     @staticmethod

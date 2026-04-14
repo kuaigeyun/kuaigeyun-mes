@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Typography, Button, Modal, Input, Tooltip, Progress, theme } from 'antd';
+import { Typography, Button, Modal, Input, Tooltip, Progress, theme, message } from 'antd';
 import {
   FullscreenOutlined,
   FullscreenExitOutlined,
@@ -32,6 +32,8 @@ import { SciFiPanelFrame } from './components/SciFiPanelFrame';
 import { OrbitalKpiField } from './components/OrbitalKpiField';
 import { SciFiTitleBackground } from '../../../../components/SciFiTitleBackground/SciFiTitleBackground';
 import { useSiteLogoUrl } from '../../../../hooks/useSiteLogoUrl';
+import { getBusinessBoardTitle, putBusinessBoardTitle } from '../../../../services/businessBoardTitle';
+import { useConfigStore } from '../../../../stores/configStore';
 
 const { Text, Title } = Typography;
 
@@ -102,48 +104,94 @@ const BusinessBoardPage: React.FC = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [currentTime, setCurrentTime] = useState(dayjs().format('YYYY-MM-DD HH:mm:ss'));
   const containerRef = useRef<HTMLDivElement>(null);
-  const [customBoardTitle, setCustomBoardTitle] = useState(() => {
-    try {
-      return (localStorage.getItem(BUSINESS_BOARD_TITLE_STORAGE_KEY) || '').trim();
-    } catch {
-      return '';
-    }
-  });
+  const [customBoardTitle, setCustomBoardTitle] = useState('');
   const [titleModalOpen, setTitleModalOpen] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
 
   const defaultBoardTitle = t('dashboard.businessBoard.title');
   const displayBoardTitle = customBoardTitle || defaultBoardTitle;
 
+  /** 浏览器标签与顶栏主标题一致（含租户保存的标题），避免菜单文案与顶栏不一致 */
+  useEffect(() => {
+    const site = useConfigStore.getState().getConfig('site_name', 'RiverEdge SaaS') as string;
+    document.title = `${displayBoardTitle} - ${site}`;
+  }, [displayBoardTitle]);
+
+  /** 从后端加载租户级标题；无记录时尝试迁移浏览器旧版 localStorage 并写回数据库 */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await getBusinessBoardTitle();
+        if (cancelled) return;
+        const fromApi = (res?.title || '').trim();
+        if (fromApi) {
+          setCustomBoardTitle(fromApi);
+          return;
+        }
+        let legacy = '';
+        try {
+          legacy = (localStorage.getItem(BUSINESS_BOARD_TITLE_STORAGE_KEY) || '').trim();
+        } catch {
+          legacy = '';
+        }
+        if (legacy) {
+          setCustomBoardTitle(legacy);
+          try {
+            await putBusinessBoardTitle(legacy);
+            localStorage.removeItem(BUSINESS_BOARD_TITLE_STORAGE_KEY);
+          } catch {
+            /* 迁移失败时仍保留本地展示 */
+          }
+        }
+      } catch {
+        try {
+          const legacy = (localStorage.getItem(BUSINESS_BOARD_TITLE_STORAGE_KEY) || '').trim();
+          if (legacy) setCustomBoardTitle(legacy);
+        } catch {
+          /* empty */
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const openTitleModal = useCallback(() => {
     setTitleDraft(customBoardTitle || defaultBoardTitle);
     setTitleModalOpen(true);
   }, [customBoardTitle, defaultBoardTitle]);
 
-  const saveBoardTitle = useCallback(() => {
+  const saveBoardTitle = useCallback(async () => {
     const next = titleDraft.trim();
     try {
-      if (next && next !== defaultBoardTitle) {
-        localStorage.setItem(BUSINESS_BOARD_TITLE_STORAGE_KEY, next);
-        setCustomBoardTitle(next);
-      } else {
+      await putBusinessBoardTitle(next || null);
+      setCustomBoardTitle(next);
+      try {
         localStorage.removeItem(BUSINESS_BOARD_TITLE_STORAGE_KEY);
-        setCustomBoardTitle('');
+      } catch {
+        /* ignore */
       }
-    } catch {
-      /* ignore */
+      setTitleModalOpen(false);
+    } catch (e: unknown) {
+      message.error((e as Error)?.message || '保存失败，请稍后重试');
     }
-    setTitleModalOpen(false);
-  }, [titleDraft, defaultBoardTitle]);
+  }, [titleDraft]);
 
-  const resetBoardTitle = useCallback(() => {
+  const resetBoardTitle = useCallback(async () => {
     try {
-      localStorage.removeItem(BUSINESS_BOARD_TITLE_STORAGE_KEY);
-    } catch {
-      /* ignore */
+      await putBusinessBoardTitle(null);
+      setCustomBoardTitle('');
+      setTitleDraft(defaultBoardTitle);
+      try {
+        localStorage.removeItem(BUSINESS_BOARD_TITLE_STORAGE_KEY);
+      } catch {
+        /* ignore */
+      }
+    } catch (e: unknown) {
+      message.error((e as Error)?.message || '恢复默认失败，请稍后重试');
     }
-    setCustomBoardTitle('');
-    setTitleDraft(defaultBoardTitle);
   }, [defaultBoardTitle]);
 
   const planExecutionLineI18n = useMemo(

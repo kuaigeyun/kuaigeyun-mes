@@ -14,7 +14,7 @@ from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
 from infra.models.user import User
-from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
+from infra.exceptions.exceptions import NotFoundError, BusinessLogicError, ValidationError
 
 from apps.kuaizhizao.services.quotation_service import QuotationService
 from apps.kuaizhizao.schemas.quotation import (
@@ -23,6 +23,7 @@ from apps.kuaizhizao.schemas.quotation import (
     QuotationResponse,
     QuotationListResponse,
     QuotationReviewAction,
+    QuotationRevisionBody,
 )
 from apps.kuaizhizao.schemas.sales_order import SalesOrderResponse
 
@@ -61,6 +62,7 @@ async def list_quotations(
     keyword: Optional[str] = Query(None, description="关键词搜索（编码、客户）"),
     quotation_code: Optional[str] = Query(None, description="报价单编号（模糊）"),
     customer_name: Optional[str] = Query(None, description="客户名称（模糊）"),
+    quotation_series_code: Optional[str] = Query(None, description="报价系列编码（精确）"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -76,6 +78,7 @@ async def list_quotations(
             keyword=keyword,
             quotation_code=quotation_code,
             customer_name=customer_name,
+            quotation_series_code=quotation_series_code,
             current_user=current_user,
         )
     except Exception as e:
@@ -107,6 +110,40 @@ async def get_quotation(
         raise HTTPException(
             status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="获取报价单详情失败",
+        )
+
+
+@router.post(
+    "/{quotation_id}/revision",
+    response_model=QuotationResponse,
+    summary="另存为新版本（修订）",
+)
+async def create_quotation_revision(
+    quotation_id: int = Path(..., description="报价单ID（系列内任一行，系统解析最新版）"),
+    body: QuotationRevisionBody = Body(default_factory=QuotationRevisionBody),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """从系列当前最新版复制为新的草稿版本；旧版标记为非最新。"""
+    try:
+        payload = body.model_dump(exclude_unset=True) if body else {}
+        return await quotation_service.create_quotation_revision(
+            tenant_id=tenant_id,
+            source_quotation_id=quotation_id,
+            created_by=current_user.id,
+            revision_data=body if payload else None,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error("另存报价新版本失败: %s", e)
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="另存报价新版本失败",
         )
 
 
@@ -354,17 +391,60 @@ async def print_quotation(
     """打印报价单"""
     from apps.kuaizhizao.services.print_service import DocumentPrintService
     from fastapi.responses import HTMLResponse, JSONResponse
-    result = await DocumentPrintService().print_document(
-        tenant_id=tenant_id,
-        document_type="quotation",
-        document_id=quotation_id,
-        template_code=template_code,
-        template_uuid=template_uuid,
-        output_format=output_format,
-    )
+    try:
+        result = await DocumentPrintService().print_document(
+            tenant_id=tenant_id,
+            document_type="quotation",
+            document_id=quotation_id,
+            template_code=template_code,
+            template_uuid=template_uuid,
+            output_format=output_format,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
     if response_format == "html":
         return HTMLResponse(content=result.get("content", ""), status_code=200)
     return JSONResponse(content=result, status_code=200)
+
+
+@router.get("/{quotation_id}/print-variables", summary="报价单打印变量（供前端 pdfme 渲染）")
+async def get_quotation_print_variables(
+    quotation_id: int = Path(..., description="报价单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """与 `_format_quotation_data` 一致，避免服务端 HTML 降级与 pdfme 设计稿不一致。"""
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+
+    try:
+        variables = await DocumentPrintService().get_document_variables_for_print(
+            tenant_id, "quotation", quotation_id
+        )
+        return {"success": True, "variables": variables}
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.post("/{quotation_id}/record-print", summary="记录报价单已打印（正式文档生成时间戳）")
+async def record_quotation_print(
+    quotation_id: int = Path(..., description="报价单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """与走服务端打印路径时的 `_maybe_stamp_quotation_formal` 一致，供纯前端 pdfme 成稿后补记。"""
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+
+    try:
+        await DocumentPrintService()._maybe_stamp_quotation_formal(tenant_id, "quotation", quotation_id)
+        return {"success": True}
+    except Exception as e:
+        logger.error("记录报价单打印失败: %s", e)
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="记录打印失败",
+        )
 
 
 @router.delete("/{quotation_id}", status_code=http_status.HTTP_204_NO_CONTENT, summary="删除报价单")

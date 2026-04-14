@@ -4,7 +4,7 @@
 定义菜单相关的 Pydantic Schema，用于数据验证和序列化。
 """
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from uuid import UUID
@@ -28,7 +28,30 @@ class MenuBase(BaseModel):
 
 class MenuCreate(MenuBase):
     """创建菜单 Schema"""
-    pass
+
+    @field_validator("meta", mode="before")
+    @classmethod
+    def normalize_meta_create(cls, v: Any) -> Any:
+        if v is None or v == "":
+            return None
+        return v
+
+    @field_validator("sort_order", mode="before")
+    @classmethod
+    def normalize_sort_order_create(cls, v: Any) -> Any:
+        if v is None or v == "":
+            return 0
+        if isinstance(v, str):
+            s = v.strip()
+            if s == "":
+                return 0
+            try:
+                return int(s)
+            except ValueError:
+                return 0
+        if isinstance(v, float) and v.is_integer():
+            return int(v)
+        return v
 
 
 class MenuUpdate(BaseModel):
@@ -45,6 +68,46 @@ class MenuUpdate(BaseModel):
     is_external: Optional[bool] = Field(None, description="是否外部链接")
     external_url: Optional[str] = Field(None, description="外部链接URL")
     meta: Optional[Dict[str, Any]] = Field(None, description="菜单元数据")
+
+    model_config = ConfigDict(extra="ignore")
+
+    @field_validator("meta", mode="before")
+    @classmethod
+    def normalize_meta(cls, v: Any) -> Any:
+        # 前端表单项清空时常见为 ""，直接当未传处理，避免 422（meta 须为 object 或 null）
+        if v is None or v == "":
+            return None
+        return v
+
+    @field_validator("sort_order", mode="before")
+    @classmethod
+    def normalize_sort_order(cls, v: Any) -> Any:
+        if v is None or v == "":
+            return None
+        if isinstance(v, str):
+            s = v.strip()
+            if s == "":
+                return None
+            try:
+                return int(s)
+            except ValueError:
+                return None
+        if isinstance(v, float) and v.is_integer():
+            return int(v)
+        return v
+
+    @field_validator("is_active", "is_external", mode="before")
+    @classmethod
+    def normalize_bool_fields(cls, v: Any) -> Any:
+        if v is None or v == "":
+            return None
+        if isinstance(v, str):
+            low = v.strip().lower()
+            if low in ("true", "1", "yes", "on"):
+                return True
+            if low in ("false", "0", "no", "off"):
+                return False
+        return v
 
 
 class MenuResponse(MenuBase):

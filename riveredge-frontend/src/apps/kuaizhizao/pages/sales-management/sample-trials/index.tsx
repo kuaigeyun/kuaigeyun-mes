@@ -38,6 +38,8 @@ import { AmountDisplay } from '../../../../../components/permission';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingRelationsBody, DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import '../../../../../components/uni-table-detail/index.less';
+import type { DocumentPrintApiResult } from '../../../../../utils/printResponseHelpers';
+import { isClientPdfmePrint, clientPdfmeListPrintMessage } from '../../../../../utils/printResponseHelpers';
 
 interface SampleTrial {
   id?: number;
@@ -818,7 +820,11 @@ const SampleTrialsPage: React.FC = () => {
 
   const handlePrint = async (record: SampleTrial) => {
     try {
-      const result = await sampleTrialApi.print(record.id!.toString()) as { success?: boolean; content?: string; message?: string };
+      const result = (await sampleTrialApi.print(record.id!.toString())) as DocumentPrintApiResult;
+      if (isClientPdfmePrint(result)) {
+        messageApi.warning(clientPdfmeListPrintMessage(result.message));
+        return;
+      }
       if (result?.success && result?.content) {
         const printWindow = window.open('', '_blank');
         if (printWindow) {

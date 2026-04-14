@@ -5,7 +5,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { App, Button, Space, Table, Tooltip, Typography, Descriptions } from 'antd';
-import { CopyOutlined } from '@ant-design/icons';
+import { CopyOutlined, PrinterOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { AmountDisplay } from '../../../../../../components/permission';
 import { MaterialBomIndicator } from '../../../../components/MaterialBomIndicator';
@@ -21,6 +21,11 @@ import { SalesOrderTrackingRadar } from './SalesOrderTrackingRadar';
 import { getSalesOrderLifecycle } from '../../../../utils/salesOrderLifecycle';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../../services/dataDictionary';
 import type { SalesOrder, SalesOrderItem } from '../../../../services/sales-order';
+import { apiRequest } from '../../../../../../services/api';
+import { trySalesOrderPdfmePreviewBlob } from '../../../../utils/salesOrderPdfmePreview';
+import type { DocumentPrintApiResult } from '../../../../../../utils/printResponseHelpers';
+import { isClientPdfmePrint } from '../../../../../../utils/printResponseHelpers';
+import { openPdfBlobInPrintWindow } from '../../../../../../utils/pdfmeClientPrint';
 
 export interface SalesOrderDetailBodyProps {
   order: SalesOrder;
@@ -113,6 +118,55 @@ export const SalesOrderDetailBody: React.FC<SalesOrderDetailBodyProps> = ({
     messageApi.info(`跳转到${type}#${id}`);
   });
 
+  const handlePrintSalesOrder = async () => {
+    if (order.id == null) return;
+    try {
+      const pdfmeBlob = await trySalesOrderPdfmePreviewBlob(order.id);
+      if (pdfmeBlob) {
+        const { revoked } = openPdfBlobInPrintWindow(pdfmeBlob);
+        if (revoked) {
+          messageApi.warning('无法打开打印窗口，请检查浏览器弹窗设置');
+        }
+        return;
+      }
+
+      const result = await apiRequest<DocumentPrintApiResult>(
+        `/apps/kuaizhizao/sales-orders/${order.id}/print`,
+        {
+          method: 'GET',
+          params: { response_format: 'json', output_format: 'html' },
+        }
+      );
+      if (isClientPdfmePrint(result)) {
+        const blob = await trySalesOrderPdfmePreviewBlob(order.id);
+        if (blob) {
+          const r = openPdfBlobInPrintWindow(blob);
+          if (r.revoked) messageApi.warning('无法打开打印窗口，请检查浏览器弹窗设置');
+          return;
+        }
+        messageApi.warning(result?.message || '当前模板为 pdfme，无法在服务端成稿');
+        return;
+      }
+      const html = result?.content || '';
+      if (html) {
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+          printWindow.document.write(
+            `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${t('app.kuaizhizao.salesOrder.detail')}</title></head><body>${html}</body></html>`
+          );
+          printWindow.document.close();
+          printWindow.onload = () => printWindow.print();
+        } else {
+          messageApi.warning('无法打开打印窗口，请检查浏览器弹窗设置');
+        }
+      } else {
+        messageApi.warning('打印内容为空');
+      }
+    } catch (e: any) {
+      messageApi.error(e?.message || '打印失败');
+    }
+  };
+
   const lifecycle = getSalesOrderLifecycle(order);
   const mainStages = lifecycle.mainStages ?? [];
   const subStages = lifecycle.subStages ?? [];
@@ -130,6 +184,14 @@ export const SalesOrderDetailBody: React.FC<SalesOrderDetailBodyProps> = ({
               children: (
                 <Space size={4}>
                   <span>{order.order_code ?? '-'}</span>
+                  <Tooltip title={t('app.kuaizhizao.salesOrder.printPdf')}>
+                    <Button
+                      type="link"
+                      size="small"
+                      icon={<PrinterOutlined style={{ fontSize: 12 }} />}
+                      onClick={handlePrintSalesOrder}
+                    />
+                  </Tooltip>
                   <Tooltip title={t('field.invitationCode.copy')}>
                     <Button
                       type="link"

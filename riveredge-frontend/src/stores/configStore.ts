@@ -29,8 +29,8 @@ interface ConfigState {
   loading: boolean;
   initialized: boolean;
   
-  // Actions
-  fetchConfigs: () => Promise<void>;
+  // Actions（force=true 时忽略「已初始化」短路，用于站点设置保存后刷新全局配置）
+  fetchConfigs: (force?: boolean) => Promise<void>;
   updateConfig: (key: string, value: any) => Promise<void>;
   updateConfigs: (settings: Record<string, any>) => Promise<void>;
   getConfig: <T>(key: string, defaultValue: T) => T;
@@ -79,10 +79,11 @@ export const useConfigStore = create<ConfigState>()(
       loading: false,
       initialized: false,
       
-      fetchConfigs: async () => {
+      fetchConfigs: async (force?: boolean) => {
         const { initialized, loading } = get();
-        if (initialized || loading) return;
-        
+        if (loading) return;
+        if (!force && initialized) return;
+
         set({ loading: true });
         try {
           const response = await getSiteSetting();

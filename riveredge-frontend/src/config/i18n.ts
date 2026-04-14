@@ -20,8 +20,9 @@ const LOCALE_BUNDLES: Record<string, Record<string, string>> = {
 };
 
 /**
- * 合并翻译：菜单相关 key 优先使用本地值，其余使用后端值
- * 避免后端数据库中的历史错误（如 path.sop=制造SOP）覆盖正确的「标准操作SOP」
+ * 合并翻译：以下 key 优先使用本地 locale，其余使用后端值
+ * - path.*、app.*.menu.*：避免后端历史错误覆盖菜单/路径文案
+ * - components.tenantSelection.*：登录页多组织选择弹窗；后端语言包常不含此类 key，合并后否则会显示原始 key
  */
 function mergeTranslationsWithMenuPriority(
   backendTranslations: Record<string, string>,
@@ -30,7 +31,12 @@ function mergeTranslationsWithMenuPriority(
   const local = LOCALE_BUNDLES[languageCode] || {};
   const merged = { ...backendTranslations };
   for (const key of Object.keys(local)) {
-    if ((key.startsWith('path.') || (key.startsWith('app.') && key.includes('.menu.'))) && local[key]) {
+    if (!local[key]) continue;
+    const useLocal =
+      key.startsWith('path.') ||
+      (key.startsWith('app.') && key.includes('.menu.')) ||
+      key.startsWith('components.tenantSelection.');
+    if (useLocal) {
       merged[key] = local[key];
     }
   }

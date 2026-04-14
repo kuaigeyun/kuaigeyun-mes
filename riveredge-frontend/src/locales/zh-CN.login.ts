@@ -1,6 +1,6 @@
 /**
  * 登录页专用语言包（精简版）
- * 仅包含 pages.login.*，减少首屏 bundle 约 400KB
+ * 包含 pages.login.* 及登录流程内嵌组件所需 key（如多组织选择弹窗），减少首屏 bundle 约 400KB
  */
 export default {
   'pages.login.title': '登录',
@@ -139,4 +139,14 @@ export default {
   'pages.login.wechatRedirectFailed': '微信登录跳转失败，请稍后重试',
   'pages.login.wechatVerifyFailed': '微信登录验证失败，请重试',
   'pages.login.wechatLoginFailed': '微信登录失败，请稍后重试',
+
+  // 多组织选择弹窗（TenantSelectionModal，与 zh-CN.ts 保持一致）
+  'components.tenantSelection.title': '选择组织',
+  'components.tenantSelection.hint': '您属于多个组织，请选择要进入的组织：',
+  'components.tenantSelection.statusActive': '激活',
+  'components.tenantSelection.statusInactive': '未激活',
+  'components.tenantSelection.statusExpired': '已过期',
+  'components.tenantSelection.statusSuspended': '已暂停',
+  'components.tenantSelection.default': '默认',
+  'components.tenantSelection.domainLabel': '域名',
 };

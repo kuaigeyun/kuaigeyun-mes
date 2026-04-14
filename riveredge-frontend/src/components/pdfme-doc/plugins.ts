@@ -7,7 +7,6 @@
  */
 import {
   text,
-  table,
   barcodes,
   image,
   svg,
@@ -19,6 +18,7 @@ import {
   dateTime,
   multiVariableText,
 } from '@pdfme/schemas';
+import { tablePluginRiveredge } from './tablePluginRiveredge';
 import { signaturePlugin } from './signaturePlugin';
 
 /** 一维码仅保留最常用两种：Code128、EAN-13；二维码 QRCode */
@@ -31,7 +31,7 @@ const barcodePlugins = Object.fromEntries(
 /** 按使用频度与关联性排序：文本→表格→图片→签名→条码→日期→图形 */
 export const PDFME_PLUGINS = {
   text: text,
-  table: table,
+  table: tablePluginRiveredge,
   image: image,
   signature: signaturePlugin,
   ...barcodePlugins,

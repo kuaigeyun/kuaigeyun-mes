@@ -79,6 +79,25 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
       { key: 'picker_name', label: '领料人', type: 'string' },
       { key: 'picking_time', label: '领料时间', type: 'date' },
       { key: 'created_at', label: '创建时间', type: 'date' },
+      {
+        key: 'items',
+        label: '明细列表',
+        type: 'array',
+        children: [
+          { key: 'items.0.material_code', label: '物料编号（第1项）', type: 'string' },
+          { key: 'items.0.material_name', label: '物料名称（第1项）', type: 'string' },
+          { key: 'items.0.material_spec', label: '规格（第1项）', type: 'string' },
+          { key: 'items.0.material_unit', label: '单位（第1项）', type: 'string' },
+          { key: 'items.0.required_quantity', label: '需求数量（第1项）', type: 'number' },
+          { key: 'items.0.picked_quantity', label: '已领数量（第1项）', type: 'number' },
+          { key: 'items.0.remaining_quantity', label: '剩余数量（第1项）', type: 'number' },
+          { key: 'items.0.warehouse_name', label: '仓库（第1项）', type: 'string' },
+          { key: 'items.0.location_code', label: '库位（第1项）', type: 'string' },
+          { key: 'items.0.batch_number', label: '批次号（第1项）', type: 'string' },
+          { key: 'items.0.status', label: '行状态（第1项）', type: 'string' },
+          { key: 'items.0.notes', label: '行备注（第1项）', type: 'string' },
+        ],
+      },
     ],
   },
   production_return: {
@@ -94,6 +113,23 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
       { key: 'returner_name', label: '退料人', type: 'string' },
       { key: 'return_time', label: '退料时间', type: 'date' },
       { key: 'created_at', label: '创建时间', type: 'date' },
+      {
+        key: 'items',
+        label: '明细列表',
+        type: 'array',
+        children: [
+          { key: 'items.0.material_code', label: '物料编号（第1项）', type: 'string' },
+          { key: 'items.0.material_name', label: '物料名称（第1项）', type: 'string' },
+          { key: 'items.0.material_spec', label: '规格（第1项）', type: 'string' },
+          { key: 'items.0.material_unit', label: '单位（第1项）', type: 'string' },
+          { key: 'items.0.return_quantity', label: '退料数量（第1项）', type: 'number' },
+          { key: 'items.0.warehouse_name', label: '仓库（第1项）', type: 'string' },
+          { key: 'items.0.location_code', label: '库位（第1项）', type: 'string' },
+          { key: 'items.0.batch_number', label: '批次号（第1项）', type: 'string' },
+          { key: 'items.0.status', label: '行状态（第1项）', type: 'string' },
+          { key: 'items.0.notes', label: '行备注（第1项）', type: 'string' },
+        ],
+      },
     ],
   },
   other_inbound: {
@@ -118,9 +154,12 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
         children: [
           { key: 'items.0.material_code', label: '物料编号（第1项）', type: 'string' },
           { key: 'items.0.material_name', label: '物料名称（第1项）', type: 'string' },
+          { key: 'items.0.material_unit', label: '单位（第1项）', type: 'string' },
           { key: 'items.0.inbound_quantity', label: '入库数量（第1项）', type: 'number' },
           { key: 'items.0.unit_price', label: '单价（第1项）', type: 'number' },
           { key: 'items.0.total_amount', label: '金额（第1项）', type: 'number' },
+          { key: 'items.0.batch_number', label: '批次号（第1项）', type: 'string' },
+          { key: 'items.0.notes', label: '行备注（第1项）', type: 'string' },
         ],
       },
     ],
@@ -130,6 +169,13 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
     name: '报价单',
     fields: [
       { key: 'code', label: '报价单号', type: 'string' },
+      { key: 'quotation_series_code', label: '报价系列号', type: 'string' },
+      { key: 'version_no', label: '版本号', type: 'number' },
+      { key: 'revision_label', label: '版本标签（如 Rev.1）', type: 'string' },
+      { key: 'is_latest_in_series', label: '是否系列内最新版', type: 'boolean' },
+      { key: 'currency_code', label: '币别', type: 'string' },
+      { key: 'review_status', label: '审核状态', type: 'string' },
+      { key: 'formal_document_generated_at', label: '正式文档生成时间', type: 'date' },
       { key: 'customer_name', label: '客户名称', type: 'string' },
       { key: 'customer_contact', label: '客户联系人', type: 'string' },
       { key: 'customer_phone', label: '客户电话', type: 'string' },
@@ -150,11 +196,18 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
         label: '明细列表',
         type: 'array',
         children: [
+          { key: 'items.0.chinese_short_name', label: '中文简称（第1项）', type: 'string' },
+          { key: 'items.0.model_number', label: '型号（第1项）', type: 'string' },
+          { key: 'items.0.image_url', label: '图片（第1项）', type: 'string' },
+          { key: 'items.0.material_unit', label: '单位（第1项）', type: 'string' },
+          { key: 'items.0.quote_quantity', label: '数量（第1项）', type: 'number' },
+          { key: 'items.0.unit_price', label: '单价（含税）（第1项）', type: 'number' },
+          { key: 'items.0.total_amount', label: '总价（含税）（第1项）', type: 'number' },
           { key: 'items.0.material_code', label: '物料编号（第1项）', type: 'string' },
           { key: 'items.0.material_name', label: '物料名称（第1项）', type: 'string' },
-          { key: 'items.0.quote_quantity', label: '报价数量（第1项）', type: 'number' },
-          { key: 'items.0.unit_price', label: '单价（第1项）', type: 'number' },
-          { key: 'items.0.total_amount', label: '金额（第1项）', type: 'number' },
+          { key: 'items.0.material_spec', label: '规格（第1项）', type: 'string' },
+          { key: 'items.0.delivery_date', label: '行交货日（第1项）', type: 'date' },
+          { key: 'items.0.notes', label: '行备注（第1项）', type: 'string' },
         ],
       },
     ],
@@ -180,8 +233,12 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
         children: [
           { key: 'items.0.material_code', label: '物料编号（第1项）', type: 'string' },
           { key: 'items.0.material_name', label: '物料名称（第1项）', type: 'string' },
+          { key: 'items.0.material_spec', label: '规格（第1项）', type: 'string' },
+          { key: 'items.0.material_unit', label: '单位（第1项）', type: 'string' },
           { key: 'items.0.borrow_quantity', label: '借出数量（第1项）', type: 'number' },
           { key: 'items.0.returned_quantity', label: '已归还数量（第1项）', type: 'number' },
+          { key: 'items.0.warehouse_name', label: '仓库（第1项）', type: 'string' },
+          { key: 'items.0.notes', label: '行备注（第1项）', type: 'string' },
         ],
       },
     ],
@@ -206,7 +263,11 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
         children: [
           { key: 'items.0.material_code', label: '物料编号（第1项）', type: 'string' },
           { key: 'items.0.material_name', label: '物料名称（第1项）', type: 'string' },
+          { key: 'items.0.material_spec', label: '规格（第1项）', type: 'string' },
+          { key: 'items.0.material_unit', label: '单位（第1项）', type: 'string' },
           { key: 'items.0.return_quantity', label: '归还数量（第1项）', type: 'number' },
+          { key: 'items.0.warehouse_name', label: '仓库（第1项）', type: 'string' },
+          { key: 'items.0.notes', label: '行备注（第1项）', type: 'string' },
         ],
       },
     ],
@@ -233,9 +294,12 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
         children: [
           { key: 'items.0.material_code', label: '物料编号（第1项）', type: 'string' },
           { key: 'items.0.material_name', label: '物料名称（第1项）', type: 'string' },
+          { key: 'items.0.material_unit', label: '单位（第1项）', type: 'string' },
           { key: 'items.0.outbound_quantity', label: '出库数量（第1项）', type: 'number' },
           { key: 'items.0.unit_price', label: '单价（第1项）', type: 'number' },
           { key: 'items.0.total_amount', label: '金额（第1项）', type: 'number' },
+          { key: 'items.0.batch_number', label: '批次号（第1项）', type: 'string' },
+          { key: 'items.0.notes', label: '行备注（第1项）', type: 'string' },
         ],
       },
     ],
@@ -252,6 +316,25 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
       { key: 'receiver_name', label: '收货人', type: 'string' },
       { key: 'receipt_time', label: '入库时间', type: 'date' },
       { key: 'created_at', label: '创建时间', type: 'date' },
+      {
+        key: 'items',
+        label: '明细列表',
+        type: 'array',
+        children: [
+          { key: 'items.0.material_code', label: '物料编号（第1项）', type: 'string' },
+          { key: 'items.0.material_name', label: '物料名称（第1项）', type: 'string' },
+          { key: 'items.0.material_spec', label: '规格（第1项）', type: 'string' },
+          { key: 'items.0.material_unit', label: '单位（第1项）', type: 'string' },
+          { key: 'items.0.receipt_quantity', label: '入库数量（第1项）', type: 'number' },
+          { key: 'items.0.qualified_quantity', label: '合格数量（第1项）', type: 'number' },
+          { key: 'items.0.unqualified_quantity', label: '不合格数量（第1项）', type: 'number' },
+          { key: 'items.0.location_code', label: '库位（第1项）', type: 'string' },
+          { key: 'items.0.batch_number', label: '批次号（第1项）', type: 'string' },
+          { key: 'items.0.quality_status', label: '质量状态（第1项）', type: 'string' },
+          { key: 'items.0.status', label: '行状态（第1项）', type: 'string' },
+          { key: 'items.0.notes', label: '行备注（第1项）', type: 'string' },
+        ],
+      },
     ],
   },
   semi_finished_goods_receipt: {
@@ -266,6 +349,25 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
       { key: 'receiver_name', label: '收货人', type: 'string' },
       { key: 'receipt_time', label: '入库时间', type: 'date' },
       { key: 'created_at', label: '创建时间', type: 'date' },
+      {
+        key: 'items',
+        label: '明细列表',
+        type: 'array',
+        children: [
+          { key: 'items.0.material_code', label: '物料编号（第1项）', type: 'string' },
+          { key: 'items.0.material_name', label: '物料名称（第1项）', type: 'string' },
+          { key: 'items.0.material_spec', label: '规格（第1项）', type: 'string' },
+          { key: 'items.0.material_unit', label: '单位（第1项）', type: 'string' },
+          { key: 'items.0.receipt_quantity', label: '入库数量（第1项）', type: 'number' },
+          { key: 'items.0.qualified_quantity', label: '合格数量（第1项）', type: 'number' },
+          { key: 'items.0.unqualified_quantity', label: '不合格数量（第1项）', type: 'number' },
+          { key: 'items.0.location_code', label: '库位（第1项）', type: 'string' },
+          { key: 'items.0.batch_number', label: '批次号（第1项）', type: 'string' },
+          { key: 'items.0.quality_status', label: '质量状态（第1项）', type: 'string' },
+          { key: 'items.0.status', label: '行状态（第1项）', type: 'string' },
+          { key: 'items.0.notes', label: '行备注（第1项）', type: 'string' },
+        ],
+      },
     ],
   },
   sales_delivery: {
@@ -282,6 +384,24 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
       { key: 'deliverer_name', label: '发货人', type: 'string' },
       { key: 'delivery_time', label: '发货时间', type: 'date' },
       { key: 'created_at', label: '创建时间', type: 'date' },
+      {
+        key: 'items',
+        label: '明细列表',
+        type: 'array',
+        children: [
+          { key: 'items.0.material_code', label: '物料编号（第1项）', type: 'string' },
+          { key: 'items.0.material_name', label: '物料名称（第1项）', type: 'string' },
+          { key: 'items.0.material_spec', label: '规格（第1项）', type: 'string' },
+          { key: 'items.0.material_unit', label: '单位（第1项）', type: 'string' },
+          { key: 'items.0.delivery_quantity', label: '出库数量（第1项）', type: 'number' },
+          { key: 'items.0.unit_price', label: '单价（第1项）', type: 'number' },
+          { key: 'items.0.total_amount', label: '金额（第1项）', type: 'number' },
+          { key: 'items.0.location_code', label: '库位（第1项）', type: 'string' },
+          { key: 'items.0.batch_number', label: '批次号（第1项）', type: 'string' },
+          { key: 'items.0.status', label: '行状态（第1项）', type: 'string' },
+          { key: 'items.0.notes', label: '行备注（第1项）', type: 'string' },
+        ],
+      },
     ],
   },
   purchase_order: {
@@ -296,6 +416,24 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
       { key: 'total_amount', label: '总金额', type: 'number' },
       { key: 'status', label: '状态', type: 'string' },
       { key: 'created_at', label: '创建时间', type: 'date' },
+      {
+        key: 'items',
+        label: '明细列表',
+        type: 'array',
+        children: [
+          { key: 'items.0.material_code', label: '物料编号（第1项）', type: 'string' },
+          { key: 'items.0.material_name', label: '物料名称（第1项）', type: 'string' },
+          { key: 'items.0.material_spec', label: '规格（第1项）', type: 'string' },
+          { key: 'items.0.material_unit', label: '单位（第1项）', type: 'string' },
+          { key: 'items.0.ordered_quantity', label: '采购数量（第1项）', type: 'number' },
+          { key: 'items.0.unit_price', label: '单价（第1项）', type: 'number' },
+          { key: 'items.0.total_amount', label: '金额（第1项）', type: 'number' },
+          { key: 'items.0.received_quantity', label: '已到货数量（第1项）', type: 'number' },
+          { key: 'items.0.outstanding_quantity', label: '未到货数量（第1项）', type: 'number' },
+          { key: 'items.0.required_date', label: '要求到货日（第1项）', type: 'date' },
+          { key: 'items.0.notes', label: '行备注（第1项）', type: 'string' },
+        ],
+      },
     ],
   },
   purchase_receipt: {
@@ -312,6 +450,28 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
       { key: 'receiver_name', label: '收货人', type: 'string' },
       { key: 'receipt_time', label: '入库时间', type: 'date' },
       { key: 'created_at', label: '创建时间', type: 'date' },
+      {
+        key: 'items',
+        label: '明细列表',
+        type: 'array',
+        children: [
+          { key: 'items.0.material_code', label: '物料编号（第1项）', type: 'string' },
+          { key: 'items.0.material_name', label: '物料名称（第1项）', type: 'string' },
+          { key: 'items.0.material_spec', label: '规格（第1项）', type: 'string' },
+          { key: 'items.0.material_unit', label: '单位（第1项）', type: 'string' },
+          { key: 'items.0.receipt_quantity', label: '入库数量（第1项）', type: 'number' },
+          { key: 'items.0.unit_price', label: '单价（第1项）', type: 'number' },
+          { key: 'items.0.total_amount', label: '金额（第1项）', type: 'number' },
+          { key: 'items.0.qualified_quantity', label: '合格数量（第1项）', type: 'number' },
+          { key: 'items.0.unqualified_quantity', label: '不合格数量（第1项）', type: 'number' },
+          { key: 'items.0.warehouse_name', label: '行仓库（第1项）', type: 'string' },
+          { key: 'items.0.location_code', label: '库位（第1项）', type: 'string' },
+          { key: 'items.0.batch_number', label: '批次号（第1项）', type: 'string' },
+          { key: 'items.0.quality_status', label: '质量状态（第1项）', type: 'string' },
+          { key: 'items.0.status', label: '行状态（第1项）', type: 'string' },
+          { key: 'items.0.notes', label: '行备注（第1项）', type: 'string' },
+        ],
+      },
     ],
   },
   delivery_notice: {
@@ -341,8 +501,12 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
         children: [
           { key: 'items.0.material_code', label: '物料编号（第1项）', type: 'string' },
           { key: 'items.0.material_name', label: '物料名称（第1项）', type: 'string' },
+          { key: 'items.0.material_spec', label: '规格（第1项）', type: 'string' },
+          { key: 'items.0.material_unit', label: '单位（第1项）', type: 'string' },
           { key: 'items.0.notice_quantity', label: '通知数量（第1项）', type: 'number' },
           { key: 'items.0.unit_price', label: '单价（第1项）', type: 'number' },
+          { key: 'items.0.total_amount', label: '金额（第1项）', type: 'number' },
+          { key: 'items.0.notes', label: '行备注（第1项）', type: 'string' },
         ],
       },
     ],
@@ -372,8 +536,12 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
         children: [
           { key: 'items.0.material_code', label: '物料编号（第1项）', type: 'string' },
           { key: 'items.0.material_name', label: '物料名称（第1项）', type: 'string' },
+          { key: 'items.0.material_spec', label: '规格（第1项）', type: 'string' },
+          { key: 'items.0.material_unit', label: '单位（第1项）', type: 'string' },
           { key: 'items.0.trial_quantity', label: '试用数量（第1项）', type: 'number' },
           { key: 'items.0.unit_price', label: '单价（第1项）', type: 'number' },
+          { key: 'items.0.total_amount', label: '金额（第1项）', type: 'number' },
+          { key: 'items.0.notes', label: '行备注（第1项）', type: 'string' },
         ],
       },
     ],
@@ -391,6 +559,31 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
       { key: 'total_amount', label: '总金额', type: 'number' },
       { key: 'status', label: '状态', type: 'string' },
       { key: 'created_at', label: '创建时间', type: 'date' },
+      {
+        key: 'items',
+        label: '明细列表',
+        type: 'array',
+        children: [
+          { key: 'items.0.chinese_short_name', label: '中文简称（第1项）', type: 'string' },
+          { key: 'items.0.model_number', label: '型号（第1项）', type: 'string' },
+          { key: 'items.0.image_url', label: '图片（第1项）', type: 'string' },
+          { key: 'items.0.material_code', label: '物料编号（第1项）', type: 'string' },
+          { key: 'items.0.material_name', label: '物料名称（第1项）', type: 'string' },
+          { key: 'items.0.material_spec', label: '规格（第1项）', type: 'string' },
+          { key: 'items.0.material_unit', label: '单位（第1项）', type: 'string' },
+          { key: 'items.0.order_quantity', label: '订单数量（第1项）', type: 'number' },
+          { key: 'items.0.quote_quantity', label: '数量（第1项）', type: 'number' },
+          { key: 'items.0.delivered_quantity', label: '已交货数量（第1项）', type: 'number' },
+          { key: 'items.0.remaining_quantity', label: '剩余数量（第1项）', type: 'number' },
+          { key: 'items.0.unit_price', label: '单价（第1项）', type: 'number' },
+          { key: 'items.0.tax_rate', label: '税率（第1项）', type: 'number' },
+          { key: 'items.0.total_amount', label: '价税合计（第1项）', type: 'number' },
+          { key: 'items.0.delivery_date', label: '行交货日（第1项）', type: 'date' },
+          { key: 'items.0.delivery_status', label: '交货状态（第1项）', type: 'string' },
+          { key: 'items.0.work_order_code', label: '工单编号（第1项）', type: 'string' },
+          { key: 'items.0.notes', label: '行备注（第1项）', type: 'string' },
+        ],
+      },
     ],
   },
   common: {
@@ -438,6 +631,8 @@ export const DOCUMENT_TYPE_TO_CODE: Record<string, string> = {
 export interface TemplateVariableItem {
   key: string;
   label: string;
+  /** 侧栏展示为「整块明细表」，点击插入 pdfme table（绑定 items / operations 数组） */
+  kind?: 'detailTable';
 }
 
 const getSampleValueByType = (type: string, key: string, label?: string): unknown => {
@@ -445,6 +640,9 @@ const getSampleValueByType = (type: string, key: string, label?: string): unknow
   const k = key.toLowerCase();
   if (k.includes('qrcode')) return 'SAMPLE-QR-001';
   if (k.includes('barcode')) return '1234567890';
+  if (k.includes('image_url') || (k.includes('image') && k.includes('url'))) {
+    return 'https://placehold.co/120x80/f0f2f5/a8b1bd?text=IMG';
+  }
   if (type === 'image') return 'https://placehold.co/400x400/f0f2f5/a8b1bd?text=Image';
   if (type === 'signature') return 'https://placehold.co/200x100/f0f2f5/a8b1bd?text=Signature';
   if (l.includes('日期') || l.includes('时间') || k.includes('date') || k.includes('time')) {
@@ -455,6 +653,12 @@ const getSampleValueByType = (type: string, key: string, label?: string): unknow
   }
   if (l.includes('编号') || l.includes('代码') || k.includes('码') || k.includes('code') || k.includes('no')) {
     return 'SN-20240218-0001';
+  }
+  if (l.includes('简称') || k.includes('chinese_short_name') || k.includes('short_name')) {
+    return 'M6-壳体';
+  }
+  if (l.includes('型号') || k.includes('model_number')) {
+    return 'WL-2024-A';
   }
   if (l.includes('名称') || l.includes('规格') || k.includes('name')) {
     return `测试${l || '数据'}`;
@@ -525,7 +729,309 @@ const ARRAY_TABLE_TEMPLATES: Record<string, ArrayTableTemplateConfig[]> = {
         { key: 'operation_code', label: '工序编号' },
         { key: 'operation_name', label: '工序名称' },
         { key: 'status', label: '工序状态' },
+        { key: 'workshop_name', label: '车间' },
         { key: 'work_center_name', label: '工作中心' },
+        { key: 'completed_quantity', label: '完成数量' },
+        { key: 'qualified_quantity', label: '合格数量' },
+        { key: 'unqualified_quantity', label: '不合格数量' },
+        { key: 'planned_start_date', label: '计划开始' },
+        { key: 'planned_end_date', label: '计划结束' },
+        { key: 'remarks', label: '备注' },
+      ],
+    },
+  ],
+  quotation: [
+    {
+      arrayKey: 'items',
+      label: '明细列表',
+      maxRows: 12,
+      columns: [
+        { key: 'chinese_short_name', label: '中文简称' },
+        { key: 'model_number', label: '型号' },
+        { key: 'image_url', label: '图片' },
+        { key: 'material_unit', label: '单位' },
+        { key: 'quote_quantity', label: '数量' },
+        { key: 'unit_price', label: '单价（含税）' },
+        { key: 'total_amount', label: '总价（含税）' },
+        { key: 'material_code', label: '物料编号' },
+        { key: 'material_name', label: '物料名称' },
+        { key: 'material_spec', label: '规格' },
+        { key: 'delivery_date', label: '行交货日' },
+        { key: 'notes', label: '备注' },
+      ],
+    },
+  ],
+  other_inbound: [
+    {
+      arrayKey: 'items',
+      label: '明细列表',
+      maxRows: 12,
+      columns: [
+        { key: 'material_code', label: '物料编号' },
+        { key: 'material_name', label: '物料名称' },
+        { key: 'material_unit', label: '单位' },
+        { key: 'inbound_quantity', label: '数量' },
+        { key: 'unit_price', label: '单价' },
+        { key: 'total_amount', label: '金额' },
+        { key: 'batch_number', label: '批次号' },
+        { key: 'notes', label: '备注' },
+      ],
+    },
+  ],
+  other_outbound: [
+    {
+      arrayKey: 'items',
+      label: '明细列表',
+      maxRows: 12,
+      columns: [
+        { key: 'material_code', label: '物料编号' },
+        { key: 'material_name', label: '物料名称' },
+        { key: 'material_unit', label: '单位' },
+        { key: 'outbound_quantity', label: '数量' },
+        { key: 'unit_price', label: '单价' },
+        { key: 'total_amount', label: '金额' },
+        { key: 'batch_number', label: '批次号' },
+        { key: 'notes', label: '备注' },
+      ],
+    },
+  ],
+  material_borrow: [
+    {
+      arrayKey: 'items',
+      label: '明细列表',
+      maxRows: 12,
+      columns: [
+        { key: 'material_code', label: '物料编号' },
+        { key: 'material_name', label: '物料名称' },
+        { key: 'material_spec', label: '规格' },
+        { key: 'material_unit', label: '单位' },
+        { key: 'borrow_quantity', label: '借出数量' },
+        { key: 'returned_quantity', label: '已归还' },
+        { key: 'warehouse_name', label: '仓库' },
+        { key: 'notes', label: '备注' },
+      ],
+    },
+  ],
+  material_return: [
+    {
+      arrayKey: 'items',
+      label: '明细列表',
+      maxRows: 12,
+      columns: [
+        { key: 'material_code', label: '物料编号' },
+        { key: 'material_name', label: '物料名称' },
+        { key: 'material_spec', label: '规格' },
+        { key: 'material_unit', label: '单位' },
+        { key: 'return_quantity', label: '归还数量' },
+        { key: 'warehouse_name', label: '仓库' },
+        { key: 'notes', label: '备注' },
+      ],
+    },
+  ],
+  delivery_notice: [
+    {
+      arrayKey: 'items',
+      label: '明细列表',
+      maxRows: 12,
+      columns: [
+        { key: 'material_code', label: '物料编号' },
+        { key: 'material_name', label: '物料名称' },
+        { key: 'material_spec', label: '规格' },
+        { key: 'material_unit', label: '单位' },
+        { key: 'notice_quantity', label: '通知数量' },
+        { key: 'unit_price', label: '单价' },
+        { key: 'total_amount', label: '金额' },
+        { key: 'notes', label: '备注' },
+      ],
+    },
+  ],
+  sample_trial: [
+    {
+      arrayKey: 'items',
+      label: '明细列表',
+      maxRows: 12,
+      columns: [
+        { key: 'material_code', label: '物料编号' },
+        { key: 'material_name', label: '物料名称' },
+        { key: 'material_spec', label: '规格' },
+        { key: 'material_unit', label: '单位' },
+        { key: 'trial_quantity', label: '试用数量' },
+        { key: 'unit_price', label: '单价' },
+        { key: 'total_amount', label: '金额' },
+        { key: 'notes', label: '备注' },
+      ],
+    },
+  ],
+  production_picking: [
+    {
+      arrayKey: 'items',
+      label: '明细列表',
+      maxRows: 15,
+      columns: [
+        { key: 'material_code', label: '物料编号' },
+        { key: 'material_name', label: '物料名称' },
+        { key: 'material_spec', label: '规格' },
+        { key: 'material_unit', label: '单位' },
+        { key: 'required_quantity', label: '需求数量' },
+        { key: 'picked_quantity', label: '已领数量' },
+        { key: 'remaining_quantity', label: '剩余数量' },
+        { key: 'warehouse_name', label: '仓库' },
+        { key: 'location_code', label: '库位' },
+        { key: 'batch_number', label: '批次号' },
+        { key: 'status', label: '状态' },
+        { key: 'notes', label: '备注' },
+      ],
+    },
+  ],
+  production_return: [
+    {
+      arrayKey: 'items',
+      label: '明细列表',
+      maxRows: 15,
+      columns: [
+        { key: 'material_code', label: '物料编号' },
+        { key: 'material_name', label: '物料名称' },
+        { key: 'material_spec', label: '规格' },
+        { key: 'material_unit', label: '单位' },
+        { key: 'return_quantity', label: '退料数量' },
+        { key: 'warehouse_name', label: '仓库' },
+        { key: 'location_code', label: '库位' },
+        { key: 'batch_number', label: '批次号' },
+        { key: 'status', label: '状态' },
+        { key: 'notes', label: '备注' },
+      ],
+    },
+  ],
+  finished_goods_receipt: [
+    {
+      arrayKey: 'items',
+      label: '明细列表',
+      maxRows: 15,
+      columns: [
+        { key: 'material_code', label: '物料编号' },
+        { key: 'material_name', label: '物料名称' },
+        { key: 'material_spec', label: '规格' },
+        { key: 'material_unit', label: '单位' },
+        { key: 'receipt_quantity', label: '入库数量' },
+        { key: 'qualified_quantity', label: '合格数量' },
+        { key: 'unqualified_quantity', label: '不合格数量' },
+        { key: 'location_code', label: '库位' },
+        { key: 'batch_number', label: '批次号' },
+        { key: 'quality_status', label: '质量状态' },
+        { key: 'status', label: '状态' },
+        { key: 'notes', label: '备注' },
+      ],
+    },
+  ],
+  semi_finished_goods_receipt: [
+    {
+      arrayKey: 'items',
+      label: '明细列表',
+      maxRows: 15,
+      columns: [
+        { key: 'material_code', label: '物料编号' },
+        { key: 'material_name', label: '物料名称' },
+        { key: 'material_spec', label: '规格' },
+        { key: 'material_unit', label: '单位' },
+        { key: 'receipt_quantity', label: '入库数量' },
+        { key: 'qualified_quantity', label: '合格数量' },
+        { key: 'unqualified_quantity', label: '不合格数量' },
+        { key: 'location_code', label: '库位' },
+        { key: 'batch_number', label: '批次号' },
+        { key: 'quality_status', label: '质量状态' },
+        { key: 'status', label: '状态' },
+        { key: 'notes', label: '备注' },
+      ],
+    },
+  ],
+  sales_delivery: [
+    {
+      arrayKey: 'items',
+      label: '明细列表',
+      maxRows: 15,
+      columns: [
+        { key: 'material_code', label: '物料编号' },
+        { key: 'material_name', label: '物料名称' },
+        { key: 'material_spec', label: '规格' },
+        { key: 'material_unit', label: '单位' },
+        { key: 'delivery_quantity', label: '出库数量' },
+        { key: 'unit_price', label: '单价' },
+        { key: 'total_amount', label: '金额' },
+        { key: 'location_code', label: '库位' },
+        { key: 'batch_number', label: '批次号' },
+        { key: 'status', label: '状态' },
+        { key: 'notes', label: '备注' },
+      ],
+    },
+  ],
+  purchase_order: [
+    {
+      arrayKey: 'items',
+      label: '明细列表',
+      maxRows: 15,
+      columns: [
+        { key: 'material_code', label: '物料编号' },
+        { key: 'material_name', label: '物料名称' },
+        { key: 'material_spec', label: '规格' },
+        { key: 'material_unit', label: '单位' },
+        { key: 'ordered_quantity', label: '采购数量' },
+        { key: 'unit_price', label: '单价' },
+        { key: 'total_amount', label: '金额' },
+        { key: 'received_quantity', label: '已到货' },
+        { key: 'outstanding_quantity', label: '未到货' },
+        { key: 'required_date', label: '要求到货日' },
+        { key: 'notes', label: '备注' },
+      ],
+    },
+  ],
+  purchase_receipt: [
+    {
+      arrayKey: 'items',
+      label: '明细列表',
+      maxRows: 15,
+      columns: [
+        { key: 'material_code', label: '物料编号' },
+        { key: 'material_name', label: '物料名称' },
+        { key: 'material_spec', label: '规格' },
+        { key: 'material_unit', label: '单位' },
+        { key: 'receipt_quantity', label: '入库数量' },
+        { key: 'unit_price', label: '单价' },
+        { key: 'total_amount', label: '金额' },
+        { key: 'qualified_quantity', label: '合格数量' },
+        { key: 'unqualified_quantity', label: '不合格数量' },
+        { key: 'warehouse_name', label: '行仓库' },
+        { key: 'location_code', label: '库位' },
+        { key: 'batch_number', label: '批次号' },
+        { key: 'quality_status', label: '质量状态' },
+        { key: 'status', label: '状态' },
+        { key: 'notes', label: '备注' },
+      ],
+    },
+  ],
+  sales_order: [
+    {
+      arrayKey: 'items',
+      label: '明细列表',
+      maxRows: 15,
+      columns: [
+        { key: 'chinese_short_name', label: '中文简称' },
+        { key: 'model_number', label: '型号' },
+        { key: 'image_url', label: '图片' },
+        { key: 'material_code', label: '物料编号' },
+        { key: 'material_name', label: '物料名称' },
+        { key: 'material_spec', label: '规格' },
+        { key: 'material_unit', label: '单位' },
+        { key: 'order_quantity', label: '订单数量' },
+        { key: 'quote_quantity', label: '数量' },
+        { key: 'delivered_quantity', label: '已交货' },
+        { key: 'remaining_quantity', label: '剩余数量' },
+        { key: 'unit_price', label: '单价' },
+        { key: 'tax_rate', label: '税率' },
+        { key: 'total_amount', label: '价税合计' },
+        { key: 'delivery_date', label: '行交货日' },
+        { key: 'delivery_status', label: '交货状态' },
+        { key: 'work_order_code', label: '工单' },
+        { key: 'notes', label: '备注' },
       ],
     },
   ],
@@ -558,9 +1064,7 @@ export const getTemplateVariableItems = (type: string): TemplateVariableItem[] =
   const allFields = [...schema.fields, ...commonFields];
   for (const field of allFields) {
     if (field.type === 'array' && field.children?.length) {
-      for (const child of field.children) {
-        items.push({ key: child.key, label: child.label });
-      }
+      items.push({ key: field.key, label: field.label, kind: 'detailTable' });
     } else {
       items.push({ key: field.key, label: field.label });
     }

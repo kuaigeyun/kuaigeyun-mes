@@ -13,6 +13,7 @@ from core.models.permission import Permission
 from core.timezone_utils import now_utc
 from core.schemas.menu import MenuCreate, MenuUpdate, MenuResponse, MenuTreeResponse
 from core.services.application.application_service import ApplicationService
+from core.menu_sync_is_active_policy import resolve_sync_is_active_for_existing_row
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.infrastructure.cache.cache_manager import cache_manager
 
@@ -416,6 +417,10 @@ class MenuService:
         
         # 更新字段
         update_data = data.model_dump(exclude_unset=True)
+        # 前端空字符串经 Schema 规范化为 None：仅表示不修改该字段，避免写入 sort_order=NULL 或误清空 meta
+        for _optional in ("sort_order", "meta"):
+            if _optional in update_data and update_data[_optional] is None:
+                update_data.pop(_optional, None)
         
         # 验证权限代码（如果提供）
         if "permission_code" in update_data and update_data["permission_code"]:
@@ -577,25 +582,20 @@ class MenuService:
     ) -> int:
         """
         根据权限代码更新菜单可见性
-        
-        当权限被删除或禁用时，自动更新关联菜单的状态。
-        
-        Args:
-            tenant_id: 组织ID
-            permission_code: 权限代码
-            
-        Returns:
-            int: 更新的菜单数量
+
+        仅在权限被删除（不存在）时：清空关联菜单的 permission_code 并禁用菜单。
+
+        不在「权限仍存在」时自动把 is_active 改回 True：带同一 permission_code 的菜单
+        可能由管理员在菜单管理中手动禁用，若此处批量启用会与手动设置冲突（例如角色权限
+        变更时会触发本方法）。
         """
-        # 检查权限是否存在
         permission = await Permission.filter(
             code=permission_code,
             tenant_id=tenant_id,
             deleted_at__isnull=True
         ).first()
-        
+
         if not permission:
-            # 权限不存在或被删除，将关联菜单的权限代码清空并禁用菜单
             updated_count = await Menu.filter(
                 tenant_id=tenant_id,
                 permission_code=permission_code,
@@ -605,25 +605,16 @@ class MenuService:
                 is_active=False
             )
             return updated_count
-        else:
-            # 权限存在，确保关联菜单是启用的（如果之前被禁用）
-            # 注意：这里只更新之前因为权限问题被禁用的菜单
-            updated_count = await Menu.filter(
-                tenant_id=tenant_id,
-                permission_code=permission_code,
-                deleted_at__isnull=True,
-                is_active=False
-            ).update(
-                is_active=True
-            )
-            return updated_count
+        return 0
 
     @staticmethod
     async def sync_menus_from_application_config(
         tenant_id: int,
         application_uuid: str,
         menu_config: Dict[str, Any],
-        is_active: bool = True
+        is_active: bool = True,
+        *,
+        preserve_existing_is_active: bool = True,
     ) -> int:
         """
         从应用菜单配置同步菜单到菜单管理
@@ -635,7 +626,10 @@ class MenuService:
             tenant_id: 组织ID
             application_uuid: 应用UUID
             menu_config: 菜单配置（JSON格式）
-            is_active: 菜单是否启用（默认与应用状态一致）
+            is_active: 新建菜单项是否启用（默认与应用状态一致）
+            preserve_existing_is_active: 对已存在行的写入规则见
+                ``core.menu_sync_is_active_policy.resolve_sync_is_active_for_existing_row``
+                （单测：tests/test_menu_sync_is_active_policy.py）
             
         Returns:
             int: 同步的菜单数量
@@ -736,7 +730,11 @@ class MenuService:
                 existing_menu.component = menu_component
                 existing_menu.permission_code = menu_permission_code
                 existing_menu.sort_order = menu_sort_order
-                existing_menu.is_active = is_active
+                _resolved = resolve_sync_is_active_for_existing_row(
+                    is_active, preserve_existing_is_active
+                )
+                if _resolved is not None:
+                    existing_menu.is_active = _resolved
                 existing_menu.is_external = menu_is_external
                 existing_menu.external_url = menu_external_url
                 existing_menu.meta = menu_meta

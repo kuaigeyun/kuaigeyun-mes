@@ -252,6 +252,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': '.', // 由于root是src目录，@指向当前目录
+      // pako：CJS 主入口无 default；@pdf-lib/standard-fonts（pdf-lib 依赖）使用 default import，Vite 需指向 ESM 构建
+      pako: resolve(__dirname, 'node_modules/pako/dist/pako.esm.mjs'),
     },
   },
   define: {
@@ -263,6 +265,7 @@ export default defineConfig({
   // 优化依赖预构建
   optimizeDeps: {
     include: [
+      'pako',
       'react',
       'react-dom',
       'react-router-dom',

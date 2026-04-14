@@ -20,6 +20,8 @@ import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFI
 import { warehouseApi } from '../../../services/production';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { getMaterialReturnLifecycle } from '../../../utils/materialReturnLifecycle';
+import type { DocumentPrintApiResult } from '../../../../../utils/printResponseHelpers';
+import { isClientPdfmePrint, clientPdfmeListPrintMessage } from '../../../../../utils/printResponseHelpers';
 
 interface MaterialReturn {
   id?: number;
@@ -300,7 +302,11 @@ const MaterialReturnsPage: React.FC = () => {
 
   const handlePrint = async (record: MaterialReturn) => {
     try {
-      const result = await warehouseApi.materialReturn.print(record.id!.toString()) as { success?: boolean; content?: string; message?: string };
+      const result = (await warehouseApi.materialReturn.print(record.id!.toString())) as DocumentPrintApiResult;
+      if (isClientPdfmePrint(result)) {
+        messageApi.warning(clientPdfmeListPrintMessage(result.message));
+        return;
+      }
       if (result?.success && result?.content) {
         const printWindow = window.open('', '_blank');
         if (printWindow) {

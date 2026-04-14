@@ -68,7 +68,7 @@ class QuotationItemResponse(QuotationItemBase):
 
 class QuotationBase(BaseSchema):
     """报价单基础schema"""
-    quotation_code: Optional[str] = Field(None, max_length=50, description="报价单编码（自动生成，无需填写）")
+    quotation_code: Optional[str] = Field(None, max_length=120, description="报价单编码（自动生成；修订版含 -Vn 后缀）")
     quotation_date: date = Field(..., description="报价日期")
     valid_until: Optional[date] = Field(None, description="有效期至")
     delivery_date: Optional[date] = Field(None, description="预计交货日期")
@@ -145,6 +145,15 @@ class QuotationResponse(QuotationBase):
     id: int
     uuid: str
     tenant_id: int
+    quotation_series_code: Optional[str] = Field(None, max_length=120, description="报价系列编码")
+    root_quotation_id: Optional[int] = Field(None, description="系列根报价单 ID")
+    version_no: int = Field(1, description="系列内版本号")
+    previous_quotation_id: Optional[int] = Field(None, description="上一版本报价单 ID")
+    is_latest_in_series: bool = Field(True, description="是否为系列最新版本")
+    superseded_by_id: Optional[int] = Field(None, description="被替代为的新版本 ID")
+    formal_document_generated_at: Optional[datetime] = Field(
+        None, description="首次生成正式报价 PDF 的时间"
+    )
     sales_order_id: Optional[int] = Field(None, description="关联销售订单ID")
     sales_order_code: Optional[str] = Field(None, max_length=50, description="关联销售订单编码")
     is_active: bool = Field(True, description="是否有效")
@@ -173,3 +182,25 @@ class QuotationListResponse(BaseSchema):
 class QuotationReviewAction(BaseSchema):
     """报价单审核类操作可选备注"""
     review_remarks: Optional[str] = Field(None, max_length=500, description="审核意见/备注")
+
+
+class QuotationRevisionBody(BaseSchema):
+    """另存为新版本：可选覆盖头字段与明细；未传则复制系列当前最新版。"""
+
+    quotation_date: Optional[date] = None
+    valid_until: Optional[date] = None
+    delivery_date: Optional[date] = None
+    customer_id: Optional[int] = None
+    customer_name: Optional[str] = Field(None, max_length=200)
+    customer_contact: Optional[str] = Field(None, max_length=100)
+    customer_phone: Optional[str] = Field(None, max_length=20)
+    total_quantity: Optional[Decimal] = Field(None, ge=0)
+    total_amount: Optional[Decimal] = Field(None, ge=0)
+    salesman_id: Optional[int] = None
+    salesman_name: Optional[str] = Field(None, max_length=100)
+    shipping_address: Optional[str] = None
+    shipping_method: Optional[str] = Field(None, max_length=50)
+    payment_terms: Optional[str] = Field(None, max_length=100)
+    currency_code: Optional[str] = Field(None, max_length=20)
+    notes: Optional[str] = None
+    items: Optional[List[QuotationItemCreate]] = None

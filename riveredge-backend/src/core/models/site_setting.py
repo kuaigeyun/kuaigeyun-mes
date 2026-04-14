@@ -81,9 +81,10 @@ class SiteSetting(BaseModel):
         Args:
             settings: 设置字典
         """
-        if not self.settings:
-            self.settings = {}
-        self.settings.update(settings)
+        # JSONField 原地改 dict 时 Tortoise 可能不标记字段已变更，导致 save() 未写入库；整体赋新 dict 可靠
+        base = dict(self.settings) if self.settings else {}
+        base.update(settings)
+        self.settings = base
     
     def __str__(self):
         """字符串表示"""

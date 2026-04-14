@@ -1211,6 +1211,31 @@ def get_demand_computation_lifecycle(
 # ---------------------------------------------------------------------------
 # 报价单生命周期（草稿 → 已提交 → 已审核 → 发送/下推 → 已下推）
 # ---------------------------------------------------------------------------
+def _merge_quotation_version_meta(quotation: Any, result: Dict[str, Any]) -> Dict[str, Any]:
+    """为生命周期结果附加版本系列信息，供列表/详情 UniLifecycle 与引导文案使用。"""
+    vn = int(getattr(quotation, "version_no", None) or 1)
+    result["version_no"] = vn
+    result["quotation_series_code"] = (
+        getattr(quotation, "quotation_series_code", None)
+        or getattr(quotation, "quotation_code", None)
+        or ""
+    )
+    is_latest = getattr(quotation, "is_latest_in_series", True)
+    result["is_latest_in_series"] = True if is_latest is None else bool(is_latest)
+    st = _norm(getattr(quotation, "status", None))
+    sugg = list(result.get("next_step_suggestions") or [])
+    if result["is_latest_in_series"] and st not in ("草稿", "draft"):
+        tag = "另存为新版本（修订）"
+        if tag not in sugg:
+            sugg.append(tag)
+    if not result["is_latest_in_series"]:
+        tag = "此为历史版本，请以系列最新版为准"
+        if tag not in sugg:
+            sugg.append(tag)
+    result["next_step_suggestions"] = sugg
+    return result
+
+
 def get_quotation_lifecycle(
     quotation: Any,
     milestones: Optional[List[Dict[str, Any]]] = None,
@@ -1240,67 +1265,91 @@ def get_quotation_lifecycle(
         }
 
     if converted_sales_order_missing and status == "已转订单":
-        return _ret(
-            "converted",
-            "已下推（下游销售订单已删除）",
-            "normal",
-            [
-                "可点击「撤回下推」解除与已删订单的关联并回到已接受",
-                "或直接重新下推转销售订单（系统将自动解除无效关联）",
-                "或删除本报价单",
-            ],
+        return _merge_quotation_version_meta(
+            quotation,
+            _ret(
+                "converted",
+                "已下推（下游销售订单已删除）",
+                "normal",
+                [
+                    "可点击「撤回下推」解除与已删订单的关联并回到已接受",
+                    "或直接重新下推转销售订单（系统将自动解除无效关联）",
+                    "或删除本报价单",
+                ],
+            ),
         )
 
     if status in ("已拒绝", "rejected") or _is_rejected(review_status):
-        return _ret(
-            "submitted",
-            "已驳回",
-            "exception",
-            ["修改报价单后点击「重新编辑」回到草稿，再提交审核"],
-            exc=True,
+        return _merge_quotation_version_meta(
+            quotation,
+            _ret(
+                "submitted",
+                "已驳回",
+                "exception",
+                ["修改报价单后点击「重新编辑」回到草稿，再提交审核"],
+                exc=True,
+            ),
         )
 
     if status in ("草稿", "draft"):
-        return _ret("draft", "草稿", "normal", ["提交报价单（进入审核）"])
+        return _merge_quotation_version_meta(
+            quotation, _ret("draft", "草稿", "normal", ["提交报价单（进入审核）"])
+        )
 
     if status == "已转订单":
-        return _ret("converted", "已下推", "success", [])
+        return _merge_quotation_version_meta(
+            quotation, _ret("converted", "已下推", "success", [])
+        )
 
     if status == "已接受":
-        return _ret(
-            "send_or_push",
-            "客户已确认（待下推）",
-            "normal",
-            ["转销售订单（下推）"],
+        return _merge_quotation_version_meta(
+            quotation,
+            _ret(
+                "send_or_push",
+                "客户已确认（待下推）",
+                "normal",
+                ["转销售订单（下推）"],
+            ),
         )
 
     if status == "已发送":
         if _quotation_review_pending(review_status):
-            return _ret(
+            return _merge_quotation_version_meta(
+                quotation,
+                _ret(
+                    "submitted",
+                    "待审核",
+                    "normal",
+                    ["审核通过", "审核驳回", "撤回提交（整单回草稿）"],
+                ),
+            )
+        if _is_approved(review_status):
+            return _merge_quotation_version_meta(
+                quotation,
+                _ret(
+                    "reviewed",
+                    "已审核",
+                    "normal",
+                    [
+                        "客户确认（标记已接受，表示已发送/客户认可）",
+                        "转销售订单（下推，可直接下推不经客户确认）",
+                        "撤回审核（回到待审核）",
+                    ],
+                ),
+            )
+        return _merge_quotation_version_meta(
+            quotation,
+            _ret(
                 "submitted",
                 "待审核",
                 "normal",
                 ["审核通过", "审核驳回", "撤回提交（整单回草稿）"],
-            )
-        if _is_approved(review_status):
-            return _ret(
-                "reviewed",
-                "已审核",
-                "normal",
-                [
-                    "客户确认（标记已接受，表示已发送/客户认可）",
-                    "转销售订单（下推，可直接下推不经客户确认）",
-                    "撤回审核（回到待审核）",
-                ],
-            )
-        return _ret(
-            "submitted",
-            "待审核",
-            "normal",
-            ["审核通过", "审核驳回", "撤回提交（整单回草稿）"],
+            ),
         )
 
-    return _ret("draft", status or "草稿", "normal", [])
+    return _merge_quotation_version_meta(
+        quotation, _ret("draft", status or "草稿", "normal", [])
+    )
 
 
 # ---------------------------------------------------------------------------

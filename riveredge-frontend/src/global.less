@@ -1124,3 +1124,10 @@ code {
   border-color: var(--ant-colorPrimary) !important;
 }
 
+/* pdfme Designer：表格单元格为 position:absolute，内层 root 须为包含块，否则相对外层画布定位导致整表糊成一条线 */
+.pdfme-designer-wrapper .selectable > div:last-child {
+  position: relative !important;
+  min-height: 100%;
+  overflow: visible;
+  box-sizing: border-box;
+}

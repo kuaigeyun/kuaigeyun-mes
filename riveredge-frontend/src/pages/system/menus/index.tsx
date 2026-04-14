@@ -297,20 +297,48 @@ const MenuListPage: React.FC = () => {
   const handleSubmit = async (values: any) => {
     try {
         setFormLoading(true);
-         // 处理 meta
-        if (values.meta && typeof values.meta === 'string') {
-            try {
+        // 处理 meta：空串不传，避免后端 422（meta 须为 object）；合法 JSON 字符串则解析
+        if (values.meta !== undefined && values.meta !== null) {
+          if (typeof values.meta === 'string') {
+            const trimmed = values.meta.trim();
+            if (trimmed === '') {
+              delete values.meta;
+            } else {
+              try {
                 values.meta = JSON.parse(values.meta);
-            } catch {
+              } catch {
                 values.meta = {};
+              }
             }
+          }
         }
+        // 只提交后端支持的字段，去掉详情里可能混入的只读字段
+        const payload: Record<string, any> = {
+          name: values.name,
+          path: values.path,
+          icon: values.icon,
+          component: values.component,
+          permission_code: values.permission_code,
+          application_uuid: values.application_uuid,
+          parent_uuid: values.parent_uuid,
+          sort_order: values.sort_order,
+          is_active: values.is_active,
+          is_external: values.is_external,
+          external_url: values.external_url,
+        };
+        if (values.meta !== undefined) {
+          payload.meta = values.meta;
+        }
+        Object.keys(payload).forEach((k) => {
+          const v = payload[k];
+          if (v === undefined) delete payload[k];
+        });
         
         if (isEdit && currentMenuUuid) {
-            await updateMenu(currentMenuUuid, values);
+            await updateMenu(currentMenuUuid, payload);
             messageApi.success(t('pages.system.updateSuccess'));
         } else {
-            await createMenu(values);
+            await createMenu(payload);
             messageApi.success(t('pages.system.createSuccess'));
         }
         setModalVisible(false);

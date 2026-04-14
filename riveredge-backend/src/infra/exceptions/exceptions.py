@@ -68,9 +68,14 @@ class NotFoundError(RiverEdgeException):
     """资源不存在错误"""
 
     def __init__(self, resource: str, resource_id: Optional[str] = None):
-        message = f"{resource}不存在"
-        if resource_id:
+        # 设计约定：resource 可为短名（如「文件」）或历史写法中的整句（如「文件不存在」）。
+        # 若已以「不存在」结尾则不再拼接，避免出现「文件不存在不存在」。
+        if resource_id is not None:
             message = f"{resource} '{resource_id}' 不存在"
+        elif resource.endswith("不存在"):
+            message = resource
+        else:
+            message = f"{resource}不存在"
         details = {"resource": resource, "resource_id": resource_id}
         super().__init__(message, "NOT_FOUND", 404, details)
 
