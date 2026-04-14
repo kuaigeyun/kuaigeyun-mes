@@ -37,8 +37,6 @@ import { useConfigStore } from '../../../../stores/configStore';
 
 const { Text, Title } = Typography;
 
-const BUSINESS_BOARD_TITLE_STORAGE_KEY = 'riveredge.businessBoard.customTitle';
-
 const clockFont =
   '"JetBrains Mono", "SF Mono", "Cascadia Code", Consolas, "Liberation Mono", ui-monospace, monospace';
 
@@ -117,39 +115,23 @@ const BusinessBoardPage: React.FC = () => {
     document.title = `${displayBoardTitle} - ${site}`;
   }, [displayBoardTitle]);
 
-  /** 从后端加载租户级标题；无记录时尝试迁移浏览器旧版 localStorage 并写回数据库 */
+  /** 从后端加载租户级标题；仅以后端持久化为准 */
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      try {
-        const res = await getBusinessBoardTitle();
-        if (cancelled) return;
-        const fromApi = (res?.title || '').trim();
-        if (fromApi) {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          const res = await getBusinessBoardTitle();
+          if (cancelled) return;
+          const fromApi = (res?.title || '').trim();
           setCustomBoardTitle(fromApi);
           return;
-        }
-        let legacy = '';
-        try {
-          legacy = (localStorage.getItem(BUSINESS_BOARD_TITLE_STORAGE_KEY) || '').trim();
         } catch {
-          legacy = '';
-        }
-        if (legacy) {
-          setCustomBoardTitle(legacy);
-          try {
-            await putBusinessBoardTitle(legacy);
-            localStorage.removeItem(BUSINESS_BOARD_TITLE_STORAGE_KEY);
-          } catch {
-            /* 迁移失败时仍保留本地展示 */
+          if (attempt < 2) {
+            await new Promise((resolve) => setTimeout(resolve, 400));
+            continue;
           }
-        }
-      } catch {
-        try {
-          const legacy = (localStorage.getItem(BUSINESS_BOARD_TITLE_STORAGE_KEY) || '').trim();
-          if (legacy) setCustomBoardTitle(legacy);
-        } catch {
-          /* empty */
+          setCustomBoardTitle('');
         }
       }
     })();
@@ -168,11 +150,6 @@ const BusinessBoardPage: React.FC = () => {
     try {
       await putBusinessBoardTitle(next || null);
       setCustomBoardTitle(next);
-      try {
-        localStorage.removeItem(BUSINESS_BOARD_TITLE_STORAGE_KEY);
-      } catch {
-        /* ignore */
-      }
       setTitleModalOpen(false);
     } catch (e: unknown) {
       message.error((e as Error)?.message || '保存失败，请稍后重试');
@@ -184,11 +161,6 @@ const BusinessBoardPage: React.FC = () => {
       await putBusinessBoardTitle(null);
       setCustomBoardTitle('');
       setTitleDraft(defaultBoardTitle);
-      try {
-        localStorage.removeItem(BUSINESS_BOARD_TITLE_STORAGE_KEY);
-      } catch {
-        /* ignore */
-      }
     } catch (e: unknown) {
       message.error((e as Error)?.message || '恢复默认失败，请稍后重试');
     }
