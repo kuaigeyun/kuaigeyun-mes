@@ -37,6 +37,9 @@ dependencies = [
     "aiosmtplib>=3.0.1", # 异步 SMTP 客户端
     "tzdata>=2025.3",
     "xhtml2pdf>=0.2.15",
+    # svglib 1.6+ 依赖 rlpycairo→pycairo；pycairo 在 Linux 常无 wheel 需源码编译（pkg-config、cairo-dev）。
+    # 迁移/极简镜像未装系统库时会失败；1.5.x 仍为 ReportLab 路径，不强制 Cairo。
+    "svglib>=1.5.1,<1.6",
 ]
 
 [project.optional-dependencies]
