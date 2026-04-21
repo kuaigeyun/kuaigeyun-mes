@@ -11,5 +11,4 @@ export { default as TextComponent } from './TextComponent';
 export { default as ImageComponent } from './ImageComponent';
 export { default as SystemConfigComponent } from './SystemConfigComponent';
 export { default as CoreConfigComponent } from './CoreConfigComponent';
-export { default as BusinessConfigComponent } from './BusinessConfigComponent';
 

@@ -1,25 +1,24 @@
 """
 业务配置 API 模块
 
-提供业务配置相关的 API 接口，包括运行模式切换、流程模块开关、流程参数配置等。
+提供业务「参数」配置相关的 API 接口（如 BOM 多版本、销售/采购/财务参数等）。
+
+变更说明（2026 重构）：
+- 业务蓝图设置已下线；功能是否开启由「菜单管理」决定，是否审核由「流程设置（ApprovalProcess）」决定。
+- 本模块不再提供 nodes/modules/running-mode/complexity-presets/templates 等蓝图相关接口，
+  仅保留纯参数 (`parameters.*`) 的读取与更新，供系统参数 Tab 使用。
+- PRO 功能列表/校验接口仍然保留，与套餐相关。
 
 Author: Luigi Lu
-Date: 2026-01-27
 """
 
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends
 from loguru import logger
 
 from infra.schemas.business_config import (
     BusinessConfigResponse,
-    RunningModeSwitchRequest,
-    ModuleSwitchRequest,
     ProcessParameterUpdateRequest,
     BatchProcessParameterUpdateRequest,
-    ConfigTemplateSaveRequest,
-    ConfigTemplateApplyRequest,
-    NodesUpdateRequest,
-    ComplexityPresetApplyRequest,
 )
 from infra.services.business_config_service import BusinessConfigService
 from infra.api.deps.deps import get_current_user
@@ -27,7 +26,6 @@ from core.api.deps.deps import get_current_tenant
 from infra.models.user import User
 from infra.exceptions.exceptions import ValidationError, NotFoundError, BusinessLogicError
 
-# 创建路由
 router = APIRouter(prefix="/business-config", tags=["Business Config"])
 
 
@@ -36,9 +34,10 @@ async def get_config_schema(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     """
-    获取业务配置 schema（参数键、节点列表）
+    获取业务配置 schema（参数键）
 
-    返回可配置的参数分类及键、全部业务节点，供前端动态渲染，避免前后端重复维护。
+    返回可配置的参数分类及键，供前端动态渲染系统参数表单。
+    蓝图相关 (processRegistry / allNodes 等) 已移除。
     """
     from infra.services.business_config_service import (
         _build_parameter_keys_schema,
@@ -51,8 +50,10 @@ async def get_config_schema(
         _build_parameter_registry_param_meta_schema,
         _build_parameter_registry_control_meta_schema,
         _build_parameter_implementation_schema,
-        ALL_NODES,
     )
+    # 说明：processRegistry 与 parameterRegistry 都属于系统「参数」分组，
+    # 前端配置中心据此渲染「流程设置」「参数设置」两个参数 Tab；
+    # 蓝图节点相关 (allNodes 等) 已在蓝图下线时移除。
     return {
         "processRegistry": _build_process_registry_schema(),
         "processRegistryMeta": _build_process_registry_meta_schema(),
@@ -64,7 +65,6 @@ async def get_config_schema(
         "parameterRegistryControlMeta": _build_parameter_registry_control_meta_schema(),
         "parameterKeys": _build_parameter_keys_schema(),
         "parameterImplementation": _build_parameter_implementation_schema(),
-        "allNodes": ALL_NODES,
     }
 
 
@@ -74,9 +74,7 @@ async def get_business_config(
     tenant_id: int = Depends(get_current_tenant),
 ) -> BusinessConfigResponse:
     """
-    获取业务配置
-    
-    返回当前组织的业务配置，包括运行模式、模块开关、流程参数等。
+    获取业务配置（仅 parameters 有效；nodes/modules 字段已废弃，读取时返回空或历史值）。
     """
     try:
         config = await BusinessConfigService().get_business_config(tenant_id)
@@ -88,150 +86,24 @@ async def get_business_config(
         raise HTTPException(status_code=500, detail=f"获取业务配置失败: {str(e)}")
 
 
-@router.post("/running-mode/switch", summary="切换运行模式")
-async def switch_running_mode(
-    request: RunningModeSwitchRequest,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> dict:
-    """
-    切换运行模式
-    
-    支持在极简模式和全流程模式之间切换，切换时自动应用对应模式的默认配置。
-    """
-    try:
-        result = await BusinessConfigService().switch_running_mode(
-            tenant_id=tenant_id,
-            mode=request.mode,
-            apply_defaults=request.apply_defaults
-        )
-        return result
-    except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        logger.error(f"切换运行模式失败: {e}")
-        raise HTTPException(status_code=500, detail=f"切换运行模式失败: {str(e)}")
-
-
-@router.get("/complexity-presets", summary="获取业务复杂度预设列表")
-async def get_complexity_presets(
-    current_user: User = Depends(get_current_user),
-) -> dict:
-    """
-    获取五级业务复杂度预设列表
-
-    供前端选择器使用，包含 L1-L5 代号、名称、描述。
-    """
-    try:
-        result = await BusinessConfigService().get_complexity_presets()
-        return result
-    except Exception as e:
-        logger.error(f"获取业务复杂度预设失败: {e}")
-        raise HTTPException(status_code=500, detail=f"获取业务复杂度预设失败: {str(e)}")
-
-
-@router.post("/complexity-presets/apply", summary="应用业务复杂度预设")
-async def apply_complexity_preset(
-    request: ComplexityPresetApplyRequest,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> dict:
-    """
-    应用业务复杂度预设
-
-    支持 L1 来料加工模式、L2 订单生产模式、L3 生产物料模式、L4 进销存生产模式、L5 全流程内控模式。
-    """
-    try:
-        result = await BusinessConfigService().apply_complexity_preset(
-            tenant_id=tenant_id,
-            level=request.level,
-        )
-        return result
-    except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        logger.error(f"应用业务复杂度预设失败: {e}")
-        raise HTTPException(status_code=500, detail=f"应用业务复杂度预设失败: {str(e)}")
-
-
-@router.post("/modules/switch", summary="更新模块开关")
-async def update_module_switch(
-    request: ModuleSwitchRequest,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> dict:
-    """
-    更新模块开关
-    
-    支持独立开启/关闭流程模块。核心模块（生产管理、仓储管理）不可关闭。
-    """
-    try:
-        result = await BusinessConfigService().update_module_switch(
-            tenant_id=tenant_id,
-            module_code=request.module_code,
-            enabled=request.enabled
-        )
-        return result
-    except BusinessLogicError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        logger.error(f"更新模块开关失败: {e}")
-        raise HTTPException(status_code=500, detail=f"更新模块开关失败: {str(e)}")
-
-
-@router.post("/nodes/update", summary="更新节点配置")
-async def update_nodes_config(
-    request: NodesUpdateRequest,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> dict:
-    """
-    更新节点配置
-    
-    更新业务流程节点的启用状态及审核要求，可同时更新行业和规模属性。
-    """
-    try:
-        result = await BusinessConfigService().update_nodes_config(
-            tenant_id=tenant_id,
-            nodes=request.nodes,
-            industry=request.industry,
-            scale=request.scale
-        )
-        return result
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        logger.error(f"更新节点配置失败: {e}")
-        raise HTTPException(status_code=500, detail=f"更新节点配置失败: {str(e)}")
-
-
 @router.post("/parameters/update", summary="更新流程参数")
 async def update_process_parameter(
     request: ProcessParameterUpdateRequest,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> dict:
-    """
-    更新流程参数
-    
-    更新指定分类的流程参数。
-    """
+    """更新指定分类下的单个参数。"""
     try:
-        result = await BusinessConfigService().update_process_parameter(
+        return await BusinessConfigService().update_process_parameter(
             tenant_id=tenant_id,
             category=request.category,
             parameter_key=request.parameter_key,
-            value=request.value
+            value=request.value,
         )
-        return result
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"更新流程参数失败: {e}")
         raise HTTPException(status_code=500, detail=f"更新流程参数失败: {str(e)}")
@@ -243,158 +115,52 @@ async def batch_update_process_parameters(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> dict:
-    """
-    批量更新流程参数
-    
-    支持一次性更新多个分类的流程参数。
-    """
+    """批量更新多个分类的参数。"""
     try:
-        result = await BusinessConfigService().batch_update_process_parameters(
+        return await BusinessConfigService().batch_update_process_parameters(
             tenant_id=tenant_id,
-            parameters=request.parameters
+            parameters=request.parameters,
         )
-        return result
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"批量更新流程参数失败: {e}")
         raise HTTPException(status_code=500, detail=f"批量更新流程参数失败: {str(e)}")
 
 
-@router.get("/pro-features/check", summary="检查PRO版功能访问权限")
+@router.get("/pro-features/check", summary="检查 PRO 版功能访问权限")
 async def check_pro_feature_access(
     feature_type: str,
     feature_code: str,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> dict:
-    """
-    检查PRO版功能访问权限
-    
-    检查指定功能是否为PRO版功能，以及当前组织是否有权限访问。
-    """
     try:
-        result = await BusinessConfigService().check_pro_feature_access(
+        return await BusinessConfigService().check_pro_feature_access(
             tenant_id=tenant_id,
             feature_type=feature_type,
-            feature_code=feature_code
+            feature_code=feature_code,
         )
-        return result
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"检查PRO版功能访问权限失败: {e}")
-        raise HTTPException(status_code=500, detail=f"检查PRO版功能访问权限失败: {str(e)}")
+        logger.error(f"检查 PRO 版功能访问权限失败: {e}")
+        raise HTTPException(status_code=500, detail=f"检查 PRO 版功能访问权限失败: {str(e)}")
 
 
-@router.get("/pro-features/list", summary="获取PRO版功能列表")
+@router.get("/pro-features/list", summary="获取 PRO 版功能列表")
 async def get_pro_features_list(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> dict:
-    """
-    获取PRO版功能列表
-    
-    返回所有PRO版功能列表，以及当前组织的套餐信息。
-    """
     try:
-        result = await BusinessConfigService().get_pro_features_list(tenant_id)
-        return result
+        return await BusinessConfigService().get_pro_features_list(tenant_id)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        logger.error(f"获取PRO版功能列表失败: {e}")
-        raise HTTPException(status_code=500, detail=f"获取PRO版功能列表失败: {str(e)}")
-
-
-@router.post("/templates/save", summary="保存配置模板")
-async def save_config_template(
-    request: ConfigTemplateSaveRequest,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> dict:
-    """
-    保存配置模板
-    
-    将当前业务配置保存为模板，方便后续复用。
-    """
-    try:
-        result = await BusinessConfigService().save_config_template(
-            tenant_id=tenant_id,
-            template_name=request.template_name,
-            template_description=request.template_description
-        )
-        return result
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        logger.error(f"保存配置模板失败: {e}")
-        raise HTTPException(status_code=500, detail=f"保存配置模板失败: {str(e)}")
-
-
-@router.get("/templates", summary="获取配置模板列表")
-async def get_config_templates(
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> list:
-    """
-    获取配置模板列表
-    
-    返回当前组织的所有配置模板。
-    """
-    try:
-        result = await BusinessConfigService().get_config_templates(tenant_id)
-        return result
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        logger.error(f"获取配置模板列表失败: {e}")
-        raise HTTPException(status_code=500, detail=f"获取配置模板列表失败: {str(e)}")
-
-
-@router.post("/templates/apply", summary="应用配置模板")
-async def apply_config_template(
-    request: ConfigTemplateApplyRequest,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> dict:
-    """
-    应用配置模板
-    
-    应用指定的配置模板，将模板配置应用到当前组织。
-    """
-    try:
-        result = await BusinessConfigService().apply_config_template(
-            tenant_id=tenant_id,
-            template_id=request.template_id
-        )
-        return result
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        logger.error(f"应用配置模板失败: {e}")
-        raise HTTPException(status_code=500, detail=f"应用配置模板失败: {str(e)}")
-
-
-@router.delete("/templates/{template_id}", summary="删除配置模板")
-async def delete_config_template(
-    template_id: int,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> dict:
-    """
-    删除配置模板
-    
-    删除指定的配置模板。
-    """
-    try:
-        result = await BusinessConfigService().delete_config_template(
-            tenant_id=tenant_id,
-            template_id=template_id
-        )
-        return result
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        logger.error(f"删除配置模板失败: {e}")
-        raise HTTPException(status_code=500, detail=f"删除配置模板失败: {str(e)}")
+        logger.error(f"获取 PRO 版功能列表失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取 PRO 版功能列表失败: {str(e)}")

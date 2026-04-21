@@ -19,7 +19,6 @@ import { theme as AntdTheme } from 'antd'
 import { StatCardTrendArea } from '../../../../../components/common/StatCardTrendArea'
 import { usePageMetrics } from '../../../../../hooks/usePageMetrics'
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DRAWER_CONFIG, type StatCard } from '../../../../../components/layout-templates'
-import { getBusinessConfig } from '../../../../../services/businessConfig'
 import { UniTable } from '../../../../../components/uni-table'
 import { UniMaterialSelect } from '../../../../../components/uni-material-select'
 import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal'
@@ -107,38 +106,16 @@ export default function SalesForecastsPage() {
   const [matrixModalVisible, setMatrixModalVisible] = useState(false)
   const [matrixMonths, setMatrixMonths] = useState<dayjs.Dayjs[]>([])
   const [matrixRows, setMatrixRows] = useState<any[]>([])
-  const [auditEnabled, setAuditEnabled] = useState(true)
-  const [salesNodesEnabled, setSalesNodesEnabled] = useState({
+  // 蓝图设置已下线：审核由后端 ApprovalProcess 决定；下推入口由菜单/权限控制。
+  const auditEnabled = true
+  const salesNodesEnabled = {
     sales_forecast: true,
     demand_computation: true,
-  })
+  }
   const forecastTracking = useDocumentTracking(
     drawerVisible && currentForecast ? 'sales_forecast' : undefined,
     currentForecast?.id
   );
-
-  useEffect(() => {
-    const loadConfig = async () => {
-      try {
-        const config = await getBusinessConfig()
-        const enabled = config.parameters?.sales?.audit_enabled === true
-        setAuditEnabled(enabled)
-        const nodes = config?.nodes || {}
-        setSalesNodesEnabled({
-          sales_forecast: nodes?.sales_forecast?.enabled !== false,
-          demand_computation: nodes?.demand_computation?.enabled !== false,
-        })
-      } catch (error) {
-        console.error('Failed to load business config:', error)
-        setAuditEnabled(true)
-        setSalesNodesEnabled({
-          sales_forecast: true,
-          demand_computation: true,
-        })
-      }
-    }
-    loadConfig()
-  }, [])
 
   const toFlatRows = (data: SalesForecast[]) => {
     const map = new Map<string, number>();

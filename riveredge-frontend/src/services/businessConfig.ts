@@ -1,22 +1,22 @@
 /**
  * 业务配置 API 服务
  *
- * 提供业务配置相关的 API 接口
- *
- * Author: Luigi Lu
- * Date: 2026-01-27
+ * 变更说明（2026 重构）：
+ * - 业务蓝图设置已下线；功能开关改由菜单管理控制，审核改由流程设置控制。
+ * - 本文件仅保留纯「参数」读写（bom / sales / purchase / finance 等）
+ *   以及 PRO 功能检查相关接口。旧版 modules/nodes/running-mode/
+ *   complexity-presets/templates 接口已删除。
  */
 
 import { apiRequest } from './api';
 
-/**
- * 业务配置响应接口
- */
 export interface BusinessConfig {
   running_mode: 'simple' | 'full';
   industry?: 'general' | 'machinery' | 'electronics' | 'machining';
   scale?: 'small' | 'medium' | 'large';
-  modules: Record<string, boolean>;
+  /** @deprecated 蓝图已下线；历史字段，新代码请勿依赖 */
+  modules?: Record<string, boolean>;
+  /** @deprecated 蓝图已下线；新代码请读菜单/流程设置 */
   nodes?: Record<string, { enabled: boolean; auditRequired: boolean }>;
   parameters: Record<string, Record<string, any>>;
   mode_switched_at?: string;
@@ -24,50 +24,16 @@ export interface BusinessConfig {
   complexity_name?: string;
 }
 
-/**
- * 运行模式切换请求接口
- */
-export interface RunningModeSwitchRequest {
-  mode: 'simple' | 'full';
-  apply_defaults?: boolean;
-}
-
-/**
- * 模块开关请求接口
- */
-export interface ModuleSwitchRequest {
-  module_code: string;
-  enabled: boolean;
-}
-
-/**
- * 流程参数更新请求接口
- */
 export interface ProcessParameterUpdateRequest {
   category: string;
   parameter_key: string;
   value: any;
 }
 
-/**
- * 批量流程参数更新请求接口
- */
 export interface BatchProcessParameterUpdateRequest {
   parameters: Record<string, Record<string, any>>;
 }
 
-/**
- * 节点配置更新请求接口
- */
-export interface NodesUpdateRequest {
-  nodes: Record<string, { enabled: boolean; auditRequired: boolean }>;
-  industry?: string;
-  scale?: string;
-}
-
-/**
- * 业务配置 schema 响应
- */
 export interface BusinessConfigSchema {
   processRegistry?: Record<string, string[]>;
   processRegistryMeta?: Record<string, { labelKey?: string; descriptionKey?: string }>;
@@ -85,67 +51,20 @@ export interface BusinessConfigSchema {
   >;
   parameterKeys: Record<string, string[]>;
   parameterImplementation?: Record<string, Record<string, boolean>>;
-  allNodes: string[];
 }
 
-/**
- * 获取业务配置 schema（参数键、节点列表）
- *
- * 供前端动态渲染配置项，单一数据源。
- */
 export async function getBusinessConfigSchema(): Promise<BusinessConfigSchema> {
   return apiRequest<BusinessConfigSchema>('/infra/business-config/schema', {
     method: 'GET',
   });
 }
 
-/**
- * 获取业务配置
- *
- * @returns 业务配置
- */
 export async function getBusinessConfig(): Promise<BusinessConfig> {
   return apiRequest<BusinessConfig>('/infra/business-config', {
     method: 'GET',
   });
 }
 
-/**
- * 切换运行模式
- *
- * @param request - 运行模式切换请求
- * @returns 切换结果
- */
-export async function switchRunningMode(
-  request: RunningModeSwitchRequest
-): Promise<{ success: boolean; message: string; running_mode: string; config: BusinessConfig }> {
-  return apiRequest('/infra/business-config/running-mode/switch', {
-    method: 'POST',
-    data: request,
-  });
-}
-
-/**
- * 更新模块开关
- *
- * @param request - 模块开关请求
- * @returns 更新结果
- */
-export async function updateModuleSwitch(
-  request: ModuleSwitchRequest
-): Promise<{ success: boolean; message: string; module_code: string; enabled: boolean }> {
-  return apiRequest('/infra/business-config/modules/switch', {
-    method: 'POST',
-    data: request,
-  });
-}
-
-/**
- * 更新流程参数
- *
- * @param request - 流程参数更新请求
- * @returns 更新结果
- */
 export async function updateProcessParameter(
   request: ProcessParameterUpdateRequest
 ): Promise<{ success: boolean; message: string; category: string; parameter_key: string; value: any }> {
@@ -155,12 +74,6 @@ export async function updateProcessParameter(
   });
 }
 
-/**
- * 批量更新流程参数
- *
- * @param request - 批量流程参数更新请求
- * @returns 更新结果
- */
 export async function batchUpdateProcessParameters(
   request: BatchProcessParameterUpdateRequest
 ): Promise<{ success: boolean; message: string; updated_count: number }> {
@@ -170,64 +83,6 @@ export async function batchUpdateProcessParameters(
   });
 }
 
-/**
- * 业务复杂度预设接口
- */
-export interface ComplexityPreset {
-  code: string;
-  name: string;
-  description: string;
-}
-
-export interface ComplexityPresetsResponse {
-  presets: ComplexityPreset[];
-  default_level: string;
-}
-
-/**
- * 获取业务复杂度预设列表
- *
- * @returns 五级预设 L1-L5 代号、名称、描述
- */
-export async function getComplexityPresets(): Promise<ComplexityPresetsResponse> {
-  return apiRequest<ComplexityPresetsResponse>('/infra/business-config/complexity-presets', {
-    method: 'GET',
-  });
-}
-
-/**
- * 应用业务复杂度预设
- *
- * @param level - 复杂度等级（L1/L2/L3/L4/L5）
- * @returns 应用结果
- */
-export async function applyComplexityPreset(
-  level: string
-): Promise<{ success: boolean; message: string; complexity_level: string; complexity_name: string; config: BusinessConfig }> {
-  return apiRequest('/infra/business-config/complexity-presets/apply', {
-    method: 'POST',
-    data: { level },
-  });
-}
-
-/**
- * 更新节点配置
- * 
- * @param request - 节点配置更新请求
- * @returns 更新结果
- */
-export async function updateNodesConfig(
-  request: NodesUpdateRequest
-): Promise<{ success: boolean; message: string; nodes: any }> {
-  return apiRequest('/infra/business-config/nodes/update', {
-    method: 'POST',
-    data: request,
-  });
-}
-
-/**
- * PRO版功能访问权限检查响应接口
- */
 export interface ProFeatureAccessCheck {
   has_access: boolean;
   is_pro_feature: boolean;
@@ -235,9 +90,6 @@ export interface ProFeatureAccessCheck {
   upgrade_message?: string;
 }
 
-/**
- * PRO版功能列表响应接口
- */
 export interface ProFeaturesList {
   has_pro_access: boolean;
   current_plan: string;
@@ -245,113 +97,18 @@ export interface ProFeaturesList {
   pro_parameters: Record<string, string[]>;
 }
 
-/**
- * 检查PRO版功能访问权限
- *
- * @param featureType - 功能类型（modules/parameters）
- * @param featureCode - 功能代码
- * @returns 检查结果
- */
 export async function checkProFeatureAccess(
   featureType: string,
   featureCode: string
 ): Promise<ProFeatureAccessCheck> {
   return apiRequest<ProFeatureAccessCheck>(
     `/infra/business-config/pro-features/check?feature_type=${featureType}&feature_code=${featureCode}`,
-    {
-      method: 'GET',
-    }
+    { method: 'GET' }
   );
 }
 
-/**
- * 获取PRO版功能列表
- *
- * @returns PRO版功能列表
- */
 export async function getProFeaturesList(): Promise<ProFeaturesList> {
   return apiRequest<ProFeaturesList>('/infra/business-config/pro-features/list', {
     method: 'GET',
-  });
-}
-
-/**
- * 配置模板接口
- */
-export interface ConfigTemplate {
-  id: number;
-  name: string;
-  description?: string;
-  config: BusinessConfig;
-  created_at: string;
-}
-
-/**
- * 配置模板保存请求接口
- */
-export interface ConfigTemplateSaveRequest {
-  template_name: string;
-  template_description?: string;
-}
-
-/**
- * 配置模板应用请求接口
- */
-export interface ConfigTemplateApplyRequest {
-  template_id: number;
-}
-
-/**
- * 保存配置模板
- *
- * @param request - 配置模板保存请求
- * @returns 保存结果
- */
-export async function saveConfigTemplate(
-  request: ConfigTemplateSaveRequest
-): Promise<{ success: boolean; message: string; template: ConfigTemplate }> {
-  return apiRequest('/infra/business-config/templates/save', {
-    method: 'POST',
-    data: request,
-  });
-}
-
-/**
- * 获取配置模板列表
- *
- * @returns 配置模板列表
- */
-export async function getConfigTemplates(): Promise<ConfigTemplate[]> {
-  return apiRequest<ConfigTemplate[]>('/infra/business-config/templates', {
-    method: 'GET',
-  });
-}
-
-/**
- * 应用配置模板
- *
- * @param request - 配置模板应用请求
- * @returns 应用结果
- */
-export async function applyConfigTemplate(
-  request: ConfigTemplateApplyRequest
-): Promise<{ success: boolean; message: string; template: ConfigTemplate }> {
-  return apiRequest('/infra/business-config/templates/apply', {
-    method: 'POST',
-    data: request,
-  });
-}
-
-/**
- * 删除配置模板
- *
- * @param templateId - 模板ID
- * @returns 删除结果
- */
-export async function deleteConfigTemplate(
-  templateId: number
-): Promise<{ success: boolean; message: string }> {
-  return apiRequest(`/infra/business-config/templates/${templateId}`, {
-    method: 'DELETE',
   });
 }

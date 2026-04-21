@@ -2,12 +2,11 @@
  * 统一菜单数据 Hook
  *
  * 平台级/系统级：使用原有 getMenuConfig 硬编号
- * 应用级 APP：数据库 getMenuTree（manifest 同步）→ 业务配置过滤 → 输出
+ * 应用级 APP：数据库 getMenuTree(is_active=true) → 权限过滤 → 输出
  *
- * 菜单显示层级（蓝图设置 → 菜单管理 → 权限管理）：
- * 1. 蓝图设置：filterMenuByBusinessConfig，模块/节点禁用则隐藏
- * 2. 菜单管理：getMenuTree(is_active=true)，未入库或禁用则不返回
- * 3. 权限管理：filterMenuByPermission，用户无权限则隐藏
+ * 菜单显示层级（蓝图设置已下线）：
+ * 1. 菜单管理：getMenuTree(is_active=true)，未入库或禁用则不返回（= 功能关闭）
+ * 2. 权限管理：filterMenuByPermission，用户无权限则隐藏
  *
  * 使用场景：BasicLayout（侧边栏、UniTabs、面包屑、页面标题）、Dashboard 快捷入口等
  */
@@ -16,8 +15,6 @@ import { useMemo, useCallback, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { MenuDataItem } from '@ant-design/pro-components';
 import { getMenuTree, type MenuTree } from '../services/menu';
-import { getBusinessConfig } from '../services/businessConfig';
-import { filterMenuByBusinessConfig } from '../utils/menuBusinessFilter';
 import { extractAppCodeFromPath, getAppDisplayName } from '../utils/menuTranslation';
 import { useGlobalStore } from '../stores';
 import { hasAnyPermission } from '../utils/permission';
@@ -100,23 +97,13 @@ export function useUnifiedMenuData(
     refetchOnWindowFocus: false,
   });
 
-  const { data: businessConfig } = useQuery({
-    queryKey: ['businessConfig'],
-    queryFn: getBusinessConfig,
-    enabled: !!currentUser,
-    staleTime: 5 * 60 * 1000,
-    retry: false,
-  });
-
   const applicationMenus = useMemo(() => {
     const tree = fullMenuTree ?? [];
     return tree.filter((m) => m.application_uuid);
   }, [fullMenuTree]);
 
-  const filteredApplicationMenus = useMemo(() => {
-    if (!applicationMenus?.length) return applicationMenus;
-    return filterMenuByBusinessConfig(applicationMenus, businessConfig ?? undefined);
-  }, [applicationMenus, businessConfig]);
+  // 蓝图下线后不再做业务配置过滤；菜单可见性完全由 is_active + 权限控制。
+  const filteredApplicationMenus = applicationMenus;
 
   useEffect(() => {
     if (applicationMenuVersion > 0) {

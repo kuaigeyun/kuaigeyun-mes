@@ -18,7 +18,7 @@ import DraggableComponent from './DraggableComponent';
 import DraggableItem from './DraggableItem';
 import Canvas from './Canvas';
 import Preview from './preview';
-import { TableComponent, ChartComponent, TextComponent, ImageComponent, SystemConfigComponent, CoreConfigComponent, BusinessConfigComponent } from './components';
+import { TableComponent, ChartComponent, TextComponent, ImageComponent, SystemConfigComponent, CoreConfigComponent } from './components';
 
 const { Sider, Content } = Layout;
 const { useToken } = theme;
@@ -26,7 +26,7 @@ const { useToken } = theme;
 /**
  * 报表组件类型
  */
-export type ComponentType = 'table' | 'chart' | 'text' | 'image' | 'group' | 'system-config' | 'core-config' | 'business-config';
+export type ComponentType = 'table' | 'chart' | 'text' | 'image' | 'group' | 'system-config' | 'core-config';
 
 /**
  * 报表组件接口
@@ -130,7 +130,7 @@ const ReportDesigner: React.FC<ReportDesignerProps> = ({
       let defaultWidth = 200;
       let defaultHeight = 50;
       
-      if (['system-config', 'core-config', 'business-config'].includes(componentType)) {
+      if (['system-config', 'core-config'].includes(componentType)) {
         defaultWidth = 800;
         defaultHeight = 600;
       } else if (componentType === 'table') {
@@ -245,7 +245,6 @@ const ReportDesigner: React.FC<ReportDesignerProps> = ({
               <div style={{ fontWeight: 'bold', marginBottom: 8 }}>{t('components.reportDesigner.systemConfig')}</div>
               <DraggableItem id="component-system-config" label={t('components.reportDesigner.systemParams')} />
               <DraggableItem id="component-core-config" label={t('components.reportDesigner.coreConfig')} />
-              <DraggableItem id="component-business-config" label={t('components.reportDesigner.businessConfig')} />
             </Space>
           </Card>
         </Sider>
@@ -291,8 +290,6 @@ const ReportDesigner: React.FC<ReportDesignerProps> = ({
                         return <SystemConfigComponent component={comp} />;
                       case 'core-config':
                         return <CoreConfigComponent component={comp} />;
-                      case 'business-config':
-                        return <BusinessConfigComponent component={comp} />;
                       default:
                         return <div>{comp.type}</div>;
                     }

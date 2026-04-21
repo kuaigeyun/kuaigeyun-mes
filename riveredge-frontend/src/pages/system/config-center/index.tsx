@@ -1,25 +1,24 @@
 /**
  * 业务配置
  *
- * 整合蓝图设置、流程设置、参数设置，按功能分类，每个参数卡片化，拟物化开关。
- * 配置模板在蓝图设置页内通过「另存为模板」「自定义模板」管理。
+ * 提供「流程设置」「参数设置」两个参数 Tab。
+ * 注：旧版「蓝图设置」已下线；
+ *   - 功能是否开启 → 由「菜单管理」控制（菜单隐藏即视为关闭）
+ *   - 功能是否审核 → 由「流程设置（ApprovalProcess）」控制
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
-import { App, Form, Card, Button, Space, Layout, Menu, InputNumber, ColorPicker, Typography, Spin, Modal, Input, Switch, Select, theme } from 'antd';
-import { SaveOutlined, ReloadOutlined, SettingOutlined, ControlOutlined, ApartmentOutlined, NodeIndexOutlined } from '@ant-design/icons';
+import { App, Form, Card, Button, Space, Layout, Menu, InputNumber, ColorPicker, Typography, Spin, Switch, Select, theme } from 'antd';
+import { SaveOutlined, ReloadOutlined, SettingOutlined, ControlOutlined, NodeIndexOutlined } from '@ant-design/icons';
 import { useSearchParams } from 'react-router-dom';
 import { MultiTabListPageTemplate } from '../../../components/layout-templates';
 import {
   getBusinessConfig,
   getBusinessConfigSchema,
   batchUpdateProcessParameters,
-  getConfigTemplates,
-  saveConfigTemplate,
 } from '../../../services/businessConfig';
-import BusinessFlowConfig from '../business-config/BusinessFlowConfig';
 import {
   PARAMETER_CATEGORIES,
   PROCESS_CATEGORIES,
@@ -254,8 +253,9 @@ const ConfigCenterPage: React.FC = () => {
   const { token } = useToken();
   const [searchParams] = useSearchParams();
   const tabFromUrl = searchParams.get('tab');
-  const validTabs = ['blueprint', 'process', 'parameters'];
-  const initialTab = validTabs.includes(tabFromUrl || '') ? tabFromUrl! : (tabFromUrl === 'graph' ? 'blueprint' : 'blueprint');
+  const validTabs = ['process', 'parameters'];
+  // 蓝图 Tab 下线后，blueprint/graph 旧链接一律落回「流程设置」
+  const initialTab = validTabs.includes(tabFromUrl || '') ? tabFromUrl! : 'process';
   const [activeMainTab, setActiveMainTab] = useState<string>(initialTab);
   const [form] = Form.useForm();
   const [processForm] = Form.useForm();
@@ -263,9 +263,6 @@ const ConfigCenterPage: React.FC = () => {
   const [processSaving, setProcessSaving] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>(PARAMETER_CATEGORIES[0]?.id ?? 'production');
   const [selectedProcessCategory, setSelectedProcessCategory] = useState<string>(PROCESS_CATEGORIES[0]?.id ?? 'process_sales');
-  const [templates, setTemplates] = useState<any[]>([]);
-  const [templateModalVisible, setTemplateModalVisible] = useState(false);
-  const [templateForm] = Form.useForm();
 
   const { data: bizRes, isLoading: configLoading, isFetching, isError: configError, refetch: refetchBusinessConfig } = useQuery({
     queryKey: BUSINESS_CONFIG_QUERY_KEY,
@@ -317,15 +314,9 @@ const ConfigCenterPage: React.FC = () => {
 
   useEffect(() => {
     const t = searchParams.get('tab');
-    if (t === 'graph' && activeMainTab !== 'blueprint') setActiveMainTab('blueprint');
-    else if (t && validTabs.includes(t) && activeMainTab !== t) setActiveMainTab(t);
+    if (t && validTabs.includes(t) && activeMainTab !== t) setActiveMainTab(t);
+    else if ((t === 'blueprint' || t === 'graph') && activeMainTab !== 'process') setActiveMainTab('process');
   }, [searchParams]);
-
-  useEffect(() => {
-    if (activeMainTab === 'blueprint') {
-      getConfigTemplates().then(setTemplates).catch(() => setTemplates([]));
-    }
-  }, [activeMainTab]);
 
   useEffect(() => {
     if (!processCategories.length) return;
@@ -353,24 +344,6 @@ const ConfigCenterPage: React.FC = () => {
     const key = getParamGuidanceI18nKey(paramKey);
     if (!key) return '';
     return renderText(key, '');
-  };
-
-  const handleSaveTemplate = async () => {
-    try {
-      const values = await templateForm.validateFields();
-      await saveConfigTemplate({
-        template_name: values.template_name,
-        template_description: values.template_description,
-      });
-      messageApi.success(t('pages.system.configCenter.templateSaveSuccess'));
-      setTemplateModalVisible(false);
-      templateForm.resetFields();
-      const list = await getConfigTemplates();
-      setTemplates(list);
-    } catch (e: any) {
-      if (e?.errorFields) return;
-      messageApi.error(e?.message || t('pages.system.configCenter.saveFailed'));
-    }
   };
 
   // 有缓存或接口返回后立即填表，避免先空白再重载
@@ -587,16 +560,6 @@ const ConfigCenterPage: React.FC = () => {
     </>
   );
 
-  const blueprintTabContent = (
-    <>
-      <BusinessFlowConfig
-      onSaveAsTemplate={() => setTemplateModalVisible(true)}
-      templates={templates}
-      onRefreshTemplates={() => getConfigTemplates().then(setTemplates)}
-    />
-    </>
-  );
-
   const processTabContent = (
     <>
       <Layout style={{ minHeight: 400, background: 'transparent' }}>
@@ -757,16 +720,6 @@ const ConfigCenterPage: React.FC = () => {
         onTabChange={setActiveMainTab}
         tabs={[
           {
-            key: 'blueprint',
-            label: (
-              <Space>
-                <ApartmentOutlined />
-                <span>{t('pages.system.configCenter.tabBlueprint')}</span>
-              </Space>
-            ),
-            children: blueprintTabContent,
-          },
-          {
             key: 'process',
             label: (
               <Space>
@@ -789,31 +742,6 @@ const ConfigCenterPage: React.FC = () => {
         ]}
         padding={24}
       />
-
-      <Modal
-        title={t('pages.system.configCenter.templateModalTitle')}
-        open={templateModalVisible}
-        onOk={handleSaveTemplate}
-        onCancel={() => {
-          setTemplateModalVisible(false);
-          templateForm.resetFields();
-        }}
-        okText={t('pages.system.configCenter.save')}
-        cancelText={t('common.cancel')}
-      >
-        <Form form={templateForm} layout="vertical">
-          <Form.Item
-            name="template_name"
-            label={t('pages.system.configCenter.templateName')}
-            rules={[{ required: true, message: t('pages.system.configCenter.templateNameRequired') }]}
-          >
-            <Input placeholder={t('pages.system.configCenter.templateNamePlaceholder')} />
-          </Form.Item>
-          <Form.Item name="template_description" label={t('pages.system.configCenter.templateDescription')}>
-            <Input.TextArea placeholder={t('pages.system.configCenter.templateDescriptionPlaceholder')} rows={3} />
-          </Form.Item>
-        </Form>
-      </Modal>
     </div>
   );
 };

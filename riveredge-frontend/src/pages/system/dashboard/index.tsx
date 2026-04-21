@@ -55,8 +55,6 @@ import {
   type ProductionBroadcastItem,
 } from '../../../services/dashboard';
 import { getMenuTree, type MenuTree } from '../../../services/menu';
-import { getBusinessConfig } from '../../../services/businessConfig';
-import { filterMenuByBusinessConfig } from '../../../utils/menuBusinessFilter';
 import {
   extractAppCodeFromPath,
   getAppDisplayName,
@@ -1057,24 +1055,8 @@ export default function DashboardPage() {
     staleTime: 5 * 60 * 1000, // 5分钟缓存
   });
 
-  // 获取业务配置（蓝图设置），用于菜单过滤
-  const { data: businessConfig, isLoading: businessConfigLoading } = useQuery({
-    queryKey: ['businessConfig'],
-    queryFn: getBusinessConfig,
-    enabled: !!currentUser,
-    staleTime: 5 * 60 * 1000,
-  });
-
-  // 按蓝图设置过滤菜单树，与侧边栏保持一致
-  const filteredMenuTree = useMemo(() => {
-    if (!menuTree) return [];
-    return filterMenuByBusinessConfig(menuTree, businessConfig ?? undefined);
-  }, [menuTree, businessConfig]);
-  // 快捷入口兜底：若业务过滤结果为空，回退到原始菜单树，避免刷新后整块空白
-  const quickEntryMenuTree = useMemo(() => {
-    if (filteredMenuTree.length > 0) return filteredMenuTree;
-    return menuTree || [];
-  }, [filteredMenuTree, menuTree]);
+  // 蓝图设置已下线；菜单可见性完全由 is_active + 权限控制。
+  const quickEntryMenuTree = useMemo(() => menuTree || [], [menuTree]);
 
   // 获取生产播报（使用真实API）
   const { data: productionBroadcastData, isLoading: productionBroadcastLoading } = useQuery<ProductionBroadcastItem[]>({
@@ -1094,7 +1076,7 @@ export default function DashboardPage() {
     queryFn: getUserPreference,
     staleTime: 5 * 60 * 1000,
   });
-  const quickEntryLoading = userPreferenceLoading || menuTreeLoading || (!!currentUser && businessConfigLoading);
+  const quickEntryLoading = userPreferenceLoading || menuTreeLoading;
 
   const updatePreferences = useUserPreferenceStore((s) => s.updatePreferences);
 

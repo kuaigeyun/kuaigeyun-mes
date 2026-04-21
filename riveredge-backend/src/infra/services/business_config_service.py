@@ -590,16 +590,16 @@ class BusinessConfigService:
     async def check_node_enabled(self, tenant_id: int, node_key: str) -> bool:
         """
         检查业务节点是否启用
+
+        业务蓝图设置已下线，功能是否开启统一由「菜单管理」控制：
+        - 若租户禁用该功能对应的菜单（is_active=False），用户在侧栏/路由
+          中将看不到入口，自然无法触发请求；
+        - 若需要在后端再额外拦截 URL 直连，应走 RBAC 权限而非蓝图开关。
+
+        因此本方法恒返回 True，保留签名是为避免改动 20+ 个业务 Service
+        调用点；后续若彻底废弃可再逐个删除调用。
         """
-        config = await self.get_business_config(tenant_id)
-        nodes = config.get("nodes", {})
-        node_config = nodes.get(node_key)
-        
-        # 如果节点配置不存在，默认启用（向后兼容）
-        if not node_config:
-            return True
-            
-        return node_config.get("enabled", True)
+        return True
 
     async def get_bom_multi_version_allowed(self, tenant_id: int) -> bool:
         """
@@ -707,38 +707,31 @@ class BusinessConfigService:
     async def check_audit_required(self, tenant_id: int, node_key: str) -> bool:
         """
         检查业务节点是否需要审核
+
+        业务蓝图设置已下线，是否需要人工审核统一由「流程设置（ApprovalProcess）」决定：
+        - 租户下存在 code=node_key 的 ApprovalProcess 且 is_active=True → 需要审核
+        - 不存在对应流程或流程被停用 → 自动通过（无需审核）
+
+        node_key 约定与 ApprovalProcess.code 保持一致（如 sales_order、
+        purchase_order、quotation、sample_trial、quality_inspection 等）。
+        历史上依赖 parameters.sales.audit_enabled / parameters.purchase.auto_approval
+        的软开关已失效，如需"自动审核通过"请直接在流程设置中停用对应流程。
         """
-        config = await self.get_business_config(tenant_id)
-        nodes = config.get("nodes", {})
-        node_config = nodes.get(node_key)
-        # 销售订单：任一为「无需审核」则无需审核。1) parameters.sales.audit_enabled=False 表示关闭审核；2) 蓝图 nodes.sales_order.auditRequired=False 表示自动审核
-        if node_key == "sales_order":
-            sales_params = config.get("parameters", {}).get("sales", {})
-            if sales_params.get("audit_enabled", True) is False:
-                return False
-            if node_config is not None:
-                return bool(node_config.get("auditRequired", False))
+        try:
+            from core.models.approval_process import ApprovalProcess
+        except Exception:  # pragma: no cover - core 层不可用时降级
             return False
 
-        # 采购订单：1) parameters.purchase.auto_approval=True 表示提交后自动通过；2) 蓝图 nodes.purchase_order.auditRequired
-        if node_key == "purchase_order":
-            purchase_params = config.get("parameters", {}).get("purchase", {})
-            if purchase_params.get("auto_approval", False) is True:
-                return False
-            if node_config is not None:
-                return bool(node_config.get("auditRequired", False))
+        if not node_key:
             return False
 
-        # 如果节点配置不存在，默认需要审核（向后兼容，或者根据模式决定，这里简便起见默认True或根据simple模式? 
-        # 为了安全起见，如果不配置，默认False可能更符合"极简"体验，但默认True符合"严谨"体验。
-        # 参考 get_business_config 中的默认值补全逻辑，如果拿到 config，应该已经补全了默认值。
-        
-        if not node_config:
-            # Fallback based on running mode logic if needed, but get_business_config should handle defaults.
-            # If still missing, assume specific defaults logic or False
-            return False
-            
-        return node_config.get("auditRequired", False)
+        exists = await ApprovalProcess.filter(
+            tenant_id=tenant_id,
+            code=node_key,
+            is_active=True,
+            deleted_at__isnull=True,
+        ).exists()
+        return bool(exists)
 
     async def can_direct_generate_work_order_from_computation(self, tenant_id: int) -> bool:
         """

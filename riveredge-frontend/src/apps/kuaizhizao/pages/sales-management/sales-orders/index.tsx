@@ -8,7 +8,6 @@
  * @date 2026-01-27
  */
 
-import { getBusinessConfig } from '../../../../../services/businessConfig';
 import React, { useRef, useState, useEffect } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormUploadButton } from '@ant-design/pro-components';
@@ -388,55 +387,22 @@ const SalesOrdersPage: React.FC = () => {
       });
   }, []);
 
-  // 销售订单审核开关（从业务配置加载）
-  const [auditEnabled, setAuditEnabled] = useState(true);
-  const [salesNodeEnabled, setSalesNodeEnabled] = useState({
+  // 蓝图设置已下线：审核是否必需由后端 ApprovalProcess 决定；
+  // 下推入口的可见性由菜单管理 + 权限决定。此处保留常量语义兼容旧 UI 逻辑。
+  const auditEnabled = true;
+  const salesNodeEnabled = {
     sales_order: true,
     demand_computation: true,
     work_order: true,
     shipment_notice: true,
     invoice: true,
-  });
+  };
   // 与 UniTable viewTypes 同步：table=订单，detailTable/card/gantt=销售明细
   const [viewTypeState, setViewTypeState] = useState<'table' | 'detailTable' | 'card' | 'gantt' | 'help'>('table');
   const dataViewMode = viewTypeState === 'table' ? 'order' : 'detail';
   /** 视图模式 ref：切换时同步更新，确保 reload 时 request 使用正确模式（避免 setState 异步导致返回订单级数据） */
   const dataViewModeRef = useRef(dataViewMode);
   dataViewModeRef.current = dataViewMode;
-
-  /**
-   * 加载业务配置，判断是否开启审核
-   */
-  useEffect(() => {
-    const loadConfig = async () => {
-      try {
-        const config = await getBusinessConfig();
-        // 默认为关闭，与配置页面 Switch 组件行为一致（undefined 为 false）
-        // 只有明确设置为 true 时才开启
-        const enabled = config.parameters?.sales?.audit_enabled === true;
-        setAuditEnabled(enabled);
-        const nodes = config?.nodes || {};
-        setSalesNodeEnabled({
-          sales_order: nodes?.sales_order?.enabled !== false,
-          demand_computation: nodes?.demand_computation?.enabled !== false,
-          work_order: nodes?.work_order?.enabled !== false,
-          shipment_notice: nodes?.shipment_notice?.enabled !== false,
-          invoice: nodes?.invoice?.enabled !== false,
-        });
-      } catch (error) {
-        console.error('加载业务配置失败:', error);
-        setAuditEnabled(true);
-        setSalesNodeEnabled({
-          sales_order: true,
-          demand_computation: true,
-          work_order: true,
-          shipment_notice: true,
-          invoice: true,
-        });
-      }
-    };
-    loadConfig();
-  }, []);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
