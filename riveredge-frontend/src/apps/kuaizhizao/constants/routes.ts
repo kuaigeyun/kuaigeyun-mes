@@ -19,7 +19,6 @@ export const ROUTES = {
   PURCHASE_REQUISITIONS: `${APP_BASE}/purchase-management/purchase-requisitions`,
   PURCHASE_ORDERS: `${APP_BASE}/purchase-management/purchase-orders`,
   RECEIPT_NOTICES: `${APP_BASE}/purchase-management/receipt-notices`,
-  LOGISTICS_TRACKING: `${APP_BASE}/purchase-management/logistics-tracking`,
 } as const;
 
 export { APP_BASE };

@@ -269,7 +269,6 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.shipment_notice_item",
                 f"apps.{module_code}.models.receipt_notice",
                 f"apps.{module_code}.models.receipt_notice_item",
-                f"apps.{module_code}.models.purchase_logistics",
                 # 统一需求管理模块（第一阶段重构）
                 f"apps.{module_code}.models.demand",
                 f"apps.{module_code}.models.demand_item",
@@ -467,7 +466,6 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.shipment_notice_item",
                 f"apps.{module_code}.models.receipt_notice",
                 f"apps.{module_code}.models.receipt_notice_item",
-                f"apps.{module_code}.models.purchase_logistics",
                 # 统一需求管理模块（第一阶段重构）
                 f"apps.{module_code}.models.demand",
                 f"apps.{module_code}.models.demand_item",

@@ -138,6 +138,22 @@ class Cache:
         return True
 
     @classmethod
+    async def purge_expired(cls) -> int:
+        """
+        清理所有已过期的缓存条目。
+
+        设计用于后台定时任务（lifespan 中启动），防止 core_cache_entries 表无限增长。
+        注意：cache.get 已有"访问时惰性过期删除"，此方法处理"写入后从未再访问"的残留。
+        """
+        if not cls._connected:
+            return 0
+        try:
+            return await CacheEntry.filter(expires_at__isnull=False, expires_at__lte=datetime.now()).delete()
+        except Exception as e:
+            logger.warning(f"purge_expired 失败: {e}")
+            return 0
+
+    @classmethod
     async def expire(cls, key: str, seconds: int) -> bool:
         """
         设置缓存过期时间

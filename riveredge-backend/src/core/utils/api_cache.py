@@ -10,8 +10,9 @@ Date: 2026-01-27
 import hashlib
 import json
 from functools import wraps
-from typing import Optional, Callable, Any, Dict
+from typing import Optional, Callable, Any, Dict, Iterable, Type
 from fastapi import Request, Response
+from pydantic import BaseModel
 from loguru import logger
 
 from infra.infrastructure.cache.cache_manager import cache_manager
@@ -213,3 +214,86 @@ def invalidate_api_cache(
     # 可以使用Redis的KEYS命令或SCAN命令
     logger.info(f"API缓存失效: namespace={namespace}, pattern={pattern}, func_name={func_name}")
     return True
+
+
+_CACHE_SKIP_KWARGS = {"current_user", "request", "response", "background_tasks", "db", "session"}
+
+
+def cache_by_kwargs(
+    namespace: str,
+    ttl: int = 30,
+    include_kwargs: Optional[Iterable[str]] = None,
+    exclude_kwargs: Optional[Iterable[str]] = None,
+):
+    """
+    面向参数化 API 的轻量缓存装饰器（基于 PostgreSQL cache_manager）。
+
+    - 不依赖 Request 对象，从函数关键字参数直接组 key，适合工作台这种
+      "tenant_id + 少量标量参数" 的接口。
+    - 自动按 tenant_id 隔离；同租户内多个用户命中同一条缓存，放大命中率。
+    - 支持返回 Pydantic 模型：写入时 model_dump(mode='json')，命中时按注解反序列化。
+
+    Args:
+        namespace: 缓存命名空间（建议按模块/接口区分，便于后续按 pattern 清理）。
+        ttl: 过期秒数（建议 30-120s；工作台类"看板"级数据足够）。
+        include_kwargs: 若提供，则仅这些参数参与 key；否则默认用全部标量参数。
+        exclude_kwargs: 额外排除的参数名（在内置 _CACHE_SKIP_KWARGS 基础上追加）。
+    """
+    skip = set(_CACHE_SKIP_KWARGS) | set(exclude_kwargs or ())
+    allow = set(include_kwargs) if include_kwargs else None
+
+    def decorator(func: Callable) -> Callable:
+        return_model: Optional[Type[BaseModel]] = None
+        ann = func.__annotations__.get("return")
+        if isinstance(ann, type) and issubclass(ann, BaseModel):
+            return_model = ann
+
+        @wraps(func)
+        async def wrapper(*args, **kwargs) -> Any:
+            tenant_id = kwargs.get("tenant_id")
+            if tenant_id is None:
+                return await func(*args, **kwargs)
+
+            parts = [f"t{tenant_id}"]
+            for k in sorted(kwargs.keys()):
+                if k in skip or k == "tenant_id":
+                    continue
+                if allow is not None and k not in allow:
+                    continue
+                v = kwargs[k]
+                if v is None or isinstance(v, (str, int, float, bool)):
+                    parts.append(f"{k}={v}")
+            cache_key = f"{func.__name__}|" + "|".join(parts)
+
+            try:
+                cached = await cache_manager.get(namespace, cache_key)
+            except Exception as e:
+                logger.warning(f"cache_by_kwargs get failed: {e}")
+                cached = None
+
+            if cached is not None:
+                if return_model is not None and isinstance(cached, dict):
+                    try:
+                        return return_model.model_validate(cached)
+                    except Exception:
+                        return cached
+                return cached
+
+            result = await func(*args, **kwargs)
+
+            payload: Any = None
+            if isinstance(result, BaseModel):
+                payload = result.model_dump(mode="json")
+            elif isinstance(result, (dict, list)):
+                payload = result
+            if payload is not None:
+                try:
+                    await cache_manager.set(namespace, cache_key, payload, ttl=ttl)
+                except Exception as e:
+                    logger.warning(f"cache_by_kwargs set failed ({func.__name__}): {e}")
+
+            return result
+
+        return wrapper
+
+    return decorator

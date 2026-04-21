@@ -100,7 +100,6 @@ class ResetDataService:
         "apps_kuaizhizao_purchase_order_items",
         "apps_kuaizhizao_purchase_requisitions",
         "apps_kuaizhizao_purchase_requisition_items",
-        "apps_kuaizhizao_purchase_logistics",
         
         # 质量与维修
         "apps_kuaizhizao_incoming_inspections",

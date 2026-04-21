@@ -264,15 +264,6 @@ CUSTOM_FIELD_PAGES: List[CustomFieldPageConfig] = [
         "module_icon": "tool",
     },
     {
-        "page_code": "kuaizhizao-sample-trial",
-        "page_name": "样品试用",
-        "page_path": "/apps/kuaizhizao/sales-management/sample-trials",
-        "table_name": "apps_kuaizhizao_sample_trials",
-        "table_name_label": "样品试用单表",
-        "module": "快格轻制造",
-        "module_icon": "tool",
-    },
-    {
         "page_code": "kuaizhizao-sales-delivery",
         "page_name": "销售发货",
         "page_path": "/apps/kuaizhizao/warehouse-management/outbound",

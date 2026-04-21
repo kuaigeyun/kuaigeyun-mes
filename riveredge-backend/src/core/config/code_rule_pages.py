@@ -41,7 +41,6 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "kuaizhizao-delivery-notice": "SHD",        # 送货单
     "kuaizhizao-shipment-notice": "FHTZ",       # 发货通知单
     "kuaizhizao-receipt-notice": "SHTZ",        # 收货通知单
-    "kuaizhizao-sample-trial": "ST",           # 样品试用
     "kuaizhizao-sales-forecast": "XSYC",        # 销售预测
     "kuaizhizao-demand-plan": "XQJH",           # 需求计划（手工计划）
     "kuaizhizao-sales-return": "XSTH",          # 销售退货
@@ -494,18 +493,6 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "module_icon": "tool",
         "auto_generate": True,
         "rule_code": "RECEIPT_NOTICE_CODE",
-        "allow_manual_edit": True,
-    },
-    {
-        "page_code": "kuaizhizao-sample-trial",
-        "page_name": "样品试用",
-        "page_path": "/apps/kuaizhizao/sales-management/sample-trials",
-        "code_field": "trial_code",
-        "code_field_label": "样品试用单编码",
-        "module": "快格轻制造",
-        "module_icon": "tool",
-        "auto_generate": True,
-        "rule_code": "SAMPLE_TRIAL_CODE",
         "allow_manual_edit": True,
     },
     {

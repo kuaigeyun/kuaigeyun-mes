@@ -514,7 +514,7 @@ class BusinessConfigService:
         是否需要人工审核：当租户存在 code=node_key 且 is_active=True 的 ApprovalProcess 时返回 True。
 
         node_key 约定与 ApprovalProcess.code 一致（sales_order、purchase_order、
-        quotation、sample_trial、quality_inspection 等）。
+        quotation、quality_inspection 等）。
         """
         if not node_key:
             return False

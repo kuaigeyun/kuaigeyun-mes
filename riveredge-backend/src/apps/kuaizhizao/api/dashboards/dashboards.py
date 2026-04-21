@@ -8,12 +8,12 @@ Date: 2025-01-15
 """
 
 from typing import List, Optional
-from tortoise.expressions import Q
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from datetime import datetime, timedelta
 
 from core.api.deps import get_current_user, get_current_tenant
+from core.utils.api_cache import cache_by_kwargs
 from infra.models.user import User
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.kuaizhizao.services.exception_service import ExceptionService
@@ -67,6 +67,7 @@ class DashboardResponse(BaseModel):
 
 
 @router.get("/todos", response_model=TodoListResponse, summary="获取待办事项列表")
+@cache_by_kwargs(namespace="dashboard:todos", ttl=30)
 async def get_todos(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -78,44 +79,37 @@ async def get_todos(
     包括：待处理工单、生产异常、库存预警、入库/出库/借还料、收货发货通知、
     采购申请待审核与采购退货、销售退货、叫料、设备故障待处理、各类检验待检验等。
     """
-    todos = []
-    
-    try:
-        # 1. 获取待处理工单（状态为released或in_progress的工单）
-        work_orders = await WorkOrderService().list_work_orders(
-            tenant_id=tenant_id,
-            status="released",
-            skip=0,
-            limit=limit,
-        )
-        
-        for wo in work_orders:
-            todos.append(TodoItem(
+    import asyncio as _asyncio
+
+    # 每种来源独立 fetcher：内部自己 try/except，不会互相拖累；一次 gather 并发所有
+    # 首次 cache miss 时耗时 ≈ max(单表查询) 而不是 sum（从 ~500ms 降到 ~50ms 级别）
+
+    async def _fetch_work_orders() -> List[TodoItem]:
+        try:
+            wos = await WorkOrderService().list_work_orders(
+                tenant_id=tenant_id, status="released", skip=0, limit=limit,
+            )
+            return [TodoItem(
                 id=f"work_order_{wo.id}",
                 type="work_order",
                 title=f"处理工单 {wo.code}",
                 description=f"产品：{wo.product_name}，数量：{wo.quantity}",
-                priority="medium",  # 工单列表响应中没有priority字段，默认medium
+                priority="medium",
                 due_date=wo.planned_end_date,
                 status="pending",
                 link=f"/apps/kuaizhizao/production-execution/work-orders/{wo.id}",
                 created_at=wo.created_at,
-            ))
-    except Exception as e:
-        logger.error(f"获取待处理工单失败: {e}")
-    
-    try:
-        # 2. 获取异常提醒（缺料异常、延期异常、质量异常）
-        exception_service = ExceptionService()
-        
-        # 获取缺料异常
-        material_shortages = await MaterialShortageException.filter(
-            tenant_id=tenant_id,
-            status="open",
-        ).limit(limit)
-        
-        for exc in material_shortages:
-            todos.append(TodoItem(
+            ) for wo in wos]
+        except Exception as e:
+            logger.error(f"获取待处理工单失败: {e}")
+            return []
+
+    async def _fetch_material_shortages() -> List[TodoItem]:
+        try:
+            rows = await MaterialShortageException.filter(
+                tenant_id=tenant_id, status="open",
+            ).limit(limit)
+            return [TodoItem(
                 id=f"exception_material_{exc.id}",
                 type="exception",
                 title=f"缺料异常：{exc.material_name}",
@@ -125,16 +119,17 @@ async def get_todos(
                 status="pending",
                 link="/apps/kuaizhizao/production-execution/material-shortage-exceptions",
                 created_at=exc.created_at,
-            ))
-        
-        # 获取延期异常
-        delivery_delays = await DeliveryDelayException.filter(
-            tenant_id=tenant_id,
-            status="open",
-        ).limit(limit)
-        
-        for exc in delivery_delays:
-            todos.append(TodoItem(
+            ) for exc in rows]
+        except Exception as e:
+            logger.error(f"获取缺料异常待办失败: {e}")
+            return []
+
+    async def _fetch_delivery_delays() -> List[TodoItem]:
+        try:
+            rows = await DeliveryDelayException.filter(
+                tenant_id=tenant_id, status="open",
+            ).limit(limit)
+            return [TodoItem(
                 id=f"exception_delay_{exc.id}",
                 type="exception",
                 title=f"延期异常：{exc.work_order_code}",
@@ -144,16 +139,17 @@ async def get_todos(
                 status="pending",
                 link="/apps/kuaizhizao/production-execution/delivery-delay-exceptions",
                 created_at=exc.created_at,
-            ))
-        
-        # 获取质量异常
-        quality_exceptions = await QualityException.filter(
-            tenant_id=tenant_id,
-            status="open",
-        ).limit(limit)
-        
-        for exc in quality_exceptions:
-            todos.append(TodoItem(
+            ) for exc in rows]
+        except Exception as e:
+            logger.error(f"获取延期异常待办失败: {e}")
+            return []
+
+    async def _fetch_quality_exceptions() -> List[TodoItem]:
+        try:
+            rows = await QualityException.filter(
+                tenant_id=tenant_id, status="open",
+            ).limit(limit)
+            return [TodoItem(
                 id=f"exception_quality_{exc.id}",
                 type="exception",
                 title=f"质量异常：{exc.title}",
@@ -163,50 +159,45 @@ async def get_todos(
                 status="pending",
                 link="/apps/kuaizhizao/production-execution/quality-exceptions",
                 created_at=exc.created_at,
-            ))
-    except Exception as e:
-        logger.error(f"获取异常提醒失败: {e}")
+            ) for exc in rows]
+        except Exception as e:
+            logger.error(f"获取质量异常待办失败: {e}")
+            return []
 
-    # 3. 仓库待办：库存预警、采购/成品待入库
-    try:
-        inv_alerts = await InventoryAlert.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-            status__in=["pending", "processing"],
-        ).order_by("-triggered_at").limit(limit)
-        for row in inv_alerts:
-            lvl = (row.alert_level or "warning").lower()
-            if lvl == "critical":
-                prio = "high"
-            elif lvl == "warning":
-                prio = "medium"
-            else:
-                prio = "low"
-            msg = (row.alert_message or "")[:200] if row.alert_message else ""
-            todos.append(TodoItem(
-                id=f"inventory_alert_{row.id}",
-                type="warehouse",
-                title=f"库存预警：{row.material_name or row.material_code}",
-                description=msg or f"{row.warehouse_name} · 当前 {row.current_quantity}",
-                priority=prio,
-                due_date=None,
-                status="pending",
-                link="/apps/kuaizhizao/warehouse-management/inventory-alert",
-                created_at=row.created_at,
-            ))
-    except Exception as e:
-        logger.error(f"获取库存预警待办失败: {e}")
+    async def _fetch_inventory_alerts() -> List[TodoItem]:
+        try:
+            rows = await InventoryAlert.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True,
+                status__in=["pending", "processing"],
+            ).order_by("-triggered_at").limit(limit)
+            out: List[TodoItem] = []
+            for row in rows:
+                lvl = (row.alert_level or "warning").lower()
+                prio = "high" if lvl == "critical" else ("medium" if lvl == "warning" else "low")
+                msg = (row.alert_message or "")[:200] if row.alert_message else ""
+                out.append(TodoItem(
+                    id=f"inventory_alert_{row.id}",
+                    type="warehouse",
+                    title=f"库存预警：{row.material_name or row.material_code}",
+                    description=msg or f"{row.warehouse_name} · 当前 {row.current_quantity}",
+                    priority=prio,
+                    due_date=None,
+                    status="pending",
+                    link="/apps/kuaizhizao/warehouse-management/inventory-alert",
+                    created_at=row.created_at,
+                ))
+            return out
+        except Exception as e:
+            logger.error(f"获取库存预警待办失败: {e}")
+            return []
 
-    try:
-        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
-
-        pending_receipts = await PurchaseReceipt.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-            status="待入库",
-        ).order_by("-created_at").limit(limit)
-        for pr in pending_receipts:
-            todos.append(TodoItem(
+    async def _fetch_purchase_receipts() -> List[TodoItem]:
+        try:
+            from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+            rows = await PurchaseReceipt.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True, status="待入库",
+            ).order_by("-created_at").limit(limit)
+            return [TodoItem(
                 id=f"purchase_receipt_{pr.id}",
                 type="warehouse",
                 title=f"待入库：{pr.receipt_code}",
@@ -216,20 +207,18 @@ async def get_todos(
                 status="pending",
                 link="/apps/kuaizhizao/warehouse-management/inbound",
                 created_at=pr.created_at,
-            ))
-    except Exception as e:
-        logger.error(f"获取待入库待办失败: {e}")
+            ) for pr in rows]
+        except Exception as e:
+            logger.error(f"获取待入库待办失败: {e}")
+            return []
 
-    try:
-        from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
-
-        pending_fg = await FinishedGoodsReceipt.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-            status="待入库",
-        ).order_by("-created_at").limit(limit)
-        for fg in pending_fg:
-            todos.append(TodoItem(
+    async def _fetch_finished_goods_receipts() -> List[TodoItem]:
+        try:
+            from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
+            rows = await FinishedGoodsReceipt.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True, status="待入库",
+            ).order_by("-created_at").limit(limit)
+            return [TodoItem(
                 id=f"finished_goods_receipt_{fg.id}",
                 type="warehouse",
                 title=f"成品待入库：{fg.receipt_code}",
@@ -239,18 +228,18 @@ async def get_todos(
                 status="pending",
                 link="/apps/kuaizhizao/warehouse-management/inbound",
                 created_at=fg.created_at,
-            ))
-    except Exception as e:
-        logger.error(f"获取成品待入库待办失败: {e}")
+            ) for fg in rows]
+        except Exception as e:
+            logger.error(f"获取成品待入库待办失败: {e}")
+            return []
 
-    # 3b. 仓储：生产退料、其他入库、借料、还料、叫料、收货通知（待收货）
-    try:
-        from apps.kuaizhizao.models.production_return import ProductionReturn
-
-        for row in await ProductionReturn.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True, status="待退料"
-        ).order_by("-created_at").limit(limit):
-            todos.append(TodoItem(
+    async def _fetch_production_returns() -> List[TodoItem]:
+        try:
+            from apps.kuaizhizao.models.production_return import ProductionReturn
+            rows = await ProductionReturn.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True, status="待退料"
+            ).order_by("-created_at").limit(limit)
+            return [TodoItem(
                 id=f"production_return_{row.id}",
                 type="warehouse",
                 title=f"生产退料待确认：{row.return_code}",
@@ -260,17 +249,18 @@ async def get_todos(
                 status="pending",
                 link="/apps/kuaizhizao/warehouse-management/inbound",
                 created_at=row.created_at,
-            ))
-    except Exception as e:
-        logger.error(f"获取生产退料待办失败: {e}")
+            ) for row in rows]
+        except Exception as e:
+            logger.error(f"获取生产退料待办失败: {e}")
+            return []
 
-    try:
-        from apps.kuaizhizao.models.other_inbound import OtherInbound
-
-        for row in await OtherInbound.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True, status="待入库"
-        ).order_by("-created_at").limit(limit):
-            todos.append(TodoItem(
+    async def _fetch_other_inbounds() -> List[TodoItem]:
+        try:
+            from apps.kuaizhizao.models.other_inbound import OtherInbound
+            rows = await OtherInbound.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True, status="待入库"
+            ).order_by("-created_at").limit(limit)
+            return [TodoItem(
                 id=f"other_inbound_{row.id}",
                 type="warehouse",
                 title=f"其他入库待确认：{row.inbound_code}",
@@ -280,17 +270,18 @@ async def get_todos(
                 status="pending",
                 link="/apps/kuaizhizao/warehouse-management/other-inbound",
                 created_at=row.created_at,
-            ))
-    except Exception as e:
-        logger.error(f"获取其他入库待办失败: {e}")
+            ) for row in rows]
+        except Exception as e:
+            logger.error(f"获取其他入库待办失败: {e}")
+            return []
 
-    try:
-        from apps.kuaizhizao.models.material_borrow import MaterialBorrow
-
-        for row in await MaterialBorrow.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True, status="待借出"
-        ).order_by("-created_at").limit(limit):
-            todos.append(TodoItem(
+    async def _fetch_material_borrows() -> List[TodoItem]:
+        try:
+            from apps.kuaizhizao.models.material_borrow import MaterialBorrow
+            rows = await MaterialBorrow.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True, status="待借出"
+            ).order_by("-created_at").limit(limit)
+            return [TodoItem(
                 id=f"material_borrow_{row.id}",
                 type="warehouse",
                 title=f"借料待确认：{row.borrow_code}",
@@ -300,17 +291,18 @@ async def get_todos(
                 status="pending",
                 link="/apps/kuaizhizao/warehouse-management/material-borrows",
                 created_at=row.created_at,
-            ))
-    except Exception as e:
-        logger.error(f"获取借料待办失败: {e}")
+            ) for row in rows]
+        except Exception as e:
+            logger.error(f"获取借料待办失败: {e}")
+            return []
 
-    try:
-        from apps.kuaizhizao.models.material_return import MaterialReturn
-
-        for row in await MaterialReturn.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True, status="待归还"
-        ).order_by("-created_at").limit(limit):
-            todos.append(TodoItem(
+    async def _fetch_material_returns() -> List[TodoItem]:
+        try:
+            from apps.kuaizhizao.models.material_return import MaterialReturn
+            rows = await MaterialReturn.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True, status="待归还"
+            ).order_by("-created_at").limit(limit)
+            return [TodoItem(
                 id=f"material_return_{row.id}",
                 type="warehouse",
                 title=f"还料待确认：{row.return_code}",
@@ -320,46 +312,49 @@ async def get_todos(
                 status="pending",
                 link="/apps/kuaizhizao/warehouse-management/material-returns",
                 created_at=row.created_at,
-            ))
-    except Exception as e:
-        logger.error(f"获取还料待办失败: {e}")
+            ) for row in rows]
+        except Exception as e:
+            logger.error(f"获取还料待办失败: {e}")
+            return []
 
-    try:
-        from apps.kuaizhizao.models.material_call_request import MaterialCallRequest
+    async def _fetch_material_calls() -> List[TodoItem]:
+        try:
+            from apps.kuaizhizao.models.material_call_request import MaterialCallRequest
+            rows = await MaterialCallRequest.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True, status="pending"
+            ).order_by("-created_at").limit(limit)
+            out: List[TodoItem] = []
+            for row in rows:
+                pr = (row.priority or "normal").lower()
+                if pr in ("urgent", "high"):
+                    prio = "high"
+                elif pr == "low":
+                    prio = "low"
+                else:
+                    prio = "medium"
+                out.append(TodoItem(
+                    id=f"material_call_{row.id}",
+                    type="warehouse",
+                    title=f"叫料待处理：{row.code}",
+                    description=f"{row.work_order_code} · {row.material_name}",
+                    priority=prio,
+                    due_date=row.needed_at,
+                    status="pending",
+                    link="/apps/kuaizhizao/warehouse-management/material-calls",
+                    created_at=row.created_at,
+                ))
+            return out
+        except Exception as e:
+            logger.error(f"获取叫料待办失败: {e}")
+            return []
 
-        for row in await MaterialCallRequest.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True, status="pending"
-        ).order_by("-created_at").limit(limit):
-            pr = (row.priority or "normal").lower()
-            if pr == "urgent":
-                prio = "high"
-            elif pr == "high":
-                prio = "high"
-            elif pr == "low":
-                prio = "low"
-            else:
-                prio = "medium"
-            todos.append(TodoItem(
-                id=f"material_call_{row.id}",
-                type="warehouse",
-                title=f"叫料待处理：{row.code}",
-                description=f"{row.work_order_code} · {row.material_name}",
-                priority=prio,
-                due_date=row.needed_at,
-                status="pending",
-                link="/apps/kuaizhizao/warehouse-management/material-calls",
-                created_at=row.created_at,
-            ))
-    except Exception as e:
-        logger.error(f"获取叫料待办失败: {e}")
-
-    try:
-        from apps.kuaizhizao.models.receipt_notice import ReceiptNotice
-
-        for row in await ReceiptNotice.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True, status="待收货"
-        ).order_by("-created_at").limit(limit):
-            todos.append(TodoItem(
+    async def _fetch_receipt_notices() -> List[TodoItem]:
+        try:
+            from apps.kuaizhizao.models.receipt_notice import ReceiptNotice
+            rows = await ReceiptNotice.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True, status="待收货"
+            ).order_by("-created_at").limit(limit)
+            return [TodoItem(
                 id=f"receipt_notice_{row.id}",
                 type="purchase",
                 title=f"收货通知待收货：{row.notice_code}",
@@ -369,18 +364,18 @@ async def get_todos(
                 status="pending",
                 link="/apps/kuaizhizao/purchase-management/receipt-notices",
                 created_at=row.created_at,
-            ))
-    except Exception as e:
-        logger.error(f"获取收货通知待办失败: {e}")
+            ) for row in rows]
+        except Exception as e:
+            logger.error(f"获取收货通知待办失败: {e}")
+            return []
 
-    # 3c. 出库作业：生产领料、销售出库、其他出库
-    try:
-        from apps.kuaizhizao.models.production_picking import ProductionPicking
-
-        for row in await ProductionPicking.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True, status="待领料"
-        ).order_by("-created_at").limit(limit):
-            todos.append(TodoItem(
+    async def _fetch_production_pickings() -> List[TodoItem]:
+        try:
+            from apps.kuaizhizao.models.production_picking import ProductionPicking
+            rows = await ProductionPicking.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True, status="待领料"
+            ).order_by("-created_at").limit(limit)
+            return [TodoItem(
                 id=f"production_picking_{row.id}",
                 type="outbound",
                 title=f"生产领料待确认：{row.picking_code}",
@@ -390,17 +385,18 @@ async def get_todos(
                 status="pending",
                 link="/apps/kuaizhizao/warehouse-management/outbound",
                 created_at=row.created_at,
-            ))
-    except Exception as e:
-        logger.error(f"获取生产领料待办失败: {e}")
+            ) for row in rows]
+        except Exception as e:
+            logger.error(f"获取生产领料待办失败: {e}")
+            return []
 
-    try:
-        from apps.kuaizhizao.models.sales_delivery import SalesDelivery
-
-        for row in await SalesDelivery.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True, status="待出库"
-        ).order_by("-created_at").limit(limit):
-            todos.append(TodoItem(
+    async def _fetch_sales_deliveries() -> List[TodoItem]:
+        try:
+            from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+            rows = await SalesDelivery.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True, status="待出库"
+            ).order_by("-created_at").limit(limit)
+            return [TodoItem(
                 id=f"sales_delivery_{row.id}",
                 type="outbound",
                 title=f"销售出库待确认：{row.delivery_code}",
@@ -410,17 +406,18 @@ async def get_todos(
                 status="pending",
                 link="/apps/kuaizhizao/warehouse-management/outbound",
                 created_at=row.created_at,
-            ))
-    except Exception as e:
-        logger.error(f"获取销售出库待办失败: {e}")
+            ) for row in rows]
+        except Exception as e:
+            logger.error(f"获取销售出库待办失败: {e}")
+            return []
 
-    try:
-        from apps.kuaizhizao.models.other_outbound import OtherOutbound
-
-        for row in await OtherOutbound.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True, status="待出库"
-        ).order_by("-created_at").limit(limit):
-            todos.append(TodoItem(
+    async def _fetch_other_outbounds() -> List[TodoItem]:
+        try:
+            from apps.kuaizhizao.models.other_outbound import OtherOutbound
+            rows = await OtherOutbound.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True, status="待出库"
+            ).order_by("-created_at").limit(limit)
+            return [TodoItem(
                 id=f"other_outbound_{row.id}",
                 type="outbound",
                 title=f"其他出库待确认：{row.outbound_code}",
@@ -430,27 +427,23 @@ async def get_todos(
                 status="pending",
                 link="/apps/kuaizhizao/warehouse-management/other-outbound",
                 created_at=row.created_at,
-            ))
-    except Exception as e:
-        logger.error(f"获取其他出库待办失败: {e}")
+            ) for row in rows]
+        except Exception as e:
+            logger.error(f"获取其他出库待办失败: {e}")
+            return []
 
-    # 3d. 采购：申请待审核、采购退货待退货
-    try:
-        from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
-        from apps.kuaizhizao.constants import DocumentStatus
-
-        pr_pending = await PurchaseRequisition.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-            status__in=(
-                DocumentStatus.PENDING_REVIEW.value,
-                "待审核",
-                "PENDING_REVIEW",
-                "PENDING",
-            ),
-        ).order_by("-created_at").limit(limit)
-        for row in pr_pending:
-            todos.append(TodoItem(
+    async def _fetch_purchase_requisitions() -> List[TodoItem]:
+        try:
+            from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
+            from apps.kuaizhizao.constants import DocumentStatus
+            rows = await PurchaseRequisition.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True,
+                status__in=(
+                    DocumentStatus.PENDING_REVIEW.value,
+                    "待审核", "PENDING_REVIEW", "PENDING",
+                ),
+            ).order_by("-created_at").limit(limit)
+            return [TodoItem(
                 id=f"purchase_requisition_{row.id}",
                 type="purchase",
                 title=f"采购申请待审核：{row.requisition_code}",
@@ -460,17 +453,18 @@ async def get_todos(
                 status="pending",
                 link="/apps/kuaizhizao/purchase-management/purchase-requisitions",
                 created_at=row.created_at,
-            ))
-    except Exception as e:
-        logger.error(f"获取采购申请待办失败: {e}")
+            ) for row in rows]
+        except Exception as e:
+            logger.error(f"获取采购申请待办失败: {e}")
+            return []
 
-    try:
-        from apps.kuaizhizao.models.purchase_return import PurchaseReturn
-
-        for row in await PurchaseReturn.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True, status="待退货"
-        ).order_by("-created_at").limit(limit):
-            todos.append(TodoItem(
+    async def _fetch_purchase_returns() -> List[TodoItem]:
+        try:
+            from apps.kuaizhizao.models.purchase_return import PurchaseReturn
+            rows = await PurchaseReturn.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True, status="待退货"
+            ).order_by("-created_at").limit(limit)
+            return [TodoItem(
                 id=f"purchase_return_{row.id}",
                 type="purchase",
                 title=f"采购退货待确认：{row.return_code}",
@@ -480,18 +474,18 @@ async def get_todos(
                 status="pending",
                 link="/apps/kuaizhizao/purchase-management/purchase-returns",
                 created_at=row.created_at,
-            ))
-    except Exception as e:
-        logger.error(f"获取采购退货待办失败: {e}")
+            ) for row in rows]
+        except Exception as e:
+            logger.error(f"获取采购退货待办失败: {e}")
+            return []
 
-    # 3e. 销售：发货通知、销售退货
-    try:
-        from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
-
-        for row in await ShipmentNotice.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True, status="待发货"
-        ).order_by("-created_at").limit(limit):
-            todos.append(TodoItem(
+    async def _fetch_shipment_notices() -> List[TodoItem]:
+        try:
+            from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
+            rows = await ShipmentNotice.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True, status="待发货"
+            ).order_by("-created_at").limit(limit)
+            return [TodoItem(
                 id=f"shipment_notice_{row.id}",
                 type="sales",
                 title=f"发货通知待发货：{row.notice_code}",
@@ -501,17 +495,18 @@ async def get_todos(
                 status="pending",
                 link="/apps/kuaizhizao/sales-management/shipment-notices",
                 created_at=row.created_at,
-            ))
-    except Exception as e:
-        logger.error(f"获取发货通知待办失败: {e}")
+            ) for row in rows]
+        except Exception as e:
+            logger.error(f"获取发货通知待办失败: {e}")
+            return []
 
-    try:
-        from apps.kuaizhizao.models.sales_return import SalesReturn
-
-        for row in await SalesReturn.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True, status="待退货"
-        ).order_by("-created_at").limit(limit):
-            todos.append(TodoItem(
+    async def _fetch_sales_returns() -> List[TodoItem]:
+        try:
+            from apps.kuaizhizao.models.sales_return import SalesReturn
+            rows = await SalesReturn.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True, status="待退货"
+            ).order_by("-created_at").limit(limit)
+            return [TodoItem(
                 id=f"sales_return_{row.id}",
                 type="sales",
                 title=f"销售退货待确认：{row.return_code}",
@@ -521,51 +516,49 @@ async def get_todos(
                 status="pending",
                 link="/apps/kuaizhizao/sales-management/sales-returns",
                 created_at=row.created_at,
-            ))
-    except Exception as e:
-        logger.error(f"获取销售退货待办失败: {e}")
+            ) for row in rows]
+        except Exception as e:
+            logger.error(f"获取销售退货待办失败: {e}")
+            return []
 
-    # 3f. 设备：故障待处理
-    try:
-        from apps.kuaizhizao.models.equipment_fault import EquipmentFault
+    async def _fetch_equipment_faults() -> List[TodoItem]:
+        try:
+            from apps.kuaizhizao.models.equipment_fault import EquipmentFault
+            rows = await EquipmentFault.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True, status="待处理"
+            ).order_by("-created_at").limit(limit)
+            out: List[TodoItem] = []
+            for row in rows:
+                lvl = (row.fault_level or "").strip()
+                if "紧急" in lvl or "严重" in lvl:
+                    prio = "high"
+                elif "一般" in lvl or "轻微" in lvl:
+                    prio = "low"
+                else:
+                    prio = "medium"
+                out.append(TodoItem(
+                    id=f"equipment_fault_{row.id}",
+                    type="equipment",
+                    title=f"设备故障待处理：{row.fault_no}",
+                    description=f"{row.equipment_name} · {row.fault_type}",
+                    priority=prio,
+                    due_date=None,
+                    status="pending",
+                    link="/apps/kuaizhizao/equipment-management/equipment-faults",
+                    created_at=row.created_at,
+                ))
+            return out
+        except Exception as e:
+            logger.error(f"获取设备故障待办失败: {e}")
+            return []
 
-        for row in await EquipmentFault.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True, status="待处理"
-        ).order_by("-created_at").limit(limit):
-            lvl = (row.fault_level or "").strip()
-            if "紧急" in lvl or "严重" in lvl:
-                prio = "high"
-            elif "一般" in lvl or "轻微" in lvl:
-                prio = "low"
-            else:
-                prio = "medium"
-            todos.append(TodoItem(
-                id=f"equipment_fault_{row.id}",
-                type="equipment",
-                title=f"设备故障待处理：{row.fault_no}",
-                description=f"{row.equipment_name} · {row.fault_type}",
-                priority=prio,
-                due_date=None,
-                status="pending",
-                link="/apps/kuaizhizao/equipment-management/equipment-faults",
-                created_at=row.created_at,
-            ))
-    except Exception as e:
-        logger.error(f"获取设备故障待办失败: {e}")
-
-    # 4. 质检待办：来料 / 过程 / 成品检验待检验
-    try:
-        from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
-        from apps.kuaizhizao.models.process_inspection import ProcessInspection
-        from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
-
-        incoming_list = await IncomingInspection.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-            status="待检验",
-        ).order_by("-created_at").limit(limit)
-        for ins in incoming_list:
-            todos.append(TodoItem(
+    async def _fetch_incoming_inspections() -> List[TodoItem]:
+        try:
+            from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
+            rows = await IncomingInspection.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True, status="待检验",
+            ).order_by("-created_at").limit(limit)
+            return [TodoItem(
                 id=f"inspection_incoming_{ins.id}",
                 type="quality_inspection",
                 title=f"来料待检：{ins.inspection_code}",
@@ -575,15 +568,18 @@ async def get_todos(
                 status="pending",
                 link="/apps/kuaizhizao/quality-management/incoming-inspection",
                 created_at=ins.created_at,
-            ))
+            ) for ins in rows]
+        except Exception as e:
+            logger.error(f"获取来料检验待办失败: {e}")
+            return []
 
-        process_list = await ProcessInspection.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-            status="待检验",
-        ).order_by("-created_at").limit(limit)
-        for ins in process_list:
-            todos.append(TodoItem(
+    async def _fetch_process_inspections() -> List[TodoItem]:
+        try:
+            from apps.kuaizhizao.models.process_inspection import ProcessInspection
+            rows = await ProcessInspection.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True, status="待检验",
+            ).order_by("-created_at").limit(limit)
+            return [TodoItem(
                 id=f"inspection_process_{ins.id}",
                 type="quality_inspection",
                 title=f"过程待检：{ins.inspection_code}",
@@ -593,15 +589,18 @@ async def get_todos(
                 status="pending",
                 link="/apps/kuaizhizao/quality-management/process-inspection",
                 created_at=ins.created_at,
-            ))
+            ) for ins in rows]
+        except Exception as e:
+            logger.error(f"获取过程检验待办失败: {e}")
+            return []
 
-        finished_list = await FinishedGoodsInspection.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-            status="待检验",
-        ).order_by("-created_at").limit(limit)
-        for ins in finished_list:
-            todos.append(TodoItem(
+    async def _fetch_finished_inspections() -> List[TodoItem]:
+        try:
+            from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
+            rows = await FinishedGoodsInspection.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True, status="待检验",
+            ).order_by("-created_at").limit(limit)
+            return [TodoItem(
                 id=f"inspection_finished_{ins.id}",
                 type="quality_inspection",
                 title=f"成品待检：{ins.inspection_code}",
@@ -611,18 +610,45 @@ async def get_todos(
                 status="pending",
                 link="/apps/kuaizhizao/quality-management/finished-goods-inspection",
                 created_at=ins.created_at,
-            ))
-    except Exception as e:
-        logger.error(f"获取质检待办失败: {e}")
+            ) for ins in rows]
+        except Exception as e:
+            logger.error(f"获取成品检验待办失败: {e}")
+            return []
 
-    # 5. TODO: 获取待审核单据（需要审批流程模块支持）
-    
-    # 按优先级和创建时间排序
+    results = await _asyncio.gather(
+        _fetch_work_orders(),
+        _fetch_material_shortages(),
+        _fetch_delivery_delays(),
+        _fetch_quality_exceptions(),
+        _fetch_inventory_alerts(),
+        _fetch_purchase_receipts(),
+        _fetch_finished_goods_receipts(),
+        _fetch_production_returns(),
+        _fetch_other_inbounds(),
+        _fetch_material_borrows(),
+        _fetch_material_returns(),
+        _fetch_material_calls(),
+        _fetch_receipt_notices(),
+        _fetch_production_pickings(),
+        _fetch_sales_deliveries(),
+        _fetch_other_outbounds(),
+        _fetch_purchase_requisitions(),
+        _fetch_purchase_returns(),
+        _fetch_shipment_notices(),
+        _fetch_sales_returns(),
+        _fetch_equipment_faults(),
+        _fetch_incoming_inspections(),
+        _fetch_process_inspections(),
+        _fetch_finished_inspections(),
+    )
+
+    todos: List[TodoItem] = [item for sublist in results for item in sublist]
+
     todos.sort(key=lambda x: (
         {"high": 0, "critical": 0, "medium": 1, "low": 2}.get((x.priority or "medium").lower(), 3),
         x.created_at
     ))
-    
+
     return TodoListResponse(
         items=todos[:limit],
         total=len(todos),
@@ -825,6 +851,7 @@ async def handle_todo(
 
 
 @router.get("/statistics", response_model=StatisticsResponse, summary="获取统计数据")
+@cache_by_kwargs(namespace="dashboard:statistics", ttl=60)
 async def get_statistics(
     date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
     date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
@@ -1036,6 +1063,7 @@ class ProcessProgressResponse(BaseModel):
 
 
 @router.get("/process-progress", response_model=ProcessProgressResponse, summary="获取工序执行进展")
+@cache_by_kwargs(namespace="dashboard:process_progress", ttl=30)
 async def get_process_progress(
     include_unstarted: bool = Query(False, description="是否包含未开始生产任务"),
     current_user: User = Depends(get_current_user),
@@ -1162,6 +1190,7 @@ class ManagementMetricsResponse(BaseModel):
 
 
 @router.get("/management-metrics", response_model=ManagementMetricsResponse, summary="获取管理指标")
+@cache_by_kwargs(namespace="dashboard:management_metrics", ttl=60)
 async def get_management_metrics(
     date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
     date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
@@ -1299,6 +1328,7 @@ class ProductionBroadcastResponse(BaseModel):
 
 
 @router.get("/production-broadcast", response_model=ProductionBroadcastResponse, summary="获取生产实时播报")
+@cache_by_kwargs(namespace="dashboard:broadcast", ttl=30)
 async def get_production_broadcast(
     limit: int = Query(10, ge=1, le=50, description="返回数量限制"),
     current_user: User = Depends(get_current_user),
@@ -1368,6 +1398,7 @@ async def get_production_broadcast(
 
 
 @router.get("/menu-badge-counts", summary="获取左侧菜单业务单据未完成数量（用于徽标）")
+@cache_by_kwargs(namespace="dashboard:badges", ttl=45)
 async def get_menu_badge_counts(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -1878,27 +1909,6 @@ async def get_menu_badge_counts(
         counts["purchase_return"] = 0
 
     try:
-        from apps.kuaizhizao.models.purchase_logistics import PurchaseLogistics
-        pl = PurchaseLogistics.filter(tenant_id=tenant_id)
-        pl_over = await pl.filter(
-            status="在途",
-            expected_arrival__lt=now_date,
-            expected_arrival__isnull=False,
-        ).count()
-        pl_exc = await pl.filter(status="异常").count()
-        pl_transit = await pl.filter(status="在途").filter(
-            Q(expected_arrival__isnull=True) | Q(expected_arrival__gte=now_date)
-        ).count()
-        counts["purchase_logistics"] = {
-            "overdue": pl_over,
-            "pending": pl_exc,
-            "in_progress": pl_transit,
-        }
-    except Exception as e:
-        logger.warning(f"menu-badge-counts purchase_logistics: {e}")
-        counts["purchase_logistics"] = 0
-
-    try:
         from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
         sn = ShipmentNotice.filter(tenant_id=tenant_id, deleted_at__isnull=True, is_active=True)
         counts["shipment_notice"] = {
@@ -1940,21 +1950,6 @@ async def get_menu_badge_counts(
     except Exception as e:
         logger.warning(f"menu-badge-counts customer_follow_up: {e}")
         counts["customer_follow_up"] = 0
-
-    try:
-        from apps.kuaizhizao.models.sample_trial import SampleTrial
-        stl = SampleTrial.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        counts["sample_trial"] = {
-            "overdue": await stl.filter(
-                trial_period_end__lt=now_date,
-                trial_period_end__isnull=False,
-            ).exclude(status__in=["已归还", "已转订单", "已关闭", "CANCELLED", "已取消"]).count(),
-            "pending": await stl.filter(status__in=["草稿", "已提交"]).count(),
-            "in_progress": await stl.filter(status__in=["已审核", "试用中"]).count(),
-        }
-    except Exception as e:
-        logger.warning(f"menu-badge-counts sample_trial: {e}")
-        counts["sample_trial"] = 0
 
     try:
         from apps.kuaizhizao.models.outsource_work_order import OutsourceWorkOrder
@@ -2055,6 +2050,7 @@ async def get_menu_badge_counts(
     return counts
 
 @router.get("/sales-summary", summary="获取销售中心汇总数据")
+@cache_by_kwargs(namespace="dashboard:sales_summary", ttl=45)
 async def get_sales_summary(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -2129,6 +2125,7 @@ async def get_sales_summary(
 
 
 @router.get("/purchase-summary", summary="获取采购中心汇总数据")
+@cache_by_kwargs(namespace="dashboard:purchase_summary", ttl=45)
 async def get_purchase_summary(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -2186,6 +2183,7 @@ async def get_purchase_summary(
 
 
 @router.get("/manufacturing-summary", summary="获取制造中心汇总数据")
+@cache_by_kwargs(namespace="dashboard:manufacturing_summary", ttl=45)
 async def get_manufacturing_summary(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -2239,6 +2237,7 @@ async def get_manufacturing_summary(
 
 
 @router.get("/equipment-summary", summary="获取设备看板汇总数据")
+@cache_by_kwargs(namespace="dashboard:equipment_summary", ttl=60)
 async def get_equipment_summary(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),

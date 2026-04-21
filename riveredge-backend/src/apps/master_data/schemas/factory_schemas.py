@@ -449,25 +449,3 @@ class BatchDeleteWorkstationsRequest(BaseModel):
 class BatchDeleteWorkCentersRequest(BaseModel):
     """批量删除工作中心请求"""
     uuids: List[str] = Field(..., description="要删除的工作中心UUID列表", min_items=1, max_items=100)
-
-
-# ==================== 工厂拓扑图 Schema ====================
-
-class FactoryTopologyNode(BaseModel):
-    """工厂拓扑图节点"""
-    id: str = Field(..., description="节点唯一标识")
-    label: str = Field(..., description="节点显示标签")
-    type: str = Field(..., description="节点类型: root/plant/workshop/production_line/workstation/work_center")
-    data: Optional[dict] = Field(default_factory=dict, description="扩展数据（uuid、code 等）")
-
-
-class FactoryTopologyEdge(BaseModel):
-    """工厂拓扑图边"""
-    source: str = Field(..., description="源节点ID")
-    target: str = Field(..., description="目标节点ID")
-
-
-class FactoryTopologyResponse(BaseModel):
-    """工厂拓扑图响应"""
-    nodes: List[FactoryTopologyNode] = Field(default_factory=list, description="节点列表")
-    edges: List[FactoryTopologyEdge] = Field(default_factory=list, description="边列表")

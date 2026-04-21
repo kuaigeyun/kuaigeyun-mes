@@ -271,7 +271,6 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.lrp_result",  # LRP结果模型
                 "apps.kuaizhizao.models.outsource_work_order",  # 委外工单模型（OutsourceWorkOrder、OutsourceMaterialIssue、OutsourceMaterialReceipt）
                 "apps.kuaizhizao.models.document_relation",  # 单据关联模型
-                "apps.kuaizhizao.models.purchase_logistics",  # 采购物流记录模型
                 "apps.kuaizhizao.models.assembly_order",  # 装配单模型
                 "apps.kuaizhizao.models.assembly_material_binding",  # 装配物料绑定模型
                 "apps.kuaizhizao.models.backflush_record",  # 物料倒冲记录模型
@@ -310,7 +309,6 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.quotation",  # 报价单模型
                 "apps.kuaizhizao.models.receipt_notice",  # 收货通知模型
                 "apps.kuaizhizao.models.replenishment_suggestion",  # 补货建议模型
-                "apps.kuaizhizao.models.sample_trial",  # 样品试用模型
                 "apps.kuaizhizao.models.customer_follow_up",  # 客户跟进记录模型
                 "apps.kuaizhizao.models.scheduling_config",  # 排程配置模型
                 "apps.kuaizhizao.models.shipment_notice",  # 发货通知模型

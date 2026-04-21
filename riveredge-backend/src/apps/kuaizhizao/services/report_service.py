@@ -209,8 +209,6 @@ class ReportService:
             return await self._get_sales_forecast_vs_actual(tenant_id, date_start, date_end)
         elif report_type == "quotation-query":
             return await self._get_quotation_query(tenant_id, date_start, date_end, customer_id)
-        elif report_type == "sample-trial-query":
-            return await self._get_sample_trial_query(tenant_id, date_start, date_end, customer_id)
         elif report_type == "sales-trend-analysis":
             from apps.kuaizhizao.models.sales_order import SalesOrder
             import pandas as pd
@@ -391,15 +389,6 @@ class ReportService:
         if date_end: query = query.filter(quotation_date__lte=date_end.date())
         if customer_id: query = query.filter(customer_id=customer_id)
         items = await query.order_by("-quotation_date").limit(100).values("quotation_code", "quotation_date", "customer_name", "total_amount", "status", "salesman_name")
-        return {"data": items, "success": True}
-
-    async def _get_sample_trial_query(self, tenant_id, date_start, date_end, customer_id):
-        from apps.kuaizhizao.models.sample_trial import SampleTrial
-        query = SampleTrial.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        if date_start: query = query.filter(request_date__gte=date_start.date())
-        if date_end: query = query.filter(request_date__lte=date_end.date())
-        if customer_id: query = query.filter(customer_id=customer_id)
-        items = await query.order_by("-request_date").limit(100).values("sample_code", "request_date", "customer_name", "material_name", "quantity", "status")
         return {"data": items, "success": True}
 
     async def query_batch_inventory(

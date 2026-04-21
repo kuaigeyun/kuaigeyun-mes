@@ -47,7 +47,6 @@ def _get_model(table_name: str) -> Optional[Type[Model]]:
         "apps_kuaizhizao_purchase_receipts": "apps.kuaizhizao.models.purchase_receipt.PurchaseReceipt",
         "apps_kuaizhizao_purchase_returns": "apps.kuaizhizao.models.purchase_return.PurchaseReturn",
         "apps_kuaizhizao_sales_orders": "apps.kuaizhizao.models.sales_order.SalesOrder",
-        "apps_kuaizhizao_sample_trials": "apps.kuaizhizao.models.sample_trial.SampleTrial",
         "apps_kuaizhizao_sales_deliveries": "apps.kuaizhizao.models.sales_delivery.SalesDelivery",
         "apps_kuaizhizao_sales_returns": "apps.kuaizhizao.models.sales_return.SalesReturn",
         "apps_kuaizhizao_production_plans": "apps.kuaizhizao.models.production_plan.ProductionPlan",

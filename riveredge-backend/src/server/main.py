@@ -227,6 +227,23 @@ async def lifespan(app: FastAPI):
     # 这里只需要确保路由已经注册到 FastAPI app
     load_plugin_routes()
     logger.info("✅ 插件路由已加载")
+
+    # 启动 cache 过期清理后台任务：惰性过期已在 get 时生效，此处兜底"写入后从未再访问"的残留
+    async def _cache_purge_loop():
+        from infra.infrastructure.cache.cache import cache as _cache
+        while True:
+            try:
+                await asyncio.sleep(600)
+                removed = await _cache.purge_expired()
+                if removed:
+                    logger.debug(f"🧹 Cache 过期清理: 删除 {removed} 条")
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.warning(f"Cache 过期清理循环异常: {e}")
+
+    app.state._cache_purge_task = asyncio.create_task(_cache_purge_loop())
+    logger.info("✅ Cache 过期清理任务已启动（10 分钟/次）")
     
     # 验证路由注册情况
     from core.services.application.application_route_manager import get_route_manager
@@ -242,6 +259,15 @@ async def lifespan(app: FastAPI):
                 logger.debug(f"      路由示例: {app_routes[:3]}")
 
     yield
+
+    # 关闭 cache 过期清理后台任务
+    purge_task = getattr(app.state, "_cache_purge_task", None)
+    if purge_task is not None:
+        purge_task.cancel()
+        try:
+            await purge_task
+        except (asyncio.CancelledError, Exception):
+            pass
 
     # 关闭缓存层
     try:

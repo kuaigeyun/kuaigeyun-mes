@@ -38,7 +38,7 @@ import {
   BulbOutlined,
 } from '@ant-design/icons';
 import type { DataNode } from 'antd/es/tree';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { DashboardTemplate } from '../../../components/layout-templates';
@@ -48,12 +48,11 @@ import {
   getTodos, 
   getStatistics, 
   handleTodo, 
-  getUserMessages,
   getProductionBroadcast,
   type TodoListResponse,
-  type NotificationItem,
   type ProductionBroadcastItem,
 } from '../../../services/dashboard';
+import { getUserMessageStats, type UserMessageStats } from '../../../services/userMessage';
 import { getMenuTree, type MenuTree } from '../../../services/menu';
 import {
   extractAppCodeFromPath,
@@ -61,8 +60,9 @@ import {
   translateAppMenuItemName,
   translateMenuName,
 } from '../../../utils/menuTranslation';
-import { getUserPreference, type UserPreference } from '../../../services/userPreference';
+import type { UserPreference } from '../../../services/userPreference';
 import { useUserPreferenceStore } from '../../../stores/userPreferenceStore';
+import { useDeferredEnabled } from '../../../hooks/useDeferredEnabled';
 import { ManufacturingIcons } from '../../../utils/manufacturingIcons';
 import { getAvatarUrl, getAvatarText, getCachedAvatarUrl } from '../../../utils/avatar';
 import { useGlobalStore } from '../../../stores';
@@ -815,7 +815,6 @@ export default function DashboardPage() {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const { token } = useToken();
   const screens = useBreakpoint();
   const isDark = useThemeStore((s) => s.resolved.isDark);
@@ -886,11 +885,15 @@ export default function DashboardPage() {
   const currentUsername = currentUser?.username || userInfo?.username;
   const currentUserUuid = (currentUser as any)?.uuid || userInfo?.uuid;
 
+  // 身份信息（岗位/角色）非首屏关键：延迟到浏览器空闲后再拉，先让 KPI/待办先渲染
+  const identityDeferredEnabled = useDeferredEnabled(400);
+
   // 获取用户详情（优先按 uuid）
   const { data: userDetail } = useQuery({
     queryKey: ['user-detail', currentUserUuid],
     queryFn: () => getUserByUuid(currentUserUuid as string),
-    enabled: !!currentUserUuid && !((currentUser as any)?.is_infra_admin),
+    enabled: identityDeferredEnabled && !!currentUserUuid && !((currentUser as any)?.is_infra_admin),
+    staleTime: 5 * 60 * 1000,
   });
   // 兜底：老会话可能没有 uuid，按用户名反查当前用户详情
   const { data: userDetailFallback } = useQuery({
@@ -900,7 +903,8 @@ export default function DashboardPage() {
       const exact = response.items.find((u: any) => u.username === currentUsername);
       return exact || response.items[0];
     },
-    enabled: !currentUserUuid && !!currentUsername && !((currentUser as any)?.is_infra_admin),
+    enabled: identityDeferredEnabled && !currentUserUuid && !!currentUsername && !((currentUser as any)?.is_infra_admin),
+    staleTime: 5 * 60 * 1000,
   });
   const resolvedUserDetail = userDetail || userDetailFallback;
   const positionName =
@@ -971,21 +975,21 @@ export default function DashboardPage() {
     }
   }, [currentUser]);
 
-  // 获取用户消息通知（接入真实API）
-  const { data: notificationsData } = useQuery<NotificationItem[]>({
-    queryKey: ['user-messages'],
-    queryFn: () => getUserMessages(1, 20, false), // 获取前20条消息，包括已读和未读
-    refetchInterval: 60000, // 每60秒自动刷新
-    retry: 2, // 失败时重试2次
+  // 消息未读数：复用 BasicLayout 的 ['userMessageStats'] 缓存，避免重复拉 20 条消息列表
+  // 同 queryKey + 相同 queryFn，30s staleTime 内由 react-query 命中缓存，不会真正发起请求
+  const { data: messageStats } = useQuery<UserMessageStats>({
+    queryKey: ['userMessageStats'],
+    queryFn: () => getUserMessageStats(),
+    staleTime: 30 * 1000,
+    refetchInterval: 60 * 1000,
   });
 
-  const notifications = useMemo(() => Array.isArray(notificationsData) ? notificationsData : [], [notificationsData]);
-
   // 获取待办事项（使用真实API）
+  // 列表上限 50：9 个 Tab × 最多 5 条展示 = 45，50 足够且显著降低后端/序列化成本
   const { data: todosResult, isLoading: todosLoading, refetch: refetchTodos } = useQuery<TodoListResponse>({
     queryKey: ['dashboard-todos'],
-    queryFn: () => getTodos(100),
-    refetchInterval: 30000,
+    queryFn: () => getTodos(50),
+    refetchInterval: 60000,
   });
 
   const todos = useMemo(() => todosResult?.items || [], [todosResult]);
@@ -1049,10 +1053,15 @@ export default function DashboardPage() {
   });
 
   // 获取菜单树（菜单管理）
+  // 与 BasicLayout 的 useUnifiedMenuData 共用 queryKey ['applicationMenus']，
+  // 避免工作台与侧边栏重复拉 /menus/tree（在 staleTime 内 react-query 会命中缓存）
   const { data: menuTree, isLoading: menuTreeLoading } = useQuery({
-    queryKey: ['dashboard-menu-tree'],
+    queryKey: ['applicationMenus'],
     queryFn: () => getMenuTree({ is_active: true }),
-    staleTime: 5 * 60 * 1000, // 5分钟缓存
+    enabled: !!currentUser,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 
   // 蓝图设置已下线；菜单可见性完全由 is_active + 权限控制。
@@ -1070,13 +1079,24 @@ export default function DashboardPage() {
     return productionBroadcastData.slice(0, 10);
   }, [productionBroadcastData]);
 
-  // 获取用户偏好设置
-  const { data: userPreference, isLoading: userPreferenceLoading } = useQuery<UserPreference>({
-    queryKey: ['dashboard-user-preference'],
-    queryFn: getUserPreference,
-    staleTime: 5 * 60 * 1000,
-  });
-  const quickEntryLoading = userPreferenceLoading || menuTreeLoading;
+  // 用户偏好：复用 useUserPreferenceStore（app.tsx / themeStore / i18n 初始化时已 fetch 过），避免首屏再发一次 /personal/user-preferences
+  const userPreferenceRaw = useUserPreferenceStore((s) => s.preferences);
+  const userPreferenceInitialized = useUserPreferenceStore((s) => s.initialized);
+  const userPreferenceLoading = useUserPreferenceStore((s) => s.loading);
+  const fetchPreferences = useUserPreferenceStore((s) => s.fetchPreferences);
+
+  // store 若尚未初始化（直达链接首次打开等场景），主动拉一次；内部已有 initialized/loading 去重
+  useEffect(() => {
+    if (!userPreferenceInitialized && !userPreferenceLoading) {
+      fetchPreferences();
+    }
+  }, [userPreferenceInitialized, userPreferenceLoading, fetchPreferences]);
+
+  const userPreference = useMemo<UserPreference | undefined>(
+    () => (userPreferenceInitialized ? ({ preferences: userPreferenceRaw } as UserPreference) : undefined),
+    [userPreferenceInitialized, userPreferenceRaw],
+  );
+  const quickEntryLoading = (!userPreferenceInitialized && userPreferenceLoading) || menuTreeLoading;
 
   const updatePreferences = useUserPreferenceStore((s) => s.updatePreferences);
 
@@ -1126,8 +1146,8 @@ export default function DashboardPage() {
     },
   });
 
-  // 未读通知数量
-  const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
+  // 未读通知数量（复用顶栏 userMessageStats 接口，无需再拉消息列表）
+  const unreadCount = messageStats?.unread ?? 0;
 
   // 优先级颜色映射
   const priorityColorMap: Record<string, string> = {
@@ -1575,8 +1595,8 @@ export default function DashboardPage() {
               onSave={async (items: QuickEntryItem[]) => {
                 // 偏好设置需要可 JSON 序列化，不能保存 ReactNode（menu_icon）
                 const serializableItems = items.map(({ menu_icon, ...rest }) => rest);
+                // updatePreferences 直接写入 useUserPreferenceStore，组件会因 store 变更自动重渲染，无需再 invalidate queries
                 await updatePreferences({ dashboard_quick_entries: serializableItems });
-                queryClient.invalidateQueries({ queryKey: ['dashboard-user-preference'] });
               }}
               renderMenuIcon={(menuUuid: string) => {
                 if (!quickEntryMenuTree.length) return <ShopOutlined />;

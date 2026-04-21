@@ -67,14 +67,6 @@ export const supplierFormSchema: FieldConfig[] = [
     allowClear: true,
   },
   {
-    name: 'supplierLevelCode',
-    type: 'select',
-    labelKey: 'field.supplier.level',
-    placeholderKey: 'field.supplier.levelPlaceholder',
-    colSpan: 12,
-    allowClear: true,
-  },
-  {
     name: 'sourceChannelCode',
     type: 'select',
     labelKey: 'field.supplier.sourceChannel',

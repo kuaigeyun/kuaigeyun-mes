@@ -46,7 +46,6 @@ const PurchaseDashboardPage = lazy(() => import('./pages/purchase-management/das
 const PurchaseOrdersPage = lazy(() => import('./pages/purchase-management/purchase-orders'));
 const PurchaseRequisitionsPage = lazy(() => import('./pages/purchase-management/purchase-requisitions'));
 const ReceiptNoticesPage = lazy(() => import('./pages/purchase-management/receipt-notices'));
-const LogisticsTrackingPage = lazy(() => import('./pages/purchase-management/logistics-tracking'));
 const PurchaseReturnsPage = lazy(() => import('./pages/purchase-management/purchase-returns'));
 
 // 销售管理页面
@@ -56,7 +55,6 @@ const QuotationsPage = lazy(() => import('./pages/sales-management/quotations'))
 const SalesOrdersPage = lazy(() => import('./pages/sales-management/sales-orders'));
 const DeliveryNotesPage = lazy(() => import('./pages/warehouse-management/delivery-notes'));
 const ShipmentNoticesPage = lazy(() => import('./pages/sales-management/shipment-notices'));
-const SampleTrialsPage = lazy(() => import('./pages/sales-management/sample-trials'));
 const CustomerFollowUpsPage = lazy(() => import('./pages/sales-management/customer-follow-ups'));
 const SalesReturnsPage = lazy(() => import('./pages/sales-management/sales-returns'));
 
@@ -154,7 +152,6 @@ const CustomerSalesReconciliationPage = lazy(() => import('./pages/sales-managem
 const ProductSalesRankingPage = lazy(() => import('./pages/sales-management/reports/ProductSalesRanking'));
 const ForecastVsActualPage = lazy(() => import('./pages/sales-management/reports/ForecastVsActual'));
 const QuotationQueryPage = lazy(() => import('./pages/sales-management/reports/QuotationQuery'));
-const SampleTrialQueryPage = lazy(() => import('./pages/sales-management/reports/SampleTrialQuery'));
 const SalesTrendAnalysisPage = lazy(() => import('./pages/sales-management/reports/SalesTrendAnalysis'));
 const SalesReturnAnalysisPage = lazy(() => import('./pages/sales-management/reports/SalesReturnAnalysis'));
 const SalespersonPerformancePage = lazy(() => import('./pages/sales-management/reports/SalespersonPerformance'));
@@ -240,7 +237,6 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="purchase-management/purchase-orders" element={withPageSuspense(PurchaseOrdersPage)} />
       <Route path="purchase-management/purchase-requisitions" element={withPageSuspense(PurchaseRequisitionsPage)} />
       <Route path="purchase-management/receipt-notices" element={withPageSuspense(ReceiptNoticesPage)} />
-      <Route path="purchase-management/logistics-tracking" element={withPageSuspense(LogisticsTrackingPage)} />
       <Route path="purchase-management/purchase-returns" element={withPageSuspense(PurchaseReturnsPage)} />
 
       {/* 生产执行路由 */}
@@ -269,7 +265,6 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="sales-management/sales-orders" element={withPageSuspense(SalesOrdersPage)} />
       <Route path="sales-management/shipment-notices" element={withPageSuspense(ShipmentNoticesPage)} />
       <Route path="sales-management/customer-follow-ups" element={withPageSuspense(CustomerFollowUpsPage)} />
-      <Route path="sales-management/sample-trials" element={withPageSuspense(SampleTrialsPage)} />
       <Route path="sales-management/sales-returns" element={withPageSuspense(SalesReturnsPage)} />
 
       <Route path="production-execution/work-orders/:id/kiosk" element={withPageSuspense(WorkOrderDetailKioskPage)} />
@@ -351,7 +346,6 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="sales-management/reports/product-sales-ranking" element={withPageSuspense(ProductSalesRankingPage)} />
       <Route path="sales-management/reports/forecast-vs-actual" element={withPageSuspense(ForecastVsActualPage)} />
       <Route path="sales-management/reports/quotation-query" element={withPageSuspense(QuotationQueryPage)} />
-      <Route path="sales-management/reports/sample-trial-query" element={withPageSuspense(SampleTrialQueryPage)} />
       <Route path="sales-management/reports/sales-trend-analysis" element={withPageSuspense(SalesTrendAnalysisPage)} />
       <Route path="sales-management/reports/sales-return-analysis" element={withPageSuspense(SalesReturnAnalysisPage)} />
       <Route path="sales-management/reports/salesperson-performance" element={withPageSuspense(SalespersonPerformancePage)} />

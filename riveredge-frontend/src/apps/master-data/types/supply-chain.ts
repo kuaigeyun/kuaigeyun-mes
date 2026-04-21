@@ -96,7 +96,6 @@ export interface Supplier {
   address?: string;
   category?: string;
   industryCode?: string;
-  supplierLevelCode?: string;
   sourceChannelCode?: string;
   estimatedAnnualPurchase?: number | string;
   creditLimit?: number | string;
@@ -119,7 +118,6 @@ export interface SupplierCreate {
   address?: string;
   category?: string;
   industryCode?: string;
-  supplierLevelCode?: string;
   sourceChannelCode?: string;
   estimatedAnnualPurchase?: number;
   creditLimit?: number;
@@ -139,7 +137,6 @@ export interface SupplierUpdate {
   address?: string;
   category?: string;
   industryCode?: string;
-  supplierLevelCode?: string;
   sourceChannelCode?: string;
   estimatedAnnualPurchase?: number;
   creditLimit?: number;

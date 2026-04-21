@@ -33,7 +33,6 @@ def _get_model_registry() -> Dict[str, tuple]:
     from apps.kuaizhizao.models.production_picking import ProductionPicking
     from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
     from apps.kuaizhizao.models.semi_finished_goods_receipt import SemiFinishedGoodsReceipt
-    from apps.kuaizhizao.models.sample_trial import SampleTrial
     from apps.kuaizhizao.models.other_outbound import OtherOutbound
     from apps.kuaizhizao.models.material_return import MaterialReturn
     from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
@@ -67,7 +66,6 @@ def _get_model_registry() -> Dict[str, tuple]:
         "production_picking": (ProductionPicking, "picking_code"),
         "finished_goods_receipt": (FinishedGoodsReceipt, "receipt_code"),
         "semi_finished_goods_receipt": (SemiFinishedGoodsReceipt, "receipt_code"),
-        "sample_trial": (SampleTrial, "trial_code"),
         "other_outbound": (OtherOutbound, "outbound_code"),
         "material_return": (MaterialReturn, "return_code"),
         "shipment_notice": (ShipmentNotice, "notice_code"),
@@ -106,7 +104,6 @@ DOCUMENT_TYPE_LABEL_ZH: Dict[str, str] = {
     "production_picking": "生产领料单",
     "finished_goods_receipt": "成品入库单",
     "semi_finished_goods_receipt": "半成品入库单",
-    "sample_trial": "样品试用单",
     "other_outbound": "其他出库单",
     "material_return": "还料单",
     "shipment_notice": "发货通知单",

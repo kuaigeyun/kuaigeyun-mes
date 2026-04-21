@@ -52,16 +52,6 @@
             "permission": "kuaizhizao:customer-follow-up:view"
           },
           {
-            "title": "app.kuaizhizao.menu.sales-management.sample-trials",
-            "path": "/apps/kuaizhizao/sales-management/sample-trials",
-            "sort_order": 3,
-            "meta": {
-              "node": "sample_trial",
-              "module": "sales"
-            },
-            "permission": "kuaizhizao:sample-trial:view"
-          },
-          {
             "title": "app.kuaizhizao.menu.sales-management.sales-forecasts",
             "path": "/apps/kuaizhizao/sales-management/sales-forecasts",
             "sort_order": 4,
@@ -147,12 +137,6 @@
                 "path": "/apps/kuaizhizao/sales-management/reports/quotation-query",
                 "sort_order": 7,
                 "permission": "kuaizhizao:sales-management-reports-quotation-query:view"
-              },
-              {
-                "title": "app.kuaizhizao.menu.reports.sample-trial-query",
-                "path": "/apps/kuaizhizao/sales-management/reports/sample-trial-query",
-                "sort_order": 8,
-                "permission": "kuaizhizao:sales-management-reports-sample-trial-query:view"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.sales-trend-analysis",
@@ -306,16 +290,6 @@
               "module": "purchase"
             },
             "permission": "kuaizhizao:purchase-order:view"
-          },
-          {
-            "title": "app.kuaizhizao.menu.purchase-management.logistics-tracking",
-            "path": "/apps/kuaizhizao/purchase-management/logistics-tracking",
-            "sort_order": 3,
-            "meta": {
-              "module": "purchase",
-              "node": "logistics_tracking"
-            },
-            "permission": "kuaizhizao:logistics-tracking:view"
           },
           {
             "title": "app.kuaizhizao.menu.purchase-management.receipt-notices",
@@ -1350,7 +1324,6 @@
     "kuaizhizao:inventory-transfer:view",
     "kuaizhizao:inventory:view",
     "kuaizhizao:line-side-warehouse:view",
-    "kuaizhizao:logistics-tracking:view",
     "kuaizhizao:lrp:compute",
     "kuaizhizao:maintenance-plan:view",
     "kuaizhizao:maintenance-reminder:view",
@@ -1520,7 +1493,6 @@
     "kuaizhizao:sales-management-reports-sales-return-analysis:view",
     "kuaizhizao:sales-management-reports-sales-trend-analysis:view",
     "kuaizhizao:sales-management-reports-salesperson-performance:view",
-    "kuaizhizao:sales-management-reports-sample-trial-query:view",
     "kuaizhizao:sales-order:approve",
     "kuaizhizao:sales-order:confirm",
     "kuaizhizao:sales-order:create",
@@ -1534,12 +1506,6 @@
     "kuaizhizao:sales-return:create",
     "kuaizhizao:sales-return:delete",
     "kuaizhizao:sales-return:view",
-    "kuaizhizao:sample-trial:convert-to-order",
-    "kuaizhizao:sample-trial:create",
-    "kuaizhizao:sample-trial:create-outbound",
-    "kuaizhizao:sample-trial:delete",
-    "kuaizhizao:sample-trial:update",
-    "kuaizhizao:sample-trial:view",
     "kuaizhizao:scheduling:create",
     "kuaizhizao:scheduling:delete",
     "kuaizhizao:scheduling:update",
@@ -1912,15 +1878,6 @@
       "page_path": "/apps/kuaizhizao/sales-management/sales-orders",
       "table_name": "apps_kuaizhizao_sales_orders",
       "table_name_label": "销售订单表",
-      "module": "快制造",
-      "module_icon": "tool"
-    },
-    {
-      "page_code": "kuaizhizao-sample-trial",
-      "page_name": "样品试用",
-      "page_path": "/apps/kuaizhizao/sales-management/sample-trials",
-      "table_name": "apps_kuaizhizao_sample_trials",
-      "table_name_label": "样品试用单表",
       "module": "快制造",
       "module_icon": "tool"
     },

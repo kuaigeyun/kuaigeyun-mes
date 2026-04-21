@@ -511,41 +511,6 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
       },
     ],
   },
-  sample_trial: {
-    type: 'sample_trial',
-    name: '样品试用单',
-    fields: [
-      { key: 'code', label: '试用单号', type: 'string' },
-      { key: 'customer_name', label: '客户名称', type: 'string' },
-      { key: 'customer_contact', label: '客户联系人', type: 'string' },
-      { key: 'customer_phone', label: '客户电话', type: 'string' },
-      { key: 'trial_purpose', label: '试用目的', type: 'string' },
-      { key: 'trial_period_start', label: '试用开始日期', type: 'date' },
-      { key: 'trial_period_end', label: '试用结束日期', type: 'date' },
-      { key: 'sales_order_code', label: '关联销售订单号', type: 'string' },
-      { key: 'other_outbound_code', label: '关联其他出库单号', type: 'string' },
-      { key: 'status', label: '状态', type: 'string' },
-      { key: 'total_quantity', label: '总数量', type: 'number' },
-      { key: 'total_amount', label: '总金额', type: 'number' },
-      { key: 'notes', label: '备注', type: 'string' },
-      { key: 'created_at', label: '创建时间', type: 'date' },
-      {
-        key: 'items',
-        label: '明细列表',
-        type: 'array',
-        children: [
-          { key: 'items.0.material_code', label: '物料编号（第1项）', type: 'string' },
-          { key: 'items.0.material_name', label: '物料名称（第1项）', type: 'string' },
-          { key: 'items.0.material_spec', label: '规格（第1项）', type: 'string' },
-          { key: 'items.0.material_unit', label: '单位（第1项）', type: 'string' },
-          { key: 'items.0.trial_quantity', label: '试用数量（第1项）', type: 'number' },
-          { key: 'items.0.unit_price', label: '单价（第1项）', type: 'number' },
-          { key: 'items.0.total_amount', label: '金额（第1项）', type: 'number' },
-          { key: 'items.0.notes', label: '行备注（第1项）', type: 'string' },
-        ],
-      },
-    ],
-  },
   sales_order: {
     type: 'sales_order',
     name: '销售订单',
@@ -625,7 +590,6 @@ export const DOCUMENT_TYPE_TO_CODE: Record<string, string> = {
   sales_order: 'SALES_ORDER_PRINT',
   quotation: 'QUOTATION_PRINT',
   delivery_notice: 'DELIVERY_NOTICE_PRINT',
-  sample_trial: 'SAMPLE_TRIAL_PRINT',
 };
 
 export interface TemplateVariableItem {
@@ -839,23 +803,6 @@ const ARRAY_TABLE_TEMPLATES: Record<string, ArrayTableTemplateConfig[]> = {
         { key: 'material_spec', label: '规格' },
         { key: 'material_unit', label: '单位' },
         { key: 'notice_quantity', label: '通知数量' },
-        { key: 'unit_price', label: '单价' },
-        { key: 'total_amount', label: '金额' },
-        { key: 'notes', label: '备注' },
-      ],
-    },
-  ],
-  sample_trial: [
-    {
-      arrayKey: 'items',
-      label: '明细列表',
-      maxRows: 12,
-      columns: [
-        { key: 'material_code', label: '物料编号' },
-        { key: 'material_name', label: '物料名称' },
-        { key: 'material_spec', label: '规格' },
-        { key: 'material_unit', label: '单位' },
-        { key: 'trial_quantity', label: '试用数量' },
         { key: 'unit_price', label: '单价' },
         { key: 'total_amount', label: '金额' },
         { key: 'notes', label: '备注' },

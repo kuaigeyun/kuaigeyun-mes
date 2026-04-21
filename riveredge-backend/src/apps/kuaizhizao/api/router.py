@@ -23,8 +23,6 @@ from .quotations.quotations import router as quotation_router
 from .delivery_notices.delivery_notices import router as delivery_notice_router
 from .shipment_notices.shipment_notices import router as shipment_notice_router
 from .receipt_notices.receipt_notices import router as receipt_notice_router
-from .purchase_logistics.purchase_logistics import router as purchase_logistics_router
-from .sample_trials.sample_trials import router as sample_trial_router
 from .customer_follow_ups.customer_follow_ups import router as customer_follow_up_router
 from .state_transitions.state_transitions import router as state_transition_router
 from .document_push_pull.document_push_pull import router as document_push_pull_router
@@ -68,8 +66,6 @@ router.include_router(quotation_router)  # 报价单管理
 router.include_router(delivery_notice_router)  # 送货单管理
 router.include_router(shipment_notice_router)  # 发货通知单管理
 router.include_router(receipt_notice_router)  # 收货通知单管理
-router.include_router(purchase_logistics_router)  # 采购物流跟踪
-router.include_router(sample_trial_router)  # 样品试用单管理
 router.include_router(customer_follow_up_router)  # 客户跟进（销售极简 CRM）
 router.include_router(production_router)
 router.include_router(purchase_router)

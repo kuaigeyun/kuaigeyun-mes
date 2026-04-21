@@ -7,6 +7,7 @@ API 依赖模块
 
 from typing import Optional
 from fastapi import Depends, HTTPException, status, Header
+from starlette.requests import Request
 
 # 复用 soil 模块的依赖函数
 from infra.api.deps.deps import (
@@ -19,13 +20,18 @@ from infra.domain.security.infra_superadmin_security import get_infra_superadmin
 from infra.domain.security.security import get_token_payload
 
 
-async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
+async def get_current_user(
+    request: Request,
+    token: str = Depends(oauth2_scheme),
+) -> User:
     """
     获取当前登录用户
 
-    复用 soil 模块的 get_current_user 函数。
+    复用 soil 模块的 get_current_user 函数；透传 request 以便 soil 层将身份
+    缓存到 request.state 供 OperationLogMiddleware 等复用。
 
     Args:
+        request: 当前请求对象（FastAPI 自动注入）
         token: JWT Token（从请求头 Authorization: Bearer <token> 中提取）
 
     Returns:
@@ -34,7 +40,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
     Raises:
         HTTPException: 当认证失败时抛出
     """
-    return await soil_get_current_user(token)
+    return await soil_get_current_user(request=request, token=token)
 
 
 async def get_current_tenant(

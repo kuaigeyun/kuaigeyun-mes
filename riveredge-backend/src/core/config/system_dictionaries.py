@@ -330,17 +330,6 @@ SYSTEM_DICTIONARIES: List[Dict[str, Any]] = [
         ],
     },
     {
-        "code": "SUPPLIER_LEVEL",
-        "name": "供应商级别",
-        "description": "供应商分级",
-        "items": [
-            {"label": "战略供应商", "value": "STRATEGIC", "description": "战略供应商", "sort_order": 1},
-            {"label": "合格供应商", "value": "QUALIFIED", "description": "合格供应商", "sort_order": 2},
-            {"label": "备选供应商", "value": "ALT", "description": "备选供应商", "sort_order": 3},
-            {"label": "待评估", "value": "PENDING", "description": "待评估", "sort_order": 4},
-        ],
-    },
-    {
         "code": "FEE_TYPE",
         "name": "费用类型",
         "description": "订单（销售/采购）涉及的附加费用类型",

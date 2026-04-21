@@ -18,8 +18,6 @@ import { SupplierFormModal } from '../../../components/SupplierFormModal';
 import type { Supplier, SupplierCreate } from '../../../types/supply-chain';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { downloadFile } from '../../../../../utils';
-import { SupplierPerformanceTag } from '../../../../kuaizhizao/pages/purchase-management/purchase-orders/ProcurementEmpowermentComponents';
-
 /**
  * 供应商管理列表页面组件
  */
@@ -46,7 +44,6 @@ const SuppliersPage: React.FC = () => {
       try {
         const packs = await Promise.all([
           getDictionaryOptions('INDUSTRY_SECTOR'),
-          getDictionaryOptions('SUPPLIER_LEVEL'),
           getDictionaryOptions('PARTNER_SOURCE_CHANNEL'),
           getDictionaryOptions('CUSTOMER_CATEGORY'),
           getDictionaryOptions('CONTACT_TITLE'),
@@ -54,10 +51,9 @@ const SuppliersPage: React.FC = () => {
         if (cancelled) return;
         setDictLabelMaps({
           INDUSTRY_SECTOR: Object.fromEntries(packs[0].map((o) => [o.value, o.label])),
-          SUPPLIER_LEVEL: Object.fromEntries(packs[1].map((o) => [o.value, o.label])),
-          PARTNER_SOURCE_CHANNEL: Object.fromEntries(packs[2].map((o) => [o.value, o.label])),
-          CUSTOMER_CATEGORY: Object.fromEntries(packs[3].map((o) => [o.value, o.label])),
-          CONTACT_TITLE: Object.fromEntries(packs[4].map((o) => [o.value, o.label])),
+          PARTNER_SOURCE_CHANNEL: Object.fromEntries(packs[1].map((o) => [o.value, o.label])),
+          CUSTOMER_CATEGORY: Object.fromEntries(packs[2].map((o) => [o.value, o.label])),
+          CONTACT_TITLE: Object.fromEntries(packs[3].map((o) => [o.value, o.label])),
         });
       } catch {
         if (!cancelled) setDictLabelMaps({});
@@ -425,7 +421,6 @@ const SuppliersPage: React.FC = () => {
         t('field.supplier.address'),
         t('field.supplier.category'),
         t('field.supplier.industry'),
-        t('field.supplier.level'),
         t('field.supplier.sourceChannel'),
         t('field.supplier.estimatedAnnualPurchase'),
         t('field.supplier.creditLimit'),
@@ -447,9 +442,6 @@ const SuppliersPage: React.FC = () => {
           item.address || '',
           item.category || '',
           item.industryCode ? dictLabelMaps['INDUSTRY_SECTOR']?.[item.industryCode] ?? item.industryCode : '',
-          item.supplierLevelCode
-            ? dictLabelMaps['SUPPLIER_LEVEL']?.[item.supplierLevelCode] ?? item.supplierLevelCode
-            : '',
           item.sourceChannelCode
             ? dictLabelMaps['PARTNER_SOURCE_CHANNEL']?.[item.sourceChannelCode] ?? item.sourceChannelCode
             : '',
@@ -493,12 +485,6 @@ const SuppliersPage: React.FC = () => {
       title: t('field.supplier.name'),
       dataIndex: 'name',
       width: 250,
-      render: (name: React.ReactNode, record: Supplier) => (
-        <Space>
-          {name}
-          {record.id && <SupplierPerformanceTag supplierId={record.id} />}
-        </Space>
-      ),
     },
     {
       title: t('field.supplier.shortName'),
@@ -537,13 +523,6 @@ const SuppliersPage: React.FC = () => {
       width: 110,
       hideInSearch: true,
       render: (_, r) => dictLabel('INDUSTRY_SECTOR', r.industryCode),
-    },
-    {
-      title: t('field.supplier.level'),
-      dataIndex: 'supplierLevelCode',
-      width: 100,
-      hideInSearch: true,
-      render: (_, r) => dictLabel('SUPPLIER_LEVEL', r.supplierLevelCode),
     },
     {
       title: t('field.supplier.sourceChannel'),
@@ -653,12 +632,6 @@ const SuppliersPage: React.FC = () => {
     {
       title: t('field.supplier.name'),
       dataIndex: 'name',
-      render: (name: React.ReactNode, record: Supplier) => (
-        <Space>
-          {name}
-          {record.id && <SupplierPerformanceTag supplierId={record.id} />}
-        </Space>
-      ),
     },
     {
       title: t('field.supplier.shortName'),
@@ -695,11 +668,6 @@ const SuppliersPage: React.FC = () => {
       title: t('field.supplier.industry'),
       dataIndex: 'industryCode',
       render: (_, r) => dictLabel('INDUSTRY_SECTOR', r.industryCode),
-    },
-    {
-      title: t('field.supplier.level'),
-      dataIndex: 'supplierLevelCode',
-      render: (_, r) => dictLabel('SUPPLIER_LEVEL', r.supplierLevelCode),
     },
     {
       title: t('field.supplier.sourceChannel'),

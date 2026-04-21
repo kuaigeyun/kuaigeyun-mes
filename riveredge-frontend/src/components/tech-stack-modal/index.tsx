@@ -327,7 +327,7 @@ const techStackData: TechStackItem[] = [
   {
     name: 'Three.js',
     version: '^0.183.2',
-    description: '3D 图形库，用于工厂拓扑 3D 可视化',
+    description: '3D 图形库（WebGL 场景，如仪表盘等）',
     license: 'MIT License',
     commercialUse: true,
     category: 'frontend',
@@ -853,12 +853,6 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
           <Title level={5}>{t('components.techStackModal.copyright.model3dTitle')}</Title>
           <Paragraph>
             {t('components.techStackModal.copyright.model3dDesc')}
-          </Paragraph>
-          <Paragraph style={{ paddingLeft: token.paddingLG }}>
-            <Text strong>Kenney — City Kit (Industrial)</Text>
-          </Paragraph>
-          <Paragraph type="secondary" style={{ paddingLeft: token.paddingLG }}>
-            {t('components.techStackModal.copyright.model3dKenney')}
           </Paragraph>
           
           <Divider />

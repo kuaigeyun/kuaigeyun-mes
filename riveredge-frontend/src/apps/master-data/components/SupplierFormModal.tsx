@@ -54,10 +54,9 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
   const isEdit = Boolean(editUuid);
 
   const loadOptions = useCallback(async () => {
-    const [users, industry, level, src, category, contactTitle] = await Promise.all([
+    const [users, industry, src, category, contactTitle] = await Promise.all([
       getUserOptions(),
       getDictionaryOptions('INDUSTRY_SECTOR'),
-      getDictionaryOptions('SUPPLIER_LEVEL'),
       getDictionaryOptions('PARTNER_SOURCE_CHANNEL'),
       getDictionaryOptions('CUSTOMER_CATEGORY'),
       getDictionaryOptions('CONTACT_TITLE'),
@@ -65,7 +64,6 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
     setOptionsMap({
       buyerId: users,
       industryCode: industry,
-      supplierLevelCode: level,
       sourceChannelCode: src,
       category,
       contactTitle,
@@ -239,7 +237,6 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
             category: { quickCreate: { label: '快速新增', onClick: () => setQuickCreateTarget({ field: 'category', dictionaryCode: 'CUSTOMER_CATEGORY', label: t('field.supplier.category') }) } },
             contactTitle: { quickCreate: { label: '快速新增', onClick: () => setQuickCreateTarget({ field: 'contactTitle', dictionaryCode: 'CONTACT_TITLE', label: t('field.supplier.contactTitle') }) } },
             industryCode: { quickCreate: { label: '快速新增', onClick: () => setQuickCreateTarget({ field: 'industryCode', dictionaryCode: 'INDUSTRY_SECTOR', label: t('field.supplier.industry') }) } },
-            supplierLevelCode: { quickCreate: { label: '快速新增', onClick: () => setQuickCreateTarget({ field: 'supplierLevelCode', dictionaryCode: 'SUPPLIER_LEVEL', label: t('field.supplier.level') }) } },
             sourceChannelCode: { quickCreate: { label: '快速新增', onClick: () => setQuickCreateTarget({ field: 'sourceChannelCode', dictionaryCode: 'PARTNER_SOURCE_CHANNEL', label: t('field.supplier.sourceChannel') }) } },
           }}
         />

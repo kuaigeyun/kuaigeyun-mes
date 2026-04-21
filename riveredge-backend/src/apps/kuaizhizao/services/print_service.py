@@ -256,7 +256,6 @@ class DocumentPrintService:
         "material_borrow": "MATERIAL_BORROW_PRINT",
         "material_return": "MATERIAL_RETURN_PRINT",
         "delivery_notice": "DELIVERY_NOTICE_PRINT",
-        "sample_trial": "SAMPLE_TRIAL_PRINT",
     }
 
     def _finalize_print_payload(
@@ -546,14 +545,6 @@ class DocumentPrintService:
             if not document:
                 raise NotFoundError(f"送货单不存在: {document_id}")
             return await self._format_delivery_notice_data(document)
-        
-        elif document_type == "sample_trial":
-            from apps.kuaizhizao.models.sample_trial import SampleTrial
-            from apps.kuaizhizao.models.sample_trial_item import SampleTrialItem
-            document = await SampleTrial.get_or_none(tenant_id=tenant_id, id=document_id, deleted_at__isnull=True)
-            if not document:
-                raise NotFoundError(f"样品试用单不存在: {document_id}")
-            return await self._format_sample_trial_data(document)
         
         else:
             raise ValidationError(f"不支持的单据类型: {document_type}")
@@ -1193,42 +1184,6 @@ class DocumentPrintService:
             "total_amount": str(notice.total_amount),
             "notes": notice.notes,
             "created_at": notice.created_at.isoformat() if notice.created_at else None,
-            "items": items_data,
-        }
-
-    async def _format_sample_trial_data(self, trial) -> Dict[str, Any]:
-        """格式化样品试用单数据"""
-        from apps.kuaizhizao.models.sample_trial_item import SampleTrialItem
-        items = await SampleTrialItem.filter(tenant_id=trial.tenant_id, trial_id=trial.id).all()
-        items_data = [
-            {
-                "material_code": i.material_code,
-                "material_name": i.material_name,
-                "material_spec": i.material_spec,
-                "material_unit": i.material_unit,
-                "trial_quantity": str(i.trial_quantity),
-                "unit_price": str(i.unit_price),
-                "total_amount": str(i.total_amount),
-                "notes": i.notes,
-            }
-            for i in items
-        ]
-        return {
-            "document_type": "sample_trial",
-            "code": trial.trial_code,
-            "customer_name": trial.customer_name,
-            "customer_contact": trial.customer_contact,
-            "customer_phone": trial.customer_phone,
-            "trial_purpose": trial.trial_purpose,
-            "trial_period_start": trial.trial_period_start.isoformat() if trial.trial_period_start else None,
-            "trial_period_end": trial.trial_period_end.isoformat() if trial.trial_period_end else None,
-            "sales_order_code": trial.sales_order_code,
-            "other_outbound_code": trial.other_outbound_code,
-            "status": trial.status,
-            "total_quantity": str(trial.total_quantity),
-            "total_amount": str(trial.total_amount),
-            "notes": trial.notes,
-            "created_at": trial.created_at.isoformat() if trial.created_at else None,
             "items": items_data,
         }
 

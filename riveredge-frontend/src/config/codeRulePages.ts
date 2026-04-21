@@ -449,18 +449,6 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     allowManualEdit: true,
   },
   {
-    pageCode: 'kuaizhizao-sample-trial',
-    pageName: '样品试用',
-    pagePath: '/apps/kuaizhizao/sales-management/sample-trials',
-    codeField: 'trial_code',
-    codeFieldLabel: '样品试用单编号',
-    module: '快格轻制造',
-    moduleIcon: 'tool',
-    autoGenerate: true,
-    ruleCode: 'SAMPLE_TRIAL_CODE',
-    allowManualEdit: true,
-  },
-  {
     pageCode: 'kuaizhizao-sales-delivery',
     pageName: '销售发货',
     pagePath: '/apps/kuaizhizao/warehouse-management/outbound',
