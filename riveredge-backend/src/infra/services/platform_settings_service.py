@@ -100,7 +100,6 @@ class PlatformSettingsService:
         
         if not settings:
             # 如果不存在，创建新设置
-            # 如果不存在，创建新设置
             create_data = PlatformSettingsCreate(
                 platform_name=data.platform_name or "RiverEdge SaaS Framework",
                 platform_logo=data.platform_logo,

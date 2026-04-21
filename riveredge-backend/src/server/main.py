@@ -142,15 +142,14 @@ async def lifespan(app: FastAPI):
     await register_db(app)
     logger.info("✅ Tortoise ORM 已注册")
     
-    # 初始化 Redis 连接
+    # 初始化缓存层（PostgreSQL 后端，仅切换就绪态）
     try:
         from infra.infrastructure.cache.cache import cache
         await cache.connect()
-        logger.info("✅ Redis 连接已初始化")
+        logger.info("✅ Cache(PG) 已就绪")
     except Exception as e:
-        logger.error(f"❌ Redis 连接初始化失败: {e}")
-        # Redis 连接失败不影响应用启动，但会影响相关功能
-        logger.warning("⚠️  在线用户等功能将不可用")
+        logger.error(f"❌ Cache 初始化失败: {e}")
+        logger.warning("⚠️  依赖 cache 的功能（在线用户等）将不可用")
 
     # 初始化服务接口层（系统级）
     await ServiceInitializer.initialize_services()
@@ -228,13 +227,13 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # 关闭 Redis 连接
+    # 关闭缓存层
     try:
         from infra.infrastructure.cache.cache import cache
         await cache.disconnect()
-        logger.info("✅ Redis 连接已关闭")
+        logger.info("✅ Cache(PG) 已关闭")
     except Exception as e:
-        logger.warning(f"关闭 Redis 连接时出错: {e}")
+        logger.warning(f"关闭 cache 时出错: {e}")
     
     # ⚠️ 注意：close_db_connections 已经在 register_db 中注册为 shutdown 事件
     # 这里不需要再次关闭，避免重复关闭导致错误
@@ -489,36 +488,18 @@ async def debug_fastapi_routes():
 # 检查数据库中的应用（调试用）
 @app.get("/debug/db-apps")
 async def debug_db_apps():
-    """
-    检查数据库中的应用记录（调试用）
-    """
-    from infra.infrastructure.database.database import get_db_connection
-    import json
+    """检查数据库中的应用记录（调试用）"""
+    from core.models.application import Application
 
     try:
-        conn = await get_db_connection()
-        rows = await conn.fetch("""
-            SELECT code, name, is_active, is_installed
-            FROM core_applications
-            WHERE tenant_id = 1 AND deleted_at IS NULL
-            ORDER BY code
-        """)
-        await conn.close()
-
-        apps = []
-        for row in rows:
-            apps.append(dict(row))
-
-        return {
-            "status": "success",
-            "apps": apps,
-            "count": len(apps)
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "message": f"数据库查询失败: {str(e)}",
-        }
+        rows = (
+            await Application.filter(tenant_id=1, deleted_at__isnull=True)
+            .order_by("code")
+            .values("code", "name", "is_active", "is_installed")
+        )
+        return {"status": "success", "apps": rows, "count": len(rows)}
+    except Exception as e:  # noqa: BLE001
+        return {"status": "error", "message": f"数据库查询失败: {e}"}
 
 # 查看已注册的应用和路由（调试用，简化输出）
 @app.get("/debug/registered-routes")
@@ -723,40 +704,6 @@ try:
     app.include_router(kuaizhizao_router, prefix="/api/v1/apps/kuaizhizao")
 except ImportError as e:
     logger.warning(f"⚠️ 无法加载 kuaizhizao 路由: {e}")
-
-# Inngest 测试端点 - 暂时禁用
-# @app.post("/api/v1/test/inngest")
-# async def test_inngest_integration(message: str = "Hello from RiverEdge!"):
-#     """
-#     测试 Inngest 集成
-#
-#     发送测试事件到 Inngest，验证集成是否正常工作。
-#     """
-#     from inngest import Event
-#
-#     try:
-#         # 发送测试事件
-#         result = await inngest_client.send(
-#             Event(
-#                 name="test/integration",
-#                 data={
-#                     "message": message,
-#                     "timestamp": str(datetime.now()),
-#                 }
-#             )
-#         )
-#
-#         return {
-#             "success": True,
-#             "message": "事件已发送到 Inngest",
-#             "event_ids": result.ids if hasattr(result, "ids") else None,
-#         }
-#     except Exception as e:
-#         return {
-#             "success": False,
-#             "error": str(e),
-#             "message": "发送事件到 Inngest 失败",
-#         }
 
 if __name__ == "__main__":
     import uvicorn

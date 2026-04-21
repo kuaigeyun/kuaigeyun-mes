@@ -68,7 +68,7 @@ class LaunchChecklistService:
                 "description": "检查BOM数据是否完整，包括BOM结构、用量等",
                 "check_method": "检查BOM表，确保BOM结构完整",
                 "is_critical": True,
-                "action_url": "/kuaipdm/bom",
+                "action_url": "/master-data/materials",
                 "action_type": "nav",
                 "action_label": "去配置BOM",
             },

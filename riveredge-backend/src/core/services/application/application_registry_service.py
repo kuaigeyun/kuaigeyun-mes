@@ -10,10 +10,8 @@
 不再硬编码应用列表，通过数据库配置动态管理。
 """
 
-import os
 import importlib
 import json
-import asyncpg
 from typing import Dict, List, Optional, Any, Set
 from pathlib import Path
 from loguru import logger
@@ -42,24 +40,18 @@ class ApplicationRegistryService:
 
         发现所有已安装的应用，注册其模型和路由。
         """
-        logger.info("🔄 开始初始化动态应用注册服务...")
-
         try:
-            # 发现所有已安装的应用
             installed_apps = await cls._discover_installed_apps()
-            logger.info(f"📋 发现 {len(installed_apps)} 个已安装的应用: {[app['code'] for app in installed_apps]}")
-
-            # 注册应用模型
-            logger.info("🏗️ 开始注册应用模型...")
             await cls._register_app_models(installed_apps)
-            logger.info("✅ 应用模型注册完成")
-
-            # 注册应用路由
-            logger.info("🔗 开始注册应用路由...")
             await cls._register_app_routes(installed_apps)
-            logger.info("✅ 应用路由注册完成")
 
-            logger.info("✅ 动态应用注册服务初始化完成")
+            total_routes = sum(len(v) for v in cls._registered_routes.values())
+            logger.info(
+                "动态应用注册完成：应用 {n_apps} 个，模型 {n_models} 个，路由 {n_routes} 条",
+                n_apps=len(installed_apps),
+                n_models=len(cls._registered_models),
+                n_routes=total_routes,
+            )
 
         except Exception as e:
             logger.error(f"❌ 应用注册服务初始化失败: {e}")
@@ -72,8 +64,6 @@ class ApplicationRegistryService:
 
         从数据库中查询所有已安装且启用的应用。
         """
-        logger.info("🔍 发现已安装应用...")
-
         # 延迟导入，避免循环依赖
         from tortoise import connections
 
@@ -103,12 +93,10 @@ class ApplicationRegistryService:
             """, default_tenant_id)
 
             apps = []
-            logger.info(f"📊 查询返回 {len(rows)} 行数据")
             for row in rows:
                 app_data = dict(row)
                 if app_data.get("code") in cls._placeholder_app_codes:
                     continue
-                logger.info(f"📋 处理应用: {app_data.get('code')} (active: {app_data.get('is_active')}, installed: {app_data.get('is_installed')})")
                 # 解析JSON字段
                 if app_data.get('menu_config') and isinstance(app_data['menu_config'], str):
                     try:
@@ -118,7 +106,7 @@ class ApplicationRegistryService:
 
                 apps.append(app_data)
 
-            logger.info(f"📋 从数据库发现 {len(apps)} 个活跃应用: {[app['name'] for app in apps]}")
+            logger.debug(f"从数据库发现 {len(apps)} 个活跃应用")
 
             # 如果数据库中没有应用，回退到文件系统扫描
             if not apps:
@@ -300,8 +288,6 @@ class ApplicationRegistryService:
 
         为每个活跃的应用注册其模型模块。
         """
-        logger.info("📝 开始注册应用模型...")
-
         registered_models = []
 
         for app in apps:
@@ -336,7 +322,7 @@ class ApplicationRegistryService:
                                 hasattr(attr, 'Meta')):
                                 # ⚠️ 关键修复：不再手动设置 _meta.db (read-only property)，由 Tortoise 自动处理
                                 # 在 Tortoise ORM 中，通过 Meta 类或 default_connection 指定连接
-                                logger.info(f"✅ 验证模型 {attr.__name__} 结构正常")
+                                logger.debug(f"验证模型 {attr.__name__} 结构正常")
 
                         # 尝试注册模型到 Tortoise（如果可能的话）
                         # 注意：Tortoise.init 后可能无法动态添加模型，但我们可以尝试
@@ -347,7 +333,7 @@ class ApplicationRegistryService:
                                 # 强制将模型添加到已注册的应用中
                                 if model_module_path not in Tortoise._apps['models']['models']:
                                     Tortoise._apps['models']['models'].append(model_module_path)
-                                    logger.info(f"✅ 将模型模块 {model_module_path} 添加到 Tortoise 配置")
+                                    logger.debug(f"将模型模块 {model_module_path} 添加到 Tortoise 配置")
                         except Exception as e:
                             logger.debug(f"无法动态注册模型到 Tortoise: {e}")
 
@@ -366,9 +352,9 @@ class ApplicationRegistryService:
                 logger.error(f"❌ 注册应用 {app_name}({app_code}) 模型失败: {e}")
 
         if registered_models:
-            logger.info(f"✅ 成功注册 {len(registered_models)} 个应用模型: {', '.join(registered_models)}")
+            logger.debug(f"成功注册 {len(registered_models)} 个应用模型")
         else:
-            logger.info("ℹ️ 没有应用模型需要注册")
+            logger.debug("没有应用模型需要注册")
 
     @classmethod
     async def _register_app_routes(cls, apps: List[Dict[str, Any]]) -> None:
@@ -377,10 +363,6 @@ class ApplicationRegistryService:
 
         为每个活跃的应用注册其API路由。
         """
-        logger.info(f"🔗 开始注册应用路由... apps数量: {len(apps)}")
-        for app in apps:
-            logger.info(f"📋 处理应用: {app.get('code')}")
-
         registered_routes = []
         # 在 main.py 中已静态注册的应用，此处跳过避免重复注册
         statically_registered_apps = {"master-data", "kuaireport", "kuaizhizao"}
@@ -389,7 +371,7 @@ class ApplicationRegistryService:
             app_code = app['code']
             app_name = app['name']
             if app_code in statically_registered_apps:
-                logger.info(f"⏭️ 应用 {app_code} 已在 main.py 静态注册，跳过动态注册")
+                logger.debug(f"⏭️ 应用 {app_code} 已在 main.py 静态注册，跳过动态注册")
                 continue
 
             try:
@@ -423,18 +405,16 @@ class ApplicationRegistryService:
                         # 获取路由对象（通常命名为router）
                         router = getattr(route_module, 'router', None)
                         if router:
-                            # 缓存路由对象
                             cls._registered_routes[app_code] = [router]
-                            logger.info(f"✅ 缓存路由对象: {app_code} -> {len([router])} 个路由器")
+                            logger.debug(f"✅ 缓存路由对象: {app_code}")
                             registered_routes.append(f"{app_name}({app_code})")
 
-                            # 如果路由管理器已初始化，则注册路由
                             route_manager = get_route_manager()
                             if route_manager:
                                 # 使用 /api/v1 作为基础前缀，路由管理器会自动添加 /apps/{app_code}
                                 route_prefix = '/api/v1'
                                 route_manager.register_app_routes(app_code, [router], prefix=route_prefix)
-                                logger.info(f"✅ 通过路由管理器注册应用路由: {route_module_path} (prefix: {route_prefix})")
+                                logger.debug(f"✅ 通过路由管理器注册应用路由: {route_module_path}")
                             else:
                                 logger.debug(f"✅ 缓存应用路由（路由管理器未初始化）: {route_module_path}")
                         else:
@@ -454,13 +434,11 @@ class ApplicationRegistryService:
                 logger.error(f"❌ 注册应用 {app_name}({app_code}) 路由失败: {e}")
 
         if registered_routes:
-            logger.info(f"✅ 成功注册 {len(registered_routes)} 个应用路由: {', '.join(registered_routes)}")
+            logger.debug(
+                f"动态路由注册完成：{len(registered_routes)} 个 -> {', '.join(registered_routes)}"
+            )
         else:
-            logger.warning("⚠️ 没有应用路由需要注册 - 这可能表示应用没有被发现或路由注册失败")
-            # 输出调试信息
-            logger.info(f"📋 已发现的应用数量: {len(apps)}")
-            if apps:
-                logger.info(f"📋 应用列表: {[app.get('name', app.get('code', 'unknown')) for app in apps]}")
+            logger.debug("没有动态应用路由需要注册（静态注册的应用已在 main.py 直接 include）")
 
     @classmethod
     def _module_exists(cls, module_path: str) -> bool:
@@ -574,7 +552,6 @@ class ApplicationRegistryService:
                 )
                 default_tenant_id = tenant_row["id"] if tenant_row else 1
 
-                logger.info(f"🔍 查询应用 {app_code} 的数据库记录...")
                 rows = await conn.fetch("""
                     SELECT uuid, code, name, description, version, changelog,
                            route_path, entry_point, menu_config,
@@ -588,17 +565,16 @@ class ApplicationRegistryService:
                       AND tenant_id = $2
                     LIMIT 1
                 """, app_code, default_tenant_id)
-                logger.info(f"📊 应用 {app_code} 查询结果: {len(rows)} 条记录")
-                
+
                 if not rows:
-                    logger.warning(f"应用 {app_code} 不存在或未启用")
-                    # 检查是否有任何记录（包括未启用的）
-                    all_rows = await conn.fetch("SELECT code, is_active, is_installed FROM core_applications WHERE code = $1", app_code)
-                    logger.warning(f"应用 {app_code} 的所有记录: {all_rows}")
+                    all_rows = await conn.fetch(
+                        "SELECT code, is_active, is_installed FROM core_applications WHERE code = $1",
+                        app_code,
+                    )
+                    logger.warning(f"应用 {app_code} 不存在或未启用；全部记录={all_rows}")
                     return False
 
                 app_data = dict(rows[0])
-                logger.info(f"✅ 找到应用 {app_code} 的数据库记录: is_active={app_data.get('is_active')}, is_installed={app_data.get('is_installed')}")
             finally:
                 await conn.close()
             
@@ -612,23 +588,18 @@ class ApplicationRegistryService:
             # 注册应用模型
             await cls._register_app_models([app_data])
 
-            # 注册应用路由
-            logger.info(f"🔄 开始注册应用 {app_code} 的路由...")
             try:
                 await cls._register_app_routes([app_data])
-                logger.info(f"✅ 应用 {app_code} 的路由注册完成")
             except Exception as route_error:
-                logger.error(f"❌ 应用 {app_code} 的路由注册失败: {route_error}")
                 import traceback
-                logger.error(f"❌ 路由注册错误详情:\n{traceback.format_exc()}")
+
+                logger.error(
+                    f"❌ 应用 {app_code} 路由注册失败: {route_error}\n{traceback.format_exc()}"
+                )
                 raise
 
-            # 更新缓存
             cls._registered_apps[app_code] = app_data
-            logger.info(f"✅ 更新应用缓存: {app_code}")
-
-            logger.info(f"✅ 应用 {app_code} 注册成功")
-            logger.info(f"📊 最终缓存状态: _registered_apps={list(cls._registered_apps.keys())}, _registered_routes={list(cls._registered_routes.keys())}")
+            logger.info(f"✅ 应用 {app_code} 动态注册成功")
             return True
             
         except Exception as e:

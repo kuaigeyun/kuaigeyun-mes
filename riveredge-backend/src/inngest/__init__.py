@@ -43,7 +43,13 @@ class Inngest:
         self.event_api_base_url = event_api_base_url
         self.is_production = is_production
 
-    def create_function(self, fn_id: str, name: str, trigger: TriggerEvent | TriggerCron, retries: int = 0):
+    def create_function(
+        self,
+        fn_id: str,
+        trigger: TriggerEvent | TriggerCron | None = None,
+        name: str = "",
+        retries: int = 0,
+    ):
         def decorator(func: Callable[..., Awaitable[Any]]):
             if isinstance(trigger, TriggerEvent):
                 register_event_handler(trigger.event, func)

@@ -459,10 +459,7 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/apps/kuaizhizao/equipment-management': ManufacturingIcons.wrench, // 设备管理 - 扳手图标（与系统设置齿轮区分）
       '/apps/kuaizhizao/finance-management': ManufacturingIcons.wallet, // 财务管理 - 使用钱包图标
       '/apps/kuaireport/analysis-center': ManufacturingIcons.chartBar, // 分析中心（已迁至快报表）- 柱状图
-      '/apps/kuaicrm': ManufacturingIcons.users, // 快客户
-      '/apps/kuaipdm': ManufacturingIcons.layers, // 快研发
       '/apps/kuaicaiwu': ManufacturingIcons.wallet, // 快财务
-      '/apps/kuaichain': ManufacturingIcons.gitBranch, // 快协同
       '/apps/kuaicaiwu/finance-management': ManufacturingIcons.wallet, // 财务管理
       '/apps/kuaicaiwu/cost-management': ManufacturingIcons.calculator, // 成本管理
       '/apps/kuaizhizao/performance': ManufacturingIcons.trophy, // 绩效管理 - 奖杯图标（与分析中心区分）

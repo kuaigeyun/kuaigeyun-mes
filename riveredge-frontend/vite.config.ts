@@ -158,12 +158,9 @@ export default defineConfig({
         // 手动代码分割策略（顺序重要：优先匹配最具体的路径）
         manualChunks: (id) => {
           if (id.includes('node_modules')) {
-            // 大体积库优先单独拆分，避免误入主包
             if (id.includes('@univerjs')) return 'vendor-univerjs';
             if (id.includes('@ant-design/pro-flow')) return 'vendor-pro-flow';
             if (id.includes('@svar-ui/react-gantt')) return 'vendor-gantt';
-            if (id.includes('@pdfme')) return 'vendor-pdfme';
-            if (id.includes('lodash')) return 'vendor-lodash';
             if (id.includes('@ant-design/pro-components')) return 'vendor-pro-components';
             if (id.includes('@ant-design/charts') || id.includes('@ant-design/plots')) return 'vendor-charts';
             if (id.includes('@ant-design/graphs')) return 'vendor-graphs';
@@ -251,9 +248,7 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@': '.', // 由于root是src目录，@指向当前目录
-      // pako：CJS 主入口无 default；@pdf-lib/standard-fonts（pdf-lib 依赖）使用 default import，Vite 需指向 ESM 构建
-      pako: resolve(__dirname, 'node_modules/pako/dist/pako.esm.mjs'),
+      '@': '.',
     },
   },
   define: {
@@ -262,10 +257,9 @@ export default defineConfig({
     __IS_MONOLITHIC__: JSON.stringify(false),
     __IS_SAAS__: JSON.stringify(true),
   },
-  // 优化依赖预构建
+  // 优化依赖预构建：只列出项目直接 import 的包；transitive 由 Vite 自动发现
   optimizeDeps: {
     include: [
-      'pako',
       'react',
       'react-dom',
       'react-router-dom',
@@ -275,21 +269,12 @@ export default defineConfig({
       '@tanstack/react-query',
       'zustand',
       'dayjs',
-      '@univerjs/core',
       '@univerjs/design',
-      '@univerjs/docs',
-      '@univerjs/docs-ui',
-      '@univerjs/engine-formula',
-      '@univerjs/engine-render',
-      '@univerjs/network',
       '@univerjs/ui',
-      '@univerjs/themes',
+      '@univerjs/presets',
+      '@univerjs/sheets-ui',
     ],
-    // ⚠️ 关键修复：强制重新构建依赖，避免缓存问题
-    force: false, // 开发环境不强制重建，提高启动速度
-    // ⚠️ 关键修复：排除可能导致问题的依赖
-    // exclude: [], // UniverJS 体积较大，但排除可能导致 bundling 问题，且 '@univerjs' 写法可能无效
-    // 优化预构建配置
+    force: false,
     esbuildOptions: {
       target: 'es2020',
     },

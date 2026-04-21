@@ -105,62 +105,6 @@ export interface PackageListResponse {
 }
 
 /**
- * 组织统计信息接口
- */
-export interface TenantStatistics {
-  total: number;
-  by_status: {
-    active: number;
-    inactive: number;
-    expired: number;
-    suspended: number;
-  };
-  by_plan: {
-    trial: number;
-    basic: number;
-    professional: number;
-    enterprise: number;
-  };
-  updated_at: string;
-}
-
-/**
- * 系统监控信息接口
- */
-export interface SystemInfo {
-  hostname: string;
-  platform: string;
-  platform_version: string;
-  architecture: string;
-  python_version: string;
-  uptime: number;
-  cpu: {
-    count: number;
-    usage_percent: number;
-    load_average: [number, number, number];
-  };
-  memory: {
-    total: number;
-    available: number;
-    used: number;
-    usage_percent: number;
-  };
-  disk: {
-    total: number;
-    used: number;
-    free: number;
-    usage_percent: number;
-  };
-  network: {
-    interfaces: Array<{
-      name: string;
-      ip_address: string;
-      mac_address: string;
-    }>;
-  };
-}
-
-/**
  * 组织信息接口
  */
 export interface Tenant {
@@ -310,28 +254,6 @@ export async function updatePackage(packageId: number, data: PackageUpdate): Pro
 export async function deletePackage(packageId: number): Promise<void> {
   return apiRequest<void>(`/infra/packages/${packageId}`, {
     method: 'DELETE',
-  });
-}
-
-/**
- * 获取组织统计信息
- *
- * @returns 组织统计信息
- */
-export async function getTenantStatistics(): Promise<TenantStatistics> {
-  return apiRequest<TenantStatistics>('/infra/monitoring/tenants/statistics', {
-    method: 'GET',
-  });
-}
-
-/**
- * 获取系统监控信息
- *
- * @returns 系统监控信息
- */
-export async function getSystemInfo(): Promise<SystemInfo> {
-  return apiRequest<SystemInfo>('/infra/monitoring/system/info', {
-    method: 'GET',
   });
 }
 

@@ -7,27 +7,26 @@ Author: Luigi Lu
 Date: 2025-12-27
 """
 
-from datetime import datetime, timedelta, timezone
-from typing import Dict, Any, Optional, List
-
-from fastapi import APIRouter, Depends, HTTPException, Query
-from tortoise.functions import Count
-from tortoise.expressions import Q
-from tortoise import Tortoise
-
-from infra.api.deps.deps import get_current_infra_superadmin
-from infra.models.infra_superadmin import InfraSuperAdmin
-from infra.models.tenant import Tenant, TenantStatus, TenantPlan
-from infra.models.user import User
-from core.models.login_log import LoginLog
+import socket
 import sys
 import platform as std_platform  # 使用标准库的 platform，避免与项目模块冲突
-from datetime import datetime
-import socket
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from tortoise import Tortoise
+from tortoise.expressions import Q
+from tortoise.functions import Count
+
+from core.models.login_log import LoginLog
+from infra.api.deps.deps import get_current_infra_superadmin
 from infra.domain.package_config import get_all_package_configs
-from typing import Dict, Any
+from infra.models.infra_superadmin import InfraSuperAdmin
+from infra.models.tenant import Tenant, TenantPlan, TenantStatus
+from infra.models.user import User
+
 try:
-    import psutil
+    import psutil  # type: ignore
 except ImportError:
     psutil = None
 

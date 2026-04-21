@@ -130,10 +130,7 @@ const renderMenuIcon = (menu: MenuTree): React.ReactNode => {
 
     // 3) 按应用匹配（最终兜底）
     const appIconMap: Record<string, React.ComponentType<any>> = {
-      kuaicrm: LucideIcons.Users,
-      kuaipdm: LucideIcons.Layers,
       kuaizhizao: LucideIcons.Factory,
-      kuaichain: LucideIcons.GitBranch,
       kuaicaiwu: LucideIcons.Calculator,
       kuaireport: LucideIcons.BarChart3,
       'master-data': LucideIcons.Database,

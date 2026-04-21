@@ -40,24 +40,9 @@ async def list_online_users(
     Returns:
         OnlineUserListResponse: 在线用户列表
     """
-    # 默认只查看当前组织的在线用户
     if tenant_id is None:
         tenant_id = current_tenant_id
-    
-    # TODO: 权限检查（只有管理员可以查看其他组织的在线用户）
-    
-    # 确保当前用户的活动时间已更新（因为用户正在访问此页面，说明他们在线）
-    # 这样可以避免中间件更新延迟导致的问题
-    try:
-        await OnlineUserService.update_user_activity(
-            tenant_id=current_tenant_id,
-            user_id=current_user.id,
-        )
-    except Exception as e:
-        # 更新失败不影响查询，记录日志即可
-        from loguru import logger
-        logger.warning(f"更新当前用户活动时间失败: {e}")
-    
+
     online_users = await OnlineUserService.list_online_users(tenant_id=tenant_id)
     
     return OnlineUserListResponse(
@@ -83,23 +68,9 @@ async def get_online_user_statistics(
     Returns:
         OnlineUserStatisticsResponse: 在线用户统计信息
     """
-    # 默认只统计当前组织的在线用户
     if tenant_id is None:
         tenant_id = current_tenant_id
-    
-    # TODO: 权限检查（只有管理员可以查看其他组织的统计）
-    
-    # 确保当前用户的活动时间已更新（因为用户正在访问此页面，说明他们在线）
-    try:
-        await OnlineUserService.update_user_activity(
-            tenant_id=current_tenant_id,
-            user_id=current_user.id,
-        )
-    except Exception as e:
-        # 更新失败不影响查询，记录日志即可
-        from loguru import logger
-        logger.warning(f"更新当前用户活动时间失败: {e}")
-    
+
     return await OnlineUserService.get_online_user_statistics(tenant_id=tenant_id)
 
 
@@ -222,15 +193,10 @@ async def debug_activity_status(
     current_tenant_id: int = Depends(get_current_tenant),
 ):
     """
-    调试端点：检查用户活动存储状态
-    
-    用于排查在线用户功能问题，检查 Redis 连接和键的存在情况。
-    
-    Returns:
-        Dict[str, Any]: Redis 状态信息
+    调试端点：检查用户活动存储状态（PostgreSQL 后端）。
     """
     try:
-        status = {
+        payload: Dict[str, Any] = {
             "storage": "postgresql",
             "current_user": {
                 "user_id": current_user.id,
@@ -247,24 +213,24 @@ async def debug_activity_status(
             tenant_id=current_tenant_id,
             user_id=current_user.id,
         ).first()
-        status["key_exists"] = current is not None
+        payload["key_exists"] = current is not None
         if current:
-            status["key_value"] = {
+            payload["key_value"] = {
                 "last_activity_time": current.last_activity_time.isoformat(),
                 "login_ip": current.login_ip,
                 "login_time": current.login_time.isoformat() if current.login_time else None,
             }
 
         rows = await UserActivity.all().order_by("-last_activity_time").limit(20)
-        status["all_activity_records"] = [
+        payload["all_activity_records"] = [
             {"tenant_id": r.tenant_id, "user_id": r.user_id, "last_activity_time": r.last_activity_time.isoformat()}
             for r in rows
         ]
-        return status
+        return payload
     except Exception as e:
         logger.error(f"获取活动状态失败: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"获取活动状态失败: {e}"
+            detail=f"获取活动状态失败: {e}",
         )
 

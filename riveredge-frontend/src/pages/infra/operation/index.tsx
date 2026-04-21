@@ -439,7 +439,7 @@ export default function OperationsDashboard() {
               ? dayjs(userStats.updated_at).format('llll')
               : dataUpdatedAt
                 ? dayjs(dataUpdatedAt).format('llll')
-                : t('pages.infra.monitoring.unknown')}
+                : t('pages.infra.operation.sourceUnknown')}
           {hasCachedData && <Text type="warning" style={{ marginLeft: 8 }}>{t('pages.infra.operation.cachedLabel')}</Text>}
         </Text>
         {autoRefresh && !error && <Text type="secondary" style={{ fontSize: token.fontSizeSM }}>{t('pages.infra.operation.autoRefreshing')}</Text>}
@@ -541,7 +541,7 @@ export default function OperationsDashboard() {
                 <Space direction="vertical" size="small" align="center" style={{ width: '100%' }}>
                   <Text type="warning" strong>⚠️ {t('pages.infra.operation.loadFailedCached')}</Text>
                   <Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
-                    {t('pages.infra.operation.dataUpdatedAt')}：{dataUpdatedAt ? dayjs(dataUpdatedAt).format('llll') : t('pages.infra.monitoring.unknown')}
+                    {t('pages.infra.operation.dataUpdatedAt')}：{dataUpdatedAt ? dayjs(dataUpdatedAt).format('llll') : t('pages.infra.operation.sourceUnknown')}
                   </Text>
                   <Button size="small" onClick={() => refetch()}>{t('pages.infra.operation.reload')}</Button>
                 </Space>

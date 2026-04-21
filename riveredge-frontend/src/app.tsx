@@ -41,6 +41,30 @@ if (typeof window !== 'undefined') {
   (window as any).__ANTD_MESSAGE__ = null;
 }
 
+/** 从 localStorage 恢复登录用户信息的单一实现，挂载初始化与拉取失败兜底共用 */
+function buildRestoredUserFromStorage() {
+  const savedUserInfo = getUserInfo();
+  if (!savedUserInfo) return null;
+  return {
+    id: savedUserInfo.id || 1,
+    username: savedUserInfo.username || 'admin',
+    email: savedUserInfo.email,
+    full_name: savedUserInfo.full_name,
+    is_infra_admin:
+      savedUserInfo.user_type === 'infra_superadmin' ||
+      savedUserInfo.is_infra_admin ||
+      false,
+    is_tenant_admin: savedUserInfo.is_tenant_admin || false,
+    tenant_id: savedUserInfo.tenant_id,
+    tenant_name: savedUserInfo.tenant_name,
+    permissions: Array.isArray(savedUserInfo.permissions) ? savedUserInfo.permissions : [],
+    permission_version: savedUserInfo.permission_version || 1,
+    department: savedUserInfo.department,
+    position: savedUserInfo.position,
+    roles: Array.isArray(savedUserInfo.roles) ? savedUserInfo.roles : [],
+  };
+}
+
 // 权限守卫组件（memo 阻断上层频繁重渲染的级联）
 const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
   const { t } = useTranslation();
@@ -65,38 +89,16 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     }
 
     const token = getToken();
-    const savedUserInfo = getUserInfo();
+    const restoredUser = buildRestoredUserFromStorage();
 
-    // 如果有 token 或保存的用户信息，但 currentUser 为空，尝试恢复
-    // 注意：这里读取 currentUser 是为了检查是否需要恢复，但由于使用了 initializedRef，
-    // 这个 effect 只会在首次挂载时执行一次，所以即使 currentUser 不在依赖数组中也是安全的
-    if ((token || savedUserInfo) && !currentUser) {
-      if (savedUserInfo) {
-        // 从 localStorage 恢复用户信息
-        const restoredUser = {
-          id: savedUserInfo.id || 1,
-          username: savedUserInfo.username || 'admin',
-          email: savedUserInfo.email,
-          full_name: savedUserInfo.full_name,
-          is_infra_admin: savedUserInfo.user_type === 'infra_superadmin' || savedUserInfo.is_infra_admin || false,
-          is_tenant_admin: savedUserInfo.is_tenant_admin || false,
-          tenant_id: savedUserInfo.tenant_id,
-          tenant_name: savedUserInfo.tenant_name, // ⚠️ 关键修复：恢复租户名称
-          permissions: Array.isArray(savedUserInfo.permissions) ? savedUserInfo.permissions : [],
-          permission_version: savedUserInfo.permission_version || 1,
-          department: savedUserInfo.department,
-          position: savedUserInfo.position,
-          roles: Array.isArray(savedUserInfo.roles) ? savedUserInfo.roles : [],
-        };
-        setCurrentUser(restoredUser);
-        setUserInfo(restoredUser);
-        if (savedUserInfo.tenant_id != null) {
-          setTenantId(savedUserInfo.tenant_id);
-        }
+    if ((token || restoredUser) && !currentUser && restoredUser) {
+      setCurrentUser(restoredUser);
+      setUserInfo(restoredUser);
+      if (restoredUser.tenant_id != null) {
+        setTenantId(restoredUser.tenant_id);
       }
     }
 
-    // 标记为已初始化，避免重复执行
     initializedRef.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 只在组件挂载时执行一次，使用 initializedRef 确保只执行一次
@@ -149,62 +151,34 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
       setUserInfo(userData);
       // 尽早预取头像 URL，与 BasicLayout 的请求复用，缩短顶栏头像显示延迟
       if (userData.avatar) prefetchAvatarUrl(userData.avatar);
-      // 预加载单据状态枚举（单一数据源）
-      initDocumentStatusCache().catch(() => {});
     }
   }, [userData, setCurrentUser]);
 
-  // 从 localStorage 恢复用户时也预加载枚举
+  // 用户就绪（无论来自 API 成功还是 localStorage 恢复）后统一预加载枚举缓存；
+  // initDocumentStatusCache 内部对 in-flight 请求做单例防并发。
   useEffect(() => {
     if (currentUser && !isPublicPath) {
       initDocumentStatusCache().catch(() => {});
     }
   }, [currentUser, isPublicPath]);
 
-  // 处理用户信息加载失败
+  // 拉取当前用户失败的兜底：优先从 localStorage 恢复；否则退出到登录页
   useEffect(() => {
-    if (isError) {
-      // 如果有 token，尝试从 localStorage 恢复用户信息
-      const token = getToken();
-      const savedUserInfo = getUserInfo();
-
-      if (token && savedUserInfo) {
-        // 从 localStorage 恢复用户信息，允许继续访问
-        const restoredUser = {
-          id: savedUserInfo.id || 1,
-          username: savedUserInfo.username || 'admin',
-          email: savedUserInfo.email,
-          full_name: savedUserInfo.full_name,
-          is_infra_admin: savedUserInfo.user_type === 'infra_superadmin' || savedUserInfo.is_infra_admin || false,
-          is_tenant_admin: savedUserInfo.is_tenant_admin || false,
-          tenant_id: savedUserInfo.tenant_id,
-          tenant_name: savedUserInfo.tenant_name, // ⚠️ 关键修复：恢复租户名称
-          permissions: Array.isArray(savedUserInfo.permissions) ? savedUserInfo.permissions : [],
-          permission_version: savedUserInfo.permission_version || 1,
-          department: savedUserInfo.department,
-          position: savedUserInfo.position,
-          roles: Array.isArray(savedUserInfo.roles) ? savedUserInfo.roles : [],
-        };
-        setCurrentUser(restoredUser);
-        // ⚠️ 关键修复：确保恢复的用户信息也保存到 localStorage
-        setUserInfo(restoredUser);
-        console.warn('⚠️ 获取用户信息失败，使用本地缓存:', error);
-      } else if (token) {
-        // 有 token 但没有保存的用户信息，使用默认值
-        setCurrentUser({
-          id: 1,
-          username: 'admin',
-          email: 'admin@example.com',
-          is_infra_admin: true,
-          is_tenant_admin: true,
-          tenant_id: 1,
-        });
-        console.warn('⚠️ 获取用户信息失败，使用默认值:', error);
-      } else {
-        // 没有 token，清理认证信息
-        clearAuth();
-        setCurrentUser(undefined);
-      }
+    if (!isError) return;
+    const token = getToken();
+    if (!token) {
+      clearAuth();
+      setCurrentUser(undefined);
+      return;
+    }
+    const restoredUser = buildRestoredUserFromStorage();
+    if (restoredUser) {
+      setCurrentUser(restoredUser);
+      setUserInfo(restoredUser);
+      console.warn('获取用户信息失败，使用本地缓存:', error);
+    } else {
+      clearAuth();
+      setCurrentUser(undefined);
     }
   }, [isError, error, setCurrentUser]);
 

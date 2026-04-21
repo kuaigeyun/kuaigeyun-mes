@@ -115,25 +115,6 @@ const queryClient = new QueryClient({
       throwOnError: false,
     },
   },
-  // ⚠️ 关键修复：增加错误处理，避免未捕获的错误导致应用崩溃
-  logger: {
-    log: (...args) => {
-      // 开发环境输出日志
-      if (import.meta.env.DEV) {
-        // 开发环境日志（可选）
-        if (import.meta.env.DEV) {
-          console.log('[React Query]', ...args);
-        }
-      }
-    },
-    warn: (...args) => {
-      console.warn('[React Query]', ...args);
-    },
-    error: (...args) => {
-      // 错误日志但不抛出异常，避免导致应用崩溃
-      console.error('[React Query]', ...args);
-    },
-  },
 })
 
 // ⚠️ 关键修复：开发环境禁用 StrictMode，避免双重渲染导致的问题

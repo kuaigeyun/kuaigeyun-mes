@@ -20,17 +20,27 @@ export interface DocumentStatusConfig {
 }
 
 let documentStatusCache: DocumentStatusConfig | null = null;
+let documentStatusInflight: Promise<DocumentStatusConfig> | null = null;
 
 /**
- * 获取单据状态枚举配置（带缓存）
+ * 获取单据状态枚举配置（带缓存 + in-flight 单例，防并发重复请求）
  */
 export async function getDocumentStatusConfig(): Promise<DocumentStatusConfig> {
   if (documentStatusCache) {
     return documentStatusCache;
   }
-  const data = await apiRequest<DocumentStatusConfig>('/core/enums/document-status');
-  documentStatusCache = data;
-  return data;
+  if (documentStatusInflight) {
+    return documentStatusInflight;
+  }
+  documentStatusInflight = apiRequest<DocumentStatusConfig>('/core/enums/document-status')
+    .then((data) => {
+      documentStatusCache = data;
+      return data;
+    })
+    .finally(() => {
+      documentStatusInflight = null;
+    });
+  return documentStatusInflight;
 }
 
 /**

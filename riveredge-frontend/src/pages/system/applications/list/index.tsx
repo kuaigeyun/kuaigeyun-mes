@@ -68,10 +68,7 @@ const getApplicationIcon = (code: string, icon?: string | null, size: number = 7
   }
   const iconMap: Record<string, React.ReactNode> = {
     kuaimes: React.createElement(ManufacturingIcons.production, { size }),
-    kuaicrm: React.createElement(ManufacturingIcons.users, { size }),
-    kuaipdm: React.createElement(ManufacturingIcons.layers, { size }),
     kuaizhizao: React.createElement(ManufacturingIcons.production, { size }),
-    kuaichain: React.createElement(ManufacturingIcons.gitBranch, { size }),
     kuaicaiwu: React.createElement(ManufacturingIcons.wallet, { size }),
     kuaireport: React.createElement(ManufacturingIcons.fileBarChart, { size }),
     'master-data': React.createElement(ManufacturingIcons.database, { size }),
@@ -92,10 +89,7 @@ const getApplicationIcon = (code: string, icon?: string | null, size: number = 7
 const getCardGradient = (code: string, isActive: boolean): string => {
   if (!isActive) return 'linear-gradient(135deg, #e8e8e8 0%, #f2f2f2 100%)';
   const gradients: Record<string, string> = {
-    kuaicrm: 'linear-gradient(135deg, #f8e4dc 0%, #f5ede8 100%)',      // 暖珊瑚
-    kuaipdm: 'linear-gradient(135deg, #dceee6 0%, #eaf5f0 100%)',      // 青绿
     kuaizhizao: 'linear-gradient(135deg, #e5e2de 0%, #eeebe8 100%)',   // 暖灰
-    kuaichain: 'linear-gradient(135deg, #d8ebe8 0%, #e8f4f1 100%)',    // 薄荷
     kuaicaiwu: 'linear-gradient(135deg, #f5ecd8 0%, #f0ebe0 100%)',    // 暖金
     kuaireport: 'linear-gradient(135deg, #dce4f0 0%, #e8eef6 100%)',   // 淡天青
     'master-data': 'linear-gradient(135deg, #dce0e6 0%, #e8ecf2 100%)', // 石板灰
@@ -641,7 +635,7 @@ const ApplicationListPage: React.FC = () => {
                   {(application.code === 'kuaimes' || application.code === 'kuaizhizao') && (
                      <Tag color="purple" style={{ marginLeft: 8, fontSize: 10, lineHeight: '18px', transform: 'scale(0.9)' }}>Lite</Tag>
                   )}
-                  {['kuaicrm', 'kuaipdm', 'kuaichain', 'kuaicaiwu'].includes(application.code) && (
+                  {['kuaicaiwu'].includes(application.code) && (
                      <>
                        <Tag color="purple" style={{ marginLeft: 8, fontSize: 10, lineHeight: '18px', transform: 'scale(0.9)' }}>Lite</Tag>
                        <Tag color="blue" style={{ marginLeft: 4, fontSize: 10, lineHeight: '18px', transform: 'scale(0.9)' }}>{t('pages.system.applications.planningTag')}</Tag>

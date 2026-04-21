@@ -150,31 +150,6 @@ class AuditLogServiceInterface(ServiceInterface):
         """
         pass
 
-    @abstractmethod
-    async def log_operation_event(
-        self,
-        tenant_id: int,
-        user_id: int,
-        operation: str,
-        resource: str,
-        resource_id: Optional[str] = None,
-        details: Optional[Dict[str, Any]] = None,
-        ip_address: Optional[str] = None,
-    ) -> None:
-        """
-        记录操作事件
-
-        Args:
-            tenant_id: 组织ID
-            user_id: 用户ID
-            operation: 操作类型
-            resource: 资源类型
-            resource_id: 资源ID
-            details: 操作详情
-            ip_address: IP地址
-        """
-        pass
-
 
 class ApplicationServiceInterface(ServiceInterface):
     """
