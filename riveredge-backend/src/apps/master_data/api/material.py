@@ -5,9 +5,7 @@
 """
 
 import uuid
-import json
-import time
-from fastapi import APIRouter, Depends, HTTPException as FastAPIHTTPException, Query, Path, Body, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Path, Body, status
 from typing import List, Optional, Annotated, Dict, Any
 from loguru import logger
 
@@ -48,29 +46,14 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 router = APIRouter(prefix="/materials", tags=["Material"])
 
 
-def _agent_debug_log(run_id: str, hypothesis_id: str, location: str, message: str, data: Dict[str, Any]) -> None:
-    try:
-        payload = {
-            "sessionId": "8e3a76",
-            "runId": run_id,
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data,
-            "timestamp": int(time.time() * 1000),
-        }
-        with open("f:/dev/riveredge/debug-8e3a76.log", "a", encoding="utf-8") as f:
-            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-
-
-def _http_exception_with_trace(
+def _http_error(
     status_code: int,
-    message: str,
+    detail: Any,
     route: str = "/materials",
     tenant_id: Optional[int] = None,
-) -> FastAPIHTTPException:
+) -> HTTPException:
+    """构造带 trace_id 的 HTTPException，便于问题定位。"""
+    message = detail.get("message") if isinstance(detail, dict) else str(detail)
     trace_id = uuid.uuid4().hex
     logger.warning(
         "master_data_material_api_error trace_id={} tenant_id={} route={} status_code={} message={}",
@@ -80,15 +63,10 @@ def _http_exception_with_trace(
         status_code,
         message,
     )
-    return FastAPIHTTPException(
+    return HTTPException(
         status_code=status_code,
         detail={"message": message, "trace_id": trace_id},
     )
-
-
-def HTTPException(*, status_code: int, detail: Any, **kwargs) -> FastAPIHTTPException:
-    message = detail.get("message") if isinstance(detail, dict) else str(detail)
-    return _http_exception_with_trace(status_code, message)
 
 
 # ==================== 物料分组相关接口 ====================
@@ -111,7 +89,7 @@ async def create_material_group(
     try:
         return await MaterialService.create_material_group(tenant_id, data)
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/groups", response_model=List[MaterialGroupResponse], summary="获取物料分组列表")
@@ -194,7 +172,7 @@ async def get_material_group(
     try:
         return await MaterialService.get_material_group_by_uuid(tenant_id, group_uuid)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.put("/groups/{group_uuid}", response_model=MaterialGroupResponse, summary="更新物料分组")
@@ -217,9 +195,9 @@ async def update_material_group(
     try:
         return await MaterialService.update_material_group(tenant_id, group_uuid, data)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.delete("/groups/{group_uuid}", summary="删除物料分组")
@@ -239,9 +217,9 @@ async def delete_material_group(
         await MaterialService.delete_material_group(tenant_id, group_uuid)
         return {"message": "物料分组删除成功"}
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 # ==================== BOM相关接口 ====================
@@ -270,7 +248,7 @@ async def create_bom(
     try:
         return await MaterialService.create_bom_batch(tenant_id, data)
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/bom/groups", response_model=List[BOMGroupSummary], summary="获取BOM分组摘要（用于列表树按需加载）")
@@ -376,7 +354,7 @@ async def get_bom(
     try:
         return await MaterialService.get_bom_by_uuid(tenant_id, bom_uuid)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.put("/bom/{bom_uuid}", response_model=BOMResponse, summary="更新BOM")
@@ -403,9 +381,9 @@ async def update_bom(
     try:
         return await MaterialService.update_bom(tenant_id, bom_uuid, data)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.delete("/bom/{bom_uuid}", summary="删除BOM")
@@ -423,7 +401,7 @@ async def delete_bom(
         await MaterialService.delete_bom(tenant_id, bom_uuid)
         return {"message": "BOM删除成功"}
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.post("/bom/{bom_uuid}/approve", response_model=BOMResponse, summary="审核BOM")
@@ -450,9 +428,9 @@ async def approve_bom(
             approved=approved
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/bom/batch-approve", response_model=List[BOMResponse], summary="批量审核BOM")
@@ -483,7 +461,7 @@ async def batch_approve_bom(
             is_reverse=is_reverse
         )
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/bom/{bom_uuid}/copy", response_model=BOMResponse, summary="复制BOM（创建新版本）")
@@ -506,9 +484,9 @@ async def copy_bom(
             new_version=new_version
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/bom/{bom_uuid}/revise", response_model=BOMResponse, summary="BOM升版（创建新修订版本）")
@@ -532,9 +510,9 @@ async def revise_bom(
             version_remark=version_remark
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/bom/material/{material_id}", response_model=List[BOMResponse], summary="根据主物料获取BOM列表")
@@ -563,9 +541,9 @@ async def get_bom_by_material(
             include_obsolete=include_obsolete
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/bom/versions/{bom_code}", response_model=List[BOMResponse], summary="获取BOM所有版本")
@@ -588,9 +566,9 @@ async def get_bom_versions(
             include_obsolete=include_obsolete
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post(
@@ -618,9 +596,9 @@ async def set_bom_version_obsolete(
         )
         return {"updated": count, "message": f"已将该 BOM 版本 {version} 设为失效"}
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/bom/batch-import", response_model=List[BOMResponse], summary="批量导入BOM（支持部门编码）")
@@ -657,9 +635,9 @@ async def batch_import_bom(
     try:
         return await MaterialService.batch_import_bom(tenant_id, data)
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 # ==================== BOM 工程变更（ECN）相关接口 ====================
@@ -684,9 +662,9 @@ async def create_bom_change(
     try:
         return await BOMChangeService.create_change(tenant_id, data, current_user.id)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/bom/changes", response_model=BOMChangeListResponse, summary="获取BOM工程变更记录列表")
@@ -710,7 +688,7 @@ async def list_bom_changes(
             page_size=page_size,
         )
     except Exception as e:
-        raise HTTPException(
+        raise _http_error(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"获取变更记录列表失败: {str(e)}",
         )
@@ -726,7 +704,7 @@ async def get_bom_change(
     try:
         return await BOMChangeService.get_change_by_uuid(tenant_id, change_uuid)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.put("/bom/changes/{change_uuid}", response_model=BOMChangeResponse, summary="更新BOM工程变更记录")
@@ -740,9 +718,9 @@ async def update_bom_change(
     try:
         return await BOMChangeService.update_change(tenant_id, change_uuid, data)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/bom/changes/{change_uuid}/approve", response_model=BOMChangeResponse, summary="审批BOM工程变更记录")
@@ -759,9 +737,9 @@ async def approve_bom_change(
             tenant_id, change_uuid, current_user.id, approved, approval_comment
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/bom/changes/{change_uuid}/execute", response_model=BOMChangeResponse, summary="执行BOM工程变更记录")
@@ -774,9 +752,9 @@ async def execute_bom_change(
     try:
         return await BOMChangeService.execute_change(tenant_id, change_uuid, current_user.id)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.delete("/bom/changes/{change_uuid}", summary="删除BOM工程变更记录")
@@ -790,7 +768,7 @@ async def delete_bom_change(
         await BOMChangeService.delete_change(tenant_id, change_uuid)
         return {"message": "删除成功"}
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.get("/bom/material/{material_id}/hierarchy", summary="生成BOM层级结构")
@@ -813,9 +791,9 @@ async def get_bom_hierarchy(
     try:
         return await MaterialService.generate_bom_hierarchy(tenant_id, material_id, version)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/bom/material/{material_id}/quantity", summary="计算BOM用量（考虑损耗率）")
@@ -843,9 +821,9 @@ async def calculate_bom_quantity(
             tenant_id, material_id, Decimal(str(parent_quantity)), version
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/bom/material/{material_id}/version", response_model=List[BOMResponse], summary="创建BOM新版本")
@@ -871,9 +849,9 @@ async def create_bom_version(
     try:
         return await MaterialService.create_bom_version(tenant_id, material_id, data)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/bom/material/{material_id}/compare-versions", summary="对比BOM版本")
@@ -897,9 +875,9 @@ async def compare_bom_versions(
     try:
         return await MaterialService.compare_bom_versions(tenant_id, material_id, data)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/bom/detect-cycle", summary="检测BOM循环依赖")
@@ -923,7 +901,7 @@ async def detect_bom_cycle(
         has_cycle = await MaterialService.detect_bom_cycle(tenant_id, material_id, component_id)
         return {"has_cycle": has_cycle}
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 # ==================== 物料编码映射相关接口 ====================
@@ -950,9 +928,9 @@ async def create_material_code_mapping(
     try:
         return await MaterialCodeMappingService.create_mapping(tenant_id, data)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/mapping", response_model=MaterialCodeMappingListResponse, summary="获取物料编码映射列表")
@@ -1004,7 +982,7 @@ async def get_material_code_mapping(
     try:
         return await MaterialCodeMappingService.get_mapping_by_uuid(tenant_id, mapping_uuid)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.put("/mapping/{mapping_uuid}", response_model=MaterialCodeMappingResponse, summary="更新物料编码映射")
@@ -1028,9 +1006,9 @@ async def update_material_code_mapping(
     try:
         return await MaterialCodeMappingService.update_mapping(tenant_id, mapping_uuid, data)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.delete("/mapping/{mapping_uuid}", summary="删除物料编码映射")
@@ -1048,7 +1026,7 @@ async def delete_material_code_mapping(
         await MaterialCodeMappingService.delete_mapping(tenant_id, mapping_uuid)
         return {"message": "物料编码映射删除成功"}
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.post("/mapping/convert", response_model=MaterialCodeConvertResponse, summary="编码转换")
@@ -1121,9 +1099,9 @@ async def create_material_batch(
     try:
         return await MaterialBatchService.create_batch(tenant_id, data)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/batches", response_model=MaterialBatchListResponse, summary="获取物料批号列表")
@@ -1151,7 +1129,7 @@ async def list_material_batches(
             page_size=page_size
         )
     except Exception as e:
-        raise HTTPException(
+        raise _http_error(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"获取批号列表失败: {str(e)}"
         )
@@ -1169,7 +1147,7 @@ async def get_material_batch(
     try:
         return await MaterialBatchService.get_batch_by_uuid(tenant_id, batch_uuid)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.put("/batches/{batch_uuid}", response_model=MaterialBatchResponse, summary="更新物料批号")
@@ -1185,9 +1163,9 @@ async def update_material_batch(
     try:
         return await MaterialBatchService.update_batch(tenant_id, batch_uuid, data)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.delete("/batches/{batch_uuid}", summary="删除物料批号")
@@ -1203,7 +1181,7 @@ async def delete_material_batch(
         await MaterialBatchService.delete_batch(tenant_id, batch_uuid)
         return {"message": "删除成功"}
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.post("/batches/generate", summary="生成批号")
@@ -1232,9 +1210,9 @@ async def generate_batch_no(
         )
         return {"batch_no": batch_no}
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/batches/{batch_uuid}/trace", summary="批号追溯")
@@ -1251,7 +1229,7 @@ async def trace_batch(
     try:
         return await MaterialBatchService.trace_batch(tenant_id, batch_uuid)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 # ==================== 物料序列号相关接口 ====================
@@ -1277,9 +1255,9 @@ async def create_material_serial(
     try:
         return await MaterialSerialService.create_serial(tenant_id, data)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/serials", response_model=MaterialSerialListResponse, summary="获取物料序列号列表")
@@ -1307,7 +1285,7 @@ async def list_material_serials(
             page_size=page_size
         )
     except Exception as e:
-        raise HTTPException(
+        raise _http_error(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"获取序列号列表失败: {str(e)}"
         )
@@ -1325,7 +1303,7 @@ async def get_material_serial(
     try:
         return await MaterialSerialService.get_serial_by_uuid(tenant_id, serial_uuid)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.put("/serials/{serial_uuid}", response_model=MaterialSerialResponse, summary="更新物料序列号")
@@ -1341,9 +1319,9 @@ async def update_material_serial(
     try:
         return await MaterialSerialService.update_serial(tenant_id, serial_uuid, data)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.delete("/serials/{serial_uuid}", summary="删除物料序列号")
@@ -1359,7 +1337,7 @@ async def delete_material_serial(
         await MaterialSerialService.delete_serial(tenant_id, serial_uuid)
         return {"message": "删除成功"}
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.post("/serials/generate", summary="生成序列号（批量）")
@@ -1383,9 +1361,9 @@ async def generate_serial_nos(
         )
         return {"serial_nos": serial_nos, "count": len(serial_nos)}
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/serials/{serial_uuid}/trace", summary="序列号追溯")
@@ -1402,7 +1380,7 @@ async def trace_serial(
     try:
         return await MaterialSerialService.trace_serial(tenant_id, serial_uuid)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 # ==================== 物料相关接口 ====================
@@ -1437,7 +1415,7 @@ async def create_material(
     try:
         return await MaterialService.create_material(tenant_id, data)
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("", response_model=List[MaterialResponse], summary="获取物料列表")
@@ -1498,7 +1476,7 @@ async def bulk_update_material_tracking(
     try:
         return await MaterialService.bulk_update_material_tracking(tenant_id, data)
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/{material_uuid}", response_model=MaterialResponse, summary="获取物料详情")
@@ -1514,23 +1492,9 @@ async def get_material(
     """
     try:
         result = await MaterialService.get_material_by_uuid(tenant_id, material_uuid)
-        defaults = (result or {}).get("defaults") if isinstance(result, dict) else getattr(result, "defaults", None)
-        _agent_debug_log(
-            "run-3",
-            "H7",
-            "material.py:get_material",
-            "material detail fetched",
-            {
-                "tenantId": tenant_id,
-                "materialUuid": material_uuid,
-                "defaultsKeys": list((defaults or {}).keys()) if isinstance(defaults, dict) else [],
-                "defaultTaxRate": (defaults or {}).get("defaultTaxRate") if isinstance(defaults, dict) else None,
-                "defaultSalePrice": (defaults or {}).get("defaultSalePrice") if isinstance(defaults, dict) else None,
-            },
-        )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status.HTTP_404_NOT_FOUND, str(e), tenant_id=tenant_id)
 
 
 @router.put("/{material_uuid}", response_model=MaterialResponse, summary="更新物料")
@@ -1559,42 +1523,14 @@ async def update_material(
     - **is_active**: 是否启用（可选）
     """
     try:
-        incoming_defaults = data.defaults if hasattr(data, "defaults") else None
-        _agent_debug_log(
-            "run-3",
-            "H8",
-            "material.py:update_material:input",
-            "material update received",
-            {
-                "tenantId": tenant_id,
-                "materialUuid": material_uuid,
-                "incomingDefaultsKeys": list((incoming_defaults or {}).keys()) if isinstance(incoming_defaults, dict) else [],
-                "incomingDefaultTaxRate": (incoming_defaults or {}).get("defaultTaxRate") if isinstance(incoming_defaults, dict) else None,
-                "incomingDefaultSalePrice": (incoming_defaults or {}).get("defaultSalePrice") if isinstance(incoming_defaults, dict) else None,
-            },
-        )
         result = await MaterialService.update_material(
             tenant_id, material_uuid, data, updated_by=current_user.id
         )
-        result_defaults = (result or {}).get("defaults") if isinstance(result, dict) else getattr(result, "defaults", None)
-        _agent_debug_log(
-            "run-3",
-            "H9",
-            "material.py:update_material:output",
-            "material update returned",
-            {
-                "tenantId": tenant_id,
-                "materialUuid": material_uuid,
-                "resultDefaultsKeys": list((result_defaults or {}).keys()) if isinstance(result_defaults, dict) else [],
-                "resultDefaultTaxRate": (result_defaults or {}).get("defaultTaxRate") if isinstance(result_defaults, dict) else None,
-                "resultDefaultSalePrice": (result_defaults or {}).get("defaultSalePrice") if isinstance(result_defaults, dict) else None,
-            },
-        )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status.HTTP_404_NOT_FOUND, str(e), tenant_id=tenant_id)
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_error(status.HTTP_400_BAD_REQUEST, str(e), tenant_id=tenant_id)
 
 
 @router.delete("/{material_uuid}", summary="删除物料")
@@ -1614,9 +1550,9 @@ async def delete_material(
         await MaterialService.delete_material(tenant_id, material_uuid)
         return {"message": "物料删除成功"}
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 # ==================== 物料来源控制相关接口 ====================
@@ -1638,9 +1574,9 @@ async def validate_material_source(
             material_uuid=material_uuid
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
-        raise HTTPException(
+        raise _http_error(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"验证失败: {str(e)}"
         )
@@ -1663,7 +1599,7 @@ async def validate_batch_material_sources(
             material_uuids=material_uuids
         )
     except Exception as e:
-        raise HTTPException(
+        raise _http_error(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"批量验证失败: {str(e)}"
         )
@@ -1688,11 +1624,11 @@ async def check_source_change_impact(
             new_source_type=new_source_type
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        raise HTTPException(
+        raise _http_error(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"检查变更影响失败: {str(e)}"
         )
@@ -1721,11 +1657,11 @@ async def change_material_source(
         )
         return await MaterialService.get_material_by_uuid(tenant_id, material.uuid)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        raise HTTPException(
+        raise _http_error(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"变更失败: {str(e)}"
         )
@@ -1748,9 +1684,9 @@ async def check_source_config_completeness(
             material_uuid=material_uuid
         )
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
-        raise HTTPException(
+        raise _http_error(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"检查失败: {str(e)}"
         )

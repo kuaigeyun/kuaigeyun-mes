@@ -8,6 +8,7 @@ import importlib
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 from fastapi import APIRouter
+from loguru import logger
 
 from .plugin_discovery import PluginDiscoveryService, DiscoveredPlugin
 
@@ -46,15 +47,14 @@ class PluginLoaderService:
 
         for plugin in discovered_plugins:
             if plugin.code not in enabled_plugins:
-                print(f"⏸️ 跳过插件 {plugin.code} (未启用)")
+                logger.debug(f"⏸️ 跳过插件 {plugin.code} (未启用)")
                 continue
 
             if not plugin.is_valid:
-                print(f"⚠️ 跳过无效插件 {plugin.code}: {plugin.error_message}")
+                logger.warning(f"⚠️ 跳过无效插件 {plugin.code}: {plugin.error_message}")
                 continue
 
             try:
-                # 加载插件路由
                 routers = self._load_plugin_routers(plugin)
                 if routers:
                     loaded_plugins.append({
@@ -63,14 +63,12 @@ class PluginLoaderService:
                         'routers': routers,
                         'manifest': plugin.manifest
                     })
-                    print(f"✅ 插件 {plugin.code} 加载成功，注册了 {len(routers)} 个路由")
+                    logger.info(f"✅ 插件 {plugin.code} 加载成功，注册了 {len(routers)} 个路由")
                 else:
-                    print(f"⚠️ 插件 {plugin.code} 没有找到可用的路由")
+                    logger.warning(f"⚠️ 插件 {plugin.code} 没有找到可用的路由")
 
             except Exception as e:
-                print(f"❌ 加载插件 {plugin.code} 失败: {str(e)}")
-                import traceback
-                traceback.print_exc()
+                logger.exception(f"❌ 加载插件 {plugin.code} 失败: {e}")
 
         return loaded_plugins
 
@@ -99,14 +97,13 @@ class PluginLoaderService:
                     attr = getattr(api_module, attr_name)
                     if isinstance(attr, APIRouter):
                         routers.append(attr)
-                        print(f"  📍 从 {api_module_path} 注册路由: {attr_name}")
+                        logger.debug(f"  📍 从 {api_module_path} 注册路由: {attr_name}")
 
             except ImportError:
-                # 如果整个模块导入失败，尝试导入子模块
                 self._load_plugin_submodule_routers(plugin, api_module_path, routers)
 
         except Exception as e:
-            print(f"  ⚠️ 加载插件 {plugin.code} 的路由时出错: {str(e)}")
+            logger.warning(f"  ⚠️ 加载插件 {plugin.code} 的路由时出错: {e}")
 
         return routers
 
@@ -145,10 +142,10 @@ class PluginLoaderService:
                         attr = getattr(module, attr_name)
                         if isinstance(attr, APIRouter):
                             routers.append(attr)
-                            print(f"  📍 从 {submodule_path} 注册路由: {attr_name}")
+                            logger.debug(f"  📍 从 {submodule_path} 注册路由: {attr_name}")
 
                 except Exception as e:
-                    print(f"  ⚠️ 加载子模块 {submodule_path} 失败: {str(e)}")
+                    logger.warning(f"  ⚠️ 加载子模块 {submodule_path} 失败: {e}")
 
     def get_available_plugins(self) -> List[Dict[str, Any]]:
         """

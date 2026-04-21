@@ -1291,30 +1291,22 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef }) 
     loadUnitOptions();
   }, []);
 
-  // 初始化数据并监听表单变化
+  // 订阅表单字段变化（替代原 setInterval 轮询）
+  const watchedUnits = Form.useWatch('units', formRef?.current);
+  const watchedBaseUnit = Form.useWatch('baseUnit', formRef?.current);
+
   useEffect(() => {
-    const updateFromForm = () => {
-      const formValues = formRef?.current?.getFieldsValue();
-      if (formValues) {
-        const unitsData = formValues.units;
-        if (unitsData && (unitsData.units || unitsData.scenarios)) {
-          setUnits(unitsData.units || []);
-          setScenarios(unitsData.scenarios || {});
-        }
-        if (formValues.baseUnit && formValues.baseUnit !== baseUnit) {
-          setBaseUnit(formValues.baseUnit);
-        }
-      }
-    };
-    
-    // 立即执行一次
-    updateFromForm();
-    
-    // 监听表单字段变化（使用较短的间隔以确保响应及时）
-    const timer = setInterval(updateFromForm, 500);
-    
-    return () => clearInterval(timer);
-  }, [formRef, baseUnit]);
+    if (watchedUnits && (watchedUnits.units || watchedUnits.scenarios)) {
+      setUnits(watchedUnits.units || []);
+      setScenarios(watchedUnits.scenarios || {});
+    }
+  }, [watchedUnits]);
+
+  useEffect(() => {
+    if (watchedBaseUnit && watchedBaseUnit !== baseUnit) {
+      setBaseUnit(watchedBaseUnit);
+    }
+  }, [watchedBaseUnit, baseUnit]);
 
   // 添加辅助单位
   const handleAddUnit = () => {

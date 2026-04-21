@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter
+from loguru import logger
 
 
 class PluginLoader:
@@ -50,7 +51,7 @@ class PluginLoader:
             
             return None
         except Exception as e:
-            print(f"加载插件 {plugin_path} 失败: {e}")
+            logger.error(f"加载插件 {plugin_path} 失败: {e}")
             return None
     
     @staticmethod
@@ -89,6 +90,6 @@ class PluginLoader:
             
             return True
         except Exception as e:
-            print(f"注册插件 {plugin_code} 路由失败: {e}")
+            logger.error(f"注册插件 {plugin_code} 路由失败: {e}")
             return False
 

@@ -235,9 +235,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"关闭 cache 时出错: {e}")
     
-    # ⚠️ 注意：close_db_connections 已经在 register_db 中注册为 shutdown 事件
-    # 这里不需要再次关闭，避免重复关闭导致错误
-    # await Tortoise.close_connections()
+    # 关闭 Tortoise ORM 数据库连接（统一走 lifespan，不再使用已弃用的 @app.on_event("shutdown")）
+    try:
+        from tortoise import Tortoise
+        await Tortoise.close_connections()
+        logger.info("✅ Tortoise ORM 连接已关闭")
+    except Exception as e:
+        logger.warning(f"关闭 Tortoise ORM 连接时出错: {e}")
+
     logger.info("✅ 应用关闭中...")
 
 # 创建FastAPI应用

@@ -7,11 +7,22 @@ Author: Luigi Lu
 Date: 2025-12-27
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from pydantic import AliasChoices, BaseModel, Field
 from starlette.requests import Request
 from loguru import logger
 
 from infra.schemas.auth import LoginRequest, LoginResponse, UserRegisterRequest, PersonalRegisterRequest, OrganizationRegisterRequest, RegisterResponse, CurrentUserResponse, SendVerificationCodeRequest, SendVerificationCodeResponse, BatchAccessCheckRequest, AccessCheckResult
+
+
+class RefreshTokenBody(BaseModel):
+    """Token 刷新请求体，兼容 `token` 与 `refresh_token` 两种字段名。"""
+
+    token: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("token", "refresh_token"),
+        description="当前 JWT，可通过 token 或 refresh_token 字段传入",
+    )
 from infra.services.auth_service import AuthService
 from infra.api.deps.deps import get_current_user
 from core.api.deps.deps import get_current_tenant
@@ -95,31 +106,23 @@ async def register(
 
 @router.post("/refresh", response_model=dict)
 async def refresh_token(
-    request: Request,
     token: str | None = Query(None, description="当前 JWT（Query，兼容旧客户端）"),
+    body: RefreshTokenBody | None = Body(None),
 ):
     """
-    刷新 Token 接口
-    
+    刷新 Token 接口。
+
     验证当前 Token 并生成新的 Token。
-    支持：Query ?token=、JSON body {\"token\"} 或 {\"refresh_token\"}（与前端一致）。
+    支持：Query ?token=、JSON body {"token"} 或 {"refresh_token"}（与前端一致）。
     """
-    raw = token
+    raw = (token or (body.token if body else None) or "").strip()
     if not raw:
-        try:
-            body = await request.json()
-        except Exception:
-            body = None
-        if isinstance(body, dict):
-            raw = body.get("token") or body.get("refresh_token")
-    if not raw or not isinstance(raw, str) or not raw.strip():
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="token required",
         )
     service = AuthService()
-    result = await service.refresh_token(raw.strip())
-    return result
+    return await service.refresh_token(raw)
 
 
 @router.post("/guest-login", response_model=LoginResponse)

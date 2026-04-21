@@ -162,6 +162,7 @@ export default function OperationsDashboard() {
     refetchOnWindowFocus: false,
     throwOnError: false,
     placeholderData: (previousData) => previousData,
+    refetchInterval: autoRefresh ? autoRefreshInterval : false,
   });
 
   const { data: userStats, isLoading: loadingUser, refetch: refetchUser } = useQuery({
@@ -173,6 +174,7 @@ export default function OperationsDashboard() {
     retry: false,
     refetchOnWindowFocus: false,
     throwOnError: false,
+    refetchInterval: autoRefresh ? autoRefreshInterval : false,
   });
 
   const { data: accessStats, isLoading: loadingAccess, refetch: refetchAccess } = useQuery({
@@ -184,6 +186,7 @@ export default function OperationsDashboard() {
     retry: false,
     refetchOnWindowFocus: false,
     throwOnError: false,
+    refetchInterval: autoRefresh ? autoRefreshInterval : false,
   });
   
   // 降级方案：如果 API 失败但有缓存数据，使用缓存数据
@@ -206,21 +209,6 @@ export default function OperationsDashboard() {
       });
     }
   }, [hasToken, isInfraSuperAdmin, queryClient]);
-  
-  /**
-   * 自动刷新逻辑
-   */
-  useEffect(() => {
-    if (!autoRefresh) return;
-
-    const interval = setInterval(() => {
-      refetch();
-      refetchUser();
-      refetchAccess();
-    }, autoRefreshInterval);
-
-    return () => clearInterval(interval);
-  }, [autoRefresh, autoRefreshInterval, refetch, refetchUser, refetchAccess]);
   
   /**
    * 处理手动刷新

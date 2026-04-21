@@ -382,14 +382,10 @@ async def register_db(app) -> None:
                 
         except Exception as conn_error:
             logger.warning(f"Tortoise ORM 连接验证失败: {conn_error}")
-        
-        # ⚠️ 关键修复：注册关闭事件，确保应用关闭时数据库连接也关闭
-        @app.on_event("shutdown")
-        async def close_db_connections():
-            logger.info("关闭 Tortoise ORM 数据库连接...")
-            await Tortoise.close_connections()
-            logger.info("数据库连接已关闭")
-            
+
+        # 连接关闭改由 main.py 的 lifespan (yield 之后) 统一管理，
+        # 避免与已弃用的 @app.on_event("shutdown") 并存。
+
     except Exception as e:
         logger.error(f"Tortoise ORM 注册失败: {e}")
         import traceback
