@@ -7,6 +7,7 @@ API 依赖模块
 from typing import Optional
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+from starlette.requests import Request
 
 from infra.models.user import User
 from infra.models.infra_superadmin import InfraSuperAdmin
@@ -31,7 +32,8 @@ infra_superadmin_oauth2_scheme = OAuth2PasswordBearer(
 
 
 async def get_current_user(
-    token: str = Depends(oauth2_scheme)
+    request: Request,
+    token: str = Depends(oauth2_scheme),
 ) -> User:
     """
     获取当前用户依赖
@@ -59,21 +61,19 @@ async def get_current_user(
     # 检查 Token 是否存在
     from loguru import logger
     if not token:
-        logger.error(f"❌ get_current_user: Token 缺失 (token={token}, type={type(token)})")
+        # 401 缺 Token 属于常态（匿名探测/未登录刷新），走 DEBUG 而非 ERROR，避免噪声污染
+        logger.debug("get_current_user: Token 缺失")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token缺失",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    logger.debug(f"🔍 get_current_user: 收到 Token，长度: {len(token) if token else 0}")
 
     # ⚠️ 关键修复：先尝试验证平台超级管理员 Token
     infra_superadmin_payload = get_infra_superadmin_token_payload(token)
     if infra_superadmin_payload:
         # 这是平台超级管理员 Token，允许全局访问
-        # 创建一个虚拟的 User 对象，标记为平台超级管理员
-        from loguru import logger
-        logger.info(f"✅ 检测到平台超级管理员 Token，允许全局访问")
+        logger.debug("检测到平台超级管理员 Token，允许全局访问")
         
         # 获取平台超级管理员 ID
         admin_id = int(infra_superadmin_payload.get("sub"))
@@ -108,6 +108,14 @@ async def get_current_user(
         # 设置一个标记，表示这是平台超级管理员
         setattr(virtual_user, '_is_infra_superadmin', True)
         setattr(virtual_user, '_infra_superadmin_id', admin_id)
+
+        # 缓存身份到 request.state，operation_log_middleware 可直接复用
+        try:
+            request.state.user_id = admin_id
+            request.state.tenant_id = None
+            request.state.jwt_payload = infra_superadmin_payload
+        except Exception:
+            pass
         
         # 确保 id 属性可以直接访问
         if not hasattr(virtual_user, 'id') or virtual_user.id is None:
@@ -116,46 +124,50 @@ async def get_current_user(
         return virtual_user
 
     # 验证普通用户 Token
-    from loguru import logger
-    logger.debug(f"🔍 开始验证普通用户 Token，Token 长度: {len(token) if token else 0}")
     payload = get_token_payload(token)
     if not payload:
-        logger.error(f"❌ 普通用户 Token 验证失败，Token 前50个字符: {token[:50] if token else 'None'}")
+        # Token 非法通常意味着过期或被篡改，不打印 token 原文，减少敏感数据泄漏 & 噪声
+        logger.debug("普通用户 Token 验证失败（过期或非法）")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="无效的 Token",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    logger.debug(f"✅ 普通用户 Token 验证成功，user_id: {payload.get('sub')}, tenant_id: {payload.get('tenant_id')}")
     
     # 获取用户 ID 和组织 ID
     user_id = int(payload.get("sub"))
     tenant_id = payload.get("tenant_id")  # ⭐ 关键：从 Token 中获取组织 ID
-    
+
+    # 缓存到 request.state，供 OperationLogMiddleware 等复用，避免同一请求重复解析 JWT
+    try:
+        request.state.user_id = user_id
+        request.state.tenant_id = int(tenant_id) if tenant_id is not None else None
+        request.state.jwt_payload = payload
+    except Exception:
+        # state 写入失败不影响主流程
+        pass
+
     # 设置组织上下文 ⭐ 关键：自动设置组织上下文
     if tenant_id:
         set_current_tenant_id(tenant_id)
     
     # 获取用户（排除已软删除的用户，避免已删除用户通过旧 Token 继续访问）
-    logger.debug(f"🔍 开始查询用户，user_id: {user_id}")
     user = await User.get_or_none(id=user_id, deleted_at__isnull=True)
     if not user:
-        logger.error(f"❌ 用户不存在或已被删除，user_id: {user_id}")
+        logger.warning(f"用户不存在或已被软删除，user_id={user_id}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="用户不存在",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    logger.debug(f"✅ 用户查询成功，user_id: {user.id}, username: {user.username}, is_active: {user.is_active}")
-    
+
     if not user.is_active:
-        logger.error(f"❌ 用户未激活，user_id: {user.id}, username: {user.username}")
+        logger.warning(f"用户未激活 user_id={user.id} username={user.username}")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="用户未激活",
         )
-    
-    logger.debug(f"✅ get_current_user 返回用户，user_id: {user.id}, username: {user.username}")
+
     return user
 
 

@@ -824,6 +824,31 @@ class ApplicationService:
         plugins = ApplicationService._scan_plugin_manifests()
         logger.info(f"扫描到 {len(plugins)} 个插件清单")
 
+        # 一次性按 tenant 取出所有已存在应用（code -> row），消除 N+1 启动期 DB 查询
+        existing_by_code: Dict[str, Dict[str, Any]] = {}
+        try:
+            conn = await get_db_connection()
+            try:
+                rows = await conn.fetch(
+                    "SELECT * FROM core_applications WHERE tenant_id = $1 AND deleted_at IS NULL",
+                    tenant_id,
+                )
+                for row in rows:
+                    app_dict = dict(row)
+                    raw_menu = app_dict.get('menu_config')
+                    if isinstance(raw_menu, str) and raw_menu:
+                        try:
+                            app_dict['menu_config'] = json.loads(raw_menu)
+                        except Exception:
+                            app_dict['menu_config'] = None
+                    app_code = app_dict.get('code')
+                    if app_code:
+                        existing_by_code[app_code] = app_dict
+            finally:
+                await conn.close()
+        except Exception as e:
+            logger.warning(f"批量预取 core_applications 失败，降级为按需查询: {e}")
+
         registered_apps = []
 
         for manifest in plugins:
@@ -839,11 +864,14 @@ class ApplicationService:
                     logger.info(f"⏭️ 跳过占位应用注册: {code}")
                     continue
                 
-                # 检查应用是否已存在
-                existing_app = await ApplicationService.get_application_by_code(
-                    tenant_id=tenant_id,
-                    code=code
-                )
+                # 优先用预取结果；预取失败时回退到单次查询
+                if existing_by_code:
+                    existing_app = existing_by_code.get(code)
+                else:
+                    existing_app = await ApplicationService.get_application_by_code(
+                        tenant_id=tenant_id,
+                        code=code
+                    )
                 
                 # 构建应用数据
                 # 如果应用已存在，保持现有的 is_active 状态；否则默认启用

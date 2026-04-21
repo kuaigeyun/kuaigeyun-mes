@@ -123,7 +123,26 @@ class OperationLogMiddleware(BaseHTTPMiddleware):
 
     @staticmethod
     def _extract_identity(request: Request) -> tuple[Optional[int], Optional[int]]:
-        """从 Authorization Bearer 解析 tenant_id / user_id，失败静默返回。"""
+        """
+        解析 tenant_id / user_id。
+        优先复用 get_current_user 在 request.state 中缓存的身份，
+        避免同一请求内二次解析 JWT；未命中时再回退到直接解析 Authorization 头。
+        """
+        # 优先从 request.state 读取（get_current_user 已校验并缓存）
+        state = getattr(request, "state", None)
+        if state is not None:
+            cached_tenant_id = getattr(state, "tenant_id", None)
+            cached_user_id = getattr(state, "user_id", None)
+            if cached_user_id is not None:
+                try:
+                    tenant_int = (
+                        int(cached_tenant_id) if cached_tenant_id is not None else None
+                    )
+                    user_int = int(cached_user_id)
+                    return tenant_int, user_int
+                except (ValueError, TypeError):
+                    pass
+
         authorization = request.headers.get("Authorization")
         if not authorization or not authorization.startswith("Bearer "):
             return None, None

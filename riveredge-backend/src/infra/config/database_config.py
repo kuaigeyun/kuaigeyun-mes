@@ -2,9 +2,29 @@
 数据库配置模块
 
 提供数据库连接配置
+
+⚠️ 当前仓库无导入方引用本模块（保留以兼容第三方脚本），
+连接池大小与 infra/infrastructure/database/database.py 的运行态配置保持一致，
+均通过 RIVEREDGE_DB_POOL_MIN / RIVEREDGE_DB_POOL_MAX 环境变量可覆盖。
 """
 
+import os
+
 from infra.config.infra_config import infra_settings
+
+
+def _int_env(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return default
+
+
+_POOL_MIN = _int_env("RIVEREDGE_DB_POOL_MIN", 5)
+_POOL_MAX = _int_env("RIVEREDGE_DB_POOL_MAX", 20)
 
 # 数据库配置（从平台级配置读取）
 DB_HOST = infra_settings.DB_HOST
@@ -28,9 +48,9 @@ TORTOISE_ORM = {
                 "user": DB_USER,
                 "password": DB_PASSWORD,
                 "database": DB_NAME,
-                # 连接池配置
-                "min_size": 5,
-                "max_size": 20,
+                # 连接池配置（与 infra/infrastructure/database/database.py 一致，走 ENV）
+                "min_size": _POOL_MIN,
+                "max_size": _POOL_MAX,
                 "max_queries": 50000,
                 "max_inactive_connection_lifetime": 300.0,
                 "command_timeout": 60,

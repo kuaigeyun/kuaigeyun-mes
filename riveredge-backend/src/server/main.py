@@ -138,34 +138,45 @@ MODE = os.getenv("MODE", "saas")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
-    # 注册 Tortoise ORM 数据库连接
+    # 注册 Tortoise ORM 数据库连接（后续并行任务依赖此步骤）
     await register_db(app)
     logger.info("✅ Tortoise ORM 已注册")
-    
-    # 初始化缓存层（PostgreSQL 后端，仅切换就绪态）
-    try:
-        from infra.infrastructure.cache.cache import cache
-        await cache.connect()
-        logger.info("✅ Cache(PG) 已就绪")
-    except Exception as e:
-        logger.error(f"❌ Cache 初始化失败: {e}")
-        logger.warning("⚠️  依赖 cache 的功能（在线用户等）将不可用")
 
-    # 初始化全局 httpx.AsyncClient（复用连接池，避免每次请求新建）
+    # 同步初始化：httpx 全局客户端与路由管理器不需要 await，放在早期避免被 gather 序列化
     try:
         from infra.infrastructure.http import init_http_client
         init_http_client()
     except Exception as e:
         logger.warning(f"⚠️ 初始化全局 httpx.AsyncClient 失败: {e}")
 
-    # 初始化服务接口层（系统级）
-    await ServiceInitializer.initialize_services()
-    logger.info("✅ 系统级服务接口层已初始化")
-    
-    # ⚠️ 第三阶段改进：初始化平台级服务接口层
-    from infra.services.interfaces.service_initializer import InfraServiceInitializer
-    await InfraServiceInitializer.initialize_services()
-    logger.info("✅ 平台级服务接口层已初始化")
+    init_route_manager(app)
+    logger.info("✅ 应用路由管理器已初始化")
+
+    # 并行初始化：cache、系统级服务、平台级服务互不依赖，一次 gather 替代 3 次 await
+    async def _init_cache() -> None:
+        try:
+            from infra.infrastructure.cache.cache import cache
+            await cache.connect()
+            logger.info("✅ Cache(PG) 已就绪")
+        except Exception as e:
+            logger.error(f"❌ Cache 初始化失败: {e}")
+            logger.warning("⚠️  依赖 cache 的功能（在线用户等）将不可用")
+
+    async def _init_sys_services() -> None:
+        await ServiceInitializer.initialize_services()
+        logger.info("✅ 系统级服务接口层已初始化")
+
+    async def _init_infra_services() -> None:
+        from infra.services.interfaces.service_initializer import InfraServiceInitializer
+        await InfraServiceInitializer.initialize_services()
+        logger.info("✅ 平台级服务接口层已初始化")
+
+    await asyncio.gather(
+        _init_cache(),
+        _init_sys_services(),
+        _init_infra_services(),
+        return_exceptions=False,
+    )
 
     # 确保平台超级管理员存在（表为空时从 .env 创建）
     try:
@@ -185,9 +196,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"确保平台超级管理员时出错: {e}")
 
-    # ⚠️ 第一阶段改进：初始化应用路由管理器
-    init_route_manager(app)
-    logger.info("✅ 应用路由管理器已初始化")
+    # 路由管理器已在 lifespan 早期与 httpx 客户端一同同步初始化
 
     # 若数据库无应用记录，自动扫描 riveredge-backend/src/apps 并注册（manifest 以后端为单一来源）
     try:

@@ -16,8 +16,29 @@ from infra.config.infra_config import infra_settings as settings
 
 # aerich 迁移时仅用 1 个连接，避免连接数超限（需设置 AERICH_MIGRATE=1）
 _is_aerich = os.environ.get("AERICH_MIGRATE") == "1"
-_pool_min = 1 if _is_aerich else 5
-_pool_max = 2 if _is_aerich else 20
+
+
+def _int_env(name: str, default: int) -> int:
+    """读取整型 ENV；值非法时回落默认，不阻塞启动。"""
+    raw = os.environ.get(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        logger.warning(f"环境变量 {name}={raw!r} 非法整数，回退默认 {default}")
+        return default
+
+
+# 应用运行态连接池（运行期 & aerich 迁移期分别读 ENV，缺省值与旧行为一致）
+# - RIVEREDGE_DB_POOL_MIN / RIVEREDGE_DB_POOL_MAX：普通进程
+# - RIVEREDGE_DB_POOL_MIN_AERICH / RIVEREDGE_DB_POOL_MAX_AERICH：aerich migrate
+if _is_aerich:
+    _pool_min = _int_env("RIVEREDGE_DB_POOL_MIN_AERICH", 1)
+    _pool_max = _int_env("RIVEREDGE_DB_POOL_MAX_AERICH", 2)
+else:
+    _pool_min = _int_env("RIVEREDGE_DB_POOL_MIN", 5)
+    _pool_max = _int_env("RIVEREDGE_DB_POOL_MAX", 20)
 
 
 # Tortoise ORM 配置
@@ -53,9 +74,9 @@ async def get_dynamic_tortoise_config() -> dict:
                     "user": settings.DB_USER,
                     "password": settings.DB_PASSWORD,
                     "database": settings.DB_NAME,
-                    # 连接池配置（解决连接中断问题）
-                    "min_size": 5,  # 最小连接池大小
-                    "max_size": 25,  # 最大连接池大小（增加以支持并发请求）
+                    # 连接池配置（与静态 TORTOISE_ORM 保持一致，均走 _pool_min/_pool_max）
+                    "min_size": _pool_min,
+                    "max_size": _pool_max,
                     "max_queries": 50000,  # 每个连接最大查询次数
                     "max_inactive_connection_lifetime": 60.0,  # 非活跃连接最大生存时间（秒，防止空闲连接由于远程防火墙断开而失效）
                     "command_timeout": 300,  # 命令超时（秒），增加以处理可能的慢查询
