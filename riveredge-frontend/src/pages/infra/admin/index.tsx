@@ -33,7 +33,7 @@ export default function InfraSuperAdminPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const setCurrentUser = useGlobalStore((s) => s.setCurrentUser);
-  const [activeTabKey, setActiveTabKey] = useState('admin');
+  const [activeTabKey, setActiveTabKey] = useState('settings');
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editFormData, setEditFormData] = useState<InfraSuperAdminUpdateRequest | null>(null);
 
@@ -100,6 +100,16 @@ export default function InfraSuperAdminPage() {
   };
 
   const tabItems = [
+    {
+      key: 'settings',
+      label: (
+        <span>
+          <SettingOutlined />
+          {t('pages.infra.admin.tabSettings')}
+        </span>
+      ),
+      children: <PlatformSettingsPage />,
+    },
     {
       key: 'admin',
       label: (
@@ -170,16 +180,6 @@ export default function InfraSuperAdminPage() {
           )}
         </>
       ),
-    },
-    {
-      key: 'settings',
-      label: (
-        <span>
-          <SettingOutlined />
-          {t('pages.infra.admin.tabSettings')}
-        </span>
-      ),
-      children: <PlatformSettingsPage />,
     },
   ];
 

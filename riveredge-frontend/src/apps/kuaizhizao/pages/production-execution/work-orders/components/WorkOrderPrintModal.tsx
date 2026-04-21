@@ -3,20 +3,11 @@ import { Modal, Select, Button, Spin, message, Empty } from 'antd';
 import { PrinterOutlined } from '@ant-design/icons';
 import {
   getPrintTemplateList,
-  getPrintTemplateByUuid,
   PrintTemplate,
 } from '../../../../../../services/printTemplate';
 import { handleError } from '../../../../../../utils/errorHandler';
 import { apiRequest } from '../../../../../../services/api';
 import { DOCUMENT_TYPE_TO_CODE } from '../../../../../../config/printTemplateSchemas';
-import { mapWorkOrderToTemplateVariables } from '../../../../../../utils/printTemplateDataMapper';
-import { isPdfmeTemplate } from '../../../../../../utils/pdfmeTemplateUtils';
-import {
-  generatePdfmePdfBlob,
-  preloadPdfmeChineseFont,
-  openPdfBlobInPrintWindow,
-} from '../../../../../../utils/pdfmeClientPrint';
-import { workOrderApi } from '../../../../services/production';
 import { MODAL_CONFIG } from '../../../../../../components/layout-templates';
 
 interface WorkOrderPrintModalProps {
@@ -37,26 +28,16 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
   const [printLoading, setPrintLoading] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>();
   const [previewHtml, setPreviewHtml] = useState<string>('');
-  const [previewPdfUrl, setPreviewPdfUrl] = useState<string | null>(null);
-  const fontPromiseRef = useRef<Promise<Awaited<ReturnType<typeof preloadPdfmeChineseFont>>> | null>(null);
   const latestSelectionRef = useRef<{ selectedTemplateId?: string; effectiveWorkOrderId?: number }>({});
 
   const effectiveWorkOrderId = workOrderId ?? workOrderData?.id;
   latestSelectionRef.current = { selectedTemplateId, effectiveWorkOrderId };
-
-  // Modal 打开时预加载字体，减少首次预览等待
-  useEffect(() => {
-    if (visible) {
-      fontPromiseRef.current = preloadPdfmeChineseFont();
-    }
-  }, [visible]);
 
   useEffect(() => {
     if (visible) {
       loadTemplates();
       setSelectedTemplateId(undefined);
       setPreviewHtml('');
-      setPreviewPdfUrl(null);
     }
   }, [visible]);
 
@@ -65,7 +46,6 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
       loadPreview();
     } else {
       setPreviewHtml('');
-      setPreviewPdfUrl(null);
     }
   }, [visible, selectedTemplateId, effectiveWorkOrderId]);
 
@@ -96,50 +76,25 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
     const reqId = `${selectedTemplateId}-${effectiveWorkOrderId}`;
     setPrintLoading(true);
     try {
-      // 并行：API 请求 + 字体加载（字体在 modal 打开时已预加载）
-      const [templateDetail, detail, operations, font] = await Promise.all([
-        getPrintTemplateByUuid(selectedTemplateId),
-        workOrderApi.get(effectiveWorkOrderId.toString()),
-        workOrderApi.getOperations(effectiveWorkOrderId.toString()),
-        fontPromiseRef.current ?? preloadPdfmeChineseFont(),
-      ]);
-
-      const variables = mapWorkOrderToTemplateVariables(detail, operations || []);
-
-      if (isPdfmeTemplate(templateDetail.content)) {
-        const blob = await generatePdfmePdfBlob({
-          templateJson: templateDetail.content,
-          variables,
-          font,
-        });
-        const current = latestSelectionRef.current;
-        if (reqId !== `${current.selectedTemplateId}-${current.effectiveWorkOrderId}`) return;
-        const url = URL.createObjectURL(blob);
-        setPreviewPdfUrl(url);
-        setPreviewHtml('');
-      } else {
-        const result = await apiRequest<{ content?: string }>(
-          `/apps/kuaizhizao/work-orders/${effectiveWorkOrderId}/print`,
-          {
-            method: 'GET',
-            params: {
-              template_uuid: selectedTemplateId,
-              output_format: 'html',
-              response_format: 'json',
-            },
-          }
-        );
-        const current = latestSelectionRef.current;
-        if (reqId !== `${current.selectedTemplateId}-${current.effectiveWorkOrderId}`) return;
-        setPreviewHtml(result?.content ?? '');
-        setPreviewPdfUrl(null);
-      }
+      const result = await apiRequest<{ content?: string }>(
+        `/apps/kuaizhizao/work-orders/${effectiveWorkOrderId}/print`,
+        {
+          method: 'GET',
+          params: {
+            template_uuid: selectedTemplateId,
+            output_format: 'html',
+            response_format: 'json',
+          },
+        }
+      );
+      const current = latestSelectionRef.current;
+      if (reqId !== `${current.selectedTemplateId}-${current.effectiveWorkOrderId}`) return;
+      setPreviewHtml(result?.content ?? '');
     } catch (error: any) {
       const current = latestSelectionRef.current;
       if (reqId !== `${current.selectedTemplateId}-${current.effectiveWorkOrderId}`) return;
       handleError(error, '加载预览失败');
       setPreviewHtml('');
-      setPreviewPdfUrl(null);
     } finally {
       const current = latestSelectionRef.current;
       if (reqId === `${current.selectedTemplateId}-${current.effectiveWorkOrderId}`) {
@@ -159,56 +114,34 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
     }
     setPrintLoading(true);
     try {
-      const templateDetail = await getPrintTemplateByUuid(selectedTemplateId);
-      const [detail, operations] = await Promise.all([
-        workOrderApi.get(effectiveWorkOrderId.toString()),
-        workOrderApi.getOperations(effectiveWorkOrderId.toString()),
-      ]);
-      const variables = mapWorkOrderToTemplateVariables(detail, operations || []);
-
-      if (isPdfmeTemplate(templateDetail.content)) {
-        const font = await (fontPromiseRef.current ?? preloadPdfmeChineseFont());
-        const blob = await generatePdfmePdfBlob({
-          templateJson: templateDetail.content,
-          variables,
-          font,
-        });
-        const { revoked } = openPdfBlobInPrintWindow(blob);
-        if (revoked) {
-          message.error('无法打开打印窗口，请检查浏览器弹窗设置');
-        } else {
-          message.success('打印已发送');
+      const result = await apiRequest<{ content?: string }>(
+        `/apps/kuaizhizao/work-orders/${effectiveWorkOrderId}/print`,
+        {
+          method: 'GET',
+          params: {
+            template_uuid: selectedTemplateId,
+            output_format: 'html',
+            response_format: 'json',
+          },
         }
-      } else {
-        const result = await apiRequest<{ content?: string }>(
-          `/apps/kuaizhizao/work-orders/${effectiveWorkOrderId}/print`,
-          {
-            method: 'GET',
-            params: {
-              template_uuid: selectedTemplateId,
-              output_format: 'html',
-              response_format: 'json',
-            },
-          }
+      );
+      const html = result?.content ?? '';
+      if (!html) {
+        message.error('打印内容为空');
+        return;
+      }
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(
+          `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>打印</title></head><body>${html}</body></html>`
         );
-        const html = result?.content ?? '';
-        if (!html) {
-          message.error('打印内容为空');
-          return;
-        }
-        const printWindow = window.open('', '_blank');
-        if (printWindow) {
-          printWindow.document.write(
-            `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>打印</title></head><body>${html}</body></html>`
-          );
-          printWindow.document.close();
-          printWindow.focus();
-          printWindow.print();
-          printWindow.close();
-          message.success('打印已发送');
-        } else {
-          message.error('无法打开打印窗口，请检查浏览器弹窗设置');
-        }
+        printWindow.document.close();
+        printWindow.focus();
+        printWindow.print();
+        printWindow.close();
+        message.success('打印已发送');
+      } else {
+        message.error('无法打开打印窗口，请检查浏览器弹窗设置');
       }
     } catch (error: any) {
       handleError(error, '打印失败');
@@ -216,13 +149,6 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
       setPrintLoading(false);
     }
   };
-
-  // 清理 PDF URL
-  useEffect(() => {
-    return () => {
-      if (previewPdfUrl) URL.revokeObjectURL(previewPdfUrl);
-    };
-  }, [previewPdfUrl]);
 
   return (
     <Modal
@@ -275,16 +201,10 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
         <div className="work-order-print-preview" style={{ height: '100%', overflow: 'auto' }}>
           {!effectiveWorkOrderId ? (
             <Empty description="工单ID缺失，无法预览" style={{ paddingTop: 100 }} />
-          ) : printLoading && !previewHtml && !previewPdfUrl ? (
+          ) : printLoading && !previewHtml ? (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', minHeight: 400 }}>
               <Spin tip="加载预览中..." />
             </div>
-          ) : previewPdfUrl ? (
-            <iframe
-              src={`${previewPdfUrl}#toolbar=0&view=Fit`}
-              title="打印预览"
-              className="work-order-print-iframe"
-            />
           ) : previewHtml ? (
             <div dangerouslySetInnerHTML={{ __html: previewHtml }} style={{ height: '100%', overflow: 'auto', padding: 16 }} />
           ) : (

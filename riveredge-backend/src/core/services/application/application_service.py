@@ -22,6 +22,8 @@ from loguru import logger
 # 由于使用直接 asyncpg 连接，类型注解使用 Dict[str, Any]
 ApplicationDict = Dict[str, Any]
 
+_PLACEHOLDER_APP_CODES = {"kuaicrm", "kuaipdm", "kuaichain"}
+
 
 class ApplicationService:
     """
@@ -221,6 +223,11 @@ class ApplicationService:
                 conditions.append(f"is_active = ${param_index}")
                 params.append(is_active)
                 param_index += 1
+
+            # 精简：隐藏并下线占位应用
+            conditions.append(f"code <> ALL(${param_index}::text[])")
+            params.append(list(_PLACEHOLDER_APP_CODES))
+            param_index += 1
 
             where_clause = " AND ".join(conditions)
 
@@ -608,6 +615,7 @@ class ApplicationService:
         # ⚠️ 关键修复：先创建数据库连接
         conn = await get_db_connection()
         try:
+            excluded_codes = list(_PLACEHOLDER_APP_CODES)
             # 动态获取停用应用列表：查询数据库中 is_active=False 的应用
             disabled_apps_result = await conn.fetch("""
                 SELECT code FROM core_applications
@@ -628,16 +636,18 @@ class ApplicationService:
                       AND is_installed = TRUE
                       AND deleted_at IS NULL
                       AND code NOT IN ({})
-                """.format(','.join(['${}'.format(i + 2) for i in range(len(disabled_apps))]))
-                params = [tenant_id] + list(disabled_apps)
+                      AND code <> ALL(${}::text[])
+                """.format(','.join(['${}'.format(i + 2) for i in range(len(disabled_apps))]), len(disabled_apps) + 2)
+                params = [tenant_id] + list(disabled_apps) + [excluded_codes]
             else:
                 base_sql = """
                     SELECT * FROM core_applications
                     WHERE tenant_id = $1
                       AND is_installed = TRUE
                       AND deleted_at IS NULL
+                      AND code <> ALL($2::text[])
                 """
-                params = [tenant_id]
+                params = [tenant_id, excluded_codes]
 
             # 如果指定了 is_active，添加过滤条件
             if is_active is not None:
@@ -807,6 +817,9 @@ class ApplicationService:
                 code = manifest.get('code')
                 if not code:
                     logger.warning(f"警告: 插件 {manifest.get('name', 'unknown')} 缺少 code 字段，跳过注册")
+                    continue
+                if code in _PLACEHOLDER_APP_CODES:
+                    logger.info(f"⏭️ 跳过占位应用注册: {code}")
                     continue
                 
                 # 检查应用是否已存在

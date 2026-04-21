@@ -119,7 +119,7 @@ const queryClient = new QueryClient({
   logger: {
     log: (...args) => {
       // 开发环境输出日志
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.DEV) {
         // 开发环境日志（可选）
         if (import.meta.env.DEV) {
           console.log('[React Query]', ...args);
@@ -138,7 +138,7 @@ const queryClient = new QueryClient({
 
 // ⚠️ 关键修复：开发环境禁用 StrictMode，避免双重渲染导致的问题
 // StrictMode 会导致组件渲染两次，可能触发一些副作用导致崩溃
-const AppWrapper = process.env.NODE_ENV === 'development' ? (
+const AppWrapper = import.meta.env.DEV ? (
   <ConfigProvider locale={zhCN}>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>

@@ -20,13 +20,16 @@ from infra.models.infra_superadmin import InfraSuperAdmin
 from infra.models.tenant import Tenant, TenantStatus, TenantPlan
 from infra.models.user import User
 from core.models.login_log import LoginLog
-import psutil
 import sys
 import platform as std_platform  # 使用标准库的 platform，避免与项目模块冲突
 from datetime import datetime
 import socket
 from infra.domain.package_config import get_all_package_configs
 from typing import Dict, Any
+try:
+    import psutil
+except ImportError:
+    psutil = None
 
 # 创建路由器
 router = APIRouter(prefix="/monitoring", tags=["Infra Monitoring"])
@@ -50,42 +53,60 @@ async def get_system_info(
     返回服务器的系统信息，包括CPU、内存、磁盘、网络等
     """
     try:
-        # 获取CPU信息
         cpu_info = {
-            "count": psutil.cpu_count(),
-            "usage_percent": psutil.cpu_percent(interval=1),
-            "load_average": psutil.getloadavg() if hasattr(psutil, 'getloadavg') else [0, 0, 0],
+            "count": 0,
+            "usage_percent": 0.0,
+            "load_average": [0, 0, 0],
         }
-
-        # 获取内存信息
-        memory = psutil.virtual_memory()
         memory_info = {
-            "total": memory.total,
-            "available": memory.available,
-            "used": memory.used,
-            "usage_percent": memory.percent,
+            "total": 0,
+            "available": 0,
+            "used": 0,
+            "usage_percent": 0.0,
         }
-
-        # 获取磁盘信息
-        disk = psutil.disk_usage('/')
         disk_info = {
-            "total": disk.total,
-            "used": disk.used,
-            "free": disk.free,
-            "usage_percent": disk.percent,
+            "total": 0,
+            "used": 0,
+            "free": 0,
+            "usage_percent": 0.0,
         }
-
-        # 获取网络接口信息
         network_info = {"interfaces": []}
-        for interface_name, interface_addresses in psutil.net_if_addrs().items():
-            for address in interface_addresses:
-                if address.family == socket.AF_INET:  # IPv4
-                    network_info["interfaces"].append({
-                        "name": interface_name,
-                        "ip_address": address.address,
-                        "mac_address": "N/A",  # MAC地址需要单独获取
-                    })
-                    break
+        uptime_seconds = 0
+
+        # psutil 可选：未安装时返回基础信息与默认值，避免服务启动失败
+        if psutil is not None:
+            cpu_info = {
+                "count": psutil.cpu_count(),
+                "usage_percent": psutil.cpu_percent(interval=1),
+                "load_average": psutil.getloadavg() if hasattr(psutil, 'getloadavg') else [0, 0, 0],
+            }
+
+            memory = psutil.virtual_memory()
+            memory_info = {
+                "total": memory.total,
+                "available": memory.available,
+                "used": memory.used,
+                "usage_percent": memory.percent,
+            }
+
+            disk = psutil.disk_usage('/')
+            disk_info = {
+                "total": disk.total,
+                "used": disk.used,
+                "free": disk.free,
+                "usage_percent": disk.percent,
+            }
+
+            for interface_name, interface_addresses in psutil.net_if_addrs().items():
+                for address in interface_addresses:
+                    if address.family == socket.AF_INET:
+                        network_info["interfaces"].append({
+                            "name": interface_name,
+                            "ip_address": address.address,
+                            "mac_address": "N/A",
+                        })
+                        break
+            uptime_seconds = max(0, int(datetime.now().timestamp() - psutil.boot_time()))
 
         # 获取系统基本信息
         system_info = {
@@ -94,7 +115,7 @@ async def get_system_info(
             "infra_version": std_platform.version(),
             "architecture": std_platform.machine(),
             "python_version": std_platform.python_version(),
-            "uptime": int(psutil.boot_time()),
+            "uptime": uptime_seconds,
             "cpu": cpu_info,
             "memory": memory_info,
             "disk": disk_info,

@@ -59,6 +59,19 @@ export default function PlatformSettingsPage() {
     mutationFn: (data: PlatformSettingsUpdateRequest) => updatePlatformSettings(data),
     onSuccess: (data) => {
       messageApi.success(t('pages.infra.platform.updateSuccess'));
+      // 立即同步本地表单与缓存，避免 UI 仍短暂显示旧值造成“没保存”的错觉
+      form.setFieldsValue({
+        platform_name: data.platform_name,
+        platform_logo: data.platform_logo,
+        favicon: data.favicon,
+        login_title: data.login_title,
+        login_content: data.login_content,
+        icp_license: data.icp_license,
+        theme_color: data.theme_color || '#1890ff',
+        tenant_auto_approve: data.tenant_auto_approve ?? false,
+        float_button_enabled: data.float_button_enabled ?? true,
+      });
+      queryClient.setQueryData(['platformSettings'], data);
       queryClient.invalidateQueries({ queryKey: ['platformSettings'] });
       queryClient.invalidateQueries({ queryKey: ['platformSettingsPublic'] });
       applyFavicon(data.favicon).catch(() => {});
@@ -156,10 +169,6 @@ export default function PlatformSettingsPage() {
         platform_name: settings.platform_name,
         platform_logo: settings.platform_logo,
         favicon: settings.favicon,
-        platform_description: settings.platform_description,
-        platform_contact_email: settings.platform_contact_email,
-        platform_contact_phone: settings.platform_contact_phone,
-        platform_website: settings.platform_website,
         login_title: settings.login_title,
         login_content: settings.login_content,
         icp_license: settings.icp_license,
@@ -359,7 +368,10 @@ export default function PlatformSettingsPage() {
    * 处理保存
    */
   const handleSave = async (values: PlatformSettingsUpdateRequest) => {
-    await updateMutation.mutateAsync(values);
+    await updateMutation.mutateAsync({
+      ...values,
+      platform_name: values.platform_name?.trim(),
+    });
   };
 
   return (
@@ -496,53 +508,6 @@ export default function PlatformSettingsPage() {
               />
             </Space>
           </ProForm.Item>
-
-          <ProFormTextArea
-            name="platform_description"
-            label={t('pages.infra.platform.platformDescription')}
-            placeholder={t('pages.infra.platform.platformDescriptionPlaceholder')}
-            fieldProps={{
-              rows: 4,
-              maxLength: 1000,
-            }}
-          />
-
-          <ProFormText
-            name="platform_contact_email"
-            label={t('pages.infra.platform.contactEmail')}
-            placeholder={t('pages.infra.platform.contactEmailPlaceholder')}
-            rules={[
-              { type: 'email', message: t('pages.infra.platform.contactEmailInvalid') },
-              { max: 255, message: t('pages.infra.platform.contactEmailMax') },
-            ]}
-            fieldProps={{
-              maxLength: 255,
-            }}
-          />
-
-          <ProFormText
-            name="platform_contact_phone"
-            label={t('pages.infra.platform.contactPhone')}
-            placeholder={t('pages.infra.platform.contactPhonePlaceholder')}
-            rules={[
-              { max: 50, message: t('pages.infra.platform.contactPhoneMax') },
-            ]}
-            fieldProps={{
-              maxLength: 50,
-            }}
-          />
-
-          <ProFormText
-            name="platform_website"
-            label={t('pages.infra.platform.website')}
-            placeholder={t('pages.infra.platform.websitePlaceholder')}
-            rules={[
-              { max: 500, message: t('pages.infra.platform.websiteMax') },
-            ]}
-            fieldProps={{
-              maxLength: 500,
-            }}
-          />
 
           <Card type="inner" title={t('pages.infra.platform.tenantConfig')} style={{ marginTop: 16, marginBottom: 16 }}>
             <ProFormSwitch

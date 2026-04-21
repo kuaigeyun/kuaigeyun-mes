@@ -44,7 +44,6 @@ import {
   reopenQuotation,
   revokePushQuotation,
   createQuotationRevision,
-  recordQuotationPrint,
   Quotation,
 } from '../../../services/quotation';
 import { getSalesOrder, type SalesOrder } from '../../../services/sales-order';
@@ -57,9 +56,7 @@ import {
   useDocumentTracking,
 } from '../../../../../components/document-tracking-panel';
 import { apiRequest } from '../../../../../services/api';
-import { tryQuotationPdfmePreviewBlob } from '../../../utils/quotationPdfmePreview';
 import type { DocumentPrintApiResult } from '../../../../../utils/printResponseHelpers';
-import { isClientPdfmePrint } from '../../../../../utils/printResponseHelpers';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import dayjs from 'dayjs';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
@@ -1296,54 +1293,14 @@ const QuotationsPage: React.FC = () => {
       setPdfPreviewVisible(true);
     };
 
-    /** pdfme 模板：浏览器内 @pdfme/generator（与 tryQuotationPdfmePreviewBlob 一致） */
-    try {
-      const pdfmeBlob = await tryQuotationPdfmePreviewBlob(qid);
-      if (pdfmeBlob) {
-        const blobUrl = URL.createObjectURL(pdfmeBlob);
-        openPdfPreview(blobUrl);
-        try {
-          await recordQuotationPrint(qid);
-        } catch {
-          /* 正式文档时间戳非阻断 */
-        }
-        messageApi.success('已打开预览（pdfme 模板）');
-        return;
-      }
-    } catch (e) {
-      console.warn('[quotation print] pdfme branch skipped', e);
-    }
-
     try {
       const result = await apiRequest<DocumentPrintApiResult>(
-        `/apps/kuaizhizao/quotations/${record.id}/print`,
+        `/apps/kuaizhizao/quotations/${qid}/print`,
         {
           method: 'GET',
           params: { response_format: 'json', output_format: 'pdf' },
         }
       );
-      if (isClientPdfmePrint(result)) {
-        try {
-          const blob = await tryQuotationPdfmePreviewBlob(qid);
-          if (blob) {
-            const blobUrl = URL.createObjectURL(blob);
-            openPdfPreview(blobUrl);
-            try {
-              await recordQuotationPrint(qid);
-            } catch {
-              /* ignore */
-            }
-            messageApi.success('已打开预览（pdfme 模板）');
-            return;
-          }
-        } catch (e: any) {
-          console.error('[quotation print] pdfme fallback failed', e);
-          messageApi.error(e?.message || 'pdfme 生成 PDF 失败，请检查模板或稍后重试');
-          return;
-        }
-        messageApi.warning(result?.message || '无法生成 pdfme 预览');
-        return;
-      }
       const raw = result?.content || '';
       if (
         result?.content_encoding === 'base64' &&

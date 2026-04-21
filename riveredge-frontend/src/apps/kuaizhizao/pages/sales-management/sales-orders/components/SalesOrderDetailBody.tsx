@@ -22,10 +22,7 @@ import { getSalesOrderLifecycle } from '../../../../utils/salesOrderLifecycle';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../../services/dataDictionary';
 import type { SalesOrder, SalesOrderItem } from '../../../../services/sales-order';
 import { apiRequest } from '../../../../../../services/api';
-import { trySalesOrderPdfmePreviewBlob } from '../../../../utils/salesOrderPdfmePreview';
 import type { DocumentPrintApiResult } from '../../../../../../utils/printResponseHelpers';
-import { isClientPdfmePrint } from '../../../../../../utils/printResponseHelpers';
-import { openPdfBlobInPrintWindow } from '../../../../../../utils/pdfmeClientPrint';
 
 export interface SalesOrderDetailBodyProps {
   order: SalesOrder;
@@ -121,15 +118,6 @@ export const SalesOrderDetailBody: React.FC<SalesOrderDetailBodyProps> = ({
   const handlePrintSalesOrder = async () => {
     if (order.id == null) return;
     try {
-      const pdfmeBlob = await trySalesOrderPdfmePreviewBlob(order.id);
-      if (pdfmeBlob) {
-        const { revoked } = openPdfBlobInPrintWindow(pdfmeBlob);
-        if (revoked) {
-          messageApi.warning('无法打开打印窗口，请检查浏览器弹窗设置');
-        }
-        return;
-      }
-
       const result = await apiRequest<DocumentPrintApiResult>(
         `/apps/kuaizhizao/sales-orders/${order.id}/print`,
         {
@@ -137,16 +125,6 @@ export const SalesOrderDetailBody: React.FC<SalesOrderDetailBodyProps> = ({
           params: { response_format: 'json', output_format: 'html' },
         }
       );
-      if (isClientPdfmePrint(result)) {
-        const blob = await trySalesOrderPdfmePreviewBlob(order.id);
-        if (blob) {
-          const r = openPdfBlobInPrintWindow(blob);
-          if (r.revoked) messageApi.warning('无法打开打印窗口，请检查浏览器弹窗设置');
-          return;
-        }
-        messageApi.warning(result?.message || '当前模板为 pdfme，无法在服务端成稿');
-        return;
-      }
       const html = result?.content || '';
       if (html) {
         const printWindow = window.open('', '_blank');

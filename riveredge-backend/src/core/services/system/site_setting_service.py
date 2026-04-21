@@ -28,14 +28,6 @@ _PLATFORM_DEFAULT_VALUES = {
     "site_logo": "",  # 无默认 logo 时留空
 }
 
-# 历史品牌残留值：命中后视为未自定义，避免继续覆盖当前默认品牌。
-_LEGACY_BRAND_TITLES = {
-    "快格云制造运营看板",
-    "快格云制造",
-    "快格轻制造",
-}
-
-
 class SiteSettingService:
     """
     站点设置服务类
@@ -80,13 +72,6 @@ class SiteSettingService:
         site_settings = await SiteSettingService.get_settings(tenant_id)
         tenant_settings = dict(site_settings.settings or {})
 
-        # 清理租户级历史品牌残留：删除 site_name，让其回退到平台级或系统默认值。
-        tenant_site_name = tenant_settings.get("site_name")
-        if isinstance(tenant_site_name, str) and tenant_site_name.strip() in _LEGACY_BRAND_TITLES:
-            tenant_settings.pop("site_name", None)
-            site_settings.settings = tenant_settings
-            await site_settings.save(update_fields=["settings"])
-        
         # 获取平台设置用于回退（新租户未设置时显示平台级默认）
         from infra.models.platform_settings import PlatformSettings
         platform = await PlatformSettings.first()

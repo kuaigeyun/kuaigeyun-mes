@@ -143,13 +143,11 @@ const PersonalProfilePage = React.lazy(() => import('../pages/personal/profile')
 const PersonalPreferencesPage = React.lazy(() => import('../pages/personal/preferences'));
 const PersonalMessagesPage = React.lazy(() => import('../pages/personal/messages'));
 const PersonalTasksPage = React.lazy(() => import('../pages/personal/tasks'));
-const InngestDashboardPage = React.lazy(() => import('../pages/infra/inngest'));
 
 // 平台级页面（按需加载）
 const PlatformOperationPage = React.lazy(() => import('../pages/infra/operation'));
 const TenantsPage = React.lazy(() => import('../pages/infra/tenants/list'));
 const PackagesPage = React.lazy(() => import('../pages/infra/packages'));
-const MonitoringPage = React.lazy(() => import('../pages/infra/monitoring'));
 const PlatformAdminPage = React.lazy(() => import('../pages/infra/admin'));
 
 const SystemRoutes: React.FC = () => (
@@ -221,7 +219,6 @@ const SystemRoutes: React.FC = () => (
     <Route path="/system/operation-guide" element={withSuspense(OperationGuidePage)} />
     <Route path="/system/launch-progress" element={withSuspense(LaunchProgressPage)} />
     <Route path="/system/usage-analysis" element={withSuspense(UsageAnalysisPage)} />
-    <Route path="/system/inngest" element={withSuspense(InngestDashboardPage)} />
 
     <Route path="/personal/profile" element={withSuspense(PersonalProfilePage)} />
     <Route path="/personal/preferences" element={withSuspense(PersonalPreferencesPage)} />
@@ -233,8 +230,8 @@ const SystemRoutes: React.FC = () => (
     <Route path="/platform/operation" element={withSuspense(PlatformOperationPage)} />
     <Route path="/infra/tenants" element={withSuspense(TenantsPage)} />
     <Route path="/infra/packages" element={withSuspense(PackagesPage)} />
-    <Route path="/infra/monitoring" element={withSuspense(MonitoringPage)} />
-    <Route path="/infra/inngest" element={withSuspense(InngestDashboardPage)} />
+    <Route path="/infra/monitoring" element={<Navigate to="/infra/admin" replace />} />
+    <Route path="/infra/inngest" element={<Navigate to="/infra/admin" replace />} />
 
     <Route path="*" element={<NotFoundPage />} />
   </Routes>

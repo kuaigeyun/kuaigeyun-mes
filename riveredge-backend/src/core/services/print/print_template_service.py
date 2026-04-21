@@ -301,7 +301,7 @@ class PrintTemplateService:
     ) -> str:
         """
         渲染模板内容（变量替换）
-        - pdfme 格式：由前端渲染，后端不支持
+        - pdfme 格式：不在此服务渲染（由上层进行降级处理）
         - 纯文本格式：{{key}} 替换，支持点号路径
         
         Args:
@@ -312,7 +312,7 @@ class PrintTemplateService:
             str: 渲染后的内容
         """
         if is_pdfme_template(template_content):
-            raise ValidationError("pdfme 模板请在前端渲染")
+            raise ValidationError("pdfme 模板不在该服务直接渲染范围内")
         return render_plain_template(template_content, data)
 
     @staticmethod
@@ -364,7 +364,7 @@ class PrintTemplateService:
             # }
             raise ValidationError("异步执行功能待实现")
         
-        # 同步渲染模板（pdfme 由前端渲染）
+        # 同步渲染模板（pdfme 模板在上层服务中会提前降级）
         if data.output_format == "html" and not is_pdfme_template(print_template.content):
             rendered_content = render_template_to_html(print_template.content, data.data)
         else:

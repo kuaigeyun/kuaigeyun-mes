@@ -27,7 +27,7 @@ import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
 import { useTranslation } from 'react-i18next';
 import type { DocumentPrintApiResult } from '../../../../../utils/printResponseHelpers';
-import { isClientPdfmePrint, clientPdfmeListPrintMessage } from '../../../../../utils/printResponseHelpers';
+import type { DocumentPrintApiResult } from '../../../../../utils/printResponseHelpers';
 
 interface MaterialBorrow {
   id?: number;
@@ -293,10 +293,6 @@ const MaterialBorrowsPage: React.FC = () => {
   const handlePrint = async (record: MaterialBorrow) => {
     try {
       const result = (await warehouseApi.materialBorrow.print(record.id!.toString())) as DocumentPrintApiResult;
-      if (isClientPdfmePrint(result)) {
-        messageApi.warning(clientPdfmeListPrintMessage(result.message));
-        return;
-      }
       if (result?.success && result?.content) {
         const printWindow = window.open('', '_blank');
         if (printWindow) {

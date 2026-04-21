@@ -55,24 +55,6 @@ class InfraSettings(BaseSettings):
         """
         return f"postgres://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
 
-    # Redis 配置
-    REDIS_HOST: str = Field(default="localhost", description="Redis 主机")
-    REDIS_PORT: int = Field(default=6379, description="Redis 端口")
-    REDIS_PASSWORD: str = Field(default="", description="Redis 密码")
-    REDIS_DB: int = Field(default=0, description="Redis 数据库编号")
-
-    @property
-    def REDIS_URL(self) -> str:
-        """
-        构建 Redis 连接字符串
-
-        Returns:
-            str: Redis 连接字符串
-        """
-        if self.REDIS_PASSWORD:
-            return f"redis://:{self.REDIS_PASSWORD}@{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
-        return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
-
     # JWT 配置
     JWT_SECRET_KEY: str = Field(default="your-secret-key-here-change-in-production", description="JWT 密钥")
     JWT_ALGORITHM: str = Field(default="HS256", description="JWT 算法")

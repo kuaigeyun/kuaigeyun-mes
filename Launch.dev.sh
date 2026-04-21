@@ -29,32 +29,32 @@ kill_port() {
 }
 
 start_backend() {
-    log_info "正在拉起后端 (8200)..."
+    log_info "正在拉起后端 (${BACKEND_PORT})..."
     cd riveredge-backend
     # 强制清理旧的 PID
     [ -f "../.logs/backend.pid" ] && rm -f "../.logs/backend.pid"
-    PYTHONPATH="src" nohup uv run uvicorn server.main:app --host 0.0.0.0 --port 8200 --reload --reload-dir src > ../.logs/backend.log 2>&1 &
+    PYTHONPATH="src" nohup uv run uvicorn server.main:app --host 0.0.0.0 --port "${BACKEND_PORT}" --reload --reload-dir src > ../.logs/backend.log 2>&1 &
     echo $! > ../.logs/backend.pid
     cd ..
     
     # 轮询等待
     local retries=0
     while [ $retries -lt $BACKEND_START_TIMEOUT ]; do
-        check_port 8200 && break
+        check_port "${BACKEND_PORT}" && break
         sleep 1
         let retries=retries+1
     done
-    check_port 8200 || { log_error "后端启动超时 (30s)"; return 1; }
+    check_port "${BACKEND_PORT}" || { log_error "后端启动超时 (${BACKEND_START_TIMEOUT}s)"; return 1; }
     log_success "后端就绪!"
 }
 
 start_frontend() {
-    log_info "正在拉起前端 (8100)..."
+    log_info "正在拉起前端 (${FRONTEND_PORT})..."
     cd riveredge-frontend
     # 自动校准代理
-    sed -i "s|target: 'http://localhost:[0-9]\+'|target: 'http://localhost:8200'|g" vite.config.ts 2>/dev/null || true
+    sed -i "s|target: 'http://localhost:[0-9]\+'|target: 'http://localhost:${BACKEND_PORT}'|g" vite.config.ts 2>/dev/null || true
     [ -f "../.logs/frontend.pid" ] && rm -f "../.logs/frontend.pid"
-    nohup npx vite --port 8100 --host 127.0.0.1 > ../.logs/frontend.log 2>&1 &
+    nohup npx vite --port "${FRONTEND_PORT}" --host 127.0.0.1 > ../.logs/frontend.log 2>&1 &
     echo $! > ../.logs/frontend.pid
     cd ..
     log_success "前端已挂起!"
@@ -62,24 +62,24 @@ start_frontend() {
 
 stop_all() {
     log_info "停止所有服务..."
-    kill_port 8200
-    kill_port 8100
+    kill_port "${BACKEND_PORT}"
+    kill_port "${FRONTEND_PORT}"
 }
 
 case "$1" in
     stop) stop_all ;;
     status)
-        check_port 8200 && log_success "Backend [OK]" || log_warn "Backend [OFF]"
-        check_port 8100 && log_success "Frontend [OK]" || log_warn "Frontend [OFF]"
+        check_port "${BACKEND_PORT}" && log_success "Backend [OK]" || log_warn "Backend [OFF]"
+        check_port "${FRONTEND_PORT}" && log_success "Frontend [OK]" || log_warn "Frontend [OFF]"
         ;;
-    be) kill_port 8200; start_backend ;;
-    fe) kill_port 8100; start_frontend ;;
+    be) kill_port "${BACKEND_PORT}"; start_backend ;;
+    fe) kill_port "${FRONTEND_PORT}"; start_frontend ;;
     *)
         mkdir -p .logs
         stop_all
         start_backend && start_frontend
         log_success "🚀 RiverEdge 系统已恢复就绪!"
-        echo "  - Web端: http://localhost:8100"
-        echo "  - API: http://localhost:8200"
+        echo "  - Web端: http://localhost:${FRONTEND_PORT}"
+        echo "  - API: http://localhost:${BACKEND_PORT}"
         ;;
 esac

@@ -389,14 +389,6 @@ const techStackData: TechStackItem[] = [
     category: 'frontend',
   },
   {
-    name: '@pdfme/ui',
-    version: '^5.5.8',
-    description: 'PDF 模板设计、预览与生成（打印模板等）',
-    license: 'MIT License',
-    commercialUse: true,
-    category: 'frontend',
-  },
-  {
     name: 'signature_pad',
     version: '^5.1.3',
     description: '电子签名库，手写签名（用于 PDF 签名组件）',

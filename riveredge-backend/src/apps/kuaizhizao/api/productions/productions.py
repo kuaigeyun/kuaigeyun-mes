@@ -695,7 +695,7 @@ async def print_work_order(
     return JSONResponse(content=result, status_code=200)
 
 
-@router.get("/work-orders/{id}/print-variables", summary="工单打印变量（供前端 pdfme 渲染）")
+@router.get("/work-orders/{id}/print-variables", summary="工单打印变量")
 async def get_work_order_print_variables(
     id: int = Path(..., description="工单ID"),
     current_user: User = Depends(get_current_user),

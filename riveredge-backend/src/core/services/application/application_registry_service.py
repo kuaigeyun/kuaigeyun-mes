@@ -33,6 +33,7 @@ class ApplicationRegistryService:
     _registered_apps: Dict[str, Dict[str, Any]] = {}
     _registered_models: Set[str] = set()
     _registered_routes: Dict[str, List[Any]] = {}
+    _placeholder_app_codes: Set[str] = {"kuaicrm", "kuaipdm", "kuaichain"}
 
     @classmethod
     async def initialize(cls) -> None:
@@ -105,6 +106,8 @@ class ApplicationRegistryService:
             logger.info(f"📊 查询返回 {len(rows)} 行数据")
             for row in rows:
                 app_data = dict(row)
+                if app_data.get("code") in cls._placeholder_app_codes:
+                    continue
                 logger.info(f"📋 处理应用: {app_data.get('code')} (active: {app_data.get('is_active')}, installed: {app_data.get('is_installed')})")
                 # 解析JSON字段
                 if app_data.get('menu_config') and isinstance(app_data['menu_config'], str):
@@ -141,6 +144,8 @@ class ApplicationRegistryService:
                 for manifest in discovered_plugins:
                     app_code = manifest.get('code')
                     if not app_code:
+                        continue
+                    if app_code in cls._placeholder_app_codes:
                         continue
                     
                     # 构建应用数据（从 manifest.json 读取）
@@ -196,6 +201,8 @@ class ApplicationRegistryService:
         for manifest in discovered_plugins:
             app_code = manifest.get("code")
             if not app_code or app_code in existing_codes:
+                continue
+            if app_code in cls._placeholder_app_codes:
                 continue
             module_code = app_code.replace("-", "_")
             route_module_path = f"apps.{module_code}.api.router"
@@ -253,6 +260,8 @@ class ApplicationRegistryService:
             package_name = sub.name
             app_code = package_name.replace("_", "-")
             if app_code in existing_codes:
+                continue
+            if app_code in cls._placeholder_app_codes:
                 continue
             route_module_path = f"apps.{package_name}.api.router"
             if not cls._module_exists(route_module_path):

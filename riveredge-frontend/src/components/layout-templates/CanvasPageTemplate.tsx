@@ -51,7 +51,7 @@ export interface CanvasPageTemplateProps {
   leftPanel?: CanvasPageSidePanelConfig;
   /** 左侧面板宽度，默认 280 */
   leftPanelWidth?: number;
-  /** 右侧配置/属性面板（可选，不传则画板占满宽度，如 pdfme 原生编辑器） */
+  /** 右侧配置/属性面板（可选，不传则画板占满宽度） */
   rightPanel?: CanvasPageSidePanelConfig;
   /** 右侧面板宽度，默认 400 */
   rightPanelWidth?: number;

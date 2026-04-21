@@ -275,8 +275,6 @@ class DocumentPrintService:
             pdf_bytes = _html_to_pdf_bytes(html_content)
             return {
                 "success": True,
-                "render_mode": "server_html",
-                "requires_client_render": False,
                 "document_type": document_type,
                 "document_id": document_id,
                 "template_code": template_code,
@@ -288,8 +286,6 @@ class DocumentPrintService:
             }
         return {
             "success": True,
-            "render_mode": "server_html",
-            "requires_client_render": False,
             "document_type": document_type,
             "document_id": document_id,
             "template_code": template_code,
@@ -297,44 +293,6 @@ class DocumentPrintService:
             "content": html_content,
             "message": message,
         }
-
-    def _finalize_client_pdfme_payload(
-        self,
-        *,
-        document_type: str,
-        document_id: int,
-        template_code: Optional[str],
-        template_uuid: Any,
-        output_format: str,
-    ) -> Dict[str, Any]:
-        """
-        pdfme 模板无法在后端按设计稿成稿：返回显式契约，不再用默认 HTML 冒充模板。
-        """
-        tid = str(template_uuid) if template_uuid is not None else None
-        of = (output_format or "html").lower()
-        msg = (
-            "pdfme 模板仅能在浏览器内用 @pdfme/generator 按设计稿成稿；"
-            "服务端不返回替代 HTML/PDF。请调用对应 print-variables 接口获取变量后在前端生成，或使用已接入 pdfme 的业务打印入口。"
-        )
-        base: Dict[str, Any] = {
-            "success": True,
-            "render_mode": "client_pdfme",
-            "requires_client_render": True,
-            "document_type": document_type,
-            "document_id": document_id,
-            "template_code": template_code,
-            "template_uuid": tid,
-            "message": msg,
-        }
-        if of == "pdf":
-            base["output_format"] = "pdf"
-            base["content"] = ""
-            base["content_encoding"] = None
-            base["mime_type"] = "application/pdf"
-        else:
-            base["output_format"] = "html"
-            base["content"] = ""
-        return base
 
     async def print_document(
         self,
@@ -419,20 +377,29 @@ class DocumentPrintService:
                 message=res.get("message", "使用默认格式打印"),
             )
 
-        # pdfme 模板仅前端可完整渲染；服务端不返回替代版式（见 _finalize_client_pdfme_payload）
+        # 历史 pdfme 模板统一降级到服务端默认渲染，避免依赖前端 @pdfme/generator。
         from core.services.print.template_renderer import is_pdfme_template
 
         if is_pdfme_template(template.content or ""):
             logger.info(
-                "打印模板 %s 为 pdfme，服务端仅返回 client_pdfme 契约，不生成 HTML/PDF",
+                "打印模板 %s 为 pdfme，降级为服务端默认模板渲染",
                 template_code or getattr(template, "code", None) or template.uuid,
             )
-            return self._finalize_client_pdfme_payload(
+            fallback = await self._generate_default_print(
+                document_type=document_type,
+                document_data=document_data,
+                output_format="html",
+            )
+            await self._maybe_stamp_quotation_formal(
+                tenant_id, document_type, document_id
+            )
+            return self._finalize_print_payload(
                 document_type=document_type,
                 document_id=document_id,
                 template_code=template_code or getattr(template, "code", None),
-                template_uuid=getattr(template, "uuid", None),
+                html_content=fallback.get("content", ""),
                 output_format=output_format,
+                message="pdfme 模板已降级为服务端默认模板渲染",
             )
 
         # 先渲染为 HTML（再按需转 PDF）
@@ -468,7 +435,7 @@ class DocumentPrintService:
         document_type: str,
         document_id: int,
     ) -> Dict[str, Any]:
-        """与 `print_document` / HTML 模板渲染共用 `_get_document_data`，供 print-variables API 与前端 pdfme。"""
+        """与 `print_document` / HTML 模板渲染共用 `_get_document_data`，供 print-variables API 调试预览。"""
         return await self._get_document_data(tenant_id, document_type, document_id)
 
     async def _get_document_data(
@@ -1039,7 +1006,7 @@ class DocumentPrintService:
             material_by_id = {m.id: m for m in mats}
 
         async def _first_material_image_preview_url(tenant: int, images: Any) -> str:
-            """物料 images 多为文件 UUID 列表，需转为带 token 的下载地址供前端 pdfme 拉取嵌入。"""
+            """物料 images 多为文件 UUID 列表，需转为带 token 的下载地址供打印模板访问。"""
             if not images:
                 return ""
             first: Any = None

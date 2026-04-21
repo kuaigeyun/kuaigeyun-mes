@@ -211,16 +211,3 @@ export async function convertQuotationToOrder(quotationId: number): Promise<Conv
   });
 }
 
-/** 与后端 _format_quotation_data 一致，供 pdfme 前端渲染 */
-export async function getQuotationPrintVariables(quotationId: number): Promise<Record<string, unknown>> {
-  const res = await apiRequest<{ variables?: Record<string, unknown> }>(
-    `/apps/kuaizhizao/quotations/${quotationId}/print-variables`,
-    { method: 'GET' }
-  );
-  return res.variables ?? {};
-}
-
-/** 与走服务端打印时的正式文档时间戳一致（pdfme 纯前端成稿后调用） */
-export async function recordQuotationPrint(quotationId: number): Promise<void> {
-  await apiRequest(`/apps/kuaizhizao/quotations/${quotationId}/record-print`, { method: 'POST' });
-}

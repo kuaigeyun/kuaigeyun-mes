@@ -409,13 +409,13 @@ async def print_quotation(
     return JSONResponse(content=result, status_code=200)
 
 
-@router.get("/{quotation_id}/print-variables", summary="报价单打印变量（供前端 pdfme 渲染）")
+@router.get("/{quotation_id}/print-variables", summary="报价单打印变量")
 async def get_quotation_print_variables(
     quotation_id: int = Path(..., description="报价单ID"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """与 `_format_quotation_data` 一致，避免服务端 HTML 降级与 pdfme 设计稿不一致。"""
+    """与 `_format_quotation_data` 一致。"""
     from apps.kuaizhizao.services.print_service import DocumentPrintService
 
     try:
@@ -433,7 +433,7 @@ async def record_quotation_print(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """与走服务端打印路径时的 `_maybe_stamp_quotation_formal` 一致，供纯前端 pdfme 成稿后补记。"""
+    """与服务端打印路径中的 `_maybe_stamp_quotation_formal` 行为一致。"""
     from apps.kuaizhizao.services.print_service import DocumentPrintService
 
     try:

@@ -7,11 +7,11 @@
 
 from typing import Dict, Any, Optional
 from datetime import datetime
-import json
 
 from ..service_interface import UserActivityServiceInterface
 from ..service_registry import service_implementation
 from ...logging.online_user_service import OnlineUserService
+from ....models.user_activity import UserActivity
 
 
 @service_implementation(UserActivityServiceInterface)
@@ -72,22 +72,8 @@ class UserActivityServiceImpl(UserActivityServiceInterface):
         Returns:
             Optional[datetime]: 最后活动时间
         """
-        # 从缓存中获取用户活动信息
-        from infra.infrastructure.cache.cache import cache
-
-        activity_key = self._online_user_service._get_activity_key(tenant_id, user_id)
-        activity_data = await cache.get(activity_key)
-
-        if activity_data:
-            try:
-                data = json.loads(activity_data)
-                last_activity_str = data.get("last_activity_time")
-                if last_activity_str:
-                    return datetime.fromisoformat(last_activity_str)
-            except (json.JSONDecodeError, ValueError):
-                pass
-
-        return None
+        entry = await UserActivity.filter(tenant_id=tenant_id, user_id=user_id).first()
+        return entry.last_activity_time if entry else None
 
     async def is_user_online(
         self,

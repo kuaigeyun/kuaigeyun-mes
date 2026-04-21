@@ -5700,7 +5700,7 @@ export default {
   'pages.system.printTemplatesDesign.rowHeightAutoHint':
     '表头与表体可分别设置最小行高（单位 mm）；多行文字时行高仍会随内容增加。',
   'pages.system.printTemplatesDesign.rowHeightFixedHint':
-    '表头与表体可分别设置固定行高（单位 mm）；与 pdfme 单元格最小高度一致，适合单行明细。',
+    '表头与表体可分别设置固定行高（单位 mm）；与模板表格单元格最小高度一致，适合单行明细。',
   'pages.system.printTemplatesDesign.detailTableBadge': '明细表',
   'pages.system.printTemplatesDesign.detailTableAdded': '已插入明细表：{{label}}',
   'pages.system.printTemplatesDesign.detailTableConfigMissing': '当前单据类型未配置明细表列，无法插入表格',
@@ -5804,7 +5804,7 @@ export default {
   'pages.system.printTemplates.columnConfig': '模板配置',
   'pages.system.printTemplates.columnUpdatedAt': '更新时间',
   'pages.system.printTemplates.workOrderTemplateName': '工单打印模板（含二维码）',
-  'pages.system.printTemplates.workOrderTemplateDescription': '基于 pdfme 的工单打印模板，包含工单二维码、基本信息及工序列表。',
+  'pages.system.printTemplates.workOrderTemplateDescription': '工单打印模板，包含工单二维码、基本信息及工序列表。',
   'pages.system.printTemplates.cardViewTitle': '打印模板管理',
   'pages.system.printTemplates.cardViewEmpty': '暂无打印模板',
   'pages.system.printTemplates.createFailed': '创建模板失败',

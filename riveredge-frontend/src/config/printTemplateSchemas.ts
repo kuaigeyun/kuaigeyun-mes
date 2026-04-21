@@ -631,7 +631,7 @@ export const DOCUMENT_TYPE_TO_CODE: Record<string, string> = {
 export interface TemplateVariableItem {
   key: string;
   label: string;
-  /** 侧栏展示为「整块明细表」，点击插入 pdfme table（绑定 items / operations 数组） */
+  /** 侧栏展示为「整块明细表」，点击插入结构化表格（绑定 items / operations 数组） */
   kind?: 'detailTable';
 }
 

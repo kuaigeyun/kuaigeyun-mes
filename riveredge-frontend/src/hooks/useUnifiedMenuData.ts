@@ -175,8 +175,6 @@ export function useUnifiedMenuData(
               c.path?.startsWith('/infra/operation') ||
               c.path?.startsWith('/infra/tenants') ||
               c.path?.startsWith('/infra/packages') ||
-              c.path?.startsWith('/infra/monitoring') ||
-              c.path?.startsWith('/infra/inngest') ||
               c.path?.startsWith('/infra/admin')
           );
           return !hasInfra;

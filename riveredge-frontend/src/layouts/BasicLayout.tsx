@@ -446,8 +446,6 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/infra/operation': ManufacturingIcons.analytics, // 运营中心 - 使用分析图标
       '/infra/tenants': ManufacturingIcons.building, // 租户管理 - 使用建筑图标（保持）
       '/infra/packages': ManufacturingIcons.package, // 应用包管理 - 使用包裹图标
-      '/infra/monitoring': ManufacturingIcons.monitor, // 系统监控 - 使用显示器图标
-      '/infra/inngest': ManufacturingIcons.workflow, // Inngest工作流 - 使用工作流图标
       '/infra/admin': ManufacturingIcons.shield, // 平台管理 - 使用盾牌图标
 
       // 应用菜单路径图标映射（使用前缀匹配，支持 /apps/{app-code}/... 格式）
@@ -619,8 +617,6 @@ const getMenuConfig = (t: (key: string) => string): PermissionMenuDataItem[] => 
       { path: '/infra/operation', name: t('menu.infra.operation'), icon: getMenuIcon(t('menu.infra.operation'), '/infra/operation') },
       { path: '/infra/tenants', name: t('menu.infra.tenants'), icon: getMenuIcon(t('menu.infra.tenants'), '/infra/tenants') },
       { path: '/infra/packages', name: t('menu.infra.packages'), icon: getMenuIcon(t('menu.infra.packages'), '/infra/packages') },
-      { path: '/infra/monitoring', name: t('menu.infra.monitoring'), icon: getMenuIcon(t('menu.infra.monitoring'), '/infra/monitoring') },
-      { path: '/infra/inngest', name: t('menu.infra.inngest'), icon: getMenuIcon(t('menu.infra.inngest'), '/infra/inngest') },
       { path: '/infra/admin', name: t('menu.infra.admin'), icon: getMenuIcon(t('menu.infra.admin'), '/infra/admin') },
     ],
   },

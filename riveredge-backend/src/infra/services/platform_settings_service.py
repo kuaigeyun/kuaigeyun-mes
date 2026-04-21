@@ -18,14 +18,6 @@ from infra.schemas.platform_settings import (
 )
 from infra.exceptions.exceptions import NotFoundError
 
-_LEGACY_PLATFORM_NAMES = {
-    "快格云制造",
-    "快格轻制造",
-    "快格云制造运营看板",
-}
-_CLEAN_PLATFORM_DEFAULT_NAME = "RiverEdge SaaS"
-
-
 class PlatformSettingsService:
     """
     平台设置服务类
@@ -45,10 +37,6 @@ class PlatformSettingsService:
         settings = await PlatformSettings.first()
         if not settings:
             return None
-        if settings.platform_name and settings.platform_name.strip() in _LEGACY_PLATFORM_NAMES:
-            settings.platform_name = _CLEAN_PLATFORM_DEFAULT_NAME
-            settings.updated_at = now_utc()
-            await settings.save(update_fields=["platform_name", "updated_at"])
         return PlatformSettingsResponse.model_validate(settings)
     
     async def get_or_create_default_settings(self) -> PlatformSettingsResponse:
@@ -66,10 +54,6 @@ class PlatformSettingsService:
             settings = await PlatformSettings.create(
                 platform_name="RiverEdge SaaS Framework"
             )
-        elif settings.platform_name and settings.platform_name.strip() in _LEGACY_PLATFORM_NAMES:
-            settings.platform_name = _CLEAN_PLATFORM_DEFAULT_NAME
-            settings.updated_at = now_utc()
-            await settings.save(update_fields=["platform_name", "updated_at"])
         return PlatformSettingsResponse.model_validate(settings)
     
     async def create_settings(

@@ -5674,7 +5674,7 @@ export default {
   'pages.system.printTemplatesDesign.rowHeightAutoHint':
     'Header and body can be set separately (mm). Multi-line text may still increase row height.',
   'pages.system.printTemplatesDesign.rowHeightFixedHint':
-    'Header and body can be set separately (mm). Matches pdfme cell min height; best for single-line cells.',
+    'Header and body can be set separately (mm). Matches template table minimum cell height; best for single-line cells.',
   'pages.system.printTemplatesDesign.detailTableBadge': 'Table',
   'pages.system.printTemplatesDesign.detailTableAdded': 'Detail table inserted: {{label}}',
   'pages.system.printTemplatesDesign.detailTableConfigMissing':

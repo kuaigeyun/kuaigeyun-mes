@@ -408,7 +408,7 @@ async def print_sales_order(
     return JSONResponse(content=result, status_code=200)
 
 
-@router.get("/{sales_order_id}/print-variables", summary="销售订单打印变量（供前端 pdfme 渲染）")
+@router.get("/{sales_order_id}/print-variables", summary="销售订单打印变量")
 async def get_sales_order_print_variables(
     sales_order_id: int = Path(..., description="销售订单ID"),
     current_user: User = Depends(get_current_user),

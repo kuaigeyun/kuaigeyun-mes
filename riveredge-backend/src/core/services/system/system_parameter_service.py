@@ -8,32 +8,11 @@ from typing import List, Optional, Dict, Any
 from uuid import UUID
 from tortoise.exceptions import IntegrityError
 import json
-import redis.asyncio as redis
 
 from core.models.system_parameter import SystemParameter
 from core.schemas.system_parameter import SystemParameterCreate, SystemParameterUpdate
 from infra.exceptions.exceptions import NotFoundError, ValidationError
-from infra.config.infra_config import infra_settings as settings
-
-# Redis 客户端（全局单例）
-_redis_client: Optional[redis.Redis] = None
-
-
-async def get_redis_client() -> redis.Redis:
-    """
-    获取 Redis 客户端（单例模式）
-    
-    Returns:
-        redis.Redis: Redis 客户端实例
-    """
-    global _redis_client
-    if _redis_client is None:
-        _redis_client = redis.from_url(
-            settings.REDIS_URL,
-            encoding="utf-8",
-            decode_responses=True
-        )
-    return _redis_client
+from infra.infrastructure.cache.cache import cache
 
 
 class SystemParameterService:
@@ -70,9 +49,8 @@ class SystemParameterService:
             参数值，如果不存在返回 None
         """
         try:
-            redis_client = await get_redis_client()
             cache_key = SystemParameterService._get_cache_key(tenant_id, key)
-            value = await redis_client.get(cache_key)
+            value = await cache.get(cache_key)
             if value:
                 return json.loads(value)
         except Exception:
@@ -92,13 +70,8 @@ class SystemParameterService:
             expire: 过期时间（秒），默认 3600 秒（1小时）
         """
         try:
-            redis_client = await get_redis_client()
             cache_key = SystemParameterService._get_cache_key(tenant_id, key)
-            await redis_client.set(
-                cache_key,
-                json.dumps(value, ensure_ascii=False),
-                ex=expire
-            )
+            await cache.set(cache_key, json.dumps(value, ensure_ascii=False), expire=expire)
         except Exception:
             # 缓存失败不影响主流程，静默处理
             pass
@@ -113,9 +86,8 @@ class SystemParameterService:
             key: 参数键
         """
         try:
-            redis_client = await get_redis_client()
             cache_key = SystemParameterService._get_cache_key(tenant_id, key)
-            await redis_client.delete(cache_key)
+            await cache.delete(cache_key)
         except Exception:
             # 缓存失败不影响主流程，静默处理
             pass

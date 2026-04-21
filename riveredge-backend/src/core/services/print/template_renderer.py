@@ -1,7 +1,8 @@
 """
 打印模板渲染模块
 
-支持纯文本 {{key}} 变量替换。pdfme 格式模板由前端渲染。
+支持纯文本 {{key}} 变量替换。
+历史 pdfme 模板由上层服务降级，不在该模块渲染。
 """
 
 import json
@@ -88,7 +89,7 @@ def render_template_to_html(template_content: str, data: Dict[str, Any]) -> str:
         HTML 字符串
     """
     if is_pdfme_template(template_content):
-        raise ValidationError("pdfme 模板请在前端渲染，后端不支持 pdfme 格式")
+        raise ValidationError("pdfme 模板不在该渲染器处理范围内")
     text = render_plain_template(template_content, data)
     html_body = text.replace("\n", "<br>").replace("  ", "&nbsp;&nbsp;")
     return f"""<!DOCTYPE html>

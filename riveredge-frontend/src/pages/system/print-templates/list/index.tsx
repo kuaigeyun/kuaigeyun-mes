@@ -28,7 +28,8 @@ import {
   PrintTemplateRenderResponse,
 } from '../../../../services/printTemplate';
 import { DOCUMENT_TYPE_OPTIONS, DOCUMENT_TYPE_TO_CODE, getSchemaByType } from '../../../../config/printTemplateSchemas';
-import { EMPTY_PDFME_TEMPLATE_JSON, DEFAULT_WORK_ORDER_PDFME_TEMPLATE_JSON } from '../../../../components/pdfme-doc/constants-json';
+import { EMPTY_HTML_TEMPLATE, DEFAULT_WORK_ORDER_HTML_TEMPLATE } from '../../../../utils/printTemplateDefaults';
+import { isStructuredPrintTemplate } from '../../../../utils/printTemplateFormat';
 
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import dayjs from 'dayjs';
@@ -54,7 +55,7 @@ const getTypeInfo = (type: string, otherText: string = '其他'): { color: strin
 };
 
 /**
- * 提取模板变量（支持 pdfme schemas 和纯文本 {{key}}）
+ * 提取模板变量（支持结构化 JSON 与纯文本 {{key}}）
  */
 const extractVariables = (content: string): string[] => {
   if (!content) return [];
@@ -72,7 +73,7 @@ const extractVariables = (content: string): string[] => {
       return Array.from(names).sort();
     }
   } catch {
-    // 非 pdfme JSON，尝试 {{key}} 提取
+    // 非结构化 JSON，尝试 {{key}} 提取
   }
   const regex = /\{\{([^}]+)\}\}/g;
   const matches = content.matchAll(regex);
@@ -260,26 +261,39 @@ const PrintTemplateListPage: React.FC = () => {
    * 打开设计器 (新标签页)
    */
   const handleOpenDesigner = (record: PrintTemplate) => {
+    if (!isStructuredPrintTemplate(record.content || '')) {
+      messageApi.warning('当前模板为 HTML 模板，请直接编辑模板内容。');
+      return;
+    }
     // 在当前标签页打开
     navigate(`/system/print-templates/design/${record.uuid}`);
   };
 
   /**
-   * 加载预设：点击后全部加载所有预设打印模板
+   * 加载预设：仅加载当前阶段保留的基础单据模板
    */
   const handleLoadPreset = async () => {
     try {
       setPresetLoading(true);
+      const BASIC_PRESET_TYPES = new Set([
+        'quotation',
+        'sales_order',
+        'purchase_order',
+        'work_order',
+        'delivery_notice',
+      ]);
       const results = await Promise.allSettled(
-        DOCUMENT_TYPE_OPTIONS.map(({ value: presetDocumentType }) => {
+        DOCUMENT_TYPE_OPTIONS
+          .filter(({ value }) => BASIC_PRESET_TYPES.has(value))
+          .map(({ value: presetDocumentType }) => {
           const schema = getSchemaByType(presetDocumentType);
           const schemaName = schema?.name ?? presetDocumentType;
           const code = DOCUMENT_TYPE_TO_CODE[presetDocumentType] ?? presetDocumentType.toUpperCase();
-          const content = presetDocumentType === 'work_order' ? DEFAULT_WORK_ORDER_PDFME_TEMPLATE_JSON : EMPTY_PDFME_TEMPLATE_JSON;
+          const content = presetDocumentType === 'work_order' ? DEFAULT_WORK_ORDER_HTML_TEMPLATE : EMPTY_HTML_TEMPLATE;
           return createPrintTemplate({
             name: schemaName + t('pages.system.printTemplates.presetTemplateNameSuffix'),
             code,
-            type: 'pdf',
+            type: 'html',
             description: t('pages.system.printTemplates.presetTemplateDescription', { name: schemaName }),
             content,
             config: { document_type: presetDocumentType },
@@ -335,7 +349,7 @@ const PrintTemplateListPage: React.FC = () => {
           code: DOCUMENT_TYPE_TO_CODE[values.document_type] || values.code,
           type: values.type,
           description: values.description,
-          content: EMPTY_PDFME_TEMPLATE_JSON,
+          content: EMPTY_HTML_TEMPLATE,
           config: { document_type: values.document_type },
           is_active: values.is_active !== false,
         };

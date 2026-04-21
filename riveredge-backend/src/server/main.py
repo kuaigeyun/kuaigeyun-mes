@@ -121,16 +121,15 @@ from core.api.plugin_manager.plugin_manager import router as plugin_manager_rout
 # 应用路由现在通过 ApplicationRegistryService 动态注册
 # 无需手动导入应用路由模块
 
-# Inngest 集成
+# Task dispatcher bootstrap
 try:
-    from core.inngest.client import inngest_client
-    from inngest.fast_api import serve as inngest_serve
-    INNGEST_AVAILABLE = True
-except ImportError:
-    inngest_client = None
-    inngest_serve = None
-    INNGEST_AVAILABLE = False
-    logger.warning("⚠️ Inngest 模块不可用，已禁用 Inngest 集成")
+    from core.inngest.functions import *  # noqa: F401,F403 - 仅用于注册事件处理器
+    from apps.master_data.inngest.functions import *  # noqa: F401,F403
+    from apps.kuaizhizao.inngest.functions import *  # noqa: F401,F403
+    TASK_DISPATCHER_READY = True
+except Exception as e:
+    TASK_DISPATCHER_READY = False
+    logger.warning(f"⚠️ 任务处理器注册失败: {e}")
 
 # 获取运行模式 - 默认为SaaS模式
 MODE = os.getenv("MODE", "saas")
@@ -354,56 +353,10 @@ static_dir = os.path.join(os.path.dirname(__file__), "..", "..", "static")
 os.makedirs(static_dir, exist_ok=True)
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
-# 注册 Inngest 服务
-# 导入 Inngest 函数（确保函数被注册）
-# 注意：函数导入已在__init__.py中处理导入错误和可用性检查
-if INNGEST_AVAILABLE:
-    try:
-        # 定时任务调度器/执行器已从 Inngest 注册中移除（系统定时任务功能保留，仅不再通过 Inngest 自动执行）
-        from core.inngest.functions import (
-            test_integration_function,
-            message_sender_function,
-            approval_workflow_function,
-            approval_action_workflow_function,
-            sop_execution_workflow_function,
-            sop_node_complete_workflow_function,
-            material_ai_suggestion_workflow,
-            material_change_notification_workflow,
-            data_backup_workflow,
-            data_restore_workflow,
-        )
-        
-        # 准备所有 Inngest 函数列表（过滤掉 None 值）
-        inngest_functions = [
-            func for func in [
-                test_integration_function,
-                message_sender_function,
-                approval_workflow_function,
-                approval_action_workflow_function,
-                sop_execution_workflow_function,
-                sop_node_complete_workflow_function,
-                material_ai_suggestion_workflow,
-                material_change_notification_workflow,
-                data_backup_workflow,
-                data_restore_workflow,
-            ] if func is not None
-        ]
-        
-        # 注册 Inngest 服务端点（serve 会直接向 app 添加 /api/inngest 路由）
-        if inngest_functions:
-            inngest_serve(app, inngest_client, inngest_functions)
-            logger.info(f"✅ Inngest 服务端点注册成功")
-            logger.info(f"✅ 已注册 {len(inngest_functions)} 个 Inngest 函数")
-            logger.info(f"✅ Inngest 端点路径: /api/inngest")
-        else:
-            logger.warning("⚠️ 没有可用的 Inngest 函数，跳过服务端点注册")
-            
-    except Exception as e:
-        logger.error(f"❌ Inngest 服务端点注册失败: {e}")
-        import traceback
-        traceback.print_exc()
+if TASK_DISPATCHER_READY:
+    logger.info("✅ 事件任务处理器已注册（Task dispatcher）")
 else:
-    logger.info("ℹ️ Inngest 模块不可用，跳过 Inngest 服务端点注册")
+    logger.warning("⚠️ 事件任务处理器未完全注册")
 
 # 健康检查端点
 @app.get("/health")

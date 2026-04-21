@@ -24,10 +24,9 @@ import {
   RenderPrintTemplateData,
   PrintTemplateRenderResponse,
 } from '../../../services/printTemplate';
-import { DOCUMENT_TYPE_OPTIONS, DOCUMENT_TYPE_TO_CODE, getSamplePreviewVariables } from '../../../config/printTemplateSchemas';
-import { isPdfmeTemplate } from '../../../utils/pdfmeTemplateUtils';
-import PdfmePreview from '../../../components/pdfme-doc/preview';
-import { EMPTY_PDFME_TEMPLATE_JSON } from '../../../components/pdfme-doc/constants-json';
+import { DOCUMENT_TYPE_OPTIONS, DOCUMENT_TYPE_TO_CODE } from '../../../config/printTemplateSchemas';
+import { isStructuredPrintTemplate } from '../../../utils/printTemplateFormat';
+import { EMPTY_HTML_TEMPLATE } from '../../../utils/printTemplateDefaults';
 import { handleError, handleSuccess } from '../../../utils/errorHandler';
 import { CODE_FONT_FAMILY } from '../../../constants/fonts';
 import dayjs from 'dayjs';
@@ -40,7 +39,7 @@ const { useToken } = theme;
 const { TextArea } = Input;
 
 /**
- * 从模板内容中提取变量（支持 pdfme schemas 和纯文本 {{key}}）
+ * 从模板内容中提取变量（支持结构化 JSON 和纯文本 {{key}}）
  */
 const extractVariables = (content: string): string[] => {
   if (!content) return [];
@@ -58,7 +57,7 @@ const extractVariables = (content: string): string[] => {
       return Array.from(names).sort();
     }
   } catch {
-    // 非 pdfme JSON
+    // 非结构化 JSON
   }
   const regex = /\{\{([^}]+)\}\}/g;
   const matches = content.matchAll(regex);
@@ -89,7 +88,6 @@ const CardView: React.FC = () => {
   const [renderLoading, setRenderLoading] = useState(false);
 
   const [previewContent, setPreviewContent] = useState<string>('');
-  const [previewPdfme, setPreviewPdfme] = useState<{ template: any; variables: Record<string, unknown> } | null>(null);
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const createFormRef = useRef<ProFormInstance>(null);
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -151,18 +149,7 @@ const CardView: React.FC = () => {
     try {
       const detail = await getPrintTemplateByUuid(template.uuid);
       setCurrentTemplate(detail);
-      if (isPdfmeTemplate(detail.content)) {
-        const templateObj = JSON.parse(detail.content);
-        const docType = detail.config?.document_type || detail.type || 'work_order';
-        setPreviewPdfme({
-          template: templateObj,
-          variables: getSamplePreviewVariables(docType),
-        });
-        setPreviewContent('');
-      } else {
-        setPreviewPdfme(null);
-        setPreviewContent(t('pages.system.printTemplates.oldFormatMessage'));
-      }
+      setPreviewContent(detail.content || t('pages.system.printTemplates.oldFormatMessage'));
       setPreviewModalVisible(true);
     } catch (error: any) {
       handleError(error, t('pages.system.printTemplates.getDetailFailed'));
@@ -188,7 +175,7 @@ const CardView: React.FC = () => {
       await createPrintTemplate({
         ...values,
         code: DOCUMENT_TYPE_TO_CODE[values.document_type] || values.code,
-        content: EMPTY_PDFME_TEMPLATE_JSON,
+        content: EMPTY_HTML_TEMPLATE,
         config: { document_type: values.document_type },
       });
       handleSuccess(t('pages.system.printTemplates.createSuccess'));
@@ -206,6 +193,10 @@ const CardView: React.FC = () => {
    * 打开设计器
    */
   const handleOpenDesigner = (template: PrintTemplate) => {
+    if (!isStructuredPrintTemplate(template.content || '')) {
+      messageApi.warning('当前模板为 HTML 模板，请直接编辑模板内容。');
+      return;
+    }
     navigate(`/system/print-templates/design/${template.uuid}`);
   };
 
@@ -633,7 +624,6 @@ const CardView: React.FC = () => {
           setPreviewModalVisible(false);
           setCurrentTemplate(null);
           setPreviewContent('');
-          setPreviewPdfme(null);
         }}
         footer={null}
         width={900}
@@ -647,20 +637,11 @@ const CardView: React.FC = () => {
               showIcon
               style={{ marginBottom: 16 }}
             />
-            {previewPdfme ? (
-              <div style={{ height: 500, minHeight: 400 }}>
-                <PdfmePreview
-                  template={previewPdfme.template}
-                  variables={previewPdfme.variables}
-                />
-              </div>
-            ) : (
-              <div style={{ border: '1px solid var(--river-border-color)', borderRadius: '4px', padding: '16px', backgroundColor: '#fff' }}>
-                <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordWrap: 'break-word', fontSize: 14, lineHeight: 1.6 }}>
-                  {previewContent}
-                </pre>
-              </div>
-            )}
+            <div style={{ border: '1px solid var(--river-border-color)', borderRadius: '4px', padding: '16px', backgroundColor: '#fff' }}>
+              <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordWrap: 'break-word', fontSize: 14, lineHeight: 1.6 }}>
+                {previewContent}
+              </pre>
+            </div>
             <Divider />
             <div>
               <Text strong>{t('pages.system.printTemplates.rawContentLabel')}</Text>
