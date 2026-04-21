@@ -57,7 +57,7 @@ const useSafeTranslation = () => {
 };
 import TenantSelector from '../components/tenant-selector';
 import TopBarSearch from '../components/TopBarSearch';
-import AiAssistant from '../components/ai-assistant';
+const AiAssistant = React.lazy(() => import('../components/ai-assistant'));
 import UniTabs from '../components/uni-tabs';
 import TechStackModal from '../components/tech-stack-modal';
 import { MobileQRCode } from '../components/mobile-preview';
@@ -81,8 +81,17 @@ import { triggerSubmit, hasSubmitHandler } from '../utils/globalSubmitShortcut';
 import { CODE_FONT_FAMILY } from '../constants/fonts';
 import { clearSessionScopedQueries } from '../utils/clearSessionQueries';
 import { getFilePreview } from '../services/file';
-import Lottie from 'lottie-react';
-import assistAnimation from '../../static/lottie/assist.json';
+const LazyAssistLottie = React.lazy(async () => {
+  const [{ default: Lottie }, animationModule] = await Promise.all([
+    import('lottie-react'),
+    import('../../static/lottie/assist.json'),
+  ]);
+  const assistAnimation = (animationModule as { default: unknown }).default ?? animationModule;
+  const Comp: React.FC<{ style?: React.CSSProperties }> = ({ style }) => (
+    <Lottie animationData={assistAnimation} loop autoplay style={style} />
+  );
+  return { default: Comp };
+});
 
 /** LOGO 缓存 TTL：25 分钟（token 1 小时过期，提前刷新避免 403） */
 const SITE_LOGO_CACHE_TTL_MS = 25 * 60 * 1000;
@@ -3932,19 +3941,18 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                 onKeyDown={(e) => e.key === 'Enter' && setAiAssistantOpen(true)}
                 className="ai-assistant-lottie-btn"
               >
-                <Lottie
-                  animationData={assistAnimation}
-                  loop
-                  autoplay
-                  style={{
-                    width: 52,
-                    height: 52,
-                    display: 'block',
-                    ...( !isLightModeLightBg ? {
-                      filter: 'brightness(2) contrast(1.2) drop-shadow(0 0 6px rgba(255, 255, 255, 0.5)) drop-shadow(0 0 16px rgba(255, 255, 255, 0.25))'
-                    } : {})
-                  }}
-                />
+                <React.Suspense fallback={<span style={{ width: 52, height: 52, display: 'block' }} />}>
+                  <LazyAssistLottie
+                    style={{
+                      width: 52,
+                      height: 52,
+                      display: 'block',
+                      ...( !isLightModeLightBg ? {
+                        filter: 'brightness(2) contrast(1.2) drop-shadow(0 0 6px rgba(255, 255, 255, 0.5)) drop-shadow(0 0 16px rgba(255, 255, 255, 0.25))'
+                      } : {})
+                    }}
+                  />
+                </React.Suspense>
               </span>
             </span>
           );
@@ -4526,11 +4534,15 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }}
       />
 
-      {/* AI 助手 */}
-      <AiAssistant
-        open={aiAssistantOpen}
-        onClose={() => setAiAssistantOpen(false)}
-      />
+      {/* AI 助手（懒加载，仅在首次打开时拉取 chunk） */}
+      {aiAssistantOpen && (
+        <React.Suspense fallback={null}>
+          <AiAssistant
+            open={aiAssistantOpen}
+            onClose={() => setAiAssistantOpen(false)}
+          />
+        </React.Suspense>
+      )}
 
       {/* 键盘快捷键帮助 */}
       <Modal

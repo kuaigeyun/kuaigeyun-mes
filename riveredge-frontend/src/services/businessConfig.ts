@@ -11,17 +11,7 @@
 import { apiRequest } from './api';
 
 export interface BusinessConfig {
-  running_mode: 'simple' | 'full';
-  industry?: 'general' | 'machinery' | 'electronics' | 'machining';
-  scale?: 'small' | 'medium' | 'large';
-  /** @deprecated 蓝图已下线；历史字段，新代码请勿依赖 */
-  modules?: Record<string, boolean>;
-  /** @deprecated 蓝图已下线；新代码请读菜单/流程设置 */
-  nodes?: Record<string, { enabled: boolean; auditRequired: boolean }>;
   parameters: Record<string, Record<string, any>>;
-  mode_switched_at?: string;
-  complexity_level?: string;
-  complexity_name?: string;
 }
 
 export interface ProcessParameterUpdateRequest {
