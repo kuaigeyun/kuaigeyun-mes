@@ -12,6 +12,7 @@ import { getSiteSetting } from '../services/siteSetting';
 import { getToken } from '../utils/auth';
 import { useUserPreferenceStore } from './userPreferenceStore';
 import { getThemeFromPreferenceCache } from './userPreferenceStore';
+import { useConfigStore } from './configStore';
 
 const DEFAULT_CONFIG = {
   colorPrimary: '#1890ff',
@@ -220,6 +221,16 @@ export const useThemeStore = create<ThemeState>((set, get) => {
           getSiteSetting().catch(() => null),
           useUserPreferenceStore.getState().fetchPreferences(),
         ]);
+
+        // 复用同一份 siteSetting 给 configStore，避免 app.tsx 再触发一次 /site-setting 请求；
+        // 失败（siteSetting 为 null）时不 hydrate，保留 configStore.fetchConfigs 独立重试能力。
+        if (siteSetting && siteSetting.settings) {
+          try {
+            useConfigStore.getState().hydrateFromSettings(siteSetting.settings);
+          } catch {
+            // 不阻塞主题流程
+          }
+        }
 
         const siteConfig = (siteSetting?.settings?.theme_config || {}) as Partial<ThemeConfig>;
         const prefs = useUserPreferenceStore.getState().preferences || {};

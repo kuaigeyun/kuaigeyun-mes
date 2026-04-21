@@ -9,12 +9,7 @@
 
     <meta name="theme-color" content="#141414" />
 
-    <!-- 性能优化：预连接 API -->
-    <link rel="preconnect" href="https://cdn.svar.dev" crossorigin />
-    <link rel="dns-prefetch" href="https://cdn.svar.dev" />
-
-    <!-- wx-icons 异步加载，登录页不依赖甘特图 -->
-    <link rel="stylesheet" href="https://cdn.svar.dev/fonts/wxi/wx-icons.css" media="print" onload="this.media='all'" />
+    <!-- 登录页不需要 SVAR 甘特图字体，已移除预连接/外链 CSS，降低首屏握手成本 -->
     <!-- 提前加载入口脚本，减少首屏等待 -->
     <script type="module" src="./login.tsx"></script>
 </head>

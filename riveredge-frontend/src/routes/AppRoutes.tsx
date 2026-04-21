@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { getInstalledApplicationList, scanPlugins } from '../services/application';
 import { loadPlugin } from '../utils/pluginLoader';
+import { getToken, getTenantId } from '../utils/auth';
 import type { Application } from '../services/application';
 import PageSkeleton from '../components/page-skeleton';
 import ProUpgradePrompt from '../components/pro-upgrade-prompt';
@@ -150,16 +151,9 @@ const AppRoutes: React.FC = () => {
   // 缓存每个 app 的 React.lazy 实例，防止 useMemo 重算时重建 lazy 组件导致子树重新挂载
   const lazyAppsCache = useRef<Map<string, React.ComponentType>>(new Map());
 
-  // 检查用户是否已登录（与 useUnifiedMenuData 并行发起请求）
-  const [token, setToken] = useState<string | null>(null);
-  const [tenantId, setTenantId] = useState<string | null>(null);
-  useEffect(() => {
-    import('../utils/auth').then(({ getToken, getTenantId }) => {
-      setToken(getToken() ?? null);
-      setTenantId(getTenantId()?.toString() ?? null);
-    });
-  }, []);
-
+  // 检查用户是否已登录（同步读取，首帧即知；不再走 dynamic import 导致多一帧 Loading）
+  const token = getToken() ?? null;
+  const tenantId = getTenantId()?.toString() ?? null;
   const isAuthenticated = !!(token && tenantId);
 
   const { data: applications = [], isLoading: loading, error, refetch } = useQuery({
@@ -223,8 +217,8 @@ const AppRoutes: React.FC = () => {
     return routes;
   }, [applications]);
 
-  // 加载中状态（认证检查中或应用列表加载中）
-  if (token === null || (isAuthenticated && loading)) {
+  // 加载中状态（应用列表加载中）
+  if (isAuthenticated && loading) {
     return <LoadingFallback />;
   }
 

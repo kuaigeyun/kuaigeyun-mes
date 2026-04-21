@@ -158,7 +158,14 @@ export default defineConfig({
         // 手动代码分割策略（顺序重要：优先匹配最具体的路径）
         manualChunks: (id) => {
           if (id.includes('node_modules')) {
+            // 巨型可视化/文档/PDF 栈：各自独立 chunk，避免被并入 vendor-other 拖累首屏
             if (id.includes('@univerjs')) return 'vendor-univerjs';
+            if (id.includes('monaco-editor') || id.includes('@monaco-editor')) return 'vendor-monaco';
+            if (id.includes('three') && !id.includes('react-three')) return 'vendor-three';
+            if (id.includes('echarts')) return 'vendor-echarts';
+            if (id.includes('xlsx') || id.includes('exceljs')) return 'vendor-xlsx';
+            if (id.includes('html2canvas')) return 'vendor-html2canvas';
+            if (id.includes('jspdf') || id.includes('pdf-lib') || id.includes('pdfjs-dist')) return 'vendor-pdf';
             if (id.includes('@ant-design/pro-flow')) return 'vendor-pro-flow';
             if (id.includes('@svar-ui/react-gantt')) return 'vendor-gantt';
             if (id.includes('@ant-design/pro-components')) return 'vendor-pro-components';
@@ -257,7 +264,8 @@ export default defineConfig({
     __IS_MONOLITHIC__: JSON.stringify(false),
     __IS_SAAS__: JSON.stringify(true),
   },
-  // 优化依赖预构建：只列出项目直接 import 的包；transitive 由 Vite 自动发现
+  // 优化依赖预构建：只列出"首屏 & 高频"包；Univer 全家桶等超重库仅在打开表格类页面时
+  // 触发按需预构建，避免冷启动被迫扫描整套 CAD/sheet/docs 资源。
   optimizeDeps: {
     include: [
       'react',
@@ -269,10 +277,19 @@ export default defineConfig({
       '@tanstack/react-query',
       'zustand',
       'dayjs',
+    ],
+    // 首屏不直接引用的大块头显式排除，让 Vite 在页面访问时再按需构建
+    exclude: [
       '@univerjs/design',
       '@univerjs/ui',
       '@univerjs/presets',
       '@univerjs/sheets-ui',
+      'echarts',
+      'three',
+      'monaco-editor',
+      'xlsx',
+      'html2canvas',
+      'jspdf',
     ],
     force: false,
     esbuildOptions: {

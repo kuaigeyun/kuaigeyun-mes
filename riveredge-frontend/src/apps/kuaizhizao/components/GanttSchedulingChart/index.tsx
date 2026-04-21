@@ -4,7 +4,7 @@
  * 基于 @svar-ui/react-gantt 实现工单级时间轴展示、拖拽调整、日/周/月视图。
  */
 
-import React, { useCallback, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { Gantt, Willow } from '@svar-ui/react-gantt';
 import '@svar-ui/react-gantt/all.css';
 import '../gantt-scrollbar.less';
@@ -12,6 +12,7 @@ import type { WorkOrderForGantt } from './types';
 import { workOrdersToGanttTasks } from './utils';
 import type { ViewMode, GanttTaskLevel } from './types';
 import dayjs from 'dayjs';
+import { ensureGanttIconsCssLoaded } from '../../../../utils/loadGanttIconsCss';
 
 const SCALES_DAY = [
   { unit: 'month', step: 1, format: '%Y年%m月' },
@@ -63,6 +64,11 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
   onBatchUpdateOperations,
   onRefresh,
 }) => {
+  // 首次渲染时按需注入 wx-icons.css，减少未使用页面/登录页的外链开销
+  useEffect(() => {
+    ensureGanttIconsCssLoaded();
+  }, []);
+
   const pendingUpdatesRef = useRef<Map<number | string, { start: Date; end: Date }>>(new Map());
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 

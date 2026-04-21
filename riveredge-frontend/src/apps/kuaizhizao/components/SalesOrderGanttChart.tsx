@@ -3,11 +3,12 @@
  * 基于 @svar-ui/react-gantt 展示销售明细的交货时间轴
  */
 
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { Gantt, Willow } from '@svar-ui/react-gantt';
 import '@svar-ui/react-gantt/all.css';
 import './gantt-scrollbar.less';
 import dayjs from 'dayjs';
+import { ensureGanttIconsCssLoaded } from '../../../utils/loadGanttIconsCss';
 
 export interface SalesOrderItemForGantt {
   _rowKey: string;
@@ -67,6 +68,11 @@ interface SalesOrderGanttChartProps {
 }
 
 const SalesOrderGanttChart: React.FC<SalesOrderGanttChartProps> = ({ items }) => {
+  // 首次渲染时按需注入 wx-icons.css，避免登录/无甘特图页面为外链字体付出 DNS/握手成本
+  useEffect(() => {
+    ensureGanttIconsCssLoaded();
+  }, []);
+
   const tasks = useMemo(() => items.map(toGanttTask), [items]);
 
   const { start, end } = useMemo(() => {

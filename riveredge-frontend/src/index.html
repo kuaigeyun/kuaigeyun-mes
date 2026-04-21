@@ -9,15 +9,8 @@
 
     <meta name="theme-color" content="#141414" />
 
-    <!-- 性能优化：预连接字体CDN（API 使用相对路径 /api/v1，无需预连接固定地址，避免局域网访问时 127.0.0.1 指向错误） -->
-    <link rel="preconnect" href="https://cdn.svar.dev" crossorigin />
-    <link rel="dns-prefetch" href="https://cdn.svar.dev" />
-
-    <!-- SVAR 甘特图图标字体：异步加载，不阻塞登录首屏（进入甘特图等页面时再加载） -->
-    <link rel="stylesheet" href="https://cdn.svar.dev/fonts/wxi/wx-icons.css" media="print" onload="this.media='all'" />
-
-    <!-- 性能优化：预加载关键字体（已移除，字体文件不存在且未使用） -->
-    <!-- <link rel="preload" href="/fonts/antd-font.woff2" as="font" type="font/woff2" crossorigin /> -->
+    <!-- SVAR 甘特图图标字体改为按需加载（utils/loadGanttIconsCss.ts），
+         仅在用户打开甘特图组件时注入，减少默认首屏/登录页的外链资源与握手成本。 -->
 </head>
 
 <body>

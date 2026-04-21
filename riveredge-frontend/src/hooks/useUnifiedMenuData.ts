@@ -92,7 +92,8 @@ export function useUnifiedMenuData(
     queryKey: [APPLICATION_MENUS_QUERY_KEY],
     queryFn: () => getMenuTree({ is_active: true }),
     enabled: !!currentUser,
-    staleTime: process.env.NODE_ENV === 'development' ? 30 * 1000 : 5 * 60 * 1000,
+    // dev 与 prod 统一 5 分钟，避免开发期频繁 refetch 菜单；需要强制刷新请手动 invalidate
+    staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
     refetchOnWindowFocus: false,
   });

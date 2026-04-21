@@ -31,6 +31,11 @@ interface ConfigState {
   
   // Actions（force=true 时忽略「已初始化」短路，用于站点设置保存后刷新全局配置）
   fetchConfigs: (force?: boolean) => Promise<void>;
+  /**
+   * 直接以外部已获取的 site settings 对象初始化 store（供 themeStore 复用）。
+   * 标记 initialized=true 后，后续 fetchConfigs 会短路，避免重复请求 /site-setting。
+   */
+  hydrateFromSettings: (settings: Record<string, any> | null | undefined) => void;
   updateConfig: (key: string, value: any) => Promise<void>;
   updateConfigs: (settings: Record<string, any>) => Promise<void>;
   getConfig: <T>(key: string, defaultValue: T) => T;
@@ -88,7 +93,6 @@ export const useConfigStore = create<ConfigState>()(
         try {
           const response = await getSiteSetting();
           const backendConfigs = flattenObject(response.settings || {});
-          // 合并后端配置与默认配置
           set((state) => ({
             configs: {
               ...state.configs,
@@ -98,11 +102,21 @@ export const useConfigStore = create<ConfigState>()(
           }));
         } catch (error) {
           console.error('获取系统配置失败:', error);
-          // 失败时保持使用缓存或默认配置，但也标记为已初始化以免阻塞应用
           set({ initialized: true });
         } finally {
           set({ loading: false });
         }
+      },
+
+      hydrateFromSettings: (settings) => {
+        const backendConfigs = flattenObject(settings || {});
+        set((state) => ({
+          configs: {
+            ...state.configs,
+            ...backendConfigs,
+          },
+          initialized: true,
+        }));
       },
       
       updateConfig: async (key, value) => {

@@ -8,8 +8,8 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { getTranslations } from '../services/language';
-import { getUserPreference } from '../services/userPreference';
 import { getToken } from '../utils/auth';
+import { useUserPreferenceStore } from '../stores/userPreferenceStore';
 
 // 默认语言包（zh-CN 同步加载，en-US 懒加载以减小主包体积）
 import zhCN from '../locales/zh-CN';
@@ -115,23 +115,47 @@ i18n.changeLanguage = async (language: string) => {
  * 从用户偏好设置中读取语言设置，并加载对应的翻译内容
  * ⚠️ 未登录时不调用需认证的 API，避免 401 触发 window.location 导致登录页无限刷新
  */
+/**
+ * 等待 userPreferenceStore 初始化完成（已有结果或 loading 中订阅直到完成）。
+ * 最长等待 3s，超时走降级，避免偶发接口挂起阻塞首屏。
+ */
+async function waitForUserPreferences(timeoutMs = 3000): Promise<void> {
+  const store = useUserPreferenceStore.getState();
+  if (store.initialized) return;
+  // 还没人触发过，则主动触发一次（内部有 loading/initialized 短路）
+  if (!store.loading) {
+    void useUserPreferenceStore.getState().fetchPreferences();
+  }
+  await new Promise<void>((resolve) => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const unsub = useUserPreferenceStore.subscribe((state) => {
+      if (state.initialized) {
+        if (timer) clearTimeout(timer);
+        unsub();
+        resolve();
+      }
+    });
+    timer = setTimeout(() => {
+      unsub();
+      resolve();
+    }, timeoutMs);
+  });
+}
+
 export async function loadUserLanguage(): Promise<void> {
   try {
     if (!getToken()) {
       await i18n.changeLanguage('zh-CN');
       return;
     }
-    // 获取用户偏好设置
-    const preference = await getUserPreference().catch((error) => {
-      // 如果是 401 错误，静默忽略（token 可能在其他地方被验证）
-      if (error?.response?.status === 401) {
-        console.warn('⚠️ 用户语言偏好设置加载失败（401），使用默认语言');
-        return null;
-      }
-      throw error; // 其他错误重新抛出
-    });
 
-    const languageCode = preference?.preferences?.language || 'zh-CN';
+    // 复用 userPreferenceStore，避免 themeStore.initFromApi 和本函数同窗口内重复请求 /user-preferences。
+    await waitForUserPreferences();
+    const prefs = useUserPreferenceStore.getState().preferences as
+      | { language?: unknown }
+      | null;
+    const cachedLang = prefs?.language;
+    const languageCode = typeof cachedLang === 'string' && cachedLang ? cachedLang : 'zh-CN';
 
     // 切换到用户选择的语言
     await i18n.changeLanguage(languageCode);

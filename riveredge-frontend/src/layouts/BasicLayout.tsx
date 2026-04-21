@@ -73,6 +73,7 @@ import { LANGUAGE_MAP } from '../config/i18n';
 import i18n, { refreshTranslations } from '../config/i18n';
 import { MenuTree } from '../services/menu';
 import { useUnifiedMenuData } from '../hooks/useUnifiedMenuData';
+import { useDeferredEnabled } from '../hooks/useDeferredEnabled';
 import { ManufacturingIcons } from '../utils/manufacturingIcons';
 import * as LucideIcons from 'lucide-react'; // 全量导入 Lucide Icons，支持动态访问所有图标
 import { getAvatarUrl, getAvatarText, getAvatarFontSize, getCachedAvatarUrl, toRelativeIfLocalhost } from '../utils/avatar';
@@ -735,11 +736,16 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     }
   }, [currentUser]);
 
+  // 首屏非关键查询统一延迟到浏览器空闲后再发，避免挤占菜单/应用/用户首屏带宽。
+  // 语言列表、消息徽标、菜单徽标都属于"有了更好，没有也能看"，晚 ~800ms 完全可接受。
+  const deferredEnabled = useDeferredEnabled(800);
+
   // 获取可用语言列表
   const { data: languageListData } = useQuery({
     queryKey: ['availableLanguages'],
     queryFn: () => getLanguageList({ is_active: true }),
     staleTime: 5 * 60 * 1000, // 5 分钟缓存
+    enabled: deferredEnabled,
   });
 
   // 组织初始化提醒已移至上线助手中，不再全局展示
@@ -771,7 +777,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     queryFn: () => getUserMessageStats(),
     staleTime: 30 * 1000, // 30 秒缓存
     refetchInterval: 60 * 1000, // 每分钟自动刷新
-    enabled: !!currentUser, // 只在用户登录后获取
+    enabled: !!currentUser && deferredEnabled, // 登录 + 首屏空闲后再拉
   });
 
   // 获取最近的消息列表（仅在下拉菜单打开时获取）
@@ -1031,7 +1037,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const { data: menuBadgeCounts = {} } = useQuery({
     queryKey: ['menuBadgeCounts'],
     queryFn: getMenuBadgeCounts,
-    enabled: !!currentUser?.id,
+    enabled: !!currentUser?.id && deferredEnabled,
     staleTime: 30 * 1000,
     refetchOnWindowFocus: true,
   });
