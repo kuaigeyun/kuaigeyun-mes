@@ -11,7 +11,7 @@
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions, ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Input, InputNumber, Select, Alert, Row, Col, Spin, Form as AntForm, DatePicker, Typography, Tooltip, Dropdown, Empty, Tabs } from 'antd';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG, type StatCard } from '../../../../../components/layout-templates';
@@ -150,7 +150,6 @@ const DemandManagementPage: React.FC = () => {
   const demandRowsByIdRef = useRef<Map<number, Demand>>(new Map());
   const formRef = useRef<any>(null);
   const tableSearchFormRef = useRef<any>(null);
-  const [searchParams] = useSearchParams();
 
   const { statCards: pageMetricCards, hasConfig: hasPageMetricConfig } = usePageMetrics();
   const invalidateStatistics = () => {
@@ -184,19 +183,9 @@ const DemandManagementPage: React.FC = () => {
   /** 数据字典 value->label 映射（用于详情抽屉显示标签） */
   const [dictLabelMap, setDictLabelMap] = useState<Record<string, Record<string, string>>>({});
 
-  // 需求类型选择（销售预测/销售订单），支持从 URL 参数读取
-  const urlDemandType = searchParams.get('demand_type') as 'sales_forecast' | 'sales_order' | null;
-  const [demandType, setDemandType] = useState<'sales_forecast' | 'sales_order' | 'demand_plan'>(
-    (urlDemandType as any) || 'sales_forecast'
-  );
+  // 需求计划页仅管理手工需求计划（demand_plan）
+  const [demandType, setDemandType] = useState<'demand_plan'>('demand_plan');
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-
-  // 当 URL 参数变化时，更新需求类型
-  useEffect(() => {
-    if (urlDemandType && (urlDemandType === 'sales_forecast' || urlDemandType === 'sales_order')) {
-      setDemandType(urlDemandType);
-    }
-  }, [urlDemandType]);
 
   /** 页面加载时预加载数据字典（发货方式、付款条件、物料单位），用于详情抽屉显示标签值 */
   useEffect(() => {
@@ -322,7 +311,7 @@ const DemandManagementPage: React.FC = () => {
       try {
         const data = await getDemand(id);
         formRef.current?.setFieldsValue(data);
-        setDemandType(data.demand_type || 'sales_forecast');
+        setDemandType((data.demand_type as 'demand_plan') || 'demand_plan');
         setIsEditingDraft(isDemandDraft(data));
       } catch (error: any) {
         messageApi.error('获取需求详情失败');
@@ -847,11 +836,7 @@ const DemandManagementPage: React.FC = () => {
             };
 
             // 处理搜索参数，优先使用搜索表单的值，如果没有则使用 URL 参数的值
-            if (searchFormValues?.demand_type) {
-              apiParams.demand_type = searchFormValues.demand_type;
-            } else if (urlDemandType) {
-              apiParams.demand_type = urlDemandType;
-            }
+            apiParams.demand_type = 'demand_plan';
             // 生命周期搜索映射到 status（与销售订单一致）
             if (searchFormValues?.lifecycle) {
               const lifecycleToStatus: Record<string, string> = {
@@ -914,7 +899,7 @@ const DemandManagementPage: React.FC = () => {
           showExportButton
           onExport={async (type, keys, pageData) => {
             try {
-              const res = await listDemands({ skip: 0, limit: 10000 });
+              const res = await listDemands({ skip: 0, limit: 10000, demand_type: 'demand_plan' });
               let items = res.data || [];
               if (type === 'currentPage' && pageData?.length) {
                 items = pageData;
@@ -1310,12 +1295,11 @@ const DemandManagementPage: React.FC = () => {
                   name="demand_type"
                   label="需求类型"
                   options={[
-                    { label: '销售预测', value: 'sales_forecast' },
-                    { label: '销售订单', value: 'sales_order' },
+                    { label: '需求计划', value: 'demand_plan' },
                   ]}
                   rules={[{ required: true, message: '请选择需求类型' }]}
                   fieldProps={{
-                    onChange: (value: 'sales_forecast' | 'sales_order') => setDemandType(value),
+                    onChange: () => setDemandType('demand_plan'),
                     style: { width: '100%' },
                   }}
                 />

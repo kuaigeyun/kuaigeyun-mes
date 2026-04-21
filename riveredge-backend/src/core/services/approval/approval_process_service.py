@@ -254,7 +254,7 @@ class ApprovalProcessService:
                 ],
             },
             "config": {},
-            "is_active": True,
+            "is_active": False,
         },
         {
             "name": "采购单审批",
@@ -291,7 +291,7 @@ class ApprovalProcessService:
                 ],
             },
             "config": {},
-            "is_active": True,
+            "is_active": False,
         },
         {
             "name": "销售单审批",
@@ -328,7 +328,7 @@ class ApprovalProcessService:
                 ],
             },
             "config": {},
-            "is_active": True,
+            "is_active": False,
         },
         {
             "name": "工单审批",
@@ -365,7 +365,7 @@ class ApprovalProcessService:
                 ],
             },
             "config": {},
-            "is_active": True,
+            "is_active": False,
         },
         {
             "name": "金额分档审批",
@@ -410,7 +410,7 @@ class ApprovalProcessService:
                 ],
             },
             "config": {},
-            "is_active": True,
+            "is_active": False,
         },
     ]
 
@@ -435,7 +435,7 @@ class ApprovalProcessService:
                         description=item.get("description"),
                         nodes=item["nodes"],
                         config=item.get("config", {}),
-                        is_active=item.get("is_active", True),
+                        is_active=item.get("is_active", False),
                     )
                     await ApprovalProcessService.create_approval_process(tenant_id, data)
                     created += 1

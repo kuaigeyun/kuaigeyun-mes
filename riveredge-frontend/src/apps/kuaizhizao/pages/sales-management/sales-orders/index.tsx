@@ -88,6 +88,7 @@ import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePageMetrics } from '../../../../../hooks/usePageMetrics';
 import { useDeferAfterPaint } from '../../../../../hooks/useDeferAfterPaint';
+import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { CustomerFollowUpFormModal, type CustomerFollowUpPreset } from '../../../components/CustomerFollowUpFormModal';
 
 /** 销售明细行（订单 + 明细合并，用于平铺表格） */
@@ -387,9 +388,7 @@ const SalesOrdersPage: React.FC = () => {
       });
   }, []);
 
-  // 蓝图设置已下线：审核是否必需由后端 ApprovalProcess 决定；
-  // 下推入口的可见性由菜单管理 + 权限决定。此处保留常量语义兼容旧 UI 逻辑。
-  const auditEnabled = true;
+  const auditEnabled = useAuditRequired('sales_order', false);
   const salesNodeEnabled = {
     sales_order: true,
     demand_computation: true,
@@ -1604,7 +1603,7 @@ const SalesOrdersPage: React.FC = () => {
         已取消: { text: t('app.kuaizhizao.salesOrder.lifecycleCancelled') },
       },
       render: (_: unknown, record: SalesOrder) => {
-        const lifecycle = getSalesOrderLifecycle(record);
+        const lifecycle = getSalesOrderLifecycle(record, auditEnabled);
         return (
           <UniLifecycle
             percent={lifecycle.percent}
@@ -1623,7 +1622,7 @@ const SalesOrdersPage: React.FC = () => {
       fixed: 'right' as const,
       valueType: 'option',
       render: (_: any, record: SalesOrder) => {
-        const lifecycle = getSalesOrderLifecycle(record);
+        const lifecycle = getSalesOrderLifecycle(record, auditEnabled);
         const canEdit = ['草稿', '待审核', '已驳回'].includes(lifecycle.stageName ?? '');
         const canDelete = ['草稿', '待审核'].includes(lifecycle.stageName ?? '') || record.status === SalesOrderStatus.DRAFT || record.status === 'PENDING_REVIEW';
         const isDraft = record.status === SalesOrderStatus.DRAFT;
@@ -1664,6 +1663,7 @@ const SalesOrdersPage: React.FC = () => {
             approvedStatuses={[...APPROVED_STATUS_VALUES]}
             rejectedStatuses={['已驳回', SalesOrderStatus.REJECTED]}
             autoApproveWhenSubmit={!auditEnabled}
+            workflowAuditEnabled={auditEnabled}
             theme="link"
             size="small"
             actions={{ submit: async (id) => submitSalesOrder(id), approve: approveSalesOrder, revoke: unapproveSalesOrder }}
@@ -1815,7 +1815,7 @@ const SalesOrdersPage: React.FC = () => {
       },
       render: (_: unknown, record: SalesOrderItemRow) => {
         const orderRecord = { id: record.sales_order_id, status: record.status, review_status: record.review_status } as SalesOrder;
-        const lifecycle = getSalesOrderLifecycle(orderRecord);
+        const lifecycle = getSalesOrderLifecycle(orderRecord, auditEnabled);
         const stageName = lifecycle.stageName ?? record.status ?? '草稿';
         return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>;
       },
@@ -1989,29 +1989,31 @@ const SalesOrdersPage: React.FC = () => {
           valueStyle: { color: token.colorPrimary },
           backgroundChart: renderTrendChart(statistics.trend_today_new ?? [], token.colorPrimary),
         },
-        {
-          title: t('app.kuaizhizao.salesOrder.lifecyclePendingReview', '待审核'),
-          value: statistics.pending_review_count ?? 0,
-          description:
-            statistics.pending_review_count !== undefined &&
-            statistics.yesterday_pending_review !== undefined ? (
-              <div>
-                今日: {statistics.pending_review_count}{' '}
-                {renderDOD(statistics.pending_review_count, statistics.yesterday_pending_review)}
-              </div>
-            ) : (statistics.pending_review_count ?? 0) > 0 ? (
-              <div style={{ color: '#faad14' }}>需即时处理</div>
-            ) : undefined,
-          valueStyle: (statistics.pending_review_count ?? 0) > 0 ? { color: '#faad14' } : undefined,
-          backgroundChart: renderTrendChart(statistics.trend_pending_review ?? [], '#faad14'),
-          onClick:
-            (statistics.pending_review_count ?? 0) > 0
-              ? () => {
-                  tableSearchFormRef.current?.setFieldsValue?.({ lifecycle: '待审核' });
-                  actionRef.current?.reload?.();
-                }
-              : undefined,
-        },
+        ...(auditEnabled
+          ? [{
+              title: t('app.kuaizhizao.salesOrder.lifecyclePendingReview', '待审核'),
+              value: statistics.pending_review_count ?? 0,
+              description:
+                statistics.pending_review_count !== undefined &&
+                statistics.yesterday_pending_review !== undefined ? (
+                  <div>
+                    今日: {statistics.pending_review_count}{' '}
+                    {renderDOD(statistics.pending_review_count, statistics.yesterday_pending_review)}
+                  </div>
+                ) : (statistics.pending_review_count ?? 0) > 0 ? (
+                  <div style={{ color: '#faad14' }}>需即时处理</div>
+                ) : undefined,
+              valueStyle: (statistics.pending_review_count ?? 0) > 0 ? { color: '#faad14' } : undefined,
+              backgroundChart: renderTrendChart(statistics.trend_pending_review ?? [], '#faad14'),
+              onClick:
+                (statistics.pending_review_count ?? 0) > 0
+                  ? () => {
+                      tableSearchFormRef.current?.setFieldsValue?.({ lifecycle: '待审核' });
+                      actionRef.current?.reload?.();
+                    }
+                  : undefined,
+            }]
+          : []),
         {
           title: t('app.kuaizhizao.salesOrder.statUnfulfilled', '未履约'),
           value: statistics.unfulfilled_count ?? 0,
@@ -2053,11 +2055,13 @@ const SalesOrdersPage: React.FC = () => {
           suffix: t('app.kuaizhizao.salesOrder.unitOrders', { defaultValue: '单' }),
           valueStyle: { color: token.colorPrimary },
         },
-        {
-          title: t('app.kuaizhizao.salesOrder.lifecyclePendingReview', '待审核'),
-          value: 0,
-          valueStyle: { color: '#faad14' },
-        },
+        ...(auditEnabled
+          ? [{
+              title: t('app.kuaizhizao.salesOrder.lifecyclePendingReview', '待审核'),
+              value: 0,
+              valueStyle: { color: '#faad14' },
+            }]
+          : []),
         {
           title: t('app.kuaizhizao.salesOrder.statUnfulfilled', '未履约'),
           value: 0,
@@ -2188,7 +2192,7 @@ const SalesOrdersPage: React.FC = () => {
               const map = new Map<string, number>();
               const flatRows: SalesOrderItemRow[] = [];
               for (const order of orders) {
-                const lifecycle = getSalesOrderLifecycle(order as SalesOrder);
+                const lifecycle = getSalesOrderLifecycle(order as SalesOrder, auditEnabled);
                 const stageName = lifecycle.stageName ?? order.status ?? '草稿';
                 const items = order.items ?? [];
                 if (items.length === 0) {
@@ -3234,7 +3238,7 @@ const SalesOrdersPage: React.FC = () => {
                 {t('app.kuaizhizao.salesOrder.reminder')}
               </Button>
               {(() => {
-                const lifecycle = getSalesOrderLifecycle(currentSalesOrder);
+                const lifecycle = getSalesOrderLifecycle(currentSalesOrder, auditEnabled);
                 const canEdit = ['草稿', '待审核', '已驳回'].includes(lifecycle.stageName ?? '');
                 const canDelete = ['草稿', '待审核'].includes(lifecycle.stageName ?? '') || currentSalesOrder.status === SalesOrderStatus.DRAFT || currentSalesOrder.status === 'PENDING_REVIEW';
                 return (
@@ -3262,6 +3266,7 @@ const SalesOrdersPage: React.FC = () => {
                 approvedStatuses={[...APPROVED_STATUS_VALUES]}
                 rejectedStatuses={['已驳回', SalesOrderStatus.REJECTED]}
                 autoApproveWhenSubmit={!auditEnabled}
+                workflowAuditEnabled={auditEnabled}
                 theme="default"
                 actions={{
                   submit: async (id) => {

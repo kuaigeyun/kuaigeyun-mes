@@ -168,17 +168,26 @@ export async function submitSalesForecast(id: number): Promise<SalesForecast> {
 }
 
 /**
- * 下推到MRP运算
+ * 下推到需求计算
  */
+export async function pushSalesForecastToComputation(
+  id: number,
+  planning_horizon: number = 12,
+  time_bucket: string = 'week'
+): Promise<any> {
+  return apiRequest<any>(`/apps/kuaizhizao/sales-forecasts/${id}/push-to-computation`, {
+    method: 'POST',
+    params: { planning_horizon, time_bucket },
+  });
+}
+
+/** 兼容旧命名 */
 export async function pushSalesForecastToMrp(
   id: number,
   planning_horizon: number = 12,
   time_bucket: string = 'week'
 ): Promise<any> {
-  return apiRequest<any>(`/apps/kuaizhizao/sales-forecasts/${id}/push-to-mrp`, {
-    method: 'POST',
-    params: { planning_horizon, time_bucket },
-  });
+  return pushSalesForecastToComputation(id, planning_horizon, time_bucket);
 }
 
 /**

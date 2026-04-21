@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Space, Button, Modal, App, Input } from 'antd';
 import { CheckCircleOutlined, CloseCircleOutlined, SendOutlined, UndoOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../services/api';
+import { useAuditRequired } from '../../hooks/useAuditRequired';
 
 export type WorkflowStatus = 'draft' | 'pending_approval' | 'approved' | 'rejected' | 'cancelled' | string;
 
@@ -43,6 +44,10 @@ export interface UniWorkflowActionsProps {
 
   /** 当系统设置为提交后自动审核通过时，是否隐藏“提交”内部逻辑，改为直接调用 approve */
   autoApproveWhenSubmit?: boolean;
+  /** 当前单据是否启用审核流程（关闭后隐藏审核相关按钮/文案） */
+  workflowAuditEnabled?: boolean;
+  /** 审核流程节点 key（如 sales_order / purchase_order）；未传时尝试按 apiPrefix 推断 */
+  auditNodeKey?: string;
 
   /** 提交按钮与确认弹窗中的动作名称，默认「提交」（如采购订单可用「提交审核」） */
   submitActionLabel?: string;
@@ -81,6 +86,8 @@ export const UniWorkflowActions: React.FC<UniWorkflowActionsProps> = ({
   approvedStatuses = ['approved', 'audited', '已审核', '审核通过'],
   rejectedStatuses = ['rejected', '已驳回'],
   autoApproveWhenSubmit = false,
+  workflowAuditEnabled,
+  auditNodeKey,
   submitActionLabel = '提交',
   onSuccess,
   theme = 'default',
@@ -89,6 +96,24 @@ export const UniWorkflowActions: React.FC<UniWorkflowActionsProps> = ({
 }) => {
   const { message } = App.useApp();
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
+
+  const inferNodeKey = (): string => {
+    if (auditNodeKey) return auditNodeKey;
+    const prefix = (apiPrefix ?? '').toLowerCase();
+    if (prefix.includes('/sales/orders')) return 'sales_order';
+    if (prefix.includes('/sales/forecasts')) return 'sales_forecast';
+    if (prefix.includes('/purchase/orders')) return 'purchase_order';
+    if (prefix.includes('/purchase/requisitions')) return 'purchase_request';
+    if (prefix.includes('/plan/production-plans')) return 'production_plan';
+    if (prefix.includes('/quality/') && prefix.includes('inspection')) return 'quality_inspection';
+    if (prefix.includes('/sales/delivery') || prefix.includes('/delivery-notice')) return 'sales_delivery';
+    if (prefix.includes('/demands')) return 'demand';
+    if (prefix.includes('/quotation')) return 'quotation';
+    return '';
+  };
+  const inferredNodeKey = inferNodeKey();
+  const inferredAuditEnabled = useAuditRequired(inferredNodeKey, false);
+  const effectiveAuditEnabled = workflowAuditEnabled ?? (inferredNodeKey ? inferredAuditEnabled : false);
 
   if (!record || !record[rowKey]) return null;
   const status = record[statusField];
@@ -115,7 +140,9 @@ export const UniWorkflowActions: React.FC<UniWorkflowActionsProps> = ({
     let actualActionName = actionName;
 
     if (action === 'submit' && autoApproveWhenSubmit) {
-       actualActionName = `${actionName}（将自动审批通过）`;
+       actualActionName = effectiveAuditEnabled
+         ? `${actionName}（将自动审批通过）`
+         : `${actionName}（将自动生效）`;
     }
 
     const content = confirmMessages[action] || `确定要 ${actualActionName} 这个${entityName}吗？`;
@@ -188,6 +215,8 @@ export const UniWorkflowActions: React.FC<UniWorkflowActionsProps> = ({
   const isPending = pendingStatuses.includes(status) || pendingStatuses.includes(reviewStatus);
   const isApproved = approvedStatuses.includes(status) || approvedStatuses.includes(reviewStatus);
   const isRejected = rejectedStatuses.includes(status) || rejectedStatuses.includes(reviewStatus);
+  const approveLabel = effectiveAuditEnabled ? '审核' : '确认';
+  const revokeLabel = effectiveAuditEnabled ? '撤销审核' : '撤销确认';
 
   return (
     <Space>
@@ -207,12 +236,12 @@ export const UniWorkflowActions: React.FC<UniWorkflowActionsProps> = ({
           key="approve"
           {...getBtnProps('approve')}
           icon={<CheckCircleOutlined />}
-          onClick={() => handleAction('approve', '审核')}
+          onClick={() => handleAction('approve', approveLabel)}
         >
-          审核
+          {approveLabel}
         </Button>
       )}
-      {isPending && (actions.approve || apiPrefix) && (actions.reject || apiPrefix) && (
+      {effectiveAuditEnabled && isPending && (actions.approve || apiPrefix) && (actions.reject || apiPrefix) && (
         <Button
           key="reject"
           {...getBtnProps('reject')}
@@ -224,15 +253,15 @@ export const UniWorkflowActions: React.FC<UniWorkflowActionsProps> = ({
         </Button>
       )}
 
-      {isApproved && (actions.revoke || apiPrefix) && (
+      {effectiveAuditEnabled && isApproved && (actions.revoke || apiPrefix) && (
         <Button
           key="revoke"
           {...getBtnProps('revoke')}
           danger={!isLink}
           icon={<UndoOutlined />}
-          onClick={() => handleAction('revoke', '撤销审核')}
+          onClick={() => handleAction('revoke', revokeLabel)}
         >
-          撤销审核
+          {revokeLabel}
         </Button>
       )}
     </Space>

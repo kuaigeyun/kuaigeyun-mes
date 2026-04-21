@@ -298,8 +298,10 @@ class DemandService(AppBaseService[Demand]):
         query = Demand.filter(tenant_id=tenant_id, deleted_at__isnull=True)
 
         # 应用过滤条件
-        if filters.get('demand_type'):
-            query = query.filter(demand_type=filters['demand_type'])
+        demand_type = filters.get('demand_type') or 'demand_plan'
+        if demand_type != 'demand_plan':
+            demand_type = 'demand_plan'
+        query = query.filter(demand_type=demand_type)
         if filters.get('status'):
             query = query.filter(status=filters['status'])
         if filters.get('business_mode'):

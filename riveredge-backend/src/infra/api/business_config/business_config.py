@@ -86,6 +86,23 @@ async def get_business_config(
         raise HTTPException(status_code=500, detail=f"获取业务配置失败: {str(e)}")
 
 
+@router.get("/audit-required", summary="批量获取单据审核开关")
+async def get_audit_required_map(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> dict:
+    """
+    返回当前组织各单据节点是否需要审核。
+    审核真源为 ApprovalProcess(code=node_key, is_active=true)。
+    """
+    try:
+        result = await BusinessConfigService().get_audit_required_map(tenant_id)
+        return {"audit_required": result}
+    except Exception as e:
+        logger.error(f"获取审核开关失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取审核开关失败: {str(e)}")
+
+
 @router.post("/parameters/update", summary="更新流程参数")
 async def update_process_parameter(
     request: ProcessParameterUpdateRequest,

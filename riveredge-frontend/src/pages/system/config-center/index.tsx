@@ -4,13 +4,13 @@
  * 提供「流程设置」「参数设置」两个参数 Tab。
  * 注：旧版「蓝图设置」已下线；
  *   - 功能是否开启 → 由「菜单管理」控制（菜单隐藏即视为关闭）
- *   - 功能是否审核 → 由「流程设置（ApprovalProcess）」控制
+ *   - 单据是否人工审核 → 在「审批流程」中启用对应流程（默认关闭）；本页仅配置流转/前置条件等
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
-import { App, Form, Card, Button, Space, Layout, Menu, InputNumber, ColorPicker, Typography, Spin, Switch, Select, theme } from 'antd';
+import { App, Form, Card, Button, Space, Layout, Menu, InputNumber, ColorPicker, Typography, Spin, Switch, Select, theme, Alert } from 'antd';
 import { SaveOutlined, ReloadOutlined, SettingOutlined, ControlOutlined, NodeIndexOutlined } from '@ant-design/icons';
 import { useSearchParams } from 'react-router-dom';
 import { MultiTabListPageTemplate } from '../../../components/layout-templates';
@@ -357,7 +357,7 @@ const ConfigCenterPage: React.FC = () => {
     const bizDefaults: Record<string, any> = {
       'procurement.require_purchase_requisition': false,
       'planning.require_production_plan': false,
-      'purchase.auto_approval': true,
+      'purchase.auto_approval': false,
       'purchase.tolerance_percentage': 0,
       'reporting.auto_approve': false,
       'work_order.material_shortage_block_level': 1,
@@ -599,6 +599,14 @@ const ConfigCenterPage: React.FC = () => {
             </Paragraph>
           )}
         </div>
+
+        <Alert
+          type="info"
+          showIcon
+          message={t('pages.system.configCenter.processAuditGuidanceTitle')}
+          description={t('pages.system.configCenter.processAuditGuidanceDesc')}
+          style={{ marginBottom: 16 }}
+        />
 
         <Spin spinning={loading}>
           <Form form={processForm} layout="vertical">

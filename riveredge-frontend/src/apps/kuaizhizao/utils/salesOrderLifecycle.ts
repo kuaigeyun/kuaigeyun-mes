@@ -182,6 +182,27 @@ function buildMainStages(stageName: string, isException: boolean): SubStage[] {
   });
 }
 
+function adaptForAuditSwitch(result: LifecycleResult, auditRequired: boolean): LifecycleResult {
+  if (auditRequired) return result;
+  const stageName = result.stageName === '待审核' ? '已审核' : result.stageName;
+  const mainStages = (result.mainStages ?? []).filter((s) => s.key !== 'pending_review');
+  const hasActive = mainStages.some((s) => s.status === 'active');
+  if (!hasActive) {
+    const auditedIdx = mainStages.findIndex((s) => s.key === 'audited');
+    if (auditedIdx >= 0) {
+      mainStages.forEach((s, idx) => {
+        if (idx < auditedIdx) s.status = 'done';
+        else if (idx === auditedIdx) s.status = 'active';
+        else s.status = 'pending';
+      });
+    }
+  }
+  const nextStepSuggestions = (result.nextStepSuggestions ?? [])
+    .map((s) => s.replace('提交审核', '提交').replace('审核通过', '确认'))
+    .filter((s) => !s.includes('驳回'));
+  return { ...result, stageName, mainStages, nextStepSuggestions };
+}
+
 import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';
 
@@ -189,7 +210,7 @@ import { parseBackendLifecycle } from './backendLifecycle';
  * 根据销售订单计算生命周期结果，供 UniLifecycle 使用。
  * 优先使用后端下发的 lifecycle（节点由后端控制），无则前端兜底计算。
  */
-export function getSalesOrderLifecycle(record: SalesOrder): LifecycleResult {
+export function getSalesOrderLifecycle(record: SalesOrder, auditRequired = true): LifecycleResult {
   const backend = (record as Record<string, unknown>).lifecycle as BackendLifecycle | undefined;
   if (backend?.main_stages?.length) {
     const result = parseBackendLifecycle(backend);
@@ -198,9 +219,9 @@ export function getSalesOrderLifecycle(record: SalesOrder): LifecycleResult {
     const r = norm(record?.review_status);
     const isRecordAudited = (s === 'AUDITED' || s === '已审核') && (r === 'APPROVED' || r === '审核通过' || r === '通过' || r === '已通过');
     if (isRecordAudited && result.stageName === '待审核') {
-      return { ...result, stageName: '已审核', mainStages: buildMainStages('已审核', false) };
+      return adaptForAuditSwitch({ ...result, stageName: '已审核', mainStages: buildMainStages('已审核', false) }, auditRequired);
     }
-    return result;
+    return adaptForAuditSwitch(result, auditRequired);
   }
   const status = norm(record?.status);
   const reviewStatus = norm(record?.review_status);
@@ -220,69 +241,69 @@ export function getSalesOrderLifecycle(record: SalesOrder): LifecycleResult {
 
   // 异常分支
   if (isRejected(reviewStatus)) {
-    return {
+    return adaptForAuditSwitch({
       percent: 15,
       stageName: '已驳回',
       status: 'exception',
       mainStages: buildMainStages('已驳回', true),
       nextStepSuggestions: ['修改订单后重新提交审核'],
-    };
+    }, auditRequired);
   }
   if (isCancelled(status)) {
-    return {
+    return adaptForAuditSwitch({
       percent: 0,
       stageName: '已取消',
       status: 'exception',
       mainStages: buildMainStages('已取消', true),
       nextStepSuggestions: [],
-    };
+    }, auditRequired);
   }
 
   // 主流程
   if (isDraft(status)) {
-    return { percent: 0, stageName: '草稿', mainStages: buildMainStages('草稿', false), nextStepSuggestions: ['提交审核'] };
+    return adaptForAuditSwitch({ percent: 0, stageName: '草稿', mainStages: buildMainStages('草稿', false), nextStepSuggestions: ['提交审核'] }, auditRequired);
   }
   // 兜底：status 可能仍为 PENDING_REVIEW 但 review_status 已 APPROVED（数据不同步），以 review_status 为准
   if (isPendingReview(status) && isApproved(reviewStatus)) {
-    return { percent: 30, stageName: '已审核', mainStages: buildMainStages('已审核', false), nextStepSuggestions: ['下推需求计算'] };
+    return adaptForAuditSwitch({ percent: 30, stageName: '已审核', mainStages: buildMainStages('已审核', false), nextStepSuggestions: ['下推需求计算'] }, auditRequired);
   }
   // 以 review_status 为准：若已审核通过则显示已审核，避免 status 未同步导致 lifecycle 显示待审核
   if (isPendingReview(status) && !isApproved(reviewStatus)) {
-    return { percent: 15, stageName: '待审核', mainStages: buildMainStages('待审核', false), nextStepSuggestions: ['审核通过', '驳回'] };
+    return adaptForAuditSwitch({ percent: 15, stageName: '待审核', mainStages: buildMainStages('待审核', false), nextStepSuggestions: ['审核通过', '驳回'] }, auditRequired);
   }
   if (isAudited(status) && !isEffective(record)) {
-    return { percent: 30, stageName: '已审核', mainStages: buildMainStages('已审核', false), nextStepSuggestions: ['下推需求计算'] };
+    return adaptForAuditSwitch({ percent: 30, stageName: '已审核', mainStages: buildMainStages('已审核', false), nextStepSuggestions: ['下推需求计算'] }, auditRequired);
   }
   if (isEffective(record) && delivery >= 100 && invoice >= 100) {
-    return {
+    return adaptForAuditSwitch({
       percent: 100,
       stageName: '已完成',
       status: 'success',
       mainStages: buildMainStages('已完成', false),
       nextStepSuggestions: [],
-    };
+    }, auditRequired);
   }
   if (isEffective(record) && delivery >= 100 && invoice < 100) {
-    return {
+    return adaptForAuditSwitch({
       percent: 75 + (invoice / 100) * 25,
       stageName: '已交货',
       subPercent: invoice,
       subLabel: '开票',
       mainStages: buildMainStages('已交货', false),
       nextStepSuggestions: ['下推销售发票'],
-    };
+    }, auditRequired);
   }
   /** 已生效：订单已确认/已下推，但尚未开始执行（无工单、无交货进度） */
   if (isEffective(record) && delivery <= 0) {
     const hasWO = hasWorkOrder(record);
     const pushed = !!record.pushed_to_computation;
     if (!pushed && !hasWO) {
-      return {
+      return adaptForAuditSwitch({
         percent: 50,
         stageName: '已生效',
         mainStages: buildMainStages('已生效', false),
         nextStepSuggestions: ['前往需求计算执行 MRP', '建立工单'],
-      };
+      }, auditRequired);
     }
   }
   if (isEffective(record) && delivery < 100) {
@@ -290,7 +311,7 @@ export function getSalesOrderLifecycle(record: SalesOrder): LifecycleResult {
     const percentBlend = 50 + (delivery / 100) * 25;
     const activeKey = subStages.find((s) => s.status === 'active')?.key;
     const suggestions = (activeKey && EXEC_SUGGESTIONS[activeKey]) || ['推进执行进度'];
-    return {
+    return adaptForAuditSwitch({
       percent: percentBlend,
       stageName: '执行中',
       subPercent: delivery,
@@ -298,13 +319,13 @@ export function getSalesOrderLifecycle(record: SalesOrder): LifecycleResult {
       mainStages: buildMainStages('执行中', false),
       subStages,
       nextStepSuggestions: suggestions,
-    };
+    }, auditRequired);
   }
 
-  return {
+  return adaptForAuditSwitch({
     percent: 30,
     stageName: '已审核',
     mainStages: buildMainStages('已审核', false),
     nextStepSuggestions: ['下推需求计算'],
-  };
+  }, auditRequired);
 }

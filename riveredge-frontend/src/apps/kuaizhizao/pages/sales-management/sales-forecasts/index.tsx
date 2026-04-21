@@ -18,6 +18,7 @@ import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidate
 import { theme as AntdTheme } from 'antd'
 import { StatCardTrendArea } from '../../../../../components/common/StatCardTrendArea'
 import { usePageMetrics } from '../../../../../hooks/usePageMetrics'
+import { useAuditRequired } from '../../../../../hooks/useAuditRequired'
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DRAWER_CONFIG, type StatCard } from '../../../../../components/layout-templates'
 import { UniTable } from '../../../../../components/uni-table'
 import { UniMaterialSelect } from '../../../../../components/uni-material-select'
@@ -34,7 +35,7 @@ import {
   submitSalesForecast,
   approveSalesForecast,
   withdrawSalesForecastApproval,
-  pushSalesForecastToMrp,
+  pushSalesForecastToComputation,
   importSalesForecasts,
   exportSalesForecasts,
   getSalesForecastStatistics,
@@ -106,8 +107,7 @@ export default function SalesForecastsPage() {
   const [matrixModalVisible, setMatrixModalVisible] = useState(false)
   const [matrixMonths, setMatrixMonths] = useState<dayjs.Dayjs[]>([])
   const [matrixRows, setMatrixRows] = useState<any[]>([])
-  // 蓝图设置已下线：审核由后端 ApprovalProcess 决定；下推入口由菜单/权限控制。
-  const auditEnabled = true
+  const auditEnabled = useAuditRequired('sales_forecast', false)
   const salesNodesEnabled = {
     sales_forecast: true,
     demand_computation: true,
@@ -607,17 +607,17 @@ export default function SalesForecastsPage() {
     });
   };
 
-  const handlePushToMrp = async (id: number) => {
+  const handlePushToComputation = async (id: number) => {
     if (!salesNodesEnabled.demand_computation) {
       messageApi.warning('需求计算节点未启用，无法下推')
       return
     }
     modalApi.confirm({
-      title: t('app.kuaizhizao.salesForecast.pushToMrp'),
-      content: t('app.kuaizhizao.salesForecast.pushToMrpConfirm'),
+      title: t('app.kuaizhizao.salesForecast.pushToComputation'),
+      content: t('app.kuaizhizao.salesForecast.pushToComputationConfirm'),
       onOk: async () => {
         try {
-          await pushSalesForecastToMrp(id)
+          await pushSalesForecastToComputation(id)
           messageApi.success(t('app.kuaizhizao.salesForecast.pushSuccess'))
           invalidateStatistics();
           invalidateMenuBadge();
@@ -640,7 +640,7 @@ export default function SalesForecastsPage() {
   };
 
   const formatForecastStatus = (status?: string, reviewStatus?: string) => {
-    const lifecycle = getSalesForecastLifecycle({ status, review_status: reviewStatus } as any);
+    const lifecycle = getSalesForecastLifecycle({ status, review_status: reviewStatus } as any, auditEnabled);
     if (lifecycle?.stageName) return lifecycle.stageName;
     if (!status) return '-';
     const statusMap: Record<string, string> = {
@@ -766,7 +766,7 @@ export default function SalesForecastsPage() {
       render: (_, record) => {
         const isFirst = record.itemIndex === undefined || record.itemIndex === 0;
         if (!isFirst && viewMode === 'item') return { children: null, props: { rowSpan: 0 } };
-        const lifecycle = getSalesForecastLifecycle(record);
+        const lifecycle = getSalesForecastLifecycle(record, auditEnabled);
         return (
           <UniLifecycle
             percent={lifecycle.percent}
@@ -797,7 +797,7 @@ export default function SalesForecastsPage() {
         const isFirst = record.itemIndex === undefined || record.itemIndex === 0;
         if (!isFirst && viewMode === 'item') return { children: null, props: { rowSpan: 0 } };
         
-        const lifecycle = getSalesForecastLifecycle(record);
+        const lifecycle = getSalesForecastLifecycle(record, auditEnabled);
         const canEdit = ['草稿', '待审核', '已驳回'].includes(lifecycle.stageName ?? '');
         const canDelete = ['草稿', '待审核'].includes(lifecycle.stageName ?? '');
         const parts: React.ReactNode[] = [
@@ -824,6 +824,7 @@ export default function SalesForecastsPage() {
             approvedStatuses={['已审核', 'AUDITED', 'APPROVED', '审核通过', '通过', '已通过']}
             rejectedStatuses={['已驳回', 'REJECTED', '审核驳回']}
             autoApproveWhenSubmit={!auditEnabled}
+            workflowAuditEnabled={auditEnabled}
             theme="link"
             size="small"
             actions={{
@@ -845,9 +846,9 @@ export default function SalesForecastsPage() {
               size="small"
               icon={<ArrowDownOutlined />}
               disabled={!salesNodesEnabled.demand_computation}
-              onClick={() => handlePushToMrp(record.id)}
+              onClick={() => handlePushToComputation(record.id)}
             >
-              {t('app.kuaizhizao.salesForecast.pushToMrp')}
+              {t('app.kuaizhizao.salesForecast.pushToComputation')}
             </Button>
           );
         }
@@ -938,18 +939,20 @@ export default function SalesForecastsPage() {
           valueStyle: { color: token.colorPrimary },
           backgroundChart: renderTrendChart(statistics?.trend_today_new ?? [], token.colorPrimary),
         },
-        {
-          title: t('app.kuaizhizao.salesForecast.statPending', '待审核'),
-          key: 'pending_review_count',
-          value: statistics?.pending_review_count ?? 0,
-          valueStyle: { color: '#faad14' },
-          description: (statistics?.pending_review_count ?? 0) > 0 ? <div style={{ color: '#faad14' }}>需即时处理</div> : undefined,
-          backgroundChart: renderTrendChart(statistics?.trend_pending_review ?? [], '#faad14'),
-          onClick: (statistics?.pending_review_count ?? 0) > 0 ? () => {
-            tableSearchFormRef.current?.setFieldsValue?.({ status: '待审核' });
-            tableRef.current?.reload?.();
-          } : undefined,
-        },
+        ...(auditEnabled
+          ? [{
+              title: t('app.kuaizhizao.salesForecast.statPending', '待审核'),
+              key: 'pending_review_count',
+              value: statistics?.pending_review_count ?? 0,
+              valueStyle: { color: '#faad14' },
+              description: (statistics?.pending_review_count ?? 0) > 0 ? <div style={{ color: '#faad14' }}>需即时处理</div> : undefined,
+              backgroundChart: renderTrendChart(statistics?.trend_pending_review ?? [], '#faad14'),
+              onClick: (statistics?.pending_review_count ?? 0) > 0 ? () => {
+                tableSearchFormRef.current?.setFieldsValue?.({ status: '待审核' });
+                tableRef.current?.reload?.();
+              } : undefined,
+            }]
+          : []),
         {
           title: t('app.kuaizhizao.salesForecast.statInProgress', '执行中'),
           key: 'in_progress_count',
@@ -1376,7 +1379,7 @@ export default function SalesForecastsPage() {
           currentForecast && (
             <Space size="small">
               {(() => {
-                const lifecycle = getSalesForecastLifecycle(currentForecast);
+                const lifecycle = getSalesForecastLifecycle(currentForecast, auditEnabled);
                 const canEdit = ['草稿', '待审核', '已驳回'].includes(lifecycle.stageName ?? '');
                 const canDelete = ['草稿', '待审核'].includes(lifecycle.stageName ?? '');
                 return (
@@ -1404,6 +1407,7 @@ export default function SalesForecastsPage() {
                 approvedStatuses={['已审核', 'AUDITED', 'APPROVED', '审核通过', '通过', '已通过']}
                 rejectedStatuses={['已驳回', 'REJECTED', '审核驳回']}
                 autoApproveWhenSubmit={!auditEnabled}
+                workflowAuditEnabled={auditEnabled}
                 onSuccess={() => {
                   invalidateStatistics();
                   invalidateMenuBadge();
@@ -1442,7 +1446,7 @@ export default function SalesForecastsPage() {
             <DetailDrawerSection title="生命周期">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {(() => {
-                  const lifecycle = getSalesForecastLifecycle(currentForecast);
+                  const lifecycle = getSalesForecastLifecycle(currentForecast, auditEnabled);
                   if (!lifecycle.mainStages?.length) return null;
                   return (
                     <UniLifecycleStepper

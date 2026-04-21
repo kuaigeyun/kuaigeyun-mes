@@ -1346,8 +1346,15 @@ class SalesOrderService:
             else:
                 demand_synced = await self._sync_demand_if_exists(tenant_id, sales_order_id, approved_by)
         result = await self.get_sales_order_by_id(tenant_id, sales_order_id)
+        auto_push_result = await self._try_auto_push_order_to_computation(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+            operator_id=approved_by,
+        )
         out = result.model_dump()
         out["demand_synced"] = demand_synced
+        if auto_push_result:
+            out["auto_computation"] = auto_push_result
         return SalesOrderResponse(**out)
 
     async def reject_sales_order(
@@ -1473,6 +1480,28 @@ class SalesOrderService:
             demand_id=demand.id,
             created_by=created_by,
         )
+
+    async def _try_auto_push_order_to_computation(
+        self,
+        tenant_id: int,
+        sales_order_id: int,
+        operator_id: int,
+    ) -> Optional[Dict[str, Any]]:
+        """按组织配置在审核通过后自动下推销售订单到需求计算。"""
+        from infra.services.business_config_service import BusinessConfigService
+
+        enabled = await BusinessConfigService().auto_push_sales_to_computation_on_approve(tenant_id)
+        if not enabled:
+            return None
+        try:
+            return await self.push_sales_order_to_computation(
+                tenant_id=tenant_id,
+                sales_order_id=sales_order_id,
+                created_by=operator_id,
+            )
+        except Exception as exc:
+            logger.warning("销售订单自动下推需求计算失败，order_id=%s: %s", sales_order_id, exc)
+            return {"success": False, "message": str(exc)}
 
     async def preview_push_sales_order_to_computation(
         self, tenant_id: int, sales_order_id: int

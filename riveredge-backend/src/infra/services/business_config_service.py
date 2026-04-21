@@ -153,13 +153,10 @@ REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
 # 参数键白名单（注册表来源）
 # ============================================================
 
-# 流程设置：企业流程控制（审核、流转、自动审批）
+# 流程设置：企业流程控制（流转、领料确认等；单据是否人工审核由「审批流程 ApprovalProcess」单独管理）
 PROCESS_KEYS = {
-    "parameters.sales.audit_enabled",
     "parameters.planning.require_production_plan",
     "parameters.procurement.require_purchase_requisition",
-    "parameters.purchase.auto_approval",
-    "parameters.reporting.auto_approve",
     "parameters.work_order.picking_issue_strategy",
     "parameters.work_order.picking_confirm_warehouse_only",
     "parameters.work_order.picking_confirm_allowed_role_codes",
@@ -178,6 +175,7 @@ PARAMETER_KEYS = {
     "parameters.reporting.quick_reporting",
     "parameters.reporting.parameter_reporting",
     "parameters.reporting.auto_fill",
+    "parameters.reporting.auto_approve",
     "parameters.reporting.default_production_worker_mode",
     "parameters.reporting.data_correction",
     "parameters.warehouse.batch_management",
@@ -205,11 +203,8 @@ PARAMETER_KEYS = {
 
 # 已实装并在后端有明确生效点的配置项（用于前端禁用"假开关"）
 IMPLEMENTED_PARAMETER_KEYS = {
-    "parameters.sales.audit_enabled",
     "parameters.planning.require_production_plan",
     "parameters.procurement.require_purchase_requisition",
-    "parameters.purchase.auto_approval",
-    "parameters.reporting.auto_approve",
     "parameters.work_order.picking_issue_strategy",
     "parameters.work_order.picking_confirm_warehouse_only",
     "parameters.work_order.picking_confirm_allowed_role_codes",
@@ -223,6 +218,7 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.work_order.last_operation_auto_inbound_mode",
     "parameters.reporting.quick_reporting",
     "parameters.reporting.parameter_reporting",
+    "parameters.reporting.auto_approve",
     "parameters.reporting.default_production_worker_mode",
     "parameters.reporting.data_correction",
     "parameters.warehouse.batch_management",
@@ -329,6 +325,7 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
     },
     "planning": {
         "require_production_plan": False,
+        "auto_push_sales_to_computation_on_approve": False,
     },
     "bom": {
         "bom_multi_version_allowed": True,
@@ -497,6 +494,17 @@ class BusinessConfigService:
         },
     }
     PRO_PLANS = ["professional", "enterprise"]
+    AUDIT_NODE_KEYS = [
+        "demand",
+        "sales_forecast",
+        "sales_order",
+        "production_plan",
+        "quotation",
+        "quality_inspection",
+        "sales_delivery",
+        "purchase_order",
+        "purchase_request",
+    ]
 
     # ========================================================
     # 功能开关 / 审核判定
@@ -525,6 +533,28 @@ class BusinessConfigService:
             deleted_at__isnull=True,
         ).exists()
         return bool(exists)
+
+    async def get_audit_required_map(
+        self,
+        tenant_id: int,
+        node_keys: List[str] | None = None,
+    ) -> Dict[str, bool]:
+        """
+        批量返回单据节点是否需要审核。
+
+        默认返回 AUDIT_NODE_KEYS 中所有节点；仅依据 ApprovalProcess.is_active 判断。
+        """
+        keys = [k for k in (node_keys or self.AUDIT_NODE_KEYS) if k]
+        if not keys:
+            return {}
+        active_rows = await ApprovalProcess.filter(
+            tenant_id=tenant_id,
+            code__in=keys,
+            is_active=True,
+            deleted_at__isnull=True,
+        ).values_list("code", flat=True)
+        active_codes = {str(code) for code in active_rows}
+        return {key: key in active_codes for key in keys}
 
     # ========================================================
     # 参数读取
@@ -619,6 +649,15 @@ class BusinessConfigService:
             config["parameters"].get("planning", {}).get("require_production_plan", False)
         )
         return not require_plan
+
+    async def auto_push_sales_to_computation_on_approve(self, tenant_id: int) -> bool:
+        """销售订单/销售预测审核通过后是否自动下推到需求计算（组织级开关，默认关闭）。"""
+        config = await self.get_business_config(tenant_id)
+        return bool(
+            config["parameters"]
+            .get("planning", {})
+            .get("auto_push_sales_to_computation_on_approve", False)
+        )
 
     async def get_planning_config(self, tenant_id: int) -> Dict[str, Any]:
         """

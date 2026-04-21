@@ -222,7 +222,7 @@ async def get_demand_statistics(
 async def list_demands(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(20, ge=1, le=100, description="限制数量"),
-    demand_type: Optional[str] = Query(None, description="需求类型（sales_forecast 或 sales_order）"),
+    demand_type: str = Query("demand_plan", description="需求类型（当前仅支持 demand_plan）"),
     demand_status: Optional[str] = Query(None, description="需求状态", alias="status"),
     pushed_to_computation: Optional[bool] = Query(None, description="是否已下推计算"),
     business_mode: Optional[str] = Query(None, description="业务模式（MTS / MTO / ATO）"),
@@ -236,9 +236,7 @@ async def list_demands(
     支持按需求类型、状态、业务模式、审核状态等条件筛选。
     """
     try:
-        filters = {}
-        if demand_type:
-            filters['demand_type'] = demand_type
+        filters = {'demand_type': "demand_plan" if demand_type != "demand_plan" else demand_type}
         if demand_status:
             filters['status'] = demand_status
         if pushed_to_computation is not None:

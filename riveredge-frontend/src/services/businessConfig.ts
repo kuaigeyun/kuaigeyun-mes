@@ -87,6 +87,17 @@ export interface ProFeaturesList {
   pro_parameters: Record<string, string[]>;
 }
 
+export interface AuditRequiredMapResponse {
+  audit_required: Record<string, boolean>;
+}
+
+export async function getAuditRequiredMap(): Promise<Record<string, boolean>> {
+  const res = await apiRequest<AuditRequiredMapResponse>('/infra/business-config/audit-required', {
+    method: 'GET',
+  });
+  return res?.audit_required ?? {};
+}
+
 export async function checkProFeatureAccess(
   featureType: string,
   featureCode: string

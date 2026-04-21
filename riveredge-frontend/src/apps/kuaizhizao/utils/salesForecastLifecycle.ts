@@ -165,6 +165,27 @@ function currentSubStageLabel(subStages: SubStage[]): string {
   return subStages[subStages.length - 1]?.label ?? '';
 }
 
+function adaptForAuditSwitch(result: LifecycleResult, auditRequired: boolean): LifecycleResult {
+  if (auditRequired) return result;
+  const stageName = result.stageName === '待审核' ? '已审核' : result.stageName;
+  const mainStages = (result.mainStages ?? []).filter((s) => s.key !== 'pending_review');
+  const hasActive = mainStages.some((s) => s.status === 'active');
+  if (!hasActive) {
+    const auditedIdx = mainStages.findIndex((s) => s.key === 'audited');
+    if (auditedIdx >= 0) {
+      mainStages.forEach((s, idx) => {
+        if (idx < auditedIdx) s.status = 'done';
+        else if (idx === auditedIdx) s.status = 'active';
+        else s.status = 'pending';
+      });
+    }
+  }
+  const nextStepSuggestions = (result.nextStepSuggestions ?? [])
+    .map((s) => s.replace('提交审核', '提交').replace('审核通过', '确认'))
+    .filter((s) => !s.includes('驳回'));
+  return { ...result, stageName, mainStages, nextStepSuggestions };
+}
+
 function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecycle {
   const status = norm(record?.status as string);
   const reviewStatus = norm(record?.review_status as string);
@@ -328,7 +349,8 @@ export interface SalesForecastLike {
  * 根据销售预测获取生命周期结果，供 UniLifecycleStepper 使用。
  */
 export function getSalesForecastLifecycle(
-  record: SalesForecastLike | Record<string, unknown> | null | undefined
+  record: SalesForecastLike | Record<string, unknown> | null | undefined,
+  auditRequired = true
 ): LifecycleResult {
   if (!record) {
     return { percent: 0, stageName: '-', mainStages: [] };
@@ -337,7 +359,10 @@ export function getSalesForecastLifecycle(
     | BackendLifecycle
     | undefined;
   if (backend?.main_stages?.length && isSalesForecastLifecycle(backend)) {
-    return parseBackendLifecycle(backend);
+    return adaptForAuditSwitch(parseBackendLifecycle(backend), auditRequired);
   }
-  return parseBackendLifecycle(buildFallbackLifecycle(record as Record<string, unknown>));
+  return adaptForAuditSwitch(
+    parseBackendLifecycle(buildFallbackLifecycle(record as Record<string, unknown>)),
+    auditRequired
+  );
 }

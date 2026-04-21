@@ -802,8 +802,8 @@ async def get_sales_forecast(
     )
 
 
-@router.post("/sales-forecasts/{forecast_id}/push-to-mrp", summary="下推到MRP运算")
-async def push_sales_forecast_to_mrp(
+@router.post("/sales-forecasts/{forecast_id}/push-to-computation", summary="下推到需求计算")
+async def push_sales_forecast_to_computation(
     forecast_id: int = Path(..., description="销售预测ID"),
     planning_horizon: int = Query(12, ge=1, le=24, description="计划周期（月数）"),
     time_bucket: str = Query("week", description="时间粒度（week/month）"),
@@ -811,9 +811,7 @@ async def push_sales_forecast_to_mrp(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
-    从销售预测下推到MRP运算
-    
-    自动执行MRP计算，生成物料需求计划
+    从销售预测下推到需求计算
     
     - **forecast_id**: 销售预测ID
     - **planning_horizon**: 计划周期（月数，默认12个月）
@@ -822,7 +820,7 @@ async def push_sales_forecast_to_mrp(
     from apps.kuaizhizao.services.sales_service import SalesForecastService
     
     service = SalesForecastService()
-    result = await service.push_to_mrp(
+    result = await service.push_to_computation(
         tenant_id=tenant_id,
         forecast_id=forecast_id,
         planning_horizon=planning_horizon,
@@ -830,6 +828,25 @@ async def push_sales_forecast_to_mrp(
         user_id=current_user.id
     )
     return JSONResponse(content=result, status_code=http_status.HTTP_200_OK)
+
+
+@router.post("/sales-forecasts/{forecast_id}/push-to-mrp", summary="下推到MRP运算（兼容接口，将废弃）")
+async def push_sales_forecast_to_mrp_legacy(
+    forecast_id: int = Path(..., description="销售预测ID"),
+    planning_horizon: int = Query(12, ge=1, le=24, description="计划周期（月数）"),
+    time_bucket: str = Query("week", description="时间粒度（week/month）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    from loguru import logger as _logger
+    _logger.warning("Deprecated API called: /sales-forecasts/%s/push-to-mrp", forecast_id)
+    return await push_sales_forecast_to_computation(
+        forecast_id=forecast_id,
+        planning_horizon=planning_horizon,
+        time_bucket=time_bucket,
+        current_user=current_user,
+        tenant_id=tenant_id,
+    )
 
 
 @router.put("/sales-forecasts/{forecast_id}", response_model=SalesForecastResponse, summary="更新销售预测")

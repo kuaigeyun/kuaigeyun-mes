@@ -43,16 +43,8 @@ export interface ConfigCategory {
   params: ParamMeta[];
 }
 
-/** 流程设置分类（审核、流转、自动审批等） */
+/** 流程设置分类（流转、前置条件等；单据人工审核请在「审批流程」中启用对应流程） */
 export const PROCESS_CATEGORIES: ConfigCategory[] = [
-  {
-    id: 'process_sales',
-    nameKey: 'pages.system.configCenter.processCategory.sales',
-    descriptionKey: 'pages.system.configCenter.processCategory.salesDesc',
-    params: [
-      { key: 'sales.audit_enabled', nameKey: 'pages.system.configCenter.param.sales_audit_enabled', descriptionKey: 'pages.system.configCenter.param.sales_audit_enabled_desc', source: 'business_config', sourcePath: 'parameters.sales.audit_enabled', type: 'boolean' },
-    ],
-  },
   {
     id: 'process_planning',
     nameKey: 'pages.system.configCenter.processCategory.planning',
@@ -67,8 +59,6 @@ export const PROCESS_CATEGORIES: ConfigCategory[] = [
     descriptionKey: 'pages.system.configCenter.processCategory.procurementDesc',
     params: [
       { key: 'procurement.require_purchase_requisition', nameKey: 'pages.system.configCenter.param.procurement_require_purchase_requisition', descriptionKey: 'pages.system.configCenter.param.procurement_require_purchase_requisition_desc', source: 'business_config', sourcePath: 'parameters.procurement.require_purchase_requisition', type: 'boolean' },
-      { key: 'purchase.auto_approval', nameKey: 'pages.system.configCenter.param.purchase_auto_approval', descriptionKey: 'pages.system.configCenter.param.purchase_auto_approval_desc', source: 'business_config', sourcePath: 'parameters.purchase.auto_approval', type: 'boolean' },
-      { key: 'quality.require_incoming_inspection_for_receipt', nameKey: 'pages.system.configCenter.param.quality_require_incoming_inspection_for_receipt', descriptionKey: 'pages.system.configCenter.param.quality_require_incoming_inspection_for_receipt_desc', source: 'business_config', sourcePath: 'parameters.quality.require_incoming_inspection_for_receipt', type: 'boolean' },
     ],
   },
   {
@@ -79,14 +69,6 @@ export const PROCESS_CATEGORIES: ConfigCategory[] = [
       { key: 'work_order.picking_confirm_warehouse_only', nameKey: 'pages.system.configCenter.param.work_order_picking_confirm_warehouse_only', descriptionKey: 'pages.system.configCenter.param.work_order_picking_confirm_warehouse_only_desc', source: 'business_config', sourcePath: 'parameters.work_order.picking_confirm_warehouse_only', type: 'boolean' },
       { key: 'work_order.require_confirmed_picking_before_operation_start', nameKey: 'pages.system.configCenter.param.work_order_require_confirmed_picking_before_operation_start', descriptionKey: 'pages.system.configCenter.param.work_order_require_confirmed_picking_before_operation_start_desc', source: 'business_config', sourcePath: 'parameters.work_order.require_confirmed_picking_before_operation_start', type: 'boolean' },
       { key: 'work_order.require_confirmed_picking_before_reporting', nameKey: 'pages.system.configCenter.param.work_order_require_confirmed_picking_before_reporting', descriptionKey: 'pages.system.configCenter.param.work_order_require_confirmed_picking_before_reporting_desc', source: 'business_config', sourcePath: 'parameters.work_order.require_confirmed_picking_before_reporting', type: 'boolean' },
-    ],
-  },
-  {
-    id: 'process_reporting',
-    nameKey: 'pages.system.configCenter.processCategory.reporting',
-    descriptionKey: 'pages.system.configCenter.processCategory.reportingDesc',
-    params: [
-      { key: 'reporting.auto_approve', nameKey: 'pages.system.configCenter.param.reporting_auto_approve', descriptionKey: 'pages.system.configCenter.param.reporting_auto_approve_desc', source: 'business_config', sourcePath: 'parameters.reporting.auto_approve', type: 'boolean' },
     ],
   },
 ];
@@ -119,6 +101,7 @@ export const PARAMETER_CATEGORIES: ConfigCategory[] = [
       { key: 'reporting.quick_reporting', nameKey: 'pages.system.configCenter.param.reporting_quick_reporting', descriptionKey: 'pages.system.configCenter.param.reporting_quick_reporting_desc', source: 'business_config', sourcePath: 'parameters.reporting.quick_reporting', type: 'boolean' },
       { key: 'reporting.parameter_reporting', nameKey: 'pages.system.configCenter.param.reporting_parameter_reporting', descriptionKey: 'pages.system.configCenter.param.reporting_parameter_reporting_desc', source: 'business_config', sourcePath: 'parameters.reporting.parameter_reporting', type: 'boolean' },
       { key: 'reporting.data_correction', nameKey: 'pages.system.configCenter.param.reporting_data_correction', descriptionKey: 'pages.system.configCenter.param.reporting_data_correction_desc', source: 'business_config', sourcePath: 'parameters.reporting.data_correction', type: 'boolean' },
+      { key: 'reporting.auto_approve', nameKey: 'pages.system.configCenter.param.reporting_auto_approve', descriptionKey: 'pages.system.configCenter.param.reporting_auto_approve_desc', source: 'business_config', sourcePath: 'parameters.reporting.auto_approve', type: 'boolean' },
       { key: 'bom.bom_multi_version_allowed', nameKey: 'pages.system.configCenter.param.bom_bom_multi_version_allowed', descriptionKey: 'pages.system.configCenter.param.bom_bom_multi_version_allowed_desc', source: 'business_config', sourcePath: 'parameters.bom.bom_multi_version_allowed', type: 'boolean' },
     ],
   },
@@ -140,6 +123,7 @@ export const PARAMETER_CATEGORIES: ConfigCategory[] = [
     nameKey: 'pages.system.configCenter.category.sales_quality',
     descriptionKey: 'pages.system.configCenter.category.sales_qualityDesc',
     params: [
+      { key: 'quality.require_incoming_inspection_for_receipt', nameKey: 'pages.system.configCenter.param.quality_require_incoming_inspection_for_receipt', descriptionKey: 'pages.system.configCenter.param.quality_require_incoming_inspection_for_receipt_desc', source: 'business_config', sourcePath: 'parameters.quality.require_incoming_inspection_for_receipt', type: 'boolean' },
       { key: 'quality.incoming_inspection', nameKey: 'pages.system.configCenter.param.quality_incoming_inspection', descriptionKey: 'pages.system.configCenter.param.quality_incoming_inspection_desc', source: 'business_config', sourcePath: 'parameters.quality.incoming_inspection', type: 'boolean' },
       { key: 'quality.process_inspection', nameKey: 'pages.system.configCenter.param.quality_process_inspection', descriptionKey: 'pages.system.configCenter.param.quality_process_inspection_desc', source: 'business_config', sourcePath: 'parameters.quality.process_inspection', type: 'boolean' },
       { key: 'quality.finished_inspection', nameKey: 'pages.system.configCenter.param.quality_finished_inspection', descriptionKey: 'pages.system.configCenter.param.quality_finished_inspection_desc', source: 'business_config', sourcePath: 'parameters.quality.finished_inspection', type: 'boolean' },

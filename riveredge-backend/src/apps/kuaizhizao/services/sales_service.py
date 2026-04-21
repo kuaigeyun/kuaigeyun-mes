@@ -106,6 +106,11 @@ class SalesForecastService(AppBaseService[SalesForecast]):
                 demand = await self._get_linked_demand_for_forecast(tenant_id, forecast.id)
                 if not demand:
                     await self._create_demand_from_sales_forecast(tenant_id, forecast.id, created_by)
+                await self._try_auto_push_forecast_to_computation(
+                    tenant_id=tenant_id,
+                    forecast_id=forecast.id,
+                    operator_id=created_by,
+                )
                 forecast = await SalesForecast.get(tenant_id=tenant_id, id=forecast.id)
 
             return SalesForecastResponse.model_validate(forecast)
@@ -420,6 +425,14 @@ class SalesForecastService(AppBaseService[SalesForecast]):
             updated_forecast = await self.get_sales_forecast_by_id(tenant_id, forecast_id)
             out = updated_forecast.model_dump()
             out["demand_synced"] = demand_synced
+            if not rejection_reason:
+                auto_push_result = await self._try_auto_push_forecast_to_computation(
+                    tenant_id=tenant_id,
+                    forecast_id=forecast_id,
+                    operator_id=approved_by,
+                )
+                if auto_push_result:
+                    out["auto_computation"] = auto_push_result
             return SalesForecastResponse(**out)
 
     async def withdraw_forecast_approval(
@@ -464,6 +477,28 @@ class SalesForecastService(AppBaseService[SalesForecast]):
                 updated_by=withdrawn_by,
             )
             return await self.get_sales_forecast_by_id(tenant_id, forecast_id)
+
+    async def _try_auto_push_forecast_to_computation(
+        self,
+        tenant_id: int,
+        forecast_id: int,
+        operator_id: int,
+    ) -> Optional[Dict[str, Any]]:
+        """按组织配置在审核通过后自动下推销售预测到需求计算。"""
+        from infra.services.business_config_service import BusinessConfigService
+
+        enabled = await BusinessConfigService().auto_push_sales_to_computation_on_approve(tenant_id)
+        if not enabled:
+            return None
+        try:
+            return await self.push_to_computation(
+                tenant_id=tenant_id,
+                forecast_id=forecast_id,
+                user_id=operator_id,
+            )
+        except Exception as exc:
+            logger.warning("销售预测自动下推需求计算失败，forecast_id=%s: %s", forecast_id, exc)
+            return {"success": False, "message": str(exc)}
 
     async def add_forecast_item(self, tenant_id: int, forecast_id: int, item_data: SalesForecastItemCreate) -> SalesForecastItemResponse:
         """添加销售预测明细"""
@@ -526,6 +561,11 @@ class SalesForecastService(AppBaseService[SalesForecast]):
                     await self._create_demand_from_sales_forecast(
                         tenant_id, forecast_id, submitted_by
                     )
+                await self._try_auto_push_forecast_to_computation(
+                    tenant_id=tenant_id,
+                    forecast_id=forecast_id,
+                    operator_id=submitted_by,
+                )
             else:
                 await SalesForecast.filter(tenant_id=tenant_id, id=forecast_id).update(
                     status=DocumentStatus.PENDING_REVIEW.value,
@@ -755,7 +795,7 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         
         return file_path
 
-    async def push_to_mrp(
+    async def push_to_computation(
         self,
         tenant_id: int,
         forecast_id: int,
@@ -806,6 +846,23 @@ class SalesForecastService(AppBaseService[SalesForecast]):
             "computation_code": result.get("computation_code"),
             "message": result.get("message", "需求计算下推成功"),
         }
+
+    async def push_to_mrp(
+        self,
+        tenant_id: int,
+        forecast_id: int,
+        planning_horizon: int = 12,
+        time_bucket: str = "week",
+        user_id: int = None
+    ) -> Dict[str, Any]:
+        """兼容旧命名：push_to_mrp -> push_to_computation。"""
+        return await self.push_to_computation(
+            tenant_id=tenant_id,
+            forecast_id=forecast_id,
+            planning_horizon=planning_horizon,
+            time_bucket=time_bucket,
+            user_id=user_id,
+        )
 
 
 
