@@ -14,9 +14,10 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import secrets
 import string
-import httpx
 import json
 from typing import Dict, Any
+
+from infra.infrastructure.http import get_http_client
 
 from tortoise import Tortoise
 from tortoise.queryset import Q
@@ -155,34 +156,30 @@ class AuthService:
 
             # 阿里云短信发送逻辑（这里简化为HTTP请求示例）
             # 实际实现需要根据阿里云SMS API文档进行调整
-            async with httpx.AsyncClient() as client:
-                # 这里是阿里云SMS API的示例调用
-                # 实际需要根据阿里云文档调整参数和URL
-                response = await client.post(
-                    "https://dysmsapi.aliyuncs.com/",
-                    data={
-                        "AccessKeyId": infra_settings.SMS_ACCESS_KEY_ID,
-                        "Action": "SendSms",
-                        "SignName": infra_settings.SMS_SIGN_NAME,
-                        "TemplateCode": infra_settings.SMS_TEMPLATE_CODE,
-                        "TemplateParam": json.dumps({"code": code}),
-                        "PhoneNumbers": phone,
-                        "Version": "2017-05-25",
-                        "Format": "JSON",
-                        "SignatureMethod": "HMAC-SHA1",
-                        "SignatureVersion": "1.0",
-                        "Timestamp": "",  # 需要生成时间戳
-                        "Signature": "",  # 需要生成签名
-                    }
-                )
-
-                result = response.json()
-                if result.get("Code") == "OK":
-                    logger.info(f"短信验证码发送成功: {phone}")
-                    return True
-                else:
-                    logger.error(f"短信验证码发送失败: {result}")
-                    return False
+            response = await get_http_client().post(
+                "https://dysmsapi.aliyuncs.com/",
+                data={
+                    "AccessKeyId": infra_settings.SMS_ACCESS_KEY_ID,
+                    "Action": "SendSms",
+                    "SignName": infra_settings.SMS_SIGN_NAME,
+                    "TemplateCode": infra_settings.SMS_TEMPLATE_CODE,
+                    "TemplateParam": json.dumps({"code": code}),
+                    "PhoneNumbers": phone,
+                    "Version": "2017-05-25",
+                    "Format": "JSON",
+                    "SignatureMethod": "HMAC-SHA1",
+                    "SignatureVersion": "1.0",
+                    "Timestamp": "",
+                    "Signature": "",
+                },
+            )
+            result = response.json()
+            if result.get("Code") == "OK":
+                logger.info(f"短信验证码发送成功: {phone}")
+                return True
+            else:
+                logger.error(f"短信验证码发送失败: {result}")
+                return False
 
         except Exception as e:
             logger.error(f"发送短信验证码异常: {e}")

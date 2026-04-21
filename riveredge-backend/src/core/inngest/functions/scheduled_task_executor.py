@@ -7,8 +7,10 @@
 from inngest import Event, TriggerEvent
 from typing import Dict, Any
 from datetime import datetime
-import httpx
+import httpx  # 仅用于异常类型
 from loguru import logger
+
+from infra.infrastructure.http import get_http_client
 
 from core.inngest.client import inngest_client
 from core.models.scheduled_task import ScheduledTask
@@ -153,28 +155,28 @@ async def _execute_api_call_task(scheduled_task: ScheduledTask) -> Dict[str, Any
         }
     
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            if method.upper() == "GET":
-                response = await client.get(url, headers=headers, params=data)
-            elif method.upper() == "POST":
-                response = await client.post(url, headers=headers, json=data)
-            elif method.upper() == "PUT":
-                response = await client.put(url, headers=headers, json=data)
-            elif method.upper() == "DELETE":
-                response = await client.delete(url, headers=headers)
-            else:
-                return {
-                    "success": False,
-                    "error": f"不支持的 HTTP 方法: {method}"
-                }
-            
-            response.raise_for_status()
-            
+        client = get_http_client()
+        if method.upper() == "GET":
+            response = await client.get(url, headers=headers, params=data, timeout=timeout)
+        elif method.upper() == "POST":
+            response = await client.post(url, headers=headers, json=data, timeout=timeout)
+        elif method.upper() == "PUT":
+            response = await client.put(url, headers=headers, json=data, timeout=timeout)
+        elif method.upper() == "DELETE":
+            response = await client.delete(url, headers=headers, timeout=timeout)
+        else:
             return {
-                "success": True,
-                "status_code": response.status_code,
-                "response": response.json() if response.headers.get("content-type", "").startswith("application/json") else response.text
+                "success": False,
+                "error": f"不支持的 HTTP 方法: {method}"
             }
+
+        response.raise_for_status()
+
+        return {
+            "success": True,
+            "status_code": response.status_code,
+            "response": response.json() if response.headers.get("content-type", "").startswith("application/json") else response.text,
+        }
     except httpx.HTTPStatusError as e:
         return {
             "success": False,

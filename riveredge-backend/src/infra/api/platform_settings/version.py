@@ -12,7 +12,8 @@ from core.timezone_utils import now_utc
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 from loguru import logger
-import httpx
+
+from infra.infrastructure.http import get_http_client
 
 router = APIRouter(prefix="/platform", tags=["Platform Version"])
 
@@ -75,23 +76,22 @@ async def get_platform_version():
     git_latest = "暂无"
 
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(GITEE_API_URL)
-            if resp.status_code == 200:
-                data = resp.json()
-                if data and isinstance(data, list) and len(data) > 0:
-                    commit = data[0]
-                    commit_info = commit.get("commit") or {}
-                    author = commit_info.get("author") or {}
-                    raw_date = author.get("date")
-                    if raw_date:
-                        try:
-                            dt = datetime.fromisoformat(raw_date.replace("Z", "+00:00"))
-                            # Gitee 返回的时间已带时区（如 +08:00），需转为 UTC 再输出，否则前端会重复加时区
-                            dt_utc = dt.astimezone(timezone.utc)
-                            git_latest = dt_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
-                        except Exception:
-                            git_latest = _normalize_to_iso_utc(raw_date[:19]) if len(raw_date) >= 16 else raw_date
+        resp = await get_http_client().get(GITEE_API_URL, timeout=5.0)
+        if resp.status_code == 200:
+            data = resp.json()
+            if data and isinstance(data, list) and len(data) > 0:
+                commit = data[0]
+                commit_info = commit.get("commit") or {}
+                author = commit_info.get("author") or {}
+                raw_date = author.get("date")
+                if raw_date:
+                    try:
+                        dt = datetime.fromisoformat(raw_date.replace("Z", "+00:00"))
+                        # Gitee 返回的时间已带时区（如 +08:00），需转为 UTC 再输出
+                        dt_utc = dt.astimezone(timezone.utc)
+                        git_latest = dt_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+                    except Exception:
+                        git_latest = _normalize_to_iso_utc(raw_date[:19]) if len(raw_date) >= 16 else raw_date
     except Exception as e:
         logger.warning(f"获取 Gitee 最新提交时间失败: {e}")
 

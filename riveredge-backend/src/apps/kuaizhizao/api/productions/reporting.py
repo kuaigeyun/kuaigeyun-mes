@@ -8,8 +8,9 @@ from datetime import datetime
 from typing import List, Optional
 from decimal import Decimal
 import uuid
-import httpx
 from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTPException, Body
+
+from infra.infrastructure.http import get_http_client
 from fastapi.responses import JSONResponse
 from loguru import logger
 
@@ -132,8 +133,7 @@ async def _emit_overview_statistics_alert(tenant_id: int, trace_id: str, error_m
             "error": error_message,
             "occurred_at": datetime.now().isoformat(),
         }
-        async with httpx.AsyncClient(timeout=3.0) as client:
-            await client.post(str(webhook_url), json=payload)
+        await get_http_client().post(str(webhook_url), json=payload, timeout=3.0)
     except Exception as notify_err:
         logger.warning(
             "reporting_overview_statistics_alert_failed trace_id={} tenant_id={} error={}",

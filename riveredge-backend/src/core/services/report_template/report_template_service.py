@@ -23,7 +23,8 @@ from core.services.base import BaseService
 from core.services.report_engines import ExcelEngine
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from loguru import logger
-import httpx
+
+from infra.infrastructure.http import get_http_client
 
 # 延迟导入 PDFEngine，因为在 Windows 上可能不可用
 try:
@@ -327,10 +328,9 @@ class ReportTemplateService(BaseService):
                 api_url = ds_config.get("url", "")
                 if api_url:
                     try:
-                        async with httpx.AsyncClient() as client:
-                            response = await client.get(api_url, params=params)
-                            response.raise_for_status()
-                            result[ds_id] = response.json()
+                        response = await get_http_client().get(api_url, params=params)
+                        response.raise_for_status()
+                        result[ds_id] = response.json()
                     except Exception as e:
                         logger.error(f"获取API数据源失败: {e}")
                         result[ds_id] = []

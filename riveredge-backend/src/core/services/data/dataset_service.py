@@ -6,8 +6,10 @@
 
 import re
 import time
-import httpx
+import httpx  # 仅用于异常类型
 from typing import Dict, Any, Optional, List, Tuple
+
+from infra.infrastructure.http import get_http_client
 from uuid import UUID
 from datetime import datetime
 
@@ -707,59 +709,59 @@ class DatasetService:
 
             body = query_config.get("body") or {}
 
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                if method == "GET":
-                    response = await client.get(url, headers=headers, params=params)
-                elif method == "POST":
-                    response = await client.post(url, headers=headers, params=params, json=body)
-                elif method == "PUT":
-                    response = await client.put(url, headers=headers, params=params, json=body)
-                elif method == "PATCH":
-                    response = await client.patch(url, headers=headers, params=params, json=body)
-                else:
-                    return {
-                        "success": False,
-                        "data": [],
-                        "total": None,
-                        "columns": None,
-                        "error": f"不支持的 HTTP 方法: {method}",
-                    }
-
-                if response.status_code >= 400:
-                    return {
-                        "success": False,
-                        "data": [],
-                        "total": None,
-                        "columns": None,
-                        "error": f"请求失败，状态码: {response.status_code}",
-                    }
-                try:
-                    response_data = response.json()
-                except Exception:
-                    response_data = {"data": response.text}
-                if isinstance(response_data, list):
-                    data = response_data
-                elif isinstance(response_data, dict):
-                    if "data" in response_data:
-                        data = (
-                            response_data["data"]
-                            if isinstance(response_data["data"], list)
-                            else [response_data["data"]]
-                        )
-                    elif "items" in response_data:
-                        data = response_data["items"]
-                    else:
-                        data = [response_data]
-                else:
-                    data = []
-                data = data[offset : offset + limit]
-                columns = list(data[0].keys()) if data and isinstance(data[0], dict) else []
+            client = get_http_client()
+            if method == "GET":
+                response = await client.get(url, headers=headers, params=params, timeout=30.0)
+            elif method == "POST":
+                response = await client.post(url, headers=headers, params=params, json=body, timeout=30.0)
+            elif method == "PUT":
+                response = await client.put(url, headers=headers, params=params, json=body, timeout=30.0)
+            elif method == "PATCH":
+                response = await client.patch(url, headers=headers, params=params, json=body, timeout=30.0)
+            else:
                 return {
-                    "success": True,
-                    "data": data,
-                    "total": len(data),
-                    "columns": columns,
+                    "success": False,
+                    "data": [],
+                    "total": None,
+                    "columns": None,
+                    "error": f"不支持的 HTTP 方法: {method}",
                 }
+
+            if response.status_code >= 400:
+                return {
+                    "success": False,
+                    "data": [],
+                    "total": None,
+                    "columns": None,
+                    "error": f"请求失败，状态码: {response.status_code}",
+                }
+            try:
+                response_data = response.json()
+            except Exception:
+                response_data = {"data": response.text}
+            if isinstance(response_data, list):
+                data = response_data
+            elif isinstance(response_data, dict):
+                if "data" in response_data:
+                    data = (
+                        response_data["data"]
+                        if isinstance(response_data["data"], list)
+                        else [response_data["data"]]
+                    )
+                elif "items" in response_data:
+                    data = response_data["items"]
+                else:
+                    data = [response_data]
+            else:
+                data = []
+            data = data[offset : offset + limit]
+            columns = list(data[0].keys()) if data and isinstance(data[0], dict) else []
+            return {
+                "success": True,
+                "data": data,
+                "total": len(data),
+                "columns": columns,
+            }
         except httpx.TimeoutException:
             return {
                 "success": False,
@@ -918,66 +920,61 @@ class DatasetService:
                 body = query_config.get('body', {})
             
             # 执行请求
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                if method == 'GET':
-                    response = await client.get(url, headers=headers, params=params)
-                elif method == 'POST':
-                    response = await client.post(url, headers=headers, params=params, json=body)
-                elif method == 'PUT':
-                    response = await client.put(url, headers=headers, params=params, json=body)
-                elif method == 'DELETE':
-                    response = await client.delete(url, headers=headers, params=params)
-                elif method == 'PATCH':
-                    response = await client.patch(url, headers=headers, params=params, json=body)
-                else:
-                    return {
-                        'success': False,
-                        'data': [],
-                        'total': None,
-                        'columns': None,
-                        'error': f'不支持的 HTTP 方法: {method}',
-                    }
-                
-                if response.status_code >= 400:
-                    return {
-                        'success': False,
-                        'data': [],
-                        'total': None,
-                        'columns': None,
-                        'error': f'API 请求失败，状态码: {response.status_code}',
-                    }
-                
-                # 解析响应
-                try:
-                    response_data = response.json()
-                except Exception:
-                    response_data = {'data': response.text}
-                
-                # 提取数据（支持多种响应格式）
-                if isinstance(response_data, list):
-                    data = response_data
-                elif isinstance(response_data, dict):
-                    if 'data' in response_data:
-                        data = response_data['data'] if isinstance(response_data['data'], list) else [response_data['data']]
-                    elif 'items' in response_data:
-                        data = response_data['items']
-                    else:
-                        data = [response_data]
-                else:
-                    data = []
-                
-                # 限制返回行数
-                data = data[offset:offset + limit]
-                
-                # 获取列信息
-                columns = list(data[0].keys()) if data and isinstance(data[0], dict) else []
-                
+            client = get_http_client()
+            if method == 'GET':
+                response = await client.get(url, headers=headers, params=params, timeout=30.0)
+            elif method == 'POST':
+                response = await client.post(url, headers=headers, params=params, json=body, timeout=30.0)
+            elif method == 'PUT':
+                response = await client.put(url, headers=headers, params=params, json=body, timeout=30.0)
+            elif method == 'DELETE':
+                response = await client.delete(url, headers=headers, params=params, timeout=30.0)
+            elif method == 'PATCH':
+                response = await client.patch(url, headers=headers, params=params, json=body, timeout=30.0)
+            else:
                 return {
-                    'success': True,
-                    'data': data,
-                    'total': len(data),
-                    'columns': columns,
+                    'success': False,
+                    'data': [],
+                    'total': None,
+                    'columns': None,
+                    'error': f'不支持的 HTTP 方法: {method}',
                 }
+
+            if response.status_code >= 400:
+                return {
+                    'success': False,
+                    'data': [],
+                    'total': None,
+                    'columns': None,
+                    'error': f'API 请求失败，状态码: {response.status_code}',
+                }
+
+            try:
+                response_data = response.json()
+            except Exception:
+                response_data = {'data': response.text}
+
+            if isinstance(response_data, list):
+                data = response_data
+            elif isinstance(response_data, dict):
+                if 'data' in response_data:
+                    data = response_data['data'] if isinstance(response_data['data'], list) else [response_data['data']]
+                elif 'items' in response_data:
+                    data = response_data['items']
+                else:
+                    data = [response_data]
+            else:
+                data = []
+
+            data = data[offset:offset + limit]
+            columns = list(data[0].keys()) if data and isinstance(data[0], dict) else []
+
+            return {
+                'success': True,
+                'data': data,
+                'total': len(data),
+                'columns': columns,
+            }
         except httpx.TimeoutException:
             return {
                 'success': False,

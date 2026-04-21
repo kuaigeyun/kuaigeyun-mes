@@ -5,11 +5,12 @@
 """
 
 from jose import JWTError, jwt
-import httpx
 import random
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
 from loguru import logger
+
+from infra.infrastructure.http import get_http_client
 
 from core.models.file import File
 from core.services.system.system_parameter_service import SystemParameterService
@@ -236,26 +237,21 @@ class FilePreviewService:
         
         # 执行健康检查
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    f"{url}/health",
-                    timeout=5.0
-                )
-                is_healthy = response.status_code == 200
-                
-                # 缓存健康检查结果
-                if use_cache:
-                    try:
-                        await cache_manager.set(
-                            "file_preview",
-                            cache_key,
-                            {"healthy": is_healthy, "checked_at": datetime.utcnow().isoformat()},
-                            ttl=FilePreviewService.HEALTH_CHECK_CACHE_TTL
-                        )
-                    except Exception:
-                        pass
-                
-                return is_healthy
+            response = await get_http_client().get(f"{url}/health", timeout=5.0)
+            is_healthy = response.status_code == 200
+
+            if use_cache:
+                try:
+                    await cache_manager.set(
+                        "file_preview",
+                        cache_key,
+                        {"healthy": is_healthy, "checked_at": datetime.utcnow().isoformat()},
+                        ttl=FilePreviewService.HEALTH_CHECK_CACHE_TTL
+                    )
+                except Exception:
+                    pass
+
+            return is_healthy
         except Exception as e:
             logger.warning(f"kkFileView 健康检查失败 ({url}): {e}")
             

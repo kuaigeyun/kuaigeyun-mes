@@ -8,11 +8,12 @@
 from typing import Optional, List, Dict, Any  # noqa: F401
 from uuid import UUID
 from tortoise.exceptions import IntegrityError
-import httpx
+import httpx  # 仅用于 BasicAuth 等类型
 
 from core.models.integration_config import IntegrationConfig
 from core.schemas.integration_config import IntegrationConfigCreate, IntegrationConfigUpdate
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.infrastructure.http import get_http_client
 
 # 系统默认数据源代码（密码从 ENV 读取，不可编辑）
 SYSTEM_DEFAULT_CODE = "system_default"
@@ -336,18 +337,17 @@ class IntegrationConfigService:
         method = config.get("method", "GET")
         headers = config.get("headers", {})
         timeout = config.get("timeout", 10.0)
-        
-        async with httpx.AsyncClient() as client:
-            response = await client.request(
-                method,
-                url,
-                headers=headers,
-                timeout=timeout
-            )
-            return {
-                "status_code": response.status_code,
-                "response": response.text[:200] if response.text else ""  # 限制响应长度
-            }
+
+        response = await get_http_client().request(
+            method,
+            url,
+            headers=headers,
+            timeout=timeout,
+        )
+        return {
+            "status_code": response.status_code,
+            "response": response.text[:200] if response.text else "",
+        }
     
     @staticmethod
     async def _test_oauth_connection(integration: IntegrationConfig) -> Dict[str, Any]:
@@ -395,19 +395,18 @@ class IntegrationConfigService:
         headers = config.get("headers", {})
         timeout = config.get("timeout", 10.0)
         test_payload = config.get("test_payload", {"test": True})
-        
-        async with httpx.AsyncClient() as client:
-            response = await client.request(
-                method,
-                url,
-                headers=headers,
-                json=test_payload,
-                timeout=timeout
-            )
-            return {
-                "status_code": response.status_code,
-                "message": "Webhook 测试请求发送成功"
-            }
+
+        response = await get_http_client().request(
+            method,
+            url,
+            headers=headers,
+            json=test_payload,
+            timeout=timeout,
+        )
+        return {
+            "status_code": response.status_code,
+            "message": "Webhook 测试请求发送成功",
+        }
     
     @staticmethod
     async def _test_database_connection(integration: IntegrationConfig) -> Dict[str, Any]:
@@ -637,16 +636,15 @@ class IntegrationConfigService:
         if not app_id or not app_secret:
             raise ValueError("飞书配置缺少 app_id 或 app_secret")
         url = "https://open.feishu.cn/openapi-connector/auth/v1/app_access_token/internal"
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                url,
-                json={"app_id": app_id, "app_secret": app_secret},
-                timeout=10.0,
-            )
-            data = resp.json()
-            if data.get("code") != 0:
-                raise ValueError(data.get("msg", "获取 token 失败"))
-            return {"message": "飞书连接成功", "tenant_access_token": "***"}
+        resp = await get_http_client().post(
+            url,
+            json={"app_id": app_id, "app_secret": app_secret},
+            timeout=10.0,
+        )
+        data = resp.json()
+        if data.get("code") != 0:
+            raise ValueError(data.get("msg", "获取 token 失败"))
+        return {"message": "飞书连接成功", "tenant_access_token": "***"}
 
     @staticmethod
     async def _test_dingtalk_connection(integration: IntegrationConfig) -> Dict[str, Any]:
@@ -657,16 +655,15 @@ class IntegrationConfigService:
         if not app_key or not app_secret:
             raise ValueError("钉钉配置缺少 app_key 或 app_secret")
         url = "https://oapi.dingtalk.com/gettoken"
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(
-                url,
-                params={"appkey": app_key, "appsecret": app_secret},
-                timeout=10.0,
-            )
-            data = resp.json()
-            if data.get("errcode") != 0:
-                raise ValueError(data.get("errmsg", "获取 token 失败"))
-            return {"message": "钉钉连接成功", "access_token": "***"}
+        resp = await get_http_client().get(
+            url,
+            params={"appkey": app_key, "appsecret": app_secret},
+            timeout=10.0,
+        )
+        data = resp.json()
+        if data.get("errcode") != 0:
+            raise ValueError(data.get("errmsg", "获取 token 失败"))
+        return {"message": "钉钉连接成功", "access_token": "***"}
 
     @staticmethod
     async def _test_wecom_connection(integration: IntegrationConfig) -> Dict[str, Any]:
@@ -677,16 +674,15 @@ class IntegrationConfigService:
         if not corp_id or not corp_secret:
             raise ValueError("企业微信配置缺少 corp_id 或 corp_secret")
         url = "https://qyapi.weixin.qq.com/cgi-bin/gettoken"
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(
-                url,
-                params={"corpid": corp_id, "corpsecret": corp_secret},
-                timeout=10.0,
-            )
-            data = resp.json()
-            if data.get("errcode") != 0:
-                raise ValueError(data.get("errmsg", "获取 token 失败"))
-            return {"message": "企业微信连接成功", "access_token": "***"}
+        resp = await get_http_client().get(
+            url,
+            params={"corpid": corp_id, "corpsecret": corp_secret},
+            timeout=10.0,
+        )
+        data = resp.json()
+        if data.get("errcode") != 0:
+            raise ValueError(data.get("errmsg", "获取 token 失败"))
+        return {"message": "企业微信连接成功", "access_token": "***"}
 
     @staticmethod
     async def _test_rest_api_connection(integration: IntegrationConfig) -> Dict[str, Any]:
@@ -707,12 +703,12 @@ class IntegrationConfigService:
             headers["Authorization"] = f"Bearer {config.get('api_key')}"
         elif config.get("token"):
             headers["Authorization"] = f"Bearer {config.get('token')}"
-        async with httpx.AsyncClient() as client:
-            for u in test_urls:
-                try:
-                    resp = await client.get(u, auth=auth, headers=headers or None, timeout=10.0)
-                    if resp.status_code < 500:
-                        return {"message": "连接成功", "status_code": resp.status_code}
-                except Exception:
-                    continue
+        client = get_http_client()
+        for u in test_urls:
+            try:
+                resp = await client.get(u, auth=auth, headers=headers or None, timeout=10.0)
+                if resp.status_code < 500:
+                    return {"message": "连接成功", "status_code": resp.status_code}
+            except Exception:
+                continue
         raise ValueError("无法连接到配置的 API 地址，请检查 base_url 和认证信息")

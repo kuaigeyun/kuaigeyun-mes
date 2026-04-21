@@ -4,9 +4,11 @@
 提供接口的 CRUD 操作和接口测试功能。
 """
 
-import httpx
+import httpx  # 仅用于异常类型
 import time
 from typing import Dict, Any, Optional, List
+
+from infra.infrastructure.http import get_http_client
 from uuid import UUID
 
 from tortoise.exceptions import IntegrityError
@@ -348,61 +350,61 @@ class APIService:
         # 5. 发送请求
         start_time = time.time()
         try:
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                # 根据请求方法发送请求
-                method_upper = api.method.upper()
-                if method_upper == "GET":
-                    response = await client.get(
-                        url,
-                        headers=request_headers,
-                        params=request_params,
-                    )
-                elif method_upper == "POST":
-                    response = await client.post(
-                        url,
-                        headers=request_headers,
-                        params=request_params,
-                        json=request_body,
-                    )
-                elif method_upper == "PUT":
-                    response = await client.put(
-                        url,
-                        headers=request_headers,
-                        params=request_params,
-                        json=request_body,
-                    )
-                elif method_upper == "DELETE":
-                    response = await client.delete(
-                        url,
-                        headers=request_headers,
-                        params=request_params,
-                    )
-                elif method_upper == "PATCH":
-                    response = await client.patch(
-                        url,
-                        headers=request_headers,
-                        params=request_params,
-                        json=request_body,
-                    )
-                else:
-                    raise ValueError(f"不支持的请求方法: {api.method}")
-                
-                # 6. 解析响应
-                elapsed_time = time.time() - start_time
-                
-                # 尝试解析 JSON 响应
-                try:
-                    response_body = response.json()
-                except Exception:
-                    # 如果不是 JSON，返回文本
-                    response_body = response.text
-                
-                return {
-                    "status_code": response.status_code,
-                    "headers": dict(response.headers),
-                    "body": response_body,
-                    "elapsed_time": round(elapsed_time, 3),
-                }
+            client = get_http_client()
+            method_upper = api.method.upper()
+            if method_upper == "GET":
+                response = await client.get(
+                    url,
+                    headers=request_headers,
+                    params=request_params,
+                    timeout=timeout,
+                )
+            elif method_upper == "POST":
+                response = await client.post(
+                    url,
+                    headers=request_headers,
+                    params=request_params,
+                    json=request_body,
+                    timeout=timeout,
+                )
+            elif method_upper == "PUT":
+                response = await client.put(
+                    url,
+                    headers=request_headers,
+                    params=request_params,
+                    json=request_body,
+                    timeout=timeout,
+                )
+            elif method_upper == "DELETE":
+                response = await client.delete(
+                    url,
+                    headers=request_headers,
+                    params=request_params,
+                    timeout=timeout,
+                )
+            elif method_upper == "PATCH":
+                response = await client.patch(
+                    url,
+                    headers=request_headers,
+                    params=request_params,
+                    json=request_body,
+                    timeout=timeout,
+                )
+            else:
+                raise ValueError(f"不支持的请求方法: {api.method}")
+
+            elapsed_time = time.time() - start_time
+            try:
+                response_body = response.json()
+            except Exception:
+                response_body = response.text
+
+            return {
+                "status_code": response.status_code,
+                "headers": dict(response.headers),
+                "body": response_body,
+                "elapsed_time": round(elapsed_time, 3),
+            }
         except httpx.TimeoutException:
             elapsed_time = time.time() - start_time
             return {

@@ -108,19 +108,17 @@ async def test_connection(
             return {"success": True, "message": "数据库连接测试成功"}
             
         elif source_type == DataSourceType.API:
-            import httpx
+            from infra.infrastructure.http import get_http_client
             url = config.get("url")
             headers = {}
             if config.get("token"):
                 headers["Authorization"] = f"Bearer {config['token']}"
-                
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                # 尝试一个简单的 HEAD 或 GET 请求
-                response = await client.get(url, headers=headers)
-                if response.status_code < 500:
-                    return {"success": True, "message": f"API 探测成功 (状态码: {response.status_code})"}
-                else:
-                    return {"success": False, "message": f"API 返回错误 (状态码: {response.status_code})"}
+
+            response = await get_http_client().get(url, headers=headers, timeout=5.0)
+            if response.status_code < 500:
+                return {"success": True, "message": f"API 探测成功 (状态码: {response.status_code})"}
+            else:
+                return {"success": False, "message": f"API 返回错误 (状态码: {response.status_code})"}
         
         return {"success": False, "message": f"暂不支持测试类型: {source_type}"}
     except Exception as e:

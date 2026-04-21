@@ -151,6 +151,13 @@ async def lifespan(app: FastAPI):
         logger.error(f"❌ Cache 初始化失败: {e}")
         logger.warning("⚠️  依赖 cache 的功能（在线用户等）将不可用")
 
+    # 初始化全局 httpx.AsyncClient（复用连接池，避免每次请求新建）
+    try:
+        from infra.infrastructure.http import init_http_client
+        init_http_client()
+    except Exception as e:
+        logger.warning(f"⚠️ 初始化全局 httpx.AsyncClient 失败: {e}")
+
     # 初始化服务接口层（系统级）
     await ServiceInitializer.initialize_services()
     logger.info("✅ 系统级服务接口层已初始化")
@@ -234,7 +241,14 @@ async def lifespan(app: FastAPI):
         logger.info("✅ Cache(PG) 已关闭")
     except Exception as e:
         logger.warning(f"关闭 cache 时出错: {e}")
-    
+
+    # 关闭全局 httpx.AsyncClient
+    try:
+        from infra.infrastructure.http import close_http_client
+        await close_http_client()
+    except Exception as e:
+        logger.warning(f"关闭全局 httpx.AsyncClient 时出错: {e}")
+
     # 关闭 Tortoise ORM 数据库连接（统一走 lifespan，不再使用已弃用的 @app.on_event("shutdown")）
     try:
         from tortoise import Tortoise

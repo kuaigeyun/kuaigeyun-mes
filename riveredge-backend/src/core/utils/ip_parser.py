@@ -13,6 +13,8 @@ from typing import Optional, Dict, Any
 from loguru import logger
 import httpx
 
+from infra.infrastructure.http import get_http_client
+
 
 def is_private_ip(ip: str) -> bool:
     """
@@ -156,27 +158,23 @@ async def get_public_ip() -> Optional[str]:
             "https://ifconfig.me/ip",
         ]
         
-        async with httpx.AsyncClient(timeout=3.0) as client:
-            for api_url in api_services:
-                try:
-                    if "ipify" in api_url:
-                        # ipify 返回 JSON 格式
-                        response = await client.get(api_url)
-                        if response.status_code == 200:
-                            data = response.json()
-                            ip = data.get("ip")
-                            if ip:
-                                return ip.strip()
-                    else:
-                        # ifconfig.me 返回纯文本
-                        response = await client.get(api_url)
-                        if response.status_code == 200:
-                            ip = response.text.strip()
-                            if ip:
-                                return ip
-                except Exception:
-                    # 继续尝试下一个服务
+        client = get_http_client()
+        for api_url in api_services:
+            try:
+                response = await client.get(api_url, timeout=3.0)
+                if response.status_code != 200:
                     continue
+                if "ipify" in api_url:
+                    data = response.json()
+                    ip = data.get("ip")
+                    if ip:
+                        return ip.strip()
+                else:
+                    ip = response.text.strip()
+                    if ip:
+                        return ip
+            except Exception:
+                continue
         
         return None
     except Exception as e:
@@ -193,16 +191,16 @@ async def _fetch_public_ip(timeout: float = 3.0) -> Optional[str]:
         "https://api.ipify.org?format=json",
         "https://icanhazip.com",
     ]
+    client = get_http_client()
     for url in urls:
         try:
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                r = await client.get(url)
-                if r.status_code == 200:
-                    text = r.text.strip()
-                    if "ipify" in url:
-                        data = r.json()
-                        return data.get("ip")
-                    return text if text and len(text) < 50 else None
+            r = await client.get(url, timeout=timeout)
+            if r.status_code == 200:
+                text = r.text.strip()
+                if "ipify" in url:
+                    data = r.json()
+                    return data.get("ip")
+                return text if text and len(text) < 50 else None
         except Exception:
             continue
     return None
@@ -264,58 +262,59 @@ async def get_ip_location_detail(ip: str, timeout: float = 3.0) -> Optional[Dict
         resolve_ip = public
 
     headers = {"User-Agent": "RiverEdge/1.0"}
+    client = get_http_client()
 
     # 1. ip-api.com
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            r = await client.get(
-                f"http://ip-api.com/json/{resolve_ip}?lang=zh-CN&fields=status,country,regionName,city,lat,lon",
-            )
-            if r.status_code == 200:
-                data = r.json()
-                if data.get("status") == "success":
-                    return _parse_location_from_provider(
-                        data,
-                        region_key="regionName",
-                    )
+        r = await client.get(
+            f"http://ip-api.com/json/{resolve_ip}?lang=zh-CN&fields=status,country,regionName,city,lat,lon",
+            timeout=timeout,
+        )
+        if r.status_code == 200:
+            data = r.json()
+            if data.get("status") == "success":
+                return _parse_location_from_provider(
+                    data,
+                    region_key="regionName",
+                )
     except Exception:
         pass
 
     # 2. ipapi.co (HTTPS)
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            r = await client.get(
-                f"https://ipapi.co/{resolve_ip}/json/",
-                headers=headers,
-            )
-            if r.status_code == 200:
-                data = r.json()
-                if not data.get("error"):
-                    result = _parse_location_from_provider(
-                        data,
-                        country_key="country_name",
-                        lat_key="latitude",
-                        lon_key="longitude",
-                    )
-                    if result:
-                        return result
+        r = await client.get(
+            f"https://ipapi.co/{resolve_ip}/json/",
+            headers=headers,
+            timeout=timeout,
+        )
+        if r.status_code == 200:
+            data = r.json()
+            if not data.get("error"):
+                result = _parse_location_from_provider(
+                    data,
+                    country_key="country_name",
+                    lat_key="latitude",
+                    lon_key="longitude",
+                )
+                if result:
+                    return result
     except Exception:
         pass
 
     # 3. ipinfo.io (HTTPS)
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            r = await client.get(
-                f"https://ipinfo.io/{resolve_ip}/json",
-                headers=headers,
-            )
-            if r.status_code == 200:
-                data = r.json()
-                if not data.get("bogon"):
-                    return _parse_location_from_provider(
-                        data,
-                        loc_key="loc",
-                    )
+        r = await client.get(
+            f"https://ipinfo.io/{resolve_ip}/json",
+            headers=headers,
+            timeout=timeout,
+        )
+        if r.status_code == 200:
+            data = r.json()
+            if not data.get("bogon"):
+                return _parse_location_from_provider(
+                    data,
+                    loc_key="loc",
+                )
     except Exception:
         pass
     return None
@@ -341,35 +340,29 @@ async def get_ip_location(ip: str, timeout: float = 2.0) -> Optional[str]:
     
     try:
         # 使用 ip-api.com 免费API（无需API Key，限制：45次/分钟）
-        # 返回格式：{"country": "中国", "regionName": "北京", "city": "北京", ...}
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.get(
-                f"http://ip-api.com/json/{ip}?lang=zh-CN&fields=status,country,regionName,city",
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                # 检查API返回状态
-                if data.get("status") == "success":
-                    country = data.get("country", "")
-                    region = data.get("regionName", "")
-                    city = data.get("city", "")
-                    
-                    # 构建地理位置字符串
-                    location_parts = []
-                    if country:
-                        location_parts.append(country)
-                    if region and region != city:
-                        location_parts.append(region)
-                    if city:
-                        location_parts.append(city)
-                    
-                    if location_parts:
-                        return " ".join(location_parts)
-            
-            return None
-            
+        response = await get_http_client().get(
+            f"http://ip-api.com/json/{ip}?lang=zh-CN&fields=status,country,regionName,city",
+            timeout=timeout,
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            if data.get("status") == "success":
+                country = data.get("country", "")
+                region = data.get("regionName", "")
+                city = data.get("city", "")
+                location_parts = []
+                if country:
+                    location_parts.append(country)
+                if region and region != city:
+                    location_parts.append(region)
+                if city:
+                    location_parts.append(city)
+                if location_parts:
+                    return " ".join(location_parts)
+
+        return None
+
     except httpx.TimeoutException:
         logger.warning(f"IP地理位置API请求超时: {ip}")
         return None
