@@ -767,31 +767,7 @@ class MaterialService:
         resp_data["code_aliases"] = [MaterialCodeAliasResponse.model_validate(a) for a in aliases]
         await _enrich_inspection_plan_name(resp_data)
         response = MaterialResponse.model_validate(resp_data)
-        
-        # 发送 Inngest 事件，触发 AI 建议工作流（异步处理）
-        try:
-            from core.inngest.client import inngest_client
-            from inngest import Event
-            
-            await inngest_client.send(
-                Event(
-                    name="material/created",
-                    data={
-                        "tenant_id": tenant_id,
-                        "material_id": material.id,
-                        "material_uuid": str(material.uuid),
-                        "material_name": material.name,
-                        "source_type": getattr(material, "source_type", None),
-                        "specification": material.specification,
-                        "base_unit": material.base_unit,
-                    }
-                )
-            )
-            logger.info(f"已发送物料创建事件到 Inngest: material_id={material.id}")
-        except Exception as e:
-            # Inngest 事件发送失败不影响物料创建，仅记录警告
-            logger.warning(f"发送物料创建事件到 Inngest 失败: {e}")
-        
+
         return response
     
     @staticmethod

@@ -23,6 +23,7 @@ except ImportError:
     data_backup_workflow = None
     data_restore_workflow = None
 
+
 # 只有在inngest可用时才导入函数
 if INNGEST_AVAILABLE:
     # 导入所有 Inngest 函数，确保它们被注册
@@ -64,13 +65,6 @@ if INNGEST_AVAILABLE:
         sop_execution_workflow_function = None
         sop_node_complete_workflow_function = None
     
-    try:
-        from apps.master_data.inngest.functions.material_ai_suggestion_workflow import (
-            material_ai_suggestion_workflow
-        )
-    except ImportError:
-        material_ai_suggestion_workflow = None
-
     try:
         from apps.master_data.inngest.functions.material_change_notification_workflow import (
             material_change_notification_workflow
@@ -125,7 +119,6 @@ __all__ = [
     "approval_action_workflow_function",
     "sop_execution_workflow_function",
     "sop_node_complete_workflow_function",
-    "material_ai_suggestion_workflow",
     "material_change_notification_workflow",
     "exception_detection_scheduler_function",
     "exception_detection_worker_function",

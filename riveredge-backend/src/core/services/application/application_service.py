@@ -468,13 +468,26 @@ class ApplicationService:
             ValidationError: 当应用是系统应用时抛出
         """
         application = await ApplicationService.get_application_by_uuid(tenant_id, uuid)
-        
-        if application.is_system:
+
+        if application.get('is_system'):
             raise ValidationError("系统应用不可卸载")
-        
-        application.is_installed = False
-        await application.save()
-        
+
+        # ⚠️ application 是 dict（来自 raw SQL），须用 raw SQL 直接更新 is_installed
+        conn = await get_db_connection()
+        try:
+            await conn.execute(
+                """
+                UPDATE core_applications
+                SET is_installed = FALSE, updated_at = NOW()
+                WHERE tenant_id = $1 AND uuid = $2 AND deleted_at IS NULL
+                """,
+                tenant_id,
+                uuid,
+            )
+        finally:
+            await conn.close()
+        application['is_installed'] = False
+
         # 自动删除关联菜单（软删除）
         from core.models.menu import Menu
         await Menu.filter(
@@ -482,7 +495,11 @@ class ApplicationService:
             application_uuid=str(uuid),
             deleted_at__isnull=True
         ).update(deleted_at=now_utc())
-        
+
+        # 清除菜单缓存，保证侧边栏/菜单管理页立即反映变化
+        from core.services.system.menu_service import MenuService
+        await MenuService._clear_menu_cache(tenant_id)
+
         return application
     
     @staticmethod

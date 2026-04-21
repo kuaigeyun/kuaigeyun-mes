@@ -144,7 +144,6 @@ const WorkOrderPrintModal = lazy(() => import('./components/WorkOrderPrintModal'
 const LazyStatTrendArea = lazy(() =>
   import('../../../../../components/common/StatCardTrendArea').then((m) => ({ default: m.StatCardTrendArea }))
 )
-const LazySmartSuggestionFloatPanel = lazy(() => import('../../../../../components/smart-suggestion-float-panel'))
 const LazyCreateWorkOrderOperationsList = lazy(() => import('./components/WorkOrderCreateDndList'))
 const LazyWorkOrderOperationsList = lazy(() => import('./components/WorkOrderDetailDndOperations'))
 const LazyWorkOrderKittingPanel = lazy(() => import('./components/WorkOrderKittingPanel'))
@@ -4668,38 +4667,6 @@ const WorkOrdersPage: React.FC = () => {
         </>
       </FormModalTemplate>
 
-      {/* 创建/编辑工单 Modal — 智能建议面板懒加载，避免拖慢列表首屏 */}
-      {modalVisible && !!selectedMaterialSourceInfo && (
-        <Suspense fallback={null}>
-          <LazySmartSuggestionFloatPanel
-            visible
-            suggestion={null}
-            messages={(() => {
-              const msgs: Array<{ text: string; title?: string }> = []
-              msgs.push({
-                title: '物料来源',
-                text: selectedMaterialSourceInfo!.sourceTypeName || '未配置',
-              })
-              if (selectedMaterialSourceInfo!.validationErrors?.length) {
-                msgs.push({
-                  title: '配置建议',
-                  text: selectedMaterialSourceInfo!.validationErrors
-                    .map((e, i) => `${i + 1}. ${e}`)
-                    .join('\n'),
-                })
-              }
-              if (selectedMaterialSourceInfo!.canCreateWorkOrder === false) {
-                msgs.push({
-                  title: '提醒',
-                  text: '该物料不允许创建生产工单，请选择其他物料',
-                })
-              }
-              return msgs
-            })()}
-            anchorSelector="[data-smart-suggestion-anchor='work-order-form']"
-          />
-        </Suspense>
-      )}
       <FormModalTemplate
         title={isEdit ? '编辑工单' : '新建工单'}
         open={modalVisible}
@@ -4717,7 +4684,6 @@ const WorkOrdersPage: React.FC = () => {
         width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef}
         grid
-        modalRender={(modal) => <div data-smart-suggestion-anchor="work-order-form">{modal}</div>}
       >
         <CodeField
           pageCode="kuaizhizao-production-work-order"

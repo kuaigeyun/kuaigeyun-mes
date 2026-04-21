@@ -22,8 +22,9 @@ import {
 } from '../../../services/userProfile';
 import { uploadFile, getFileByUuid, getFilePreview, getFileDownloadUrl, FileUploadResponse, File } from '../../../services/file';
 import { getAvatarUrl, getAvatarText, getAvatarFontSize } from '../../../utils/avatar';
-import { getUserInfo, getTenantId, setTenantId } from '../../../utils/auth';
+import { getUserInfo, getTenantId, setTenantId, setUserInfo } from '../../../utils/auth';
 import { apiRequest } from '../../../services/api';
+import { useGlobalStore } from '../../../stores';
 
 /**
  * 个人资料页面组件
@@ -40,6 +41,8 @@ const UserProfilePage: React.FC = () => {
   const [avatarFileList, setAvatarFileList] = useState<UploadFile[]>([]);
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
   const [activeTab, setActiveTab] = useState<string>('basic');
+  const setGlobalUser = useGlobalStore((s) => s.setCurrentUser);
+  const currentUser = useGlobalStore((s) => s.currentUser);
 
   /**
    * 加载个人资料
@@ -326,7 +329,27 @@ const UserProfilePage: React.FC = () => {
       try {
         const updatedData = await getUserProfile();
         setProfileData(updatedData);
-        
+
+        // 同步全局用户信息（顶栏/头像/欢迎语等依赖），避免保存后仍显示旧的 username/手机号
+        const prevUser = currentUser;
+        if (prevUser) {
+          setGlobalUser({
+            ...prevUser,
+            username: updatedData.username ?? prevUser.username,
+            email: updatedData.email ?? prevUser.email,
+            full_name: updatedData.full_name ?? undefined,
+            avatar: updatedData.avatar ?? undefined,
+          });
+        }
+        const prevLocal = getUserInfo() || {};
+        setUserInfo({
+          ...prevLocal,
+          username: updatedData.username ?? prevLocal.username,
+          email: updatedData.email ?? prevLocal.email,
+          full_name: updatedData.full_name ?? null,
+          avatar: updatedData.avatar ?? null,
+        });
+
         // 更新表单值
         formRef.current?.setFieldsValue({
           username: updatedData.username,

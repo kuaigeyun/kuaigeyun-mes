@@ -1001,6 +1001,24 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     collapsed,
   });
 
+  /** KU-AI 应用是否在当前菜单树中可见（关闭/停用/无权限时为 false） */
+  const isKuaiaiAppAvailable = useMemo(() => {
+    const containsKuaiai = (items: MenuDataItem[] | undefined): boolean => {
+      if (!items) return false;
+      for (const item of items) {
+        const p = item.path;
+        if (p && (p === '/apps/kuaiai' || p.startsWith('/apps/kuaiai/'))) {
+          return true;
+        }
+        if (item.children && containsKuaiai(item.children as MenuDataItem[])) {
+          return true;
+        }
+      }
+      return false;
+    };
+    return containsKuaiai(breadcrumbMenuData);
+  }, [breadcrumbMenuData]);
+
   const { data: menuBadgeCounts = {} } = useQuery({
     queryKey: ['menuBadgeCounts'],
     queryFn: getMenuBadgeCounts,
@@ -3903,7 +3921,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         actionsRender={() => {
           const actions = [];
 
-          if (!isMobileOrTablet) {
+          if (!isMobileOrTablet && isKuaiaiAppAvailable) {
           // AI 助手入口：仅 Lottie 图标 48x48，无文字、无背景、无动效
           actions.push(
             <span key="aiAssistant" className="ai-assistant-lottie-btn-wrapper">

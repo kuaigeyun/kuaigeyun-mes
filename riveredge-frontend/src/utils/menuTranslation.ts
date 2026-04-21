@@ -155,6 +155,13 @@ export function translateAppMenuItemName(
   let relativePath: string | null = null;
 
   if (path && appCode) {
+    // 应用根菜单（path === `/apps/${appCode}`）：优先使用统一的应用显示名 locale，
+    // 避免历史数据库中 root 菜单的 name 字段写入过旧名称（如「轻管理会计」「基础数据」）导致侧边栏/菜单管理错显。
+    const normalized = path.replace(/\/$/, '');
+    if (normalized === `/apps/${appCode}`) {
+      const appDisplay = getAppDisplayName(appCode, t, '');
+      if (appDisplay) return appDisplay;
+    }
     relativePath = path.replace(`/apps/${appCode}/`, '');
   } else if (children && children.length > 0) {
     // 处理分组菜单：递归找到第一个有 path 的子孙节点

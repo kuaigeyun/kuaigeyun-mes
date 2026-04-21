@@ -278,7 +278,25 @@ class MenuService:
                                 menu_tree.children = []
                             result.append(menu_tree)
                         return result
-                    return rebuild_tree(cached)
+                    cached_tree = rebuild_tree(cached)
+                    # 对缓存命中结果也做孤儿菜单过滤，避免历史缓存显示已卸载应用菜单
+                    try:
+                        visible_apps = await ApplicationService.get_installed_applications(tenant_id=tenant_id)
+                        visible_app_uuids = {str(a["uuid"]) for a in visible_apps}
+
+                        def filter_orphan(nodes: List[MenuTreeResponse]) -> List[MenuTreeResponse]:
+                            kept: List[MenuTreeResponse] = []
+                            for n in nodes:
+                                if n.application_uuid and str(n.application_uuid) not in visible_app_uuids:
+                                    continue
+                                n.children = filter_orphan(n.children or [])
+                                kept.append(n)
+                            return kept
+
+                        cached_tree = filter_orphan(cached_tree)
+                    except Exception:
+                        pass
+                    return cached_tree
             except Exception:
                 # 缓存失败不影响主流程
                 pass
@@ -297,6 +315,19 @@ class MenuService:
         
         # 注意：prefetch_related 对于自关联可能有问题，直接查询所有菜单，然后在内存中构建树
         all_menus = await query.order_by("sort_order", "created_at").all()
+
+        # 过滤孤儿菜单：application_uuid 对应的应用已卸载/禁用/软删除/占位时不显示
+        # 说明：平台/系统菜单（application_uuid 为 NULL）照常保留。
+        try:
+            visible_apps = await ApplicationService.get_installed_applications(tenant_id=tenant_id)
+            visible_app_uuids = {str(a["uuid"]) for a in visible_apps}
+            all_menus = [
+                m for m in all_menus
+                if (not m.application_uuid) or (str(m.application_uuid) in visible_app_uuids)
+            ]
+        except Exception:
+            # 过滤失败不影响主流程（降级返回未过滤结果）
+            pass
         
         # 构建菜单映射
         menu_map: Dict[int, MenuTreeResponse] = {}
