@@ -7,47 +7,30 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal, Space, Switch } from 'antd';
+import { App, Button, Modal, Space } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 
 import { customerFollowUpApi, type CustomerFollowUp } from '../../../services/customer-follow-up';
-import { customerApi, getDictionaryOptions } from '../../../../master-data/services/supply-chain';
+import { getDictionaryOptions } from '../../../../master-data/services/supply-chain';
 import { CustomerFollowUpFormModal } from '../../../components/CustomerFollowUpFormModal';
-import type { Customer } from '../../../../master-data/types/supply-chain';
 
 const DICT_CODE = 'SALES_FOLLOW_UP_TYPE';
-
-const getCustomerId = (c: any): number | null => {
-  const id = Number(c?.id ?? c?.customer_id);
-  return Number.isFinite(id) ? id : null;
-};
-
-const getCustomerName = (c: any): string => {
-  const code = String(c?.code ?? c?.customer_code ?? '').trim();
-  const name = String(c?.name ?? c?.customer_name ?? '').trim();
-  return `${code} ${name}`.trim();
-};
 
 const CustomerFollowUpsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
-  const [customers, setCustomers] = useState<Customer[]>([]);
   const [activityOptions, setActivityOptions] = useState<{ label: string; value: string }[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<CustomerFollowUp | null>(null);
-  const filtersRef = useRef({
-    customer_id: undefined as number | undefined,
-    pending_only: false,
-  });
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const activityLabelMap = useMemo(() => {
     const m: Record<string, string> = {};
@@ -57,29 +40,7 @@ const CustomerFollowUpsPage: React.FC = () => {
     return m;
   }, [activityOptions]);
 
-  const loadCustomersForFilter = async () => {
-    try {
-      const val = await customerApi.list({ limit: 1000, isActive: true } as any);
-      let custData: any[] = [];
-      if (Array.isArray(val)) {
-        custData = val;
-      } else if (val && typeof val === 'object') {
-        custData = (val as any).items || (val as any).data || [];
-      }
-      const uniq = new Map<number, any>();
-      for (const c of custData) {
-        const id = getCustomerId(c);
-        if (id == null) continue;
-        if (!uniq.has(id)) uniq.set(id, c);
-      }
-      setCustomers(Array.from(uniq.values()) as Customer[]);
-    } catch {
-      setCustomers([]);
-    }
-  };
-
   useEffect(() => {
-    loadCustomersForFilter();
     getDictionaryOptions(DICT_CODE)
       .then((opts) => setActivityOptions(opts || []))
       .catch(() => setActivityOptions([]));
@@ -111,6 +72,26 @@ const CustomerFollowUpsPage: React.FC = () => {
           reloadTable();
         } catch {
           message.error(t('common.deleteFailed'));
+        }
+      },
+    });
+  };
+
+  const handleBatchDelete = (keys: React.Key[]) => {
+    if (keys.length === 0) return;
+    Modal.confirm({
+      title: t('common.confirmBatchDelete'),
+      content: t('common.confirmBatchDeleteContent', { count: keys.length }),
+      onOk: async () => {
+        try {
+          for (const key of keys) {
+            await customerFollowUpApi.delete(Number(key));
+          }
+          message.success(t('common.deleteSuccess'));
+          setSelectedRowKeys([]);
+          reloadTable();
+        } catch (error: any) {
+          message.error(error?.message || t('common.deleteFailed'));
         }
       },
     });
@@ -212,10 +193,13 @@ const CustomerFollowUpsPage: React.FC = () => {
     <>
       <ListPageTemplate style={{ padding: 0 }}>
         <UniTable<CustomerFollowUp>
+          selectedRowKeys={selectedRowKeys}
+          onRowSelectionChange={setSelectedRowKeys}
           headerTitle={t('app.kuaizhizao.menu.sales-management.customer-follow-ups')}
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
+          enableRowSelection
           options={{ reload: true, density: true, setting: true }}
           scroll={{ x: 1200 }}
           pagination={{
@@ -226,35 +210,17 @@ const CustomerFollowUpsPage: React.FC = () => {
             <Button key="new" type="primary" icon={<PlusOutlined />} onClick={openCreate}>
               {t('app.kuaizhizao.customerFollowUp.new') + NEW_SHORTCUT_HINT}
             </Button>,
-            <UniDropdown
-              key="cust"
-              allowClear
-              showSearch
-              placeholder={t('app.kuaizhizao.customerFollowUp.filterCustomer')}
-              style={{ width: 200 }}
-              options={customers
-                .map((c: any) => {
-                  const id = getCustomerId(c);
-                  if (id == null) return null;
-                  return { label: getCustomerName(c) || String(id), value: id };
-                })
-                .filter(Boolean) as Array<{ label: string; value: number }>}
-              onChange={(v) => {
-                filtersRef.current.customer_id = v != null ? Number(v) : undefined;
-                reloadTable();
-              }}
-            />,
-            <span key="pendingLabel">{t('app.kuaizhizao.customerFollowUp.pendingOnly')}</span>,
-            <Switch
-              key="pending"
-              onChange={(v) => {
-                filtersRef.current.pending_only = v;
-                reloadTable();
-              }}
-            />,
+            <Button
+              key="batchDelete"
+              danger
+              icon={<DeleteOutlined />}
+              disabled={selectedRowKeys.length === 0}
+              onClick={() => handleBatchDelete(selectedRowKeys)}
+            >
+              {t('common.batchDelete')}
+            </Button>,
           ]}
           request={async (params, _sort, _filter, searchFormValues) => {
-            const f = filtersRef.current;
             const keyword =
               typeof searchFormValues?.keyword === 'string'
                 ? searchFormValues.keyword.trim() || undefined
@@ -264,8 +230,6 @@ const CustomerFollowUpsPage: React.FC = () => {
                 skip: ((params.current || 1) - 1) * (params.pageSize || 20),
                 limit: params.pageSize || 20,
                 keyword,
-                customer_id: f.customer_id,
-                pending_only: f.pending_only || undefined,
               });
               return {
                 data: res.items || [],

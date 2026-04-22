@@ -2049,13 +2049,120 @@ async def get_menu_badge_counts(
 
     return counts
 
+
+# ==========================================
+# 看板 KPI 可配置项（租户级 TenantConfig）
+# ==========================================
+# 说明：以下 3 个 KPI 以前为硬编码（销售目标、采购到货率、设备 OEE），
+# 现改为从 TenantConfig 读取，缺省时使用兜底值。
+CONFIG_KEY_SALES_MONTHLY_TARGET = "dashboard.kpi.sales_monthly_target"
+CONFIG_KEY_PURCHASE_ARRIVAL_RATE = "dashboard.kpi.purchase_arrival_rate"
+CONFIG_KEY_EQUIPMENT_OEE = "dashboard.kpi.equipment_oee"
+
+DEFAULT_SALES_MONTHLY_TARGET = 1_000_000.0
+DEFAULT_PURCHASE_ARRIVAL_RATE = 92.5
+DEFAULT_EQUIPMENT_OEE = 85.6
+
+
+async def _read_dashboard_kpi(
+    tenant_id: int,
+    config_key: str,
+    default: float,
+    inner_key: str = "value",
+) -> float:
+    """
+    读取看板 KPI 配置值（tenant 级），不存在则返回 default。
+
+    config_value 约定为 JSON 对象，按约定的 inner_key（默认 "value"）取值；
+    也兼容 {amount: ...} / {percent: ...} 常见命名。
+    """
+    from infra.services.tenant_service import TenantService
+
+    try:
+        config = await TenantService().get_tenant_config(tenant_id, config_key)
+        if not config or not isinstance(config.config_value, dict):
+            return default
+        raw = (
+            config.config_value.get(inner_key)
+            or config.config_value.get("value")
+            or config.config_value.get("amount")
+            or config.config_value.get("percent")
+        )
+        if raw is None:
+            return default
+        return float(raw)
+    except Exception as e:
+        logger.warning(f"read dashboard kpi {config_key} failed: {e}")
+        return default
+
+
+# ---------------------------------------------------------------------------
+# 单据状态白名单
+# 历史数据状态值混用了"小写英文 / 中文 / DemandStatus·DocumentStatus 的大写枚举"
+# 三种写法，这里集中维护，避免看板查询遗漏真实数据。
+# ---------------------------------------------------------------------------
+
+# 已审核/已确认/已完成 等"业务上视为有效销售订单"的状态
+SALES_ORDER_ACTIVE_STATUS = [
+    # 小写英文（历史）
+    "approved", "confirmed", "completed", "delivered", "closed",
+    "released", "in_progress",
+    # 中文
+    "已审核", "已确认", "已完成", "已发货", "已关闭", "执行中", "进行中", "已下达",
+    # 大写枚举（DemandStatus / DocumentStatus）
+    "APPROVED", "AUDITED", "CONFIRMED", "RELEASED", "IN_PROGRESS", "COMPLETED",
+]
+
+# 待发货订单（已审核，还未发货 / 未完成）
+SALES_ORDER_PENDING_SHIP_STATUS = [
+    "approved", "confirmed",
+    "已审核", "已确认",
+    "APPROVED", "AUDITED", "CONFIRMED", "RELEASED", "IN_PROGRESS",
+]
+
+# 已审核/已确认/已完成/已收货 等"业务上视为有效采购订单"的状态
+PURCHASE_ORDER_ACTIVE_STATUS = [
+    "approved", "partial_received", "received", "completed",
+    "released", "in_progress",
+    "已审核", "部分收货", "已收货", "已完成", "执行中", "进行中", "已下达",
+    "APPROVED", "AUDITED", "CONFIRMED", "RELEASED", "IN_PROGRESS", "COMPLETED",
+]
+
+# 待收货采购订单
+PURCHASE_ORDER_PENDING_RECEIPT_STATUS = [
+    "approved", "partial_received",
+    "已审核", "部分收货",
+    "APPROVED", "AUDITED", "CONFIRMED", "RELEASED", "IN_PROGRESS",
+]
+
+# 有效申购单（未被驳回/取消的）
+PURCHASE_REQUISITION_ACTIVE_STATUS = [
+    "草稿", "待审核", "已通过", "部分转单",
+    "draft", "pending", "approved", "partial_converted",
+    "DRAFT", "PENDING_REVIEW", "AUDITED", "APPROVED", "CONFIRMED",
+]
+
+# 执行中工单
+WORK_ORDER_IN_PROGRESS_STATUS = [
+    "in_progress", "进行中", "released", "已下达", "执行中",
+    "IN_PROGRESS", "RELEASED",
+]
+
+
 @router.get("/sales-summary", summary="获取销售中心汇总数据")
 @cache_by_kwargs(namespace="dashboard:sales_summary", ttl=45)
 async def get_sales_summary(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
+    date_start: Optional[str] = Query(None, description="起始日期 YYYY-MM-DD；缺省为当月"),
+    date_end: Optional[str] = Query(None, description="结束日期 YYYY-MM-DD；缺省为当月末"),
 ):
-    """销售中心汇总数据：待处理报价、待发货订单、本月销售达成率。"""
+    """销售中心汇总数据：待处理报价、待发货订单、所选区间销售达成率。
+
+    说明：
+    - "待处理报价 / 待发货订单 / 逾期发货" 为当前状态快照，不随区间变化。
+    - "本月销售额 / 上期销售额 / 达成率 / 新增报价" 按 date_start~date_end 过滤，默认当月。
+    """
     from apps.kuaizhizao.models.quotation import Quotation
     from apps.kuaizhizao.models.sales_order import SalesOrder
     from tortoise.functions import Sum
@@ -2063,44 +2170,48 @@ async def get_sales_summary(
     import asyncio
 
     now = datetime.now()
-    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    range_start_dt, range_end_dt, range_start_date, range_end_date = _resolve_month_range(date_start, date_end)
+    month_start = range_start_dt
 
     # 1. 待处理报价 (草稿/待审核)
     q1 = Quotation.filter(tenant_id=tenant_id, status__in=["草稿", "待审核"], deleted_at__isnull=True).count()
     # 2. 待发货订单 (已审核且未发货 - 这里简化逻辑)
-    q2 = SalesOrder.filter(tenant_id=tenant_id, status__in=["approved", "confirmed", "已审核", "已确认"], deleted_at__isnull=True).count()
+    q2 = SalesOrder.filter(tenant_id=tenant_id, status__in=SALES_ORDER_PENDING_SHIP_STATUS, deleted_at__isnull=True).count()
     
     # 增加：逾期发货订单 (已审核且交期已过)
     now_date = now.date()
     q2_overdue = SalesOrder.filter(
         tenant_id=tenant_id, 
-        status__in=["approved", "confirmed", "已审核", "已确认"], 
+        status__in=SALES_ORDER_PENDING_SHIP_STATUS, 
         delivery_date__lt=now_date,
         deleted_at__isnull=True
     ).count()
 
     q3 = SalesOrder.filter(
         tenant_id=tenant_id,
-        status__in=["approved", "confirmed", "completed", "已审核", "已确认", "已完成"],
-        order_date__gte=month_start.date(),
+        status__in=SALES_ORDER_ACTIVE_STATUS,
+        order_date__gte=range_start_date,
+        order_date__lte=range_end_date,
         deleted_at__isnull=True
     ).values_list("total_amount", flat=True)
 
-    # 4. 上月销售完成情况 (用于对比)
-    last_month_end = month_start - timedelta(days=1)
-    last_month_start = last_month_end.replace(day=1)
+    # 4. 上期销售完成情况 (用于对比)：长度与当前区间相同，紧邻前一段
+    span_days = (range_end_date - range_start_date).days + 1
+    prev_end_date = range_start_date - timedelta(days=1)
+    prev_start_date = prev_end_date - timedelta(days=span_days - 1)
     q4 = SalesOrder.filter(
         tenant_id=tenant_id,
-        status__in=["approved", "confirmed", "completed", "已审核", "已确认", "已完成"],
-        order_date__gte=last_month_start.date(),
-        order_date__lte=last_month_end.date(),
+        status__in=SALES_ORDER_ACTIVE_STATUS,
+        order_date__gte=prev_start_date,
+        order_date__lte=prev_end_date,
         deleted_at__isnull=True
     ).values_list("total_amount", flat=True)
 
-    # 5. 本月新增报价
+    # 5. 区间内新增报价
     q5 = Quotation.filter(
         tenant_id=tenant_id,
-        created_at__gte=month_start,
+        created_at__gte=range_start_dt,
+        created_at__lte=range_end_dt,
         deleted_at__isnull=True
     ).count()
 
@@ -2110,7 +2221,12 @@ async def get_sales_summary(
     
     total_amount = sum(float(x or 0) for x in sales_amounts)
     last_month_amount = sum(float(x or 0) for x in last_month_amounts)
-    target_amount = 1000000.0 # 模拟目标值
+    target_amount = await _read_dashboard_kpi(
+        tenant_id,
+        CONFIG_KEY_SALES_MONTHLY_TARGET,
+        DEFAULT_SALES_MONTHLY_TARGET,
+        inner_key="amount",
+    )
     achievement_rate = (total_amount / target_amount * 100) if target_amount > 0 else 0.0
 
     return {
@@ -2129,8 +2245,14 @@ async def get_sales_summary(
 async def get_purchase_summary(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
+    date_start: Optional[str] = Query(None, description="起始日期 YYYY-MM-DD；缺省为当月"),
+    date_end: Optional[str] = Query(None, description="结束日期 YYYY-MM-DD；缺省为当月末"),
 ):
-    """采购中心汇总数据：待处理申购、待收货订单、本月采购到货率。"""
+    """采购中心汇总数据：待处理申购、待收货订单、采购到货率。
+
+    - 状态计数（待处理申购/紧急/待收货/逾期）为实时快照。
+    - "新增申购数" 按 date_start~date_end 过滤，默认当月。
+    """
     from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
     from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
     from tortoise.functions import Sum
@@ -2138,38 +2260,46 @@ async def get_purchase_summary(
 
     now = datetime.now()
     now_date = now.date()
-    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    range_start_dt, range_end_dt, _range_start_date, _range_end_date = _resolve_month_range(date_start, date_end)
 
     # 1. 待处理申购
-    q1 = PurchaseRequisition.filter(tenant_id=tenant_id, status__in=["草稿", "待审核", "已通过", "部分转单"], deleted_at__isnull=True).count()
+    q1 = PurchaseRequisition.filter(tenant_id=tenant_id, status__in=PURCHASE_REQUISITION_ACTIVE_STATUS, deleted_at__isnull=True).count()
     
     # 增加：紧急申购
     q1_urgent = PurchaseRequisition.filter(
         tenant_id=tenant_id, 
         is_urgent=True, 
-        status__in=["草稿", "待审核", "已通过", "部分转单"],
+        status__in=PURCHASE_REQUISITION_ACTIVE_STATUS,
         deleted_at__isnull=True
     ).count()
 
     # 2. 待收货订单
-    q2 = PurchaseOrder.filter(tenant_id=tenant_id, status__in=["approved", "partial_received", "已审核", "部分收货"]).count()
+    q2 = PurchaseOrder.filter(tenant_id=tenant_id, status__in=PURCHASE_ORDER_PENDING_RECEIPT_STATUS).count()
     
     # 增加：逾期未到货
     q2_overdue = PurchaseOrder.filter(
         tenant_id=tenant_id,
-        status__in=["approved", "partial_received", "已审核", "部分收货"],
+        status__in=PURCHASE_ORDER_PENDING_RECEIPT_STATUS,
         delivery_date__lt=now_date
     ).count()
 
-    # 3. 本月新增申购
+    # 3. 区间内新增申购
     q3 = PurchaseRequisition.filter(
         tenant_id=tenant_id,
-        created_at__gte=month_start,
+        created_at__gte=range_start_dt,
+        created_at__lte=range_end_dt,
         deleted_at__isnull=True
     ).count()
 
     pending_requisitions, urgent_requisitions, pending_receipts, overdue_receipts, new_requisitions = await asyncio.gather(
         q1, q1_urgent, q2, q2_overdue, q3
+    )
+
+    arrival_rate = await _read_dashboard_kpi(
+        tenant_id,
+        CONFIG_KEY_PURCHASE_ARRIVAL_RATE,
+        DEFAULT_PURCHASE_ARRIVAL_RATE,
+        inner_key="percent",
     )
 
     return {
@@ -2178,7 +2308,7 @@ async def get_purchase_summary(
         "new_requisitions_this_month": new_requisitions,
         "pending_receipts": pending_receipts,
         "overdue_receipts": overdue_receipts,
-        "arrival_rate": 92.5, # 模拟数据
+        "arrival_rate": round(arrival_rate, 2),
     }
 
 
@@ -2187,20 +2317,34 @@ async def get_purchase_summary(
 async def get_manufacturing_summary(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
+    date_start: Optional[str] = Query(None, description="起始日期 YYYY-MM-DD；缺省为今日"),
+    date_end: Optional[str] = Query(None, description="结束日期 YYYY-MM-DD；缺省为今日"),
 ):
-    """制造中心汇总数据：待排产工单、进行中工单、今日生产产出。"""
+    """制造中心汇总数据。
+
+    - 状态计数（待排产/进行中/返工/待审核报工）为实时快照。
+    - today_output：区间内成品入库单（已入库）合计数量（按实际入库时间），非工序报工合格数。
+    - 合格率：区间内报工记录的合格数 /（合格+不合格），按 date_start~date_end 过滤；缺省为今日。
+    """
     from apps.kuaizhizao.models.work_order import WorkOrder
     from apps.kuaizhizao.models.reporting_record import ReportingRecord
-    from tortoise.functions import Sum
+    from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
     import asyncio
 
     now = datetime.now()
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if date_start:
+        range_start_dt = datetime.strptime(date_start, "%Y-%m-%d").replace(hour=0, minute=0, second=0, microsecond=0)
+    else:
+        range_start_dt = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if date_end:
+        range_end_dt = datetime.strptime(date_end, "%Y-%m-%d").replace(hour=23, minute=59, second=59, microsecond=0)
+    else:
+        range_end_dt = now.replace(hour=23, minute=59, second=59, microsecond=0)
 
     # 1. 待排产工单 (草稿状态)
-    q1 = WorkOrder.filter(tenant_id=tenant_id, status__in=["draft", "草稿"], deleted_at__isnull=True).count()
+    q1 = WorkOrder.filter(tenant_id=tenant_id, status__in=["draft", "草稿", "DRAFT"], deleted_at__isnull=True).count()
     # 2. 进行中工单
-    q2 = WorkOrder.filter(tenant_id=tenant_id, status__in=["in_progress", "进行中"], deleted_at__isnull=True).count()
+    q2 = WorkOrder.filter(tenant_id=tenant_id, status__in=WORK_ORDER_IN_PROGRESS_STATUS, deleted_at__isnull=True).count()
     
     # 增加：返工单 (进行中)
     q2_rework = ReworkOrder.filter(
@@ -2209,18 +2353,30 @@ async def get_manufacturing_summary(
         deleted_at__isnull=True
     ).count()
 
-    # 3. 今日生产产出 (合格报工数)
-    q3 = ReportingRecord.filter(tenant_id=tenant_id, reported_at__gte=today_start).values_list(
-        "qualified_quantity", "unqualified_quantity"
-    )
+    # 3. 区间内生产产出
+    q3 = ReportingRecord.filter(
+        tenant_id=tenant_id,
+        reported_at__gte=range_start_dt,
+        reported_at__lte=range_end_dt,
+    ).values_list("qualified_quantity", "unqualified_quantity")
     
     # 增加：待审核报工
     q4 = ReportingRecord.filter(tenant_id=tenant_id, status="pending").count()
 
-    pending_scheduling, in_progress_count, rework_count, prod_records, pending_reporting = await asyncio.gather(
-        q1, q2, q2_rework, q3, q4
+    # 区间内成品入库数量（已入库，按 receipt_time）
+    q_fg = FinishedGoodsReceipt.filter(
+        tenant_id=tenant_id,
+        status="已入库",
+        receipt_time__gte=range_start_dt,
+        receipt_time__lte=range_end_dt,
+        deleted_at__isnull=True,
+    ).values_list("total_quantity",)
+
+    pending_scheduling, in_progress_count, rework_count, prod_records, pending_reporting, fg_rows = await asyncio.gather(
+        q1, q2, q2_rework, q3, q4, q_fg
     )
-    
+
+    finished_goods_inbound_qty = sum(float(r[0] or 0) for r in fg_rows)
     total_qualified = sum(float(r[0] or 0) for r in prod_records)
     total_unqualified = sum(float(r[1] or 0) for r in prod_records)
     total_reported = total_qualified + total_unqualified
@@ -2230,7 +2386,7 @@ async def get_manufacturing_summary(
         "pending_scheduling": pending_scheduling,
         "in_progress_count": in_progress_count,
         "rework_count": rework_count,
-        "today_output": total_qualified,
+        "today_output": finished_goods_inbound_qty,
         "qualified_rate": round(qualified_rate, 2),
         "pending_reporting": pending_reporting
     }
@@ -2241,29 +2397,404 @@ async def get_manufacturing_summary(
 async def get_equipment_summary(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
+    date_start: Optional[str] = Query(None, description="起始日期 YYYY-MM-DD；缺省为今日"),
+    date_end: Optional[str] = Query(None, description="结束日期 YYYY-MM-DD；缺省为今日"),
 ):
-    """设备看板汇总数据：报修中设备、今日保养任务、设备综合效率 OEE。"""
+    """设备看板汇总数据：报修中设备、区间保养任务、设备综合效率 OEE。"""
     from apps.kuaizhizao.models.equipment import Equipment
     from apps.kuaizhizao.models.maintenance_plan import MaintenanceExecution
     from datetime import datetime
     import asyncio
 
     now = datetime.now()
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    today_end = now.replace(hour=23, minute=59, second=59, microsecond=0)
+    if date_start:
+        range_start_dt = datetime.strptime(date_start, "%Y-%m-%d").replace(hour=0, minute=0, second=0, microsecond=0)
+    else:
+        range_start_dt = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if date_end:
+        range_end_dt = datetime.strptime(date_end, "%Y-%m-%d").replace(hour=23, minute=59, second=59, microsecond=0)
+    else:
+        range_end_dt = now.replace(hour=23, minute=59, second=59, microsecond=0)
 
-    # 1. 报修中设备
+    # 1. 报修中设备（状态快照，不随区间变化）
     q1 = Equipment.filter(tenant_id=tenant_id, status__in=["维修中", "故障"], deleted_at__isnull=True).count()
-    # 2. 今日保养任务 (保养执行记录中计划在今天的)
-    q2 = MaintenanceExecution.filter(tenant_id=tenant_id, execution_date__gte=today_start, execution_date__lte=today_end, deleted_at__isnull=True).count()
+    # 2. 区间内保养任务
+    q2 = MaintenanceExecution.filter(
+        tenant_id=tenant_id,
+        execution_date__gte=range_start_dt,
+        execution_date__lte=range_end_dt,
+        deleted_at__isnull=True,
+    ).count()
     
     repairing_count, maintenance_tasks = await asyncio.gather(q1, q2)
+
+    oee = await _read_dashboard_kpi(
+        tenant_id,
+        CONFIG_KEY_EQUIPMENT_OEE,
+        DEFAULT_EQUIPMENT_OEE,
+        inner_key="percent",
+    )
 
     return {
         "repairing_count": repairing_count,
         "today_maintenance_tasks": maintenance_tasks,
-        "oee": 85.6, # 模拟数据
+        "oee": round(oee, 2),
     }
+
+
+# ==========================================
+# 运营看板 - 扩展 API（TOP10 / 执行中工单 / 仓储）
+# ==========================================
+
+def _resolve_month_range(
+    date_start: Optional[str],
+    date_end: Optional[str],
+):
+    """
+    解析查询区间；缺省为"当月 1 号 00:00:00 ~ 当月最后一天 23:59:59"。
+    返回 (start_dt, end_dt, start_date, end_date)。
+    """
+    now = datetime.now()
+    if date_start:
+        start_dt = datetime.strptime(date_start, "%Y-%m-%d").replace(hour=0, minute=0, second=0, microsecond=0)
+    else:
+        start_dt = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    if date_end:
+        end_dt = datetime.strptime(date_end, "%Y-%m-%d").replace(hour=23, minute=59, second=59, microsecond=0)
+    else:
+        # 当月末
+        if now.month == 12:
+            next_month = now.replace(year=now.year + 1, month=1, day=1)
+        else:
+            next_month = now.replace(month=now.month + 1, day=1)
+        end_dt = (next_month - timedelta(days=1)).replace(hour=23, minute=59, second=59, microsecond=0)
+
+    return start_dt, end_dt, start_dt.date(), end_dt.date()
+
+
+@router.get("/sales-top10", summary="获取销售产品排行 TOP10")
+@cache_by_kwargs(namespace="dashboard:sales_top10", ttl=60)
+async def get_sales_top10(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    date_start: Optional[str] = Query(None, description="起始日期 YYYY-MM-DD，默认本月"),
+    date_end: Optional[str] = Query(None, description="结束日期 YYYY-MM-DD，默认本月"),
+    limit: int = Query(10, ge=1, le=50, description="条数"),
+):
+    """按销售明细（已审核/已确认/已完成订单）数量聚合的产品 TOP 排行（按销售数量倒序）。"""
+    from apps.kuaizhizao.models.sales_order import SalesOrder
+    from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+
+    start_dt, end_dt, start_date, end_date = _resolve_month_range(date_start, date_end)
+
+    # 拉取区间内的有效销售订单 ID
+    order_ids = await SalesOrder.filter(
+        tenant_id=tenant_id,
+        status__in=SALES_ORDER_ACTIVE_STATUS,
+        order_date__gte=start_date,
+        order_date__lte=end_date,
+        deleted_at__isnull=True,
+    ).values_list("id", flat=True)
+
+    if not order_ids:
+        return {"items": []}
+
+    rows = await SalesOrderItem.filter(sales_order_id__in=list(order_ids)).values(
+        "material_id", "material_code", "material_name", "order_quantity", "total_amount"
+    )
+
+    agg: dict = {}
+    for r in rows:
+        mid = r.get("material_id") or 0
+        key = mid or (r.get("material_code") or r.get("material_name") or "unknown")
+        bucket = agg.setdefault(key, {
+            "material_id": mid,
+            "material_code": r.get("material_code") or "",
+            "material_name": r.get("material_name") or "",
+            "quantity": 0.0,
+            "amount": 0.0,
+        })
+        bucket["quantity"] += float(r.get("order_quantity") or 0)
+        bucket["amount"] += float(r.get("total_amount") or 0)
+
+    items = sorted(agg.values(), key=lambda x: x["quantity"], reverse=True)[:limit]
+    for it in items:
+        it["quantity"] = round(it["quantity"], 2)
+        it["amount"] = round(it["amount"], 2)
+
+    return {"items": items}
+
+
+@router.get("/purchase-top10", summary="获取原料采购排行 TOP10")
+@cache_by_kwargs(namespace="dashboard:purchase_top10", ttl=60)
+async def get_purchase_top10(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    date_start: Optional[str] = Query(None, description="起始日期 YYYY-MM-DD，默认本月"),
+    date_end: Optional[str] = Query(None, description="结束日期 YYYY-MM-DD，默认本月"),
+    limit: int = Query(10, ge=1, le=50, description="条数"),
+):
+    """按采购订单明细（已审核/部分收货/已完成）数量与金额聚合的原料 TOP 排行。"""
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
+
+    start_dt, end_dt, start_date, end_date = _resolve_month_range(date_start, date_end)
+
+    order_ids = await PurchaseOrder.filter(
+        tenant_id=tenant_id,
+        status__in=PURCHASE_ORDER_ACTIVE_STATUS,
+        order_date__gte=start_date,
+        order_date__lte=end_date,
+    ).values_list("id", flat=True)
+
+    if not order_ids:
+        return {"items": []}
+
+    rows = await PurchaseOrderItem.filter(order_id__in=list(order_ids)).values(
+        "material_id", "material_code", "material_name", "ordered_quantity", "total_price"
+    )
+
+    agg: dict = {}
+    for r in rows:
+        mid = r.get("material_id") or 0
+        key = mid or (r.get("material_code") or r.get("material_name") or "unknown")
+        bucket = agg.setdefault(key, {
+            "material_id": mid,
+            "material_code": r.get("material_code") or "",
+            "material_name": r.get("material_name") or "",
+            "quantity": 0.0,
+            "amount": 0.0,
+        })
+        bucket["quantity"] += float(r.get("ordered_quantity") or 0)
+        bucket["amount"] += float(r.get("total_price") or 0)
+
+    items = sorted(agg.values(), key=lambda x: x["quantity"], reverse=True)[:limit]
+    for it in items:
+        it["quantity"] = round(it["quantity"], 2)
+        it["amount"] = round(it["amount"], 2)
+
+    return {"items": items}
+
+
+@router.get("/work-orders-active", summary="获取执行中工单及工序进度")
+@cache_by_kwargs(namespace="dashboard:work_orders_active", ttl=20)
+async def get_work_orders_active(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    limit: int = Query(50, ge=1, le=200, description="工单条数上限"),
+):
+    """
+    执行中工单 + 每道工序的状态/进度。
+
+    工序 status 映射：completed → done，in_progress → active，其它 → pending。
+    工序进度 progress（仅 active 用）：min(100, qualified_quantity / plan * 100)。
+    """
+    from apps.kuaizhizao.models.work_order import WorkOrder
+    from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
+
+    work_orders = await WorkOrder.filter(
+        tenant_id=tenant_id,
+        status__in=WORK_ORDER_IN_PROGRESS_STATUS,
+        deleted_at__isnull=True,
+    ).order_by("-actual_start_date", "-created_at").limit(limit).values(
+        "id", "code", "product_code", "product_name", "quantity",
+        "qualified_quantity", "completed_quantity",
+    )
+
+    if not work_orders:
+        return {"items": []}
+
+    wo_ids = [w["id"] for w in work_orders]
+    ops = await WorkOrderOperation.filter(
+        work_order_id__in=wo_ids,
+        deleted_at__isnull=True,
+    ).order_by("sequence").values(
+        "work_order_id", "operation_name", "sequence", "status",
+        "qualified_quantity",
+    )
+
+    ops_by_wo: dict = {}
+    for op in ops:
+        ops_by_wo.setdefault(op["work_order_id"], []).append(op)
+
+    def _map_status(s: str) -> str:
+        if s in ("completed", "completed_force", "已完成"):
+            return "done"
+        if s in ("in_progress", "进行中"):
+            return "active"
+        return "pending"
+
+    items = []
+    for w in work_orders:
+        plan = float(w.get("quantity") or 0)
+        raw_steps = ops_by_wo.get(w["id"], [])
+        steps = []
+        for op in raw_steps:
+            status = _map_status(op.get("status") or "")
+            progress = 0
+            if status == "active" and plan > 0:
+                qty = float(op.get("qualified_quantity") or 0)
+                progress = int(min(100, round(qty / plan * 100)))
+            steps.append({
+                "name": op.get("operation_name") or "",
+                "sequence": op.get("sequence") or 0,
+                "status": status,
+                "progress": progress,
+            })
+
+        items.append({
+            "id": w.get("code") or str(w.get("id")),
+            "product_code": w.get("product_code") or "",
+            "product": w.get("product_name") or "",
+            "planned": float(w.get("quantity") or 0),
+            "qualified": float(w.get("qualified_quantity") or 0),
+            "completed": float(w.get("completed_quantity") or 0),
+            "steps": steps,
+        })
+
+    return {"items": items}
+
+
+@router.get("/warehouse-summary", summary="获取仓储中心汇总指标")
+@cache_by_kwargs(namespace="dashboard:warehouse_summary", ttl=60)
+async def get_warehouse_summary(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    仓储四指标：
+    - total_stock      总库存数量（MaterialBatch 在库 + LineSideInventory 可用）
+    - in_stock_batches 在库批次数（MaterialBatch status="in_stock"）
+    - pending_inbound  待入库单数（PurchaseReceipt + FinishedGoodsReceipt + OtherInbound status="待入库"）
+    - pending_outbound 待出库单数（SalesDelivery + OtherOutbound status="待出库"）
+    """
+    from apps.master_data.models.material_batch import MaterialBatch
+    from apps.kuaizhizao.models.line_side_inventory import LineSideInventory
+    from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+    from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
+    from apps.kuaizhizao.models.other_inbound import OtherInbound
+    from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+    from apps.kuaizhizao.models.other_outbound import OtherOutbound
+    import asyncio
+
+    batch_qty_q = MaterialBatch.filter(
+        tenant_id=tenant_id, status="in_stock"
+    ).values_list("quantity", flat=True)
+    line_qty_q = LineSideInventory.filter(
+        tenant_id=tenant_id, status__in=["available", "reserved"]
+    ).values_list("quantity", flat=True)
+    batch_count_q = MaterialBatch.filter(tenant_id=tenant_id, status="in_stock").count()
+
+    pr_q = PurchaseReceipt.filter(tenant_id=tenant_id, status="待入库", deleted_at__isnull=True).count()
+    fg_q = FinishedGoodsReceipt.filter(tenant_id=tenant_id, status="待入库", deleted_at__isnull=True).count()
+    oi_q = OtherInbound.filter(tenant_id=tenant_id, status="待入库", deleted_at__isnull=True).count()
+
+    sd_q = SalesDelivery.filter(tenant_id=tenant_id, status="待出库", deleted_at__isnull=True).count()
+    oo_q = OtherOutbound.filter(tenant_id=tenant_id, status="待出库", deleted_at__isnull=True).count()
+
+    batch_qty, line_qty, batch_count, pr, fg, oi, sd, oo = await asyncio.gather(
+        batch_qty_q, line_qty_q, batch_count_q, pr_q, fg_q, oi_q, sd_q, oo_q
+    )
+
+    total_stock = sum(float(x or 0) for x in batch_qty) + sum(float(x or 0) for x in line_qty)
+
+    return {
+        "total_stock": round(total_stock, 2),
+        "in_stock_batches": int(batch_count or 0),
+        "pending_inbound": int((pr or 0) + (fg or 0) + (oi or 0)),
+        "pending_outbound": int((sd or 0) + (oo or 0)),
+    }
+
+
+@router.get("/warehouse-trend", summary="获取仓储入/出库按日走势")
+@cache_by_kwargs(namespace="dashboard:warehouse_trend", ttl=60)
+async def get_warehouse_trend(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    date_start: Optional[str] = Query(None, description="起始日期 YYYY-MM-DD，默认本月 1 号"),
+    date_end: Optional[str] = Query(None, description="结束日期 YYYY-MM-DD，默认今天"),
+):
+    """
+    仓储月度入库/出库按日聚合。
+    入库源：PurchaseReceipt + FinishedGoodsReceipt + OtherInbound (receipt_time)
+    出库源：SalesDelivery + OtherOutbound (delivery_time)
+    返回按日排序：items[{date: 'MM-DD', in: number, out: number}]。
+    """
+    from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+    from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
+    from apps.kuaizhizao.models.other_inbound import OtherInbound
+    from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+    from apps.kuaizhizao.models.other_outbound import OtherOutbound
+    import asyncio
+
+    now = datetime.now()
+    start_dt = (
+        datetime.strptime(date_start, "%Y-%m-%d")
+        if date_start else now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    )
+    end_dt_raw = (
+        datetime.strptime(date_end, "%Y-%m-%d")
+        if date_end else now
+    )
+    end_dt = end_dt_raw.replace(hour=23, minute=59, second=59, microsecond=0)
+
+    in_queries = [
+        PurchaseReceipt.filter(
+            tenant_id=tenant_id,
+            receipt_time__gte=start_dt, receipt_time__lte=end_dt,
+            deleted_at__isnull=True,
+        ).values_list("receipt_time", "total_quantity"),
+        FinishedGoodsReceipt.filter(
+            tenant_id=tenant_id,
+            receipt_time__gte=start_dt, receipt_time__lte=end_dt,
+            deleted_at__isnull=True,
+        ).values_list("receipt_time", "total_quantity"),
+        OtherInbound.filter(
+            tenant_id=tenant_id,
+            receipt_time__gte=start_dt, receipt_time__lte=end_dt,
+            deleted_at__isnull=True,
+        ).values_list("receipt_time", "total_quantity"),
+    ]
+    out_queries = [
+        SalesDelivery.filter(
+            tenant_id=tenant_id,
+            delivery_time__gte=start_dt, delivery_time__lte=end_dt,
+            deleted_at__isnull=True,
+        ).values_list("delivery_time", "total_quantity"),
+        OtherOutbound.filter(
+            tenant_id=tenant_id,
+            delivery_time__gte=start_dt, delivery_time__lte=end_dt,
+            deleted_at__isnull=True,
+        ).values_list("delivery_time", "total_quantity"),
+    ]
+
+    in_results, out_results = await asyncio.gather(
+        asyncio.gather(*in_queries),
+        asyncio.gather(*out_queries),
+    )
+
+    bucket: dict = {}
+
+    def _add(dt, qty, key: str):
+        if not dt:
+            return
+        d = dt.strftime("%m-%d")
+        b = bucket.setdefault(d, {"date": d, "in": 0.0, "out": 0.0, "_sort": dt.strftime("%Y-%m-%d")})
+        b[key] += float(qty or 0)
+
+    for rs in in_results:
+        for dt, qty in rs:
+            _add(dt, qty, "in")
+    for rs in out_results:
+        for dt, qty in rs:
+            _add(dt, qty, "out")
+
+    items = [
+        {"date": b["date"], "in": round(b["in"], 2), "out": round(b["out"], 2)}
+        for b in sorted(bucket.values(), key=lambda x: x["_sort"])
+    ]
+
+    return {"items": items}
 
 
 async def get_dashboard(

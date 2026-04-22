@@ -1,79 +1,64 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Typography, Button, Modal, Input, Tooltip, Progress, theme, message } from 'antd';
+import { Typography, Button, Modal, Input, Tooltip, Progress, theme, message, Empty, Radio } from 'antd';
+import { Canvas, useFrame } from '@react-three/fiber';
+import { Billboard, useTexture } from '@react-three/drei';
+import * as THREE from 'three';
 import {
   FullscreenOutlined,
   FullscreenExitOutlined,
-  LineChartOutlined,
-  PieChartOutlined,
-  BarChartOutlined,
   SettingOutlined,
-  ToolOutlined,
-  ShoppingOutlined,
-  InboxOutlined,
-  ContainerOutlined,
 } from '@ant-design/icons';
-import { Area, DualAxes, Line, Pie, Radar } from '@ant-design/charts';
+import { Column, Area, Chart } from '@ant-design/charts';
 import { useTranslation } from 'react-i18next';
+import { useQuery } from '@tanstack/react-query';
 import dayjs from 'dayjs';
-import { businessBoardChartTheme, accent } from './chartTheme';
-import {
-  kpiItems,
-  unitOutputData,
-  planExecutionLineData,
-  deviceStatusMixData,
-  equipmentUtilTrendData,
-  operationsFeed,
-  salesShipTrendData,
-  procurementInboundData,
-  warehouseQcBarData,
-} from './mockData';
-import { EventFeed } from './components/EventFeed';
-import { SciFiPanelFrame } from './components/SciFiPanelFrame';
-import { OrbitalKpiField } from './components/OrbitalKpiField';
-import { SciFiTitleBackground } from '../../../../components/SciFiTitleBackground/SciFiTitleBackground';
-import { useSiteLogoUrl } from '../../../../hooks/useSiteLogoUrl';
+import { businessBoardChartTheme } from './chartTheme';
 import { getBusinessBoardTitle, putBusinessBoardTitle } from '../../../../services/businessBoardTitle';
+import { getFilePreview } from '../../../../services/file';
 import { useConfigStore } from '../../../../stores/configStore';
+import {
+  getSalesSummary,
+  getPurchaseSummary,
+  getManufacturingSummary,
+  getEquipmentSummary,
+  getManagementMetrics,
+  getProcessProgress,
+  getProductionBroadcast,
+  getSalesTop10,
+  getPurchaseTop10,
+  getActiveWorkOrders,
+  getWarehouseSummary,
+  getWarehouseTrend,
+  type ProductionBroadcastItem,
+  type ActiveWorkOrderItem,
+} from '../../../../services/dashboard';
 
-const { Text, Title } = Typography;
+const { Title } = Typography;
+
+/** ===== 配色（对齐参考图：深海军蓝 + 亮青） ===== */
+const hud = {
+  bgDeep: '#06162d', // 稍微调亮的底色
+  bgMid: '#0a1f3d',
+  bgPanel: 'rgba(8, 26, 54, 0.72)',
+  bgPanelTop: 'rgba(12, 36, 70, 0.78)',
+  cyan: '#00d0ff', 
+  cyanSoft: '#7ee7ff', 
+  cyanDim: 'rgba(0, 208, 255, 0.22)',
+  borderLine: 'rgba(0, 208, 255, 0.35)',
+  platformBlue: '#0095ff', 
+  amber: '#fbbf24',
+  emerald: '#34d399',
+  rose: '#fb7185',
+  violet: '#a78bfa',
+  textPrimary: '#e0f7ff',
+  textSoft: '#9fb8d0',
+  textDim: '#5c7798',
+} as const;
 
 const clockFont =
   '"JetBrains Mono", "SF Mono", "Cascadia Code", Consolas, "Liberation Mono", ui-monospace, monospace';
 
-/** 区块标题：字号略大，与圆形图标按钮搭配 */
-const titleSm: React.CSSProperties = {
-  fontSize: 14,
-  fontWeight: 600,
-  color: '#bae6fd',
-  letterSpacing: 0.35,
-  display: 'flex',
-  alignItems: 'center',
-  gap: 10,
-  marginBottom: 4,
-  flexShrink: 0,
-  lineHeight: 1.35,
-};
-
-const sectionTitleIconBtn: React.CSSProperties = {
-  width: 32,
-  height: 32,
-  borderRadius: '50%',
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  flexShrink: 0,
-  color: '#e0f2fe',
-  fontSize: 16,
-  background: 'linear-gradient(155deg, rgba(56, 189, 248, 0.32) 0%, rgba(15, 23, 42, 0.78) 100%)',
-  border: '1px solid rgba(148, 163, 184, 0.45)',
-  boxShadow: '0 2px 10px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.16)',
-};
-
-const SectionTitleIconBtn: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <span style={sectionTitleIconBtn}>{children}</span>
-);
-
-/** 勿用 height:100%：flex 父级未给明确定义高度时百分比常为 0，G2 autoFit 会得到空画布 */
+/** ===== 基础样式 ===== */
 const chartHost: React.CSSProperties = {
   flex: 1,
   minWidth: 0,
@@ -83,39 +68,870 @@ const chartHost: React.CSSProperties = {
   boxSizing: 'border-box',
 };
 
-const CHART_DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
-
-const boardPlot = {
-  autoFit: true as const,
-  appendPadding: 4,
+const formatCompact = (value: number): string => {
+  if (!Number.isFinite(value)) return '0';
+  const abs = Math.abs(value);
+  if (abs >= 1e8) return `${(value / 1e8).toFixed(2)}亿`;
+  if (abs >= 1e4) return `${(value / 1e4).toFixed(1)}万`;
+  if (abs >= 1e3) return `${(value / 1e3).toFixed(1)}k`;
+  return Math.round(value).toLocaleString();
 };
 
-const boardPlotRose = {
-  autoFit: true as const,
-  appendPadding: 4,
+/** ===== HUD 面板：科幻斜切角外框 + 粗壮发光边框 ===== */
+interface HudPanelProps {
+  children: React.ReactNode;
+  style?: React.CSSProperties;
+  flex?: string | number;
+  variant?: 'left' | 'right' | 'middleTop' | 'middleBottom';
+}
+const HudPanel: React.FC<HudPanelProps> = ({ children, style, flex, variant = 'left' }) => {
+  if (variant === 'middleTop') {
+    return (
+      <div
+        style={{
+          position: 'relative',
+          flex: flex ?? '1 1 0',
+          minWidth: 0,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          padding: '16px',
+          boxSizing: 'border-box',
+          ...style,
+        }}
+      >
+        {/* 没有亮色边框和切角，只有深色打底 */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 0,
+            background: `linear-gradient(135deg, rgba(8, 26, 54, 0.4) 0%, rgba(4, 15, 34, 0.3) 100%)`,
+            boxShadow: `inset 0 0 30px rgba(0, 180, 230, 0.05)`,
+            borderRadius: 4,
+          }}
+        />
+        <div style={{ position: 'relative', zIndex: 10, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+          {children}
+        </div>
+      </div>
+    );
+  }
+
+  let outerClip = '';
+  let innerClip = '';
+  let corner1: React.ReactNode = null;
+  let corner2: React.ReactNode = null;
+
+  if (variant === 'right') {
+    outerClip = 'polygon(24px 0, 100% 0, 100% calc(100% - 24px), calc(100% - 24px) 100%, 0 100%, 0 24px)';
+    innerClip = 'polygon(23px 0, 100% 0, 100% calc(100% - 23px), calc(100% - 23px) 100%, 0 100%, 0 23px)';
+    corner1 = (
+      <div aria-hidden style={{ position: 'absolute', top: 0, left: 0, width: '35%', height: '40%', maxWidth: 180, maxHeight: 80, zIndex: 1, pointerEvents: 'none' }}>
+        <svg width="100%" height="100%" viewBox="0 0 180 80" preserveAspectRatio="none">
+          <polyline points="180,2 26,2 2,26 2,80" fill="none" stroke="#00d0ff" strokeWidth="4" filter="drop-shadow(0 0 8px #00d0ff)" />
+          <circle cx="160" cy="2" r="3" fill="#ffffff" filter="drop-shadow(0 0 5px #00d0ff)" />
+        </svg>
+      </div>
+    );
+    corner2 = (
+      <div aria-hidden style={{ position: 'absolute', bottom: 0, right: 0, width: '35%', height: '40%', maxWidth: 180, maxHeight: 80, zIndex: 1, pointerEvents: 'none' }}>
+        <svg width="100%" height="100%" viewBox="0 0 180 80" preserveAspectRatio="none">
+          <polyline points="0,78 154,78 178,54 178,0" fill="none" stroke="#00d0ff" strokeWidth="4" filter="drop-shadow(0 0 8px #00d0ff)" />
+          <circle cx="20" cy="78" r="3" fill="#ffffff" filter="drop-shadow(0 0 5px #00d0ff)" />
+        </svg>
+      </div>
+    );
+  } else if (variant === 'middleBottom') {
+    outerClip = 'polygon(0 0, 100% 0, 100% calc(100% - 24px), calc(100% - 24px) 100%, 24px 100%, 0 calc(100% - 24px))';
+    innerClip = 'polygon(0 0, 100% 0, 100% calc(100% - 23px), calc(100% - 23px) 100%, 23px 100%, 0 calc(100% - 23px))';
+    corner1 = (
+      <>
+        {/* 上边框悬浮装饰梁 */}
+        <div style={{ position: 'absolute', top: 0, left: '20%', right: '20%', height: 12, zIndex: 5 }}>
+          <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(180deg, ${hud.cyan}44, transparent)`, clipPath: 'polygon(0 0, 100% 0, 96% 100%, 4% 100%)' }} />
+          <div style={{ position: 'absolute', left: '35%', right: '35%', top: 0, height: 2, background: hud.cyan, boxShadow: `0 0 10px ${hud.cyan}` }} />
+        </div>
+        <div aria-hidden style={{ position: 'absolute', bottom: 0, left: 0, width: '35%', height: '40%', maxWidth: 180, maxHeight: 80, zIndex: 1, pointerEvents: 'none' }}>
+          <svg width="100%" height="100%" viewBox="0 0 180 80" preserveAspectRatio="none">
+            <polyline points="180,78 26,78 2,54 2,0" fill="none" stroke="#00d0ff" strokeWidth="4" filter="drop-shadow(0 0 8px #00d0ff)" />
+            <circle cx="160" cy="78" r="3" fill="#ffffff" filter="drop-shadow(0 0 5px #00d0ff)" />
+          </svg>
+        </div>
+      </>
+    );
+    corner2 = (
+      <div aria-hidden style={{ position: 'absolute', bottom: 0, right: 0, width: '35%', height: '40%', maxWidth: 180, maxHeight: 80, zIndex: 1, pointerEvents: 'none' }}>
+        <svg width="100%" height="100%" viewBox="0 0 180 80" preserveAspectRatio="none">
+          <polyline points="0,78 154,78 178,54 178,0" fill="none" stroke="#00d0ff" strokeWidth="4" filter="drop-shadow(0 0 8px #00d0ff)" />
+          <circle cx="20" cy="78" r="3" fill="#ffffff" filter="drop-shadow(0 0 5px #00d0ff)" />
+        </svg>
+      </div>
+    );
+  } else {
+    // left
+    outerClip = 'polygon(0 0, calc(100% - 24px) 0, 100% 24px, 100% 100%, 24px 100%, 0 calc(100% - 24px))';
+    innerClip = 'polygon(0 0, calc(100% - 23px) 0, 100% 23px, 100% 100%, 23px 100%, 0 calc(100% - 23px))';
+    corner1 = (
+      <div aria-hidden style={{ position: 'absolute', top: 0, right: 0, width: '35%', height: '40%', maxWidth: 180, maxHeight: 80, zIndex: 1, pointerEvents: 'none' }}>
+        <svg width="100%" height="100%" viewBox="0 0 180 80" preserveAspectRatio="none">
+          <polyline points="0,2 154,2 178,26 178,80" fill="none" stroke="#00d0ff" strokeWidth="4" filter="drop-shadow(0 0 8px #00d0ff)" />
+          <circle cx="20" cy="2" r="3" fill="#ffffff" filter="drop-shadow(0 0 5px #00d0ff)" />
+        </svg>
+      </div>
+    );
+    corner2 = (
+      <div aria-hidden style={{ position: 'absolute', bottom: 0, left: 0, width: '35%', height: '40%', maxWidth: 180, maxHeight: 80, zIndex: 1, pointerEvents: 'none' }}>
+        <svg width="100%" height="100%" viewBox="0 0 180 80" preserveAspectRatio="none">
+          <polyline points="180,78 26,78 2,54 2,0" fill="none" stroke="#00d0ff" strokeWidth="4" filter="drop-shadow(0 0 8px #00d0ff)" />
+          <circle cx="160" cy="78" r="3" fill="#ffffff" filter="drop-shadow(0 0 5px #00d0ff)" />
+        </svg>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        position: 'relative',
+        flex: flex ?? '1 1 0',
+        minWidth: 0,
+        minHeight: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        padding: '2px', // 充当边框厚度
+        background: 'rgba(37, 99, 235, 0.4)', // 边框底色
+        clipPath: outerClip,
+        filter: 'drop-shadow(0 0 8px rgba(37, 99, 235, 0.2))',
+        boxSizing: 'border-box',
+        ...style,
+      }}
+    >
+      <div
+        style={{
+          position: 'absolute',
+          inset: 2, // 向内缩进形成边框
+          zIndex: 0,
+          background: `linear-gradient(135deg, rgba(12, 36, 70, 0.85) 0%, rgba(4, 15, 34, 0.95) 100%)`,
+          clipPath: innerClip,
+          boxShadow: `inset 0 0 30px rgba(0, 136, 255, 0.1)`,
+        }}
+      />
+      {corner1}
+      {corner2}
+      <div
+        style={{
+          position: 'relative',
+          zIndex: 10,
+          display: 'flex',
+          flexDirection: 'column',
+          flex: 1,
+          minHeight: 0,
+          padding: '16px', // 恢复正常内容的内边距
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
 };
+
+/** ===== 区块标题：双书名号 + 青色字 + 右侧小标 ===== */
+interface HudTitleProps {
+  title: React.ReactNode;
+  suffix?: React.ReactNode;
+  right?: React.ReactNode;
+}
+const HudTitle: React.FC<HudTitleProps> = ({ title, suffix, right }) => (
+  <div
+    style={{
+      flexShrink: 0,
+      display: 'flex',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 8,
+      lineHeight: 1.3,
+    }}
+  >
+    <span
+      aria-hidden
+      style={{
+        color: hud.cyan,
+        fontSize: 14,
+        fontWeight: 700,
+        textShadow: `0 0 8px ${hud.cyan}`,
+      }}
+    >
+      «
+    </span>
+    <span
+      style={{
+        color: hud.textPrimary,
+        fontSize: 14,
+        fontWeight: 700,
+        letterSpacing: 0.5,
+        textShadow: `0 0 8px rgba(0, 180, 230, 0.35)`,
+      }}
+    >
+      {title}
+    </span>
+    {suffix ? (
+      <span style={{ color: hud.textDim, fontSize: 13, marginLeft: 4 }}>{suffix}</span>
+    ) : null}
+    {right ? <span style={{ marginLeft: 'auto' }}>{right}</span> : null}
+  </div>
+);
+
+/* eslint-disable react/no-unknown-property */
+
+/** ===== 高级线性科技指标卡 (Linear Tech HUD Panel) ===== */
+interface TechBadgeProps {
+  label: string;
+  value: React.ReactNode;
+  color?: string;
+  unit?: string;
+  align?: 'left' | 'right';
+}
+const TechBadge: React.FC<TechBadgeProps & { delay?: number }> = ({
+  label,
+  value,
+  color = hud.cyan,
+  unit,
+  align = 'left',
+  delay = 0,
+}) => {
+  return (
+    <div 
+      className="hud-card-float"
+      style={{ 
+        width: 130, 
+        height: 130, 
+        borderRadius: '50%',
+        background: `radial-gradient(circle, ${color}15 0%, transparent 70%)`,
+        position: 'relative',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        border: `1px solid ${color}22`,
+        boxShadow: `inset 0 0 20px ${color}11`,
+        animationDelay: `${delay}s`
+      }}
+    >
+      {/* 外部轨道装饰 (雷达环) */}
+      <div 
+        className="hud-ring-spin"
+        style={{
+          position: 'absolute',
+          inset: -6,
+          borderRadius: '50%',
+          border: `1px dashed ${color}44`,
+          opacity: 0.5,
+          animationDirection: align === 'right' ? 'reverse' : 'normal'
+        }} 
+      />
+
+      {/* 侧面重点弧度 */}
+      <div style={{
+        position: 'absolute',
+        inset: -2,
+        borderRadius: '50%',
+        border: `3px solid transparent`,
+        borderLeft: align === 'left' ? `6px solid ${color}` : 'none',
+        borderRight: align === 'right' ? `6px solid ${color}` : 'none',
+        filter: `drop-shadow(0 0 5px ${color})`
+      }} />
+
+      {/* 背景微网格 */}
+      <div style={{
+        position: 'absolute',
+        inset: 4,
+        borderRadius: '50%',
+        opacity: 0.1,
+        backgroundImage: `radial-gradient(${color} 1px, transparent 1px)`,
+        backgroundSize: '10px 10px',
+        backgroundPosition: 'center',
+        overflow: 'hidden'
+      }} />
+
+      {/* 内部主数据 */}
+      <div style={{ 
+        position: 'relative',
+        zIndex: 2,
+        fontSize: 13, 
+        color: hud.textSoft, 
+        letterSpacing: 1, 
+        textTransform: 'uppercase', 
+        marginBottom: 2,
+        textAlign: 'center',
+        padding: '0 10px',
+        maxWidth: '90%'
+      }}>
+        {label}
+      </div>
+      
+      <div style={{ 
+        position: 'relative',
+        zIndex: 2,
+        display: 'flex', 
+        alignItems: 'baseline', 
+        gap: 2,
+      }}>
+        <span style={{ 
+          fontSize: 28, 
+          fontWeight: 900, 
+          color: '#ffffff', 
+          fontFamily: clockFont,
+          textShadow: `0 0 10px ${color}aa`,
+          lineHeight: 1
+        }}>
+          {value}
+        </span>
+        {unit && <span style={{ fontSize: 11, color: hud.textSoft, fontWeight: 500 }}>{unit}</span>}
+      </div>
+    </div>
+  );
+};
+
+/** ===== 3D 模型：高精细复合动力堆 (High-Detail Power Core) ===== */
+const HudPowerCore: React.FC = () => {
+  const meshRef = useRef<THREE.Group>(null);
+  const pointsRef = useRef<THREE.Points>(null);
+  
+  // 1. 加载高清静态大图资源
+  const texture = useTexture('/img/dashboard.png');
+  
+  // 2. 优化图片纹理质量 (静默处理)
+  useEffect(() => {
+    if (texture) {
+      texture.anisotropy = 16; // eslint-disable-line
+    }
+  }, [texture]);
+
+  useFrame((state) => {
+    // 仅驱动旋转背景点阵地球，保持中心大图静止
+    if (pointsRef.current) {
+      pointsRef.current.rotation.y = state.clock.getElapsedTime() * 0.15;
+    }
+  });
+
+  return (
+    <group ref={meshRef}>
+      {/* 核心 1：背景数字环境 (点云球体) */}
+      <points ref={pointsRef}>
+        <sphereGeometry args={[2.2, 64, 64]} />
+        <pointsMaterial size={0.02} color={hud.cyan} transparent opacity={0.2} />
+      </points>
+
+      {/* 核心 2：核心大图展示 - 物理嵌套在地球内部 (深度对齐) */}
+      <Billboard position={[0, 0, 0]}>
+        <mesh>
+          <planeGeometry args={[4.2, 3.6]} />
+          <meshBasicMaterial 
+            map={texture} 
+            transparent 
+            depthTest={true}
+            depthWrite={false}
+            toneMapped={false}
+            side={THREE.DoubleSide} 
+          />
+        </mesh>
+      </Billboard>
+    </group>
+  );
+};
+
+interface HudHeroProps {
+  todayOutput: number;
+  qualifiedRate: number;
+  inProgressWo: number;
+  pendingSchedule: number;
+  avgCycle: number;
+  onTimeDelivery: number;
+  reworkCount: number;
+  repairingCount: number;
+  siteLogoUrl?: string;
+  labels: {
+    woPlatform: string;
+    opPlatform: string;
+    todayOutput: string;
+    qualifiedRate: string;
+    inProgressWo: string;
+    pendingSchedule: string;
+    avgCycle: string;
+    onTimeDelivery: string;
+    reworkOrders: string;
+    repairingEquip: string;
+    unitDays: string;
+  };
+}
+
+const HudHero: React.FC<HudHeroProps> = ({
+  todayOutput,
+  qualifiedRate,
+  inProgressWo,
+  pendingSchedule,
+  avgCycle,
+  onTimeDelivery,
+  reworkCount,
+  labels,
+}) => (
+  <div
+    style={{
+      position: 'relative',
+      flex: 1,
+      minHeight: 0,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+    }}
+  >
+    {/* 背景空间层次 */}
+    <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(circle at 50% 50%, rgba(0, 136, 255, 0.04) 0%, transparent 80%)` }} />
+    <div style={{ position: 'absolute', inset: 0, opacity: 0.1, backgroundImage: `linear-gradient(rgba(0,136,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0,136,255,0.05) 1px, transparent 1px)`, backgroundSize: '40px 40px', backgroundPosition: 'center' }} />
+
+    {/* 中央 3D 全景核心容器 (全画幅展示) */}
+    <div style={{ width: '100%', height: '100%', position: 'relative', zIndex: 1 }}>
+      <Canvas camera={{ position: [0, 0, 8], fov: 32 }}>
+        <ambientLight intensity={0.5} />
+        <pointLight position={[10, 10, 10]} intensity={1.5} color={hud.cyan} />
+        <pointLight position={[-10, -10, -10]} intensity={1} color={hud.platformBlue} />
+        <HudPowerCore />
+      </Canvas>
+      
+      {/* 全息悬浮指标分布系统 (中轴挂载) */}
+      
+      {/* 左侧集群 */}
+      <div style={{ 
+        position: 'absolute', 
+        left: '10%', 
+        top: '50%', 
+        transform: 'translateY(-50%)', 
+        zIndex: 20,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 24,
+      }}>
+        <div style={{ marginBottom: 0 }}><TechBadge label={labels.inProgressWo} value={inProgressWo} color={hud.cyan} align="left" /></div>
+        <div style={{ marginLeft: -40 }}><TechBadge label={labels.avgCycle} value={avgCycle.toFixed(1)} color={hud.platformBlue} unit={labels.unitDays} align="left" /></div>
+        <div style={{ marginTop: 0 }}><TechBadge label={labels.reworkOrders} value={reworkCount} color={hud.rose} align="left" /></div>
+      </div>
+
+      {/* 右侧集群 */}
+      <div style={{ 
+        position: 'absolute', 
+        right: '10%', 
+        top: '50%', 
+        transform: 'translateY(-50%)', 
+        zIndex: 16,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 24,
+        alignItems: 'flex-end'
+      }}>
+        <div style={{ marginBottom: 0 }}><TechBadge label={labels.pendingSchedule} value={pendingSchedule} color={hud.cyan} align="right" /></div>
+        <div style={{ marginRight: -40 }}><TechBadge label={labels.onTimeDelivery} value={onTimeDelivery.toFixed(1)} color={hud.platformBlue} unit="%" align="right" /></div>
+        <div style={{ marginTop: 0 }}><TechBadge label={labels.qualifiedRate} value={qualifiedRate.toFixed(1)} color={hud.emerald} unit="%" align="right" /></div>
+      </div>
+
+      {/* 中央黄金位置（成品产出，区间成品入库数量） */}
+      <div style={{ 
+        position: 'absolute', 
+        bottom: '1%', 
+        left: '50%', 
+        transform: 'translateX(-50%)', 
+        textAlign: 'center',
+        padding: '10px 40px',
+        borderTop: '1px solid rgba(0,255,255,0.2)',
+        background: 'linear-gradient(180deg, rgba(0,255,255,0.05), transparent)'
+      }}>
+        <div style={{ 
+          fontSize: 14, 
+          color: '#fff', 
+          letterSpacing: 4, 
+          fontWeight: 600,
+          background: 'rgba(0, 0, 0, 0.4)', 
+          padding: '1px 6px',
+          borderRadius: 4,
+          display: 'inline-block',
+          marginBottom: 6,
+          boxShadow: '0 0 10px rgba(0, 82, 204, 0.4)'
+        }}>
+          {labels.todayOutput}
+        </div>
+        <div style={{ 
+          fontSize: 52, 
+          color: '#fff', 
+          fontWeight: 900, 
+          fontFamily: clockFont, 
+          textShadow: `0 0 30px ${hud.emerald}`,
+          lineHeight: 1.1
+        }}>
+          {formatCompact(todayOutput)}
+        </div>
+        <div style={{ fontSize: 10, color: hud.textDim, marginTop: 4 }}>FINISHED_GOODS_INBOUND_QTY</div>
+      </div>
+    </div>
+
+    <style>{`
+      @keyframes hudFloat {
+        0% { transform: translateY(0px); }
+        50% { transform: translateY(-8px); }
+        100% { transform: translateY(0px); }
+      }
+      @keyframes orbitSpin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      @keyframes pulse {
+        0% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.5; transform: scale(0.8); }
+        100% { opacity: 1; transform: scale(1); }
+      }
+      @keyframes techScanEffect {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(250%); }
+      }
+      .hud-card-float {
+        animation: hudFloat 4s ease-in-out infinite;
+      }
+      .hud-ring-spin {
+        animation: orbitSpin 10s linear infinite;
+      }
+    `}</style>
+  </div>
+);
+
+
+
+
+
+
+/** ===== StatTile：面板内小卡 ===== */
+interface StatTileProps {
+  label: string;
+  value: React.ReactNode;
+  color?: string;
+  unit?: string;
+}
+const StatTile: React.FC<StatTileProps> = ({ label, value, color = hud.cyan, unit }) => (
+  <div
+    style={{
+      flex: 1,
+      minWidth: 0,
+      padding: '8px 10px',
+      background: 'linear-gradient(160deg, rgba(10, 32, 64, 0.7), rgba(4, 15, 34, 0.7))',
+      border: `1px solid ${hud.borderLine}`,
+      boxShadow: `inset 0 0 14px rgba(0, 130, 210, 0.12)`,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 2,
+    }}
+  >
+    <span style={{ fontSize: 13, color: hud.textSoft, letterSpacing: 0.3 }}>{label}</span>
+    <span
+      style={{
+        fontSize: 22,
+        fontWeight: 800,
+        lineHeight: 1.1,
+        color,
+        fontFamily: clockFont,
+        textShadow: `0 0 8px ${color}55`,
+        display: 'inline-flex',
+        alignItems: 'baseline',
+        gap: 4,
+      }}
+    >
+      {value}
+      {unit ? <span style={{ fontSize: 11, color: hud.textSoft, fontWeight: 500 }}>{unit}</span> : null}
+    </span>
+  </div>
+);
+
+/** ===== 实时播报 Feed ===== */
+interface BroadcastFeedProps {
+  items: ProductionBroadcastItem[];
+  emptyText: string;
+}
+const BroadcastFeed: React.FC<BroadcastFeedProps> = ({ items, emptyText }) => {
+  if (!items || items.length === 0) {
+    return (
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description={<span style={{ color: hud.textDim }}>{emptyText}</span>}
+        />
+      </div>
+    );
+  }
+  const animKey = 'live-scroll';
+  const loop = items.length > 4 ? [...items, ...items] : items;
+  return (
+    <div
+      style={{
+        flex: 1,
+        minHeight: 0,
+        overflow: 'hidden',
+        position: 'relative',
+        maskImage:
+          'linear-gradient(to bottom, transparent, black 10%, black 90%, transparent)',
+      }}
+    >
+      <style>
+        {`
+          @keyframes ${animKey} {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(-50%); }
+          }
+          .hud-live-feed { animation: ${animKey} 42s linear infinite; }
+          .hud-live-feed:hover { animation-play-state: paused; }
+          @media (prefers-reduced-motion: reduce) {
+            .hud-live-feed { animation: none !important; }
+          }
+        `}
+      </style>
+      <div
+        className="hud-live-feed"
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 4,
+          paddingTop: 4,
+          paddingBottom: 4,
+        }}
+      >
+        {loop.map((it, idx) => {
+          const qualified = Number(it.qualified_quantity || 0);
+          const unqualified = Number(it.unqualified_quantity || 0);
+          const level: 'info' | 'warn' | 'risk' =
+            unqualified > qualified ? 'risk' : unqualified > 0 ? 'warn' : 'info';
+          const dotColor =
+            level === 'risk'
+              ? hud.rose
+              : level === 'warn'
+                ? hud.amber
+                : hud.cyan;
+          const timeText = it.created_at ? dayjs(it.created_at).format('MM-DD HH:mm') : '';
+          return (
+            <div
+              key={`${it.id}-${idx}`}
+              style={{
+                padding: '5px 10px',
+                background: 'rgba(8, 24, 50, 0.55)',
+                border: `1px solid rgba(0, 229, 255, 0.12)`,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                flexShrink: 0,
+                fontSize: 13,
+              }}
+            >
+              <span
+                aria-hidden
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: '50%',
+                  background: dotColor,
+                  boxShadow: `0 0 6px ${dotColor}`,
+                  flexShrink: 0,
+                }}
+              />
+              <span
+                style={{
+                  color: hud.textSoft,
+                  fontFamily: clockFont,
+                  fontSize: 11,
+                  flexShrink: 0,
+                }}
+              >
+                {timeText}
+              </span>
+              <span
+                style={{
+                  color: hud.textPrimary,
+                  fontWeight: 600,
+                  flex: 1,
+                  minWidth: 0,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {it.operator_name} · {it.process_name} · {it.work_order_no}
+              </span>
+              <span style={{ color: hud.emerald, fontFamily: clockFont, fontSize: 13 }}>
+                ✓{qualified}
+              </span>
+              {unqualified > 0 && (
+                <span style={{ color: hud.rose, fontFamily: clockFont, fontSize: 13 }}>
+                  ×{unqualified}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+/** ===== 顶部装饰标题栏（对齐参考图：中心大字 + 两侧波形） ===== */
+const HeaderDecoration: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div
+    style={{
+      position: 'absolute',
+      inset: 0,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      pointerEvents: 'none',
+      overflow: 'hidden',
+    }}
+  >
+    <style>
+      {`
+        @keyframes headerPulseLine {
+          0%, 100% { opacity: 0.3; }
+          50% { opacity: 1; }
+        }
+        @keyframes headerGlow {
+          0%, 100% { filter: drop-shadow(0 0 8px rgba(0, 229, 255, 0.4)); }
+          50% { filter: drop-shadow(0 0 16px rgba(0, 229, 255, 0.8)); }
+        }
+        @keyframes headerFlash {
+          0%, 40%, 60%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+      `}
+    </style>
+    <svg
+      width="100%"
+      height="100%"
+      preserveAspectRatio="none"
+      viewBox="0 0 1600 80"
+      style={{ position: 'absolute', inset: 0 }}
+    >
+      <defs>
+        <radialGradient id="hud-center-glow" cx="50%" cy="100%" r="50%">
+          <stop offset="0%" stopColor="rgba(0, 229, 255, 0.2)" />
+          <stop offset="60%" stopColor="rgba(0, 229, 255, 0.05)" />
+          <stop offset="100%" stopColor="rgba(0, 229, 255, 0)" />
+        </radialGradient>
+        <linearGradient id="hud-line-glow" x1="0" x2="1" y1="0" y2="0">
+          <stop offset="0" stopColor="transparent" />
+          <stop offset="0.3" stopColor={hud.cyan} stopOpacity="0.8" />
+          <stop offset="0.5" stopColor="#ffffff" />
+          <stop offset="0.7" stopColor={hud.cyan} stopOpacity="0.8" />
+          <stop offset="1" stopColor="transparent" />
+        </linearGradient>
+      </defs>
+      
+      {/* 顶部柔和中心背景 */}
+      <rect x="0" y="0" width="1600" height="80" fill="url(#hud-center-glow)" />
+      
+      {/* 底部折线轮廓，带发光动画 */}
+      <g style={{ animation: 'headerGlow 3s ease-in-out infinite' }}>
+        <polyline points="0,60 450,60 500,78 1100,78 1150,60 1600,60" fill="none" stroke="url(#hud-line-glow)" strokeWidth="2" />
+      </g>
+      
+      {/* 装饰边框内线 */}
+      <polyline points="0,55 440,55 490,72 1110,72 1160,55 1600,55" fill="none" stroke={hud.cyanSoft} strokeOpacity="0.2" strokeWidth="1" />
+      
+      {/* 斜线切角装饰（左） */}
+      <polygon points="455,60 480,75 470,75 445,60" fill={hud.cyan} opacity="0.9" />
+      <polygon points="465,60 490,75 480,75 455,60" fill={hud.cyan} opacity="0.4" />
+      <polygon points="475,60 500,75 490,75 465,60" fill={hud.cyan} opacity="0.15" />
+      
+      {/* 斜线切角装饰（右） */}
+      <polygon points="1145,60 1120,75 1130,75 1155,60" fill={hud.cyan} opacity="0.9" />
+      <polygon points="1135,60 1110,75 1120,75 1145,60" fill={hud.cyan} opacity="0.4" />
+      <polygon points="1125,60 1100,75 1110,75 1135,60" fill={hud.cyan} opacity="0.15" />
+
+      {/* 顶部脉冲指示栏 */}
+      <rect x="700" y="0" width="200" height="3" fill={hud.cyan} style={{ animation: 'headerPulseLine 2s ease-in-out infinite' }} />
+      <rect x="760" y="3" width="80" height="2" fill="#ffffff" opacity="0.6" style={{ animation: 'headerFlash 3s infinite' }} />
+
+      {/* 点阵和刻度装饰 */}
+      {Array.from({ length: 15 }).map((_, i) => (
+        <rect key={`tickL-${i}`} x={300 + i * 8} y="56" width="3" height="4" fill={hud.cyanSoft} opacity={0.3 + ((i % 3) * 0.2)} />
+      ))}
+      {Array.from({ length: 15 }).map((_, i) => (
+        <rect key={`tickR-${i}`} x={1300 - i * 8} y="56" width="3" height="4" fill={hud.cyanSoft} opacity={0.3 + ((i % 3) * 0.2)} />
+      ))}
+    </svg>
+    {children}
+  </div>
+);
 
 const BusinessBoardPage: React.FC = () => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
-  const siteLogoUrl = useSiteLogoUrl();
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [currentTime, setCurrentTime] = useState(dayjs().format('YYYY-MM-DD HH:mm:ss'));
   const containerRef = useRef<HTMLDivElement>(null);
   const [customBoardTitle, setCustomBoardTitle] = useState('');
   const [titleModalOpen, setTitleModalOpen] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
+  const [timeRange, setTimeRange] = useState<'today' | 'week' | 'month'>('month');
 
-  const defaultBoardTitle = t('dashboard.businessBoard.title');
+  /** 根据 timeRange 推导 YYYY-MM-DD 区间；week 以周一为起点 */
+  const dateRange = useMemo(() => {
+    const now = dayjs();
+    let start = now;
+    let end = now;
+    if (timeRange === 'today') {
+      start = now.startOf('day');
+      end = now.endOf('day');
+    } else if (timeRange === 'week') {
+      const dow = now.day();
+      const daysBack = dow === 0 ? 6 : dow - 1;
+      start = now.subtract(daysBack, 'day').startOf('day');
+      end = start.add(6, 'day').endOf('day');
+    } else {
+      start = now.startOf('month');
+      end = now.endOf('month');
+    }
+    return {
+      dateStart: start.format('YYYY-MM-DD'),
+      dateEnd: end.format('YYYY-MM-DD'),
+    };
+  }, [timeRange]);
+
+  const siteName = (useConfigStore((state) => state.configs['site_name']) as string) || 'RiverEdge SaaS';
+  const siteLogoValue = (useConfigStore((state) => state.configs['site_logo']) as string) || '';
+  const [siteLogoUrl, setSiteLogoUrl] = useState('/img/logo.png');
+
+  /** 动态解析站点 LOGO URL (处理 UUID) */
+  useEffect(() => {
+    const loadSiteLogo = async () => {
+      if (!siteLogoValue) {
+        setSiteLogoUrl('/img/logo.png');
+        return;
+      }
+      const isUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+      if (isUUID(siteLogoValue)) {
+        try {
+          const previewInfo = await getFilePreview(siteLogoValue, { forAvatar: true });
+          setSiteLogoUrl(previewInfo.preview_url);
+        } catch {
+          setSiteLogoUrl('/img/logo.png');
+        }
+      } else {
+        setSiteLogoUrl(siteLogoValue);
+      }
+    };
+    loadSiteLogo();
+  }, [siteLogoValue]);
+
+  const defaultBoardTitle = `${siteName}运营看板`;
   const displayBoardTitle = customBoardTitle || defaultBoardTitle;
 
-  /** 浏览器标签与顶栏主标题一致（含租户保存的标题），避免菜单文案与顶栏不一致 */
   useEffect(() => {
-    const site = useConfigStore.getState().getConfig('site_name', 'RiverEdge SaaS') as string;
-    document.title = `${displayBoardTitle} - ${site}`;
-  }, [displayBoardTitle]);
+    document.title = `${displayBoardTitle} - ${siteName}`;
+  }, [displayBoardTitle, siteName]);
 
-  /** 从后端加载租户级标题；仅以后端持久化为准 */
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -166,96 +982,6 @@ const BusinessBoardPage: React.FC = () => {
     }
   }, [defaultBoardTitle]);
 
-  const planExecutionLineI18n = useMemo(
-    () =>
-      planExecutionLineData.map((d) => ({
-        day: t(`dashboard.businessBoard.chartDay.${CHART_DAY_KEYS[d.dayIdx]}`),
-        rate: d.rate,
-      })),
-    [t]
-  );
-
-  const equipmentOeeLine = useMemo(
-    () =>
-      equipmentUtilTrendData.map((d) => ({
-        day: t(`dashboard.businessBoard.chartDay.${CHART_DAY_KEYS[d.dayIdx]}`),
-        oee: d.oee,
-      })),
-    [t]
-  );
-
-  const equipmentDowntimeLine = useMemo(
-    () =>
-      equipmentUtilTrendData.map((d) => ({
-        day: t(`dashboard.businessBoard.chartDay.${CHART_DAY_KEYS[d.dayIdx]}`),
-        downtimeMin: d.downtimeMin,
-      })),
-    [t]
-  );
-
-  const deviceStatusGauges = useMemo(() => {
-    const total = deviceStatusMixData.reduce((acc, d) => acc + d.value, 0) || 1;
-    const running = deviceStatusMixData.find((d) => d.typeKey === 'running')?.value || 0;
-    const idle = deviceStatusMixData.find((d) => d.typeKey === 'idle')?.value || 0;
-    const abnormal =
-      (deviceStatusMixData.find((d) => d.typeKey === 'fault')?.value || 0) +
-      (deviceStatusMixData.find((d) => d.typeKey === 'maintenance')?.value || 0);
-
-    return [
-      { label: t('dashboard.businessBoard.deviceStatus.running'), percent: running / total, value: running, color: accent.emerald },
-      { label: t('dashboard.businessBoard.deviceStatus.idle'), percent: idle / total, value: idle, color: accent.amber },
-      { label: t('dashboard.businessBoard.deviceStatus.fault'), percent: abnormal / total, value: abnormal, color: accent.rose },
-    ];
-  }, [t]);
-
-  const salesShipLong = useMemo(
-    () =>
-      salesShipTrendData.flatMap((d) => {
-        const day = t(`dashboard.businessBoard.chartDay.${CHART_DAY_KEYS[d.dayIdx]}`);
-        return [
-          { day, metric: t('dashboard.businessBoard.metric.orders'), value: d.orders },
-          { day, metric: t('dashboard.businessBoard.metric.shipments'), value: d.shipments },
-        ];
-      }),
-    [t]
-  );
-
-  const procurementInboundI18n = useMemo(
-    () =>
-      procurementInboundData.map((d) => ({
-        day: t(`dashboard.businessBoard.chartDay.${CHART_DAY_KEYS[d.dayIdx]}`),
-        batches: d.batches,
-      })),
-    [t]
-  );
-
-  const warehouseQcBarI18n = useMemo(
-    () =>
-      warehouseQcBarData.map((d) => ({
-        stage: t(`dashboard.businessBoard.warehouseQc.${d.stageKey}`),
-        qty: d.qty,
-      })),
-    [t]
-  );
-
-  /** 产线：分组柱「计划 vs 实际」 */
-  const productionPlanActual = useMemo(
-    () =>
-      unitOutputData.flatMap((d) => [
-        {
-          name: d.name,
-          series: t('dashboard.businessBoard.metric.planShort'),
-          value: d.target,
-        },
-        {
-          name: d.name,
-          series: t('dashboard.businessBoard.metric.actualShort'),
-          value: d.actual,
-        },
-      ]),
-    [t]
-  );
-
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(dayjs().format('YYYY-MM-DD HH:mm:ss')), 1000);
     return () => clearInterval(timer);
@@ -275,34 +1001,189 @@ const BusinessBoardPage: React.FC = () => {
     }
   };
 
+  /** ===== 真实数据 ===== */
+  const salesQuery = useQuery({
+    queryKey: ['dashboard-board', 'sales', timeRange],
+    queryFn: () => getSalesSummary(dateRange.dateStart, dateRange.dateEnd),
+    refetchInterval: 60_000,
+    retry: 1,
+  });
+  const purchaseQuery = useQuery({
+    queryKey: ['dashboard-board', 'purchase', timeRange],
+    queryFn: () => getPurchaseSummary(dateRange.dateStart, dateRange.dateEnd),
+    refetchInterval: 60_000,
+    retry: 1,
+  });
+  const manufacturingQuery = useQuery({
+    queryKey: ['dashboard-board', 'manufacturing', timeRange],
+    queryFn: () => getManufacturingSummary(dateRange.dateStart, dateRange.dateEnd),
+    refetchInterval: 45_000,
+    retry: 1,
+  });
+  const equipmentQuery = useQuery({
+    queryKey: ['dashboard-board', 'equipment', timeRange],
+    queryFn: () => getEquipmentSummary(dateRange.dateStart, dateRange.dateEnd),
+    refetchInterval: 60_000,
+    retry: 1,
+  });
+  const metricsQuery = useQuery({
+    queryKey: ['dashboard-board', 'metrics', timeRange],
+    queryFn: () => getManagementMetrics(dateRange.dateStart, dateRange.dateEnd),
+    refetchInterval: 90_000,
+    retry: 1,
+  });
+  const processQuery = useQuery({
+    queryKey: ['dashboard-board', 'process'],
+    queryFn: () => getProcessProgress(false),
+    refetchInterval: 45_000,
+    retry: 1,
+  });
+  const broadcastQuery = useQuery({
+    queryKey: ['dashboard-board', 'broadcast'],
+    queryFn: () => getProductionBroadcast(20),
+    refetchInterval: 30_000,
+    retry: 1,
+  });
+  const salesTop10Query = useQuery({
+    queryKey: ['dashboard-board', 'sales-top10', timeRange],
+    queryFn: () => getSalesTop10(dateRange.dateStart, dateRange.dateEnd),
+    refetchInterval: 120_000,
+    retry: 1,
+  });
+  const purchaseTop10Query = useQuery({
+    queryKey: ['dashboard-board', 'purchase-top10', timeRange],
+    queryFn: () => getPurchaseTop10(dateRange.dateStart, dateRange.dateEnd),
+    refetchInterval: 120_000,
+    retry: 1,
+  });
+  const activeWorkOrdersQuery = useQuery({
+    queryKey: ['dashboard-board', 'active-work-orders'],
+    queryFn: () => getActiveWorkOrders(50),
+    refetchInterval: 30_000,
+    retry: 1,
+  });
+  const warehouseSummaryQuery = useQuery({
+    queryKey: ['dashboard-board', 'warehouse-summary'],
+    queryFn: getWarehouseSummary,
+    refetchInterval: 60_000,
+    retry: 1,
+  });
+  const warehouseTrendQuery = useQuery({
+    queryKey: ['dashboard-board', 'warehouse-trend', timeRange],
+    queryFn: () => getWarehouseTrend(dateRange.dateStart, dateRange.dateEnd),
+    refetchInterval: 120_000,
+    retry: 1,
+  });
+
+  const [woPage, setWoPage] = useState(0);
+  const WO_PAGE_SIZE = 5;
+  const allWorkOrders: ActiveWorkOrderItem[] = useMemo(
+    () => activeWorkOrdersQuery.data ?? [],
+    [activeWorkOrdersQuery.data],
+  );
+
+  useEffect(() => {
+    if (allWorkOrders.length <= WO_PAGE_SIZE) return;
+    const totalPages = Math.ceil(allWorkOrders.length / WO_PAGE_SIZE);
+    const timer = setInterval(() => {
+      setWoPage(prev => (prev + 1) % totalPages);
+    }, 6000);
+    return () => clearInterval(timer);
+  }, [allWorkOrders.length]);
+
+  const sales = salesQuery.data;
+  const purchase = purchaseQuery.data;
+  const manufacturing = manufacturingQuery.data;
+  const equipment = equipmentQuery.data;
+  const metrics = metricsQuery.data;
+  const processItems = useMemo(() => processQuery.data ?? [], [processQuery.data]);
+  const broadcastItems = useMemo(() => broadcastQuery.data ?? [], [broadcastQuery.data]);
+  const salesTop10 = useMemo(() => salesTop10Query.data ?? [], [salesTop10Query.data]);
+  const purchaseTop10 = useMemo(() => purchaseTop10Query.data ?? [], [purchaseTop10Query.data]);
+  const warehouseSummary = warehouseSummaryQuery.data;
+  const warehouseTrend = useMemo(() => warehouseTrendQuery.data ?? [], [warehouseTrendQuery.data]);
+
+  const salesBarData = useMemo(
+    () => [
+      {
+        period: t('dashboard.businessBoard.sales.lastMonth'),
+        amount: Number(sales?.total_amount_last_month ?? 0),
+      },
+      {
+        period: t('dashboard.businessBoard.sales.thisMonth'),
+        amount: Number(sales?.total_amount ?? 0),
+      },
+    ],
+    [sales, t],
+  );
+
+  const processChartData = useMemo(() => {
+    const arr = processItems.slice(0, 6);
+    const qLabel = t('dashboard.businessBoard.process.qualified');
+    const uLabel = t('dashboard.businessBoard.process.unqualified');
+    const pLabel = t('dashboard.businessBoard.process.planned');
+    return arr.flatMap((p) => [
+      { process: p.process_name, series: pLabel, value: Number(p.planned_quantity || 0) },
+      { process: p.process_name, series: qLabel, value: Number(p.qualified_quantity || 0) },
+      { process: p.process_name, series: uLabel, value: Number(p.unqualified_quantity || 0) },
+    ]);
+  }, [processItems, t]);
+
+  const heroLabels = useMemo(
+    () => ({
+      woPlatform: '工单',
+      opPlatform: '工序',
+      todayOutput: t('dashboard.businessBoard.hero.todayOutput'),
+      qualifiedRate: t('dashboard.businessBoard.hero.qualifiedRate'),
+      inProgressWo: t('dashboard.businessBoard.hero.inProgressWo'),
+      pendingSchedule: t('dashboard.businessBoard.hero.pendingSchedule'),
+      avgCycle: t('dashboard.businessBoard.hero.avgCycle'),
+      onTimeDelivery: t('dashboard.businessBoard.hero.onTimeDelivery'),
+      reworkOrders: t('dashboard.businessBoard.hero.reworkOrders'),
+      repairingEquip: t('dashboard.businessBoard.hero.repairingEquip'),
+      unitDays: t('dashboard.businessBoard.unit.days'),
+    }),
+    [t],
+  );
+
   return (
     <div
       ref={containerRef}
       style={{
-        flex: 1,
-        minHeight: 0,
-        height: '100%',
-        maxHeight: '100%',
+        width: isFullscreen ? '100vw' : '100%',
+        height: isFullscreen ? '100vh' : 'calc(100vh - 100px)',
+        position: isFullscreen ? 'fixed' : 'relative',
+        top: isFullscreen ? 0 : 'auto',
+        left: isFullscreen ? 0 : 'auto',
+        zIndex: isFullscreen ? 1000 : 1,
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
-        background: '#020617',
-        backgroundImage: `
-          linear-gradient(rgba(56, 189, 248, 0.035) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(56, 189, 248, 0.035) 1px, transparent 1px)
+        background: `
+          radial-gradient(ellipse 80% 50% at 50% 0%, rgba(0, 136, 255, 0.22), transparent 85%),
+          radial-gradient(circle at 50% 50%, rgba(0, 136, 255, 0.05), transparent 70%),
+          linear-gradient(180deg, ${hud.bgDeep} 0%, ${hud.bgDeep} 100%)
         `,
-        backgroundSize: '40px 40px',
+        backgroundColor: hud.bgDeep,
         boxSizing: 'border-box',
-        position: 'relative',
         borderRadius: isFullscreen ? 0 : token.borderRadiusLG || token.borderRadius,
       }}
     >
+      {/* 细网格（backgroundPosition 使重复纹理相对视区居中） */}
       <div
+        aria-hidden
         style={{
           position: 'absolute',
           inset: 0,
-          background: 'radial-gradient(ellipse 70% 45% at 50% -15%, rgba(56, 189, 248, 0.1), transparent)',
+          backgroundImage: `
+            linear-gradient(rgba(0, 208, 255, 0.08) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(0, 208, 255, 0.08) 1px, transparent 1px)
+          `,
+          backgroundSize: '40px 40px',
+          backgroundPosition: 'center',
           pointerEvents: 'none',
+          mixBlendMode: 'screen',
+          opacity: 0.8
         }}
       />
 
@@ -311,108 +1192,160 @@ const BusinessBoardPage: React.FC = () => {
           position: 'relative',
           zIndex: 10,
           flexShrink: 0,
+          height: 80,
           overflow: 'hidden',
-          borderBottom: 'none',
         }}
       >
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            zIndex: 0,
-            pointerEvents: 'none',
-          }}
-        >
-          <SciFiTitleBackground />
-        </div>
+        <HeaderDecoration>
+          <div />
+        </HeaderDecoration>
         <div
           style={{
             position: 'relative',
-            zIndex: 1,
+            zIndex: 2,
             display: 'grid',
             gridTemplateColumns: 'minmax(0, 1fr) auto minmax(0, 1fr)',
             alignItems: 'center',
             gap: 12,
-            padding: '10px 14px 10px',
+            padding: '10px 24px 6px',
+            height: '100%',
           }}
         >
-        <div style={{ justifySelf: 'start', display: 'flex', alignItems: 'center', minWidth: 0 }}>
-          <img
-            src={siteLogoUrl}
-            alt=""
-            style={{ height: 36, maxWidth: 160, width: 'auto', objectFit: 'contain', display: 'block' }}
-            onError={(e) => {
-              (e.target as HTMLImageElement).src = '/img/logo.png';
-            }}
-          />
-        </div>
-        <div
-          style={{
-            justifySelf: 'center',
-            textAlign: 'center',
-            minWidth: 0,
-            maxWidth: 'min(52vw, 480px)',
-          }}
-        >
-          <Title
-            level={4}
+          <div
             style={{
-              color: '#f8fafc',
-              margin: 0,
-              fontWeight: 700,
-              fontSize: 32,
-              lineHeight: 1.25,
-              letterSpacing: 0.3,
-            }}
-            ellipsis
-          >
-            {displayBoardTitle}
-          </Title>
-          <Text style={{ color: '#94a3b8', fontSize: 12, display: 'block', marginTop: 2 }} ellipsis>
-            {t('dashboard.businessBoard.subtitle')}
-          </Text>
-        </div>
-        <div
-          style={{
-            justifySelf: 'end',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 14,
-            flexShrink: 0,
-          }}
-        >
-          <time
-            dateTime={currentTime}
-            style={{
-              color: '#ffffff',
-              fontSize: 15,
-              fontWeight: 500,
-              fontFamily: clockFont,
-              letterSpacing: 0.5,
-              whiteSpace: 'nowrap',
+              justifySelf: 'start',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              minWidth: 0,
             }}
           >
-            {currentTime}
-          </time>
-          <Tooltip title={t('dashboard.businessBoard.customizeTitle')}>
-            <Button
-              type="text"
-              icon={<SettingOutlined style={{ fontSize: 18 }} />}
-              onClick={openTitleModal}
-              style={{ color: '#e2e8f0' }}
-              aria-label={t('dashboard.businessBoard.customizeTitle')}
-            />
-          </Tooltip>
-          <Tooltip title={isFullscreen ? t('dashboard.businessBoard.exitFullscreen') : t('dashboard.businessBoard.fullscreen')}>
-            <Button
-              type="text"
-              icon={isFullscreen ? <FullscreenExitOutlined style={{ fontSize: 18 }} /> : <FullscreenOutlined style={{ fontSize: 18 }} />}
-              onClick={toggleFullscreen}
-              style={{ color: accent.cyan }}
-              aria-label={isFullscreen ? t('dashboard.businessBoard.exitFullscreen') : t('dashboard.businessBoard.fullscreen')}
-            />
-          </Tooltip>
-        </div>
+            <style>
+              {`
+                .hud-time-filter .ant-radio-button-wrapper {
+                  background: rgba(8, 26, 54, 0.6);
+                  border-color: rgba(0, 208, 255, 0.2);
+                  color: #9fb8d0;
+                }
+                .hud-time-filter .ant-radio-button-wrapper:hover {
+                  color: #00d0ff;
+                }
+                .hud-time-filter .ant-radio-button-wrapper-checked:not(.ant-radio-button-wrapper-disabled) {
+                  border-color: #00d0ff;
+                  color: #040d1e;
+                  background: #00d0ff;
+                  box-shadow: 0 0 15px rgba(0, 208, 255, 0.6);
+                }
+                .hud-time-filter .ant-radio-button-wrapper-checked:not(.ant-radio-button-wrapper-disabled):hover {
+                  color: #040d1e;
+                  border-color: #00d0ff;
+                }
+                .hud-time-filter .ant-radio-button-wrapper::before {
+                  background-color: rgba(0, 208, 255, 0.2) !important;
+                }
+                .hud-time-filter .ant-radio-button-wrapper-checked::before {
+                  background-color: transparent !important;
+                }
+              `}
+            </style>
+            <Radio.Group
+              className="hud-time-filter"
+              value={timeRange}
+              onChange={(e) => setTimeRange(e.target.value)}
+              buttonStyle="solid"
+            >
+              <Radio.Button value="today">当天</Radio.Button>
+              <Radio.Button value="week">本周</Radio.Button>
+              <Radio.Button value="month">本月</Radio.Button>
+            </Radio.Group>
+          </div>
+          <div
+            style={{
+              justifySelf: 'center',
+              textAlign: 'center',
+              minWidth: 0,
+              maxWidth: 'min(52vw, 540px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Title
+              level={4}
+              style={{
+                color: '#ffffff',
+                margin: 0,
+                fontWeight: 800,
+                fontSize: 32,
+                lineHeight: 0.75,
+                letterSpacing: 4,
+                textShadow: `0 0 20px rgba(0, 208, 255, 0.8), 0 0 35px rgba(0, 136, 255, 0.4)`,
+                padding: '18px 32px',
+              }}
+              ellipsis
+            >
+              {displayBoardTitle}
+            </Title>
+          </div>
+          <div
+            style={{
+              justifySelf: 'end',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              flexShrink: 0,
+            }}
+          >
+            <time
+              dateTime={currentTime}
+              style={{
+                color: '#ffffff',
+                fontSize: 20,
+                fontWeight: 600,
+                fontFamily: '"Varela Round", "Arial Rounded MT Bold", "Microsoft YaHei", sans-serif',
+                letterSpacing: 1.5,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {currentTime}
+            </time>
+            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+              <Tooltip title={t('dashboard.businessBoard.customizeTitle')}>
+                <Button
+                  type="text"
+                  icon={<SettingOutlined style={{ fontSize: 18 }} />}
+                  onClick={openTitleModal}
+                  style={{ color: '#ffffff' }}
+                  aria-label={t('dashboard.businessBoard.customizeTitle')}
+                />
+              </Tooltip>
+              <Tooltip
+                title={
+                  isFullscreen
+                    ? t('dashboard.businessBoard.exitFullscreen')
+                    : t('dashboard.businessBoard.fullscreen')
+                }
+              >
+                <Button
+                  type="text"
+                  icon={
+                    isFullscreen ? (
+                      <FullscreenExitOutlined style={{ fontSize: 18 }} />
+                    ) : (
+                      <FullscreenOutlined style={{ fontSize: 18 }} />
+                    )
+                  }
+                  onClick={toggleFullscreen}
+                  style={{ color: '#ffffff' }}
+                  aria-label={
+                    isFullscreen
+                      ? t('dashboard.businessBoard.exitFullscreen')
+                      : t('dashboard.businessBoard.fullscreen')
+                  }
+                />
+              </Tooltip>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -438,6 +1371,7 @@ const BusinessBoardPage: React.FC = () => {
         </Button>
       </Modal>
 
+      {/* 主体：左 2 + 中（装饰 + 1）+ 右 2 */}
       <div
         style={{
           position: 'relative',
@@ -445,328 +1379,547 @@ const BusinessBoardPage: React.FC = () => {
           flex: 1,
           minHeight: 0,
           display: 'flex',
-          gap: 8,
-          padding: '14px 10px 10px',
+          gap: 16,
+          padding: '10px 16px 16px',
           boxSizing: 'border-box',
         }}
       >
+        {/* Left */}
         <div
           style={{
-            flex: '3 1 0',
+            flex: '1 1 0',
             minWidth: 0,
             minHeight: 0,
             display: 'flex',
             flexDirection: 'column',
-            gap: 8,
+            gap: 16,
           }}
         >
-          <SciFiPanelFrame rimConverge="sw" style={{ flex: '1 1 0', minHeight: 158 }}>
-            <div style={titleSm}>
-              <SectionTitleIconBtn>
-                <ShoppingOutlined />
-              </SectionTitleIconBtn>
-              {t('dashboard.businessBoard.section.salesShipTrend')}
+          <HudPanel>
+            <HudTitle
+              title={t('dashboard.businessBoard.section.salesPanel')}
+              suffix={t('dashboard.businessBoard.sales.thisMonth')}
+            />
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                gap: 8,
+                marginBottom: 10,
+                flexShrink: 0,
+              }}
+            >
+              <StatTile
+                label={t('dashboard.businessBoard.sales.pendingQuotation')}
+                value={sales?.pending_quotations ?? '—'}
+                color={hud.cyan}
+              />
+              <StatTile
+                label={t('dashboard.businessBoard.sales.pendingShipment')}
+                value={sales?.pending_shipments ?? '—'}
+                color={hud.amber}
+              />
+              <StatTile
+                label={t('dashboard.businessBoard.sales.overdueShipment')}
+                value={sales?.overdue_shipments ?? '—'}
+                color={hud.rose}
+              />
+              <StatTile
+                label={t('dashboard.businessBoard.sales.achievementRate')}
+                value={sales ? sales.achievement_rate.toFixed(1) : '—'}
+                unit="%"
+                color={hud.emerald}
+              />
             </div>
-            <div style={{ ...chartHost, minHeight: 118 }}>
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', justifyContent: 'center' }}>
-                <div style={{ height: '100%', width: '100%', maxWidth: '480px', aspectRatio: '2' }}>
-                  <Line
-                    {...boardPlot}
-                    padding="auto"
-                    style={{ width: '100%', height: '100%' }}
-                    data={salesShipLong}
-                    xField="day"
-                    yField="value"
-                    seriesField="metric"
-                    colorField="metric"
-                    shapeField="smooth"
-                    theme={businessBoardChartTheme}
-                    color={[accent.cyan, accent.emerald]}
-                    line={{ size: 2 }}
-                    point={{ size: 3, shapeField: 'circle' }}
-                    axis={{ x: { labelFill: '#cbd5e1', labelFontSize: 10, lineStroke: 'rgba(255,255,255,0.15)' }, y: { labelFill: '#cbd5e1', labelFontSize: 10, gridStroke: 'rgba(255,255,255,0.06)' } }}
-                    legend={{ position: 'top', itemName: { style: { fill: '#cbd5e1', fontSize: 11 } }, color: { position: 'top', itemLabelFill: '#cbd5e1', itemLabelFontSize: 11 } } as any}
-                    label={{ text: 'value', position: 'top', style: { fill: '#f8fafc', fontSize: 10, fontWeight: 500 }, dy: -8 }}
-                  />
-                </div>
-              </div>
-            </div>
-          </SciFiPanelFrame>
-
-          <SciFiPanelFrame rimConverge="sw" style={{ flex: '1 1 0', minHeight: 158 }}>
-            <div style={titleSm}>
-              <SectionTitleIconBtn>
-                <InboxOutlined />
-              </SectionTitleIconBtn>
-              {t('dashboard.businessBoard.section.procurementInbound')}
-            </div>
-            <div style={{ ...chartHost, minHeight: 118 }}>
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', justifyContent: 'center' }}>
-                <div style={{ height: '100%', width: '100%', maxWidth: '480px', aspectRatio: '2' }}>
-                  <Area
-                    {...boardPlot}
-                    style={{ width: '100%', height: '100%', fill: `linear-gradient(-90deg, transparent 0%, ${accent.violet} 100%)`, fillOpacity: 0.35, stroke: accent.violet, lineWidth: 2 }}
-                    data={procurementInboundI18n}
-                    xField="day"
-                    yField="batches"
-                    shapeField="smooth"
-                    theme={businessBoardChartTheme}
-                    line={{ size: 2 }}
-                    point={{ size: 4, fill: accent.violet }}
-                    axis={{ x: { labelFill: '#cbd5e1', labelFontSize: 10 }, y: { labelFill: '#cbd5e1', labelFontSize: 10, gridStroke: 'rgba(255,255,255,0.06)' } }}
-                    label={{ text: (d: any) => `${d.batches} 批`, position: 'top', style: { fill: '#f8fafc', fontSize: 10, fontWeight: 500 }, dy: -8 }}
-                  />
-                </div>
-              </div>
-            </div>
-          </SciFiPanelFrame>
-
-          <SciFiPanelFrame rimConverge="sw" style={{ flex: '1 1 0', minHeight: 158 }}>
-            <div style={titleSm}>
-              <SectionTitleIconBtn>
-                <ContainerOutlined />
-              </SectionTitleIconBtn>
-              {t('dashboard.businessBoard.section.warehouseQcBoard')}
-            </div>
-            <div style={{ ...chartHost, minHeight: 118 }}>
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', justifyContent: 'center' }}>
-                <div style={{ height: '100%', width: '100%', maxWidth: '360px', aspectRatio: '1.5' }}>
-                  <Pie
-                    {...boardPlotRose}
-                    padding="auto"
-                    style={{ width: '100%', height: '100%' }}
-                    data={warehouseQcBarI18n}
-                    angleField="qty"
-                    colorField="stage"
-                    innerRadius={0.62}
-                    radius={0.87}
-                    theme={businessBoardChartTheme}
-                    color={[accent.amber, accent.emerald, accent.violet, accent.cyan, accent.rose, accent.slate]}
-                    label={{ text: 'qty', style: { fill: '#f8fafc', fontSize: 11, fontWeight: 'bold' } }}
-                    legend={{ position: 'right', offsetX: -10, layout: 'vertical', itemSpacing: 6, itemName: { style: { fill: '#cbd5e1', fontSize: 10 } }, color: { position: 'right', itemLabelFill: '#cbd5e1', itemLabelFontSize: 11 } } as any}
-                  />
-                </div>
-              </div>
-            </div>
-          </SciFiPanelFrame>
-        </div>
-
-        <div
-          style={{
-            flex: '4 1 0',
-            minWidth: 0,
-            minHeight: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 8,
-            overflow: 'visible',
-          }}
-        >
-          <div
-            style={{
-              flex: '2 1 0',
-              minHeight: 316,
-              minWidth: 0,
-              position: 'relative',
-              overflow: 'visible',
-              boxSizing: 'border-box',
-              paddingTop: 'clamp(10px, 2vh, 22px)',
-              paddingBottom: 'clamp(18px, 3.5vh, 36px)',
-              marginBottom: 8,
-            }}
-          >
-            <OrbitalKpiField kpiItems={kpiItems} t={t} isFullscreen={isFullscreen} />
-          </div>
-
-          {/*
-            中列下部：固定 1 行 2 列（勿改回 2×2）
-          */}
-          <div
-            style={{
-              flex: '1 1 0',
-              minHeight: 158,
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: 8,
-            }}
-          >
-            <SciFiPanelFrame rimConverge="sw" style={{ minHeight: 158, minWidth: 0 }}>
-              <div style={titleSm}>
-                <SectionTitleIconBtn>
-                  <BarChartOutlined />
-                </SectionTitleIconBtn>
-                {t('dashboard.businessBoard.section.productionOutput')}
-              </div>
-              <div style={{ ...chartHost, minHeight: 132 }}>
-                <div style={{ position: 'absolute', inset: 0, display: 'flex', justifyContent: 'center' }}>
-                  <div style={{ height: '100%', width: '100%', maxWidth: '400px', aspectRatio: '1.5' }}>
-                    <Radar
-                      {...boardPlotRose}
-                      padding="auto"
-                      style={{ width: '100%', height: '100%' }}
-                      data={productionPlanActual}
-                      xField="name"
-                      yField="value"
-                      seriesField="series"
-                      colorField="series"
-                      theme={businessBoardChartTheme}
-                      color={[accent.slate, accent.cyan]}
-                      area={{ style: { fillOpacity: 0.15 } }}
-                      line={{ style: { lineWidth: 2 } }}
-                      point={{ size: 3, shapeField: 'circle' }}
-                      axis={{
-                        x: { labelFill: '#cbd5e1', labelFontSize: 10, gridStroke: 'rgba(255,255,255,0.1)' },
-                        y: { label: false, gridStroke: 'rgba(255,255,255,0.1)' }
-                      }}
-                      legend={{ position: 'top', layout: 'horizontal', itemName: { style: { fill: '#cbd5e1', fontSize: 11 } }, color: { position: 'top', itemLabelFill: '#cbd5e1', itemLabelFontSize: 11 } } as any}
-                    />
-                  </div>
-                </div>
-              </div>
-            </SciFiPanelFrame>
-            <SciFiPanelFrame rimConverge="se" style={{ minHeight: 158, minWidth: 0 }}>
-              <div style={titleSm}>
-                <SectionTitleIconBtn>
-                  <LineChartOutlined />
-                </SectionTitleIconBtn>
-                {t('dashboard.businessBoard.section.planExecution')}
-              </div>
-              <div style={{ ...chartHost, minHeight: 132 }}>
-                <div style={{ position: 'absolute', inset: 0, display: 'flex', justifyContent: 'center' }}>
-                  <div style={{ height: '100%', width: '100%', maxWidth: '480px', aspectRatio: '2' }}>
-                    <Area
-                      {...boardPlot}
-                      padding="auto"
-                      style={{ width: '100%', height: '100%', fill: `linear-gradient(-90deg, transparent 0%, ${accent.emerald} 100%)`, fillOpacity: 0.22, stroke: accent.emerald, lineWidth: 2 }}
-                    data={planExecutionLineI18n}
-                    xField="day"
-                    yField="rate"
-                    shapeField="smooth"
-                    theme={businessBoardChartTheme}
-                    line={{ size: 2 }}
-                    point={{ size: 3, fill: accent.emerald }}
-                    axis={{ x: { labelFill: '#cbd5e1', labelFontSize: 10 }, y: { labelFormatter: (v: string) => `${v}%`, labelFill: '#cbd5e1', labelFontSize: 10, gridStroke: 'rgba(255,255,255,0.06)' } }}
-                      label={{ text: (d: any) => `${d.rate}%`, position: 'top', style: { fill: '#f8fafc', fontSize: 10, fontWeight: 500 }, dy: -8 }}
-                      legend={false}
-                    />
-                  </div>
-                </div>
-              </div>
-            </SciFiPanelFrame>
-          </div>
-        </div>
-
-        <div
-          style={{
-            flex: '3 1 0',
-            minWidth: 0,
-            minHeight: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 8,
-          }}
-        >
-          <SciFiPanelFrame rimConverge="se" style={{ flex: '1 1 0', minHeight: 158 }}>
-            <div style={titleSm}>
-              <SectionTitleIconBtn>
-                <PieChartOutlined />
-              </SectionTitleIconBtn>
-              {t('dashboard.businessBoard.section.deviceStatusMix')}
-            </div>
-            <div style={{ ...chartHost, minHeight: 140, display: 'flex' }}>
-              <div style={{ display: 'flex', gap: 12, height: '100%', width: '100%', alignItems: 'center', justifyContent: 'center', padding: '12px 6px' }}>
-                {deviceStatusGauges.map((g: any, idx: number) => (
-                  <div key={idx} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minWidth: 0 }}>
-                    <Progress
-                      type="dashboard"
-                      percent={Math.round(g.percent * 100)}
-                      size={isFullscreen ? 115 : 95}
-                      strokeColor={{
-                        '0%': g.color,
-                        '100%': g.color + 'dd',
-                      }}
-                      railColor="rgba(255,255,255,0.06)"
-                      format={(p) => (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                          <span style={{ color: g.color, fontSize: isFullscreen ? 17 : 14, fontWeight: 800 }}>{p}%</span>
-                          <span style={{ color: '#94a3b8', fontSize: isFullscreen ? 11 : 9, marginTop: -2 }}>{g.value} 台</span>
+            <div style={{ ...chartHost, minHeight: 220, marginTop: 0 }}>
+              <div style={{ fontSize: 10, color: hud.textDim, marginBottom: 8, letterSpacing: 2 }}>PRODUCT_SALES_RANKING_TOP10</div>
+              <div style={{ height: '100%', width: '100%' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
+                  {(() => {
+                    if (salesTop10.length === 0) {
+                      return (
+                        <div style={{ textAlign: 'center', color: hud.textDim, padding: '24px 0', fontSize: 13 }}>
+                          {t('common.noData', { defaultValue: '暂无数据' })}
                         </div>
-                      )}
-                      gapDegree={70}
-                      strokeWidth={10}
-                    />
-                    <div style={{ fontSize: 11, fontWeight: 600, color: '#f1f5f9', whiteSpace: 'nowrap', marginTop: -14 }}>{g.label}</div>
-                  </div>
-                ))}
+                      );
+                    }
+                    const maxQty = Math.max(1, ...salesTop10.map((x) => x.quantity));
+                    return salesTop10.map((item, idx) => (
+                      <div key={`${item.material_id}-${item.material_code || idx}`} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ width: 18, fontSize: 13, color: hud.textDim, fontFamily: clockFont }}>{(idx + 1).toString().padStart(2, '0')}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                            <span style={{ fontSize: 13, color: hud.textSoft, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.material_name || item.material_code}</span>
+                            <span style={{ fontSize: 13, color: hud.cyan, fontWeight: 700, fontFamily: clockFont }}>{formatCompact(item.quantity)}</span>
+                          </div>
+                          <div style={{ height: 4, background: 'rgba(255,255,255,0.03)', borderRadius: 2, overflow: 'hidden', position: 'relative' }}>
+                            <div
+                              style={{
+                                height: '100%',
+                                width: `${(item.quantity / maxQty) * 100}%`,
+                                background: `linear-gradient(90deg, ${hud.cyan}33, ${hud.cyan})`,
+                                boxShadow: `0 0 10px ${hud.cyan}66`,
+                                borderRadius: 2,
+                                transition: 'width 1s cubic-bezier(0.4, 0, 0.2, 1)',
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ));
+                  })()}
+                </div>
               </div>
             </div>
-          </SciFiPanelFrame>
+          </HudPanel>
 
-          <SciFiPanelFrame rimConverge="se" style={{ flex: '1 1 0', minHeight: 158 }}>
-            <div style={titleSm}>
-              <SectionTitleIconBtn>
-                <LineChartOutlined />
-              </SectionTitleIconBtn>
-              {t('dashboard.businessBoard.section.equipmentUtilTrend')}
+          <HudPanel>
+            <HudTitle title={t('dashboard.businessBoard.section.purchasePanel')} />
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                gap: 8,
+                marginBottom: 10,
+                flexShrink: 0,
+              }}
+            >
+              <StatTile
+                label={t('dashboard.businessBoard.purchase.pendingRequisition')}
+                value={purchase?.pending_requisitions ?? '—'}
+                color={hud.cyan}
+              />
+              <StatTile
+                label={t('dashboard.businessBoard.purchase.urgent')}
+                value={purchase?.urgent_requisitions ?? '—'}
+                color={hud.rose}
+              />
+              <StatTile
+                label={t('dashboard.businessBoard.purchase.pendingReceipt')}
+                value={purchase?.pending_receipts ?? '—'}
+                color={hud.amber}
+              />
+              <StatTile
+                label={t('dashboard.businessBoard.purchase.overdueReceipt')}
+                value={purchase?.overdue_receipts ?? '—'}
+                color={hud.rose}
+              />
             </div>
-            <div style={{ fontSize: 9, color: '#64748b', marginBottom: 2, flexShrink: 0 }}>
-              <span style={{ color: accent.cyan }}>●</span> {t('dashboard.businessBoard.metric.oee')}{' '}
-              <span style={{ color: accent.amber, marginLeft: 8 }}>■</span> {t('dashboard.businessBoard.metric.downtimeMin')}
-            </div>
-            <div style={{ ...chartHost, minHeight: 118 }}>
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', justifyContent: 'center' }}>
-                <div style={{ height: '100%', width: '100%', maxWidth: '480px', aspectRatio: '2' }}>
-                  <DualAxes
-                    {...boardPlot}
-                    padding="auto"
-                    style={{ width: '100%', height: '100%' }}
-                  xField="day"
-                  theme={businessBoardChartTheme}
-                  children={[
-                    {
-                      type: 'line',
-                      data: equipmentOeeLine,
-                      xField: 'day',
-                      yField: 'oee',
-                      shape: 'smooth',
-                      style: { stroke: accent.cyan, lineWidth: 2 },
-                      axis: { y: { labelFormatter: (v: string) => `${String(v)}%`, labelFill: '#cbd5e1', labelFontSize: 10, gridStroke: 'rgba(255,255,255,0.06)' } as any },
-                      label: { text: (d: any) => `${d.oee}%`, style: { fill: accent.cyan, fontSize: 10, fontWeight: 500 }, dy: -8 } as any,
-                    },
-                    {
-                      type: 'line',
-                      data: equipmentDowntimeLine,
-                      xField: 'day',
-                      yField: 'downtimeMin',
-                      shape: 'smooth',
-                      style: { stroke: accent.amber, lineWidth: 2, lineDash: [4, 4] },
-                      axis: {
-                        y: {
-                          position: 'right' as const,
-                          labelFormatter: (v: string) => `${String(v)}m`,
-                          labelFill: '#cbd5e1',
-                          labelFontSize: 10,
-                        } as any,
-                      },
-                      label: { text: (d: any) => `${d.downtimeMin}m`, style: { fill: accent.amber, fontSize: 10, fontWeight: 500 }, dy: 10 } as any,
-                    },
-                  ]}
-                />
-               </div>
+            <div style={{ ...chartHost, minHeight: 220, marginTop: 0 }}>
+              <div style={{ fontSize: 10, color: hud.textDim, marginBottom: 8, letterSpacing: 2 }}>RAW_MATERIAL_PURCHASE_TOP10</div>
+              <div style={{ height: '100%', width: '100%' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
+                  {(() => {
+                    if (purchaseTop10.length === 0) {
+                      return (
+                        <div style={{ textAlign: 'center', color: hud.textDim, padding: '24px 0', fontSize: 13 }}>
+                          {t('common.noData', { defaultValue: '暂无数据' })}
+                        </div>
+                      );
+                    }
+                    const maxQty = Math.max(1, ...purchaseTop10.map((x) => x.quantity));
+                    return purchaseTop10.map((item, idx) => (
+                      <div key={`${item.material_id}-${item.material_code || idx}`} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ width: 18, fontSize: 13, color: hud.textDim, fontFamily: clockFont }}>{(idx + 1).toString().padStart(2, '0')}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                            <span style={{ fontSize: 13, color: hud.textSoft, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.material_name || item.material_code}</span>
+                            <span style={{ fontSize: 13, color: hud.cyan, fontWeight: 700, fontFamily: clockFont }}>{formatCompact(item.quantity)}</span>
+                          </div>
+                          <div style={{ height: 4, background: 'rgba(255,255,255,0.03)', borderRadius: 2, overflow: 'hidden' }}>
+                            <div
+                              style={{
+                                height: '100%',
+                                width: `${(item.quantity / maxQty) * 100}%`,
+                                background: `linear-gradient(90deg, ${hud.cyan}33, ${hud.cyan})`,
+                                boxShadow: `0 0 10px ${hud.cyan}66`,
+                                borderRadius: 2,
+                                transition: 'width 1s cubic-bezier(0.4, 0, 0.2, 1)',
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ));
+                  })()}
+                </div>
               </div>
             </div>
-          </SciFiPanelFrame>
-
-          <SciFiPanelFrame rimConverge="se" style={{ flex: '1 1 0', minHeight: 158 }}>
-            <div style={titleSm}>
-              <SectionTitleIconBtn>
-                <ToolOutlined />
-              </SectionTitleIconBtn>
-              {t('dashboard.businessBoard.section.equipmentEventStream')}
-            </div>
-            <EventFeed items={operationsFeed} t={t} />
-          </SciFiPanelFrame>
+          </HudPanel>
         </div>
+
+        {/* Middle */}
+        <div
+          style={{
+            flex: '1.55 1 0',
+            minWidth: 0,
+            minHeight: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 16,
+          }}
+        >
+          <HudPanel variant="middleTop" style={{ flex: '1.15 1 0', minHeight: 260 }}>
+            {/* 制造态势标题与实时标签已根据要求移除 */}
+            <HudHero
+              todayOutput={Number(manufacturing?.today_output ?? 0)}
+              qualifiedRate={Number(manufacturing?.qualified_rate ?? 0)}
+              inProgressWo={Number(manufacturing?.in_progress_count ?? 0)}
+              pendingSchedule={Number(manufacturing?.pending_scheduling ?? 0)}
+              avgCycle={Number(metrics?.average_production_cycle ?? 0)}
+              onTimeDelivery={Number(metrics?.on_time_delivery_rate ?? 0)}
+              reworkCount={Number(manufacturing?.rework_count ?? 0)}
+              repairingCount={Number(equipment?.repairing_count ?? 0)}
+              siteLogoUrl={siteLogoUrl}
+              labels={heroLabels}
+            />
+          </HudPanel>
+
+          <HudPanel variant="middleBottom" style={{ flex: '0.75 1 0' }}>
+            <HudTitle 
+              title="执行中工单实时监控" 
+              right={
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                   <span style={{ fontSize: 10, color: hud.cyan, opacity: 0.8, fontFamily: clockFont }}>PAGE {woPage + 1}/{Math.ceil(allWorkOrders.length / WO_PAGE_SIZE)}</span>
+                   <span style={{ fontSize: 10, color: hud.cyan, fontFamily: clockFont }}>TOTAL: {allWorkOrders.length.toString().padStart(2, '0')}</span>
+                </div>
+              } 
+            />
+            <div style={{ ...chartHost, minHeight: 200, display: 'flex', flexDirection: 'column', gap: 6, paddingTop: 6 }}>
+              {allWorkOrders.slice(woPage * WO_PAGE_SIZE, (woPage + 1) * WO_PAGE_SIZE).map((wo, woIdx) => (
+                <div 
+                  key={wo.id} 
+                  className="hud-wo-row"
+                  style={{ 
+                    position: 'relative', 
+                    padding: '8px 16px',
+                    background: 'rgba(255,255,255,0.02)',
+                    borderRadius: 4,
+                    animation: 'rowEnter 0.5s ease forwards',
+                    animationDelay: `${woIdx * 0.1}s`,
+                    opacity: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 20,
+                    minHeight: 52
+                  }}
+                >
+                  {/* 左侧：工单 & 产品 & 计划数 (占 42%) */}
+                  <div style={{ flex: '0 0 42%', display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                    <span style={{ fontSize: 13, background: hud.cyan, color: hud.bgDeep, fontWeight: 'bold', padding: '2px 6px', borderRadius: 2, fontFamily: clockFont, whiteSpace: 'nowrap' }}>{wo.id}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+                      <span style={{ fontSize: 13, color: hud.textPrimary, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{wo.product}</span>
+                      <span style={{ fontSize: 13, color: hud.textDim, whiteSpace: 'nowrap' }}>[ 计划: <span style={{ color: hud.cyan, fontWeight: 'bold', fontFamily: clockFont }}>{wo.planned}</span> ]</span>
+                    </div>
+                  </div>
+
+                  {/* 右侧：强化版步骤轴 (固定显示 5 槽位) */}
+                  <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', paddingLeft: 10, paddingRight: 10, alignSelf: 'stretch', paddingTop: 4 }}>
+                    {/* 贯穿背景线 */}
+                    <div style={{ position: 'absolute', left: 24, right: 24, top: 16, height: 1, background: 'rgba(255,255,255,0.08)', zIndex: 0 }} />
+
+                    {(() => {
+                      // 固定 5 个槽位：不足补占位、超过走窗口算法
+                      const SLOT = 5;
+                      type Slot = { key: string; step?: typeof wo.steps[number]; placeholder: boolean };
+                      const slots: Slot[] = [];
+
+                      if (wo.steps.length >= SLOT) {
+                        const activeIdx = wo.steps.findIndex(s => s.status === 'active');
+                        const focusIdx = activeIdx === -1 ? wo.steps.length - 1 : activeIdx;
+                        let start = Math.max(0, focusIdx - 3);
+                        let end = Math.min(wo.steps.length, focusIdx + 2);
+                        if (end - start < SLOT) {
+                          if (start === 0) end = Math.min(wo.steps.length, SLOT);
+                          else if (end === wo.steps.length) start = Math.max(0, wo.steps.length - SLOT);
+                        }
+                        wo.steps.slice(start, end).forEach((step, idx) => {
+                          slots.push({ key: `s-${start + idx}-${step.name}`, step, placeholder: false });
+                        });
+                      } else {
+                        wo.steps.forEach((step, idx) => {
+                          slots.push({ key: `s-${idx}-${step.name}`, step, placeholder: false });
+                        });
+                        // 后补占位圆环，保证 5 个对齐
+                        for (let i = wo.steps.length; i < SLOT; i++) {
+                          slots.push({ key: `ph-${wo.id}-${i}`, placeholder: true });
+                        }
+                      }
+                      return slots;
+                    })().map(({ key, step, placeholder }) => {
+                      const isDone = step?.status === 'done';
+                      const isActive = step?.status === 'active';
+                      const isPending = step?.status === 'pending';
+                      const COMPLETED_GREEN = '#34d399';
+                      const PENDING_COLOR = 'rgba(255,255,255,0.1)';
+
+                      return (
+                        <div key={key} style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flex: 1 }}>
+                          {placeholder ? (
+                            <div style={{
+                              width: 24,
+                              height: 24,
+                              borderRadius: '50%',
+                              background: hud.bgDeep,
+                              border: `2px solid ${PENDING_COLOR}`,
+                              boxSizing: 'border-box',
+                            }} />
+                          ) : (
+                            <div style={{
+                              width: 24,
+                              height: 24,
+                              borderRadius: '50%',
+                              background: isDone ? COMPLETED_GREEN : hud.bgDeep,
+                              border: `2px solid ${isPending ? PENDING_COLOR : (isDone ? COMPLETED_GREEN : hud.cyan)}`,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              boxSizing: 'border-box'
+                            }}>
+                              {isDone ? (
+                                <span style={{ color: hud.bgDeep, fontSize: 13, fontWeight: 'bold' }}>✓</span>
+                              ) : isActive ? (
+                                <span style={{ color: hud.cyan, fontSize: 8, fontWeight: 'bold', fontFamily: clockFont }}>{step!.progress}%</span>
+                              ) : null}
+                            </div>
+                          )}
+                          <span style={{
+                            fontSize: 13,
+                            color: placeholder
+                              ? 'transparent'
+                              : isPending
+                                ? hud.textDim
+                                : isActive
+                                  ? hud.cyan
+                                  : (isDone ? COMPLETED_GREEN : hud.textSoft),
+                            textAlign: 'center',
+                            whiteSpace: 'nowrap',
+                            userSelect: 'none'
+                          }}>
+                            {placeholder ? '—' : step!.name}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+              
+              <style>{`
+                @keyframes rowEnter {
+                  from { transform: translateX(10px); opacity: 0; }
+                  to { transform: translateX(0); opacity: 1; }
+                }
+              `}</style>
+            </div>
+          </HudPanel>
+        </div>
+
+        {/* Right */}
+        <div
+          style={{
+            flex: '1 1 0',
+            minWidth: 0,
+            minHeight: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 16,
+          }}
+        >
+          <HudPanel variant="right">
+            <HudTitle
+              title="仓储物流动态中心"
+              suffix="本月走势"
+              right={
+                <div style={{ display: 'flex', gap: 10, fontSize: 13, alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <div style={{ width: 10, height: 2, background: '#0095ff' }} />
+                    <span style={{ color: '#0095ff' }}>入</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <div style={{ width: 10, height: 2, background: '#fb7185' }} />
+                    <span style={{ color: '#fb7185' }}>出</span>
+                  </div>
+                  <span style={{ fontSize: 13, color: hud.cyan, fontFamily: clockFont, marginLeft: 4 }}>LO_TREND</span>
+                </div>
+              }
+            />
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                gap: 8,
+                marginBottom: 10,
+                flexShrink: 0,
+              }}
+            >
+              <StatTile
+                label="总库存"
+                value={warehouseSummary ? formatCompact(warehouseSummary.total_stock) : '—'}
+                color={hud.cyan}
+              />
+              <StatTile
+                label="在库批次"
+                value={warehouseSummary?.in_stock_batches ?? '—'}
+                unit="批"
+                color={hud.emerald}
+              />
+              <StatTile
+                label="待入库"
+                value={warehouseSummary?.pending_inbound ?? '—'}
+                unit="单"
+                color={hud.amber}
+              />
+              <StatTile
+                label="待出库"
+                value={warehouseSummary?.pending_outbound ?? '—'}
+                unit="单"
+                color={hud.rose}
+              />
+            </div>
+            {(() => {
+              const inData = warehouseTrend.map((p) => ({ time: p.date, val: p.in }));
+              const outData = warehouseTrend.map((p) => ({ time: p.date, val: p.out }));
+              const COLOR_IN = '#0095ff';
+              const COLOR_OUT = '#fb7185';
+
+              const chartHeight = isFullscreen ? 360 : 220;
+
+              if (warehouseTrend.length === 0) {
+                return (
+                  <div style={{ width: '100%', height: chartHeight, display: 'flex', alignItems: 'center', justifyContent: 'center', color: hud.textDim, fontSize: 13 }}>
+                    {t('common.noData', { defaultValue: '暂无数据' })}
+                  </div>
+                );
+              }
+
+              return (
+                <div style={{ width: '100%', height: chartHeight, position: 'relative', overflow: 'visible', flexShrink: 0 }}>
+                  <Column
+                    key={`logistics-grouped-column-${isFullscreen ? 'fs' : 'nm'}`}
+                    autoFit
+                    appendPadding={4}
+                    padding="auto"
+                    data={[
+                      ...inData.map(d => ({ ...d, type: 'IN' })),
+                      ...outData.map(d => ({ ...d, type: 'OUT' })),
+                    ]}
+                    xField="time"
+                    yField="val"
+                    colorField="type"
+                    group={true}
+                    scale={{
+                      color: { range: [COLOR_IN, COLOR_OUT] },
+                      x: { paddingInner: 0.35, paddingOuter: 0.2 },
+                      y: { nice: true, domainMin: 0 },
+                    }}
+                    // HUD 柔光柱：顶部色 → 柱底渐隐（v2 G2 mark style）
+                    style={{
+                      fill: (datum: any) =>
+                        datum.type === 'IN'
+                          ? 'l(270) 0:#0095ff 1:rgba(0,149,255,0.12)'
+                          : 'l(270) 0:#fb7185 1:rgba(251,113,133,0.12)',
+                      stroke: (datum: any) => (datum.type === 'IN' ? COLOR_IN : COLOR_OUT),
+                      lineWidth: 0.8,
+                      strokeOpacity: 0.85,
+                      radiusTopLeft: 2,
+                      radiusTopRight: 2,
+                      shadowColor: (datum: any) => (datum.type === 'IN' ? COLOR_IN : COLOR_OUT),
+                      shadowBlur: 3,
+                    }}
+                    axis={{
+                      x: {
+                        labelFill: 'rgba(255,255,255,0.55)',
+                        labelFontSize: 10,
+                        labelAutoRotate: false,
+                        grid: false,
+                        lineStroke: 'rgba(255,255,255,0.2)',
+                        tickStroke: 'rgba(255,255,255,0.3)',
+                        tickLength: 3,
+                      },
+                      y: {
+                        labelFill: 'rgba(255,255,255,0.55)',
+                        labelFontSize: 10,
+                        // 与刻度配套的水平虚线标线
+                        grid: true,
+                        gridStroke: 'rgba(255,255,255,0.22)',
+                        gridStrokeOpacity: 0.8,
+                        gridLineWidth: 1,
+                        gridLineDash: [3, 3],
+                        line: false,
+                        tick: false,
+                      },
+                    }}
+                    interaction={{ tooltip: { shared: true } }}
+                    legend={false}
+                  />
+                </div>
+              );
+            })()}
+          </HudPanel>
+
+          <HudPanel variant="right">
+            <HudTitle
+              title={t('dashboard.businessBoard.section.liveBroadcast')}
+              right={
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '2px 8px',
+                    border: `1px solid ${hud.emerald}55`,
+                    background: 'rgba(52, 211, 153, 0.08)',
+                    color: hud.emerald,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: 1,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: '50%',
+                      background: hud.emerald,
+                      boxShadow: `0 0 6px ${hud.emerald}`,
+                    }}
+                  />
+                  {t('dashboard.businessBoard.live')}
+                </span>
+              }
+            />
+            <BroadcastFeed
+              items={broadcastItems}
+              emptyText={t('dashboard.businessBoard.empty')}
+            />
+          </HudPanel>
+        </div>
+      </div>
+
+      {/* 底部信息条 */}
+      <div
+        style={{
+          position: 'relative',
+          zIndex: 1,
+          flexShrink: 0,
+          height: 22,
+          padding: '0 16px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          borderTop: `1px solid ${hud.borderLine}`,
+          background: 'linear-gradient(180deg, transparent, rgba(0, 229, 255, 0.05))',
+          fontSize: 10,
+          color: hud.textDim,
+          letterSpacing: 0.5,
+          fontFamily: clockFont,
+        }}
+      >
+        <span>
+          SYS · OK · {broadcastItems.length.toString().padStart(2, '0')} BROADCAST · {processItems.length.toString().padStart(2, '0')} PROCESS
+        </span>
+        <span>{currentTime}</span>
       </div>
     </div>
   );

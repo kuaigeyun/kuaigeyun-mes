@@ -1,78 +1,104 @@
-import React, { useRef, useLayoutEffect } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls } from '@react-three/drei';
+/* eslint-disable react/no-unknown-property */
+import React, { useRef, Suspense } from 'react';
+import { Canvas, useFrame } from '@react-three/fiber';
+import { useGLTF, Float, Environment, Stars, ContactShadows, OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 
-function TransparentScene() {
-  const { scene, gl } = useThree();
-  useLayoutEffect(() => {
-    scene.background = null;
-    gl.setClearColor(0x000000, 0);
-  }, [scene, gl]);
-  return null;
-}
+/** ===== 3D 模型：高精尖运算核心 (Precision Operational Core) ===== */
+/** 使用本地成品高精度模型 (DamagedHelmet)，具备极致的金属质感与工业细节 */
+function OperationalCore() {
+  // 加载本地成品模型
+  const { scene } = useGLTF('/models/hero-core.glb');
+  const groupRef = useRef<THREE.Group>(null);
 
-function CoreGroup() {
-  const group = useRef<THREE.Group>(null);
-  useFrame((_, delta) => {
-    if (!group.current) return;
-    group.current.rotation.y += delta * 0.35;
-    group.current.rotation.x += delta * 0.12;
+  useFrame((state) => {
+    if (groupRef.current) {
+      // 基础缓慢自转
+      groupRef.current.rotation.y = state.clock.getElapsedTime() * 0.15;
+    }
   });
+
   return (
-    <group ref={group} scale={0.72}>
-      <mesh>
-        <icosahedronGeometry args={[1.65, 1]} />
-        <meshStandardMaterial
-          color="#38bdf8"
-          wireframe
-          emissive="#0284c7"
-          emissiveIntensity={0.5}
-          metalness={0.25}
-          roughness={0.35}
+    <group ref={groupRef}>
+      <Float speed={2} rotationIntensity={0.5} floatIntensity={0.5}>
+        {/* 核心成品模型：放大并调整姿态 */}
+        <primitive 
+          object={scene} 
+          scale={3.2} 
+          position={[0, -0.5, 0]} 
+          rotation={[0, Math.PI / 2, 0]} 
         />
-      </mesh>
-      <mesh rotation={[Math.PI / 2, 0.4, 0]}>
-        <torusGeometry args={[2.15, 0.055, 14, 72]} />
-        <meshStandardMaterial
-          color="#34d399"
-          emissive="#059669"
-          emissiveIntensity={0.4}
-          transparent
-          opacity={0.92}
-        />
-      </mesh>
-      <mesh rotation={[0.2, 0.8, 0]}>
-        <torusGeometry args={[1.48, 0.04, 10, 56]} />
-        <meshStandardMaterial color="#a78bfa" emissive="#7c3aed" emissiveIntensity={0.3} transparent opacity={0.78} />
+        
+        {/* 为满足“圆形”需求，添加多层科技能量环 */}
+        <mesh rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[3.8, 0.02, 16, 100]} />
+          <meshStandardMaterial color="#00ffff" emissive="#00ffff" emissiveIntensity={2} transparent opacity={0.6} />
+        </mesh>
+        
+        <mesh rotation={[Math.PI / 2, 0.5, 0]}>
+          <torusGeometry args={[4.2, 0.012, 12, 100]} />
+          <meshStandardMaterial color="#00ffff" emissive="#00ffff" emissiveIntensity={1} transparent opacity={0.3} />
+        </mesh>
+      </Float>
+
+      {/* 扫掠激光效果 */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -3, 0]}>
+        <ringGeometry args={[2, 5, 64]} />
+        <meshBasicMaterial color="#00ffff" transparent opacity={0.05} />
       </mesh>
     </group>
   );
 }
 
-const BoardHero3D: React.FC = () => (
-  <div style={{ width: '100%', height: '100%', minHeight: 0, touchAction: 'none', background: 'transparent' }}>
-    <Canvas
-      dpr={[1, 2]}
-      camera={{ position: [0, 0.04, 4.35], fov: 45, near: 0.1, far: 50 }}
-      gl={{ alpha: true, antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: false }}
-      style={{ width: '100%', height: '100%', background: 'transparent', display: 'block' }}
-    >
-      <TransparentScene />
-      <ambientLight intensity={0.4} />
-      <pointLight position={[7, 9, 9]} intensity={1.55} color="#7dd3fc" />
-      <pointLight position={[-7, -5, 7]} intensity={0.75} color="#c4b5fd" />
-      <CoreGroup />
-      <OrbitControls
-        enableZoom={false}
-        enablePan={false}
-        autoRotate
-        autoRotateSpeed={0.65}
-        minPolarAngle={Math.PI * 0.14}
-        maxPolarAngle={Math.PI * 0.82}
-      />
-    </Canvas>
-  </div>
-);
+export const BoardHero3D: React.FC = () => {
+  return (
+    <div style={{ width: '100%', height: '100%', minHeight: '550px', position: 'relative' }}>
+      <Canvas camera={{ position: [0, 4, 12], fov: 40 }}>
+        <color attach="background" args={['#000000']} />
+        
+        <ambientLight intensity={0.5} />
+        <pointLight position={[10, 10, 10]} intensity={1.5} color="#00ffff" />
+        <spotLight position={[-10, 20, 10]} angle={0.15} penumbra={1} intensity={2} castShadow />
+
+        <Suspense fallback={null}>
+          <OperationalCore />
+          <Environment preset="night" />
+          {/* 星空背景 */}
+          <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
+          {/* 地面阴影 */}
+          <ContactShadows resolution={1024} scale={15} blur={2} opacity={0.6} far={10} color="#00ffff" />
+        </Suspense>
+
+        <OrbitControls 
+          enableZoom={false} 
+          enablePan={false}
+          autoRotate 
+          autoRotateSpeed={0.5}
+          maxPolarAngle={Math.PI / 1.8}
+          minPolarAngle={Math.PI / 4}
+        />
+      </Canvas>
+
+      {/* HUD Overlay - 保持原有信息 */}
+      <div style={{
+          position: 'absolute',
+          top: '30px',
+          left: '30px',
+          color: '#00ffff',
+          fontFamily: 'monospace',
+          fontSize: '11px',
+          zIndex: 10,
+          borderLeft: '4px solid #00ffff',
+          padding: '12px',
+          background: 'rgba(0, 255, 255, 0.05)',
+          backdropFilter: 'blur(10px)'
+      }}>
+          <div style={{ fontWeight: 'bold', fontSize: '13px', marginBottom: '8px' }}>CENTRAL_HUB_OPERATIONAL</div>
+          <div>STATUS: SYNCING</div>
+          <div>LATENCY: 12ms</div>
+      </div>
+    </div>
+  );
+};
 
 export default BoardHero3D;

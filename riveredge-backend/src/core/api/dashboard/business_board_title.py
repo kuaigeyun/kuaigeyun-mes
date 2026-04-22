@@ -31,8 +31,19 @@ class BusinessBoardTitleBody(BaseModel):
 
 
 def _extract_title(config_value: Optional[dict]) -> Optional[str]:
-    if not config_value or not isinstance(config_value, dict):
+    if not config_value:
         return None
+        
+    if isinstance(config_value, str):
+        import json
+        try:
+            config_value = json.loads(config_value)
+        except Exception:
+            return None
+            
+    if not isinstance(config_value, dict):
+        return None
+        
     raw = config_value.get("title")
     if raw is None:
         return None

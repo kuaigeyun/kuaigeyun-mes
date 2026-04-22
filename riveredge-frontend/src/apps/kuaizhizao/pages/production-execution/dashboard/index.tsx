@@ -212,7 +212,7 @@ const ManufacturingDashboard: React.FC = () => {
                       </div>
                     </div>
                     {kpiSideBlock([
-                      { label: '今日产出', value: s?.today_output ?? 0 },
+                      { label: '成品产出', value: s?.today_output ?? 0 },
                       { label: '待核报工', value: s?.pending_reporting ?? 0 },
                     ])}
                   </div>

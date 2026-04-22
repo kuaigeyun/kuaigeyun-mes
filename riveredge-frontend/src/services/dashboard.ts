@@ -272,3 +272,262 @@ export async function getProductionBroadcast(limit: number = 10): Promise<Produc
   });
   return response.items;
 }
+
+/**
+ * 销售中心汇总
+ */
+export interface SalesSummary {
+  pending_quotations: number;
+  new_quotations_this_month: number;
+  pending_shipments: number;
+  overdue_shipments: number;
+  achievement_rate: number;
+  total_amount: number;
+  total_amount_last_month: number;
+}
+
+export async function getSalesSummary(
+  dateStart?: string,
+  dateEnd?: string,
+): Promise<SalesSummary> {
+  return apiRequest<SalesSummary>('/apps/kuaizhizao/dashboard/sales-summary', {
+    params: {
+      ...(dateStart && { date_start: dateStart }),
+      ...(dateEnd && { date_end: dateEnd }),
+    },
+  });
+}
+
+/**
+ * 采购中心汇总
+ */
+export interface PurchaseSummary {
+  pending_requisitions: number;
+  urgent_requisitions: number;
+  new_requisitions_this_month: number;
+  pending_receipts: number;
+  overdue_receipts: number;
+  arrival_rate: number;
+}
+
+export async function getPurchaseSummary(
+  dateStart?: string,
+  dateEnd?: string,
+): Promise<PurchaseSummary> {
+  return apiRequest<PurchaseSummary>('/apps/kuaizhizao/dashboard/purchase-summary', {
+    params: {
+      ...(dateStart && { date_start: dateStart }),
+      ...(dateEnd && { date_end: dateEnd }),
+    },
+  });
+}
+
+/**
+ * 制造中心汇总（today_output：所选日期范围内成品入库已入库数量合计）
+ */
+export interface ManufacturingSummary {
+  pending_scheduling: number;
+  in_progress_count: number;
+  rework_count: number;
+  /** 区间内成品入库单（已入库）数量合计；字段名历史兼容 */
+  today_output: number;
+  qualified_rate: number;
+  pending_reporting: number;
+}
+
+export async function getManufacturingSummary(
+  dateStart?: string,
+  dateEnd?: string,
+): Promise<ManufacturingSummary> {
+  return apiRequest<ManufacturingSummary>('/apps/kuaizhizao/dashboard/manufacturing-summary', {
+    params: {
+      ...(dateStart && { date_start: dateStart }),
+      ...(dateEnd && { date_end: dateEnd }),
+    },
+  });
+}
+
+/**
+ * 设备看板汇总
+ */
+export interface EquipmentSummary {
+  repairing_count: number;
+  today_maintenance_tasks: number;
+  oee: number;
+}
+
+export async function getEquipmentSummary(
+  dateStart?: string,
+  dateEnd?: string,
+): Promise<EquipmentSummary> {
+  return apiRequest<EquipmentSummary>('/apps/kuaizhizao/dashboard/equipment-summary', {
+    params: {
+      ...(dateStart && { date_start: dateStart }),
+      ...(dateEnd && { date_end: dateEnd }),
+    },
+  });
+}
+
+/**
+ * 管理指标
+ */
+export interface ManagementMetrics {
+  average_production_cycle: number;
+  on_time_delivery_rate: number;
+}
+
+export async function getManagementMetrics(
+  dateStart?: string,
+  dateEnd?: string,
+): Promise<ManagementMetrics> {
+  return apiRequest<ManagementMetrics>('/apps/kuaizhizao/dashboard/management-metrics', {
+    params: {
+      ...(dateStart && { date_start: dateStart }),
+      ...(dateEnd && { date_end: dateEnd }),
+    },
+  });
+}
+
+/**
+ * 物料 TOP 排行项（销售 / 采购共用）
+ */
+export interface MaterialRankingItem {
+  material_id: number;
+  material_code: string;
+  material_name: string;
+  quantity: number;
+  amount: number;
+}
+
+interface MaterialRankingResponse {
+  items: MaterialRankingItem[];
+}
+
+/**
+ * 销售产品排行 TOP10
+ */
+export async function getSalesTop10(
+  dateStart?: string,
+  dateEnd?: string,
+  limit: number = 10,
+): Promise<MaterialRankingItem[]> {
+  const response = await apiRequest<MaterialRankingResponse>(
+    '/apps/kuaizhizao/dashboard/sales-top10',
+    {
+      params: {
+        limit,
+        ...(dateStart && { date_start: dateStart }),
+        ...(dateEnd && { date_end: dateEnd }),
+      },
+    },
+  );
+  return response.items;
+}
+
+/**
+ * 原料采购排行 TOP10
+ */
+export async function getPurchaseTop10(
+  dateStart?: string,
+  dateEnd?: string,
+  limit: number = 10,
+): Promise<MaterialRankingItem[]> {
+  const response = await apiRequest<MaterialRankingResponse>(
+    '/apps/kuaizhizao/dashboard/purchase-top10',
+    {
+      params: {
+        limit,
+        ...(dateStart && { date_start: dateStart }),
+        ...(dateEnd && { date_end: dateEnd }),
+      },
+    },
+  );
+  return response.items;
+}
+
+/**
+ * 执行中工单工序
+ */
+export interface ActiveWorkOrderStep {
+  name: string;
+  sequence: number;
+  /** done | active | pending */
+  status: 'done' | 'active' | 'pending';
+  /** 仅 active 有意义，0-100 */
+  progress: number;
+}
+
+/**
+ * 执行中工单
+ */
+export interface ActiveWorkOrderItem {
+  id: string;
+  product_code: string;
+  product: string;
+  planned: number;
+  qualified: number;
+  completed: number;
+  steps: ActiveWorkOrderStep[];
+}
+
+interface ActiveWorkOrdersResponse {
+  items: ActiveWorkOrderItem[];
+}
+
+/**
+ * 获取执行中工单列表（含工序步骤）
+ */
+export async function getActiveWorkOrders(limit: number = 50): Promise<ActiveWorkOrderItem[]> {
+  const response = await apiRequest<ActiveWorkOrdersResponse>(
+    '/apps/kuaizhizao/dashboard/work-orders-active',
+    { params: { limit } },
+  );
+  return response.items;
+}
+
+/**
+ * 仓储中心汇总指标
+ */
+export interface WarehouseSummary {
+  total_stock: number;
+  in_stock_batches: number;
+  pending_inbound: number;
+  pending_outbound: number;
+}
+
+export async function getWarehouseSummary(): Promise<WarehouseSummary> {
+  return apiRequest<WarehouseSummary>('/apps/kuaizhizao/dashboard/warehouse-summary');
+}
+
+/**
+ * 仓储入/出库按日走势项
+ */
+export interface WarehouseTrendPoint {
+  /** MM-DD */
+  date: string;
+  in: number;
+  out: number;
+}
+
+interface WarehouseTrendResponse {
+  items: WarehouseTrendPoint[];
+}
+
+/**
+ * 获取仓储入/出库按日走势
+ */
+export async function getWarehouseTrend(
+  dateStart?: string,
+  dateEnd?: string,
+): Promise<WarehouseTrendPoint[]> {
+  const response = await apiRequest<WarehouseTrendResponse>(
+    '/apps/kuaizhizao/dashboard/warehouse-trend',
+    {
+      params: {
+        ...(dateStart && { date_start: dateStart }),
+        ...(dateEnd && { date_end: dateEnd }),
+      },
+    },
+  );
+  return response.items;
+}
