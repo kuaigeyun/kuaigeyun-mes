@@ -55,6 +55,9 @@ deploy/
 scripts/
 build-web-h5.sh
 !riveredge-frontend/scripts/
+# 前端业务页：infra 脚本管理（勿被根目录 scripts/ 规则误伤）
+!riveredge-frontend/src/pages/infra/scripts/
+!riveredge-frontend/src/pages/infra/scripts/**
 riveredge-panel/diagnose.sh
 riveredge-panel/fix-and-start.sh
 
