@@ -30,43 +30,15 @@ import type { MenuProps } from 'antd';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { RightOutlined } from '@ant-design/icons';
-import {
-  FcGrid,
-  FcMenu,
-  FcSettings,
-  FcServices,
-  FcReadingEbook,
-  FcGlobe,
-  FcCommandLine,
-  FcMultipleInputs,
-  FcDepartment,
-  FcBusinessContact,
-  FcPrivacy,
-  FcManager,
-  FcFolder,
-  FcDataConfiguration,
-  FcDatabase,
-  FcFlowChart,
-  FcDataSheet,
-  FcWorkflow,
-  FcInspection,
-  FcTemplate,
-  FcComments,
-  FcPrint,
-  FcDocument,
-  FcTimeline,
-  FcClock,
-  FcConferenceCall,
-  FcDataBackup,
-  FcBusinessman,
-  FcTodoList,
-  FcSms,
-} from 'react-icons/fc';
+import { Icon as IconifyIcon, addCollection } from '@iconify/react/dist/offline';
+import fluentColorIcons from '@iconify-json/fluent-color/icons.json';
 import { translateMenuName, translatePathTitle, translateAppMenuItemName, extractAppCodeFromPath, findMenuTitleWithTranslation, getAppDisplayName } from '../utils/menuTranslation';
 import { prefetchPlugin } from '../utils/pluginLoader';
 import { prefetchKuaizhizaoRoute } from '../apps/kuaizhizao/routePrefetch';
 import dayjs from 'dayjs';
 import { getUserMessageStats, getUserMessages, markMessagesRead, type UserMessage } from '../services/userMessage';
+
+addCollection(fluentColorIcons);
 
 // 安全的翻译 hook，避免多语言初始化失败导致应用崩溃
 const useSafeTranslation = () => {
@@ -1087,50 +1059,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     return visibleGroups;
   }, [systemMenuEntry]);
 
-  const getSystemTileTone = useCallback((groupKey: string, index: number) => {
-    // 鲜艳版：提升饱和度和亮度，增强图标容器存在感
-    const groupToneFamilies: Record<string, { from: string; to: string; border: string; icon: string }[]> = {
-      'core-config-group': [
-        { from: '#4f8dff', to: '#2f6df6', border: '#79a9ff', icon: '#ffffff' },
-        { from: '#4ca2ff', to: '#2e7df8', border: '#7fc0ff', icon: '#ffffff' },
-        { from: '#3f86ff', to: '#2668ec', border: '#70a3ff', icon: '#ffffff' },
-      ],
-      'user-management-group': [
-        { from: '#8d6bff', to: '#6b49f0', border: '#b39aff', icon: '#ffffff' },
-        { from: '#7f7bff', to: '#5c5af2', border: '#a8a5ff', icon: '#ffffff' },
-        { from: '#a16bff', to: '#7d45ef', border: '#c39dff', icon: '#ffffff' },
-      ],
-      'personal-center-group': [
-        { from: '#39d7bf', to: '#1bbfa7', border: '#76ead8', icon: '#ffffff' },
-        { from: '#42d9a0', to: '#1fc27f', border: '#7ceac0', icon: '#ffffff' },
-        { from: '#32cfcd', to: '#14b7b4', border: '#73e8e6', icon: '#ffffff' },
-      ],
-      'data-center-group': [
-        { from: '#5f748f', to: '#465a74', border: '#8ea2bc', icon: '#ffffff' },
-        { from: '#557ea7', to: '#3e658b', border: '#8fb2d4', icon: '#ffffff' },
-        { from: '#60749a', to: '#465c81', border: '#96abcf', icon: '#ffffff' },
-      ],
-      'process-management-group': [
-        { from: '#9b75ff', to: '#7d55f3', border: '#c4a8ff', icon: '#ffffff' },
-        { from: '#7e80ff', to: '#6163f3', border: '#a7a9ff', icon: '#ffffff' },
-        { from: '#b06cff', to: '#8f49f1', border: '#d1a4ff', icon: '#ffffff' },
-      ],
-      'monitoring-ops-group': [
-        { from: '#f2b545', to: '#d6901c', border: '#ffd17a', icon: '#ffffff' },
-        { from: '#f09c4b', to: '#d47522', border: '#ffc08b', icon: '#ffffff' },
-        { from: '#f4bf58', to: '#de9725', border: '#ffd98f', icon: '#ffffff' },
-      ],
-    };
-    const fallback = groupToneFamilies['core-config-group'];
-    const family = groupToneFamilies[groupKey] || fallback;
-    const tone = family[index % family.length];
-    return {
-      bg: `linear-gradient(145deg, ${tone.from} 0%, ${tone.to} 100%)`,
-      border: tone.border,
-      icon: tone.icon,
-    };
-  }, []);
-
   const handleSystemSettingsNavigate = useCallback((path?: string) => {
     if (!path) return;
     setSystemSettingsOpen(false);
@@ -1142,48 +1070,47 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   }, [navigate]);
 
   const getSystemPanelIcon = useCallback((path?: string): React.ReactNode => {
-    if (!path) return <FcGrid />;
-    const iconMap: Record<string, React.ComponentType> = {
-      '/system/applications': FcGrid,
-      '/system/menus': FcMenu,
-      '/system/site-settings': FcSettings,
-      '/system/config-center': FcServices,
-      '/system/data-dictionaries': FcReadingEbook,
-      '/system/languages': FcGlobe,
-      '/system/code-rules': FcCommandLine,
-      '/system/custom-fields': FcMultipleInputs,
-      '/system/departments': FcDepartment,
-      '/system/positions': FcBusinessContact,
-      '/system/roles': FcPrivacy,
-      '/system/users': FcManager,
-      '/system/files': FcFolder,
-      '/system/apis': FcDataConfiguration,
-      '/system/data-sources': FcDatabase,
-      '/system/application-connections': FcFlowChart,
-      '/system/datasets': FcDataSheet,
-      '/system/approval-processes': FcWorkflow,
-      '/system/approval-instances': FcInspection,
-      '/system/messages/template': FcTemplate,
-      '/system/messages/config': FcComments,
-      '/system/print-devices': FcPrint,
-      '/system/print-templates': FcDocument,
-      '/system/operation-logs': FcTimeline,
-      '/system/login-logs': FcClock,
-      '/system/online-users': FcConferenceCall,
-      '/system/data-backups': FcDataBackup,
-      '/personal/profile': FcBusinessman,
-      '/personal/preferences': FcSettings,
-      '/personal/messages': FcSms,
-      '/personal/tasks': FcTodoList,
+    if (!path) return <IconifyIcon icon="fluent-color:apps-24" />;
+    const iconMap: Record<string, string> = {
+      '/system/applications': 'fluent-color:apps-24',
+      '/system/menus': 'fluent-color:apps-list-detail-24',
+      '/system/site-settings': 'fluent-color:settings-24',
+      '/system/config-center': 'fluent-color:briefcase-24',
+      '/system/data-dictionaries': 'fluent-color:book-open-24',
+      '/system/languages': 'fluent-color:globe-24',
+      '/system/code-rules': 'fluent-color:code-24',
+      '/system/custom-fields': 'fluent-color:form-24',
+      '/system/departments': 'fluent-color:building-24',
+      '/system/positions': 'fluent-color:people-list-24',
+      '/system/roles': 'fluent-color:shield-24',
+      '/system/users': 'fluent-color:people-24',
+      '/system/files': 'fluent-color:document-folder-24',
+      '/system/apis': 'fluent-color:link-multiple-24',
+      '/system/data-sources': 'fluent-color:database-24',
+      '/system/application-connections': 'fluent-color:data-pie-24',
+      '/system/datasets': 'fluent-color:table-24',
+      '/system/approval-processes': 'fluent-color:clipboard-task-24',
+      '/system/approval-instances': 'fluent-color:checkmark-circle-24',
+      '/system/messages/template': 'fluent-color:drafts-24',
+      '/system/messages/config': 'fluent-color:chat-24',
+      '/system/print-devices': 'fluent-color:wrench-24',
+      '/system/print-templates': 'fluent-color:document-24',
+      '/system/operation-logs': 'fluent-color:history-24',
+      '/system/login-logs': 'fluent-color:clock-24',
+      '/system/online-users': 'fluent-color:people-team-24',
+      '/system/data-backups': 'fluent-color:arrow-clockwise-dashes-24',
+      '/personal/profile': 'fluent-color:person-24',
+      '/personal/preferences': 'fluent-color:options-24',
+      '/personal/messages': 'fluent-color:chat-24',
+      '/personal/tasks': 'fluent-color:clipboard-24',
     };
-    const Icon = iconMap[path];
-    if (Icon) return <Icon />;
+    const iconName = iconMap[path];
+    if (iconName) return <IconifyIcon icon={iconName} />;
     const matchedPrefix = Object.keys(iconMap).find((key) => path.startsWith(key));
     if (matchedPrefix) {
-      const MatchedIcon = iconMap[matchedPrefix];
-      return <MatchedIcon />;
+      return <IconifyIcon icon={iconMap[matchedPrefix]} />;
     }
-    return <FcGrid />;
+    return <IconifyIcon icon="fluent-color:apps-24" />;
   }, []);
 
   const hasAiAssistantEntry = useMemo(() => {
@@ -2945,25 +2872,25 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           border-radius: ${Number(token.borderRadius || 6)}px !important;
         }
         .riveredge-footer-settings-btn {
-          background: ${token.colorPrimaryBg} !important;
-          border-color: ${token.colorPrimaryBorder} !important;
-          box-shadow: inset 0 0 0 1px ${token.colorPrimaryBorder}33 !important;
+          background: ${siderTextColor === '#ffffff' ? 'rgba(77, 166, 255, 0.26)' : token.colorPrimaryBg} !important;
+          border-color: ${siderTextColor === '#ffffff' ? 'rgba(143, 206, 255, 0.62)' : token.colorPrimaryBorder} !important;
+          box-shadow: inset 0 0 0 1px ${siderTextColor === '#ffffff' ? 'rgba(166, 219, 255, 0.22)' : `${token.colorPrimaryBorder}33`} !important;
         }
         .riveredge-footer-settings-btn:hover {
-          background: ${token.colorPrimaryBgHover} !important;
+          background: ${siderTextColor === '#ffffff' ? 'rgba(98, 177, 255, 0.34)' : token.colorPrimaryBgHover} !important;
         }
         .riveredge-footer-settings-btn:active {
-          background: ${token.colorPrimaryBorder} !important;
+          background: ${siderTextColor === '#ffffff' ? 'rgba(120, 189, 255, 0.42)' : token.colorPrimaryBorder} !important;
         }
         .riveredge-footer-collapse-btn {
-          background: ${isDarkMode ? 'rgba(255, 255, 255, 0.12)' : '#f5f5f5'} !important;
-          border-color: ${isDarkMode ? 'rgba(255, 255, 255, 0.2)' : '#d9d9d9'} !important;
+          background: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.1)' : '#f5f5f5'} !important;
+          border-color: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.28)' : '#d9d9d9'} !important;
         }
         .riveredge-footer-collapse-btn:hover {
-          background: ${isDarkMode ? 'rgba(255, 255, 255, 0.18)' : '#ebebeb'} !important;
+          background: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.16)' : '#ebebeb'} !important;
         }
         .riveredge-footer-collapse-btn:active {
-          background: ${isDarkMode ? 'rgba(255, 255, 255, 0.24)' : '#e2e2e2'} !important;
+          background: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.24)' : '#e2e2e2'} !important;
         }
         .riveredge-system-settings-panel {
           position: fixed;
@@ -4156,11 +4083,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         collapsedButtonRender={(collapsed) => {
           // 根据菜单栏文字颜色计算分割线颜色
           // 如果是浅色文字（深色背景），使用浅色分割线；否则使用深色分割线
+          const isDarkSider = siderTextColor === '#ffffff';
           const dividerColor = siderTextColor === '#ffffff'
             ? 'rgba(255, 255, 255, 0.15)'
             : (isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.12)');
-          const footerBtnBg = token.colorPrimaryBg;
-          const footerBtnBorder = token.colorPrimaryBorder;
+          const settingsBtnBg = isDarkSider ? 'rgba(77, 166, 255, 0.26)' : token.colorPrimaryBg;
+          const settingsBtnBorder = isDarkSider ? 'rgba(143, 206, 255, 0.62)' : token.colorPrimaryBorder;
+          const collapseBtnBg = isDarkSider ? 'rgba(255, 255, 255, 0.1)' : '#f5f5f5';
+          const collapseBtnBorder = isDarkSider ? 'rgba(255, 255, 255, 0.28)' : '#d9d9d9';
 
           return (
             <div
@@ -4185,8 +4115,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                     onClick={() => setSystemSettingsOpen((prev) => !prev)}
                     style={{
                       color: siderTextColor,
-                      backgroundColor: footerBtnBg,
-                      border: `1px solid ${footerBtnBorder}`,
+                      backgroundColor: settingsBtnBg,
+                      border: `1px solid ${settingsBtnBorder}`,
                       minHeight: 34,
                     }}
                     title={t('ui.sidebar.systemSettings')}
@@ -4202,8 +4132,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                     onClick={() => handleSetCollapsed(!collapsed)}
                     style={{
                       color: siderTextColor,
-                      backgroundColor: footerBtnBg,
-                      border: `1px solid ${footerBtnBorder}`,
+                      backgroundColor: collapseBtnBg,
+                      border: `1px solid ${collapseBtnBorder}`,
                       minHeight: 34,
                     }}
                     title={collapsed ? t('ui.sidebar.expand') : t('ui.sidebar.collapse')}
@@ -4956,8 +4886,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                     className="riveredge-system-settings-grid"
                     style={{ gridTemplateColumns: `repeat(${group.itemCols}, minmax(0, 1fr))` }}
                   >
-                    {group.items.map((child, childIndex) => {
-                      const tone = getSystemTileTone(group.key, childIndex);
+                    {group.items.map((child) => {
                       return (
                         <button
                           key={String(child.key || child.path)}
@@ -4968,9 +4897,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                         >
                           <span
                             className="riveredge-system-settings-item-icon"
-                            style={{
-                              color: tone.icon,
-                            }}
                           >
                             {getSystemPanelIcon(child.path)}
                           </span>
