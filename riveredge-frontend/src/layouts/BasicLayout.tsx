@@ -1287,6 +1287,21 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     return 'var(--ant-colorText)';
   }, [storeSiderBg, isDarkMode]);
 
+  /** 底栏统一判定：深色模式或深色侧栏（白字） */
+  const isDarkSiderFooter = React.useMemo(
+    () => isDarkMode || siderTextColor === '#ffffff',
+    [isDarkMode, siderTextColor],
+  );
+  /** 底栏按钮统一 token：只维护这一套 */
+  const siderFooterToken = React.useMemo(
+    () =>
+      theme.getDesignToken({
+        algorithm: isDarkSiderFooter ? theme.darkAlgorithm : theme.defaultAlgorithm,
+        token: { colorPrimary: token.colorPrimary },
+      }),
+    [isDarkSiderFooter, token.colorPrimary],
+  );
+
   /**
    * 检查锁屏状态，如果已锁定则重定向到锁屏页
    */
@@ -2866,31 +2881,47 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn {
           color: ${siderTextColor} !important;
         }
+        /* 盖过上一段：设置钮文字/图标用主题主色 */
+        .ant-pro-layout .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn,
+        .ant-pro-layout .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn {
+          color: ${siderFooterToken.colorPrimary} !important;
+        }
         .riveredge-footer-settings-btn,
         .riveredge-footer-collapse-btn {
           width: 100% !important;
           border-radius: ${Number(token.borderRadius || 6)}px !important;
         }
+        /* 系统设置：始终用主题色 token，勿写死蓝 */
         .riveredge-footer-settings-btn {
-          background: ${siderTextColor === '#ffffff' ? 'rgba(77, 166, 255, 0.26)' : token.colorPrimaryBg} !important;
-          border-color: ${siderTextColor === '#ffffff' ? 'rgba(143, 206, 255, 0.62)' : token.colorPrimaryBorder} !important;
-          box-shadow: inset 0 0 0 1px ${siderTextColor === '#ffffff' ? 'rgba(166, 219, 255, 0.22)' : `${token.colorPrimaryBorder}33`} !important;
+          background: ${siderFooterToken.colorPrimaryBg} !important;
+          border-color: ${siderFooterToken.colorPrimaryBorder} !important;
+          box-shadow: inset 0 0 0 1px color-mix(in srgb, ${siderFooterToken.colorPrimaryBorder} 35%, transparent) !important;
+          color: ${siderFooterToken.colorPrimary} !important;
+        }
+        .riveredge-footer-settings-btn .anticon,
+        .riveredge-footer-settings-btn svg {
+          color: ${siderFooterToken.colorPrimary} !important;
         }
         .riveredge-footer-settings-btn:hover {
-          background: ${siderTextColor === '#ffffff' ? 'rgba(98, 177, 255, 0.34)' : token.colorPrimaryBgHover} !important;
+          background: ${siderFooterToken.colorPrimaryBgHover} !important;
+          border-color: ${siderFooterToken.colorPrimaryBorderHover ?? siderFooterToken.colorPrimaryBorder} !important;
         }
         .riveredge-footer-settings-btn:active {
-          background: ${siderTextColor === '#ffffff' ? 'rgba(120, 189, 255, 0.42)' : token.colorPrimaryBorder} !important;
+          background: ${siderFooterToken.colorPrimaryBorder} !important;
         }
+        /* 折叠钮统一中性底 token */
         .riveredge-footer-collapse-btn {
-          background: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.1)' : '#f5f5f5'} !important;
-          border-color: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.28)' : '#d9d9d9'} !important;
+          background: ${siderFooterToken.colorFillSecondary} !important;
+          border-color: ${siderFooterToken.colorSplit} !important;
+          box-shadow: none !important;
         }
         .riveredge-footer-collapse-btn:hover {
-          background: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.16)' : '#ebebeb'} !important;
+          background: ${siderFooterToken.colorFillTertiary} !important;
         }
         .riveredge-footer-collapse-btn:active {
-          background: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.24)' : '#e2e2e2'} !important;
+          background: ${siderFooterToken.colorFillQuaternary} !important;
         }
         .riveredge-system-settings-panel {
           position: fixed;
@@ -3056,6 +3087,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn:hover {
           color: ${siderTextColor} !important;
         }
+        .ant-pro-layout .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn:hover,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn:hover,
+        .ant-pro-layout .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn:hover,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn:hover {
+          color: ${siderFooterToken.colorPrimary} !important;
+        }
         .ant-pro-layout .ant-pro-sider-footer .ant-btn:hover .anticon,
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn:hover .anticon,
         .ant-pro-layout .ant-pro-sider-footer .ant-btn:hover svg,
@@ -3073,6 +3110,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn:active {
           color: ${siderTextColor} !important;
         }
+        .ant-pro-layout .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn:active,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn:active,
+        .ant-pro-layout .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn:active,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn:active {
+          color: ${siderFooterToken.colorPrimary} !important;
+        }
         .ant-pro-layout .ant-pro-sider-footer .ant-btn:active .anticon,
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn:active .anticon,
         .ant-pro-layout .ant-pro-sider-footer .ant-btn:active svg,
@@ -3082,6 +3125,37 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-pro-sider-footer > div .ant-btn:active svg,
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn:active svg {
           color: ${siderTextColor} !important;
+        }
+        /* 设置钮图标：跟主题主色（盖过上面「全体侧栏底栏图标 = siderTextColor」） */
+        .ant-pro-layout .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn .anticon,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn .anticon,
+        .ant-pro-layout .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn .anticon,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn .anticon,
+        .ant-pro-layout .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn svg,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn svg,
+        .ant-pro-layout .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn svg,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn svg {
+          color: ${siderFooterToken.colorPrimary} !important;
+        }
+        .ant-pro-layout .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn:hover .anticon,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn:hover .anticon,
+        .ant-pro-layout .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn:hover .anticon,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn:hover .anticon,
+        .ant-pro-layout .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn:hover svg,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn:hover svg,
+        .ant-pro-layout .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn:hover svg,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn:hover svg {
+          color: ${siderFooterToken.colorPrimary} !important;
+        }
+        .ant-pro-layout .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn:active .anticon,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn:active .anticon,
+        .ant-pro-layout .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn:active .anticon,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn:active .anticon,
+        .ant-pro-layout .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn:active svg,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn.riveredge-footer-settings-btn:active svg,
+        .ant-pro-layout .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn:active svg,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn.riveredge-footer-settings-btn:active svg {
+          color: ${siderFooterToken.colorPrimary} !important;
         }
         /* ==================== 左侧菜单栏滚动条样式 ==================== */
         /* 完全隐藏左侧菜单栏滚动条，不占用任何宽度 */
@@ -4081,16 +4155,15 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         layout="mix" // 固定使用 MIX 布局模式
         navTheme={isDarkMode ? "realDark" : "light"}
         collapsedButtonRender={(collapsed) => {
-          // 根据菜单栏文字颜色计算分割线颜色
-          // 如果是浅色文字（深色背景），使用浅色分割线；否则使用深色分割线
-          const isDarkSider = siderTextColor === '#ffffff';
-          const dividerColor = siderTextColor === '#ffffff'
+          const dividerColor = isDarkSiderFooter
             ? 'rgba(255, 255, 255, 0.15)'
-            : (isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.12)');
-          const settingsBtnBg = isDarkSider ? 'rgba(77, 166, 255, 0.26)' : token.colorPrimaryBg;
-          const settingsBtnBorder = isDarkSider ? 'rgba(143, 206, 255, 0.62)' : token.colorPrimaryBorder;
-          const collapseBtnBg = isDarkSider ? 'rgba(255, 255, 255, 0.1)' : '#f5f5f5';
-          const collapseBtnBorder = isDarkSider ? 'rgba(255, 255, 255, 0.28)' : '#d9d9d9';
+            : 'rgba(0, 0, 0, 0.12)';
+          const settingsBtnBg = String(siderFooterToken.colorPrimaryBg);
+          const settingsBtnBorder = String(siderFooterToken.colorPrimaryBorder);
+          const settingsAccentColor = String(siderFooterToken.colorPrimary);
+          const collapseBtnBg = String(siderFooterToken.colorFillSecondary);
+          const collapseBtnBorder = String(siderFooterToken.colorSplit);
+          const collapseChromeColor = siderTextColor;
 
           return (
             <div
@@ -4100,6 +4173,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               }}
             >
               <div
+                className="riveredge-footer-btns"
                 style={{
                   display: 'flex',
                   gap: 8,
@@ -4111,10 +4185,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                     ref={systemSettingsTriggerRef}
                     className="riveredge-footer-settings-btn"
                     type="default"
-                    icon={<AppstoreOutlined style={{ color: siderTextColor }} />}
+                    icon={<AppstoreOutlined style={{ color: settingsAccentColor }} />}
                     onClick={() => setSystemSettingsOpen((prev) => !prev)}
                     style={{
-                      color: siderTextColor,
+                      color: settingsAccentColor,
                       backgroundColor: settingsBtnBg,
                       border: `1px solid ${settingsBtnBorder}`,
                       minHeight: 34,
@@ -4128,10 +4202,16 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                   <Button
                     className="riveredge-footer-collapse-btn"
                     type="default"
-                    icon={collapsed ? <MenuUnfoldOutlined style={{ color: siderTextColor }} /> : <MenuFoldOutlined style={{ color: siderTextColor }} />}
+                    icon={
+                      collapsed ? (
+                        <MenuUnfoldOutlined style={{ color: collapseChromeColor }} />
+                      ) : (
+                        <MenuFoldOutlined style={{ color: collapseChromeColor }} />
+                      )
+                    }
                     onClick={() => handleSetCollapsed(!collapsed)}
                     style={{
-                      color: siderTextColor,
+                      color: collapseChromeColor,
                       backgroundColor: collapseBtnBg,
                       border: `1px solid ${collapseBtnBorder}`,
                       minHeight: 34,
@@ -4157,13 +4237,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         menuRender={isFullscreen ? () => null : undefined}
         // 侧栏顶部固定搜索框：总高 38px，输入框 34px、上下各 2px，胶囊圆角 50%，简短文案，拟物按键提示
         menuExtraRender={isFullscreen || collapsed ? undefined : () => {
-          // 与 collapsedButtonRender 分割线一致：浅色全局主题 + 深色侧栏时不用 --river-divider-color（#d9d9d9 在深色底上过亮）
-          const sidebarSearchBottomBorder =
-            siderTextColor === '#ffffff'
-              ? 'rgba(255, 255, 255, 0.15)'
-              : isDarkMode
-                ? 'rgba(255, 255, 255, 0.08)'
-                : 'rgba(0, 0, 0, 0.12)';
+          // 与侧栏底部分割线一致（深色底栏统一用 isDarkSiderFooter）
+          const sidebarSearchBottomBorder = isDarkSiderFooter
+            ? 'rgba(255, 255, 255, 0.15)'
+            : 'rgba(0, 0, 0, 0.12)';
           return (
           <div
             className="riveredge-sidebar-search-wrapper"
