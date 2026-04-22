@@ -163,7 +163,6 @@ export function useUnifiedMenuData(
               c.path?.startsWith('/infra/operation') ||
               c.path?.startsWith('/infra/tenants') ||
               c.path?.startsWith('/infra/packages') ||
-              c.path?.startsWith('/infra/scripts') ||
               c.path?.startsWith('/infra/scheduled-tasks') ||
               c.path?.startsWith('/infra/admin')
           );
