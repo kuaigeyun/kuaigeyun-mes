@@ -7,7 +7,7 @@
 
 import { ProDescriptions } from '@ant-design/pro-components';
 import { App, Button, Space, Modal, Tabs } from 'antd';
-import { LogoutOutlined, SettingOutlined, UserOutlined } from '@ant-design/icons';
+import { LogoutOutlined, SafetyCertificateOutlined, SettingOutlined, UserOutlined } from '@ant-design/icons';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { MultiTabListPageTemplate } from '../../../components/layout-templates';
@@ -22,6 +22,7 @@ import { useNavigate } from 'react-router-dom';
 import { useGlobalStore } from '../../../stores';
 import { useTranslation } from 'react-i18next';
 import PlatformSettingsPage from './settings';
+import LicenseCenterTab from './license-center';
 // import InfraSuperAdminForm from './form'; // 暂时注释掉，等待后续实现
 
 /**
@@ -109,6 +110,16 @@ export default function InfraSuperAdminPage() {
         </span>
       ),
       children: <PlatformSettingsPage />,
+    },
+    {
+      key: 'license-center',
+      label: (
+        <span>
+          <SafetyCertificateOutlined />
+          {t('pages.infra.admin.tabLicenseCenter', { defaultValue: '许可证中心' })}
+        </span>
+      ),
+      children: <LicenseCenterTab />,
     },
     {
       key: 'admin',

@@ -9,7 +9,7 @@
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormUploadButton } from '@ant-design/pro-components';
 import type { DescriptionsProps } from 'antd';
@@ -63,7 +63,6 @@ import { getPurchaseOrderLifecycle } from '../../../utils/purchaseOrderLifecycle
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { SupplierFormModal } from '../../../../master-data/components/SupplierFormModal';
 import { batchImport } from '../../../../../utils/batchOperations';
-import { usePageMetrics } from '../../../../../hooks/usePageMetrics';
 
 /** 与后端 DocumentStatus / ReviewStatus 及中文存量值对齐，供 UniWorkflowActions 识别 */
 const PO_WORKFLOW_DRAFT_STATUSES = ['草稿', 'draft', 'DRAFT', DocumentStatus.DRAFT];
@@ -117,7 +116,7 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
       content = dayjs(value as string).format('YYYY-MM-DD');
     }
     if (col.render && dataSource != null) {
-      content = col.render(content, dataSource, index, {}, col);
+      content = col.render(content, dataSource, index, {}, col) as React.ReactNode;
     }
     return {
       key: String(col.key ?? col.dataIndex ?? index),
@@ -345,19 +344,58 @@ const PurchaseOrdersPage: React.FC = () => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
   const navigate = useNavigate();
-  const location = useLocation();
   const { message: messageApi } = App.useApp();
   const queryClient = useQueryClient();
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const tableSearchFormRef = useRef<any>(null);
-  const [, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
 
-  const { statCards: pageMetricCards, hasConfig: hasPageMetricConfig } = usePageMetrics();
+  // Modal 相关状态
+  const [modalVisible, setModalVisible] = useState(false);
+  const [isEdit, setIsEdit] = useState(false);
+  const [currentOrder, setCurrentOrder] = useState<PurchaseOrder | null>(null);
+  const formRef = useRef<any>(null);
+  /** 标记是否在保存后自动提交（草稿转正式） */
+  const submitAfterSaveRef = useRef(false);
+
+  // Drawer 相关状态
+  const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
+  const [orderDetail, setOrderDetail] = useState<PurchaseOrderDetail | null>(null);
+  const purchaseOrderTracking = useDocumentTracking(
+    detailDrawerVisible && orderDetail?.id ? 'purchase_order' : undefined,
+    orderDetail?.id
+  );
+
+  // 供应商列表、订单类型、币种
+  const [supplierList, setSupplierList] = useState<any[]>([]);
+  const [suppliersLoading, setSuppliersLoading] = useState(false);
+  const [orderTypeOptions] = useState<Array<{ label: string; value: string }>>([
+    { label: '标准采购', value: '标准采购' },
+    { label: '紧急采购', value: '紧急采购' },
+    { label: '框架协议', value: '框架协议' },
+  ]);
+  const [orderTypeLoading] = useState(false);
+  const [currencyOptions, setCurrencyOptions] = useState<Array<{ label: string; value: string }>>([]);
+  const [currencyLoading, setCurrencyLoading] = useState(false);
+  const [users, setUsers] = useState<User[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+
+  // 审批流程相关状态
+  const [approvalStatus, setApprovalStatus] = useState<ApprovalStatusResponse | null>(null);
+  const [approvalLoading, setApprovalLoading] = useState(false);
+  const [syncModalVisible, setSyncModalVisible] = useState(false);
+  const [supplierCreateVisible, setSupplierCreateVisible] = useState(false);
+
+  // 下推入库 Modal
+  const [pushToReceiptVisible, setPushToReceiptVisible] = useState(false);
+  const [pushToNoticeVisible, setPushToNoticeVisible] = useState(false);
+  const [pushToReturnVisible, setPushToReturnVisible] = useState(false);
+  const [landingCostModalVisible, setLandingCostModalVisible] = useState(false);
+
   const invalidateStatistics = () => {
     queryClient.invalidateQueries({ queryKey: ['purchaseOrderStatistics'] });
-    queryClient.invalidateQueries({ queryKey: ['pageMetrics', location.pathname] });
   };
 
   useEffect(() => {
@@ -421,47 +459,9 @@ const PurchaseOrdersPage: React.FC = () => {
   const { data: statistics } = useQuery({
     queryKey: ['purchaseOrderStatistics'],
     queryFn: getPurchaseOrderStatistics,
-    enabled: !hasPageMetricConfig,
   });
 
-  // Modal 相关状态
-  const [modalVisible, setModalVisible] = useState(false);
-  const [isEdit, setIsEdit] = useState(false);
-  const [currentOrder, setCurrentOrder] = useState<PurchaseOrder | null>(null);
-  const formRef = useRef<any>(null);
-  /** 标记是否在保存后自动提交（草稿转正式） */
-  const submitAfterSaveRef = useRef(false);
-
-  // Drawer 相关状态
-  const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
-  const [orderDetail, setOrderDetail] = useState<PurchaseOrderDetail | null>(null);
-  const purchaseOrderTracking = useDocumentTracking(
-    detailDrawerVisible && orderDetail?.id ? 'purchase_order' : undefined,
-    orderDetail?.id
-  );
-
-  // 供应商列表、订单类型、币种
-  const [supplierList, setSupplierList] = useState<any[]>([]);
-  const [suppliersLoading, setSuppliersLoading] = useState(false);
-  const [orderTypeOptions] = useState<Array<{ label: string; value: string }>>([
-    { label: '标准采购', value: '标准采购' },
-    { label: '紧急采购', value: '紧急采购' },
-    { label: '框架协议', value: '框架协议' },
-  ]);
-  const [orderTypeLoading] = useState(false);
-  const [currencyOptions, setCurrencyOptions] = useState<Array<{ label: string; value: string }>>([]);
-  const [currencyLoading, setCurrencyLoading] = useState(false);
-  const [users, setUsers] = useState<User[]>([]);
-  const [usersLoading, setUsersLoading] = useState(false);
-
-  // 审批流程相关状态
-  const [approvalStatus, setApprovalStatus] = useState<ApprovalStatusResponse | null>(null);
-  const [approvalLoading, setApprovalLoading] = useState(false);
-  const [syncModalVisible, setSyncModalVisible] = useState(false);
-  const [supplierCreateVisible, setSupplierCreateVisible] = useState(false);
-
   // 下推入库 Modal
-  const [pushToReceiptVisible, setPushToReceiptVisible] = useState(false);
   const [feeTypeOptions, setFeeTypeOptions] = useState<any[]>([]);
 
   useEffect(() => {
@@ -516,18 +516,14 @@ const PurchaseOrdersPage: React.FC = () => {
   const [pushToReceiptPreviewLoading, setPushToReceiptPreviewLoading] = useState(false);
   const [pushToReceiptLoading, setPushToReceiptLoading] = useState(false);
 
-  // 下推收货通知 Modal
-  const [pushToNoticeVisible, setPushToNoticeVisible] = useState(false);
+  // 下推收货通知 Modal 相关详情状态
   const [pushToNoticeOrder, setPushToNoticeOrder] = useState<PurchaseOrderDetail | null>(null);
   const [pushToNoticeQuantities, setPushToNoticeQuantities] = useState<Record<number, number>>({});
-  const [pushToReturnVisible, setPushToReturnVisible] = useState(false);
   const [pushToReturnOrder, setPushToReturnOrder] = useState<PurchaseOrderDetail | null>(null);
   const [pushToReturnQuantities, setPushToReturnQuantities] = useState<Record<number, number>>({});
   const [pushToReturnWarehouseId, setPushToReturnWarehouseId] = useState<number | undefined>(undefined);
   const [pushToReturnWarehouseName, setPushToReturnWarehouseName] = useState('');
   const [pushToReturnLoading, setPushToReturnLoading] = useState(false);
-  // 费用分摊 Modal
-  const [landingCostModalVisible, setLandingCostModalVisible] = useState(false);
   const [landingCostOrder, setLandingCostOrder] = useState<PurchaseOrder | null>(null);
 
   /** 列表列顺序：金额/数量/时间在前；生命周期固定倒数第二；操作列最后（与 UI_Standard 一致） */
@@ -1206,7 +1202,7 @@ const PurchaseOrdersPage: React.FC = () => {
         tax_rate: 0,
         required_date: it.required_date || it.requiredDate ? dayjs(it.required_date || it.requiredDate) : undefined,
       }));
-      setTimeout(() => {
+      window.setTimeout(() => {
         formRef.current?.setFieldsValue({
           order_code: detail.order_code,
           supplier_id: detail.supplier_id,
@@ -1411,34 +1407,32 @@ const PurchaseOrdersPage: React.FC = () => {
     {
       title: '订单金额',
       dataIndex: 'total_amount',
-      render: (text) => `¥${formatAmount(text)}`,
+      render: (text: any) => `¥${formatAmount(text)}`,
     },
     {
       title: '税率',
       dataIndex: 'tax_rate',
-      render: (text) => text ? `${text}%` : '-',
+      render: (text: any) => text ? `${text}%` : '-',
     },
     {
       title: '税额',
       dataIndex: 'tax_amount',
-      render: (text) => (text != null && text !== '') ? `¥${formatAmount(text)}` : '-',
+      render: (text: any) => (text != null && text !== '') ? `¥${formatAmount(text)}` : '-',
     },
     {
       title: '含税金额',
       dataIndex: 'net_amount',
-      render: (text) => (text != null && text !== '') ? `¥${formatAmount(text)}` : '-',
+      render: (text: any) => (text != null && text !== '') ? `¥${formatAmount(text)}` : '-',
     },
     {
       title: '备注',
       dataIndex: 'notes',
       span: 3,
-      render: (text) => text || '-',
+      render: (text: any) => text || '-',
     },
   ];
 
-  const statCards: StatCard[] = hasPageMetricConfig
-    ? pageMetricCards
-    : statistics
+  const statCards: StatCard[] = statistics
     ? [
         {
           title: t('app.kuaizhizao.purchase.statArrivalRate'),
@@ -1567,6 +1561,7 @@ const PurchaseOrdersPage: React.FC = () => {
           createButtonText="新建采购订单"
           onCreate={handleCreate}
           enableRowSelection
+          selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
           onDelete={handleBatchDelete}
@@ -1604,13 +1599,13 @@ const PurchaseOrdersPage: React.FC = () => {
                 messageApi.warning('暂无数据可导出');
                 return;
               }
-              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
+              const blob = new window.Blob([window.JSON.stringify(items, null, 2)], { type: 'application/json' });
+              const url = window.URL.createObjectURL(blob);
               const a = document.createElement('a');
               a.href = url;
               a.download = `purchase-orders-${new Date().toISOString().slice(0, 10)}.json`;
               a.click();
-              URL.revokeObjectURL(url);
+              window.URL.revokeObjectURL(url);
               messageApi.success(`已导出 ${items.length} 条记录`);
             } catch (error: any) {
               messageApi.error(error?.message || '导出失败');

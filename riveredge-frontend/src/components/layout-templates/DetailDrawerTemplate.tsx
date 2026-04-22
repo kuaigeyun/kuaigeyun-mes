@@ -20,7 +20,7 @@ import { DRAWER_CONFIG } from './constants';
  */
 export interface DetailDrawerTemplateProps<T = any> {
   /** Drawer 标题 */
-  title: string;
+  title: ReactNode;
   /** 是否显示 */
   open?: boolean;
   /** 是否显示 (兼容旧版本) */

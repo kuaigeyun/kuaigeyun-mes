@@ -13,7 +13,7 @@
 }
 
 /* 确保 Modal 本身紧贴右下方并保留 16px 边距 */
-.ai-qa-modal-bottom-right .ant-modal {
+.ai-qa-modal-bottom-right .ai-qa-panel {
   position: absolute !important;
   top: auto !important;
   left: auto !important;
@@ -21,15 +21,17 @@
   bottom: 14px !important;
   margin: 0 !important;
   padding: 0 !important;
+  width: 480px;
+  max-width: calc(100vw - 28px);
 }
 
-/* 通过 Root Class 强制覆盖内部默认 padding */
-.ai-qa-modal-root .ant-modal-container,
-.ai-qa-modal-root .ant-modal-content {
+/* 面板内容内边距 */
+.ai-qa-modal-bottom-right .ai-qa-panel-container,
+.ai-qa-modal-bottom-right .ai-qa-panel-content {
   padding: 40px 8px 8px 8px !important;
 }
 
-.ai-qa-modal-bottom-right .ant-modal-container {
+.ai-qa-modal-bottom-right .ai-qa-panel-container {
   transform-origin: bottom right !important; /* 强制缩放动画起点为右下角 */
   border-radius: 16px;
   border: 1px solid var(--river-divider-color);
@@ -44,12 +46,12 @@
   overflow: hidden;
 }
 
-.ant-modal-container {
+.ai-qa-modal-bottom-right .ai-qa-panel-container {
   padding: 16px !important;
 }
 /* 同样强制 Ant Design 动画外壳的变换中心 */
-.ai-qa-modal-bottom-right .ant-modal,
-.ai-qa-modal-bottom-right .ant-modal-content {
+.ai-qa-modal-bottom-right .ai-qa-panel,
+.ai-qa-modal-bottom-right .ai-qa-panel-content {
   transform-origin: bottom right !important;
 }
 
@@ -67,12 +69,7 @@
     drop-shadow(0 0 16px rgba(255, 255, 255, 0.25));
 }
 
-/* 无标题时去掉头部占位 */
-.ai-qa-modal-bottom-right .ant-modal-header {
-  display: none;
-}
-
-.ai-qa-modal-bottom-right .ant-modal-body {
+.ai-qa-modal-bottom-right .ai-qa-panel-body {
   padding: 0;
   flex: 1;
   min-height: 0;

@@ -225,6 +225,23 @@ export async function disableApplication(applicationUuid: string): Promise<Appli
 }
 
 /**
+ * 使用 Key 激活 PRO 应用访问权限
+ *
+ * @param applicationUuid - 应用 UUID
+ * @param key - 激活 Key（仅用于校验，服务端不会保存明文）
+ * @returns 激活后的应用信息
+ */
+export async function activateProApplication(
+  applicationUuid: string,
+  licenseKey: string
+): Promise<Application> {
+  return apiRequest<Application>(`/core/applications/${applicationUuid}/activate-pro`, {
+    method: 'POST',
+    data: { license_key: licenseKey },
+  });
+}
+
+/**
  * 扫描插件目录并自动注册插件应用
  *
  * 从 riveredge-apps 目录扫描所有插件的 manifest.json 文件，

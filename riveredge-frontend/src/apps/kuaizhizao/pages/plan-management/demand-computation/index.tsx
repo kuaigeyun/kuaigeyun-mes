@@ -111,7 +111,6 @@ import { listDemands, getDemand, Demand, DemandStatus, ReviewStatus } from '../.
 import { getBusinessConfig } from '../../../../../services/businessConfig'
 import { bomApi } from '../../../../master-data/services/material'
 import { warehouseApi } from '../../../../master-data/services/warehouse'
-import { usePageMetrics } from '../../../../../hooks/usePageMetrics'
 import ComputationHistoryTab from './ComputationHistoryTab'
 import { MrpParametersCustomerGuideTrigger } from './MrpParametersCustomerGuide'
 import { formatDateBySiteSetting, formatDateTimeBySiteSetting } from '../../../../../utils/format'
@@ -577,15 +576,12 @@ const DemandComputationPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null)
   const formRef = useRef<any>(null)
 
-  const { statCards: pageMetricCards, hasConfig: hasPageMetricConfig } = usePageMetrics()
   const invalidateStatistics = () => {
     queryClient.invalidateQueries({ queryKey: ['demandComputationStatistics'] })
-    queryClient.invalidateQueries({ queryKey: ['pageMetrics', location.pathname] })
   }
   const { data: statistics } = useQuery({
     queryKey: ['demandComputationStatistics'],
     queryFn: getDemandComputationStatistics,
-    enabled: !hasPageMetricConfig,
   })
 
   const { data: warehouseRows = [] } = useQuery({
@@ -1287,9 +1283,7 @@ const DemandComputationPage: React.FC = () => {
     },
   ]
 
-  const statCards: StatCard[] = hasPageMetricConfig
-    ? pageMetricCards
-    : statistics
+  const statCards: StatCard[] = statistics
     ? [
         { title: '总计算数', value: statistics.total_count },
         { title: '进行中', value: statistics.pending_count, valueStyle: statistics.pending_count > 0 ? { color: '#faad14' } : undefined },

@@ -14,7 +14,7 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import type { DescriptionsProps } from 'antd';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   ActionType,
   ProColumns,
@@ -40,7 +40,7 @@ import {
   Spin,
   theme as AntdTheme,
 } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
+import { EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
@@ -64,7 +64,6 @@ import {
   DocumentTrackingTimelineBody,
   useDocumentTracking,
 } from '../../../../../components/document-tracking-panel';
-import { usePageMetrics } from '../../../../../hooks/usePageMetrics';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
 import { materialApi } from '../../../../master-data/services/material';
 import { warehouseApi } from '../../../../master-data/services/warehouse';
@@ -107,11 +106,24 @@ interface OutsourceWorkOrder {
   createdAt?: string;
   updatedAt?: string;
   /** 后端 snake_case */
+  tenant_id?: number;
   product_id?: number;
+  product_code?: string;
+  product_name?: string;
   supplier_id?: number;
+  supplier_code?: string;
+  supplier_name?: string;
   outsource_operation?: string;
+  unit_price?: number;
+  total_amount?: number;
   planned_start_date?: string;
   planned_end_date?: string;
+  actual_start_date?: string;
+  actual_end_date?: string;
+  issued_quantity?: number;
+  received_quantity?: number;
+  qualified_quantity?: number;
+  unqualified_quantity?: number;
   updated_at?: string;
 }
 
@@ -182,7 +194,6 @@ const OWO_STAT_SPARK_3 = [3, 4, 5, 6, 5, 7, 8];
 
 export const OutsourceWorkOrdersTable: React.FC = () => {
   const navigate = useNavigate();
-  const location = useLocation();
   const { message: messageApi } = App.useApp();
   const { token } = AntdTheme.useToken();
   const actionRef = useRef<ActionType>(null);
@@ -192,14 +203,11 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
   const [localStats, setLocalStats] = useState({ total: 0, draft: 0, inProgress: 0 });
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
-  const { statCards: pageMetricCards, hasConfig: hasPageMetricConfig } = usePageMetrics(location.pathname);
 
   // 产品列表状态（只显示委外件）
   const [productList, setProductList] = useState<any[]>([]);
   // 供应商列表状态
   const [supplierList, setSupplierList] = useState<any[]>([]);
-  // 仓库列表状态
-  const [warehouseList, setWarehouseList] = useState<any[]>([]);
   const [priorityOptions, setPriorityOptions] = useState<Array<{ label: string; value: string }>>(PRIORITY_FALLBACK);
   const [priorityLoading, setPriorityLoading] = useState(false);
 
@@ -236,10 +244,8 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!hasPageMetricConfig) {
-      void refreshLocalStats();
-    }
-  }, [hasPageMetricConfig, statsVersion, refreshLocalStats]);
+    void refreshLocalStats();
+  }, [statsVersion, refreshLocalStats]);
 
   // 委外发料 Modal 相关状态
   const [issueModalVisible, setIssueModalVisible] = useState(false);
@@ -278,12 +284,8 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         // 加载供应商列表
         const suppliers = await supplierApi.list({ isActive: true });
         setSupplierList(suppliers);
-
-        // 加载仓库列表
-        const warehouses = await warehouseApi.list({ isActive: true });
-        setWarehouseList(Array.isArray(warehouses) ? warehouses : (warehouses as any)?.items ?? []);
       } catch (error) {
-        console.error('获取数据失败:', error);
+        window.console.error('获取数据失败:', error);
         messageApi.error('获取数据失败');
       }
     };
@@ -350,7 +352,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         dataIndex: ['unitPrice', 'unit_price'] as any,
         render: (_, record) => {
           const price = record.unitPrice || record.unit_price;
-          return price != null && price !== '' ? (
+          return price != null ? (
             <AmountDisplay resource="outsource_order" value={Number(price)} />
           ) : (
             '-'
@@ -362,7 +364,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         dataIndex: ['totalAmount', 'total_amount'] as any,
         render: (_, record) => {
           const amount = record.totalAmount || record.total_amount;
-          return amount != null && amount !== '' ? (
+          return amount != null ? (
             <AmountDisplay resource="outsource_order" value={Number(amount)} />
           ) : (
             '-'
@@ -557,7 +559,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       setIsEdit(true);
       setCurrentWorkOrder(detail);
       setModalVisible(true);
-      setTimeout(() => {
+      window.setTimeout(() => {
         formRef.current?.setFieldsValue({
           name: detail.name,
           productId: detail.productId || detail.product_id,
@@ -1135,29 +1137,26 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
     }
   };
 
-  const statCards: StatCard[] =
-    hasPageMetricConfig && pageMetricCards.length > 0
-      ? pageMetricCards
-      : [
-          {
-            title: '工单委外总数',
-            value: localStats.total,
-            valueStyle: { color: token.colorPrimary },
-            backgroundChart: <SimpleSparkline data={OWO_STAT_SPARK_1} color={token.colorPrimary} />,
-          },
-          {
-            title: '草稿',
-            value: localStats.draft,
-            valueStyle: { color: token.colorWarning },
-            backgroundChart: <SimpleSparkline data={OWO_STAT_SPARK_2} color={token.colorWarning} />,
-          },
-          {
-            title: '执行中',
-            value: localStats.inProgress,
-            valueStyle: { color: token.colorSuccess },
-            backgroundChart: <SimpleSparkline data={OWO_STAT_SPARK_3} color={token.colorSuccess} />,
-          },
-        ];
+  const statCards: StatCard[] = [
+    {
+      title: '工单委外总数',
+      value: localStats.total,
+      valueStyle: { color: token.colorPrimary },
+      backgroundChart: <SimpleSparkline data={OWO_STAT_SPARK_1} color={token.colorPrimary} />,
+    },
+    {
+      title: '草稿',
+      value: localStats.draft,
+      valueStyle: { color: token.colorWarning },
+      backgroundChart: <SimpleSparkline data={OWO_STAT_SPARK_2} color={token.colorWarning} />,
+    },
+    {
+      title: '执行中',
+      value: localStats.inProgress,
+      valueStyle: { color: token.colorSuccess },
+      backgroundChart: <SimpleSparkline data={OWO_STAT_SPARK_3} color={token.colorSuccess} />,
+    },
+  ];
 
   return (
     <>

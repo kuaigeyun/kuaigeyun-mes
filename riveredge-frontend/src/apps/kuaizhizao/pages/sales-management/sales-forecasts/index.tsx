@@ -11,13 +11,12 @@ import React, { useRef, useState, useEffect, useCallback } from 'react'
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormInstance, ProFormSelect } from '@ant-design/pro-components'
 import { App, Button, Space, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Typography, Modal, Dropdown, Descriptions } from 'antd'
 import { PlusOutlined, DeleteOutlined, EyeOutlined, EditOutlined, ArrowDownOutlined, ImportOutlined, AppstoreAddOutlined } from '@ant-design/icons'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts'
 import { theme as AntdTheme } from 'antd'
 import { StatCardTrendArea } from '../../../../../components/common/StatCardTrendArea'
-import { usePageMetrics } from '../../../../../hooks/usePageMetrics'
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired'
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DRAWER_CONFIG, type StatCard } from '../../../../../components/layout-templates'
 import { UniTable } from '../../../../../components/uni-table'
@@ -68,15 +67,12 @@ export default function SalesForecastsPage() {
   const [modalVisible, setModalVisible] = useState(false)
   const tableRef = useRef<ActionType>();
   const queryClient = useQueryClient();
-  const location = useLocation();
 
   const invalidateMenuBadge = useInvalidateMenuBadgeCounts();
   const invalidateStatistics = () => {
     queryClient.invalidateQueries({ queryKey: ['salesForecastStatistics'] });
-    queryClient.invalidateQueries({ queryKey: ['pageMetrics', location.pathname] });
   };
 
-  const { statCards: pageMetricCards, hasConfig: hasPageMetricConfig } = usePageMetrics();
   const { data: statistics } = useQuery({
     queryKey: ['salesForecastStatistics'],
     queryFn: () => getSalesForecastStatistics(),
@@ -86,10 +82,7 @@ export default function SalesForecastsPage() {
   const rowKeyToOrderIdRef = useRef<Map<string, number>>(new Map());
 
   const [viewType, setViewType] = useState<'table' | 'detailTable'>('detailTable')
-  /** 视图模式 ref：切换时同步更新，确保 reload 时 request 使用正确模式 */
-  const viewModeRef = useRef<'order' | 'item'>(viewType === 'table' ? 'order' : 'item');
   const viewMode = viewType === 'table' ? 'order' : 'item';
-  viewModeRef.current = viewMode;
 
   /**
    * 将含有 items 的预测单据拍平为明细行，用于“明细视图”
@@ -206,19 +199,6 @@ export default function SalesForecastsPage() {
     [messageApi, t]
   )
 
-  /**
-   * 销售预测明细汇总组件
-   */
-  const SalesForecastFormSummary: React.FC = () => {
-    const items = AntForm.useWatch('items');
-    const totalQuantity = items?.reduce((sum: number, it: any) => sum + (Number(it?.forecast_quantity) || 0), 0) || 0;
-
-    return (
-      <div style={{ marginTop: 12, padding: '12px', background: '#fafafa', borderRadius: '4px', display: 'flex', justifyContent: 'flex-end' }}>
-        <span>{t('app.kuaizhizao.salesForecast.totalQuantity') || '总预测数量'}: <Typography.Text strong>{totalQuantity}</Typography.Text></span>
-      </div>
-    );
-  };
 
   const handleCreate = async () => {
     if (!salesNodesEnabled.sales_forecast) {
@@ -578,14 +558,14 @@ export default function SalesForecastsPage() {
         status: isDraft ? '草稿' : undefined,
       }
       if (isEdit && currentId) {
-        const res = await updateSalesForecast(currentId, { ...basePayload, items })
+        const res = await updateSalesForecast(currentId, { ...basePayload, items: items as any[] })
         const syncTip = t('app.kuaizhizao.salesForecast.syncTip')
         messageApi.success(res?.demand_synced ? `${t('common.updateSuccess')}。${syncTip}` : t('common.updateSuccess'))
       } else {
         await createSalesForecast({
           ...basePayload,
           forecast_code: forecastCode,
-          items,
+          items: items as any[],
         } as SalesForecast)
         messageApi.success(isDraft ? t('app.kuaizhizao.salesForecast.draftSaved') : t('common.createSuccess'))
       }
@@ -892,43 +872,7 @@ export default function SalesForecastsPage() {
     return <StatCardTrendArea data={data} color={chartColor} />;
   };
 
-  const statCards: StatCard[] = hasPageMetricConfig
-    ? pageMetricCards.map((card) => {
-        const key = card.key;
-        const color = (card.valueStyle as { color?: string } | undefined)?.color ?? '#1890ff';
-        if (!key || !statistics) return card;
-        const trendMap: Record<string, { date: string; value: number }[] | undefined> = {
-          today_new_count: statistics.trend_today_new,
-          pending_review_count: statistics.trend_pending_review,
-        };
-        const yesterdayMap: Record<string, number | undefined> = {
-          today_new_count: statistics.yesterday_today_new,
-          pending_review_count: statistics.yesterday_pending_review,
-        };
-        const trend = trendMap[key];
-        const yesterday = yesterdayMap[key];
-        const val = typeof card.value === 'number' ? card.value : 0;
-        let description: React.ReactNode = undefined;
-        if (yesterday !== undefined) {
-          description = (
-            <div>
-              今日: {val} {renderDOD(val, yesterday)}
-            </div>
-          );
-        } else if (key === 'pending_review_count' && val > 0) {
-          description = <div style={{ color: '#faad14' }}>需即时处理</div>;
-        }
-        return {
-          ...card,
-          description,
-          backgroundChart: trend?.length ? renderTrendChart(trend, color) : undefined,
-          onClick: key === 'pending_review_count' && val > 0 ? () => {
-            tableSearchFormRef.current?.setFieldsValue?.({ status: '待审核' });
-            tableRef.current?.reload?.();
-          } : undefined
-        };
-      })
-    : [
+  const statCards: StatCard[] = [
         {
           title: t('app.kuaizhizao.salesForecast.statTodayNew', '今日新增'),
           key: 'today_new_count',
@@ -985,13 +929,12 @@ export default function SalesForecastsPage() {
           defaultViewType="table"
           onViewTypeChange={(v) => {
             setViewType(v as 'table' | 'detailTable');
-            viewModeRef.current = v === 'table' ? 'order' : 'item';
             setTimeout(() => {
               tableRef.current?.reload();
             }, 0);
           }}
           request={async (params) => {
-            const currentMode = viewModeRef.current;
+            const currentMode = viewType === 'table' ? 'order' : 'item';
             const res = await listSalesForecasts({
               ...params,
               include_items: currentMode === 'item' ? 1 : 0,
@@ -1514,3 +1457,19 @@ export default function SalesForecastsPage() {
     </>
   )
 }
+
+/**
+ * 销售预测明细汇总组件
+ */
+const SalesForecastFormSummary: React.FC = () => {
+  const { t } = useTranslation();
+  const items = AntForm.useWatch('items');
+  const totalQuantity = items?.reduce((sum: number, it: any) => sum + (Number(it?.forecast_quantity) || 0), 0) || 0;
+
+  return (
+    <div style={{ marginTop: 12, padding: '12px', background: '#fafafa', borderRadius: '4px', display: 'flex', justifyContent: 'flex-end' }}>
+      <span>{t('app.kuaizhizao.salesForecast.totalQuantity') || '总预测数量'}: <Typography.Text strong>{totalQuantity}</Typography.Text></span>
+    </div>
+  );
+};
+

@@ -1230,27 +1230,37 @@ class SalesOrderService:
             audit_required = True
             logger.info("销售订单 %s 命中价格偏差审批阈值，强制走审批: %s", sales_order_id, force_reason)
         if not audit_required:
-            logger.info("销售订单 %s 蓝图配置为自动审核，提交后直接通过", sales_order_id)
+            logger.info("销售订单 %s 审核流程关闭，提交后直接进入已确认", sales_order_id)
             from apps.base_service import AppBaseService
             submitter_name = await AppBaseService().get_user_name(submitted_by)
             async with in_transaction():
                 await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(
-                    status=DemandStatus.PENDING_REVIEW,
-                    review_status=ReviewStatus.PENDING,
+                    status=DemandStatus.CONFIRMED,
+                    review_status=ReviewStatus.APPROVED,
+                    reviewer_id=submitted_by,
+                    reviewer_name=submitter_name,
+                    review_time=datetime.now(),
                     updated_by=submitted_by,
                 )
                 await self._log_state_transition(
                     tenant_id, sales_order_id,
-                    DemandStatus.DRAFT, DemandStatus.PENDING_REVIEW,
-                    submitted_by, submitter_name, "提交",
+                    DemandStatus.DRAFT, DemandStatus.CONFIRMED,
+                    submitted_by, submitter_name, "提交并自动确认",
                 )
-            return await self.approve_sales_order(tenant_id, sales_order_id, submitted_by, is_auto_approve=True)
+                demand = await self._get_linked_demand(tenant_id, sales_order_id)
+                if not demand:
+                    await self._create_demand_from_sales_order(
+                        tenant_id, sales_order_id, submitted_by
+                    )
+                else:
+                    await self._sync_demand_if_exists(tenant_id, sales_order_id, submitted_by)
+            return await self.get_sales_order_by_id(tenant_id, sales_order_id)
 
         from core.services.approval.approval_instance_service import ApprovalInstanceService
         instance = await ApprovalInstanceService.start_approval(
             tenant_id=tenant_id,
             user_id=submitted_by,
-            process_code="sales_order_approval",
+            process_code="sales_order",
             entity_type="sales_order",
             entity_id=order.id,
             entity_uuid=str(order.uuid),

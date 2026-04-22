@@ -169,7 +169,6 @@ const WORK_ORDER_ROW_EXPAND_QK = 'workOrderRowExpand' as const
 const WORK_ORDER_ROW_EXPAND_STALE_MS = 60_000
 import { getFileDownloadUrl, uploadMultipleFiles } from '../../../../../services/file'
 import { batchImport } from '../../../../../utils/batchOperations'
-import { usePageMetrics } from '../../../../../hooks/usePageMetrics'
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow'
 
 interface WorkOrder {
@@ -340,10 +339,8 @@ const WorkOrdersPage: React.FC = () => {
   const tableSearchFormRef = useRef<any>(null)
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
 
-  const { statCards: pageMetricCards, hasConfig: hasPageMetricConfig } = usePageMetrics()
   const invalidateStatistics = () => {
     queryClient.invalidateQueries({ queryKey: ['workOrderStatistics'] })
-    queryClient.invalidateQueries({ queryKey: ['pageMetrics', location.pathname] })
     queryClient.invalidateQueries({
       queryKey: ['uniTable', 'kuaizhizao', 'work-orders', 'list'],
       exact: false,
@@ -352,7 +349,6 @@ const WorkOrdersPage: React.FC = () => {
   const { data: statistics } = useQuery({
     queryKey: ['workOrderStatistics'],
     queryFn: getWorkOrderStatistics,
-    enabled: !hasPageMetricConfig,
     staleTime: 30_000, // 30 秒内不重复请求统计接口
   })
   const { data: executionConfig } = useQuery({
@@ -383,7 +379,7 @@ const WorkOrdersPage: React.FC = () => {
           searchFormValues
         )
       } catch (error) {
-        console.error('获取工单列表失败:', error)
+      window.console.error('获取工单列表失败:', error)
         messageApi.error('获取工单列表失败')
         return {
           data: [],
@@ -405,6 +401,17 @@ const WorkOrdersPage: React.FC = () => {
   const [operationList, setOperationList] = useState<any[]>([])
   // 工艺路线列表状态
   const [processRouteList, setProcessRouteList] = useState<any[]>([])
+  
+  const [workerList, setWorkerList] = useState<any[]>([])
+  const [teamList, setTeamList] = useState<any[]>([])
+  const [stationList, setStationList] = useState<any[]>([])
+  const [equipmentList, setEquipmentList] = useState<any[]>([])
+  const [moldList, setMoldList] = useState<any[]>([])
+  const [toolList, setToolList] = useState<any[]>([])
+  const [workshopList, setWorkshopList] = useState<any[]>([])
+  const [workCenterList, setWorkCenterList] = useState<any[]>([])
+  const [personnelOptions, setPersonnelOptions] = useState<any[]>([])
+  const [resourceOptions, setResourceOptions] = useState<any[]>([])
   // 选中的工序列表（用于创建工单时）
   const [selectedOperations, setSelectedOperations] = useState<any[]>([])
   // 当前选中产品的物料来源信息
@@ -414,6 +421,41 @@ const WorkOrdersPage: React.FC = () => {
     validationErrors?: string[]
     canCreateWorkOrder?: boolean
   } | null>(null)
+
+  /** 根据物料加载其绑定的工艺路线并填充工序 */
+  const loadProcessRouteForMaterial = useCallback(async (materialUuid: string) => {
+    try {
+      const route = await processRouteApi.getProcessRouteForMaterial(materialUuid)
+      if (!route) {
+        formRef.current?.setFieldsValue({ process_route_id: undefined })
+        setSelectedOperations([])
+        formRef.current?.setFieldsValue({ operations: undefined })
+        return
+      }
+      const routeDetail = await processRouteApi.get(route.uuid)
+      const routeJump =
+        (routeDetail as any)?.allow_operation_jump ?? (routeDetail as any)?.allowOperationJump ?? false
+      formRef.current?.setFieldsValue({
+        process_route_id: route.id,
+        allow_operation_jump: routeJump,
+      })
+      const operations = parseOperationSequence(routeDetail?.operation_sequence, operationList)
+      if (operations.length > 0) {
+        setSelectedOperations(operations)
+        formRef.current?.setFieldsValue({
+          operations: operations.map((o: any) => o.operation_id),
+        })
+        messageApi.success(`已加载工艺路线及 ${operations.length} 个工序`)
+      } else {
+        setSelectedOperations([])
+        formRef.current?.setFieldsValue({ operations: undefined })
+      }
+    } catch (e: any) {
+      console.warn('加载工艺路线失败:', e)
+      formRef.current?.setFieldsValue({ process_route_id: undefined, operations: undefined })
+      setSelectedOperations([])
+    }
+  }, [operationList, messageApi])
   // 只显示自制件
   const [onlyShowMake, setOnlyShowMake] = useState(false)
   // 从文档加载的产品列表（销售订单/销售预测/需求）
@@ -717,16 +759,6 @@ const WorkOrdersPage: React.FC = () => {
   const [currentWorkOrderForDispatch, setCurrentWorkOrderForDispatch] = useState<WorkOrder | null>(
     null
   )
-  const [workerList, setWorkerList] = useState<any[]>([])
-  const [teamList, setTeamList] = useState<any[]>([])
-  const [stationList, setStationList] = useState<any[]>([])
-  const [equipmentList, setEquipmentList] = useState<any[]>([])
-  const [moldList, setMoldList] = useState<any[]>([])
-  const [toolList, setToolList] = useState<any[]>([])
-  const [workshopList, setWorkshopList] = useState<any[]>([])
-  const [workCenterList, setWorkCenterList] = useState<any[]>([])
-  const [personnelOptions, setPersonnelOptions] = useState<any[]>([])
-  const [resourceOptions, setResourceOptions] = useState<any[]>([])
   const [dispatchPickListsLoading, setDispatchPickListsLoading] = useState(false)
   const dispatchFormRef = useRef<any>(null)
 
@@ -1016,40 +1048,6 @@ const WorkOrdersPage: React.FC = () => {
     return result.map((r, i) => ({ ...r, sequence: i + 1 }))
   }
 
-  /** 根据物料加载其绑定的工艺路线并填充工序 */
-  const loadProcessRouteForMaterial = async (materialUuid: string) => {
-    try {
-      const route = await processRouteApi.getProcessRouteForMaterial(materialUuid)
-      if (!route) {
-        formRef.current?.setFieldsValue({ process_route_id: undefined })
-        setSelectedOperations([])
-        formRef.current?.setFieldsValue({ operations: undefined })
-        return
-      }
-      const routeDetail = await processRouteApi.get(route.uuid)
-      const routeJump =
-        (routeDetail as any)?.allow_operation_jump ?? (routeDetail as any)?.allowOperationJump ?? false
-      formRef.current?.setFieldsValue({
-        process_route_id: route.id,
-        allow_operation_jump: routeJump,
-      })
-      const operations = parseOperationSequence(routeDetail?.operation_sequence, operationList)
-      if (operations.length > 0) {
-        setSelectedOperations(operations)
-        formRef.current?.setFieldsValue({
-          operations: operations.map((o: any) => o.operation_id),
-        })
-        messageApi.success(`已加载工艺路线及 ${operations.length} 个工序`)
-      } else {
-        setSelectedOperations([])
-        formRef.current?.setFieldsValue({ operations: undefined })
-      }
-    } catch (e: any) {
-      console.warn('加载工艺路线失败:', e)
-      formRef.current?.setFieldsValue({ process_route_id: undefined, operations: undefined })
-      setSelectedOperations([])
-    }
-  }
 
   /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号 */
   const handleCreate = () => {
@@ -1227,7 +1225,7 @@ const WorkOrdersPage: React.FC = () => {
     setCurrentWorkOrderForDispatch(workOrder)
     setDispatchModalVisible(true)
     // 如果已有派工信息，设置初始值
-    setTimeout(() => {
+    window.setTimeout(() => {
       if (dispatchFormRef.current) {
         const combinedPersonnelValues: string[] = [];
         if (operation.assigned_worker_id) combinedPersonnelValues.push(`U_${operation.assigned_worker_id}`);
@@ -3867,6 +3865,17 @@ const WorkOrdersPage: React.FC = () => {
             详情
           </Button>,
         ]
+        parts.push(
+          <Button
+            key="edit"
+            type="link"
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => handleEdit(record)}
+          >
+            编辑
+          </Button>
+        )
         if (isDraft) {
           parts.push(
             <Button
@@ -3877,18 +3886,6 @@ const WorkOrdersPage: React.FC = () => {
               onClick={() => handleRelease(record)}
             >
               下达
-            </Button>
-          )
-        } else {
-          parts.push(
-            <Button
-              key="edit"
-              type="link"
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => handleEdit(record)}
-            >
-              编辑
             </Button>
           )
         }
@@ -3993,35 +3990,35 @@ const WorkOrdersPage: React.FC = () => {
             </Button>
           )
         }
-        if (canDelete) {
-          parts.push(
-            <Button
-              key="delete"
-              type="link"
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={() => {
-                Modal.confirm({
-                  title: '确定要删除吗？',
-                  content: '删除后无法恢复',
-                  onOk: async () => {
-                    try {
-                      await workOrderApi.delete(record.id!.toString())
-                      messageApi.success('删除成功')
-                      invalidateStatistics()
-                      actionRef.current?.reload()
-                    } catch (error: any) {
-                      messageApi.error(error.message || '删除失败')
-                    }
-                  },
-                })
-              }}
-            >
-              删除
-            </Button>
-          )
-        }
+        parts.push(
+          <Button
+            key="delete"
+            type="link"
+            size="small"
+            danger
+            disabled={!canDelete}
+            icon={<DeleteOutlined />}
+            onClick={() => {
+              if (!canDelete) return
+              Modal.confirm({
+                title: '确定要删除吗？',
+                content: '删除后无法恢复',
+                onOk: async () => {
+                  try {
+                    await workOrderApi.delete(record.id!.toString())
+                    messageApi.success('删除成功')
+                    invalidateStatistics()
+                    actionRef.current?.reload()
+                  } catch (error: any) {
+                    messageApi.error(error.message || '删除失败')
+                  }
+                },
+              })
+            }}
+          >
+            删除
+          </Button>
+        )
 
         return renderRowActionsOverflow(parts, `wo-${rowKey}`)
       },
@@ -4052,28 +4049,7 @@ const WorkOrdersPage: React.FC = () => {
     )
   }
 
-  const statCards: StatCard[] = hasPageMetricConfig
-    ? pageMetricCards.map((card) => {
-        if (!statistics) return card
-        const title = String(card.title || '')
-        if (title.includes('工单总数')) {
-          return { ...card, value: statistics.total_count ?? 0 }
-        }
-        if (title.includes('运行工单') || title.includes('进行中工单') || title.includes('在制工单')) {
-          return { ...card, value: statistics.in_progress_count ?? 0 }
-        }
-        if (title.includes('工单完成率')) {
-          return { ...card, value: statistics.completion_rate ?? 0, suffix: '%' }
-        }
-        if (title.includes('完工数量') || title.includes('今日完工')) {
-          return { ...card, value: statistics.completed_today_count ?? 0 }
-        }
-        if (title.includes('产线达成率') || title.includes('计划达成率')) {
-          return { ...card, value: statistics.plan_achievement_rate ?? 0, suffix: '%' }
-        }
-        return card
-      })
-    : statistics
+  const statCards: StatCard[] = statistics
     ? [
         {
           title: t('app.kuaizhizao.workOrder.statOverdue'),
@@ -4255,13 +4231,13 @@ const WorkOrdersPage: React.FC = () => {
                 messageApi.warning('暂无数据可导出')
                 return
               }
-              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' })
-              const url = URL.createObjectURL(blob)
+              const blob = new window.Blob([window.JSON.stringify(items, null, 2)], { type: 'application/json' })
+              const url = window.URL.createObjectURL(blob)
               const a = document.createElement('a')
               a.href = url
               a.download = `work-orders-${new Date().toISOString().slice(0, 10)}.json`
               a.click()
-              URL.revokeObjectURL(url)
+              window.URL.revokeObjectURL(url)
               messageApi.success(`已导出 ${items.length} 条记录`)
             } catch (error: any) {
               messageApi.error(error?.message || '导出失败')

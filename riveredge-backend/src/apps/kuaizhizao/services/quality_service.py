@@ -54,6 +54,19 @@ async def _is_finished_inspection_enabled(tenant_id: int) -> bool:
     return bool(quality.get("finished_inspection", False))
 
 
+async def _is_quality_audit_required(tenant_id: int, stage_code: str) -> bool:
+    """
+    质检审核开关：优先读取分阶段开关，未配置时回退到总开关 quality_inspection。
+    """
+    from infra.services.business_config_service import BusinessConfigService
+
+    config_service = BusinessConfigService()
+    stage_required = await config_service.check_audit_required(tenant_id, stage_code)
+    if stage_required:
+        return True
+    return await config_service.check_audit_required(tenant_id, "quality_inspection")
+
+
 async def _require_iqc_stage_enabled(tenant_id: int) -> None:
     """组织级 IQC 总开关（TenantConfig）；关闭时禁止创建/下推来料检。"""
     t = await get_quality_inspection_stage_toggles(tenant_id)
@@ -112,10 +125,8 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
 
             create_data = inspection_data.model_dump(exclude_unset=True, exclude={'created_by'})
             # 检查业务配置：若无需审核，则创建时直接设为已审核（考虑中小企业实情）
-            from infra.services.business_config_service import BusinessConfigService
             from apps.kuaizhizao.constants import ReviewStatus
-            config_service = BusinessConfigService()
-            audit_required = await config_service.check_audit_required(tenant_id, "quality_inspection")
+            audit_required = await _is_quality_audit_required(tenant_id, "incoming_inspection")
             if not audit_required:
                 create_data["review_status"] = ReviewStatus.APPROVED
 
@@ -679,10 +690,8 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
             code = await self.generate_code(tenant_id, "PROCESS_INSPECTION_CODE", prefix=f"PQ{today}")
 
             create_data = inspection_data.model_dump(exclude_unset=True, exclude={'created_by'})
-            from infra.services.business_config_service import BusinessConfigService
             from apps.kuaizhizao.constants import ReviewStatus
-            config_service = BusinessConfigService()
-            audit_required = await config_service.check_audit_required(tenant_id, "quality_inspection")
+            audit_required = await _is_quality_audit_required(tenant_id, "process_inspection")
             if not audit_required:
                 create_data["review_status"] = ReviewStatus.APPROVED
 
@@ -1194,10 +1203,8 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
             code = await self.generate_code(tenant_id, "FINISHED_GOODS_INSPECTION_CODE", prefix=f"FQ{today}")
 
             create_data = inspection_data.model_dump(exclude_unset=True, exclude={'created_by'})
-            from infra.services.business_config_service import BusinessConfigService
             from apps.kuaizhizao.constants import ReviewStatus
-            config_service = BusinessConfigService()
-            audit_required = await config_service.check_audit_required(tenant_id, "quality_inspection")
+            audit_required = await _is_quality_audit_required(tenant_id, "finished_goods_inspection")
             if not audit_required:
                 create_data["review_status"] = ReviewStatus.APPROVED
 

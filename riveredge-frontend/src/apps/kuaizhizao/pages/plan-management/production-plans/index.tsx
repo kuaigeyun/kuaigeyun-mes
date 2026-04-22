@@ -35,7 +35,6 @@ import {
   MODAL_CONFIG,
   type StatCard,
 } from '../../../../../components/layout-templates';
-import { usePageMetrics } from '../../../../../hooks/usePageMetrics';
 import { planningApi } from '../../../services/production';
 import { getProductionPlanLifecycle } from '../../../utils/productionPlanLifecycle';
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
@@ -135,11 +134,8 @@ const ProductionPlansPage: React.FC = () => {
     load();
   }, []);
 
-  const { statCards: pageMetricCards, hasConfig: hasPageMetricConfig } = usePageMetrics(location.pathname);
-
   const invalidatePlanStatistics = () => {
     queryClient.invalidateQueries({ queryKey: ['productionPlanStatistics'] });
-    queryClient.invalidateQueries({ queryKey: ['pageMetrics', location.pathname] });
   };
 
   const { data: planStatistics } = useQuery({
@@ -155,9 +151,6 @@ const ProductionPlansPage: React.FC = () => {
   });
 
   const statCards: StatCard[] = useMemo(() => {
-    if (hasPageMetricConfig && pageMetricCards.length > 0) {
-      return pageMetricCards;
-    }
     const s = planStatistics;
     return [
       {
@@ -185,7 +178,7 @@ const ProductionPlansPage: React.FC = () => {
         valueStyle: { color: '#ff4d4f' },
       },
     ];
-  }, [hasPageMetricConfig, pageMetricCards, planStatistics]);
+  }, [planStatistics]);
 
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState<boolean>(false);

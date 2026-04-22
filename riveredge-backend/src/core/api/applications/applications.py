@@ -4,13 +4,18 @@
 提供应用的 CRUD 操作和安装/卸载功能。
 """
 
-from typing import Optional, List
+from typing import Optional, List, Dict, Any, Set
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+import hashlib
+import hmac
+import os
+from datetime import datetime, timezone
 
 from core.schemas.application import (
     ApplicationCreate,
     ApplicationUpdate,
     ApplicationResponse,
+    ProActivationRequest,
 )
 from core.services.application.application_service import ApplicationService
 from core.services.application.application_registry_service import ApplicationRegistryService
@@ -18,20 +23,115 @@ from core.services.application.application_route_manager import get_route_manage
 import json
 from pathlib import Path
 from core.api.deps.deps import get_current_tenant
+from core.schemas.system_parameter import SystemParameterCreate, SystemParameterUpdate
+from core.services.system.system_parameter_service import SystemParameterService
+from infra.services.license_center_service import LicenseCenterService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.tenant import Tenant
 from infra.domain.package_config import can_use_pro_apps
 from loguru import logger
 
 router = APIRouter(prefix="/applications", tags=["Applications"])
+PRO_ACTIVATION_REGISTRY_KEY = "pro_app_activation_registry"
 
 
-def _enrich_app_with_pro_info(app: dict, allow_pro_apps: bool) -> dict:
+async def _load_pro_activation_registry(tenant_id: int) -> Dict[str, Any]:
+    parameter = await SystemParameterService.get_parameter(
+        tenant_id=tenant_id,
+        key=PRO_ACTIVATION_REGISTRY_KEY,
+        use_cache=True,
+    )
+    if not parameter:
+        return {"version": 1, "apps": {}}
+    value = parameter.get_value()
+    if isinstance(value, dict):
+        apps = value.get("apps")
+        if isinstance(apps, dict):
+            return {"version": int(value.get("version", 1)), "apps": apps}
+    return {"version": 1, "apps": {}}
+
+
+async def _save_pro_activation_registry(tenant_id: int, registry: Dict[str, Any]) -> None:
+    existing = await SystemParameterService.get_parameter(
+        tenant_id=tenant_id,
+        key=PRO_ACTIVATION_REGISTRY_KEY,
+        use_cache=False,
+    )
+    if existing:
+        await SystemParameterService.update_parameter(
+            tenant_id=tenant_id,
+            uuid=str(existing.uuid),
+            data=SystemParameterUpdate(value=registry),
+        )
+        return
+    await SystemParameterService.create_parameter(
+        tenant_id=tenant_id,
+        data=SystemParameterCreate(
+            key=PRO_ACTIVATION_REGISTRY_KEY,
+            value=registry,
+            type="json",
+            description="PRO 应用 Key 激活注册表（仅存摘要）",
+            is_system=True,
+            is_active=True,
+        ),
+    )
+
+
+async def _get_activated_pro_codes(tenant_id: int) -> Set[str]:
+    registry = await _load_pro_activation_registry(tenant_id)
+    return set((registry.get("apps") or {}).keys())
+
+
+def _parse_pro_key_map_from_env() -> Dict[str, List[str]]:
+    raw = os.getenv("RIVEREDGE_PRO_APP_KEYS", "").strip()
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+        if isinstance(parsed, dict):
+            output: Dict[str, List[str]] = {}
+            for app_code, keys in parsed.items():
+                if isinstance(keys, list):
+                    output[str(app_code)] = [str(item).strip() for item in keys if str(item).strip()]
+                elif isinstance(keys, str) and keys.strip():
+                    output[str(app_code)] = [keys.strip()]
+            return output
+    except json.JSONDecodeError:
+        pass
+    wildcard_keys = [item.strip() for item in raw.split(",") if item.strip()]
+    return {"*": wildcard_keys}
+
+
+def _is_valid_pro_key(app_code: str, key: str) -> bool:
+    key_map = _parse_pro_key_map_from_env()
+    if not key_map:
+        return False
+    candidates = key_map.get(app_code, []) + key_map.get("*", [])
+    cleaned_key = key.strip()
+    return any(hmac.compare_digest(cleaned_key, candidate) for candidate in candidates)
+
+
+async def _is_valid_license_key(app_code: str, license_key: str) -> bool:
+    # 优先校验平台级许可证中心，其次兼容环境变量白名单
+    if await LicenseCenterService.verify_license_key(app_code=app_code, license_key=license_key):
+        return True
+    return _is_valid_pro_key(app_code, license_key)
+
+
+def _build_key_digest(tenant_id: int, app_code: str, key: str) -> str:
+    salt = os.getenv("RIVEREDGE_PRO_KEY_DIGEST_SALT", "riveredge-pro-key-salt")
+    payload = f"{tenant_id}:{app_code}:{key.strip()}:{salt}"
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _enrich_app_with_pro_info(app: dict, activated_codes: Set[str]) -> dict:
     """从 manifest 读取 is_pro，并计算 can_access，注入到 app_data。"""
     code = app.get('code')
     manifest = ApplicationService._get_manifest_by_code(code) if code else None
     is_pro = bool(manifest.get('is_pro', False)) if manifest else False
-    can_access = not is_pro or allow_pro_apps
+    has_key_access = bool(code and code in activated_codes)
+    # 产品规则：PRO 应用必须先完成 License Key 激活；套餐权限不再作为绕过条件
+    can_access = not is_pro or has_key_access
     return {'is_pro': is_pro, 'can_access': can_access}
 
 
@@ -102,6 +202,7 @@ async def list_applications(
     # 获取租户套餐是否允许 PRO 应用
     tenant = await Tenant.get_or_none(id=tenant_id)
     allow_pro_apps = can_use_pro_apps(tenant.plan) if tenant else False
+    activated_codes = await _get_activated_pro_codes(tenant_id)
 
     # 安全构造响应对象，避免传递多余字段
     result = []
@@ -115,7 +216,7 @@ async def list_applications(
                 except (json.JSONDecodeError, TypeError):
                     app['menu_config'] = None
 
-            pro_info = _enrich_app_with_pro_info(app, allow_pro_apps)
+            pro_info = _enrich_app_with_pro_info(app, activated_codes)
             # 只保留 ApplicationResponse 需要的字段，避免传递多余字段
             # is_custom_name/is_custom_sort 使用 .get 兼容数据库未执行迁移 127 的环境
             app_data = {
@@ -174,6 +275,7 @@ async def list_installed_applications(
     # 获取租户套餐是否允许 PRO 应用
     tenant = await Tenant.get_or_none(id=tenant_id)
     allow_pro_apps = can_use_pro_apps(tenant.plan) if tenant else False
+    activated_codes = await _get_activated_pro_codes(tenant_id)
 
     # 安全构造响应对象，避免传递多余字段
     result = []
@@ -187,7 +289,7 @@ async def list_installed_applications(
                 except (json.JSONDecodeError, TypeError):
                     app['menu_config'] = None
 
-            pro_info = _enrich_app_with_pro_info(app, allow_pro_apps)
+            pro_info = _enrich_app_with_pro_info(app, activated_codes)
             # 只保留 ApplicationResponse 需要的字段，避免传递多余字段
             # is_custom_name/is_custom_sort 使用 .get 兼容数据库未执行迁移 127 的环境
             app_data = {
@@ -251,7 +353,11 @@ async def get_application(
             tenant_id=tenant_id,
             uuid=uuid
         )
-        return ApplicationResponse.model_validate(application)
+        tenant = await Tenant.get_or_none(id=tenant_id)
+        allow_pro_apps = can_use_pro_apps(tenant.plan) if tenant else False
+        activated_codes = await _get_activated_pro_codes(tenant_id)
+        pro_info = _enrich_app_with_pro_info(application, activated_codes)
+        return ApplicationResponse.model_validate({**application, **pro_info})
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -345,6 +451,20 @@ async def enable_application(
         HTTPException: 当应用不存在时抛出
     """
     try:
+        app_detail = await ApplicationService.get_application_by_uuid(
+            tenant_id=tenant_id,
+            uuid=uuid,
+        )
+        tenant = await Tenant.get_or_none(id=tenant_id)
+        allow_pro_apps = can_use_pro_apps(tenant.plan) if tenant else False
+        activated_codes = await _get_activated_pro_codes(tenant_id)
+        pro_info = _enrich_app_with_pro_info(app_detail, activated_codes)
+        if pro_info.get("is_pro") and not pro_info.get("can_access"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="PRO 应用未激活，请先输入有效 License Key。",
+            )
+
         application = await ApplicationService.enable_application(
             tenant_id=tenant_id,
             uuid=uuid
@@ -361,7 +481,7 @@ async def enable_application(
             import logging
             logging.warning(f"应用路由注册失败（不影响应用启用）: {route_error}")
         
-        return ApplicationResponse.model_validate(application)
+        return ApplicationResponse.model_validate({**application, **pro_info})
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -372,6 +492,56 @@ async def enable_application(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"启用应用失败: {str(e)}"
         )
+
+
+@router.post("/{uuid}/activate-pro", response_model=ApplicationResponse)
+async def activate_pro_application(
+    uuid: str,
+    payload: ProActivationRequest,
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """激活 PRO 应用访问权限（仅存许可证摘要，不保存明文）。"""
+    key = (payload.license_key or "").strip()
+    if len(key) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="License Key 格式不合法，请检查后重试。",
+        )
+    app = await ApplicationService.get_application_by_uuid(tenant_id=tenant_id, uuid=uuid)
+    app_code = app.get("code")
+    manifest = ApplicationService._get_manifest_by_code(app_code) if app_code else None
+    is_pro = bool(manifest.get("is_pro", False)) if manifest else False
+    if not is_pro:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="当前应用不是 PRO 应用，无需输入 License Key。",
+        )
+    # 平台许可证中心：成功时会做激活配额占用，避免一个 Key 被多人重复滥用
+    consumed = await LicenseCenterService.consume_license_key(
+        app_code=app_code,
+        license_key=key,
+        tenant_id=tenant_id,
+    )
+    if not consumed and not _is_valid_pro_key(app_code, key):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="License Key 无效或已超过可激活次数，请联系平台管理员确认授权信息。",
+        )
+
+    registry = await _load_pro_activation_registry(tenant_id)
+    apps_registry = registry.setdefault("apps", {})
+    apps_registry[app_code] = {
+        "digest": _build_key_digest(tenant_id, app_code, key),
+        "last4": key[-4:],
+        "activated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await _save_pro_activation_registry(tenant_id, registry)
+
+    tenant = await Tenant.get_or_none(id=tenant_id)
+    allow_pro_apps = can_use_pro_apps(tenant.plan) if tenant else False
+    activated_codes = await _get_activated_pro_codes(tenant_id)
+    pro_info = _enrich_app_with_pro_info(app, activated_codes)
+    return ApplicationResponse.model_validate({**app, **pro_info})
 
 
 @router.post("/{uuid}/disable", response_model=ApplicationResponse)

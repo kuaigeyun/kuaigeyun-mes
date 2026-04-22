@@ -445,7 +445,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             req.review_status = ReviewStatus.PENDING.value
             # TODO: 接入真正的工作流引擎
         else:
-            req.status = DocumentStatus.AUDITED.value
+            req.status = DocumentStatus.CONFIRMED.value
             req.review_status = ReviewStatus.APPROVED.value
             
         req.updated_by = submitted_by
@@ -509,6 +509,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         normalized = normalize_status(req.status)
         if normalized not in (
             DocumentStatus.AUDITED.value,
+            DocumentStatus.CONFIRMED.value,
             DocumentStatus.PARTIAL_CONVERTED.value,
             DocumentStatus.FULL_CONVERTED.value,
         ):
@@ -575,7 +576,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
 
 
         normalized = normalize_status(req.status)
-        if normalized not in (DocumentStatus.AUDITED.value, DocumentStatus.PARTIAL_CONVERTED.value):
+        if normalized not in (DocumentStatus.AUDITED.value, DocumentStatus.CONFIRMED.value, DocumentStatus.PARTIAL_CONVERTED.value):
             raise BusinessLogicError("只有已通过或部分转单状态的采购申请可转单")
 
         items = await PurchaseRequisitionItem.filter(

@@ -494,16 +494,31 @@ class BusinessConfigService:
         },
     }
     PRO_PLANS = ["professional", "enterprise"]
+    # 默认按单据类型独立开关；流程设置启用后才进入人工审核
     AUDIT_NODE_KEYS = [
         "demand",
         "sales_forecast",
         "sales_order",
-        "production_plan",
         "quotation",
-        "quality_inspection",
-        "sales_delivery",
-        "purchase_order",
+        "production_plan",
         "purchase_request",
+        "purchase_order",
+        "reporting_record",
+        "quality_inspection",
+        "incoming_inspection",
+        "process_inspection",
+        "finished_goods_inspection",
+        "sales_delivery",
+        "purchase_receipt",
+        "finished_goods_receipt",
+        "other_inbound",
+        "other_outbound",
+        "production_picking",
+        "production_return",
+        "material_borrow",
+        "material_return",
+        "sales_return",
+        "purchase_return",
     ]
 
     # ========================================================

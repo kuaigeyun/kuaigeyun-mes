@@ -496,7 +496,7 @@ class DemandService(AppBaseService[Demand]):
                     instance = await ApprovalInstanceService.start_approval(
                         tenant_id=tenant_id,
                         user_id=submitted_by,
-                        process_code="demand_approval",
+                        process_code="demand",
                         entity_type="demand",
                         entity_id=demand_id,
                         entity_uuid=str(demand.uuid),
@@ -516,7 +516,12 @@ class DemandService(AppBaseService[Demand]):
                 )
 
         if not audit_required:
-            return await self.approve_demand(tenant_id, demand_id, submitted_by)
+            return await self.approve_demand(
+                tenant_id,
+                demand_id,
+                submitted_by,
+                target_confirmed=True,
+            )
 
         return await self.get_demand_by_id(tenant_id, demand_id)
 
@@ -525,7 +530,8 @@ class DemandService(AppBaseService[Demand]):
         tenant_id: int, 
         demand_id: int, 
         approved_by: int, 
-        rejection_reason: Optional[str] = None
+        rejection_reason: Optional[str] = None,
+        target_confirmed: bool = False,
     ) -> DemandResponse:
         """
         审核需求
@@ -577,17 +583,21 @@ class DemandService(AppBaseService[Demand]):
                         status = DemandStatus.REJECTED
                     elif result.get("flow_completed"):
                         review_status = ReviewStatus.APPROVED
-                        status = DemandStatus.AUDITED
+                        status = DemandStatus.CONFIRMED if target_confirmed else DemandStatus.AUDITED
                     else:
                         review_status = ReviewStatus.PENDING
                         status = DemandStatus.PENDING_REVIEW
                 else:
                     review_status = ReviewStatus.REJECTED if rejection_reason else ReviewStatus.APPROVED
-                    status = DemandStatus.REJECTED if rejection_reason else DemandStatus.AUDITED
+                    status = DemandStatus.REJECTED if rejection_reason else (
+                        DemandStatus.CONFIRMED if target_confirmed else DemandStatus.AUDITED
+                    )
             except Exception as e:
                 logger.warning(f"使用审批服务失败: {e}，回退到简单审核模式")
                 review_status = ReviewStatus.REJECTED if rejection_reason else ReviewStatus.APPROVED
-                status = DemandStatus.REJECTED if rejection_reason else DemandStatus.AUDITED
+                status = DemandStatus.REJECTED if rejection_reason else (
+                    DemandStatus.CONFIRMED if target_confirmed else DemandStatus.AUDITED
+                )
             
             # 使用状态流转服务更新状态
             try:
@@ -759,7 +769,7 @@ class DemandService(AppBaseService[Demand]):
             if not demand:
                 raise NotFoundError("需求", str(demand_id))
 
-            if demand.status not in (DemandStatus.AUDITED,) + LEGACY_AUDITED_VALUES:
+            if demand.status not in (DemandStatus.AUDITED, DemandStatus.CONFIRMED) + LEGACY_AUDITED_VALUES:
                 raise BusinessLogicError(f"只能撤回已审核状态的需求计算，当前状态: {demand.status}")
 
             if not demand.pushed_to_computation:
@@ -878,7 +888,7 @@ class DemandService(AppBaseService[Demand]):
                 raise NotFoundError("需求", str(demand_id))
             
             # 只能撤销审核已审核或已驳回状态的需求
-            if demand.status not in [DemandStatus.AUDITED, DemandStatus.REJECTED]:
+            if demand.status not in [DemandStatus.AUDITED, DemandStatus.CONFIRMED, DemandStatus.REJECTED]:
                 raise BusinessLogicError(f"只能撤销审核已审核或已驳回状态的需求，当前状态: {demand.status}")
 
             # 若已下推计算，先尝试撤回计算（无下游时自动撤回）
@@ -1694,8 +1704,8 @@ class DemandService(AppBaseService[Demand]):
         if not demand:
             raise NotFoundError("需求", str(demand_id))
 
-        if demand.status != DemandStatus.AUDITED:
-            raise ValidationError(f"只能下推已审核的需求，当前状态：{demand.status}")
+        if demand.status not in (DemandStatus.AUDITED, DemandStatus.CONFIRMED):
+            raise ValidationError(f"只能下推已审核/已确认的需求，当前状态：{demand.status}")
 
         if demand.review_status != ReviewStatus.APPROVED:
             raise ValidationError(f"只能下推审核通过的需求，当前审核状态：{demand.review_status}")

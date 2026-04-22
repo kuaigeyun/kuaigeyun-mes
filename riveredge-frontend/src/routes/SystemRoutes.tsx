@@ -108,8 +108,8 @@ const PluginManagerPage = React.lazy(() => import('../pages/system/plugin-manage
 const OperationLogsPage = React.lazy(() => import('../pages/system/operation-logs'));
 const LoginLogsPage = React.lazy(() => import('../pages/system/login-logs'));
 const OnlineUsersPage = React.lazy(() => import('../pages/system/online-users'));
-const ScheduledTasksPage = React.lazy(() => import('../pages/system/scheduled-tasks/list'));
-const ScriptsPage = React.lazy(() => import('../pages/system/scripts/list'));
+const ScheduledTasksPage = React.lazy(() => import('../pages/infra/scheduled-tasks/list'));
+const ScriptsPage = React.lazy(() => import('../pages/infra/scripts/list'));
 const PrintDevicesPage = React.lazy(() => import('../pages/system/print-devices/list'));
 const PrintTemplatesPage = React.lazy(() => import('../pages/system/print-templates/list'));
 const CodeRulesPage = React.lazy(() => import('../pages/system/code-rules/list'));
@@ -118,7 +118,7 @@ const DataSourcesPage = React.lazy(() => import('../pages/system/data-sources/li
 const ApplicationConnectionsPage = React.lazy(() => import('../pages/system/application-connections/list'));
 const DatasetsPage = React.lazy(() => import('../pages/system/datasets/list'));
 const DatasetDesignerPage = React.lazy(() => import('../pages/system/datasets/designer'));
-const PageMetricsPage = React.lazy(() => import('../pages/system/datasets/page-metrics'));
+
 const DataBackupsPage = React.lazy(() => import('../pages/system/data-backups'));
 const CustomFieldsPage = React.lazy(() => import('../pages/system/custom-fields/list'));
 const ApiServicesPage = React.lazy(() => import('../pages/system/apis/list'));
@@ -185,8 +185,7 @@ const SystemRoutes: React.FC = () => (
     <Route path="/system/operation-logs" element={withSuspense(OperationLogsPage)} />
     <Route path="/system/login-logs" element={withSuspense(LoginLogsPage)} />
     <Route path="/system/online-users" element={withSuspense(OnlineUsersPage)} />
-    <Route path="/system/scheduled-tasks" element={withSuspense(ScheduledTasksPage)} />
-    <Route path="/system/scripts" element={withSuspense(ScriptsPage)} />
+
     <Route path="/system/print-devices" element={withSuspense(PrintDevicesPage)} />
     <Route path="/system/print-templates" element={withSuspense(PrintTemplatesPage)} />
     <Route path="/system/print-templates/design/:uuid" element={withSuspense(PrintTemplateDesignPage)} />
@@ -196,7 +195,7 @@ const SystemRoutes: React.FC = () => (
     <Route path="/system/application-connections" element={withSuspense(ApplicationConnectionsPage)} />
     <Route path="/system/datasets" element={withSuspense(DatasetsPage)} />
     <Route path="/system/datasets/designer" element={withSuspense(DatasetDesignerPage)} />
-    <Route path="/system/datasets/page-metrics" element={withSuspense(PageMetricsPage)} />
+
     <Route path="/system/data-backups" element={withSuspense(DataBackupsPage)} />
     <Route path="/system/custom-fields" element={withSuspense(CustomFieldsPage)} />
     <Route path="/system/api-services" element={withSuspense(ApiServicesPage)} />
@@ -230,6 +229,8 @@ const SystemRoutes: React.FC = () => (
     <Route path="/platform/operation" element={withSuspense(PlatformOperationPage)} />
     <Route path="/infra/tenants" element={withSuspense(TenantsPage)} />
     <Route path="/infra/packages" element={withSuspense(PackagesPage)} />
+    <Route path="/infra/scripts" element={withSuspense(ScriptsPage)} />
+    <Route path="/infra/scheduled-tasks" element={withSuspense(ScheduledTasksPage)} />
     <Route path="/infra/monitoring" element={<Navigate to="/infra/admin" replace />} />
     <Route path="/infra/inngest" element={<Navigate to="/infra/admin" replace />} />
 

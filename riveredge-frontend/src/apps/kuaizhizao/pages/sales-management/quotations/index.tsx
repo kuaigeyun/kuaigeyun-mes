@@ -62,6 +62,7 @@ import dayjs from 'dayjs';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { batchImport } from '../../../../../utils/batchOperations';
+import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import { useTranslation } from 'react-i18next';
 import { CustomerFollowUpFormModal, type CustomerFollowUpPreset } from '../../../components/CustomerFollowUpFormModal';
 import { RE_STATUS_BADGE_DRAFT, resolveStatusTagDisplayProps } from '../../../../../constants/statusBadges';
@@ -199,36 +200,8 @@ const LINKED_DOCUMENT_DRAWER_Z_INDEX = 1050;
 /** 操作列平铺按钮上限（最多 4 个），第 5 个起收入「更多」 */
 const QUOTATION_ROW_ACTIONS_INLINE_MAX = 4;
 
-function renderQuotationRowActions(
-  nodes: React.ReactNode[],
-  keyPrefix: string
-): React.ReactNode {
-  const wrapped = nodes.map((node, i) => (
-    <span key={`${keyPrefix}-${i}`}>{node}</span>
-  ));
-  if (wrapped.length <= QUOTATION_ROW_ACTIONS_INLINE_MAX) {
-    return <Space size="small" wrap>{wrapped}</Space>;
-  }
-  const inline = wrapped.slice(0, QUOTATION_ROW_ACTIONS_INLINE_MAX);
-  const overflow = wrapped.slice(QUOTATION_ROW_ACTIONS_INLINE_MAX);
-  return (
-    <Space size="small" wrap>
-      {inline}
-      <Dropdown
-        menu={{
-          items: overflow.map((node, i) => ({
-            key: `${keyPrefix}-more-${i}`,
-            label: node,
-          })),
-        }}
-        trigger={['click']}
-      >
-        <Button type="link" size="small">
-          更多
-        </Button>
-      </Dropdown>
-    </Space>
-  );
+function renderQuotationRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
+  return renderRowActionsOverflow(nodes, keyPrefix, QUOTATION_ROW_ACTIONS_INLINE_MAX);
 }
 
 /** 与销售订单明细表同一套 Table + Form.List 用法；物料列样式见 .quotation-detail-table */
@@ -538,69 +511,67 @@ const QuotationsPage: React.FC = () => {
       hideInSearch: true,
       render: (_, record) => {
         const parts: React.ReactNode[] = [
-          <Button key="d" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record.id!)}>
+          <Button key="d" type="link" size="small" onClick={() => handleDetail(record.id!)}>
             详情
           </Button>,
         ];
+        const canEdit = record.status === '草稿';
+        const deletable = canDeleteQuotation(record);
+        parts.push(
+          <Button key="e" type="link" size="small" disabled={!canEdit} onClick={() => canEdit && handleEdit(record)}>
+            编辑
+          </Button>
+        );
+        parts.push(
+          <Button key="del" type="link" size="small" danger disabled={!deletable} onClick={() => deletable && handleDelete(record)}>
+            删除
+          </Button>
+        );
         if (record.status === '草稿') {
           parts.push(
-            <Button key="e" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-              编辑
-            </Button>
-          );
-        }
-        if (canDeleteQuotation(record)) {
-          parts.push(
-            <Button key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
-              删除
-            </Button>
-          );
-        }
-        if (record.status === '草稿') {
-          parts.push(
-            <Button key="sub" type="link" size="small" icon={<SendOutlined />} onClick={() => handleSubmit(record)}>
+            <Button key="sub" type="link" size="small" onClick={() => handleSubmit(record)}>
               提交
             </Button>
           );
         }
         if (canWithdrawQuotation(record)) {
           parts.push(
-            <Button key="w" type="link" size="small" icon={<RollbackOutlined />} onClick={() => handleWithdraw(record)}>
+            <Button key="w" type="link" size="small" onClick={() => handleWithdraw(record)}>
               撤回
             </Button>
           );
         }
         if (canApproveQuotation(record)) {
           parts.push(
-            <Button key="ap" type="link" size="small" icon={<CheckOutlined />} onClick={() => handleApprove(record)}>
+            <Button key="ap" type="link" size="small" onClick={() => handleApprove(record)}>
               审核通过
             </Button>
           );
         }
         if (canRejectQuotation(record)) {
           parts.push(
-            <Button key="rj" type="link" size="small" icon={<CloseCircleOutlined />} onClick={() => openRejectModal(record)}>
+            <Button key="rj" type="link" size="small" onClick={() => openRejectModal(record)}>
               驳回
             </Button>
           );
         }
         if (canRevokeReviewQuotation(record)) {
           parts.push(
-            <Button key="rv" type="link" size="small" icon={<UndoOutlined />} onClick={() => handleRevokeReview(record)}>
+            <Button key="rv" type="link" size="small" onClick={() => handleRevokeReview(record)}>
               撤回审核
             </Button>
           );
         }
         if (canConfirmCustomerQuotation(record)) {
           parts.push(
-            <Button key="cc" type="link" size="small" icon={<SendOutlined />} onClick={() => handleConfirmCustomer(record)}>
+            <Button key="cc" type="link" size="small" onClick={() => handleConfirmCustomer(record)}>
               客户确认
             </Button>
           );
         }
         if (canReopenQuotation(record)) {
           parts.push(
-            <Button key="ro" type="link" size="small" icon={<EditOutlined />} onClick={() => handleReopen(record)}>
+            <Button key="ro" type="link" size="small" onClick={() => handleReopen(record)}>
               重新编辑
             </Button>
           );
@@ -626,7 +597,6 @@ const QuotationsPage: React.FC = () => {
                 <Button
                   type="link"
                   size="small"
-                  icon={<SwapOutlined />}
                   disabled={superseded}
                   onClick={() => !superseded && handleConvert(record)}
                 >
@@ -638,7 +608,7 @@ const QuotationsPage: React.FC = () => {
         }
         if (canRevokePushQuotation(record)) {
           parts.push(
-            <Button key="rp" type="link" size="small" icon={<RollbackOutlined />} onClick={() => handleRevokePush(record)}>
+            <Button key="rp" type="link" size="small" onClick={() => handleRevokePush(record)}>
               撤回下推
             </Button>
           );
@@ -649,7 +619,6 @@ const QuotationsPage: React.FC = () => {
               key="rev"
               type="link"
               size="small"
-              icon={<BranchesOutlined />}
               onClick={() => handleRevision(record)}
             >
               {t('app.kuaizhizao.quotation.saveAsRevision')}
@@ -668,7 +637,6 @@ const QuotationsPage: React.FC = () => {
             <Button
               type="link"
               size="small"
-              icon={<PrinterOutlined />}
               disabled={!canPrintFormalQuotation(record)}
               onClick={() => canPrintFormalQuotation(record) && handlePrint(record)}
             >
@@ -678,7 +646,7 @@ const QuotationsPage: React.FC = () => {
         );
         if (record.customer_id != null && Number.isFinite(Number(record.customer_id))) {
           parts.push(
-            <Button key="fu" type="link" size="small" icon={<CommentOutlined />} onClick={() => openFollowUpFromQuotation(record)}>
+            <Button key="fu" type="link" size="small" onClick={() => openFollowUpFromQuotation(record)}>
               {t('app.kuaizhizao.customerFollowUp.addFollowUpFromDocument')}
             </Button>
           );

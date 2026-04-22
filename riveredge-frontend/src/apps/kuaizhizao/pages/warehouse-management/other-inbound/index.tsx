@@ -219,7 +219,7 @@ const OtherInboundPage: React.FC = () => {
             </>
           )}
           {record.status === '已入库' && (
-            <Button type="link" size="small" icon={<ThunderboltOutlined />} onClick={() => handleWithdraw(record)} style={{ color: '#fa8c16' }}>撤销确认</Button>
+            <Button type="link" size="small" icon={<ThunderboltOutlined />} onClick={() => handleWithdraw(record)} style={{ color: '#fa8c16' }}>撤销</Button>
           )}
         </Space>
       ),

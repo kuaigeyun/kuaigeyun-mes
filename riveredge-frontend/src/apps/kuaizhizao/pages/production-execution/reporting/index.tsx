@@ -34,16 +34,12 @@ import {
   Spin,
   Form,
   Radio,
-  theme as AntdTheme,
   Descriptions,
   Typography,
-  Dropdown,
   Empty,
   Table,
 } from 'antd';
-import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useLocation } from 'react-router-dom';
 import {
   QrcodeOutlined,
   ScanOutlined,
@@ -69,7 +65,6 @@ import {
   DRAWER_CONFIG,
   type StatCard,
 } from '../../../../../components/layout-templates';
-import { SimpleSparkline } from '../../../../../components';
 import { reportingApi, workOrderApi, materialBindingApi, getReportingStatistics } from '../../../services/production';
 import { getReportingLifecycle } from '../../../utils/reportingLifecycle';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
@@ -86,9 +81,9 @@ import { useGlobalStore } from '../../../../../stores';
 import { UniUserSelect } from '../../../../../components/uni-user-select';
 import type { User } from '../../../../../services/user';
 import type { CurrentUser } from '../../../../../types/api';
-import { usePageMetrics } from '../../../../../hooks/usePageMetrics';
 import { getRemainingReportableQuantity } from '../../../utils/workOrderReporting';
 import { coerceReportingCreateStrings } from '../../../utils/reportingPayload';
+import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import dayjs from 'dayjs';
 
 /** 报工记录（后端返回 snake_case） */
@@ -140,30 +135,7 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
 }
 
 function renderReportingRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  const wrapped = nodes.map((node, i) => <span key={`${keyPrefix}-${i}`}>{node}</span>);
-  if (wrapped.length <= REPORTING_ROW_ACTIONS_INLINE_MAX) {
-    return <Space size="small" wrap>{wrapped}</Space>;
-  }
-  const inline = wrapped.slice(0, REPORTING_ROW_ACTIONS_INLINE_MAX);
-  const overflow = wrapped.slice(REPORTING_ROW_ACTIONS_INLINE_MAX);
-  return (
-    <Space size="small" wrap>
-      {inline}
-      <Dropdown
-        menu={{
-          items: overflow.map((node, i) => ({
-            key: `${keyPrefix}-more-${i}`,
-            label: node,
-          })),
-        }}
-        trigger={['click']}
-      >
-        <Button type="link" size="small">
-          更多
-        </Button>
-      </Dropdown>
-    </Space>
-  );
+  return renderRowActionsOverflow(nodes, keyPrefix, REPORTING_ROW_ACTIONS_INLINE_MAX);
 }
 
 /** 获取报工员工信息：优先使用工序派工的 assigned_worker，否则使用当前登录用户 */
@@ -533,11 +505,8 @@ const SubOperationReportingForm: React.FC<{
 };
 
 const ReportingPage: React.FC = () => {
-  const { t } = useTranslation();
-  const { token } = AntdTheme.useToken();
   const { message: messageApi } = App.useApp();
   const queryClient = useQueryClient();
-  const location = useLocation();
   const actionRef = useRef<ActionType>(null);
 
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
@@ -551,10 +520,50 @@ const ReportingPage: React.FC = () => {
     reportingDetail?.id
   );
 
-  const { statCards: pageMetricCards, hasConfig: hasPageMetricConfig } = usePageMetrics(location.pathname);
+  const { data: stats } = useQuery({
+    queryKey: ['reportingStatistics'],
+    queryFn: getReportingStatistics,
+    staleTime: 60_000,
+  });
+
+  const statCards: StatCard[] = useMemo(() => {
+    if (!stats) return [];
+    return [
+      {
+        title: '累计工时',
+        value: (stats.cumulative_hours ?? 0).toFixed(1),
+        unit: 'h',
+        trend: stats.trends?.hours,
+        icon: <ClockCircleOutlined />,
+      },
+      {
+        title: '预估工资',
+        value: (stats.estimated_wages ?? 0).toLocaleString(),
+        unit: '¥',
+        trend: stats.trends?.wages,
+        icon: <CheckCircleOutlined />,
+      },
+      {
+        title: '生产效率',
+        value: ((stats.efficiency ?? 0) * 100).toFixed(1) + '%',
+        trend: stats.trends?.efficiency,
+        icon: <CheckCircleOutlined />,
+        color: 'green',
+        subValue: stats.efficiency_yoy != null ? (stats.efficiency_yoy >= 0 ? '+' : '') + stats.efficiency_yoy + '%' : undefined,
+        subLabel: '同比',
+      },
+      {
+        title: '异常提报',
+        value: stats.exception_reports ?? 0,
+        unit: '项',
+        icon: <WarningOutlined />,
+        color: (stats.exception_reports ?? 0) > 0 ? 'red' : 'green',
+      },
+    ];
+  }, [stats]);
+
   const invalidateStatistics = () => {
     queryClient.invalidateQueries({ queryKey: ['reportingStatistics'] });
-    queryClient.invalidateQueries({ queryKey: ['pageMetrics', location.pathname] });
   };
 
   // 报工Modal状态
@@ -1485,7 +1494,6 @@ const ReportingPage: React.FC = () => {
         key="detail"
         type="link"
         size="small"
-        icon={<EyeOutlined />}
         onClick={(e) => {
           e.stopPropagation();
           void handleDetail(record);
@@ -1616,7 +1624,6 @@ const ReportingPage: React.FC = () => {
             key="defect"
             type="link"
             size="small"
-            icon={<WarningOutlined />}
             style={{ color: '#faad14' }}
             onClick={(e) => {
               e.stopPropagation();
@@ -1632,7 +1639,6 @@ const ReportingPage: React.FC = () => {
             type="link"
             size="small"
             danger
-            icon={<DeleteOutlined />}
             onClick={(e) => {
               e.stopPropagation();
               handleCreateScrap(record);
@@ -1810,126 +1816,6 @@ const ReportingPage: React.FC = () => {
     },
   ];
 
-  // 报工统计数据（采用 useQuery）
-  const { data: statistics } = useQuery({
-    queryKey: ['reportingStatistics'],
-    queryFn: getReportingStatistics,
-    enabled: !hasPageMetricConfig,
-  });
-
-  const statCards: StatCard[] = hasPageMetricConfig
-    ? pageMetricCards
-    : statistics
-    ? [
-        {
-          title: t('app.kuaizhizao.reporting.statCumulativeHours'),
-          value: statistics.cumulative_hours ?? 0,
-          suffix: 'h',
-          valueStyle: { color: token.colorPrimary },
-          backgroundChart: (
-            <SimpleSparkline 
-              data={statistics.trends?.hours || [120, 145, 138, 160, 155, 175, 168]} 
-              color={token.colorPrimary} 
-            />
-          ),
-        },
-        {
-          title: t('app.kuaizhizao.reporting.statEstimatedWages'),
-          value: statistics.estimated_wages ?? 0,
-          prefix: '¥',
-          precision: 2,
-          valueStyle: { color: token.colorPrimary },
-          description: (
-            <div style={{ color: token.colorTextSecondary }}>
-              {t('app.kuaizhizao.reporting.statEstimatedWagesAccrualHint', {
-                amount: ((statistics.estimated_wages ?? 0) * 1.1).toFixed(2),
-              })}
-            </div>
-          ),
-          backgroundChart: (
-            <SimpleSparkline 
-              data={statistics.trends?.wages || [1200, 1500, 1800, 1600, 2100, 1900, 2400]} 
-              color={token.colorPrimary} 
-            />
-          ),
-        },
-        {
-          title: t('app.kuaizhizao.reporting.statDowntimeRecords'),
-          value: statistics.downtime_records ?? 0,
-          valueStyle: (statistics.downtime_records ?? 0) > 0 ? { color: token.colorError } : undefined,
-          backgroundChart: (
-            <SimpleSparkline 
-              data={[2, 4, 1, 0, 3, 1, 2]} 
-              color={token.colorError} 
-            />
-          ),
-        },
-        {
-          title: t('app.kuaizhizao.reporting.statExceptionReports'),
-          value: statistics.exception_reports ?? 0,
-          valueStyle: (statistics.exception_reports ?? 0) > 0 ? { color: token.colorWarning } : undefined,
-          description:
-            (statistics.exception_reports ?? 0) > 0
-              ? t('app.kuaizhizao.reporting.statExceptionPriority')
-              : t('app.kuaizhizao.reporting.statExceptionNoneRecent'),
-          backgroundChart: (
-            <SimpleSparkline 
-              data={[1, 0, 2, 0, 1, 0, 0]} 
-              color={token.colorWarning} 
-            />
-          ),
-        },
-        {
-          title: t('app.kuaizhizao.reporting.statEfficiency'),
-          value: statistics.efficiency ?? 0,
-          suffix: '%',
-          valueStyle: { color: '#fa8c16' }, // Orange
-          description: (statistics.efficiency ?? 0) > 0 || (statistics as any).efficiency_yoy ? (
-            <div style={{ color: ((statistics as any).efficiency_yoy ?? 5) >= 0 ? '#52c41a' : '#ff4d4f' }}>
-              {t('app.kuaizhizao.reporting.statEfficiencyVsBaseline', {
-                value: (statistics as any).efficiency_yoy
-                  ? `${(statistics as any).efficiency_yoy > 0 ? '+' : ''}${(statistics as any).efficiency_yoy}%`
-                  : '+5%',
-              })}
-            </div>
-          ) : null,
-          backgroundChart: (
-            <SimpleSparkline 
-              data={statistics.trends?.efficiency || [75, 82, 78, 85, 88, 92, 90]} 
-              color="#fa8c16" 
-            />
-          ),
-        },
-      ]
-    : [
-        {
-          title: t('app.kuaizhizao.reporting.statCumulativeHours'),
-          value: 0,
-          suffix: 'h',
-          valueStyle: { color: token.colorPrimary },
-        },
-        {
-          title: t('app.kuaizhizao.reporting.statEstimatedWages'),
-          value: 0,
-          prefix: '¥',
-          precision: 2,
-          valueStyle: { color: token.colorPrimary },
-        },
-        {
-          title: t('app.kuaizhizao.reporting.statDowntimeRecords'),
-          value: 0,
-        },
-        {
-          title: t('app.kuaizhizao.reporting.statExceptionReports'),
-          value: 0,
-        },
-        {
-          title: t('app.kuaizhizao.reporting.statEfficiency'),
-          value: 0,
-          suffix: '%',
-          valueStyle: { color: '#fa8c16' },
-        },
-      ];
 
   const reportingDetailBaseColumns: ProDescriptionsItemProps<ReportingRecord>[] = useMemo(
     () => [

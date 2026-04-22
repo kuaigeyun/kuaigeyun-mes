@@ -366,12 +366,14 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 raise BusinessLogicError("当前组织未开启快捷报工，请在配置中心启用后再操作")
 
             auto_approve = biz_config.get("parameters", {}).get("reporting", {}).get("auto_approve", False)
+            reporting_audit_required = await biz_config_svc.check_audit_required(tenant_id, "reporting_record")
+            should_auto_approve = (not reporting_audit_required) or bool(auto_approve)
 
             approved_at = None
             approved_by = None
             approved_by_name = None
 
-            if auto_approve and reporting_data.status == 'pending':
+            if should_auto_approve and reporting_data.status == 'pending':
                 reporting_data.status = 'approved'
                 approved_at = datetime.now()
                 approved_by = reported_by

@@ -435,10 +435,10 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/system/datasets': ManufacturingIcons.inventory, // 数据集 - 使用库存图标
       '/system/messages/config': ManufacturingIcons.bell, // 消息配置 - 使用铃铛图标
       '/system/messages/template': ManufacturingIcons.fileText, // 消息模板 - 使用文件文本图标
-      '/system/scheduled-tasks': ManufacturingIcons.clock, // 定时任务 - 使用时钟图标
+      '/infra/scheduled-tasks': ManufacturingIcons.clock, // 定时任务 - 使用时钟图标
       '/system/approval-processes': ManufacturingIcons.workflow, // 审批流程 - 使用工作流图标
       '/system/approval-instances': ManufacturingIcons.checkCircle, // 审批实例 - 使用检查圆圈图标
-      '/system/scripts': ManufacturingIcons.fileCode, // 脚本管理 - 使用代码文件图标
+      '/infra/scripts': ManufacturingIcons.fileCode, // 脚本管理 - 使用代码文件图标
       '/system/print-templates': ManufacturingIcons.fileText, // 打印模板 - 使用文件文本图标
       '/system/report-templates': ManufacturingIcons.chartBar, // 报表模板 - 使用柱状图图标
       '/system/print-devices': ManufacturingIcons.printer, // 打印设备 - 使用打印机图标
@@ -584,15 +584,14 @@ const getMenuConfig = (t: (key: string) => string): PermissionMenuDataItem[] => 
         { path: '/system/data-sources', name: t('menu.system.data-sources'), icon: getMenuIcon(t('menu.system.data-sources'), '/system/data-sources') },
         { path: '/system/application-connections', name: t('menu.system.application-connections'), icon: getMenuIcon(t('menu.system.application-connections'), '/system/application-connections') },
         { path: '/system/datasets', name: t('menu.system.datasets'), icon: getMenuIcon(t('menu.system.datasets'), '/system/datasets') },
-        { path: '/system/datasets/page-metrics', name: t('menu.system.datasets.pageMetrics') || '页面指标配置', icon: getMenuIcon(t('menu.system.datasets'), '/system/datasets/page-metrics') },
+
       ]},
       { key: 'process-management-group', type: 'group', name: t('menu.group.process-management'), label: t('menu.group.process-management'), className: 'riveredge-menu-group-title', children: [
         { path: '/system/approval-processes', name: t('menu.system.approval-processes'), icon: getMenuIcon(t('menu.system.approval-processes'), '/system/approval-processes'), children: [{ path: '/system/approval-processes/designer', name: t('path.system.approval-processes.designer'), hideInMenu: true }] },
         { path: '/system/approval-instances', name: t('menu.system.approval-instances'), icon: getMenuIcon(t('menu.system.approval-instances'), '/system/approval-instances') },
         { path: '/system/messages/template', name: t('menu.system.messages.template'), icon: getMenuIcon(t('menu.system.messages.template'), '/system/messages/template') },
         { path: '/system/messages/config', name: t('menu.system.messages.config'), icon: getMenuIcon(t('menu.system.messages.config'), '/system/messages/config') },
-        { path: '/system/scripts', name: t('menu.system.scripts'), icon: getMenuIcon(t('menu.system.scripts'), '/system/scripts') },
-        { path: '/system/scheduled-tasks', name: t('menu.system.scheduled-tasks'), icon: getMenuIcon(t('menu.system.scheduled-tasks'), '/system/scheduled-tasks') },
+
         { path: '/system/print-devices', name: t('menu.system.print-devices'), icon: getMenuIcon(t('menu.system.print-devices'), '/system/print-devices') },
         { path: '/system/print-templates', name: t('menu.system.print-templates'), icon: getMenuIcon(t('menu.system.print-templates'), '/system/print-templates'), children: [{ path: '/system/print-templates/design', name: t('path.system.print-templates.design'), hideInMenu: true }] },
       ]},
@@ -622,6 +621,8 @@ const getMenuConfig = (t: (key: string) => string): PermissionMenuDataItem[] => 
       { path: '/infra/operation', name: t('menu.infra.operation'), icon: getMenuIcon(t('menu.infra.operation'), '/infra/operation') },
       { path: '/infra/tenants', name: t('menu.infra.tenants'), icon: getMenuIcon(t('menu.infra.tenants'), '/infra/tenants') },
       { path: '/infra/packages', name: t('menu.infra.packages'), icon: getMenuIcon(t('menu.infra.packages'), '/infra/packages') },
+      { path: '/infra/scripts', name: t('menu.infra.scripts'), icon: getMenuIcon(t('menu.infra.scripts'), '/infra/scripts') },
+      { path: '/infra/scheduled-tasks', name: t('menu.infra.scheduled-tasks'), icon: getMenuIcon(t('menu.infra.scheduled-tasks'), '/infra/scheduled-tasks') },
       { path: '/infra/admin', name: t('menu.infra.admin'), icon: getMenuIcon(t('menu.infra.admin'), '/infra/admin') },
     ],
   },

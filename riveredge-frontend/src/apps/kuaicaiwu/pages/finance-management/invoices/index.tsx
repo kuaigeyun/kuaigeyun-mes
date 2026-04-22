@@ -12,7 +12,6 @@ import { App, Button, Modal, Popconfirm, Typography } from 'antd';
 import { FileTextOutlined, AccountBookOutlined, PayCircleOutlined, EyeOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { invoiceService } from '../../../services/finance/invoice';
-import { usePageMetrics } from '../../../../../hooks/usePageMetrics';
 import { Invoice, InvoiceCreateData } from '../../../types/finance/invoice';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { apiRequest } from '../../../../../services/api';
@@ -32,11 +31,9 @@ const InvoiceList: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
-  const { statCards: pageMetricCards, hasConfig: hasPageMetricConfig } = usePageMetrics(location.pathname);
 
   const invalidateInvoiceStatistics = () => {
     queryClient.invalidateQueries({ queryKey: ['invoiceStatistics'] });
-    queryClient.invalidateQueries({ queryKey: ['pageMetrics', location.pathname] });
   };
 
   const { data: invoiceStatistics } = useQuery({
@@ -186,20 +183,6 @@ const InvoiceList: React.FC = () => {
 
   const statCards: StatCard[] = useMemo(() => {
     const s = invoiceStatistics;
-    if (hasPageMetricConfig && pageMetricCards.length > 0) {
-      return pageMetricCards.map((card) => {
-        if (!s || !card.key) return card;
-        const valueMap: Record<string, number | undefined> = {
-          total_count: s.total_count,
-          in_total_amount: s.in_total_amount,
-          out_total_amount: s.out_total_amount,
-          pending_verification_count: s.pending_verification_count,
-        };
-        const v = valueMap[card.key];
-        if (v === undefined) return card;
-        return { ...card, value: v };
-      });
-    }
     if (!s) {
       return [
         { title: '总发票数', value: 0, prefix: <FileTextOutlined />, valueStyle: { color: '#1890ff' } },
@@ -232,7 +215,7 @@ const InvoiceList: React.FC = () => {
         valueStyle: { color: '#f5222d' },
       },
     ];
-  }, [hasPageMetricConfig, pageMetricCards, invoiceStatistics]);
+  }, [invoiceStatistics]);
 
   return (
     <ListPageTemplate statCards={statCards}>

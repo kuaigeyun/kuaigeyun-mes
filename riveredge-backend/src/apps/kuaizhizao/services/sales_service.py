@@ -203,10 +203,10 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         """获取销售预测统计"""
         from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
         
-        # 活动预测数（已审核且未下推计算）
+        # 活动预测数（已审核/已确认且未下推计算）
         active_count = await SalesForecast.filter(
             tenant_id=tenant_id,
-            status=DocumentStatus.AUDITED.value,
+            status__in=[DocumentStatus.AUDITED.value, DocumentStatus.CONFIRMED.value],
             planning_pushed_to_computation=False,
             deleted_at__isnull=True
         ).count()
@@ -551,7 +551,7 @@ class SalesForecastService(AppBaseService[SalesForecast]):
 
             if not audit_required:
                 await SalesForecast.filter(tenant_id=tenant_id, id=forecast_id).update(
-                    status=DocumentStatus.AUDITED.value,
+                    status=DocumentStatus.CONFIRMED.value,
                     review_status=ReviewStatus.APPROVED.value,
                     updated_by=submitted_by
                 )

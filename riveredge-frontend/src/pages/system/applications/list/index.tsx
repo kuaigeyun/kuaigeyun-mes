@@ -41,6 +41,7 @@ import {
   uninstallApplication,
   enableApplication,
   disableApplication,
+  activateProApplication,
   updateApplication,
   syncApplicationManifest,
   scanApplications,
@@ -111,6 +112,7 @@ const ApplicationListPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const editFormRef = useRef<ProFormInstance>(null);
   const upgradeFormRef = useRef<ProFormInstance>(null);
+  const proKeyFormRef = useRef<ProFormInstance>(null);
 
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -126,6 +128,10 @@ const ApplicationListPage: React.FC = () => {
   const [upgradingApp, setUpgradingApp] = useState<Application | null>(null);
   const [scanning, setScanning] = useState(false);
   const [syncAllLoading, setSyncAllLoading] = useState(false);
+  const [proKeyModalVisible, setProKeyModalVisible] = useState(false);
+  const [proKeySubmitting, setProKeySubmitting] = useState(false);
+  const [proKeyTargetApp, setProKeyTargetApp] = useState<Application | null>(null);
+  const [pendingEnableAfterActivation, setPendingEnableAfterActivation] = useState(false);
   const [resetModalVisible, setResetModalVisible] = useState(false);
   const [resetTargetApp, setResetTargetApp] = useState<Application | null>(null);
   const [resetConfirmText, setResetConfirmText] = useState('');
@@ -271,6 +277,15 @@ const ApplicationListPage: React.FC = () => {
   const handleToggleActive = async (record: Application, checked: boolean) => {
     try {
       if (checked) {
+        if (record.is_pro && !record.can_access) {
+          setProKeyTargetApp(record);
+          setPendingEnableAfterActivation(true);
+          setProKeyModalVisible(true);
+          setTimeout(() => {
+            proKeyFormRef.current?.setFieldsValue({ license_key: '' });
+          }, 0);
+          return;
+        }
         await enableApplication(record.uuid);
         messageApi.success(t('pages.system.applications.enableSuccess'));
       } else {
@@ -285,6 +300,31 @@ const ApplicationListPage: React.FC = () => {
       useGlobalStore.getState().incrementApplicationMenuVersion();
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.applications.operationFailed'));
+    }
+  };
+
+  const handleActivateProKey = async (values: { license_key: string }) => {
+    if (!proKeyTargetApp) return;
+    try {
+      setProKeySubmitting(true);
+      await activateProApplication(proKeyTargetApp.uuid, values.license_key);
+      if (pendingEnableAfterActivation) {
+        await enableApplication(proKeyTargetApp.uuid);
+      }
+      messageApi.success(
+        pendingEnableAfterActivation
+          ? t('pages.system.applications.proActivateAndEnableSuccess', { defaultValue: 'License Key 校验通过，应用已启用' })
+          : t('pages.system.applications.proActivateSuccess', { defaultValue: 'License Key 校验通过，已完成授权' })
+      );
+      setProKeyModalVisible(false);
+      setPendingEnableAfterActivation(false);
+      actionRef.current?.reload();
+      queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
+      useGlobalStore.getState().incrementApplicationMenuVersion();
+    } catch (error: any) {
+      messageApi.error(error?.message || t('pages.system.applications.proActivateFailed', { defaultValue: 'License Key 校验失败' }));
+    } finally {
+      setProKeySubmitting(false);
     }
   };
 
@@ -1077,6 +1117,37 @@ const ApplicationListPage: React.FC = () => {
       </FormModalTemplate>
 
       {/* 应用升版 Modal - 使用 FormModalTemplate */}
+      <FormModalTemplate
+        key={proKeyTargetApp?.uuid ?? 'pro-key'}
+        title={t('pages.system.applications.proKeyModalTitle', { defaultValue: '输入 License Key（许可证密钥）' })}
+        open={proKeyModalVisible}
+        onClose={() => {
+          setProKeyModalVisible(false);
+          setPendingEnableAfterActivation(false);
+        }}
+        onFinish={handleActivateProKey}
+        isEdit={true}
+        loading={proKeySubmitting}
+        formRef={proKeyFormRef}
+        width={MODAL_CONFIG.SMALL_WIDTH}
+      >
+        <ProFormText.Password
+          name="license_key"
+          label={t('pages.system.applications.proKeyLabel', { defaultValue: 'License Key（许可证密钥）' })}
+          placeholder={t('pages.system.applications.proKeyPlaceholder', { defaultValue: '请输入 License Key' })}
+          rules={[
+            { required: true, message: t('common.required', { defaultValue: '必填' }) },
+            { min: 8, message: t('pages.system.applications.proKeyMinLength', { defaultValue: 'License Key 长度至少 8 位' }) },
+          ]}
+          fieldProps={{
+            autoComplete: 'off',
+          }}
+        />
+        <div style={{ color: '#8c8c8c', fontSize: 12, marginTop: 8 }}>
+          {t('pages.system.applications.proKeyHint', { defaultValue: '系统仅保存 License Key 摘要（不可逆），用于后续授权校验。' })}
+        </div>
+      </FormModalTemplate>
+
       <FormModalTemplate
         key={upgradingApp?.uuid ?? 'upgrade'}
         title={t('pages.system.applications.upgradeModalTitle', { name: upgradingApp?.name ?? '' })}

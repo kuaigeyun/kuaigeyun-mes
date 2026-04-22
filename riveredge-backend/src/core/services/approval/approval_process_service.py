@@ -211,207 +211,64 @@ class ApprovalProcessService:
         approval_process.deleted_at = datetime.now()
         await approval_process.save()
 
-    # 中国中小企业常用审批流程预设。
-    # 业务调用 start_approval(process_code=...) 时使用的 code 与下表一致：
-    # - simple_approval: 通用简单审批
-    # - purchase_order: 采购订单审批（与采购业务关联）
-    # - sales_order: 销售订单审批（与销售业务关联）
-    # - work_order: 生产工单审批
-    # - amount_tier_approval: 金额分档审批（按 instance.data.amount 走不同分支）
+    @staticmethod
+    def _simple_nodes(label: str) -> Dict[str, Any]:
+        return {
+            "nodes": [
+                {
+                    "id": "start",
+                    "type": "start",
+                    "position": {"x": 250, "y": 50},
+                    "data": {"label": "开始", "layoutDirection": "vertical"},
+                },
+                {
+                    "id": "approval_1",
+                    "type": "approval",
+                    "position": {"x": 250, "y": 200},
+                    "data": {
+                        "label": label,
+                        "approver_type": "user",
+                        "layoutDirection": "vertical",
+                    },
+                },
+                {
+                    "id": "end",
+                    "type": "end",
+                    "position": {"x": 250, "y": 350},
+                    "data": {"label": "结束", "layoutDirection": "vertical"},
+                },
+            ],
+            "edges": [
+                {"source": "start", "target": "approval_1"},
+                {"source": "approval_1", "target": "end"},
+            ],
+        }
+
+    # 中国中小制造业常见单据审核开关（全部默认关闭，按需开启）
     PRESET_APPROVAL_PROCESSES = [
-        {
-            "name": "简单审批",
-            "code": "simple_approval",
-            "description": "通用简单审批流程：提交→审批人→结束",
-            "nodes": {
-                "nodes": [
-                    {
-                        "id": "start",
-                        "type": "start",
-                        "position": {"x": 250, "y": 50},
-                        "data": {"label": "开始", "layoutDirection": "vertical"},
-                    },
-                    {
-                        "id": "approval_1",
-                        "type": "approval",
-                        "position": {"x": 250, "y": 200},
-                        "data": {
-                            "label": "审批",
-                            "approver_type": "user",
-                            "layoutDirection": "vertical",
-                        },
-                    },
-                    {
-                        "id": "end",
-                        "type": "end",
-                        "position": {"x": 250, "y": 350},
-                        "data": {"label": "结束", "layoutDirection": "vertical"},
-                    },
-                ],
-                "edges": [
-                    {"source": "start", "target": "approval_1"},
-                    {"source": "approval_1", "target": "end"},
-                ],
-            },
-            "config": {},
-            "is_active": False,
-        },
-        {
-            "name": "采购单审批",
-            "code": "purchase_order",
-            "description": "采购订单审批流程",
-            "nodes": {
-                "nodes": [
-                    {
-                        "id": "start",
-                        "type": "start",
-                        "position": {"x": 250, "y": 50},
-                        "data": {"label": "开始", "layoutDirection": "vertical"},
-                    },
-                    {
-                        "id": "approval_1",
-                        "type": "approval",
-                        "position": {"x": 250, "y": 200},
-                        "data": {
-                            "label": "采购经理审批",
-                            "approver_type": "user",
-                            "layoutDirection": "vertical",
-                        },
-                    },
-                    {
-                        "id": "end",
-                        "type": "end",
-                        "position": {"x": 250, "y": 350},
-                        "data": {"label": "结束", "layoutDirection": "vertical"},
-                    },
-                ],
-                "edges": [
-                    {"source": "start", "target": "approval_1"},
-                    {"source": "approval_1", "target": "end"},
-                ],
-            },
-            "config": {},
-            "is_active": False,
-        },
-        {
-            "name": "销售单审批",
-            "code": "sales_order",
-            "description": "销售订单审批流程",
-            "nodes": {
-                "nodes": [
-                    {
-                        "id": "start",
-                        "type": "start",
-                        "position": {"x": 250, "y": 50},
-                        "data": {"label": "开始", "layoutDirection": "vertical"},
-                    },
-                    {
-                        "id": "approval_1",
-                        "type": "approval",
-                        "position": {"x": 250, "y": 200},
-                        "data": {
-                            "label": "销售经理审批",
-                            "approver_type": "user",
-                            "layoutDirection": "vertical",
-                        },
-                    },
-                    {
-                        "id": "end",
-                        "type": "end",
-                        "position": {"x": 250, "y": 350},
-                        "data": {"label": "结束", "layoutDirection": "vertical"},
-                    },
-                ],
-                "edges": [
-                    {"source": "start", "target": "approval_1"},
-                    {"source": "approval_1", "target": "end"},
-                ],
-            },
-            "config": {},
-            "is_active": False,
-        },
-        {
-            "name": "工单审批",
-            "code": "work_order",
-            "description": "生产工单审批流程",
-            "nodes": {
-                "nodes": [
-                    {
-                        "id": "start",
-                        "type": "start",
-                        "position": {"x": 250, "y": 50},
-                        "data": {"label": "开始", "layoutDirection": "vertical"},
-                    },
-                    {
-                        "id": "approval_1",
-                        "type": "approval",
-                        "position": {"x": 250, "y": 200},
-                        "data": {
-                            "label": "生产经理审批",
-                            "approver_type": "user",
-                            "layoutDirection": "vertical",
-                        },
-                    },
-                    {
-                        "id": "end",
-                        "type": "end",
-                        "position": {"x": 250, "y": 350},
-                        "data": {"label": "结束", "layoutDirection": "vertical"},
-                    },
-                ],
-                "edges": [
-                    {"source": "start", "target": "approval_1"},
-                    {"source": "approval_1", "target": "end"},
-                ],
-            },
-            "config": {},
-            "is_active": False,
-        },
-        {
-            "name": "金额分档审批",
-            "code": "amount_tier_approval",
-            "description": "按金额分支：大额走经理审批，小额走部门审批。提交时 data 需含 amount 字段。",
-            "nodes": {
-                "nodes": [
-                    {"id": "start", "type": "start", "position": {"x": 250, "y": 50}, "data": {"label": "开始", "layoutDirection": "vertical"}},
-                    {
-                        "id": "cond_1",
-                        "type": "condition",
-                        "position": {"x": 250, "y": 150},
-                        "data": {
-                            "label": "条件判断",
-                            "layoutDirection": "vertical",
-                            "conditions": [
-                                {"field": "amount", "operator": ">", "value": 10000},
-                                {"field": "amount", "operator": "<=", "value": 10000},
-                            ],
-                        },
-                    },
-                    {
-                        "id": "approval_manager",
-                        "type": "approval",
-                        "position": {"x": 100, "y": 280},
-                        "data": {"label": "经理审批", "approverType": "manager", "layoutDirection": "vertical"},
-                    },
-                    {
-                        "id": "approval_dept",
-                        "type": "approval",
-                        "position": {"x": 400, "y": 280},
-                        "data": {"label": "部门审批", "approverType": "department", "layoutDirection": "vertical"},
-                    },
-                    {"id": "end", "type": "end", "position": {"x": 250, "y": 400}, "data": {"label": "结束", "layoutDirection": "vertical"}},
-                ],
-                "edges": [
-                    {"source": "start", "target": "cond_1"},
-                    {"source": "cond_1", "target": "approval_manager"},
-                    {"source": "cond_1", "target": "approval_dept"},
-                    {"source": "approval_manager", "target": "end"},
-                    {"source": "approval_dept", "target": "end"},
-                ],
-            },
-            "config": {},
-            "is_active": False,
-        },
+        {"name": "需求审核", "code": "demand", "description": "需求单据审核", "nodes": _simple_nodes.__func__("计划主管审核"), "config": {}, "is_active": False},
+        {"name": "销售预测审核", "code": "sales_forecast", "description": "销售预测审核", "nodes": _simple_nodes.__func__("销售主管审核"), "config": {}, "is_active": False},
+        {"name": "销售订单审核", "code": "sales_order", "description": "销售订单审核", "nodes": _simple_nodes.__func__("销售经理审核"), "config": {}, "is_active": False},
+        {"name": "报价单审核", "code": "quotation", "description": "报价单审核", "nodes": _simple_nodes.__func__("商务负责人审核"), "config": {}, "is_active": False},
+        {"name": "生产计划审核", "code": "production_plan", "description": "生产计划审核", "nodes": _simple_nodes.__func__("计划主管审核"), "config": {}, "is_active": False},
+        {"name": "采购申请审核", "code": "purchase_request", "description": "采购申请审核", "nodes": _simple_nodes.__func__("采购主管审核"), "config": {}, "is_active": False},
+        {"name": "采购订单审核", "code": "purchase_order", "description": "采购订单审核", "nodes": _simple_nodes.__func__("采购经理审核"), "config": {}, "is_active": False},
+        {"name": "报工审核", "code": "reporting_record", "description": "报工记录审核", "nodes": _simple_nodes.__func__("生产主管审核"), "config": {}, "is_active": False},
+        {"name": "质检审核", "code": "quality_inspection", "description": "来料/过程/成品质检审核", "nodes": _simple_nodes.__func__("质量负责人审核"), "config": {}, "is_active": False},
+        {"name": "来料检验审核", "code": "incoming_inspection", "description": "来料检验单审核", "nodes": _simple_nodes.__func__("质量负责人审核"), "config": {}, "is_active": False},
+        {"name": "过程检验审核", "code": "process_inspection", "description": "过程检验单审核", "nodes": _simple_nodes.__func__("质量负责人审核"), "config": {}, "is_active": False},
+        {"name": "成品检验审核", "code": "finished_goods_inspection", "description": "成品检验单审核", "nodes": _simple_nodes.__func__("质量负责人审核"), "config": {}, "is_active": False},
+        {"name": "销售出库审核", "code": "sales_delivery", "description": "销售出库审核", "nodes": _simple_nodes.__func__("仓储负责人审核"), "config": {}, "is_active": False},
+        {"name": "采购收货审核", "code": "purchase_receipt", "description": "采购收货审核", "nodes": _simple_nodes.__func__("仓储负责人审核"), "config": {}, "is_active": False},
+        {"name": "成品入库审核", "code": "finished_goods_receipt", "description": "成品入库审核", "nodes": _simple_nodes.__func__("仓储负责人审核"), "config": {}, "is_active": False},
+        {"name": "其他入库审核", "code": "other_inbound", "description": "其他入库审核", "nodes": _simple_nodes.__func__("仓储负责人审核"), "config": {}, "is_active": False},
+        {"name": "其他出库审核", "code": "other_outbound", "description": "其他出库审核", "nodes": _simple_nodes.__func__("仓储负责人审核"), "config": {}, "is_active": False},
+        {"name": "生产领料审核", "code": "production_picking", "description": "生产领料审核", "nodes": _simple_nodes.__func__("车间主管审核"), "config": {}, "is_active": False},
+        {"name": "生产退料审核", "code": "production_return", "description": "生产退料审核", "nodes": _simple_nodes.__func__("车间主管审核"), "config": {}, "is_active": False},
+        {"name": "借料审核", "code": "material_borrow", "description": "借料审核", "nodes": _simple_nodes.__func__("仓储负责人审核"), "config": {}, "is_active": False},
+        {"name": "还料审核", "code": "material_return", "description": "还料审核", "nodes": _simple_nodes.__func__("仓储负责人审核"), "config": {}, "is_active": False},
+        {"name": "销售退货审核", "code": "sales_return", "description": "销售退货审核", "nodes": _simple_nodes.__func__("售后负责人审核"), "config": {}, "is_active": False},
+        {"name": "采购退货审核", "code": "purchase_return", "description": "采购退货审核", "nodes": _simple_nodes.__func__("采购主管审核"), "config": {}, "is_active": False},
     ]
 
     @staticmethod

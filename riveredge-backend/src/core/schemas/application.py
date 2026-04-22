@@ -78,3 +78,8 @@ class ApplicationResponse(ApplicationBase):
     
     model_config = ConfigDict(from_attributes=True)
 
+
+class ProActivationRequest(BaseModel):
+    """PRO 应用激活请求。"""
+    license_key: str = Field(..., min_length=8, max_length=256, description="PRO License Key")
+

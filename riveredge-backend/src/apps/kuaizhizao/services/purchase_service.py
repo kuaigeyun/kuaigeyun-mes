@@ -484,9 +484,9 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         audit_required = await config_service.check_audit_required(tenant_id, "purchase_order")
 
         if not audit_required:
-            # 无需审核，直接设为已审核
+            # 无需审核，直接确认
             await order.update_from_dict({
-                'status': DocumentStatus.AUDITED.value,
+                'status': DocumentStatus.CONFIRMED.value,
                 'review_status': ReviewStatus.APPROVED.value,
                 'updated_by': submitted_by
             }).save()
@@ -498,7 +498,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             instance = await ApprovalInstanceService.start_approval(
                 tenant_id=tenant_id,
                 user_id=submitted_by,
-                process_code="purchase_order_approval",
+                process_code="purchase_order",
                 entity_type="purchase_order",
                 entity_id=order_id,
                 entity_uuid=str(order.uuid),
@@ -579,7 +579,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     'review_time': datetime.now(),
                     'review_status': ReviewStatus.APPROVED.value,
                     'review_remarks': approve_data.review_remarks,
-                    'status': DocumentStatus.AUDITED.value,
+                    'status': DocumentStatus.CONFIRMED.value,
                     'updated_by': approved_by
                 }
             else:
@@ -608,7 +608,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             }
 
             if approve_data.approved:
-                update_dict['status'] = DocumentStatus.AUDITED.value
+                update_dict['status'] = DocumentStatus.CONFIRMED.value
 
         await order.update_from_dict(update_dict).save()
 

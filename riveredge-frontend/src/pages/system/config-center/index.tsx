@@ -1,38 +1,44 @@
 /**
- * 业务配置
+ * 统一配置中心
  *
- * 提供「流程设置」「参数设置」两个参数 Tab。
- * 注：旧版「蓝图设置」已下线；
- *   - 功能是否开启 → 由「菜单管理」控制（菜单隐藏即视为关闭）
- *   - 单据是否人工审核 → 在「审批流程」中启用对应流程（默认关闭）；本页仅配置流转/前置条件等
+ * 提供「参数设置」「审核设置」「流程设置」「业务自动化」「消息提醒」五个功能 Tab。
+ * 每个 Tab 内部按业务模块（销售、计划、采购、生产、质量、设备、仓储）组织。
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
-import { App, Form, Card, Button, Space, Layout, Menu, InputNumber, ColorPicker, Typography, Spin, Switch, Select, theme, Alert } from 'antd';
-import { SaveOutlined, ReloadOutlined, SettingOutlined, ControlOutlined, NodeIndexOutlined } from '@ant-design/icons';
+import { App, Form, Card, Button, Space, Layout, Menu, InputNumber, ColorPicker, Typography, Spin, Switch, Select, theme, Modal, Descriptions } from 'antd';
+import { SaveOutlined, ReloadOutlined, SettingOutlined, NodeIndexOutlined, AuditOutlined, ControlOutlined, BellOutlined } from '@ant-design/icons';
+import type { ProFormInstance } from '@ant-design/pro-components';
+import { ProFormSelect, ProFormDependency } from '@ant-design/pro-components';
 import { useSearchParams } from 'react-router-dom';
 import { MultiTabListPageTemplate } from '../../../components/layout-templates';
+import { UniTable } from '../../../components/uni-table';
+import { FormModalTemplate } from '../../../components/layout-templates';
+import { renderRowActionsOverflow } from '../../../utils/renderRowActionsOverflow';
 import {
   getBusinessConfig,
   getBusinessConfigSchema,
   batchUpdateProcessParameters,
 } from '../../../services/businessConfig';
+import { getMessageConfigList, type MessageConfig } from '../../../services/messageConfig';
+import { getMessageTemplateList, type MessageTemplate } from '../../../services/messageTemplate';
+import {
+  getApprovalProcessList,
+  createApprovalProcess,
+  updateApprovalProcess,
+  type ApprovalProcess,
+} from '../../../services/approvalProcess';
+import { getUserList, type User } from '../../../services/user';
 import {
   PARAMETER_CATEGORIES,
-  PROCESS_CATEGORIES,
+  AUDIT_CATEGORIES,
+  FLOW_CATEGORIES,
+  AUTOMATION_CATEGORIES,
   type ConfigCategory,
-  type ParamMeta,
-  type ParamSelectOption,
 } from './configTree';
 
-type RegistryControlField = {
-  type?: ParamMeta['type'];
-  min?: number;
-  max?: number;
-  options?: ParamSelectOption[];
-};
 import type { Color } from 'antd/es/color-picker';
 
 const { Sider, Content } = Layout;
@@ -75,177 +81,110 @@ function toBusinessParams(flat: Record<string, any>, bizParamKeys: string[]): Re
   return params;
 }
 
-function flattenRegistryKeys(registry?: Record<string, string[]>): Set<string> {
-  const set = new Set<string>();
-  if (!registry) return set;
-  for (const [category, keys] of Object.entries(registry)) {
-    for (const key of keys || []) {
-      set.add(`${category}.${key}`);
-    }
-  }
-  return set;
-}
-
-function buildProcessCategoriesFromRegistry(
-  registry: Record<string, string[]> | undefined,
-  fallbackCategories: ConfigCategory[],
-  categoryMeta?: Record<string, { labelKey?: string; descriptionKey?: string }>,
-  paramMeta?: Record<string, Record<string, { labelKey?: string; descriptionKey?: string }>>,
-  controlMeta?: Record<string, Record<string, RegistryControlField>>
-): ConfigCategory[] {
-  if (!registry || Object.keys(registry).length === 0) return fallbackCategories;
-
-  const fallbackCategoryById = new Map<string, ConfigCategory>(
-    fallbackCategories.map((c) => [c.id, c])
-  );
-  const fallbackParamByKey = new Map<string, ParamMeta>();
-  for (const category of fallbackCategories) {
-    for (const param of category.params) {
-      fallbackParamByKey.set(param.key, param);
-    }
-  }
-
-  const categories: ConfigCategory[] = [];
-  const categoryByNameKey = new Map<string, ConfigCategory>();
-
-  for (const [categoryKey, keys] of Object.entries(registry)) {
-    const processCategoryId = `process_${categoryKey}`;
-    const fallbackCategory = fallbackCategoryById.get(processCategoryId);
-    const nameKey = categoryMeta?.[categoryKey]?.labelKey || fallbackCategory?.nameKey || categoryKey;
-    const descriptionKey = categoryMeta?.[categoryKey]?.descriptionKey || fallbackCategory?.descriptionKey;
-
-    const params: ParamMeta[] = (keys || []).map((key) => {
-      const fullKey = `${categoryKey}.${key}`;
-      const fallbackParam = fallbackParamByKey.get(fullKey);
-      const currentMeta = paramMeta?.[categoryKey]?.[key];
-      const currentControl = controlMeta?.[categoryKey]?.[key];
-      if (fallbackParam) {
-        return {
-          ...fallbackParam,
-          nameKey: currentMeta?.labelKey || fallbackParam.nameKey,
-          descriptionKey: currentMeta?.descriptionKey || fallbackParam.descriptionKey,
-          type: currentControl?.type || fallbackParam.type,
-          min: currentControl?.min ?? fallbackParam.min,
-          max: currentControl?.max ?? fallbackParam.max,
-          selectOptions: currentControl?.options ?? fallbackParam.selectOptions,
-        };
-      }
-      return {
-        key: fullKey,
-        nameKey: currentMeta?.labelKey || fullKey,
-        descriptionKey: currentMeta?.descriptionKey || `${fullKey}.desc`,
-        source: 'business_config',
-        sourcePath: `parameters.${fullKey}`,
-        type: currentControl?.type || 'boolean',
-        min: currentControl?.min,
-        max: currentControl?.max,
-        selectOptions: currentControl?.options,
-      };
-    });
-
-    if (categoryByNameKey.has(nameKey)) {
-      categoryByNameKey.get(nameKey)!.params.push(...params);
-    } else {
-      const newCat: ConfigCategory = {
-        id: processCategoryId,
-        nameKey,
-        descriptionKey,
-        params,
-      };
-      categories.push(newCat);
-      categoryByNameKey.set(nameKey, newCat);
-    }
-  }
-
-  return categories;
-}
-
-function buildParameterCategoriesFromRegistry(
-  registry: Record<string, string[]> | undefined,
-  fallbackCategories: ConfigCategory[],
-  categoryMeta?: Record<string, { labelKey?: string; descriptionKey?: string }>,
-  paramMeta?: Record<string, Record<string, { labelKey?: string; descriptionKey?: string }>>,
-  controlMeta?: Record<string, Record<string, RegistryControlField>>
-): ConfigCategory[] {
-  if (!registry || Object.keys(registry).length === 0) return fallbackCategories;
-
-  const fallbackCategoryByBusinessGroup = new Map<string, ConfigCategory>();
-  const fallbackParamByKey = new Map<string, ParamMeta>();
-  for (const category of fallbackCategories) {
-    for (const param of category.params) {
-      fallbackParamByKey.set(param.key, param);
-      const group = param.key.split('.')[0];
-      if (group && !fallbackCategoryByBusinessGroup.has(group)) {
-        fallbackCategoryByBusinessGroup.set(group, category);
-      }
-    }
-  }
-
-  const categories: ConfigCategory[] = [];
-  const categoryByNameKey = new Map<string, ConfigCategory>();
-
-  for (const [categoryKey, keys] of Object.entries(registry)) {
-    const categoryId = `param_${categoryKey}`;
-    const fallbackCategory = fallbackCategoryByBusinessGroup.get(categoryKey);
-    const nameKey = categoryMeta?.[categoryKey]?.labelKey || fallbackCategory?.nameKey || categoryKey;
-    const descriptionKey = categoryMeta?.[categoryKey]?.descriptionKey || fallbackCategory?.descriptionKey;
-
-    const params: ParamMeta[] = (keys || []).map((key) => {
-      const fullKey = `${categoryKey}.${key}`;
-      const fallbackParam = fallbackParamByKey.get(fullKey);
-      const currentMeta = paramMeta?.[categoryKey]?.[key];
-      const currentControl = controlMeta?.[categoryKey]?.[key];
-      if (fallbackParam) {
-        return {
-          ...fallbackParam,
-          nameKey: currentMeta?.labelKey || fallbackParam.nameKey,
-          descriptionKey: currentMeta?.descriptionKey || fallbackParam.descriptionKey,
-          type: currentControl?.type || fallbackParam.type,
-          min: currentControl?.min ?? fallbackParam.min,
-          max: currentControl?.max ?? fallbackParam.max,
-          selectOptions: currentControl?.options ?? fallbackParam.selectOptions,
-        };
-      }
-      return {
-        key: fullKey,
-        nameKey: currentMeta?.labelKey || fullKey,
-        descriptionKey: currentMeta?.descriptionKey || `${fullKey}.desc`,
-        source: 'business_config',
-        sourcePath: `parameters.${fullKey}`,
-        type: currentControl?.type || 'boolean',
-        min: currentControl?.min,
-        max: currentControl?.max,
-        selectOptions: currentControl?.options,
-      };
-    });
-
-    if (categoryByNameKey.has(nameKey)) {
-      categoryByNameKey.get(nameKey)!.params.push(...params);
-    } else {
-      const newCat: ConfigCategory = {
-        id: categoryId,
-        nameKey,
-        descriptionKey,
-        params,
-      };
-      categories.push(newCat);
-      categoryByNameKey.set(nameKey, newCat);
-    }
-  }
-
-  return categories;
-}
-
-function humanizeKey(raw: string): string {
-  return raw
-    .replace(/\./g, ' / ')
-    .replace(/_/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
 const BUSINESS_CONFIG_QUERY_KEY = ['businessConfig'] as const;
 const BUSINESS_CONFIG_SCHEMA_QUERY_KEY = ['businessConfigSchema'] as const;
+const APPROVAL_PROCESS_LIST_QUERY_KEY = ['approvalProcessListForConfigCenter'] as const;
+
+/** 审核开关定义：与后端识别的 code 对应，并关联到具体业务模块 ID */
+const AUDIT_SWITCH_ITEMS: Array<{ code: string; labelKey: string; descKey: string; categoryId: string }> = [
+  { code: 'sales_forecast', labelKey: 'pages.system.configCenter.auditSwitch.sales_forecast.label', descKey: 'pages.system.configCenter.auditSwitch.sales_forecast.desc', categoryId: 'sales' },
+  { code: 'sales_order', labelKey: 'pages.system.configCenter.auditSwitch.sales_order.label', descKey: 'pages.system.configCenter.auditSwitch.sales_order.desc', categoryId: 'sales' },
+  { code: 'quotation', labelKey: 'pages.system.configCenter.auditSwitch.quotation.label', descKey: 'pages.system.configCenter.auditSwitch.quotation.desc', categoryId: 'sales' },
+  { code: 'sales_delivery', labelKey: 'pages.system.configCenter.auditSwitch.sales_delivery.label', descKey: 'pages.system.configCenter.auditSwitch.sales_delivery.desc', categoryId: 'sales' },
+  { code: 'sales_return', labelKey: 'pages.system.configCenter.auditSwitch.sales_return.label', descKey: 'pages.system.configCenter.auditSwitch.sales_return.desc', categoryId: 'sales' },
+  { code: 'purchase_request', labelKey: 'pages.system.configCenter.auditSwitch.purchase_request.label', descKey: 'pages.system.configCenter.auditSwitch.purchase_request.desc', categoryId: 'procurement' },
+  { code: 'purchase_order', labelKey: 'pages.system.configCenter.auditSwitch.purchase_order.label', descKey: 'pages.system.configCenter.auditSwitch.purchase_order.desc', categoryId: 'procurement' },
+  { code: 'purchase_return', labelKey: 'pages.system.configCenter.auditSwitch.purchase_return.label', descKey: 'pages.system.configCenter.auditSwitch.purchase_return.desc', categoryId: 'procurement' },
+  { code: 'demand', labelKey: 'pages.system.configCenter.auditSwitch.demand.label', descKey: 'pages.system.configCenter.auditSwitch.demand.desc', categoryId: 'planning' },
+  { code: 'production_plan', labelKey: 'pages.system.configCenter.auditSwitch.production_plan.label', descKey: 'pages.system.configCenter.auditSwitch.production_plan.desc', categoryId: 'planning' },
+  { code: 'incoming_inspection', labelKey: 'pages.system.configCenter.auditSwitch.incoming_inspection.label', descKey: 'pages.system.configCenter.auditSwitch.incoming_inspection.desc', categoryId: 'quality' },
+  { code: 'process_inspection', labelKey: 'pages.system.configCenter.auditSwitch.process_inspection.label', descKey: 'pages.system.configCenter.auditSwitch.process_inspection.desc', categoryId: 'quality' },
+  { code: 'finished_goods_inspection', labelKey: 'pages.system.configCenter.auditSwitch.finished_goods_inspection.label', descKey: 'pages.system.configCenter.auditSwitch.finished_goods_inspection.desc', categoryId: 'quality' },
+  { code: 'production_picking', labelKey: 'pages.system.configCenter.auditSwitch.production_picking.label', descKey: 'pages.system.configCenter.auditSwitch.production_picking.desc', categoryId: 'production' },
+  { code: 'production_return', labelKey: 'pages.system.configCenter.auditSwitch.production_return.label', descKey: 'pages.system.configCenter.auditSwitch.production_return.desc', categoryId: 'production' },
+  { code: 'reporting_record', labelKey: 'pages.system.configCenter.auditSwitch.reporting_record.label', descKey: 'pages.system.configCenter.auditSwitch.reporting_record.desc', categoryId: 'production' },
+  { code: 'purchase_receipt', labelKey: 'pages.system.configCenter.auditSwitch.purchase_receipt.label', descKey: 'pages.system.configCenter.auditSwitch.purchase_receipt.desc', categoryId: 'warehouse' },
+  { code: 'finished_goods_receipt', labelKey: 'pages.system.configCenter.auditSwitch.finished_goods_receipt.label', descKey: 'pages.system.configCenter.auditSwitch.finished_goods_receipt.desc', categoryId: 'warehouse' },
+  { code: 'other_inbound', labelKey: 'pages.system.configCenter.auditSwitch.other_inbound.label', descKey: 'pages.system.configCenter.auditSwitch.other_inbound.desc', categoryId: 'warehouse' },
+  { code: 'other_outbound', labelKey: 'pages.system.configCenter.auditSwitch.other_outbound.label', descKey: 'pages.system.configCenter.auditSwitch.other_outbound.desc', categoryId: 'warehouse' },
+  { code: 'material_borrow', labelKey: 'pages.system.configCenter.auditSwitch.material_borrow.label', descKey: 'pages.system.configCenter.auditSwitch.material_borrow.desc', categoryId: 'warehouse' },
+  { code: 'material_return', labelKey: 'pages.system.configCenter.auditSwitch.material_return.label', descKey: 'pages.system.configCenter.auditSwitch.material_return.desc', categoryId: 'warehouse' },
+];
+
+const NOTIFICATION_DOCUMENT_OPTIONS = [
+  { value: 'sales_order', label: '销售订单' },
+  { value: 'quotation', label: '报价单' },
+  { value: 'purchase_order', label: '采购订单' },
+  { value: 'work_order', label: '工单' },
+  { value: 'quality_inspection', label: '质检单' },
+  { value: 'quality_exception', label: '质量异常单' },
+  { value: 'equipment_fault', label: '设备故障单' },
+  { value: 'maintenance_order', label: '维保工单' },
+  { value: 'shipment_notice', label: '发货通知' },
+  { value: 'inbound', label: '入库单' },
+  { value: 'outbound', label: '出库单' },
+];
+
+const NOTIFICATION_ACTION_OPTIONS: Record<string, Array<{ value: string; label: string }>> = {
+  sales_order: [
+    { value: 'submitted', label: '提交' },
+    { value: 'approved', label: '审核通过' },
+    { value: 'pushed_to_work_order', label: '下推工单' },
+    { value: 'delivery_delayed', label: '交期延误' },
+  ],
+  quotation: [
+    { value: 'submitted', label: '提交' },
+    { value: 'approved', label: '审核通过' },
+    { value: 'customer_confirmed', label: '客户确认' },
+    { value: 'converted_to_order', label: '转销售订单' },
+  ],
+  purchase_order: [
+    { value: 'submitted', label: '提交' },
+    { value: 'approved', label: '审核通过' },
+    { value: 'pushed_to_receipt', label: '下推收货' },
+    { value: 'delivery_delayed', label: '交期延误' },
+  ],
+  work_order: [
+    { value: 'released', label: '下达' },
+    { value: 'started', label: '开工' },
+    { value: 'completed', label: '完工' },
+    { value: 'reworked', label: '转返工' },
+  ],
+  quality_inspection: [
+    { value: 'submitted', label: '提交' },
+    { value: 'approved', label: '审核通过' },
+    { value: 'rejected', label: '驳回' },
+    { value: 'abnormal_detected', label: '检出异常' },
+  ],
+  quality_exception: [
+    { value: 'created', label: '新建异常' },
+    { value: 'assigned', label: '分派处理' },
+    { value: 'closed', label: '异常关闭' },
+  ],
+  equipment_fault: [
+    { value: 'reported', label: '故障报修' },
+    { value: 'assigned', label: '派工维修' },
+    { value: 'resolved', label: '故障恢复' },
+  ],
+  maintenance_order: [
+    { value: 'created', label: '新建维保' },
+    { value: 'started', label: '开始维保' },
+    { value: 'completed', label: '完成维保' },
+  ],
+  shipment_notice: [
+    { value: 'submitted', label: '提交' },
+    { value: 'confirmed', label: '确认发货' },
+    { value: 'delivery_delayed', label: '发货延误' },
+  ],
+  inbound: [
+    { value: 'submitted', label: '提交' },
+    { value: 'confirmed', label: '确认入库' },
+  ],
+  outbound: [
+    { value: 'submitted', label: '提交' },
+    { value: 'confirmed', label: '确认出库' },
+  ],
+};
 
 const ConfigCenterPage: React.FC = () => {
   const { t, i18n } = useTranslation();
@@ -253,55 +192,123 @@ const ConfigCenterPage: React.FC = () => {
   const { token } = useToken();
   const [searchParams] = useSearchParams();
   const tabFromUrl = searchParams.get('tab');
-  const validTabs = ['process', 'parameters'];
-  // 蓝图 Tab 下线后，blueprint/graph 旧链接一律落回「流程设置」
-  const initialTab = validTabs.includes(tabFromUrl || '') ? tabFromUrl! : 'process';
+  const validTabs = useMemo(() => ['parameters', 'audit', 'flow', 'automation', 'notification'], []);
+  const initialTab = validTabs.includes(tabFromUrl || '') ? tabFromUrl! : 'parameters';
   const [activeMainTab, setActiveMainTab] = useState<string>(initialTab);
-  const [form] = Form.useForm();
-  const [processForm] = Form.useForm();
-  const [saving, setSaving] = useState(false);
-  const [processSaving, setProcessSaving] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<string>(PARAMETER_CATEGORIES[0]?.id ?? 'production');
-  const [selectedProcessCategory, setSelectedProcessCategory] = useState<string>(PROCESS_CATEGORIES[0]?.id ?? 'process_sales');
 
-  const { data: bizRes, isLoading: configLoading, isFetching, isError: configError, refetch: refetchBusinessConfig } = useQuery({
+  const [form] = Form.useForm();
+  const [saving, setSaving] = useState(false);
+  const containerRef = useRef<any>(null);
+  const [containerHeight, setContainerHeight] = useState<number>(400);
+
+  // 为 4 个主 Tab 分别记录选中的侧边栏模块 ID
+  const [selectedParamCat, setSelectedParamCat] = useState<string>(PARAMETER_CATEGORIES[0].id);
+  const [selectedAuditCat, setSelectedAuditCat] = useState<string>(AUDIT_CATEGORIES[0].id);
+  const [selectedFlowCat, setSelectedFlowCat] = useState<string>(FLOW_CATEGORIES[0].id);
+  const [selectedAutoCat, setSelectedAutoCat] = useState<string>(AUTOMATION_CATEGORIES[0].id);
+  const notificationFormRef = useRef<ProFormInstance>();
+  const [notificationModalOpen, setNotificationModalOpen] = useState(false);
+  const [notificationModalMode, setNotificationModalMode] = useState<'create' | 'edit'>('create');
+  const [editingNotificationRuleId, setEditingNotificationRuleId] = useState<string | null>(null);
+  const [notificationModalInitialValues, setNotificationModalInitialValues] = useState<Record<string, any>>({});
+
+  const { data: bizRes, isLoading: configLoading, isFetching, refetch: refetchBusinessConfig } = useQuery({
     queryKey: BUSINESS_CONFIG_QUERY_KEY,
     queryFn: getBusinessConfig,
     staleTime: 60_000,
-    placeholderData: (prev) => prev,
   });
+
   const { data: schemaRes } = useQuery({
     queryKey: BUSINESS_CONFIG_SCHEMA_QUERY_KEY,
     queryFn: getBusinessConfigSchema,
     staleTime: 300_000,
   });
+
+  const { data: approvalProcessList, refetch: refetchApprovalProcessList } = useQuery({
+    queryKey: APPROVAL_PROCESS_LIST_QUERY_KEY,
+    queryFn: () => getApprovalProcessList({ limit: 500 }),
+    staleTime: 30_000,
+  });
+  const { data: usersRes } = useQuery({
+    queryKey: ['configCenterUsersForNotification'],
+    queryFn: () => getUserList({ page: 1, page_size: 200, is_active: true }),
+    staleTime: 300_000,
+  });
+  const { data: messageChannels = [] } = useQuery({
+    queryKey: ['configCenterMessageChannels'],
+    queryFn: () => getMessageConfigList({ skip: 0, limit: 500, is_active: true }),
+    staleTime: 300_000,
+  });
+  const { data: messageTemplates = [] } = useQuery({
+    queryKey: ['configCenterMessageTemplates'],
+    queryFn: () => getMessageTemplateList({ skip: 0, limit: 500, is_active: true }),
+    staleTime: 300_000,
+  });
+
   const loading = configLoading && !bizRes;
 
-  const processCategories = useMemo(
-    () => buildProcessCategoriesFromRegistry(
-      schemaRes?.processRegistry,
-      PROCESS_CATEGORIES,
-      schemaRes?.processRegistryMeta,
-      schemaRes?.processRegistryParamMeta,
-      schemaRes?.processRegistryControlMeta
-    ),
-    [schemaRes?.processRegistry, schemaRes?.processRegistryMeta, schemaRes?.processRegistryParamMeta, schemaRes?.processRegistryControlMeta]
-  );
-  const parameterCategories = useMemo(
-    () => buildParameterCategoriesFromRegistry(
-      schemaRes?.parameterRegistry,
-      PARAMETER_CATEGORIES,
-      schemaRes?.parameterRegistryMeta,
-      schemaRes?.parameterRegistryParamMeta,
-      schemaRes?.parameterRegistryControlMeta
-    ),
-    [schemaRes?.parameterRegistry, schemaRes?.parameterRegistryMeta, schemaRes?.parameterRegistryParamMeta, schemaRes?.parameterRegistryControlMeta]
-  );
-  const category = parameterCategories.find((c) => c.id === selectedCategory);
-  const processCategory = processCategories.find((c) => c.id === selectedProcessCategory);
+  const approvalProcessByCode = useMemo(() => {
+    const m = new Map<string, ApprovalProcess>();
+    for (const p of approvalProcessList || []) {
+      if (p.code) m.set(p.code, p);
+    }
+    return m;
+  }, [approvalProcessList]);
+
   const parameterImplementation = schemaRes?.parameterImplementation || {};
-  const processRegistryKeySet = flattenRegistryKeys(schemaRes?.processRegistry);
-  const parameterRegistryKeySet = flattenRegistryKeys(schemaRes?.parameterRegistry);
+  const userOptions = useMemo(
+    () =>
+      (usersRes?.items || []).map((u: User) => ({
+        value: u.id,
+        label: `${u.full_name || u.username}${u.department?.name ? `（${u.department.name}）` : ''}`,
+      })),
+    [usersRes]
+  );
+  const BUILTIN_IN_APP_CHANNEL_UUID = '__builtin_internal_channel__';
+  const channelOptions = useMemo(() => {
+    const builtIn = {
+      uuid: BUILTIN_IN_APP_CHANNEL_UUID,
+      name: '站内通知',
+      code: 'IN_APP_DEFAULT',
+      type: 'internal',
+      is_active: true,
+    } as Partial<MessageConfig>;
+    const list = Array.isArray(messageChannels) ? messageChannels : [];
+    const hasInternal = list.some((it: any) => it?.type === 'internal' || it?.code === 'IN_APP_DEFAULT');
+    const merged = hasInternal ? list : [builtIn as MessageConfig, ...list];
+    return merged.map((it: any) => ({
+      value: String(it.uuid || it.code),
+      label: String(it.name || it.code || '消息渠道'),
+      code: String(it.code || ''),
+      type: String(it.type || ''),
+    }));
+  }, [messageChannels]);
+  const templateOptions = useMemo(
+    () =>
+      (Array.isArray(messageTemplates) ? messageTemplates : []).map((it: MessageTemplate) => ({
+        value: String(it.uuid),
+        label: it.name || it.code,
+        code: it.code,
+      })),
+    [messageTemplates]
+  );
+  const channelNameByKey = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const ch of channelOptions) {
+      m.set(String(ch.value), String(ch.label));
+      if (ch.code) m.set(String(ch.code), String(ch.label));
+    }
+    return m;
+  }, [channelOptions]);
+  const templateNameByKey = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const tp of templateOptions) {
+      m.set(String(tp.value), String(tp.label));
+      if (tp.code) m.set(String(tp.code), String(tp.label));
+    }
+    return m;
+  }, [templateOptions]);
+
   const isImplementedParam = (sourcePath: string): boolean => {
     if (!sourcePath.startsWith('parameters.')) return true;
     const parts = sourcePath.replace('parameters.', '').split('.');
@@ -312,82 +319,56 @@ const ConfigCenterPage: React.FC = () => {
     return categoryImpl[parameterKey] !== false;
   };
 
-  useEffect(() => {
-    const t = searchParams.get('tab');
-    if (t && validTabs.includes(t) && activeMainTab !== t) setActiveMainTab(t);
-    else if ((t === 'blueprint' || t === 'graph') && activeMainTab !== 'process') setActiveMainTab('process');
-  }, [searchParams]);
-
-  useEffect(() => {
-    if (!processCategories.length) return;
-    const existed = processCategories.some((c) => c.id === selectedProcessCategory);
-    if (!existed) {
-      setSelectedProcessCategory(processCategories[0].id);
-    }
-  }, [processCategories, selectedProcessCategory]);
-
-  useEffect(() => {
-    if (!parameterCategories.length) return;
-    const existed = parameterCategories.some((c) => c.id === selectedCategory);
-    if (!existed) {
-      setSelectedCategory(parameterCategories[0].id);
-    }
-  }, [parameterCategories, selectedCategory]);
-
   const renderText = (key: string | undefined, fallback?: string) => {
     if (!key) return fallback || '';
     if (i18n.exists(key)) return t(key);
     return fallback || key;
   };
+  const toArrayValue = (value: any): string[] => {
+    if (Array.isArray(value)) return value.map(v => String(v));
+    if (typeof value === 'string') return value.split(',').map(v => v.trim()).filter(Boolean);
+    return [];
+  };
 
   const getParamGuidance = (paramKey: string): string => {
     const key = getParamGuidanceI18nKey(paramKey);
-    if (!key) return '';
-    return renderText(key, '');
+    return key ? renderText(key, '') : '';
   };
 
-  // 有缓存或接口返回后立即填表，避免先空白再重载
   useEffect(() => {
-    if (!bizRes) return;
-    const initialValues: Record<string, any> = {};
-    const bizParams = flattenBusinessParams(bizRes?.parameters || {});
-    for (const [k, v] of Object.entries(bizParams)) {
-      initialValues[k] = v;
-    }
-    const bizDefaults: Record<string, any> = {
-      'procurement.require_purchase_requisition': false,
-      'planning.require_production_plan': false,
-      'purchase.auto_approval': false,
-      'purchase.tolerance_percentage': 0,
-      'reporting.auto_approve': false,
-      'work_order.material_shortage_block_level': 1,
-      'warehouse.location_management': false,
-      'warehouse.auto_outbound': true,
+    const tVal = searchParams.get('tab');
+    if (tVal && validTabs.includes(tVal) && activeMainTab !== tVal) setActiveMainTab(tVal);
+  }, [searchParams, activeMainTab, validTabs]);
+
+  useEffect(() => {
+    const updateHeight = () => {
+      if (!containerRef.current) return;
+      const top = containerRef.current.getBoundingClientRect().top;
+      const next = Math.max(400, Math.floor(window.innerHeight - top - 16));
+      setContainerHeight(next);
     };
-    for (const [k, v] of Object.entries(bizDefaults)) {
-      if (initialValues[k] === undefined) initialValues[k] = v;
-    }
-    form.setFieldsValue(initialValues);
-    processForm.setFieldsValue(initialValues);
-  }, [bizRes]);
+    updateHeight();
+    window.addEventListener('resize', updateHeight);
+    return () => window.removeEventListener('resize', updateHeight);
+  }, [activeMainTab]);
 
   useEffect(() => {
-    if (configError && !bizRes) {
-      messageApi.error(t('pages.system.configCenter.loadFailed'));
-    }
-  }, [configError, bizRes]);
+    const initialValues = flattenBusinessParams(bizRes?.parameters || {});
+    form.setFieldsValue(initialValues);
+  }, [bizRes, form]);
 
-  const handleSaveParameters = async () => {
+  const handleSave = async (categories: ConfigCategory[]) => {
     try {
       await form.validateFields();
-      const values = form.getFieldsValue(true) as Record<string, any>;
+      const values = form.getFieldsValue(true);
       setSaving(true);
 
       const bizKeys: string[] = [];
-      for (const cat of parameterCategories) {
+      for (const cat of categories) {
         for (const param of cat.params) {
-          const inRegistry = parameterRegistryKeySet.size === 0 || parameterRegistryKeySet.has(param.key);
-          if (param.source === 'business_config' && isImplementedParam(param.sourcePath) && inRegistry) bizKeys.push(param.key);
+          if (param.source === 'business_config' && isImplementedParam(param.sourcePath)) {
+            bizKeys.push(param.key);
+          }
         }
       }
 
@@ -395,361 +376,475 @@ const ConfigCenterPage: React.FC = () => {
       if (Object.keys(bizParams).length > 0) {
         await batchUpdateProcessParameters({ parameters: bizParams });
       }
-
       messageApi.success(t('pages.system.configCenter.saveSuccess'));
       await refetchBusinessConfig();
     } catch (error: any) {
-      if (error?.errorFields) return;
-      messageApi.error(error.message || t('pages.system.configCenter.saveFailed'));
+      if (!error?.errorFields) messageApi.error(error.message || t('pages.system.configCenter.saveFailed'));
     } finally {
       setSaving(false);
     }
   };
 
-  const handleSaveProcess = async () => {
+  const handleToggleAuditProcess = async (code: string, checked: boolean) => {
     try {
-      await processForm.validateFields();
-      const values = processForm.getFieldsValue(true) as Record<string, any>;
-      setProcessSaving(true);
-
-      const bizKeys: string[] = [];
-      for (const cat of processCategories) {
-        for (const param of cat.params) {
-          const inRegistry = processRegistryKeySet.size === 0 || processRegistryKeySet.has(param.key);
-          if (isImplementedParam(param.sourcePath) && inRegistry) bizKeys.push(param.key);
-        }
+      const exists = approvalProcessByCode.get(code);
+      if (exists) {
+        await updateApprovalProcess(exists.uuid, { is_active: checked });
+      } else if (checked) {
+        await createApprovalProcess({
+          code,
+          name: `${code}_audit`,
+          description: '单据审核开关（配置中心创建）',
+          nodes: {
+            nodes: [{ id: 'start', type: 'start', position: { x: 250, y: 50 }, data: { label: '开始' } }, { id: 'end', type: 'end', position: { x: 250, y: 350 }, data: { label: '结束' } }],
+            edges: [{ source: 'start', target: 'end' }],
+          },
+          config: {},
+          is_active: true,
+        });
       }
-
-      const bizParams = toBusinessParams(values, bizKeys);
-      if (Object.keys(bizParams).length > 0) {
-        await batchUpdateProcessParameters({ parameters: bizParams });
-      }
-
-      messageApi.success(t('pages.system.configCenter.saveSuccess'));
-      await refetchBusinessConfig();
+      await refetchApprovalProcessList();
+      messageApi.success(t('pages.system.configCenter.auditSwitch.updateSuccess'));
     } catch (error: any) {
-      if (error?.errorFields) return;
-      messageApi.error(error.message || t('pages.system.configCenter.saveFailed'));
-    } finally {
-      setProcessSaving(false);
+      messageApi.error(error?.message || t('pages.system.configCenter.auditSwitch.updateFailed'));
     }
   };
 
-  const parametersTabContent = (
-    <>
-      <Layout style={{ minHeight: 400, background: 'transparent' }}>
-      <Sider
-        width={200}
-        style={{
-          background: token.colorBgContainer,
-          borderRadius: 8,
-          padding: '16px 0',
-        }}
-      >
-        <div style={{ padding: '0 16px 16px', borderBottom: `1px solid ${token.colorBorder}`, marginBottom: 8 }}>
-          <Space>
-            <SettingOutlined style={{ fontSize: 18 }} />
-            <Text strong>{t('pages.system.configCenter.categoryTitle')}</Text>
-          </Space>
-        </div>
-        <Menu
-          selectedKeys={[selectedCategory]}
-          mode="inline"
-          style={{ border: 'none', background: 'transparent' }}
-          items={parameterCategories.map((c) => ({
-            key: c.id,
-            label: renderText(c.nameKey, humanizeKey(c.id.replace(/^param_/, ''))),
-          }))}
-          onClick={({ key }) => setSelectedCategory(key)}
-        />
-      </Sider>
-      <Content style={{ padding: '0 0 0 24px', overflow: 'visible' }}>
-        <div style={{ marginBottom: 16 }}>
-          <Text strong style={{ fontSize: 16 }}>
-            {category ? renderText(category.nameKey, humanizeKey(category.id.replace(/^param_/, ''))) : ''}
-          </Text>
-          {category?.descriptionKey && (
-            <Paragraph type="secondary" style={{ marginBottom: 0, marginTop: 4 }}>
-              {renderText(category.descriptionKey, '')}
+  const notificationRuleRows = useMemo(() => {
+    const raw = bizRes?.parameters?.notifications;
+    const list = Array.isArray(raw?.rules)
+      ? raw.rules
+      : raw
+        ? [raw]
+        : [];
+    const documentLabel: Record<string, string> = {
+      sales_order: '销售订单',
+      purchase_order: '采购订单',
+      work_order: '工单',
+      quality_inspection: '质检单',
+      quality_exception: '质量异常单',
+      equipment_fault: '设备故障单',
+      maintenance_order: '维保工单',
+    };
+    const actionLabel: Record<string, string> = {
+      submitted: '提交',
+      approved: '审核通过',
+      pushed_to_work_order: '下推工单',
+      delivery_delayed: '交期延误',
+      customer_confirmed: '客户确认',
+      converted_to_order: '转销售订单',
+      pushed_to_receipt: '下推收货',
+      released: '下达',
+      started: '开工',
+      completed: '完工',
+      reworked: '转返工',
+      confirmed: '确认',
+      rejected: '驳回',
+      abnormal_detected: '检出异常',
+      created: '新建',
+      assigned: '分派处理',
+      closed: '异常关闭',
+      reported: '故障报修',
+      resolved: '故障恢复',
+    };
+    const scopeLabel: Record<string, string> = {
+      creator: '创建人',
+      salesman: '业务员',
+      follower: '跟单员',
+    };
+    return list.map((rule: any, idx: number) => {
+      const channelRefs = Array.isArray(rule?.channel_uuids)
+        ? rule.channel_uuids
+        : Array.isArray(rule?.channels)
+          ? rule.channels
+          : [];
+      const channels = channelRefs.map((v: string) => channelNameByKey.get(String(v)) || String(v)).join(' + ') || '-';
+      const scopes = (Array.isArray(rule?.recipient_scopes) ? rule.recipient_scopes : []).map((v: string) => scopeLabel[v] || v).join(' + ');
+      const users = (Array.isArray(rule?.recipient_user_ids) ? rule.recipient_user_ids : []).length;
+      const recipients = [scopes, users > 0 ? `指定人员(${users})` : ''].filter(Boolean).join(' + ') || '-';
+      const templateKey = String(rule?.template_uuid || rule?.template || '');
+      const template = templateNameByKey.get(templateKey) || templateKey || '-';
+      return {
+        id: String(rule?.id || rule?.code || idx + 1),
+        scene: rule?.scene_name || '已配置通知规则',
+        document: documentLabel[String(rule?.trigger_document || '')] || String(rule?.trigger_document || '-'),
+        action: actionLabel[String(rule?.trigger_action || '')] || String(rule?.trigger_action || '-'),
+        channels,
+        recipients,
+        template,
+        enabled: rule?.enabled !== false,
+        raw: rule,
+      };
+    });
+  }, [bizRes, channelNameByKey, templateNameByKey]);
+
+  const getExistingNotificationRules = () => {
+    const raw = bizRes?.parameters?.notifications;
+    if (Array.isArray(raw?.rules)) return raw.rules;
+    if (raw) {
+      return [{
+        id: raw.id || `rule_${Date.now()}`,
+        scene_name: raw.scene_name || '已配置通知规则',
+        enabled: raw.enabled !== false,
+        trigger_document: raw.trigger_document,
+        trigger_action: raw.trigger_action,
+        channels: raw.channels,
+        recipient_scopes: raw.recipient_scopes,
+        recipient_user_ids: raw.recipient_user_ids,
+        template: raw.template,
+      }];
+    }
+    return [];
+  };
+
+  const handleCreateNotificationRule = async (values: any) => {
+    try {
+      setSaving(true);
+      const existingRules = getExistingNotificationRules();
+      const newRule = {
+        id: `rule_${Date.now()}`,
+        scene_name: '已配置通知规则',
+        enabled: true,
+        trigger_document: values.trigger_document || '',
+        trigger_action: values.trigger_action || '',
+        channel_uuids: toArrayValue(values.channels).length > 0 ? toArrayValue(values.channels) : [BUILTIN_IN_APP_CHANNEL_UUID],
+        channels: toArrayValue(values.channels).length > 0 ? toArrayValue(values.channels) : [BUILTIN_IN_APP_CHANNEL_UUID],
+        recipient_scopes: toArrayValue(values.recipient_scopes),
+        recipient_user_ids: toArrayValue(values.recipient_user_ids).map(v => Number(v)).filter(v => Number.isFinite(v)),
+        template_uuid: values.template || '',
+        template: values.template || '',
+      };
+      const allowedActions = (NOTIFICATION_ACTION_OPTIONS[String(newRule.trigger_document)] || []).map(it => it.value);
+      if (!allowedActions.includes(String(newRule.trigger_action))) {
+        throw new Error('触发动作与单据类型不匹配，请重新选择');
+      }
+      const nextRules =
+        notificationModalMode === 'edit' && editingNotificationRuleId
+          ? existingRules.map((r: any) => (String(r?.id) === editingNotificationRuleId ? { ...r, ...newRule, id: editingNotificationRuleId } : r))
+          : [...existingRules, newRule];
+      await batchUpdateProcessParameters({
+        parameters: {
+          notifications: {
+            rules: nextRules,
+          },
+        },
+      });
+      messageApi.success(notificationModalMode === 'edit' ? '通知规则已更新' : '通知规则已新增');
+      setNotificationModalOpen(false);
+      setNotificationModalMode('create');
+      setEditingNotificationRuleId(null);
+      await refetchBusinessConfig();
+    } catch (error: any) {
+      if (!error?.errorFields) messageApi.error(error.message || '新增通知规则失败');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleEditNotificationRule = (row: any) => {
+    setNotificationModalMode('edit');
+    setEditingNotificationRuleId(String(row.id));
+    setNotificationModalInitialValues({
+      trigger_document: row.raw?.trigger_document,
+      trigger_action: row.raw?.trigger_action,
+      channels: Array.isArray(row.raw?.channel_uuids)
+        ? row.raw.channel_uuids
+        : (Array.isArray(row.raw?.channels) ? row.raw.channels : []),
+      recipient_scopes: Array.isArray(row.raw?.recipient_scopes) ? row.raw.recipient_scopes : [],
+      recipient_user_ids: Array.isArray(row.raw?.recipient_user_ids) ? row.raw.recipient_user_ids : [],
+      template: row.raw?.template_uuid || row.raw?.template || undefined,
+    });
+    setNotificationModalOpen(true);
+  };
+
+  const handleViewNotificationRule = (row: any) => {
+    Modal.info({
+      title: '通知规则详情',
+      width: 720,
+      content: (
+        <Descriptions column={2} size="small">
+          <Descriptions.Item label="场景">{row.scene}</Descriptions.Item>
+          <Descriptions.Item label="状态">{row.enabled ? '启用' : '停用'}</Descriptions.Item>
+          <Descriptions.Item label="单据类型">{row.document}</Descriptions.Item>
+          <Descriptions.Item label="触发动作">{row.action}</Descriptions.Item>
+          <Descriptions.Item label="通知渠道" span={2}>{row.channels}</Descriptions.Item>
+          <Descriptions.Item label="通知对象" span={2}>{row.recipients}</Descriptions.Item>
+          <Descriptions.Item label="消息模板" span={2}>{row.template}</Descriptions.Item>
+        </Descriptions>
+      ),
+    });
+  };
+
+  const handleDeleteNotificationRule = (row: any) => {
+    Modal.confirm({
+      title: '删除通知规则',
+      content: '确定删除该条通知规则吗？',
+      onOk: async () => {
+        try {
+          const existingRules = getExistingNotificationRules();
+          const nextRules = existingRules.filter((r: any) => String(r?.id) !== String(row.id));
+          await batchUpdateProcessParameters({
+            parameters: {
+              notifications: { rules: nextRules },
+            },
+          });
+          messageApi.success('通知规则已删除');
+          await refetchBusinessConfig();
+        } catch (error: any) {
+          messageApi.error(error?.message || '删除通知规则失败');
+        }
+      },
+    });
+  };
+
+  const renderNotificationTab = () => (
+    <Layout style={{ minHeight: 400, height: '100%', minWidth: 0, background: 'transparent' }}>
+      <Content style={{ padding: '24px 0 0 0', height: '100%', minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <div className="config-center-scrollable-content">
+          <div style={{ marginBottom: 16 }}>
+            <Text strong style={{ fontSize: 16 }}>消息提醒</Text>
+            <Paragraph type="secondary" style={{ marginTop: 4 }}>
+              当单据发生可配置动作时，通过可配置渠道通知指定人员。
             </Paragraph>
-          )}
-        </div>
-
-        <Spin spinning={loading}>
-          <Form form={form} layout="vertical">
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
-              {category?.params.map((param) => (
-                <Card key={param.key} size="small" style={{ marginBottom: 0 }}>
-                  {(() => {
-                    const implemented = isImplementedParam(param.sourcePath);
-                    return (
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'flex-start',
-                      gap: 16,
-                    }}
-                  >
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <Text strong>{renderText(param.nameKey, humanizeKey(param.key))}</Text>
-                      <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 4, marginBottom: 0 }}>
-                        {renderText(param.descriptionKey, '')}
-                      </Paragraph>
-                      {!!getParamGuidance(param.key) && (
-                        <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 4, marginBottom: 0 }}>
-                          {getParamGuidance(param.key)}
-                        </Paragraph>
-                      )}
-                    </div>
-                    <div style={{ flexShrink: 0 }}>
-                      <Form.Item
-                        name={[param.key]}
-                        noStyle
-                        valuePropName={param.type === 'boolean' ? 'checked' : undefined}
-                        getValueFromEvent={
-                          param.type === 'color'
-                            ? (c: Color) => (typeof c?.toHexString === 'function' ? c.toHexString() : c)
-                            : undefined
-                        }
-                      >
-                        {param.type === 'boolean' ? (
-                          <Switch disabled={!implemented} />
-                        ) : param.type === 'number' ? (
-                          <InputNumber min={param.min} max={param.max} precision={0} style={{ width: 140 }} disabled={!implemented} />
-                        ) : param.type === 'select' && param.selectOptions?.length ? (
-                          <Select
-                            style={{ minWidth: 200 }}
-                            disabled={!implemented}
-                            options={param.selectOptions.map((o) => ({
-                              value: o.value,
-                              label: renderText(o.labelKey, o.value),
-                            }))}
-                          />
-                        ) : param.type === 'color' ? (
-                          <ColorPicker showText disabled={!implemented} />
-                        ) : null}
-                      </Form.Item>
-                    </div>
-                  </div>
-                    );
-                  })()}
-                  {!isImplementedParam(param.sourcePath) && (
-                    <Paragraph type="warning" style={{ marginTop: 8, marginBottom: 0, fontSize: 12 }}>
-                      该配置项暂未在后端实装，已禁用编辑。
-                    </Paragraph>
-                  )}
-                </Card>
-              ))}
+          </div>
+          <Spin spinning={loading}>
+            <div>
+              <UniTable
+                columnPersistenceId="config-center-notification-rules-table"
+                rowKey="id"
+                pagination={false}
+                search={false}
+                options={false}
+                showCreateButton
+                createButtonText="新建通知规则"
+                onCreate={() => {
+                  notificationFormRef.current?.resetFields?.();
+                  setNotificationModalInitialValues({});
+                  setNotificationModalMode('create');
+                  setEditingNotificationRuleId(null);
+                  setNotificationModalOpen(true);
+                }}
+                columns={[
+                  { title: '场景', dataIndex: 'scene', width: 180 },
+                  { title: '单据类型', dataIndex: 'document', width: 120 },
+                  { title: '消息模板', dataIndex: 'template', width: 220 },
+                  { title: '触发动作', dataIndex: 'action', width: 140 },
+                  { title: '通知渠道', dataIndex: 'channels', width: 180 },
+                  { title: '通知对象', dataIndex: 'recipients', width: 220 },
+                  { title: '状态', dataIndex: 'enabled', width: 90, render: (v: boolean) => (v ? '启用' : '停用') },
+                  {
+                    title: '操作',
+                    width: 220,
+                    render: (_: any, row: any) => {
+                      const actions: React.ReactNode[] = [
+                        <Button key="detail" type="link" size="small" onClick={() => handleViewNotificationRule(row)}>详情</Button>,
+                        <Button key="edit" type="link" size="small" onClick={() => handleEditNotificationRule(row)}>编辑</Button>,
+                        <Button key="delete" type="link" size="small" danger onClick={() => handleDeleteNotificationRule(row)}>删除</Button>,
+                      ];
+                      return renderRowActionsOverflow(actions, `notification-rule-${row.id}`, 4);
+                    },
+                  },
+                ]}
+                dataSource={notificationRuleRows}
+              />
             </div>
-          </Form>
-        </Spin>
-
-        <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-start' }}>
-          <Space>
-            <Button icon={<ReloadOutlined />} onClick={() => refetchBusinessConfig()} loading={isFetching}>
-              {t('pages.system.configCenter.refresh')}
-            </Button>
-            <Button type="primary" icon={<SaveOutlined />} onClick={handleSaveParameters} loading={saving}>
-              {t('pages.system.configCenter.save')}
-            </Button>
-          </Space>
+          </Spin>
         </div>
       </Content>
     </Layout>
-    </>
   );
 
-  const processTabContent = (
-    <>
-      <Layout style={{ minHeight: 400, background: 'transparent' }}>
-      <Sider
-        width={200}
-        style={{
-          background: token.colorBgContainer,
-          borderRadius: 8,
-          padding: '16px 0',
-        }}
-      >
-        <div style={{ padding: '0 16px 16px', borderBottom: `1px solid ${token.colorBorder}`, marginBottom: 8 }}>
-          <Space>
-            <NodeIndexOutlined style={{ fontSize: 18 }} />
-            <Text strong>{t('pages.system.configCenter.categoryTitle')}</Text>
-          </Space>
-        </div>
-        <Menu
-          selectedKeys={[selectedProcessCategory]}
-          mode="inline"
-          style={{ border: 'none', background: 'transparent' }}
-          items={processCategories.map((c) => ({
-            key: c.id,
-            label: renderText(c.nameKey, humanizeKey(c.id.replace(/^process_/, ''))),
-          }))}
-          onClick={({ key }) => setSelectedProcessCategory(key)}
-        />
-      </Sider>
-      <Content style={{ padding: '0 0 0 24px', overflow: 'visible' }}>
-        <div style={{ marginBottom: 16 }}>
-          <Text strong style={{ fontSize: 16 }}>
-            {processCategory ? renderText(processCategory.nameKey, humanizeKey(processCategory.id.replace(/^process_/, ''))) : ''}
-          </Text>
-          {processCategory?.descriptionKey && (
-            <Paragraph type="secondary" style={{ marginBottom: 0, marginTop: 4 }}>
-              {renderText(processCategory.descriptionKey, '')}
-            </Paragraph>
-          )}
-        </div>
+  // 通用 Tab 内容渲染器
+  const renderTabContent = (
+    categories: ConfigCategory[],
+    selectedCatId: string,
+    onSelectCat: (id: string) => void,
+    icon: React.ReactNode,
+    showAuditSection: boolean = false
+  ) => {
+    const currentCat = categories.find(c => c.id === selectedCatId) || categories[0];
+    const auditSwitches = showAuditSection ? AUDIT_SWITCH_ITEMS.filter(it => it.categoryId === selectedCatId) : [];
 
-        <Alert
-          type="info"
-          showIcon
-          message={t('pages.system.configCenter.processAuditGuidanceTitle')}
-          description={t('pages.system.configCenter.processAuditGuidanceDesc')}
-          style={{ marginBottom: 16 }}
-        />
+    return (
+      <Layout style={{ minHeight: 400, height: '100%', minWidth: 0, background: 'transparent' }}>
+        <Sider width={200} style={{ background: token.colorBgContainer, borderRadius: 8, padding: '16px 0' }}>
+          <div style={{ padding: '0 16px 16px', borderBottom: `1px solid ${token.colorBorder}`, marginBottom: 8 }}>
+            <Space>{icon}<Text strong>{t('pages.system.configCenter.categoryTitle')}</Text></Space>
+          </div>
+          <Menu
+            selectedKeys={[selectedCatId]}
+            mode="inline"
+            style={{ border: 'none', background: 'transparent' }}
+            items={categories.map(c => ({ key: c.id, label: renderText(c.nameKey, c.id) }))}
+            onClick={({ key }) => onSelectCat(key)}
+          />
+        </Sider>
+        <Content style={{ padding: '24px 0 0 24px', height: '100%', minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <div className="config-center-scrollable-content">
+            <div style={{ marginBottom: 16 }}>
+              <Text strong style={{ fontSize: 16 }}>{renderText(currentCat.nameKey, currentCat.id)}</Text>
+              {currentCat.descriptionKey && <Paragraph type="secondary" style={{ marginTop: 4 }}>{renderText(currentCat.descriptionKey, '')}</Paragraph>}
+            </div>
 
-        <Spin spinning={loading}>
-          <Form form={processForm} layout="vertical">
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
-              {processCategory?.params.map((param) => (
-                <Card key={param.key} size="small" style={{ marginBottom: 0 }}>
-                  {(() => {
+            {showAuditSection && (
+              <Card size="small" style={{ marginBottom: 16 }}>
+                <Text strong>{t('pages.system.configCenter.auditSwitch.sectionTitle')}</Text>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', gap: 12, marginTop: 12 }}>
+                  {auditSwitches.map(item => (
+                    <Card key={item.code} size="small" bodyStyle={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <div style={{ flex: 1, marginRight: 16 }}>
+                        <Text strong>{renderText(item.labelKey, item.code)}</Text>
+                        <Paragraph type="secondary" style={{ fontSize: 12, margin: 0 }}>{renderText(item.descKey, '')}</Paragraph>
+                      </div>
+                      <Switch checked={!!approvalProcessByCode.get(item.code)?.is_active} onChange={v => handleToggleAuditProcess(item.code, v)} />
+                    </Card>
+                  ))}
+                  {auditSwitches.length === 0 && <Text type="secondary">{t('pages.system.configCenter.auditSwitch.empty')}</Text>}
+                </div>
+              </Card>
+            )}
+
+            <Spin spinning={loading}>
+              <Form form={form} layout="vertical">
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', gap: 16 }}>
+                  {currentCat.params.map(param => {
                     const implemented = isImplementedParam(param.sourcePath);
                     return (
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'flex-start',
-                      gap: 16,
-                    }}
-                  >
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <Text strong>{renderText(param.nameKey, humanizeKey(param.key))}</Text>
-                      <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 4, marginBottom: 0 }}>
-                        {renderText(param.descriptionKey, '')}
-                      </Paragraph>
-                      {!!getParamGuidance(param.key) && (
-                        <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 4, marginBottom: 0 }}>
-                          {getParamGuidance(param.key)}
-                        </Paragraph>
-                      )}
-                    </div>
-                    <div style={{ flexShrink: 0 }}>
-                      <Form.Item
-                        name={[param.key]}
-                        noStyle
-                        valuePropName={param.type === 'boolean' ? 'checked' : undefined}
-                        getValueFromEvent={
-                          param.type === 'color'
-                            ? (c: Color) => (typeof c?.toHexString === 'function' ? c.toHexString() : c)
-                            : undefined
-                        }
-                      >
-                        {param.type === 'boolean' ? (
-                          <Switch disabled={!implemented} />
-                        ) : param.type === 'number' ? (
-                          <InputNumber min={param.min} max={param.max} precision={0} style={{ width: 140 }} disabled={!implemented} />
-                        ) : param.type === 'select' && param.selectOptions?.length ? (
-                          <Select
-                            style={{ minWidth: 200 }}
-                            disabled={!implemented}
-                            options={param.selectOptions.map((o) => ({
-                              value: o.value,
-                              label: renderText(o.labelKey, o.value),
-                            }))}
-                          />
-                        ) : param.type === 'color' ? (
-                          <ColorPicker showText disabled={!implemented} />
-                        ) : null}
-                      </Form.Item>
-                    </div>
-                  </div>
+                      <Card key={param.key} size="small">
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <div style={{ flex: 1, marginRight: 16 }}>
+                            <Text strong>{renderText(param.nameKey, param.key)}</Text>
+                            <Paragraph type="secondary" style={{ fontSize: 12, margin: 0 }}>{renderText(param.descriptionKey, '')}</Paragraph>
+                            {!!getParamGuidance(param.key) && <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 4 }}>{getParamGuidance(param.key)}</Paragraph>}
+                          </div>
+                          <Form.Item
+                            name={[param.key]}
+                            noStyle
+                            valuePropName={param.type === 'boolean' ? 'checked' : undefined}
+                            getValueFromEvent={
+                              param.type === 'color'
+                                ? (c: Color) => (typeof c?.toHexString === 'function' ? c.toHexString() : c)
+                                : undefined
+                            }
+                          >
+                            {param.type === 'boolean' ? <Switch disabled={!implemented} /> :
+                             param.type === 'number' ? <InputNumber min={param.min} max={param.max} style={{ width: 120 }} disabled={!implemented} /> :
+                             param.type === 'select' ? <Select options={param.selectOptions?.map(o => ({ value: o.value, label: renderText(o.labelKey, o.value) }))} style={{ minWidth: 160 }} disabled={!implemented} /> :
+                             param.type === 'color' ? <ColorPicker showText disabled={!implemented} /> : null}
+                          </Form.Item>
+                        </div>
+                        {!implemented && <Text type="warning" style={{ fontSize: 12, marginTop: 8, display: 'block' }}>该配置项暂未实装，已禁用编辑。</Text>}
+                      </Card>
                     );
-                  })()}
-                  {!isImplementedParam(param.sourcePath) && (
-                    <Paragraph type="warning" style={{ marginTop: 8, marginBottom: 0, fontSize: 12 }}>
-                      该流程项暂未在后端实装，已禁用编辑。
-                    </Paragraph>
-                  )}
-                </Card>
-              ))}
-            </div>
-          </Form>
-        </Spin>
+                  })}
+                </div>
+              </Form>
+            </Spin>
 
-        <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-start' }}>
-          <Space>
-            <Button icon={<ReloadOutlined />} onClick={() => refetchBusinessConfig()} loading={isFetching}>
-              {t('pages.system.configCenter.refresh')}
-            </Button>
-            <Button type="primary" icon={<SaveOutlined />} onClick={handleSaveProcess} loading={processSaving}>
-              {t('pages.system.configCenter.save')}
-            </Button>
-          </Space>
-        </div>
-      </Content>
-    </Layout>
-    </>
-  );
+            <Space style={{ marginTop: 24 }}>
+              <Button icon={<ReloadOutlined />} onClick={() => refetchBusinessConfig()} loading={isFetching}>{t('pages.system.configCenter.refresh')}</Button>
+              <Button type="primary" icon={<SaveOutlined />} onClick={() => handleSave(categories)} loading={saving}>{t('pages.system.configCenter.save')}</Button>
+            </Space>
+          </div>
+        </Content>
+      </Layout>
+    );
+  };
 
   return (
-    <div
-        className="config-center-page"
-        style={{
-          background: token.colorBgContainer,
-          minHeight: '100%',
-          borderRadius: typeof token.borderRadiusLG === 'number' ? token.borderRadiusLG : (token.borderRadiusLG ?? 8),
-          overflow: 'hidden',
-        }}
-      >
-      <style>{`
-        /* 最外层带 tabs 的卡片保留圆角 */
-        .config-center-page .ant-card.ant-card-bordered.ant-card-contain-tabs {
-          border-radius: ${typeof token.borderRadiusLG === 'number' ? `${token.borderRadiusLG}px` : token.borderRadiusLG ?? '8px'} !important;
-        }
-        /* 修正 ant-card-body 多出的 16px 高度：将 padding 从默认 24px 调整为 16px */
-        .config-center-page .ant-card .ant-card-body {
-          padding: 16px !important;
-        }
-        /* 隔离左侧 Sider 背景，避免继承主菜单深色，强制使用浅色 */
-        .config-center-page .ant-layout-sider,
-        .config-center-page .ant-layout-sider .ant-layout-sider-children,
-        .config-center-page .ant-layout .ant-layout-sider {
-          background: ${token.colorBgContainer} !important;
-        }
-        /* 确保卡片主体也有背景，与内容区隔离 */
-        .config-center-page .ant-card {
-          background: ${token.colorBgContainer} !important;
-        }
-      `}</style>
+    <div className="config-center-page" ref={containerRef} style={{ height: containerHeight, minHeight: 400, borderRadius: 8, overflow: 'hidden' }}>
       <MultiTabListPageTemplate
+        style={{ height: '100%' }}
         activeTabKey={activeMainTab}
         onTabChange={setActiveMainTab}
         tabs={[
-          {
-            key: 'process',
-            label: (
-              <Space>
-                <NodeIndexOutlined />
-                <span>{t('pages.system.configCenter.tabProcess')}</span>
-              </Space>
-            ),
-            children: processTabContent,
-          },
-          {
-            key: 'parameters',
-            label: (
-              <Space>
-                <ControlOutlined />
-                <span>{t('pages.system.configCenter.tabParameters')}</span>
-              </Space>
-            ),
-            children: parametersTabContent,
-          },
+          { key: 'parameters', label: t('pages.system.configCenter.tabParameters'), children: renderTabContent(PARAMETER_CATEGORIES, selectedParamCat, setSelectedParamCat, <SettingOutlined />) },
+          { key: 'audit', label: t('pages.system.configCenter.tabAudit'), children: renderTabContent(AUDIT_CATEGORIES, selectedAuditCat, setSelectedAuditCat, <AuditOutlined />, true) },
+          { key: 'flow', label: t('pages.system.configCenter.tabFlow'), children: renderTabContent(FLOW_CATEGORIES, selectedFlowCat, setSelectedFlowCat, <NodeIndexOutlined />) },
+          { key: 'automation', label: t('pages.system.configCenter.tabAutomation'), children: renderTabContent(AUTOMATION_CATEGORIES, selectedAutoCat, setSelectedAutoCat, <ControlOutlined />) },
+          { key: 'notification', label: '消息提醒', children: renderNotificationTab(), icon: <BellOutlined /> },
         ]}
         padding={24}
       />
+
+      <FormModalTemplate
+        title={notificationModalMode === 'edit' ? '编辑通知规则' : '新建通知规则'}
+        open={notificationModalOpen}
+        onClose={() => {
+          setNotificationModalOpen(false);
+          setNotificationModalMode('create');
+          setEditingNotificationRuleId(null);
+        }}
+        onFinish={handleCreateNotificationRule}
+        isEdit={notificationModalMode === 'edit'}
+        formRef={notificationFormRef}
+        width={860}
+        layout="vertical"
+        initialValues={notificationModalInitialValues}
+      >
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 16 }}>
+          <ProFormSelect
+            name="trigger_document"
+            label="单据类型"
+            rules={[{ required: true, message: '请选择单据类型' }]}
+            options={NOTIFICATION_DOCUMENT_OPTIONS}
+          />
+          <ProFormDependency name={['trigger_document']}>
+            {({ trigger_document }) => (
+              <ProFormSelect
+                name="trigger_action"
+                label="触发动作"
+                rules={[{ required: true, message: '请选择触发动作' }]}
+                options={NOTIFICATION_ACTION_OPTIONS[String(trigger_document || '')] || []}
+                fieldProps={{
+                  placeholder: trigger_document ? '请选择触发动作' : '请先选择单据类型',
+                  disabled: !trigger_document,
+                }}
+              />
+            )}
+          </ProFormDependency>
+          <ProFormDependency name={['trigger_document', 'trigger_action']}>
+            {({ trigger_document, trigger_action }) => {
+              const validValues = (NOTIFICATION_ACTION_OPTIONS[String(trigger_document || '')] || []).map(it => it.value);
+              if (trigger_action && !validValues.includes(trigger_action)) {
+                notificationFormRef.current?.setFieldValue?.('trigger_action', undefined);
+              }
+              return null;
+            }}
+          </ProFormDependency>
+          <ProFormSelect
+            name="template"
+            label="消息模板"
+            options={templateOptions}
+            initialValue={templateOptions[0]?.value}
+          />
+          <ProFormSelect
+            name="channels"
+            label="通知渠道"
+            mode="multiple"
+            options={channelOptions}
+            initialValue={[BUILTIN_IN_APP_CHANNEL_UUID]}
+          />
+          <ProFormSelect
+            name="recipient_scopes"
+            label="通知角色"
+            mode="multiple"
+            options={[
+              { value: 'creator', label: '创建人' },
+              { value: 'salesman', label: '业务员' },
+              { value: 'follower', label: '跟单员' },
+            ]}
+            initialValue={['salesman', 'follower']}
+          />
+          <ProFormSelect
+            name="recipient_user_ids"
+            label="指定人员"
+            mode="multiple"
+            options={userOptions}
+            fieldProps={{ placeholder: '可选：补充指定人员' }}
+          />
+        </div>
+      </FormModalTemplate>
     </div>
   );
 };

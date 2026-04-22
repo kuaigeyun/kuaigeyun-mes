@@ -2122,9 +2122,9 @@ SALES_ORDER_PENDING_SHIP_STATUS = [
 
 # 已审核/已确认/已完成/已收货 等"业务上视为有效采购订单"的状态
 PURCHASE_ORDER_ACTIVE_STATUS = [
-    "approved", "partial_received", "received", "completed",
+    "approved", "confirmed", "partial_received", "received", "completed",
     "released", "in_progress",
-    "已审核", "部分收货", "已收货", "已完成", "执行中", "进行中", "已下达",
+    "已审核", "已确认", "部分收货", "已收货", "已完成", "执行中", "进行中", "已下达",
     "APPROVED", "AUDITED", "CONFIRMED", "RELEASED", "IN_PROGRESS", "COMPLETED",
 ]
 

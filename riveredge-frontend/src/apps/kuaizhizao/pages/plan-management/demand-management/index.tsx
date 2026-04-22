@@ -11,9 +11,9 @@
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions, ProFormInstance } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Input, InputNumber, Select, Alert, Row, Col, Spin, Form as AntForm, DatePicker, Typography, Tooltip, Dropdown, Empty, Tabs } from 'antd';
+import { App, Button, Tag, Space, Modal, Row, Col, Table, Input, InputNumber, Alert, Spin, Form as AntForm, DatePicker, Typography, Tooltip, Dropdown, Empty, Tabs } from 'antd';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG, type StatCard } from '../../../../../components/layout-templates';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
@@ -67,8 +67,9 @@ import { getDemandTypeLabel, getDemandTypeTagProps } from '../../../utils/demand
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import dayjs from 'dayjs';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
-import { usePageMetrics } from '../../../../../hooks/usePageMetrics';
 import { useTranslation } from 'react-i18next';
+
+const DEMAND_ORIGIN_SUB_KEYS = new Set(['from_forecast', 'from_order', 'manual_plan']);
 
 /** 根据字典 code 和 value 获取标签，无匹配时返回原值（支持大小写不敏感匹配） */
 function getDictLabel(map: Record<string, Record<string, string>>, code: string, value: string | undefined): string {
@@ -86,16 +87,10 @@ function formatDateTime(t: string | undefined): string {
   return d.isValid() ? d.format('YYYY-MM-DD HH:mm:ss') : t;
 }
 
-// normalizeDemandTypeKey moved to ../../../utils/demandType.ts
-
-// Moved to ../../../utils/demandType.ts
-
-const DEMAND_ORIGIN_SUB_KEYS = new Set(['from_forecast', 'from_order', 'manual_plan']);
-
 /** 详情「生命周期」区块标题：主标题 + 来源文案（无圆环、无单独来源子轨） */
 function buildDemandLifecycleSectionTitle(record: Demand) {
   const lifecycle = getDemandLifecycle(record);
-  const originLabel = (lifecycle.subStages ?? []).find((s) => DEMAND_ORIGIN_SUB_KEYS.has(s.key))?.label;
+  const originLabel = (lifecycle.subStages ?? []).find((s: any) => DEMAND_ORIGIN_SUB_KEYS.has(s.key))?.label;
   if (!originLabel) {
     return '生命周期';
   }
@@ -142,27 +137,23 @@ const DEMAND_ROW_ACTIONS_INLINE_MAX = 4;
 const DemandManagementPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+
   const navigate = useNavigate();
-  const location = useLocation();
   const queryClient = useQueryClient();
   const actionRef = useRef<ActionType>(null);
-  /** 当前列表行缓存，用于批量删除时识别 demand_type */
   const demandRowsByIdRef = useRef<Map<number, Demand>>(new Map());
   const formRef = useRef<any>(null);
   const tableSearchFormRef = useRef<any>(null);
 
-  const { statCards: pageMetricCards, hasConfig: hasPageMetricConfig } = usePageMetrics();
   const invalidateStatistics = () => {
     queryClient.invalidateQueries({ queryKey: ['demandStatistics'] });
-    queryClient.invalidateQueries({ queryKey: ['pageMetrics', location.pathname] });
   };
+
   const { data: statistics } = useQuery({
     queryKey: ['demandStatistics'],
     queryFn: getDemandStatistics,
-    enabled: !hasPageMetricConfig,
   });
 
-  // Modal 相关状态（新建/编辑）
   const [modalVisible, setModalVisible] = useState(false);
   const [createPlanModalVisible, setCreatePlanModalVisible] = useState(false);
   const [createPlanLoading, setCreatePlanLoading] = useState(false);
@@ -172,7 +163,6 @@ const DemandManagementPage: React.FC = () => {
   const [currentId, setCurrentId] = useState<number | null>(null);
   const [isEditingDraft, setIsEditingDraft] = useState(false); // 当前编辑的需求是否为草稿（草稿可改更多字段）
 
-  // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [currentDemand, setCurrentDemand] = useState<Demand | null>(null);
   const [recalcHistory, setRecalcHistory] = useState<DemandRecalcHistoryItem[]>([]);
@@ -180,14 +170,18 @@ const DemandManagementPage: React.FC = () => {
   const [recalcHistoryLoading, setRecalcHistoryLoading] = useState(false);
   const [snapshotsLoading, setSnapshotsLoading] = useState(false);
   const [demandTrackingRefreshKey, setDemandTrackingRefreshKey] = useState(0);
-  /** 数据字典 value->label 映射（用于详情抽屉显示标签） */
   const [dictLabelMap, setDictLabelMap] = useState<Record<string, Record<string, string>>>({});
 
   // 需求计划页仅管理手工需求计划（demand_plan）
-  const [demandType, setDemandType] = useState<'demand_plan'>('demand_plan');
+  const demandType = 'demand_plan' as const;
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
-  /** 页面加载时预加载数据字典（发货方式、付款条件、物料单位），用于详情抽屉显示标签值 */
+  const demandTracking = useDocumentTracking(
+    drawerVisible && currentDemand?.id != null ? 'demand' : undefined,
+    drawerVisible ? currentDemand?.id ?? undefined : undefined,
+    demandTrackingRefreshKey
+  );
+
   useEffect(() => {
     const loadDicts = async () => {
       const result: Record<string, Record<string, string>> = {};
@@ -219,45 +213,6 @@ const DemandManagementPage: React.FC = () => {
     [messageApi, t]
   );
 
-  const demandTracking = useDocumentTracking(
-    drawerVisible && currentDemand?.id != null ? 'demand' : undefined,
-    drawerVisible ? currentDemand?.id ?? undefined : undefined,
-    demandTrackingRefreshKey
-  );
-
-  /** 打开详情时拉取重算历史、变更快照 */
-  useEffect(() => {
-    if (!drawerVisible || !currentDemand?.id) return;
-    setRecalcHistoryLoading(true);
-    listDemandRecalcHistory(currentDemand.id, { limit: 50 })
-      .then(setRecalcHistory)
-      .catch(() => messageApi.error('获取重算历史失败'))
-      .finally(() => setRecalcHistoryLoading(false));
-    setSnapshotsLoading(true);
-    listDemandSnapshots(currentDemand.id, { limit: 20 })
-      .then(setSnapshots)
-      .catch(() => messageApi.error('获取快照列表失败'))
-      .finally(() => setSnapshotsLoading(false));
-  }, [drawerVisible, currentDemand?.id, messageApi]);
-
-  const appendDemandPlanItemsFromMaterials = useCallback(
-    (selected: Material[]) => {
-      const current = createPlanFormRef.current?.getFieldValue('items') ?? [];
-      const newRows = selected.map((m) => ({
-        material_id: m.id,
-        material_code: m.mainCode ?? m.code ?? '',
-        material_name: m.name ?? '',
-        material_unit: m.baseUnit ?? '',
-        required_quantity: 0,
-        delivery_date: dayjs(),
-      }));
-      createPlanFormRef.current?.setFieldsValue({ items: [...current, ...newRows] });
-      messageApi.success(t('app.kuaizhizao.common.materialBatchAdded', { count: selected.length }));
-    },
-    [messageApi, t]
-  );
-
-  /** 新建需求计划提交 */
   const handleCreatePlanSubmit = async (values: any) => {
     setCreatePlanLoading(true);
     try {
@@ -292,16 +247,13 @@ const DemandManagementPage: React.FC = () => {
       createPlanFormRef.current?.resetFields();
       invalidateStatistics();
       actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(getApiErrorMessage(error, '创建失败'));
+    } catch (err: any) {
+      messageApi.error(getApiErrorMessage(err) || '提交失败');
     } finally {
       setCreatePlanLoading(false);
     }
   };
 
-  /**
-   * 处理编辑需求
-   */
   const handleEdit = async (keys: React.Key[]) => {
     if (keys.length === 1) {
       const id = Number(keys[0]);
@@ -310,9 +262,8 @@ const DemandManagementPage: React.FC = () => {
       setModalVisible(true);
       try {
         const data = await getDemand(id);
-        formRef.current?.setFieldsValue(data);
-        setDemandType((data.demand_type as 'demand_plan') || 'demand_plan');
         setIsEditingDraft(isDemandDraft(data));
+        formRef.current?.setFieldsValue(data);
       } catch (error: any) {
         messageApi.error('获取需求详情失败');
       }
@@ -320,15 +271,56 @@ const DemandManagementPage: React.FC = () => {
   };
 
   /**
-   * 处理详情查看
+   * 处理提交表单（仅用于编辑，如修改优先级）
    */
+  const handleSubmit = async (values: any) => {
+    if (!isEdit || !currentId) return;
+    try {
+      await updateDemand(currentId, values);
+      messageApi.success('需求更新成功');
+      setModalVisible(false);
+      invalidateStatistics();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '操作失败');
+      throw error;
+    }
+  };
+
+  useEffect(() => {
+    if (!drawerVisible || !currentDemand?.id) return;
+
+    const loadExtraData = async () => {
+      setRecalcHistoryLoading(true);
+      try {
+        const history = await listDemandRecalcHistory(currentDemand.id!, { limit: 50 });
+        setRecalcHistory(history);
+      } catch {
+        messageApi.error('获取重算历史失败');
+      } finally {
+        setRecalcHistoryLoading(false);
+      }
+
+      setSnapshotsLoading(true);
+      try {
+        const list = await listDemandSnapshots(currentDemand.id!, { limit: 20 });
+        setSnapshots(list);
+      } catch {
+        messageApi.error('获取快照列表失败');
+      } finally {
+        setSnapshotsLoading(false);
+      }
+    };
+
+    loadExtraData();
+  }, [drawerVisible, currentDemand?.id, messageApi]);
+
   const handleDetail = async (keys: React.Key[]) => {
     if (keys.length === 1) {
       const id = Number(keys[0]);
       try {
         const data = await getDemand(id, true, false);
         setCurrentDemand(data);
-
         setDrawerVisible(true);
       } catch (error: any) {
         messageApi.error('获取需求详情失败');
@@ -336,10 +328,6 @@ const DemandManagementPage: React.FC = () => {
     }
   };
 
-  /**
-   * 处理删除需求
-   * 只能删除草稿或待审核状态的需求
-   */
   const handleDelete = async (keys: React.Key[]) => {
     if (keys.length === 0) {
       messageApi.warning('请选择要删除的需求');
@@ -375,8 +363,8 @@ const DemandManagementPage: React.FC = () => {
           try {
             await deleteDemand(id);
             successCount += 1;
-          } catch (e: any) {
-            errors.push(`ID ${id}: ${e?.message || '删除失败'}`);
+          } catch (e) {
+            errors.push(`ID ${id}: ${getApiErrorMessage(e)}`);
           }
         }
         if (successCount > 0) {
@@ -392,26 +380,6 @@ const DemandManagementPage: React.FC = () => {
     });
   };
 
-  /**
-   * 处理提交表单（仅用于编辑，如修改优先级）
-   */
-  const handleSubmit = async (values: any) => {
-    if (!isEdit || !currentId) return;
-    try {
-      await updateDemand(currentId, values);
-      messageApi.success('需求更新成功');
-      setModalVisible(false);
-      invalidateStatistics();
-      actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
-      throw error;
-    }
-  };
-
-  /**
-   * 合并多选需求进行计算
-   */
   const handleMergeComputation = async () => {
     if (selectedRowKeys.length === 0) {
       messageApi.warning('请先选择要合并计算的需求');
@@ -442,9 +410,6 @@ const DemandManagementPage: React.FC = () => {
     });
   };
 
-  /**
-   * 处理下推需求到物料需求运算
-   */
   const handlePushToComputation = async (id: number) => {
     Modal.confirm({
       title: '下推到物料需求运算',
@@ -453,12 +418,8 @@ const DemandManagementPage: React.FC = () => {
         try {
           const result = await pushDemandToComputation(id);
           messageApi.success(result.message || '需求下推成功');
-          if (result.computation_code) {
-            messageApi.info(`计算编号：${result.computation_code}`);
-          }
           invalidateStatistics();
           actionRef.current?.reload();
-          // 勿在 onOk 内 await getDemand：详情 GET 若慢/挂起会导致确认框一直 loading
           if (currentDemand?.id === id) {
             void getDemand(id)
               .then((updated) => setCurrentDemand(updated))
@@ -472,9 +433,6 @@ const DemandManagementPage: React.FC = () => {
     });
   };
 
-  /**
-   * 处理从需求计算撤回
-   */
   const handleWithdrawFromComputation = async (id: number) => {
     Modal.confirm({
       title: '撤回下推',
@@ -498,9 +456,6 @@ const DemandManagementPage: React.FC = () => {
     });
   };
 
-  /**
-   * 表格列定义
-   */
   const columns: ProColumns<Demand>[] = [
     {
       title: '需求编号',
@@ -542,12 +497,6 @@ const DemandManagementPage: React.FC = () => {
       ellipsis: true,
     },
     {
-      title: '客户名称',
-      dataIndex: 'customer_name',
-      width: 150,
-      ellipsis: true,
-    },
-    {
       title: '总数量',
       dataIndex: 'total_quantity',
       width: 100,
@@ -562,70 +511,6 @@ const DemandManagementPage: React.FC = () => {
         MTO: { text: '按订单生产', status: 'Success' },
         ATO: { text: '按订单组装 (ATO)', status: 'Warning' },
       },
-    },
-    {
-      title: '优先级',
-      dataIndex: 'priority',
-      width: 100,
-      render: (_, record: Demand) => (
-        <Select
-          size="small"
-          value={record.priority ?? 5}
-          options={[
-            { label: '高 (1)', value: 1 },
-            { label: '中 (5)', value: 5 },
-            { label: '低 (10)', value: 10 },
-          ]}
-          onChange={async (v) => {
-            if (record.id == null) return;
-            try {
-              await updateDemand(record.id, { priority: v });
-              messageApi.success('优先级已更新');
-              invalidateStatistics();
-              actionRef.current?.reload();
-            } catch (e: any) {
-              messageApi.error(e?.message || '更新失败');
-            }
-          }}
-          style={{ width: 90 }}
-        />
-      ),
-    },
-    {
-      title: '来源',
-      dataIndex: ['source_type', 'source_code'],
-      width: 160,
-      ellipsis: true,
-      render: (_: unknown, record: Demand) => {
-        const st = record.source_type;
-        const sc = record.source_code;
-        if (!st && !sc) return '-';
-        const label =
-          st === 'sales_order' ? '销售订单' :
-          st === 'sales_forecast' ? '销售预测' :
-          st === 'sample_trial' ? '样件试制' :
-          st === 'quotation' ? '报价单' :
-          st || '';
-        return sc ? `${label} ${sc}` : label || '-';
-      },
-    },
-    {
-      title: '开始日期',
-      dataIndex: 'start_date',
-      valueType: 'date',
-      width: 120,
-    },
-    {
-      title: '结束日期',
-      dataIndex: 'end_date',
-      valueType: 'date',
-      width: 120,
-    },
-    {
-      title: '交货日期',
-      dataIndex: 'delivery_date',
-      valueType: 'date',
-      width: 120,
     },
     {
       title: '生命周期',
@@ -782,9 +667,7 @@ const DemandManagementPage: React.FC = () => {
     },
   ];
 
-  const statCards: StatCard[] = hasPageMetricConfig
-    ? pageMetricCards
-    : statistics
+  const statCards: StatCard[] = statistics
     ? [
         { title: '活动需求', value: statistics.active_count },
         {
@@ -820,6 +703,23 @@ const DemandManagementPage: React.FC = () => {
           precision: 2,
         },
       ];
+ 
+  const appendDemandPlanItemsFromMaterials = useCallback(
+    (selected: Material[]) => {
+      const current = createPlanFormRef.current?.getFieldValue('items') ?? [];
+      const newRows = selected.map((m) => ({
+        material_id: m.id,
+        material_code: m.mainCode ?? m.code ?? '',
+        material_name: m.name ?? '',
+        material_unit: m.baseUnit ?? '',
+        required_quantity: 0,
+        delivery_date: dayjs(),
+      }));
+      createPlanFormRef.current?.setFieldsValue({ items: [...current, ...newRows] });
+      messageApi.success(t('app.kuaizhizao.common.materialBatchAdded', { count: selected.length }));
+    },
+    [messageApi, t]
+  );
 
   return (
     <>
@@ -835,9 +735,7 @@ const DemandManagementPage: React.FC = () => {
               limit: params.pageSize || 20,
             };
 
-            // 处理搜索参数，优先使用搜索表单的值，如果没有则使用 URL 参数的值
             apiParams.demand_type = 'demand_plan';
-            // 生命周期搜索映射到 status（与销售订单一致）
             if (searchFormValues?.lifecycle) {
               const lifecycleToStatus: Record<string, string> = {
                 草稿: 'DRAFT',
@@ -853,14 +751,7 @@ const DemandManagementPage: React.FC = () => {
             } else if (searchFormValues?.status) {
               apiParams.status = searchFormValues.status;
             }
-            if (searchFormValues?.business_mode) {
-              apiParams.business_mode = searchFormValues.business_mode;
-            }
-            if (searchFormValues?.review_status) {
-              apiParams.review_status = searchFormValues.review_status;
-            }
 
-            // 处理排序
             if (sort) {
               const sortKeys = Object.keys(sort);
               if (sortKeys.length > 0) {
@@ -910,13 +801,13 @@ const DemandManagementPage: React.FC = () => {
                 messageApi.warning('暂无数据可导出');
                 return;
               }
-              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
+              const blob = new window.Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+              const url = window.URL.createObjectURL(blob);
               const a = document.createElement('a');
               a.href = url;
               a.download = `demands-${new Date().toISOString().slice(0, 10)}.json`;
               a.click();
-              URL.revokeObjectURL(url);
+              window.URL.revokeObjectURL(url);
               messageApi.success(`已导出 ${items.length} 条记录`);
             } catch (error: any) {
               messageApi.error(error?.message || '导出失败');
@@ -1299,7 +1190,6 @@ const DemandManagementPage: React.FC = () => {
                   ]}
                   rules={[{ required: true, message: '请选择需求类型' }]}
                   fieldProps={{
-                    onChange: () => setDemandType('demand_plan'),
                     style: { width: '100%' },
                   }}
                 />
@@ -1327,43 +1217,6 @@ const DemandManagementPage: React.FC = () => {
                   width="100%"
                 />
               </Col>
-              {demandType === 'sales_forecast' && (
-                <Col span={12}>
-                  <ProFormText
-                    name="forecast_period"
-                    label="预测周期"
-                    placeholder="例如：2026-01"
-                    rules={[{ required: true, message: '请输入预测周期' }]}
-                  />
-                </Col>
-              )}
-              {demandType === 'sales_order' && (
-                <>
-                  <Col span={12}>
-                    <ProFormText
-                      name="customer_name"
-                      label="客户名称"
-                      rules={[{ required: true, message: '请输入客户名称' }]}
-                    />
-                  </Col>
-                  <Col span={12}>
-                    <ProFormDatePicker
-                      name="order_date"
-                      label="订单日期"
-                      rules={[{ required: true, message: '请选择订单日期' }]}
-                      width="100%"
-                    />
-                  </Col>
-                  <Col span={12}>
-                    <ProFormDatePicker
-                      name="delivery_date"
-                      label="交货日期"
-                      rules={[{ required: true, message: '请选择交货日期' }]}
-                      width="100%"
-                    />
-                  </Col>
-                </>
-              )}
               <Col span={24}>
                 <ProFormTextArea
                   name="notes"

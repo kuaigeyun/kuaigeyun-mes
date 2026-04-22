@@ -65,6 +65,8 @@ export interface UniWorkflowActionsProps {
     reject?: string;
     revoke?: string;
   };
+  /** 审核关闭时，是否强制隐藏审核语义动作（审核/驳回/撤销审核/确认） */
+  hideAuditActionsWhenDisabled?: boolean;
 }
 
 /**
@@ -83,7 +85,7 @@ export const UniWorkflowActions: React.FC<UniWorkflowActionsProps> = ({
   reviewStatusField = 'review_status',
   draftStatuses = ['draft', '草稿'],
   pendingStatuses = ['pending_approval', 'pending_review', '待审核'],
-  approvedStatuses = ['approved', 'audited', '已审核', '审核通过'],
+  approvedStatuses = ['approved', 'audited', 'confirmed', '已审核', '已确认', '审核通过'],
   rejectedStatuses = ['rejected', '已驳回'],
   autoApproveWhenSubmit = false,
   workflowAuditEnabled,
@@ -93,6 +95,7 @@ export const UniWorkflowActions: React.FC<UniWorkflowActionsProps> = ({
   theme = 'default',
   size = 'middle',
   confirmMessages = {},
+  hideAuditActionsWhenDisabled = true,
 }) => {
   const { message } = App.useApp();
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
@@ -107,6 +110,17 @@ export const UniWorkflowActions: React.FC<UniWorkflowActionsProps> = ({
     if (prefix.includes('/plan/production-plans')) return 'production_plan';
     if (prefix.includes('/quality/') && prefix.includes('inspection')) return 'quality_inspection';
     if (prefix.includes('/sales/delivery') || prefix.includes('/delivery-notice')) return 'sales_delivery';
+    if (prefix.includes('/warehouse/purchase-receipt')) return 'purchase_receipt';
+    if (prefix.includes('/warehouse/finished-goods-receipt')) return 'finished_goods_receipt';
+    if (prefix.includes('/warehouse/other-inbound')) return 'other_inbound';
+    if (prefix.includes('/warehouse/other-outbound')) return 'other_outbound';
+    if (prefix.includes('/warehouse/material-borrow')) return 'material_borrow';
+    if (prefix.includes('/warehouse/material-return')) return 'material_return';
+    if (prefix.includes('/warehouse/production-picking')) return 'production_picking';
+    if (prefix.includes('/warehouse/production-return')) return 'production_return';
+    if (prefix.includes('/warehouse/sales-returns')) return 'sales_return';
+    if (prefix.includes('/warehouse/purchase-returns')) return 'purchase_return';
+    if (prefix.includes('/productions/reporting') || prefix.includes('/reporting')) return 'reporting_record';
     if (prefix.includes('/demands')) return 'demand';
     if (prefix.includes('/quotation')) return 'quotation';
     return '';
@@ -216,7 +230,12 @@ export const UniWorkflowActions: React.FC<UniWorkflowActionsProps> = ({
   const isApproved = approvedStatuses.includes(status) || approvedStatuses.includes(reviewStatus);
   const isRejected = rejectedStatuses.includes(status) || rejectedStatuses.includes(reviewStatus);
   const approveLabel = effectiveAuditEnabled ? '审核' : '确认';
-  const revokeLabel = effectiveAuditEnabled ? '撤销审核' : '撤销确认';
+  const revokeLabel = effectiveAuditEnabled ? '撤销审核' : '撤销';
+  const effectiveSubmitLabel =
+    !effectiveAuditEnabled && submitActionLabel.includes('审核')
+      ? submitActionLabel.replace(/审核/g, '').trim() || '提交'
+      : submitActionLabel;
+  const canShowAuditSemanticActions = effectiveAuditEnabled || !hideAuditActionsWhenDisabled;
 
   return (
     <Space>
@@ -224,41 +243,41 @@ export const UniWorkflowActions: React.FC<UniWorkflowActionsProps> = ({
         <Button
           key="submit"
           {...getBtnProps('submit')}
-          icon={<SendOutlined />}
-          onClick={() => handleAction('submit', submitActionLabel)}
+          icon={isLink ? undefined : <SendOutlined />}
+          onClick={() => handleAction('submit', effectiveSubmitLabel)}
         >
-          {submitActionLabel}
+          {effectiveSubmitLabel}
         </Button>
       )}
 
-      {isPending && (actions.approve || apiPrefix) && (
+      {canShowAuditSemanticActions && isPending && (actions.approve || apiPrefix) && (
         <Button
           key="approve"
           {...getBtnProps('approve')}
-          icon={<CheckCircleOutlined />}
+          icon={isLink ? undefined : <CheckCircleOutlined />}
           onClick={() => handleAction('approve', approveLabel)}
         >
           {approveLabel}
         </Button>
       )}
-      {effectiveAuditEnabled && isPending && (actions.approve || apiPrefix) && (actions.reject || apiPrefix) && (
+      {canShowAuditSemanticActions && isPending && (actions.approve || apiPrefix) && (actions.reject || apiPrefix) && (
         <Button
           key="reject"
           {...getBtnProps('reject')}
           danger
-          icon={<CloseCircleOutlined />}
+          icon={isLink ? undefined : <CloseCircleOutlined />}
           onClick={handleReject}
         >
           驳回
         </Button>
       )}
 
-      {effectiveAuditEnabled && isApproved && (actions.revoke || apiPrefix) && (
+      {canShowAuditSemanticActions && isApproved && (actions.revoke || apiPrefix) && (
         <Button
           key="revoke"
           {...getBtnProps('revoke')}
           danger={!isLink}
-          icon={<UndoOutlined />}
+          icon={isLink ? undefined : <UndoOutlined />}
           onClick={() => handleAction('revoke', revokeLabel)}
         >
           {revokeLabel}

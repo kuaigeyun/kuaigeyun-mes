@@ -17,7 +17,6 @@ import {
   ActionType,
   ProColumns,
   ProDescriptionsItemProps,
-  ProFormText,
   ProFormSelect,
   ProFormDatePicker,
   ProFormDigit,
@@ -60,7 +59,7 @@ import {
   useDocumentTracking,
 } from '../../../../../components/document-tracking-panel';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
-import { usePageMetrics } from '../../../../../hooks/usePageMetrics';
+import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
 
 interface OutsourceOrder {
@@ -172,7 +171,6 @@ export const OutsourceOrdersTable: React.FC = () => {
   const [localStats, setLocalStats] = useState({ total: 0, draft: 0, inProgress: 0 });
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
-  const { statCards: pageMetricCards, hasConfig: hasPageMetricConfig } = usePageMetrics(location.pathname);
 
   // Modal 相关状态
   const [modalVisible, setModalVisible] = useState(false);
@@ -207,10 +205,8 @@ export const OutsourceOrdersTable: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!hasPageMetricConfig) {
-      refreshLocalStats();
-    }
-  }, [hasPageMetricConfig, statsVersion, refreshLocalStats]);
+    refreshLocalStats();
+  }, [statsVersion, refreshLocalStats]);
 
   /**
    * 加载供应商列表
@@ -221,11 +217,12 @@ export const OutsourceOrdersTable: React.FC = () => {
         const suppliers = await supplierApi.list({ isActive: true });
         setSupplierList(suppliers || []);
       } catch (error) {
-        console.error('加载供应商列表失败:', error);
+        window.console.error('获取数据失败:', error);
+        messageApi.error('获取数据失败');
       }
     };
     loadSuppliers();
-  }, []);
+  }, [messageApi]);
 
   const detailBaseColumns: ProDescriptionsItemProps<OutsourceOrder>[] = useMemo(
     () => [
@@ -353,7 +350,7 @@ export const OutsourceOrdersTable: React.FC = () => {
       setIsEdit(true);
       setCurrentOutsourceOrder(detail);
       setModalVisible(true);
-      setTimeout(() => {
+      window.setTimeout(() => {
         formRef.current?.setFieldsValue({
           supplier_id: detail.supplier_id,
           outsource_quantity: detail.outsource_quantity,
@@ -592,7 +589,7 @@ export const OutsourceOrdersTable: React.FC = () => {
       align: 'left',
       hideInSearch: true,
       render: (_, record) => {
-        const lifecycle = getOutsourceOrderLifecycle(record);
+        const lifecycle = getOutsourceOrderLifecycle(record as any);
         return (
           <UniLifecycle
             percent={lifecycle.percent}
@@ -642,29 +639,26 @@ export const OutsourceOrdersTable: React.FC = () => {
     }
   };
 
-  const statCards: StatCard[] =
-    hasPageMetricConfig && pageMetricCards.length > 0
-      ? pageMetricCards
-      : [
-          {
-            title: '工序委外单总数',
-            value: localStats.total,
-            valueStyle: { color: token.colorPrimary },
-            backgroundChart: <SimpleSparkline data={OO_STAT_SPARK_1} color={token.colorPrimary} />,
-          },
-          {
-            title: '草稿',
-            value: localStats.draft,
-            valueStyle: { color: token.colorWarning },
-            backgroundChart: <SimpleSparkline data={OO_STAT_SPARK_2} color={token.colorWarning} />,
-          },
-          {
-            title: '执行中',
-            value: localStats.inProgress,
-            valueStyle: { color: token.colorSuccess },
-            backgroundChart: <SimpleSparkline data={OO_STAT_SPARK_3} color={token.colorSuccess} />,
-          },
-        ];
+  const statCards: StatCard[] = [
+    {
+      title: '工序委外单总数',
+      value: localStats.total,
+      valueStyle: { color: token.colorPrimary },
+      backgroundChart: <SimpleSparkline data={OO_STAT_SPARK_1} color={token.colorPrimary} />,
+    },
+    {
+      title: '草稿',
+      value: localStats.draft,
+      valueStyle: { color: token.colorWarning },
+      backgroundChart: <SimpleSparkline data={OO_STAT_SPARK_2} color={token.colorWarning} />,
+    },
+    {
+      title: '执行中',
+      value: localStats.inProgress,
+      valueStyle: { color: token.colorSuccess },
+      backgroundChart: <SimpleSparkline data={OO_STAT_SPARK_3} color={token.colorSuccess} />,
+    },
+  ];
 
   return (
     <>
@@ -824,7 +818,7 @@ export const OutsourceOrdersTable: React.FC = () => {
               <DetailDrawerSection title="生命周期">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {(() => {
-                    const lifecycle = getOutsourceOrderLifecycle(outsourceOrderDetail);
+                    const lifecycle = getOutsourceOrderLifecycle(outsourceOrderDetail as any);
                     const mainStages = lifecycle.mainStages ?? [];
                     if (mainStages.length === 0) return null;
                     return (

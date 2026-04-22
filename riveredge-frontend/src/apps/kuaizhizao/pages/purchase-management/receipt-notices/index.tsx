@@ -10,7 +10,7 @@
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
 import type { DescriptionsProps } from 'antd';
 import {
@@ -57,7 +57,6 @@ import {
   DocumentTrackingTimelineBody,
   useDocumentTracking,
 } from '../../../../../components/document-tracking-panel';
-import { usePageMetrics } from '../../../../../hooks/usePageMetrics';
 import { receiptNoticeApi } from '../../../services/receipt-notice';
 import { getReceiptNoticeLifecycle } from '../../../utils/receiptNoticeLifecycle';
 import { listPurchaseOrders, getPurchaseOrder } from '../../../services/purchase';
@@ -123,7 +122,7 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
       content = dayjs(value as string).format('YYYY-MM-DD');
     }
     if (col.render && dataSource != null) {
-      content = col.render(content, dataSource, index, {}, col);
+      content = col.render(content, dataSource, index, {} as any, col as any) as any;
     }
     return {
       key: String(col.key ?? col.dataIndex ?? index),
@@ -164,15 +163,12 @@ function renderReceiptNoticeRowActions(nodes: React.ReactNode[], keyPrefix: stri
 const ReceiptNoticesPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const location = useLocation();
   const { token } = theme.useToken();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [statsVersion, setStatsVersion] = useState(0);
   const [localStats, setLocalStats] = useState({ total: 0, pending: 0, notified: 0, received: 0 });
-
-  const { statCards: pageMetricCards, hasConfig: hasPageMetricConfig } = usePageMetrics(location.pathname);
 
   const refreshLocalStats = useCallback(async () => {
     try {
@@ -191,10 +187,8 @@ const ReceiptNoticesPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!hasPageMetricConfig) {
-      refreshLocalStats();
-    }
-  }, [hasPageMetricConfig, statsVersion, refreshLocalStats]);
+    refreshLocalStats();
+  }, [statsVersion, refreshLocalStats]);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [noticeDetail, setNoticeDetail] = useState<ReceiptNoticeDetail | null>(null);
   const receiptNoticeTracking = useDocumentTracking(
@@ -218,7 +212,7 @@ const ReceiptNoticesPage: React.FC = () => {
         const ordersRes = await listPurchaseOrders({ limit: 500 }).catch(() => ({ data: [], total: 0 }));
         setPurchaseOrderList(ordersRes?.data || []);
       } catch (e) {
-        console.error('加载采购订单失败', e);
+        window.console.error('加载采购订单失败', e);
       }
     };
     load();
@@ -526,7 +520,7 @@ const ReceiptNoticesPage: React.FC = () => {
     setEffectiveRuleCode(null);
     setEditingId(null);
     setCreateModalVisible(true);
-    setTimeout(() => {
+    window.setTimeout(() => {
       formRef.current?.setFieldsValue({ items: [defaultReceiptItem] });
     }, 100);
     let ruleCode = getPageRuleCode('kuaizhizao-receipt-notice');
@@ -544,12 +538,12 @@ const ReceiptNoticesPage: React.FC = () => {
         .then((res) => {
           const preview = res.code;
           setPreviewCode(preview ?? null);
-          setTimeout(() => {
+          window.setTimeout(() => {
             formRef.current?.setFieldsValue({ notice_code: preview ?? '', items: [defaultReceiptItem] });
           }, 100);
         })
         .catch((e) => {
-          console.warn('收货通知单编号预生成失败:', e);
+          window.console.warn('收货通知单编号预生成失败:', e);
           setPreviewCode(null);
         });
     } else {
@@ -609,7 +603,7 @@ const ReceiptNoticesPage: React.FC = () => {
         const res = await generateCode({ rule_code: ruleCodeToUse });
         noticeCode = res.code;
       } catch (e) {
-        console.warn('收货通知单编号正式生成失败，使用当前值:', e);
+        window.console.warn('收货通知单编号正式生成失败，使用当前值:', e);
       }
     }
     try {
@@ -948,10 +942,7 @@ const ReceiptNoticesPage: React.FC = () => {
     </>
   );
 
-  const statCards: StatCard[] =
-    hasPageMetricConfig && pageMetricCards.length > 0
-      ? pageMetricCards
-      : [
+  const statCards: StatCard[] = [
           {
             title: '单据总数',
             value: localStats.total,
@@ -1155,11 +1146,11 @@ const ReceiptNoticesPage: React.FC = () => {
                     className="receipt-notice-detail-items"
                     style={{ width: '100%', maxWidth: '100%', overflowX: 'auto', overflowY: 'hidden' }}
                   >
-                    <Table
-                      size="small"
-                      tableLayout="fixed"
-                      style={{ minWidth: RN_DETAIL_ITEMS_MIN_WIDTH }}
-                      rowKey={(_, idx) => (noticeDetail?.items?.[idx] as any)?.id ?? idx}
+                      <Table
+                        size="small"
+                        tableLayout="fixed"
+                        style={{ minWidth: RN_DETAIL_ITEMS_MIN_WIDTH }}
+                        rowKey={(record: any, idx?: number) => record?.id ?? idx}
                       columns={[
                         { title: '物料编号', dataIndex: 'material_code', width: 120, ellipsis: true },
                         { title: '物料名称', dataIndex: 'material_name', width: 150, ellipsis: true },

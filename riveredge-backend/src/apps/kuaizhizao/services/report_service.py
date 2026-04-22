@@ -247,7 +247,7 @@ class ReportService:
         agg = await query.annotate(total_amt=Sum("total_amount")).values("total_amt")
         total_amount = float(agg[0]["total_amt"] or 0) if agg else 0.0
         pending_review = await query.filter(review_status="PENDING").count()
-        in_execution = await query.filter(status="CONFIRMED").count()
+        in_execution = await query.filter(status__in=["CONFIRMED", "AUDITED", "已确认", "已审核"]).count()
         completed = await query.filter(status="COMPLETED").count()
         items = await query.order_by("-order_date").limit(50).values(
             "id", "order_code", "order_date", "customer_name", "delivery_date",

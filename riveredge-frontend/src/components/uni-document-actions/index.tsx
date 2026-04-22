@@ -8,15 +8,7 @@
  */
 
 import React from 'react';
-import { Space, Button, Dropdown, Modal } from 'antd';
-import {
-  EyeOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  MoreOutlined,
-  ArrowDownOutlined,
-  PrinterOutlined,
-} from '@ant-design/icons';
+import { Space, Button, Dropdown, Modal, Tooltip } from 'antd';
 import type { MenuProps } from 'antd';
 
 /** 操作列标准配置 */
@@ -44,13 +36,26 @@ export interface DocumentActionButtonProps {
   danger?: boolean;
   /** 是否禁用 */
   disabled?: boolean;
+  /** 禁用提示 */
+  disabledReason?: string;
+}
+
+export interface ActionDescriptor {
+  key: string;
+  label: React.ReactNode;
+  onClick?: () => void;
+  visible?: boolean;
+  disabled?: boolean;
+  disabledReason?: string;
+  danger?: boolean;
+  group?: 'primary' | 'more' | 'push';
 }
 
 /** 详情按钮 */
 export function DetailButton({
   onClick,
   label = '详情',
-  icon = <EyeOutlined />,
+  icon,
 }: {
   onClick: () => void;
   label?: string;
@@ -67,27 +72,34 @@ export function DetailButton({
 export function EditButton({
   onClick,
   label = '编辑',
-  icon = <EditOutlined />,
+  icon,
   disabled,
+  disabledReason,
 }: {
   onClick: () => void;
   label?: string;
   icon?: React.ReactNode;
   disabled?: boolean;
+  disabledReason?: string;
 }) {
-  return (
+  const btn = (
     <Button type="link" size="small" icon={icon} onClick={onClick} disabled={disabled}>
       {label}
     </Button>
   );
+  if (disabled && disabledReason) {
+    return <Tooltip title={disabledReason}>{btn}</Tooltip>;
+  }
+  return btn;
 }
 
 /** 删除按钮 */
 export function DeleteButton({
   onClick,
   label = '删除',
-  icon = <DeleteOutlined />,
+  icon,
   disabled,
+  disabledReason,
   needConfirm = true,
   confirmTitle,
   confirmContent,
@@ -96,6 +108,7 @@ export function DeleteButton({
   label?: string;
   icon?: React.ReactNode;
   disabled?: boolean;
+  disabledReason?: string;
   needConfirm?: boolean;
   confirmTitle?: string;
   confirmContent?: string;
@@ -114,21 +127,25 @@ export function DeleteButton({
       onClick();
     }
   };
-  return (
+  const btn = (
     <Button type="link" size="small" danger icon={icon} onClick={handleClick} disabled={disabled}>
       {label}
     </Button>
   );
+  if (disabled && disabledReason) {
+    return <Tooltip title={disabledReason}>{btn}</Tooltip>;
+  }
+  return btn;
 }
 
 /** 更多下拉菜单项 */
 export interface MoreMenuItem {
   key: string;
   label: React.ReactNode;
-  icon?: React.ReactNode;
   onClick?: () => void;
   danger?: boolean;
   disabled?: boolean;
+  disabledReason?: string;
 }
 
 /** 更多下拉菜单 */
@@ -143,7 +160,6 @@ export function MoreDropdown({
   const menuItems: MenuProps['items'] = items.map((it) => ({
     key: it.key,
     label: it.label,
-    icon: it.icon,
     danger: it.danger,
     disabled: it.disabled,
     onClick: it.onClick,
@@ -151,7 +167,7 @@ export function MoreDropdown({
   return (
     <Dropdown menu={{ items: menuItems }} trigger={['click']}>
       {children ?? (
-        <Button type="link" size="small" icon={<MoreOutlined />}>
+        <Button type="link" size="small">
           更多
         </Button>
       )}
@@ -164,7 +180,6 @@ export function printMenuItem(onClick: () => void): MoreMenuItem {
   return {
     key: 'print',
     label: '打印',
-    icon: <PrinterOutlined />,
     onClick,
   };
 }
@@ -179,8 +194,76 @@ export function pushMenuItem(
   return {
     key,
     label,
-    icon: <ArrowDownOutlined />,
     onClick,
     disabled,
   };
+}
+
+const ACTION_ORDER = ['detail', 'edit', 'delete', 'push'] as const;
+
+export function UnifiedRowActions({
+  actions,
+  maxInline = 4,
+  moreLabel = '更多',
+}: {
+  actions: ActionDescriptor[];
+  maxInline?: number;
+  moreLabel?: string;
+}) {
+  const visibleActions = actions
+    .filter((it) => it.visible !== false)
+    .sort((a, b) => {
+      const ai = ACTION_ORDER.indexOf(a.key as (typeof ACTION_ORDER)[number]);
+      const bi = ACTION_ORDER.indexOf(b.key as (typeof ACTION_ORDER)[number]);
+      const ap = ai === -1 ? 99 : ai;
+      const bp = bi === -1 ? 99 : bi;
+      return ap - bp;
+    });
+
+  const inlineActions = visibleActions.slice(0, maxInline);
+  const moreActions = visibleActions.slice(maxInline);
+
+  const renderActionButton = (action: ActionDescriptor) => {
+    const btn = (
+      <Button
+        key={action.key}
+        type="link"
+        size="small"
+        danger={action.danger}
+        disabled={action.disabled}
+        onClick={action.onClick}
+      >
+        {action.label}
+      </Button>
+    );
+    if (action.disabled && action.disabledReason) {
+      return (
+        <Tooltip key={action.key} title={action.disabledReason}>
+          {btn}
+        </Tooltip>
+      );
+    }
+    return btn;
+  };
+
+  return (
+    <Space size="small" wrap>
+      {inlineActions.map(renderActionButton)}
+      {moreActions.length > 0 ? (
+        <MoreDropdown
+          items={moreActions.map((action) => ({
+            key: action.key,
+            label: action.label,
+            disabled: action.disabled,
+            danger: action.danger,
+            onClick: action.onClick,
+          }))}
+        >
+          <Button type="link" size="small">
+            {moreLabel}
+          </Button>
+        </MoreDropdown>
+      ) : null}
+    </Space>
+  );
 }

@@ -65,6 +65,7 @@ import { useNewShortcut } from '../../hooks/useNewShortcut'
 import { NEW_SHORTCUT_HINT } from '../../utils/globalNewShortcut'
 import { DictionaryLabel } from '../dictionary-label'
 import { stableJsonForQueryKey } from '../../utils/tableQueryKey'
+import { useAuditRequiredMap } from '../../hooks/useAuditRequired'
 
 /**
  * 与表内 isOperationColumn 判定一致：用于右侧固定列排序，避免「仅 render、无 dataIndex」的操作列被当成普通列，
@@ -929,6 +930,173 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
   // 检测是否为操作列（用于操作列样式与宽度处理；与 normalizeFixedRightColumnOrder 共用判定）
   const isOperationColumn = (col: any) => isUniTableOperationColumn(col)
+  const { data: auditRequiredMap } = useAuditRequiredMap()
+  const hasAnyAuditEnabled = useMemo(
+    () => Object.values(auditRequiredMap || {}).some((v) => v === true),
+    [auditRequiredMap]
+  )
+
+  const normalizeOperationActionNode = useCallback((node: React.ReactNode): React.ReactNode => {
+    if (!node) return node
+    if (Array.isArray(node)) return node.map((child) => normalizeOperationActionNode(child))
+    if (!React.isValidElement(node)) return node
+
+    const elementType = node.type as any
+    const displayName = elementType?.displayName || elementType?.name
+    const isButtonLike = displayName === 'Button' || typeof elementType === 'string' && elementType === 'button'
+
+    const readNodeText = (input: React.ReactNode): string => {
+      if (input == null || typeof input === 'boolean') return ''
+      if (typeof input === 'string' || typeof input === 'number') return String(input)
+      if (Array.isArray(input)) return input.map(readNodeText).join('')
+      if (!React.isValidElement(input)) return ''
+      return readNodeText(input.props?.children)
+    }
+
+    const normalizeActionLabelText = (text: string): string => {
+      const trimmed = (text || '').trim()
+      if (!trimmed) return trimmed
+      if (trimmed === '查看') return '详情'
+      return trimmed
+    }
+
+    const resolveButtonTone = (text: string): { type: 'default' | 'primary'; danger?: boolean } => {
+      const normalized = text.replace(/\s+/g, '')
+      if (/删除|驳回|报废/.test(normalized)) return { type: 'default', danger: true }
+      if (/详情|编辑|下推|提交|确认|审核|通过/.test(normalized)) return { type: 'primary' }
+      return { type: 'default' }
+    }
+
+    const normalizeMenuLabel = (labelNode: React.ReactNode): React.ReactNode => {
+      const text = normalizeActionLabelText(readNodeText(labelNode))
+      return text || labelNode
+    }
+
+    const resolveActionKind = (text: string): 'detail' | 'edit' | 'delete' | 'push' | 'more' | null => {
+      const normalized = text.replace(/\s+/g, '')
+      if (!normalized) return null
+      if (normalized.includes('详情') || normalized.includes('查看')) return 'detail'
+      if (normalized.includes('编辑') || normalized.includes('修改')) return 'edit'
+      if (normalized.includes('删除')) return 'delete'
+      if (normalized.includes('下推')) return 'push'
+      if (normalized.includes('更多')) return 'more'
+      return null
+    }
+
+    const fillCoreActionPlaceholders = (childrenNodes: React.ReactNode[]): React.ReactNode[] => {
+      const kindOf = (child: React.ReactNode) => resolveActionKind(readNodeText(child))
+      const kinds = new Set(
+        childrenNodes.map((child) => kindOf(child)).filter(Boolean) as Array<'detail' | 'edit' | 'delete' | 'push' | 'more'>
+      )
+
+      // 仅在识别出操作列动作时补位，避免误伤其它渲染块
+      if (kinds.size === 0) return childrenNodes
+
+      const placeholders: React.ReactNode[] = []
+      if (!kinds.has('detail')) {
+        placeholders.push(
+          <Button key="placeholder-detail" type="default" size="small" disabled>
+            详情
+          </Button>
+        )
+      }
+      if (!kinds.has('edit')) {
+        placeholders.push(
+          <Button key="placeholder-edit" type="default" size="small" disabled>
+            编辑
+          </Button>
+        )
+      }
+      if (!kinds.has('delete')) {
+        placeholders.push(
+          <Button key="placeholder-delete" type="default" size="small" danger disabled>
+            删除
+          </Button>
+        )
+      }
+      const mergedNodes = placeholders.length > 0 ? [...childrenNodes, ...placeholders] : childrenNodes
+      const coreOrder: Array<'detail' | 'edit' | 'delete'> = ['detail', 'edit', 'delete']
+      const used = new Set<number>()
+      const orderedCoreNodes: React.ReactNode[] = []
+      for (const kind of coreOrder) {
+        const idx = mergedNodes.findIndex((node, i) => !used.has(i) && kindOf(node) === kind)
+        if (idx >= 0) {
+          used.add(idx)
+          orderedCoreNodes.push(mergedNodes[idx])
+        }
+      }
+      const restNodes = mergedNodes.filter((node, i) => {
+        if (used.has(i)) return false
+        const kind = kindOf(node)
+        if (kind === 'detail' || kind === 'edit' || kind === 'delete') return false
+        return true
+      })
+      return [...orderedCoreNodes, ...restNodes]
+    }
+
+    const isAuditSemanticAction = (text: string): boolean => {
+      const normalized = text.replace(/\s+/g, '')
+      return (
+        normalized === '确认' ||
+        normalized.includes('审核') ||
+        normalized.includes('审批') ||
+        normalized.includes('驳回')
+      )
+    }
+
+    if (isButtonLike) {
+      const actionText = normalizeActionLabelText(readNodeText(node))
+      if (!hasAnyAuditEnabled && isAuditSemanticAction(actionText)) {
+        return null
+      }
+      const tone = resolveButtonTone(actionText)
+      return React.cloneElement(node as React.ReactElement<any>, {
+        type: tone.type,
+        danger: tone.danger,
+        size: 'small',
+        icon: undefined,
+        style: undefined,
+        children: normalizeActionLabelText(readNodeText((node as React.ReactElement<any>).props?.children)) || (node as React.ReactElement<any>).props?.children,
+      })
+    }
+
+    const hasDropdownMenuItems = Array.isArray(node.props?.menu?.items)
+    if (hasDropdownMenuItems) {
+      const nextItems = node.props.menu.items
+        .map((item: any) => {
+          if (!item || item.type === 'divider') return item
+          const normalizedLabel = normalizeMenuLabel(item.label)
+          if (!normalizedLabel) return null
+          return {
+            ...item,
+            label: normalizedLabel,
+          }
+        })
+        .filter(Boolean)
+      return React.cloneElement(node as React.ReactElement<any>, {
+        menu: {
+          ...node.props.menu,
+          items: nextItems,
+        },
+      })
+    }
+
+    if (node.props?.children) {
+      const normalizedChildren = React.Children.map(node.props.children, (child) =>
+        normalizeOperationActionNode(child)
+      )
+      const normalizedArray = React.Children.toArray(normalizedChildren)
+      const filledChildren = fillCoreActionPlaceholders(normalizedArray)
+      const childCount = React.Children.count(normalizedChildren)
+      const nextChildren =
+        childCount <= 1 ? filledChildren[0] ?? normalizedChildren : filledChildren
+      return React.cloneElement(node as React.ReactElement<any>, {
+        children: nextChildren,
+      })
+    }
+
+    return node
+  }, [hasAnyAuditEnabled])
 
   // 为 date/dateTime 列注入站点格式的展示，使站点设置中的日期格式在单据表格中生效
   // 操作列：自适应宽度、不换行（whiteSpace: nowrap，移除固定 width）
@@ -962,6 +1130,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       }
       if (isOperationColumn(col)) {
         const { width, ...rest } = col
+        const baseRender = col.render
         // 操作列统一规范：内容不换行、宽度自适应（width: auto + scroll.x: max-content 由浏览器根据内容计算）
         return {
           ...rest,
@@ -974,11 +1143,14 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               overflow: 'visible',
             },
           }),
+          render: baseRender
+            ? (...args: any[]) => normalizeOperationActionNode(baseRender(...args))
+            : undefined,
         }
       }
       return col
     })
-  }, [effectiveColumns, dateFormatKey])
+  }, [effectiveColumns, dateFormatKey, normalizeOperationActionNode])
 
   // 列宽拖拽：遵循 use-antd-resizable-header 与 ProTable 固定列规范
     // - 至少一列不设置 width（自适应），固定列必须保留 width

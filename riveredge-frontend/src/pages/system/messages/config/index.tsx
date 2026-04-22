@@ -54,6 +54,23 @@ const MessageConfigListPage: React.FC = () => {
   const [detailData, setDetailData] = useState<MessageConfig | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
+  const BUILTIN_INTERNAL_CHANNEL_UUID = '__builtin_internal_channel__';
+  const BUILTIN_INTERNAL_CHANNEL_CODE = 'IN_APP_DEFAULT';
+  const isBuiltInChannel = (record: Partial<MessageConfig> | undefined | null) =>
+    !!record && (record.uuid === BUILTIN_INTERNAL_CHANNEL_UUID || record.code === BUILTIN_INTERNAL_CHANNEL_CODE);
+  const builtInInternalChannel: MessageConfig = {
+    uuid: BUILTIN_INTERNAL_CHANNEL_UUID,
+    name: '站内通知',
+    code: BUILTIN_INTERNAL_CHANNEL_CODE,
+    type: 'internal',
+    description: '系统内置默认渠道（不可删除）',
+    config: {},
+    is_active: true,
+    is_default: true,
+    created_at: '',
+    updated_at: '',
+  } as MessageConfig;
+
   /**
    * 处理新建消息配置
    */
@@ -73,6 +90,10 @@ const MessageConfigListPage: React.FC = () => {
    * 处理编辑消息配置
    */
   const handleEdit = async (record: MessageConfig) => {
+    if (isBuiltInChannel(record)) {
+      messageApi.info('站内通知为系统内置渠道，不支持编辑');
+      return;
+    }
     try {
       setIsEdit(true);
       setCurrentMessageConfigUuid(record.uuid);
@@ -96,6 +117,12 @@ const MessageConfigListPage: React.FC = () => {
    * 处理查看详情
    */
   const handleView = async (record: MessageConfig) => {
+    if (isBuiltInChannel(record)) {
+      setDetailData(builtInInternalChannel);
+      setDrawerVisible(true);
+      setDetailLoading(false);
+      return;
+    }
     try {
       setDetailLoading(true);
       setDrawerVisible(true);
@@ -112,6 +139,10 @@ const MessageConfigListPage: React.FC = () => {
    * 处理删除消息配置
    */
   const handleDelete = async (record: MessageConfig) => {
+    if (isBuiltInChannel(record)) {
+      messageApi.warning('站内通知为系统内置渠道，不可删除');
+      return;
+    }
     try {
       await deleteMessageConfig(record.uuid);
       messageApi.success(t('pages.system.messageConfig.deleteSuccess'));
@@ -125,14 +156,15 @@ const MessageConfigListPage: React.FC = () => {
    * 处理批量删除消息配置
    */
   const handleBatchDelete = () => {
-    if (selectedRowKeys.length === 0) {
+    const deletableKeys = selectedRowKeys.filter((k) => String(k) !== BUILTIN_INTERNAL_CHANNEL_UUID);
+    if (deletableKeys.length === 0) {
       messageApi.warning(t('pages.system.selectFirst'));
       return;
     }
 
     Modal.confirm({
       title: t('pages.system.messageConfig.batchDeleteConfirmTitle'),
-      content: t('pages.system.messageConfig.batchDeleteConfirmContent', { count: selectedRowKeys.length }),
+      content: t('pages.system.messageConfig.batchDeleteConfirmContent', { count: deletableKeys.length }),
       okText: t('common.confirm'),
       cancelText: t('common.cancel'),
       okType: 'danger',
@@ -142,7 +174,7 @@ const MessageConfigListPage: React.FC = () => {
           let failCount = 0;
           const errors: string[] = [];
 
-          for (const key of selectedRowKeys) {
+          for (const key of deletableKeys) {
             try {
               await deleteMessageConfig(key.toString());
               successCount++;
@@ -390,12 +422,14 @@ const MessageConfigListPage: React.FC = () => {
             type="link"
             size="small"
             icon={<EditOutlined />}
+            disabled={isBuiltInChannel(record)}
             onClick={() => handleEdit(record)}
           >
             {t('pages.system.messageConfig.edit')}
           </Button>
           <Popconfirm
             title={t('pages.system.messageConfig.deleteConfirm')}
+            disabled={isBuiltInChannel(record)}
             onConfirm={() => handleDelete(record)}
           >
             <Button
@@ -403,6 +437,7 @@ const MessageConfigListPage: React.FC = () => {
               danger
               size="small"
               icon={<DeleteOutlined />}
+              disabled={isBuiltInChannel(record)}
             >
               {t('pages.system.messageConfig.delete')}
             </Button>
@@ -496,10 +531,13 @@ const MessageConfigListPage: React.FC = () => {
           
           try {
             const result = await getMessageConfigList(apiParams);
+            const merged = Array.isArray(result) ? result : [];
+            const hasInternal = merged.some((it: any) => isBuiltInChannel(it) || (it?.type === 'internal' && it?.is_default));
+            const dataWithBuiltIn = hasInternal ? merged : [builtInInternalChannel, ...merged];
             return {
-              data: result,
+              data: dataWithBuiltIn,
               success: true,
-              total: result.length,  // 简化实现，实际应该从后端返回总数
+              total: dataWithBuiltIn.length,  // 简化实现，实际应该从后端返回总数
             };
           } catch (error: any) {
             console.error('获取消息配置列表失败:', error);

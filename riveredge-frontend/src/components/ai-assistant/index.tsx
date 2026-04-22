@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react'
-import { Modal, message, Button } from 'antd'
+import React, { useEffect, useMemo, useState } from 'react'
+import { message, Button } from 'antd'
 import { CloseOutlined, CopyOutlined, ReloadOutlined, PlusOutlined } from '@ant-design/icons'
 import { Bubble, Prompts, Sender, Welcome, XProvider } from '@ant-design/x'
 import type { PromptsItemType } from '@ant-design/x'
@@ -40,6 +40,9 @@ const MSG_WELCOME_TITLE = '你好，我是 KU-AI'
 const MSG_WELCOME_DESC = '可解答生产排产、设备与质量管理、上线准备、系统操作等问题。'
 const MSG_WELCOME_CTA = '赶快开始提问吧～'
 const SENDER_PLACEHOLDER = '按下 Enter 提交问题，Ctrl + Enter 换行'
+const GLOBAL_LOCK_CLASSES = ['ant-scrolling-effect', 'ant-modal-open']
+const BODY_STYLE_KEYS = ['overflow', 'overflow-y', 'padding-right', 'width', 'font-size', 'line-height'] as const
+const HTML_STYLE_KEYS = ['overflow', 'overflow-y', 'font-size', 'line-height'] as const
 
 /** 制造业向推荐问题（点击即发送） */
 const PROMPT_ITEMS: PromptsItemType[] = [
@@ -50,6 +53,57 @@ const PROMPT_ITEMS: PromptsItemType[] = [
 ]
 
 const AIAssistant: React.FC<AIAssistantProps> = ({ open = false, onClose, designOnly = true }) => {
+  useEffect(() => {
+    if (!open) return
+
+    const body = document.body
+    const html = document.documentElement
+    const classSnapshot = {
+      body: new Set(body.classList),
+      html: new Set(html.classList),
+    }
+    const bodyStyleSnapshot = new Map<string, string | null>()
+    const htmlStyleSnapshot = new Map<string, string | null>()
+
+    BODY_STYLE_KEYS.forEach(key => bodyStyleSnapshot.set(key, body.style.getPropertyValue(key) || null))
+    HTML_STYLE_KEYS.forEach(key => htmlStyleSnapshot.set(key, html.style.getPropertyValue(key) || null))
+
+    return () => {
+      Array.from(body.classList).forEach(className => {
+        if (className.startsWith('ant-') && !classSnapshot.body.has(className)) {
+          body.classList.remove(className)
+        }
+      })
+      Array.from(html.classList).forEach(className => {
+        if (className.startsWith('ant-') && !classSnapshot.html.has(className)) {
+          html.classList.remove(className)
+        }
+      })
+
+      GLOBAL_LOCK_CLASSES.forEach(className => {
+        const hadBodyClass = classSnapshot.body.has(className)
+        const hadHtmlClass = classSnapshot.html.has(className)
+
+        if (hadBodyClass) body.classList.add(className)
+        else body.classList.remove(className)
+
+        if (hadHtmlClass) html.classList.add(className)
+        else html.classList.remove(className)
+      })
+
+      BODY_STYLE_KEYS.forEach(key => {
+        const value = bodyStyleSnapshot.get(key)
+        if (value === null || value === '') body.style.removeProperty(key)
+        else body.style.setProperty(key, value)
+      })
+      HTML_STYLE_KEYS.forEach(key => {
+        const value = htmlStyleSnapshot.get(key)
+        if (value === null || value === '') html.style.removeProperty(key)
+        else html.style.setProperty(key, value)
+      })
+    }
+  }, [open])
+
   // 仅界面模式：本地消息列表，用于展示默认对话样式
   const [designOnlyMessages, setDesignOnlyMessages] = useState<BubbleItem[]>([])
   const [designOnlyLoading, setDesignOnlyLoading] = useState(false)
@@ -363,25 +417,19 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ open = false, onClose, design
   )
 
   return (
-    <Modal
-      open={open}
-      onCancel={onClose}
-      closable={false}
-      title={null}
-      width={480}
-      mask={false}
-      footer={null}
-      getContainer={false} // 强制完全内联渲染，彻底封杀 AntD 注入全局样式的各种副作用
-      rootClassName="ai-qa-modal-root"
-      wrapClassName="ai-qa-modal-bottom-right"
-      styles={{
-        body: { padding: 0, minHeight: 420 },
-        wrapper: { overflow: 'hidden' },
-      }}
-      classNames={{ body: 'ai-assistant-modal-content' }}
-    >
-      <XProvider>{qaContent}</XProvider>
-    </Modal>
+    open ? (
+      <div className="ai-qa-modal-bottom-right">
+        <div className="ai-qa-panel" role="dialog" aria-label="AI 助手" aria-modal={false}>
+          <div className="ai-qa-panel-container">
+            <div className="ai-qa-panel-content">
+              <div className="ai-qa-panel-body ai-assistant-modal-content">
+                <XProvider>{qaContent}</XProvider>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    ) : null
   )
 }
 

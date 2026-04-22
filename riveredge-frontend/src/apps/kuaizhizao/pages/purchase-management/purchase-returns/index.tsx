@@ -9,7 +9,6 @@
 
 import React, { useRef, useState, useMemo } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
-import { useLocation } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import type { DescriptionsProps } from 'antd';
 import {
@@ -46,7 +45,6 @@ import {
 } from '../../../../../components/document-tracking-panel';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { warehouseApi } from '../../../services/production';
-import { usePageMetrics } from '../../../../../hooks/usePageMetrics';
 import { getPurchaseReturnLifecycle } from '../../../utils/purchaseReturnLifecycle';
 
 interface PurchaseReturn {
@@ -159,23 +157,18 @@ function renderPurchaseReturnRowActions(nodes: React.ReactNode[], keyPrefix: str
 const PurchaseReturnsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const { token } = theme.useToken();
-  const location = useLocation();
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const queryClient = useQueryClient();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
-  const { statCards: pageMetricCards, hasConfig: hasPageMetricConfig } = usePageMetrics(location.pathname);
-
   const invalidatePurchaseReturnStatistics = () => {
     queryClient.invalidateQueries({ queryKey: ['purchaseReturnStatistics'] });
-    queryClient.invalidateQueries({ queryKey: ['pageMetrics', location.pathname] });
   };
 
   const { data: prStats } = useQuery({
     queryKey: ['purchaseReturnStatistics'],
     queryFn: () => warehouseApi.purchaseReturn.statistics(),
-    enabled: !hasPageMetricConfig,
   });
 
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
@@ -427,9 +420,6 @@ const PurchaseReturnsPage: React.FC = () => {
   ];
 
   const statCards: StatCard[] = useMemo(() => {
-    if (hasPageMetricConfig && pageMetricCards.length > 0) {
-      return pageMetricCards;
-    }
     const s = prStats;
     const z = [0, 0, 0, 0, 0, 0, 0];
     return [
@@ -458,7 +448,7 @@ const PurchaseReturnsPage: React.FC = () => {
         backgroundChart: <SimpleSparkline data={s?.trend_cancelled?.length ? s.trend_cancelled : z} color={token.colorError} />,
       },
     ];
-  }, [hasPageMetricConfig, pageMetricCards, prStats, token]);
+  }, [prStats, token]);
 
   return (
     <>
@@ -495,6 +485,7 @@ const PurchaseReturnsPage: React.FC = () => {
             }
           }}
           enableRowSelection={true}
+          selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton={true}
           onDelete={async (keys) => {

@@ -11,7 +11,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import type { DescriptionsProps } from 'antd';
-import { useSearchParams, useLocation } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import {
   ActionType,
   ProColumns,
@@ -56,7 +56,6 @@ import {
   DocumentTrackingTimelineBody,
   useDocumentTracking,
 } from '../../../../../components/document-tracking-panel';
-import { usePageMetrics } from '../../../../../hooks/usePageMetrics';
 import { getPackingBindingLifecycle } from '../../../utils/packingBindingLifecycle';
 import dayjs from 'dayjs';
 
@@ -145,16 +144,29 @@ const PB_STAT_SPARK_3 = [1, 2, 1, 2, 1, 2, 2];
 const PackingBindingPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const { token } = AntdTheme.useToken();
-  const location = useLocation();
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [statsVersion, setStatsVersion] = useState(0);
-  const [localStats, setLocalStats] = useState({ total: 0, scan: 0, manual: 0 });
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const formRef = useRef<any>(null);
 
-  const { statCards: pageMetricCards, hasConfig: hasPageMetricConfig } = usePageMetrics(location.pathname);
+  const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
+  const [currentBinding, setCurrentBinding] = useState<PackingBinding | null>(null);
+
+  const handleDetail = useCallback(async (record: PackingBinding) => {
+    try {
+      const detail = await packingBindingApi.get(record.id!.toString());
+      setCurrentBinding(detail);
+      setDetailDrawerVisible(true);
+    } catch (error: any) {
+      messageApi.error(error.message || '获取装箱绑定记录详情失败');
+    }
+  }, [messageApi, setCurrentBinding, setDetailDrawerVisible]);
+
+  const [localStats, setLocalStats] = useState({ total: 0, scan: 0, manual: 0 });
 
   const refreshLocalStats = useCallback(async () => {
     try {
@@ -171,16 +183,9 @@ const PackingBindingPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!hasPageMetricConfig) {
-      void refreshLocalStats();
-    }
-  }, [hasPageMetricConfig, statsVersion, refreshLocalStats]);
+    void refreshLocalStats();
+  }, [statsVersion, refreshLocalStats]);
 
-  const [editModalVisible, setEditModalVisible] = useState(false);
-  const formRef = useRef<any>(null);
-
-  const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
-  const [currentBinding, setCurrentBinding] = useState<PackingBinding | null>(null);
 
   const packingTracking = useDocumentTracking(
     detailDrawerVisible && currentBinding?.id ? 'packing_binding' : undefined,
@@ -250,17 +255,8 @@ const PackingBindingPage: React.FC = () => {
     }
   };
 
-  const handleDetail = async (record: PackingBinding) => {
-    try {
-      const detail = await packingBindingApi.get(record.id!.toString());
-      setCurrentBinding(detail);
-      setDetailDrawerVisible(true);
-    } catch (error: any) {
-      messageApi.error(error.message || '获取装箱绑定记录详情失败');
-    }
-  };
 
-  const handleEdit = async (record: PackingBinding) => {
+  const handleEdit = useCallback(async (record: PackingBinding) => {
     try {
       setCurrentBindingId(record.id!);
       setEditModalVisible(true);
@@ -274,7 +270,7 @@ const PackingBindingPage: React.FC = () => {
     } catch (error: any) {
       messageApi.error(error.message || '获取装箱绑定记录详情失败');
     }
-  };
+  }, [messageApi]);
 
   const handleEditSubmit = async (values: any) => {
     try {
@@ -598,29 +594,26 @@ const PackingBindingPage: React.FC = () => {
     }
   };
 
-  const statCards: StatCard[] =
-    hasPageMetricConfig && pageMetricCards.length > 0
-      ? pageMetricCards
-      : [
-          {
-            title: '装箱绑定总数',
-            value: localStats.total,
-            valueStyle: { color: token.colorPrimary },
-            backgroundChart: <SimpleSparkline data={PB_STAT_SPARK_1} color={token.colorPrimary} />,
-          },
-          {
-            title: '扫码绑定',
-            value: localStats.scan,
-            valueStyle: { color: token.colorSuccess },
-            backgroundChart: <SimpleSparkline data={PB_STAT_SPARK_2} color={token.colorSuccess} />,
-          },
-          {
-            title: '手动绑定',
-            value: localStats.manual,
-            valueStyle: { color: token.colorWarning },
-            backgroundChart: <SimpleSparkline data={PB_STAT_SPARK_3} color={token.colorWarning} />,
-          },
-        ];
+  const statCards: StatCard[] = [
+    {
+      title: '装箱绑定总数',
+      value: localStats.total,
+      valueStyle: { color: token.colorPrimary },
+      backgroundChart: <SimpleSparkline data={PB_STAT_SPARK_1} color={token.colorPrimary} />,
+    },
+    {
+      title: '扫码绑定',
+      value: localStats.scan,
+      valueStyle: { color: token.colorSuccess },
+      backgroundChart: <SimpleSparkline data={PB_STAT_SPARK_2} color={token.colorSuccess} />,
+    },
+    {
+      title: '手动绑定',
+      value: localStats.manual,
+      valueStyle: { color: token.colorWarning },
+      backgroundChart: <SimpleSparkline data={PB_STAT_SPARK_3} color={token.colorWarning} />,
+    },
+  ];
 
   return (
     <>

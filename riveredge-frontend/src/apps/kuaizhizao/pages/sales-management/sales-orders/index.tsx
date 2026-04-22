@@ -86,9 +86,9 @@ import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../s
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { usePageMetrics } from '../../../../../hooks/usePageMetrics';
 import { useDeferAfterPaint } from '../../../../../hooks/useDeferAfterPaint';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import { CustomerFollowUpFormModal, type CustomerFollowUpPreset } from '../../../components/CustomerFollowUpFormModal';
 
 /** 销售明细行（订单 + 明细合并，用于平铺表格） */
@@ -363,13 +363,11 @@ const SalesOrdersPage: React.FC = () => {
   /** 刷新销售订单统计（指标卡片） */
   const invalidateStatistics = () => {
     queryClient.invalidateQueries({ queryKey: ['salesOrderStatistics'] });
-    queryClient.invalidateQueries({ queryKey: ['pageMetrics', location.pathname] });
   };
 
-  const { statCards: pageMetricCards, hasConfig: hasPageMetricConfig } = usePageMetrics();
   const secondaryStatsReady = useDeferAfterPaint();
   const { data: statistics } = useQuery({
-    queryKey: ['salesOrderStatistics'],
+    queryKey: ['salesOrderStatistics', location.pathname],
     queryFn: getSalesOrderStatistics,
     /** 与页面指标错开：先让列表请求发起，再拉聚合统计（趋势图等） */
     enabled: secondaryStatsReady,
@@ -401,7 +399,6 @@ const SalesOrdersPage: React.FC = () => {
   const dataViewMode = viewTypeState === 'table' ? 'order' : 'detail';
   /** 视图模式 ref：切换时同步更新，确保 reload 时 request 使用正确模式（避免 setState 异步导致返回订单级数据） */
   const dataViewModeRef = useRef(dataViewMode);
-  dataViewModeRef.current = dataViewMode;
 
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
@@ -1626,32 +1623,22 @@ const SalesOrdersPage: React.FC = () => {
         const canEdit = ['草稿', '待审核', '已驳回'].includes(lifecycle.stageName ?? '');
         const canDelete = ['草稿', '待审核'].includes(lifecycle.stageName ?? '') || record.status === SalesOrderStatus.DRAFT || record.status === 'PENDING_REVIEW';
         const isDraft = record.status === SalesOrderStatus.DRAFT;
-        const isRejected = record.status === SalesOrderStatus.REJECTED || record.status === '已驳回';
-        const isPending = record.review_status === ReviewStatus.PENDING || record.review_status === '待审核';
-        const isApproved = APPROVED_STATUS_VALUES.some((v) => record.status === v || record.review_status === v);
-        const workflowButtonCount = isPending ? 2 : ((isDraft || isRejected || isApproved) ? 1 : 0);
-        const inlineLimitForNormalActions = Math.max(1, SALES_ORDER_ROW_ACTIONS_INLINE_MAX - workflowButtonCount);
-        const fixedInlineNodes: React.ReactNode[] = [];
         const parts: React.ReactNode[] = [
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail([record.id!])}>
+          <Button type="link" size="small" onClick={() => handleDetail([record.id!])}>
             {t('app.kuaizhizao.salesOrder.viewDetail')}
           </Button>,
         ];
-        if (canEdit) {
-          parts.push(
-            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit([record.id!])}>
-              {t('app.kuaizhizao.salesOrder.editAction')}
-            </Button>
-          );
-        }
-        if (canDelete) {
-          parts.push(
-            <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => handleDeleteSingle(record.id!)}>
-              {t('app.kuaizhizao.salesOrder.delete')}
-            </Button>
-          );
-        }
-        fixedInlineNodes.push(
+        parts.push(
+          <Button type="link" size="small" disabled={!canEdit} onClick={() => canEdit && handleEdit([record.id!])}>
+            {t('app.kuaizhizao.salesOrder.editAction')}
+          </Button>
+        );
+        parts.push(
+          <Button type="link" danger size="small" disabled={!canDelete} onClick={() => canDelete && handleDeleteSingle(record.id!)}>
+            {t('app.kuaizhizao.salesOrder.delete')}
+          </Button>
+        );
+        parts.push(
           <UniWorkflowActions
             key="workflow-actions"
             record={record}
@@ -1671,67 +1658,75 @@ const SalesOrdersPage: React.FC = () => {
             confirmMessages={{ submit: auditEnabled ? t('app.kuaizhizao.salesOrder.submitConfirmAudit') : t('app.kuaizhizao.salesOrder.submitConfirmAuto') }}
           />
         );
-        if (isApprovedRecord(record)) {
+        {
+          const pushEnabledBase = isApprovedRecord(record);
+          const canPushComputation =
+            pushEnabledBase && canOpenDemandComputationPush(record, salesNodeEnabled.demand_computation);
+          const canPushWorkOrder =
+            pushEnabledBase && canOpenDirectWorkOrderPush(record, salesNodeEnabled.work_order);
+          const canPushShipment = pushEnabledBase && !!salesNodeEnabled.shipment_notice;
+          const canPushInvoice = pushEnabledBase && !!salesNodeEnabled.invoice;
+          const canPushSalesReturn = pushEnabledBase;
+          const canWithdrawComputation = pushEnabledBase && !!record.pushed_to_computation;
+          const pushMenuItems = [
+            {
+              key: 'computation',
+              label: t('app.kuaizhizao.salesOrder.demandComputation'),
+              disabled: !canPushComputation,
+              onClick: () => canPushComputation && handlePushToComputation(record.id!, record),
+            },
+            {
+              key: 'workorder',
+              label: t('app.kuaizhizao.salesOrder.pushToWorkOrder'),
+              disabled: !canPushWorkOrder,
+              onClick: () => canPushWorkOrder && handlePushToWorkOrder(record.id!, record),
+            },
+            { type: 'divider' as const },
+            {
+              key: 'shipment',
+              label: t('app.kuaizhizao.salesOrder.shipmentNotice'),
+              disabled: !canPushShipment,
+              onClick: () => canPushShipment && handlePushToShipmentNotice(record.id!),
+            },
+            {
+              key: 'invoice',
+              label: t('app.kuaizhizao.salesOrder.salesInvoice'),
+              disabled: !canPushInvoice,
+              onClick: () => canPushInvoice && handlePushToInvoice(record.id!),
+            },
+            {
+              key: 'sales-return',
+              label: '下推销售退货单',
+              disabled: !canPushSalesReturn,
+              onClick: () => canPushSalesReturn && handlePushToSalesReturn(record.id!),
+            },
+            ...(record.pushed_to_computation
+              ? [
+                  { type: 'divider' as const },
+                  {
+                    key: 'withdraw',
+                    label: t('app.kuaizhizao.salesOrder.withdrawComputation'),
+                    disabled: !canWithdrawComputation,
+                    onClick: () => canWithdrawComputation && handleWithdrawFromComputation(record.id!),
+                  },
+                ]
+              : []),
+          ];
+          const canUsePush = pushMenuItems.some((it: any) => it.type !== 'divider' && !it.disabled);
           parts.push(
-            <Dropdown
-              menu={{
-                items: [
-                  {
-                    key: 'computation',
-                    label: t('app.kuaizhizao.salesOrder.demandComputation'),
-                    icon: <ArrowDownOutlined />,
-                    disabled: !canOpenDemandComputationPush(record, salesNodeEnabled.demand_computation),
-                    onClick: () =>
-                      canOpenDemandComputationPush(record, salesNodeEnabled.demand_computation) &&
-                      handlePushToComputation(record.id!, record),
-                  },
-                  {
-                    key: 'workorder',
-                    label: t('app.kuaizhizao.salesOrder.pushToWorkOrder'),
-                    icon: <ArrowDownOutlined />,
-                    disabled: !canOpenDirectWorkOrderPush(record, salesNodeEnabled.work_order),
-                    onClick: () =>
-                      canOpenDirectWorkOrderPush(record, salesNodeEnabled.work_order) &&
-                      handlePushToWorkOrder(record.id!, record),
-                  },
-                  { type: 'divider' },
-                  { key: 'shipment', label: t('app.kuaizhizao.salesOrder.shipmentNotice'), icon: <SendOutlined />, disabled: !salesNodeEnabled.shipment_notice, onClick: () => handlePushToShipmentNotice(record.id!) },
-                  { key: 'invoice', label: t('app.kuaizhizao.salesOrder.salesInvoice'), icon: <FileTextOutlined />, disabled: !salesNodeEnabled.invoice, onClick: () => handlePushToInvoice(record.id!) },
-                  { key: 'sales-return', label: '下推销售退货单', icon: <RollbackOutlined />, onClick: () => handlePushToSalesReturn(record.id!) },
-                  ...(record.pushed_to_computation ? [{ type: 'divider' as const }, { key: 'withdraw', label: t('app.kuaizhizao.salesOrder.withdrawComputation'), icon: <RollbackOutlined />, onClick: () => handleWithdrawFromComputation(record.id!) }] : []),
-                ],
-              }}
-            >
-              <Button type="link" size="small" icon={<ArrowDownOutlined />}>{t('app.kuaizhizao.salesOrder.push')}</Button>
+            <Dropdown menu={{ items: pushMenuItems }}>
+              <Button type="link" size="small" disabled={!canUsePush}>
+                {t('app.kuaizhizao.salesOrder.push')}
+              </Button>
             </Dropdown>
           );
         }
         parts.push(
-          <Button type="link" size="small" icon={<CommentOutlined />} onClick={() => openFollowUpFromSalesOrder(record)}>
+          <Button type="link" size="small" onClick={() => openFollowUpFromSalesOrder(record)}>
             {t('app.kuaizhizao.customerFollowUp.addFollowUpFromDocument')}
           </Button>
         );
-        return (
-          <Space size="small" wrap>
-            {parts
-              .slice(0, inlineLimitForNormalActions)
-              .map((node, i) => <span key={`sales-order-${record.id ?? 'row'}-inline-${i}`}>{node}</span>)}
-            {fixedInlineNodes}
-            {parts.length > inlineLimitForNormalActions ? (
-              <Dropdown
-                trigger={['click']}
-                menu={{
-                  items: parts.slice(inlineLimitForNormalActions).map((node, i) => ({
-                    key: `sales-order-${record.id ?? 'row'}-more-${i}`,
-                    label: node,
-                  })),
-                }}
-              >
-                <Button type="link" size="small">更多</Button>
-              </Dropdown>
-            ) : null}
-          </Space>
-        );
+        return renderRowActionsOverflow(parts, `sales-order-${record.id ?? 'row'}`, SALES_ORDER_ROW_ACTIONS_INLINE_MAX);
       },
     },
   ];
@@ -1896,64 +1891,7 @@ const SalesOrdersPage: React.FC = () => {
     );
   };
 
-  const statCards: StatCard[] = hasPageMetricConfig
-    ? pageMetricCards.map((card) => {
-        const key = card.key;
-        const color = (card.valueStyle as { color?: string } | undefined)?.color ?? '#1890ff';
-        if (!key || !statistics) return card;
-        const trendMap: Record<string, { date: string; value: number }[] | undefined> = {
-          overdue_count: statistics.trend_overdue,
-          today_new_count: statistics.trend_today_new,
-          pending_review_count: statistics.trend_pending_review,
-          unfulfilled_count: statistics.trend_unfulfilled,
-          annual_total_amount: statistics.trend_annual,
-        };
-        const yesterdayMap: Record<string, number | undefined> = {
-          overdue_count: statistics.yesterday_overdue,
-          today_new_count: statistics.yesterday_today_new,
-          pending_review_count: statistics.yesterday_pending_review,
-          unfulfilled_count: statistics.yesterday_unfulfilled,
-        };
-        const trend = trendMap[key];
-        const yesterday = yesterdayMap[key];
-        const val = typeof card.value === 'number' ? card.value : 0;
-        let description: React.ReactNode = undefined;
-        if (key === 'annual_total_amount' && statistics.annual_total_yoy !== undefined) {
-          description = (
-            <div style={{ color: statistics.annual_total_yoy >= 0 ? '#52c41a' : '#ff4d4f' }}>
-              较去年同期 {statistics.annual_total_yoy > 0 ? '+' : ''}{statistics.annual_total_yoy}%
-            </div>
-          );
-        } else if (yesterday !== undefined) {
-          description = (
-            <div>
-              今日: {val} {renderDOD(val, yesterday)}
-            </div>
-          );
-        } else if (key === 'pending_review_count' && val > 0) {
-          description = <div style={{ color: '#faad14' }}>需即时处理</div>;
-        }
-        let onClick: (() => void) | undefined;
-        if (key === 'overdue_count' && val > 0) {
-          onClick = () => {
-            tableSearchFormRef.current?.setFieldsValue?.({ status: 'in_progress' });
-            actionRef.current?.reload?.();
-          };
-        } else if (key === 'pending_review_count' && val > 0) {
-          onClick = () => {
-            tableSearchFormRef.current?.setFieldsValue?.({ lifecycle: '待审核' });
-            actionRef.current?.reload?.();
-          };
-        }
-        return {
-          ...card,
-          ...(key === 'annual_total_amount' && { prefix: '¥' }),
-          description,
-          backgroundChart: trend?.length ? renderTrendChart(trend, color) : undefined,
-          onClick,
-        };
-      })
-    : statistics
+  const statCards: StatCard[] = statistics
     ? [
         {
           title: t('app.kuaizhizao.salesOrder.statOverdue', '逾期未交'),
