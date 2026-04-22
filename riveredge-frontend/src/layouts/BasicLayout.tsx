@@ -15,10 +15,12 @@ import {
   FileTextOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  AppstoreOutlined,
   TranslationOutlined,
   BgColorsOutlined,
   FullscreenOutlined,
   FullscreenExitOutlined,
+  CloseOutlined,
   LockOutlined,
   BellOutlined,
   DeleteOutlined,
@@ -28,6 +30,38 @@ import type { MenuProps } from 'antd';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { RightOutlined } from '@ant-design/icons';
+import {
+  FcGrid,
+  FcMenu,
+  FcSettings,
+  FcServices,
+  FcReadingEbook,
+  FcGlobe,
+  FcCommandLine,
+  FcMultipleInputs,
+  FcDepartment,
+  FcBusinessContact,
+  FcPrivacy,
+  FcManager,
+  FcFolder,
+  FcDataConfiguration,
+  FcDatabase,
+  FcFlowChart,
+  FcDataSheet,
+  FcWorkflow,
+  FcInspection,
+  FcTemplate,
+  FcComments,
+  FcPrint,
+  FcDocument,
+  FcTimeline,
+  FcClock,
+  FcConferenceCall,
+  FcDataBackup,
+  FcBusinessman,
+  FcTodoList,
+  FcSms,
+} from 'react-icons/fc';
 import { translateMenuName, translatePathTitle, translateAppMenuItemName, extractAppCodeFromPath, findMenuTitleWithTranslation, getAppDisplayName } from '../utils/menuTranslation';
 import { prefetchPlugin } from '../utils/pluginLoader';
 import { prefetchKuaizhizaoRoute } from '../apps/kuaizhizao/routePrefetch';
@@ -57,7 +91,7 @@ const useSafeTranslation = () => {
 };
 import TenantSelector from '../components/tenant-selector';
 import TopBarSearch from '../components/TopBarSearch';
-const AiAssistant = React.lazy(() => import('../components/ai-assistant'));
+import AiAssistant from '../components/ai-assistant';
 import UniTabs from '../components/uni-tabs';
 import TechStackModal from '../components/tech-stack-modal';
 import { MobileQRCode } from '../components/mobile-preview';
@@ -73,7 +107,6 @@ import { LANGUAGE_MAP } from '../config/i18n';
 import i18n, { refreshTranslations } from '../config/i18n';
 import { MenuTree } from '../services/menu';
 import { useUnifiedMenuData } from '../hooks/useUnifiedMenuData';
-import { useDeferredEnabled } from '../hooks/useDeferredEnabled';
 import { ManufacturingIcons } from '../utils/manufacturingIcons';
 import * as LucideIcons from 'lucide-react'; // 全量导入 Lucide Icons，支持动态访问所有图标
 import { getAvatarUrl, getAvatarText, getAvatarFontSize, getCachedAvatarUrl, toRelativeIfLocalhost } from '../utils/avatar';
@@ -82,17 +115,8 @@ import { triggerSubmit, hasSubmitHandler } from '../utils/globalSubmitShortcut';
 import { CODE_FONT_FAMILY } from '../constants/fonts';
 import { clearSessionScopedQueries } from '../utils/clearSessionQueries';
 import { getFilePreview } from '../services/file';
-const LazyAssistLottie = React.lazy(async () => {
-  const [{ default: Lottie }, animationModule] = await Promise.all([
-    import('lottie-react'),
-    import('../../static/lottie/assist.json'),
-  ]);
-  const assistAnimation = (animationModule as { default: unknown }).default ?? animationModule;
-  const Comp: React.FC<{ style?: React.CSSProperties }> = ({ style }) => (
-    <Lottie animationData={assistAnimation} loop autoplay style={style} />
-  );
-  return { default: Comp };
-});
+import Lottie from 'lottie-react';
+import assistAnimation from '../../static/lottie/assist.json';
 
 /** LOGO 缓存 TTL：25 分钟（token 1 小时过期，提前刷新避免 403） */
 const SITE_LOGO_CACHE_TTL_MS = 25 * 60 * 1000;
@@ -147,11 +171,13 @@ const MENU_BADGE_PATH_KEY: Record<string, string> = {
   '/apps/kuaizhizao/purchase-management/purchase-orders': 'purchase_order',
   '/apps/kuaizhizao/purchase-management/purchase-requisitions': 'purchase_requisition',
   '/apps/kuaizhizao/purchase-management/receipt-notices': 'receipt_notice',
+  '/apps/kuaizhizao/purchase-management/logistics-tracking': 'purchase_logistics',
   '/apps/kuaizhizao/purchase-management/purchase-returns': 'purchase_return',
   '/apps/kuaizhizao/sales-management/sales-orders': 'sales_order',
   '/apps/kuaizhizao/sales-management/sales-forecasts': 'sales_forecast',
   '/apps/kuaizhizao/sales-management/quotations': 'quotation',
   '/apps/kuaizhizao/sales-management/customer-follow-ups': 'customer_follow_up',
+  '/apps/kuaizhizao/sales-management/sample-trials': 'sample_trial',
   '/apps/kuaizhizao/sales-management/shipment-notices': 'shipment_notice',
   '/apps/kuaizhizao/sales-management/sales-returns': 'sales_return',
   '/apps/kuaizhizao/warehouse-management/inbound': 'inbound',
@@ -416,12 +442,12 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/system/roles': ManufacturingIcons.shield, // 角色权限管理 - 使用盾牌图标
       '/system/departments': ManufacturingIcons.building, // 部门管理 - 使用建筑图标
       '/system/positions': ManufacturingIcons.userCog, // 职位管理 - 使用用户配置图标
-      '/system/users': ManufacturingIcons.users, // 用户管理 - 使用用户组图标
-      '/system/applications': ManufacturingIcons.factory, // 应用中心 - 使用工厂图标
-      '/system/menus': ManufacturingIcons.checklist, // 菜单管理 - 使用清单图标
+      '/system/users': ManufacturingIcons.user, // 账户管理 - 使用单用户图标，和在线用户区分
+      '/system/applications': ManufacturingIcons.layout, // 应用中心 - 使用应用入口/布局图标
+      '/system/menus': ManufacturingIcons.menu, // 菜单管理 - 使用菜单图标
       '/system/site-settings': ManufacturingIcons.mdSettings, // 站点设置 - 使用设置图标
-      '/system/config-center': ManufacturingIcons.systemConfig, // 业务配置（主路径，与页面组件一致）
-      '/system/business-config': ManufacturingIcons.systemConfig, // 兼容旧书签，重定向到 config-center
+      '/system/config-center': ManufacturingIcons.mdConfiguration, // 业务配置 - 使用设置2图标，区别于站点设置
+      '/system/business-config': ManufacturingIcons.mdConfiguration, // 兼容旧书签，重定向到 config-center
       '/system/system-parameters': ManufacturingIcons.mdConfiguration, // 兼容旧书签，重定向到 config-center
       '/system/data-dictionaries': ManufacturingIcons.bookOpen, // 数据字典 - 使用打开的书本图标
       '/system/code-rules': ManufacturingIcons.code, // 编号规则 - 使用代码图标
@@ -431,20 +457,18 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/system/files': ManufacturingIcons.folder, // 文件管理 - 使用文件夹图标
       '/system/apis': ManufacturingIcons.api, // API管理 - 使用API图标
       '/system/data-sources': ManufacturingIcons.database, // 数据源 - 使用数据库图标
-      '/system/application-connections': ManufacturingIcons.network, // 应用连接 - 使用网络图标
+      '/system/application-connections': ManufacturingIcons.gitBranch, // 应用连接器 - 使用分支连接图标
       '/system/datasets': ManufacturingIcons.inventory, // 数据集 - 使用库存图标
       '/system/messages/config': ManufacturingIcons.bell, // 消息配置 - 使用铃铛图标
       '/system/messages/template': ManufacturingIcons.fileText, // 消息模板 - 使用文件文本图标
-      '/infra/scheduled-tasks': ManufacturingIcons.clock, // 定时任务 - 使用时钟图标
       '/system/approval-processes': ManufacturingIcons.workflow, // 审批流程 - 使用工作流图标
       '/system/approval-instances': ManufacturingIcons.checkCircle, // 审批实例 - 使用检查圆圈图标
-      '/infra/scripts': ManufacturingIcons.fileCode, // 脚本管理 - 使用代码文件图标
-      '/system/print-templates': ManufacturingIcons.fileText, // 打印模板 - 使用文件文本图标
+      '/system/print-templates': ManufacturingIcons.fileSpreadsheet, // 打印模板 - 使用模板文档图标
       '/system/report-templates': ManufacturingIcons.chartBar, // 报表模板 - 使用柱状图图标
       '/system/print-devices': ManufacturingIcons.printer, // 打印设备 - 使用打印机图标
       '/personal': ManufacturingIcons.userCircle, // 个人中心 - 使用用户圆圈图标
       '/personal/profile': ManufacturingIcons.user, // 个人资料 - 使用用户图标
-      '/personal/preferences': ManufacturingIcons.mdSettings, // 偏好设置 - 使用设置图标
+      '/personal/preferences': ManufacturingIcons.pencil, // 偏好设置 - 使用编辑图标，区别系统设置
       '/personal/messages': ManufacturingIcons.bell, // 我的消息 - 使用铃铛图标
       '/personal/tasks': ManufacturingIcons.checklist, // 我的任务 - 使用清单图标
       '/system/operation-logs': ManufacturingIcons.history, // 操作日志 - 使用历史图标
@@ -467,7 +491,10 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/apps/kuaizhizao/equipment-management': ManufacturingIcons.wrench, // 设备管理 - 扳手图标（与系统设置齿轮区分）
       '/apps/kuaizhizao/finance-management': ManufacturingIcons.wallet, // 财务管理 - 使用钱包图标
       '/apps/kuaireport/analysis-center': ManufacturingIcons.chartBar, // 分析中心（已迁至快报表）- 柱状图
+      '/apps/kuaicrm': ManufacturingIcons.users, // 快客户
+      '/apps/kuaipdm': ManufacturingIcons.layers, // 快研发
       '/apps/kuaicaiwu': ManufacturingIcons.wallet, // 快财务
+      '/apps/kuaichain': ManufacturingIcons.gitBranch, // 快协同
       '/apps/kuaicaiwu/finance-management': ManufacturingIcons.wallet, // 财务管理
       '/apps/kuaicaiwu/cost-management': ManufacturingIcons.calculator, // 成本管理
       '/apps/kuaizhizao/performance': ManufacturingIcons.trophy, // 绩效管理 - 奖杯图标（与分析中心区分）
@@ -584,14 +611,12 @@ const getMenuConfig = (t: (key: string) => string): PermissionMenuDataItem[] => 
         { path: '/system/data-sources', name: t('menu.system.data-sources'), icon: getMenuIcon(t('menu.system.data-sources'), '/system/data-sources') },
         { path: '/system/application-connections', name: t('menu.system.application-connections'), icon: getMenuIcon(t('menu.system.application-connections'), '/system/application-connections') },
         { path: '/system/datasets', name: t('menu.system.datasets'), icon: getMenuIcon(t('menu.system.datasets'), '/system/datasets') },
-
       ]},
       { key: 'process-management-group', type: 'group', name: t('menu.group.process-management'), label: t('menu.group.process-management'), className: 'riveredge-menu-group-title', children: [
         { path: '/system/approval-processes', name: t('menu.system.approval-processes'), icon: getMenuIcon(t('menu.system.approval-processes'), '/system/approval-processes'), children: [{ path: '/system/approval-processes/designer', name: t('path.system.approval-processes.designer'), hideInMenu: true }] },
         { path: '/system/approval-instances', name: t('menu.system.approval-instances'), icon: getMenuIcon(t('menu.system.approval-instances'), '/system/approval-instances') },
         { path: '/system/messages/template', name: t('menu.system.messages.template'), icon: getMenuIcon(t('menu.system.messages.template'), '/system/messages/template') },
         { path: '/system/messages/config', name: t('menu.system.messages.config'), icon: getMenuIcon(t('menu.system.messages.config'), '/system/messages/config') },
-
         { path: '/system/print-devices', name: t('menu.system.print-devices'), icon: getMenuIcon(t('menu.system.print-devices'), '/system/print-devices') },
         { path: '/system/print-templates', name: t('menu.system.print-templates'), icon: getMenuIcon(t('menu.system.print-templates'), '/system/print-templates'), children: [{ path: '/system/print-templates/design', name: t('path.system.print-templates.design'), hideInMenu: true }] },
       ]},
@@ -601,17 +626,12 @@ const getMenuConfig = (t: (key: string) => string): PermissionMenuDataItem[] => 
         { path: '/system/online-users', name: t('menu.system.online-users'), icon: getMenuIcon(t('menu.system.online-users'), '/system/online-users') },
         { path: '/system/data-backups', name: t('menu.system.data-backups'), icon: getMenuIcon(t('menu.system.data-backups'), '/system/data-backups') },
       ]},
-    ],
-  },
-  {
-    path: '/personal',
-    name: t('menu.personal'),
-    icon: getMenuIcon(t('menu.personal'), '/personal'),
-    children: [
-      { path: '/personal/profile', name: t('menu.personal.profile'), icon: getMenuIcon(t('menu.personal.profile'), '/personal/profile') },
-      { path: '/personal/preferences', name: t('menu.personal.preferences'), icon: getMenuIcon(t('menu.personal.preferences'), '/personal/preferences') },
-      { path: '/personal/messages', name: t('menu.personal.messages'), icon: getMenuIcon(t('menu.personal.messages'), '/personal/messages') },
-      { path: '/personal/tasks', name: t('menu.personal.tasks'), icon: getMenuIcon(t('menu.personal.tasks'), '/personal/tasks') },
+      { key: 'personal-center-group', type: 'group', name: t('menu.personal'), label: t('menu.personal'), className: 'riveredge-menu-group-title', children: [
+        { path: '/personal/profile', name: t('menu.personal.profile'), icon: getMenuIcon(t('menu.personal.profile'), '/personal/profile') },
+        { path: '/personal/preferences', name: t('menu.personal.preferences'), icon: getMenuIcon(t('menu.personal.preferences'), '/personal/preferences') },
+        { path: '/personal/messages', name: t('menu.personal.messages'), icon: getMenuIcon(t('menu.personal.messages'), '/personal/messages') },
+        { path: '/personal/tasks', name: t('menu.personal.tasks'), icon: getMenuIcon(t('menu.personal.tasks'), '/personal/tasks') },
+      ]},
     ],
   },
   {
@@ -621,8 +641,6 @@ const getMenuConfig = (t: (key: string) => string): PermissionMenuDataItem[] => 
       { path: '/infra/operation', name: t('menu.infra.operation'), icon: getMenuIcon(t('menu.infra.operation'), '/infra/operation') },
       { path: '/infra/tenants', name: t('menu.infra.tenants'), icon: getMenuIcon(t('menu.infra.tenants'), '/infra/tenants') },
       { path: '/infra/packages', name: t('menu.infra.packages'), icon: getMenuIcon(t('menu.infra.packages'), '/infra/packages') },
-      { path: '/infra/scripts', name: t('menu.infra.scripts'), icon: getMenuIcon(t('menu.infra.scripts'), '/infra/scripts') },
-      { path: '/infra/scheduled-tasks', name: t('menu.infra.scheduled-tasks'), icon: getMenuIcon(t('menu.infra.scheduled-tasks'), '/infra/scheduled-tasks') },
       { path: '/infra/admin', name: t('menu.infra.admin'), icon: getMenuIcon(t('menu.infra.admin'), '/infra/admin') },
     ],
   },
@@ -669,10 +687,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const [techStackModalOpen, setTechStackModalOpen] = useState(false);
   const [themeEditorOpen, setThemeEditorOpen] = useState(false);
   const [languageDropdownOpen, setLanguageDropdownOpen] = useState(false);
+  const [systemSettingsOpen, setSystemSettingsOpen] = useState(false);
   const [breadcrumbVisible, setBreadcrumbVisible] = useState(true);
   const [userOpenKeys, setUserOpenKeys] = useState<string[]>([]); // 用户手动展开的菜单 key
   const [userClosedKeys, setUserClosedKeys] = useState<string[]>([]); // 用户手动收起的菜单 key
   const breadcrumbRef = useRef<HTMLDivElement>(null);
+  const systemSettingsPanelRef = useRef<HTMLDivElement>(null);
+  const systemSettingsTriggerRef = useRef<HTMLButtonElement>(null);
   const currentUser = useGlobalStore((s) => s.currentUser);
   const logout = useGlobalStore((s) => s.logout);
   const isLocked = useGlobalStore((s) => s.isLocked);
@@ -735,16 +756,11 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     }
   }, [currentUser]);
 
-  // 首屏非关键查询统一延迟到浏览器空闲后再发，避免挤占菜单/应用/用户首屏带宽。
-  // 语言列表、消息徽标、菜单徽标都属于"有了更好，没有也能看"，晚 ~800ms 完全可接受。
-  const deferredEnabled = useDeferredEnabled(800);
-
   // 获取可用语言列表
   const { data: languageListData } = useQuery({
     queryKey: ['availableLanguages'],
     queryFn: () => getLanguageList({ is_active: true }),
     staleTime: 5 * 60 * 1000, // 5 分钟缓存
-    enabled: deferredEnabled,
   });
 
   // 组织初始化提醒已移至上线助手中，不再全局展示
@@ -776,7 +792,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     queryFn: () => getUserMessageStats(),
     staleTime: 30 * 1000, // 30 秒缓存
     refetchInterval: 60 * 1000, // 每分钟自动刷新
-    enabled: !!currentUser && deferredEnabled, // 登录 + 首屏空闲后再拉
+    enabled: !!currentUser, // 只在用户登录后获取
   });
 
   // 获取最近的消息列表（仅在下拉菜单打开时获取）
@@ -1015,28 +1031,209 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     collapsed,
   });
 
-  /** KU-AI 应用是否在当前菜单树中可见（关闭/停用/无权限时为 false） */
-  const isKuaiaiAppAvailable = useMemo(() => {
-    const containsKuaiai = (items: MenuDataItem[] | undefined): boolean => {
-      if (!items) return false;
-      for (const item of items) {
-        const p = item.path;
-        if (p && (p === '/apps/kuaiai' || p.startsWith('/apps/kuaiai/'))) {
-          return true;
-        }
-        if (item.children && containsKuaiai(item.children as MenuDataItem[])) {
-          return true;
-        }
-      }
-      return false;
+  const systemMenuEntry = useMemo(
+    () => filteredMenuData.find((item) => item.path === '/system'),
+    [filteredMenuData]
+  );
+  const systemSettingsGroups = useMemo(() => {
+    const preferredOrder = [
+      'core-config-group',
+      'user-management-group',
+      'personal-center-group',
+      'data-center-group',
+      'process-management-group',
+      'monitoring-ops-group',
+    ];
+    const spanByKey: Record<string, number> = {
+      // 按 24 栅格布局：
+      // 第一行：核心配置(12) + 用户管理(6) + 个人中心(6) = 24
+      'core-config-group': 12,
+      'user-management-group': 6,
+      'personal-center-group': 6,
+      // 第二行：数据中心(9) + 流程管理(9) + 监控运维(6) = 24
+      'data-center-group': 9,
+      'process-management-group': 9,
+      'monitoring-ops-group': 6,
     };
-    return containsKuaiai(breadcrumbMenuData);
-  }, [breadcrumbMenuData]);
+    const groups = (systemMenuEntry?.children ?? []) as MenuDataItem[];
+    const visibleGroups = groups
+      .filter((group) => !group?.hideInMenu)
+      .map((group, index) => {
+        const items = (group.children ?? []).filter((child) => !child?.hideInMenu && !!child?.path);
+        const itemCount = items.length;
+        // 每个分组固定显示为两行：列数按数量自动计算
+        const itemCols = Math.max(2, Math.ceil(itemCount / 2));
+        // 组宽度按设计占位，确保每行总占位凑满 12，避免右侧空白列
+        const rawKey = String(group.key || group.name || `system-group-${index}`);
+        const groupSpan = spanByKey[rawKey] ?? Math.min(6, Math.max(3, itemCols + 1));
+        return {
+          key: rawKey,
+          name: group.name,
+          items,
+          itemCount,
+          itemCols,
+          groupSpan,
+        };
+      })
+      .filter((group) => group.itemCount > 0)
+      .sort((a, b) => {
+        const aOrder = preferredOrder.indexOf(a.key);
+        const bOrder = preferredOrder.indexOf(b.key);
+        if (aOrder === -1 && bOrder === -1) return 0;
+        if (aOrder === -1) return 1;
+        if (bOrder === -1) return -1;
+        return aOrder - bOrder;
+      });
+    return visibleGroups;
+  }, [systemMenuEntry]);
+
+  const getSystemTileTone = useCallback((groupKey: string, index: number) => {
+    // 鲜艳版：提升饱和度和亮度，增强图标容器存在感
+    const groupToneFamilies: Record<string, { from: string; to: string; border: string; icon: string }[]> = {
+      'core-config-group': [
+        { from: '#4f8dff', to: '#2f6df6', border: '#79a9ff', icon: '#ffffff' },
+        { from: '#4ca2ff', to: '#2e7df8', border: '#7fc0ff', icon: '#ffffff' },
+        { from: '#3f86ff', to: '#2668ec', border: '#70a3ff', icon: '#ffffff' },
+      ],
+      'user-management-group': [
+        { from: '#8d6bff', to: '#6b49f0', border: '#b39aff', icon: '#ffffff' },
+        { from: '#7f7bff', to: '#5c5af2', border: '#a8a5ff', icon: '#ffffff' },
+        { from: '#a16bff', to: '#7d45ef', border: '#c39dff', icon: '#ffffff' },
+      ],
+      'personal-center-group': [
+        { from: '#39d7bf', to: '#1bbfa7', border: '#76ead8', icon: '#ffffff' },
+        { from: '#42d9a0', to: '#1fc27f', border: '#7ceac0', icon: '#ffffff' },
+        { from: '#32cfcd', to: '#14b7b4', border: '#73e8e6', icon: '#ffffff' },
+      ],
+      'data-center-group': [
+        { from: '#5f748f', to: '#465a74', border: '#8ea2bc', icon: '#ffffff' },
+        { from: '#557ea7', to: '#3e658b', border: '#8fb2d4', icon: '#ffffff' },
+        { from: '#60749a', to: '#465c81', border: '#96abcf', icon: '#ffffff' },
+      ],
+      'process-management-group': [
+        { from: '#9b75ff', to: '#7d55f3', border: '#c4a8ff', icon: '#ffffff' },
+        { from: '#7e80ff', to: '#6163f3', border: '#a7a9ff', icon: '#ffffff' },
+        { from: '#b06cff', to: '#8f49f1', border: '#d1a4ff', icon: '#ffffff' },
+      ],
+      'monitoring-ops-group': [
+        { from: '#f2b545', to: '#d6901c', border: '#ffd17a', icon: '#ffffff' },
+        { from: '#f09c4b', to: '#d47522', border: '#ffc08b', icon: '#ffffff' },
+        { from: '#f4bf58', to: '#de9725', border: '#ffd98f', icon: '#ffffff' },
+      ],
+    };
+    const fallback = groupToneFamilies['core-config-group'];
+    const family = groupToneFamilies[groupKey] || fallback;
+    const tone = family[index % family.length];
+    return {
+      bg: `linear-gradient(145deg, ${tone.from} 0%, ${tone.to} 100%)`,
+      border: tone.border,
+      icon: tone.icon,
+    };
+  }, []);
+
+  const handleSystemSettingsNavigate = useCallback((path?: string) => {
+    if (!path) return;
+    setSystemSettingsOpen(false);
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      window.open(path, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    navigate(path);
+  }, [navigate]);
+
+  const getSystemPanelIcon = useCallback((path?: string): React.ReactNode => {
+    if (!path) return <FcGrid />;
+    const iconMap: Record<string, React.ComponentType> = {
+      '/system/applications': FcGrid,
+      '/system/menus': FcMenu,
+      '/system/site-settings': FcSettings,
+      '/system/config-center': FcServices,
+      '/system/data-dictionaries': FcReadingEbook,
+      '/system/languages': FcGlobe,
+      '/system/code-rules': FcCommandLine,
+      '/system/custom-fields': FcMultipleInputs,
+      '/system/departments': FcDepartment,
+      '/system/positions': FcBusinessContact,
+      '/system/roles': FcPrivacy,
+      '/system/users': FcManager,
+      '/system/files': FcFolder,
+      '/system/apis': FcDataConfiguration,
+      '/system/data-sources': FcDatabase,
+      '/system/application-connections': FcFlowChart,
+      '/system/datasets': FcDataSheet,
+      '/system/approval-processes': FcWorkflow,
+      '/system/approval-instances': FcInspection,
+      '/system/messages/template': FcTemplate,
+      '/system/messages/config': FcComments,
+      '/system/print-devices': FcPrint,
+      '/system/print-templates': FcDocument,
+      '/system/operation-logs': FcTimeline,
+      '/system/login-logs': FcClock,
+      '/system/online-users': FcConferenceCall,
+      '/system/data-backups': FcDataBackup,
+      '/personal/profile': FcBusinessman,
+      '/personal/preferences': FcSettings,
+      '/personal/messages': FcSms,
+      '/personal/tasks': FcTodoList,
+    };
+    const Icon = iconMap[path];
+    if (Icon) return <Icon />;
+    const matchedPrefix = Object.keys(iconMap).find((key) => path.startsWith(key));
+    if (matchedPrefix) {
+      const MatchedIcon = iconMap[matchedPrefix];
+      return <MatchedIcon />;
+    }
+    return <FcGrid />;
+  }, []);
+
+  const hasAiAssistantEntry = useMemo(() => {
+    const stack: MenuDataItem[] = [...filteredMenuData];
+    while (stack.length > 0) {
+      const current = stack.pop();
+      if (!current) continue;
+      if (typeof current.path === 'string' && current.path.startsWith('/apps/kuaiai')) {
+        return true;
+      }
+      if (Array.isArray(current.children) && current.children.length > 0) {
+        stack.push(...(current.children as MenuDataItem[]));
+      }
+    }
+    return false;
+  }, [filteredMenuData]);
+
+  useEffect(() => {
+    setSystemSettingsOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!systemSettingsOpen) return;
+    const handleOutsideClick = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (
+        systemSettingsPanelRef.current?.contains(target) ||
+        systemSettingsTriggerRef.current?.contains(target)
+      ) {
+        return;
+      }
+      setSystemSettingsOpen(false);
+    };
+    const handleEsc = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setSystemSettingsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, [systemSettingsOpen]);
 
   const { data: menuBadgeCounts = {} } = useQuery({
     queryKey: ['menuBadgeCounts'],
     queryFn: getMenuBadgeCounts,
-    enabled: !!currentUser?.id && deferredEnabled,
+    enabled: !!currentUser?.id,
     staleTime: 30 * 1000,
     refetchOnWindowFocus: true,
   });
@@ -1201,8 +1398,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // 接管 F1 控制，开启 AI 助手，阻止浏览器原生帮助打开
-      if (e.key === 'F1') {
+      // 接管 F1 控制，开启 AI 助手（仅在 AI 应用已启用时）
+      if (e.key === 'F1' && hasAiAssistantEntry) {
         e.preventDefault();
         e.stopPropagation();
         setAiAssistantOpen(true);
@@ -1249,7 +1446,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, []);
+  }, [hasAiAssistantEntry]);
 
   /**
    * 检测面包屑是否换行，如果换行则隐藏
@@ -2740,8 +2937,179 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn,
         .ant-pro-layout .ant-pro-sider-footer > div .ant-btn,
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn {
-          width: 100% !important;
           color: ${siderTextColor} !important;
+        }
+        .riveredge-footer-settings-btn,
+        .riveredge-footer-collapse-btn {
+          width: 100% !important;
+          border-radius: ${Number(token.borderRadius || 6)}px !important;
+        }
+        .riveredge-footer-settings-btn {
+          background: ${token.colorPrimaryBg} !important;
+          border-color: ${token.colorPrimaryBorder} !important;
+          box-shadow: inset 0 0 0 1px ${token.colorPrimaryBorder}33 !important;
+        }
+        .riveredge-footer-settings-btn:hover {
+          background: ${token.colorPrimaryBgHover} !important;
+        }
+        .riveredge-footer-settings-btn:active {
+          background: ${token.colorPrimaryBorder} !important;
+        }
+        .riveredge-footer-collapse-btn {
+          background: ${isDarkMode ? 'rgba(255, 255, 255, 0.12)' : '#f5f5f5'} !important;
+          border-color: ${isDarkMode ? 'rgba(255, 255, 255, 0.2)' : '#d9d9d9'} !important;
+        }
+        .riveredge-footer-collapse-btn:hover {
+          background: ${isDarkMode ? 'rgba(255, 255, 255, 0.18)' : '#ebebeb'} !important;
+        }
+        .riveredge-footer-collapse-btn:active {
+          background: ${isDarkMode ? 'rgba(255, 255, 255, 0.24)' : '#e2e2e2'} !important;
+        }
+        .riveredge-system-settings-panel {
+          position: fixed;
+          left: 8px;
+          bottom: 52px;
+          width: min(940px, calc(100vw - 24px));
+          max-height: min(86vh, 860px);
+          border-radius: ${Number(token.borderRadiusLG || 8)}px;
+          border: 1px solid rgba(255, 255, 255, 0.16);
+          background: rgba(20, 22, 28, 0.86);
+          backdrop-filter: blur(24px) saturate(125%);
+          -webkit-backdrop-filter: blur(24px) saturate(125%);
+          box-shadow: 0 26px 56px rgba(0, 0, 0, 0.58);
+          z-index: 1200;
+          overflow: hidden;
+        }
+        .riveredge-system-settings-panel-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 16px 18px 12px;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+        }
+        .riveredge-system-settings-panel-title {
+          font-size: 16px;
+          font-weight: 700;
+          color: rgba(255, 255, 255, 0.94);
+        }
+        .riveredge-system-settings-panel-body {
+          padding: 14px;
+          overflow-y: auto;
+          max-height: min(78vh, 760px);
+          display: grid;
+          grid-template-columns: repeat(24, minmax(0, 1fr));
+          align-content: start;
+          gap: 12px;
+        }
+        .riveredge-system-settings-group {
+          border-radius: ${Number(token.borderRadiusLG || 8)}px;
+          padding: 12px;
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .riveredge-system-settings-group-title {
+          font-size: 13px;
+          font-weight: 600;
+          color: rgba(255, 255, 255, 0.86);
+          margin-bottom: 10px;
+        }
+        .riveredge-system-settings-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 8px;
+        }
+        .riveredge-system-settings-item {
+          width: 100%;
+          border: none;
+          background: rgba(255, 255, 255, 0.02);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          color: rgba(255, 255, 255, 0.92);
+          padding: 10px 8px;
+          border-radius: ${Number(token.borderRadius || 6)}px;
+          min-height: 76px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+        .riveredge-system-settings-item:hover {
+          background: rgba(255, 255, 255, 0.07);
+          transform: translateY(-1px);
+          box-shadow: none;
+        }
+        .riveredge-system-settings-item:focus-visible {
+          outline: 2px solid var(--ant-colorPrimary);
+          outline-offset: 1px;
+        }
+        .riveredge-system-settings-item-icon {
+          width: 44px;
+          height: 44px;
+          border-radius: ${Number(token.borderRadiusLG || 8)}px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          background: transparent;
+          border: none;
+          box-shadow: none;
+          padding: 0;
+          line-height: 1;
+          transition: transform 0.18s ease;
+        }
+        .riveredge-system-settings-item-icon .anticon,
+        .riveredge-system-settings-item-icon svg {
+          font-size: 42px;
+          width: 42px;
+          height: 42px;
+          color: currentColor;
+        }
+        .riveredge-system-settings-item:hover .riveredge-system-settings-item-icon {
+          transform: translateY(-1px);
+        }
+        .riveredge-system-settings-item-label {
+          font-size: 13px;
+          line-height: 1.2;
+          font-weight: 500;
+          text-align: center;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          width: 100%;
+        }
+        @media (max-width: 1440px) {
+          .riveredge-system-settings-panel-body {
+            grid-template-columns: repeat(18, minmax(0, 1fr));
+          }
+        }
+        @media (max-width: 1180px) {
+          .riveredge-system-settings-panel {
+            width: min(820px, calc(100vw - 16px));
+          }
+          .riveredge-system-settings-panel-body {
+            grid-template-columns: repeat(12, minmax(0, 1fr));
+          }
+          .riveredge-system-settings-group {
+            grid-column: span 6 !important;
+          }
+        }
+        @media (max-width: 900px) {
+          .riveredge-system-settings-panel {
+            left: 8px;
+            right: 8px;
+            width: auto;
+          }
+          .riveredge-system-settings-panel-body {
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+          }
+          .riveredge-system-settings-group {
+            grid-column: span 6 !important;
+          }
+        }
+        @supports not ((backdrop-filter: blur(2px))) {
+          .riveredge-system-settings-panel {
+            background: rgba(14, 18, 26, 0.96);
+          }
         }
         /* 侧边栏底部收起按钮图标样式 - 根据菜单栏背景色自动适配 */
         .ant-pro-layout .ant-pro-sider-footer .ant-btn .anticon,
@@ -3791,6 +4159,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           const dividerColor = siderTextColor === '#ffffff'
             ? 'rgba(255, 255, 255, 0.15)'
             : (isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.12)');
+          const footerBtnBg = token.colorPrimaryBg;
+          const footerBtnBorder = token.colorPrimaryBorder;
 
           return (
             <div
@@ -3799,16 +4169,47 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                 borderTop: `1px solid ${dividerColor}`,
               }}
             >
-              <Button
-                type="text"
-                icon={collapsed ? <MenuUnfoldOutlined style={{ color: siderTextColor }} /> : <MenuFoldOutlined style={{ color: siderTextColor }} />}
-                onClick={() => handleSetCollapsed(!collapsed)}
+              <div
                 style={{
-                  width: '100%',
-                  color: siderTextColor,
+                  display: 'flex',
+                  gap: 8,
+                  flexDirection: collapsed ? 'column' : 'row',
                 }}
-                title={collapsed ? t('ui.sidebar.expand') : t('ui.sidebar.collapse')}
-              />
+              >
+                <div style={{ flex: 3 }}>
+                  <Button
+                    ref={systemSettingsTriggerRef}
+                    className="riveredge-footer-settings-btn"
+                    type="default"
+                    icon={<AppstoreOutlined style={{ color: siderTextColor }} />}
+                    onClick={() => setSystemSettingsOpen((prev) => !prev)}
+                    style={{
+                      color: siderTextColor,
+                      backgroundColor: footerBtnBg,
+                      border: `1px solid ${footerBtnBorder}`,
+                      minHeight: 34,
+                    }}
+                    title={t('ui.sidebar.systemSettings')}
+                    aria-expanded={systemSettingsOpen}
+                    aria-label={t('ui.sidebar.systemSettings')}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <Button
+                    className="riveredge-footer-collapse-btn"
+                    type="default"
+                    icon={collapsed ? <MenuUnfoldOutlined style={{ color: siderTextColor }} /> : <MenuFoldOutlined style={{ color: siderTextColor }} />}
+                    onClick={() => handleSetCollapsed(!collapsed)}
+                    style={{
+                      color: siderTextColor,
+                      backgroundColor: footerBtnBg,
+                      border: `1px solid ${footerBtnBorder}`,
+                      minHeight: 34,
+                    }}
+                    title={collapsed ? t('ui.sidebar.expand') : t('ui.sidebar.collapse')}
+                  />
+                </div>
+              </div>
             </div>
           );
         }}
@@ -3935,7 +4336,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         actionsRender={() => {
           const actions = [];
 
-          if (!isMobileOrTablet && isKuaiaiAppAvailable) {
+          if (!isMobileOrTablet && hasAiAssistantEntry) {
           // AI 助手入口：仅 Lottie 图标 48x48，无文字、无背景、无动效
           actions.push(
             <span key="aiAssistant" className="ai-assistant-lottie-btn-wrapper">
@@ -3946,18 +4347,19 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                 onKeyDown={(e) => e.key === 'Enter' && setAiAssistantOpen(true)}
                 className="ai-assistant-lottie-btn"
               >
-                <React.Suspense fallback={<span style={{ width: 52, height: 52, display: 'block' }} />}>
-                  <LazyAssistLottie
-                    style={{
-                      width: 52,
-                      height: 52,
-                      display: 'block',
-                      ...( !isLightModeLightBg ? {
-                        filter: 'brightness(2) contrast(1.2) drop-shadow(0 0 6px rgba(255, 255, 255, 0.5)) drop-shadow(0 0 16px rgba(255, 255, 255, 0.25))'
-                      } : {})
-                    }}
-                  />
-                </React.Suspense>
+                <Lottie
+                  animationData={assistAnimation}
+                  loop
+                  autoplay
+                  style={{
+                    width: 52,
+                    height: 52,
+                    display: 'block',
+                    ...( !isLightModeLightBg ? {
+                      filter: 'brightness(2) contrast(1.2) drop-shadow(0 0 6px rgba(255, 255, 255, 0.5)) drop-shadow(0 0 16px rgba(255, 255, 255, 0.25))'
+                    } : {})
+                  }}
+                />
               </span>
             </span>
           );
@@ -4311,7 +4713,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           return <Space size={8} align="center">{actions}</Space>;
         }}
         menuDataRender={() => {
-          return filteredMenuData;
+          return filteredMenuData.filter((item) => item.path !== '/system');
         }}
         menuProps={{
           mode: 'inline',
@@ -4522,6 +4924,67 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         </UniTabs>
         )}
       </ProLayout >
+      {systemSettingsOpen && (
+        <div
+          ref={systemSettingsPanelRef}
+          className="riveredge-system-settings-panel"
+          role="dialog"
+          aria-modal="false"
+          aria-label={t('menu.system')}
+        >
+          <div className="riveredge-system-settings-panel-header">
+            <span className="riveredge-system-settings-panel-title">{t('menu.system')}</span>
+            <Button
+              type="text"
+              size="small"
+              onClick={() => setSystemSettingsOpen(false)}
+              title={t('common.close')}
+              aria-label={t('common.close')}
+              icon={<CloseOutlined />}
+            />
+          </div>
+          <div className="riveredge-system-settings-panel-body">
+            {systemSettingsGroups.map((group) => {
+              return (
+                <section
+                  key={group.key}
+                  className="riveredge-system-settings-group"
+                  style={{ gridColumn: `span ${group.groupSpan}` }}
+                >
+                  <div className="riveredge-system-settings-group-title">{group.name as React.ReactNode}</div>
+                  <div
+                    className="riveredge-system-settings-grid"
+                    style={{ gridTemplateColumns: `repeat(${group.itemCols}, minmax(0, 1fr))` }}
+                  >
+                    {group.items.map((child, childIndex) => {
+                      const tone = getSystemTileTone(group.key, childIndex);
+                      return (
+                        <button
+                          key={String(child.key || child.path)}
+                          type="button"
+                          className="riveredge-system-settings-item"
+                          onClick={() => handleSystemSettingsNavigate(child.path)}
+                          title={typeof child.name === 'string' ? child.name : undefined}
+                        >
+                          <span
+                            className="riveredge-system-settings-item-icon"
+                            style={{
+                              color: tone.icon,
+                            }}
+                          >
+                            {getSystemPanelIcon(child.path)}
+                          </span>
+                          <span className="riveredge-system-settings-item-label">{child.name as React.ReactNode}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* 技术栈信息弹窗 */}
       < TechStackModal
@@ -4539,15 +5002,11 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }}
       />
 
-      {/* AI 助手（懒加载，仅在首次打开时拉取 chunk） */}
-      {aiAssistantOpen && (
-        <React.Suspense fallback={null}>
-          <AiAssistant
-            open={aiAssistantOpen}
-            onClose={() => setAiAssistantOpen(false)}
-          />
-        </React.Suspense>
-      )}
+      {/* AI 助手 */}
+      <AiAssistant
+        open={aiAssistantOpen}
+        onClose={() => setAiAssistantOpen(false)}
+      />
 
       {/* 键盘快捷键帮助 */}
       <Modal

@@ -205,6 +205,7 @@ export default {
   // UI text translations
   'ui.sidebar.expand': 'Expand Sidebar',
   'ui.sidebar.collapse': 'Collapse Sidebar',
+  'ui.sidebar.systemSettings': 'System Settings',
   'ui.message.notification': 'Message Notification',
   'ui.theme.color': 'Theme Color',
   'ui.fullscreen.exit': 'Exit Fullscreen',

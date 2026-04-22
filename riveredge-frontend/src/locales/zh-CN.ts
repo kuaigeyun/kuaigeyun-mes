@@ -204,6 +204,7 @@ export default {
   // UI 文本翻译
   'ui.sidebar.expand': '展开侧边栏',
   'ui.sidebar.collapse': '收起侧边栏',
+  'ui.sidebar.systemSettings': '系统设置',
   'ui.message.notification': '消息通知',
   'ui.theme.color': '主题颜色',
   'ui.fullscreen.exit': '退出全屏',
