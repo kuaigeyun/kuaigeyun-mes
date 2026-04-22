@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Typography, Button, Modal, Input, Tooltip, Progress, theme, message, Empty, Radio } from 'antd';
+import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
+import { Typography, Button, Modal, Input, Tooltip, Progress, theme, message, Empty, Radio, Upload } from 'antd';
+import type { UploadProps } from 'antd';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { Billboard, useTexture } from '@react-three/drei';
 import * as THREE from 'three';
@@ -7,6 +8,7 @@ import {
   FullscreenOutlined,
   FullscreenExitOutlined,
   SettingOutlined,
+  PlusOutlined,
 } from '@ant-design/icons';
 import { Column, Area, Chart } from '@ant-design/charts';
 import { useTranslation } from 'react-i18next';
@@ -14,7 +16,7 @@ import { useQuery } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import { businessBoardChartTheme } from './chartTheme';
 import { getBusinessBoardTitle, putBusinessBoardTitle } from '../../../../services/businessBoardTitle';
-import { getFilePreview } from '../../../../services/file';
+import { getFilePreview, uploadFile } from '../../../../services/file';
 import { useConfigStore } from '../../../../stores/configStore';
 import {
   getSalesSummary,
@@ -34,6 +36,9 @@ import {
 } from '../../../../services/dashboard';
 
 const { Title } = Typography;
+
+/** 中心 HUD 默认配图（未上传自定义图时使用） */
+const DEFAULT_HERO_TEXTURE = '/img/dashboard.png';
 
 /** ===== 配色（对齐参考图：深海军蓝 + 亮青） ===== */
 const hud = {
@@ -394,12 +399,12 @@ const TechBadge: React.FC<TechBadgeProps & { delay?: number }> = ({
 };
 
 /** ===== 3D 模型：高精细复合动力堆 (High-Detail Power Core) ===== */
-const HudPowerCore: React.FC = () => {
+const HudPowerCore: React.FC<{ textureUrl: string }> = ({ textureUrl }) => {
   const meshRef = useRef<THREE.Group>(null);
   const pointsRef = useRef<THREE.Points>(null);
   
-  // 1. 加载高清静态大图资源
-  const texture = useTexture('/img/dashboard.png');
+  // 1. 加载高清静态大图资源（支持租户自定义 URL）
+  const texture = useTexture(textureUrl);
   
   // 2. 优化图片纹理质量 (静默处理)
   useEffect(() => {
@@ -442,6 +447,8 @@ const HudPowerCore: React.FC = () => {
 };
 
 interface HudHeroProps {
+  /** 中心 Billboard 贴图（默认 /img/dashboard.png 或文件预览 URL） */
+  centerTextureUrl: string;
   todayOutput: number;
   qualifiedRate: number;
   inProgressWo: number;
@@ -467,6 +474,7 @@ interface HudHeroProps {
 }
 
 const HudHero: React.FC<HudHeroProps> = ({
+  centerTextureUrl,
   todayOutput,
   qualifiedRate,
   inProgressWo,
@@ -497,7 +505,9 @@ const HudHero: React.FC<HudHeroProps> = ({
         <ambientLight intensity={0.5} />
         <pointLight position={[10, 10, 10]} intensity={1.5} color={hud.cyan} />
         <pointLight position={[-10, -10, -10]} intensity={1} color={hud.platformBlue} />
-        <HudPowerCore />
+        <Suspense fallback={null}>
+          <HudPowerCore key={centerTextureUrl} textureUrl={centerTextureUrl} />
+        </Suspense>
       </Canvas>
       
       {/* 全息悬浮指标分布系统 (中轴挂载) */}
@@ -872,8 +882,14 @@ const BusinessBoardPage: React.FC = () => {
   const [currentTime, setCurrentTime] = useState(dayjs().format('YYYY-MM-DD HH:mm:ss'));
   const containerRef = useRef<HTMLDivElement>(null);
   const [customBoardTitle, setCustomBoardTitle] = useState('');
+  /** 中间配图文件 UUID，null 表示使用系统默认图 */
+  const [customHeroImageUuid, setCustomHeroImageUuid] = useState<string | null>(null);
+  const [heroTextureUrl, setHeroTextureUrl] = useState(DEFAULT_HERO_TEXTURE);
   const [titleModalOpen, setTitleModalOpen] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
+  /** 弹窗内编辑中的中间图 UUID */
+  const [heroImageUuidDraft, setHeroImageUuidDraft] = useState<string | null>(null);
+  const [heroDraftPreviewUrl, setHeroDraftPreviewUrl] = useState(DEFAULT_HERO_TEXTURE);
   const [timeRange, setTimeRange] = useState<'today' | 'week' | 'month'>('month');
 
   /** 根据 timeRange 推导 YYYY-MM-DD 区间；week 以周一为起点 */
@@ -941,6 +957,7 @@ const BusinessBoardPage: React.FC = () => {
           if (cancelled) return;
           const fromApi = (res?.title || '').trim();
           setCustomBoardTitle(fromApi);
+          setCustomHeroImageUuid(res?.hero_image_uuid ?? null);
           return;
         } catch {
           if (attempt < 2) {
@@ -948,6 +965,7 @@ const BusinessBoardPage: React.FC = () => {
             continue;
           }
           setCustomBoardTitle('');
+          setCustomHeroImageUuid(null);
         }
       }
     })();
@@ -956,31 +974,105 @@ const BusinessBoardPage: React.FC = () => {
     };
   }, []);
 
+  /** 将已保存的中间图 UUID 解析为 Three 可用的贴图 URL */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!customHeroImageUuid) {
+        setHeroTextureUrl(DEFAULT_HERO_TEXTURE);
+        return;
+      }
+      try {
+        const previewInfo = await getFilePreview(customHeroImageUuid);
+        if (!cancelled) setHeroTextureUrl(previewInfo.preview_url);
+      } catch {
+        if (!cancelled) setHeroTextureUrl(DEFAULT_HERO_TEXTURE);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [customHeroImageUuid]);
+
+  /** 弹窗内预览：随草稿 UUID 变化 */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!heroImageUuidDraft) {
+        setHeroDraftPreviewUrl(DEFAULT_HERO_TEXTURE);
+        return;
+      }
+      try {
+        const previewInfo = await getFilePreview(heroImageUuidDraft);
+        if (!cancelled) setHeroDraftPreviewUrl(previewInfo.preview_url);
+      } catch {
+        if (!cancelled) setHeroDraftPreviewUrl(DEFAULT_HERO_TEXTURE);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [heroImageUuidDraft]);
+
   const openTitleModal = useCallback(() => {
     setTitleDraft(customBoardTitle || defaultBoardTitle);
+    setHeroImageUuidDraft(customHeroImageUuid);
     setTitleModalOpen(true);
-  }, [customBoardTitle, defaultBoardTitle]);
+  }, [customBoardTitle, customHeroImageUuid, defaultBoardTitle]);
+
+  const handleHeroBeforeUpload = useCallback<NonNullable<UploadProps['beforeUpload']>>(
+    async (file) => {
+      const f = file as { type?: string; size?: number };
+      if (!f.type?.startsWith('image/')) {
+        message.error(t('dashboard.businessBoard.heroImageInvalidType'));
+        return Upload.LIST_IGNORE;
+      }
+      if ((f.size ?? 0) > 5 * 1024 * 1024) {
+        message.error(t('dashboard.businessBoard.heroImageTooLarge'));
+        return Upload.LIST_IGNORE;
+      }
+      try {
+        const res = await uploadFile(file as Parameters<typeof uploadFile>[0], {
+          category: 'dashboard_hero',
+          description: 'business-board-center-image',
+        });
+        setHeroImageUuidDraft(res.uuid);
+      } catch (e: unknown) {
+        message.error((e as Error)?.message || '上传失败');
+      }
+      return false;
+    },
+    [t],
+  );
 
   const saveBoardTitle = useCallback(async () => {
-    const next = titleDraft.trim();
+    const nextTitle = titleDraft.trim() || null;
     try {
-      await putBusinessBoardTitle(next || null);
-      setCustomBoardTitle(next);
+      const data = await putBusinessBoardTitle({
+        title: nextTitle,
+        hero_image_uuid: heroImageUuidDraft,
+      });
+      setCustomBoardTitle((data.title || '').trim());
+      setCustomHeroImageUuid(data.hero_image_uuid ?? null);
       setTitleModalOpen(false);
     } catch (e: unknown) {
       message.error((e as Error)?.message || '保存失败，请稍后重试');
     }
-  }, [titleDraft]);
+  }, [titleDraft, heroImageUuidDraft]);
 
   const resetBoardTitle = useCallback(async () => {
     try {
-      await putBusinessBoardTitle(null);
-      setCustomBoardTitle('');
+      const data = await putBusinessBoardTitle({
+        title: null,
+        hero_image_uuid: customHeroImageUuid,
+      });
+      setCustomBoardTitle((data.title || '').trim());
+      setCustomHeroImageUuid(data.hero_image_uuid ?? null);
       setTitleDraft(defaultBoardTitle);
     } catch (e: unknown) {
       message.error((e as Error)?.message || '恢复默认失败，请稍后重试');
     }
-  }, [defaultBoardTitle]);
+  }, [defaultBoardTitle, customHeroImageUuid]);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(dayjs().format('YYYY-MM-DD HH:mm:ss')), 1000);
@@ -1357,6 +1449,7 @@ const BusinessBoardPage: React.FC = () => {
         okText={t('dashboard.businessBoard.saveTitle')}
         cancelText={t('common.cancel')}
         destroyOnHidden
+        width={480}
       >
         <Input
           value={titleDraft}
@@ -1369,6 +1462,53 @@ const BusinessBoardPage: React.FC = () => {
         <Button type="link" size="small" onClick={resetBoardTitle} style={{ paddingLeft: 0, marginTop: 8 }}>
           {t('dashboard.businessBoard.resetTitle')}
         </Button>
+
+        <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${token.colorBorderSecondary}` }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
+            {t('dashboard.businessBoard.heroImageLabel')}
+          </div>
+          <div style={{ fontSize: 12, color: token.colorTextSecondary, marginBottom: 10 }}>
+            {t('dashboard.businessBoard.heroImageHint')}
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: 12 }}>
+            <Upload accept="image/*" showUploadList={false} maxCount={1} beforeUpload={handleHeroBeforeUpload}>
+              <div
+                style={{
+                  width: 104,
+                  height: 104,
+                  border: `1px dashed ${token.colorBorder}`,
+                  borderRadius: token.borderRadiusLG,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'hidden',
+                  cursor: 'pointer',
+                  background: token.colorFillAlter,
+                }}
+              >
+                {heroImageUuidDraft ? (
+                  <img
+                    src={heroDraftPreviewUrl}
+                    alt=""
+                    style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                  />
+                ) : (
+                  <div style={{ textAlign: 'center', padding: 8 }}>
+                    <PlusOutlined style={{ fontSize: 22, color: token.colorTextSecondary }} />
+                    <div style={{ marginTop: 6, fontSize: 12, color: token.colorTextSecondary }}>
+                      {t('dashboard.businessBoard.uploadHeroImage')}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Upload>
+            {heroImageUuidDraft ? (
+              <Button type="link" size="small" onClick={() => setHeroImageUuidDraft(null)} style={{ paddingLeft: 0 }}>
+                {t('dashboard.businessBoard.resetHeroImage')}
+              </Button>
+            ) : null}
+          </div>
+        </div>
       </Modal>
 
       {/* 主体：左 2 + 中（装饰 + 1）+ 右 2 */}
@@ -1562,6 +1702,7 @@ const BusinessBoardPage: React.FC = () => {
           <HudPanel variant="middleTop" style={{ flex: '1.15 1 0', minHeight: 260 }}>
             {/* 制造态势标题与实时标签已根据要求移除 */}
             <HudHero
+              centerTextureUrl={heroTextureUrl}
               todayOutput={Number(manufacturing?.today_output ?? 0)}
               qualifiedRate={Number(manufacturing?.qualified_rate ?? 0)}
               inProgressWo={Number(manufacturing?.in_progress_count ?? 0)}

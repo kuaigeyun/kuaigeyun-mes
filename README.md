@@ -35,29 +35,6 @@
 
 <img src="docs/screenshots/wechat/wechat.png" alt="微信沟通反馈群" width="280" />
 
----
-
-## 近期更新
-
-**BOM 功能强化 增加配置件/替代料 20260318**：
-
-![BOM功能强化](docs/screenshots/update/update20260318.png)
-
-**审批流设计优化 20260317**：
-
-![审批流设计优化](docs/screenshots/update/update20260317.png)
-
-**实验性 3D 内容展示 20260315**：
-
-![实验性3D内容展示](docs/screenshots/update/update20260315.png)
-
-**应用规划更新 20260314**：
-
-![应用规划更新](docs/screenshots/update/update20260314.png)
-
-**工单指标卡视觉体验优化 20260312**：
-
-![工单指标卡视觉体验优化](docs/screenshots/update/update20260312.png)
 
 ---
 
