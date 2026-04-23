@@ -392,38 +392,6 @@ const getGreetingKey = (): string => {
   return 'pages.dashboard.greetingNight';
 };
 
-/** 7 段管数码管组件 - 模拟真实 LCD 文字 */
-const LcdDigit = ({ value, size = 36, color = '#2C3E50' }: { value: string; size?: number; color?: string }) => {
-  // 7 段定义: a, b, c, d, e, f, g
-  const segments: Record<string, number[]> = {
-    '0': [1, 1, 1, 1, 1, 1, 0],
-    '1': [0, 1, 1, 0, 0, 0, 0],
-    '2': [1, 1, 0, 1, 1, 0, 1],
-    '3': [1, 1, 1, 1, 0, 0, 1],
-    '4': [0, 1, 1, 0, 0, 1, 1],
-    '5': [1, 0, 1, 1, 0, 1, 1],
-    '6': [1, 0, 1, 1, 1, 1, 1],
-    '7': [1, 1, 1, 0, 0, 0, 0],
-    '8': [1, 1, 1, 1, 1, 1, 1],
-    '9': [1, 1, 1, 1, 0, 1, 1],
-  };
-
-  const active = segments[value] || [0, 0, 0, 0, 0, 0, 0];
-  const opacityDim = 0.05;
-
-  return (
-    <svg width={size * 0.6} height={size} viewBox="0 0 24 40" style={{ display: 'block' }}>
-      {/* a */} <path d="M 4 2 L 20 2 L 18 4 L 6 4 Z" fill={color} opacity={active[0] ? 1 : opacityDim} />
-      {/* b */} <path d="M 22 4 L 22 18 L 20 16 L 20 6 Z" fill={color} opacity={active[1] ? 1 : opacityDim} />
-      {/* c */} <path d="M 22 22 L 22 36 L 20 34 L 20 24 Z" fill={color} opacity={active[2] ? 1 : opacityDim} />
-      {/* d */} <path d="M 20 38 L 4 38 L 6 36 L 18 36 Z" fill={color} opacity={active[3] ? 1 : opacityDim} />
-      {/* e */} <path d="M 2 36 L 2 22 L 4 24 L 4 34 Z" fill={color} opacity={active[4] ? 1 : opacityDim} />
-      {/* f */} <path d="M 2 18 L 2 4 L 4 6 L 4 16 Z" fill={color} opacity={active[5] ? 1 : opacityDim} />
-      {/* g */} <path d="M 6 19 L 18 19 L 19 20 L 18 21 L 6 21 L 5 20 Z" fill={color} opacity={active[6] ? 1 : opacityDim} />
-    </svg>
-  );
-};
-
 function DashboardLcdClock({ 
   time, 
   inline, 
@@ -453,8 +421,7 @@ function DashboardLcdClock({
   const lcdTextDim = isDark ? 'rgba(74, 222, 128, 0.05)' : 'rgba(0,0,0,0.06)';
   const lcdTextActive = isDark ? '#4ade80' : '#2C3D4F';
 
-  // 恢复字体大小：32px
-  const digitSize = inline ? 36 : 44;
+  const timeText = `${hourStr}:${minuteStr}:${secondStr}`;
 
   // 决定闹钟图标的颜色和动画
   const isAlerting = alertType !== 'none';
@@ -587,31 +554,30 @@ function DashboardLcdClock({
         `}} />
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-        <div style={{ display: 'flex', gap: 1 }}>
-          <LcdDigit value={hourStr[0]} size={digitSize} color={lcdTextActive} />
-          <LcdDigit value={hourStr[1]} size={digitSize} color={lcdTextActive} />
-        </div>
-        
-        <div style={{ padding: '0 1px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ width: 2, height: 2, borderRadius: '50%', background: lcdTextActive }} />
-          <div style={{ width: 2, height: 2, borderRadius: '50%', background: lcdTextActive }} />
-        </div>
-
-        <div style={{ display: 'flex', gap: 1 }}>
-          <LcdDigit value={minuteStr[0]} size={digitSize} color={lcdTextActive} />
-          <LcdDigit value={minuteStr[1]} size={digitSize} color={lcdTextActive} />
-        </div>
-
-        <div style={{ padding: '0 1px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ width: 2, height: 2, borderRadius: '50%', background: lcdTextActive }} />
-          <div style={{ width: 2, height: 2, borderRadius: '50%', background: lcdTextActive }} />
-        </div>
-
-        <div style={{ display: 'flex', gap: 1 }}>
-          <LcdDigit value={secondStr[0]} size={digitSize} color={lcdTextActive} />
-          <LcdDigit value={secondStr[1]} size={digitSize} color={lcdTextActive} />
-        </div>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100%',
+        }}
+      >
+        <span
+          style={{
+            color: isDark ? '#7DE8AE' : '#516B86',
+            fontSize: inline ? 28 : 34,
+            fontWeight: 800,
+            paddingTop: 6,
+            letterSpacing: inline ? '0.06em' : '0.08em',
+            lineHeight: 1,
+            fontVariantNumeric: 'tabular-nums',
+            fontFamily:
+              '"Inter Tight", "DIN Alternate", "Bahnschrift", "Segoe UI", "Arial Black", "PingFang SC", "Microsoft YaHei", sans-serif',
+            textShadow: isDark ? '0 0 7px rgba(125, 232, 174, 0.2)' : '0 1px 0 rgba(255,255,255,0.55)',
+          }}
+        >
+          {timeText}
+        </span>
       </div>
 
       <div style={{ 
