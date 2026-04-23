@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { UserOutlined, LockOutlined, ThunderboltOutlined, GlobalOutlined, WindowsFilled, AndroidFilled, DownloadOutlined } from '@ant-design/icons';
 import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 const LottiePlayer = lazy(() => import('lottie-react').then((m) => ({ default: m.default })));
-import { registerPersonal, registerOrganization, checkTenantExists, searchTenants, sendVerificationCode, type TenantCheckResponse, type TenantSearchOption, type OrganizationRegisterRequest, type SendVerificationCodeRequest } from '../../services/register';
+import { registerPersonal, registerOrganization, checkTenantExists, searchTenants, type TenantCheckResponse, type TenantSearchOption, type OrganizationRegisterRequest } from '../../services/register';
 import { login, guestLogin, wechatLoginCallback, type LoginResponse } from '../../services/auth';
 import { setToken, setTenantId, setUserInfo } from '../../utils/auth';
 import { useGlobalStore } from '../../stores/globalStore';
@@ -290,7 +290,7 @@ export default function LoginPage() {
 
   // 注册抽屉状态
   const [registerDrawerVisible, setRegisterDrawerVisible] = useState(false);
-  const [registerType, setRegisterType] = useState<'select' | 'personal' | 'organization'>('select');
+  const [registerType, setRegisterType] = useState<'personal' | 'organization'>('personal');
 
   const showClientDownloadPlaceholder = useCallback(() => {
     message.info(t('pages.login.clientDownloadPlaceholder'));
@@ -352,13 +352,10 @@ export default function LoginPage() {
   interface PersonalRegisterFormData {
     username: string;
     phone: string;
-    phone_verification_code: string;
-    email?: string;
     password: string;
     confirm_password: string;
     full_name?: string;
     tenant_domain?: string;
-    invite_code?: string;
   }
   
   /**
@@ -366,11 +363,11 @@ export default function LoginPage() {
    */
   interface OrganizationRegisterFormData {
     tenant_name: string;
+    full_name: string;
     phone: string;
     password: string;
     confirm_password: string;
     tenant_domain?: string;
-    email?: string;
   }
   
   /**
@@ -435,22 +432,6 @@ export default function LoginPage() {
   };
 
   /**
-   * 发送验证码（供 RegisterDrawer 使用）
-   */
-  const handleSendVerificationCode = async (phone: string) => {
-    try {
-      const result = await sendVerificationCode({ phone });
-      if (result.success) {
-        message.success(result.message);
-      } else {
-        message.error(result.message);
-      }
-    } catch {
-      message.error(t('pages.login.codeSendFailed'));
-    }
-  };
-  
-  /**
    * 处理个人注册提交
    */
   const handlePersonalRegister = async (values: PersonalRegisterFormData) => {
@@ -472,27 +453,13 @@ export default function LoginPage() {
       }
       // 如果不填写组织代码，tenant_id 为 undefined，将注册到默认组织
 
-      // TODO(登录): 短信服务接入后，在此调用后端验证 phone_verification_code
-      // 当前：验证码为空时跳过；非空时仅做格式校验
-      if (!values.phone_verification_code || values.phone_verification_code.trim() === '') {
-        // 验证码未填写，跳过（待短信服务启用后移除）
-      } else {
-        // 这里可以添加简单的格式验证
-        if (!/^\d{6}$/.test(values.phone_verification_code)) {
-          message.error(t('pages.login.verificationCodeInvalid'));
-          return;
-        }
-      }
-
-      // 提交个人注册
+      // 提交个人注册（邮箱、邀请码、短信验证码不在表单中收集）
       const registerResponse = await registerPersonal({
         username: values.username,
         phone: values.phone,
-        email: values.email && values.email.trim() !== '' ? values.email : undefined,
         password: values.password,
         full_name: values.full_name && values.full_name.trim() !== '' ? values.full_name : undefined,
         tenant_id: tenant_id,
-        invite_code: values.invite_code,
       });
 
       if (registerResponse) {
@@ -540,7 +507,7 @@ export default function LoginPage() {
       setUserInfo(userInfo);
       useUserPreferenceStore.getState().rehydrateFromStorage();
       setRegisterDrawerVisible(false);
-      setRegisterType('select');
+      setRegisterType('personal');
       // 延迟执行消息提示和导航，避免阻塞主线程
       setTimeout(() => {
         message.success(t('pages.login.success'));
@@ -550,7 +517,7 @@ export default function LoginPage() {
         } catch (loginError: any) {
           message.warning(t('pages.login.registerSuccessManual'));
           setRegisterDrawerVisible(false);
-          setRegisterType('select');
+          setRegisterType('personal');
         }
       }
     } catch (error: any) {
@@ -582,13 +549,12 @@ export default function LoginPage() {
         return;
       }
 
-      // 提交组织注册（极简表单：组织名称、手机号、密码）
       const registerResponse = await registerOrganization({
         tenant_name: values.tenant_name,
+        full_name: values.full_name?.trim() || undefined,
         phone: values.phone,
         password: values.password,
         tenant_domain: values.tenant_domain,
-        email: values.email,
       });
 
       if (registerResponse && registerResponse.success) {
@@ -636,7 +602,7 @@ export default function LoginPage() {
       setUserInfo(userInfo);
       useUserPreferenceStore.getState().rehydrateFromStorage();
       setRegisterDrawerVisible(false);
-      setRegisterType('select');
+      setRegisterType('personal');
       // 延迟执行消息提示和导航，避免阻塞主线程
       // 新注册的组织跳转到初始化向导
       setTimeout(() => {
@@ -647,7 +613,7 @@ export default function LoginPage() {
         } catch (loginError: any) {
           message.warning(t('pages.login.registerSuccessManual'));
           setRegisterDrawerVisible(false);
-          setRegisterType('select');
+          setRegisterType('personal');
         }
       }
     } catch (error: any) {
@@ -1346,6 +1312,20 @@ export default function LoginPage() {
         algorithm: theme.defaultAlgorithm, // 强制使用浅色模式，不受全局深色模式影响
         token: {
           colorPrimary: themeColor, // 固定主题色，不受全局主题影响
+          // 聚焦环默认 lineWidth*2 偏粗；品牌色较深时边框+阴影叠加重。收紧为更接近系统默认的细环
+          controlOutlineWidth: 1,
+        },
+        components: {
+          Input: {
+            hoverBorderColor: '#91caff',
+            activeBorderColor: '#69b1ff',
+            activeShadow: '0 0 0 1px rgba(22, 119, 255, 0.22)',
+          },
+          Select: {
+            hoverBorderColor: '#91caff',
+            activeBorderColor: '#69b1ff',
+            activeOutlineColor: 'rgba(22, 119, 255, 0.22)',
+          },
         },
       }}
     >
@@ -1881,14 +1861,11 @@ export default function LoginPage() {
               <Button
                 type="default"
                 size="large"
-                icon={<ThunderboltOutlined />}
+                className="login-guest-login-btn"
+                icon={<ThunderboltOutlined className="login-guest-login-btn-icon" aria-hidden />}
                 block
                 onClick={handleGuestLogin}
-                style={{
-                  height: '40px',
-                  borderColor: themeColor,
-                  color: themeColor,
-                }}
+                style={{ height: 40 }}
               >
                 {t('pages.login.guestLogin')}
               </Button>
@@ -1900,44 +1877,11 @@ export default function LoginPage() {
                 color: themeColor,
               }}
             >
-              {t('pages.login.noAccount')}<Button type="link" style={{ padding: 0, color: themeColor }} onClick={() => {
+              {t('pages.login.noAccount')}<Button type="link" style={{ padding: 0, color: themeColor, textDecoration: 'underline', textUnderlineOffset: '4px' }} onClick={() => {
                 setRegisterDrawerVisible(true);
-                setRegisterType('select');
+                setRegisterType('personal');
               }}>{t('pages.login.registerNow')}</Button>
             </Text>
-          </div>
-
-          {/* 底部链接（ICP备案、用户条款、隐私条款） */}
-          <div className="login-footer-links">
-            <Space separator={<span style={{ color: '#d9d9d9' }}>|</span>} size="small">
-              {platformSettings?.icp_license && (
-                <Text type="secondary" style={{ fontSize: '12px' }}>
-                  {t('pages.login.icpLicense')}{platformSettings.icp_license}
-                </Text>
-              )}
-              <Button
-                type="link"
-                size="small"
-                style={{ padding: 0, fontSize: '12px', height: 'auto', color: themeColor }}
-                onClick={() => {
-                  setTermsModalType('user');
-                  setTermsModalVisible(true);
-                }}
-              >
-                {t('pages.login.userTerms')}
-              </Button>
-              <Button
-                type="link"
-                size="small"
-                style={{ padding: 0, fontSize: '12px', height: 'auto', color: themeColor }}
-                onClick={() => {
-                  setTermsModalType('privacy');
-                  setTermsModalVisible(true);
-                }}
-              >
-                {t('pages.login.privacyTerms')}
-              </Button>
-            </Space>
           </div>
 
           <div
@@ -1975,9 +1919,42 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <p className="login-browser-hint-footnote" role="note">
-          {t('pages.login.browserHintShort')}
-        </p>
+        <div className="login-bottom-fixed">
+          <p className="login-browser-hint-footnote" role="note">
+            {t('pages.login.browserHintShort')}
+          </p>
+          <div className="login-footer-links">
+            <Space separator={<span style={{ color: '#d9d9d9' }}>|</span>} size="small">
+              {platformSettings?.icp_license && (
+                <Text type="secondary" style={{ fontSize: '11px' }}>
+                  {t('pages.login.icpLicense')}{platformSettings.icp_license}
+                </Text>
+              )}
+              <Button
+                type="link"
+                size="small"
+                style={{ padding: 0, fontSize: '11px', height: 'auto', color: themeColor }}
+                onClick={() => {
+                  setTermsModalType('user');
+                  setTermsModalVisible(true);
+                }}
+              >
+                {t('pages.login.userTerms')}
+              </Button>
+              <Button
+                type="link"
+                size="small"
+                style={{ padding: 0, fontSize: '11px', height: 'auto', color: themeColor }}
+                onClick={() => {
+                  setTermsModalType('privacy');
+                  setTermsModalVisible(true);
+                }}
+              >
+                {t('pages.login.privacyTerms')}
+              </Button>
+            </Space>
+          </div>
+        </div>
       </div>
 
       {/* 组织选择弹窗 - 懒加载，仅多组织登录时加载 */}
@@ -2015,7 +1992,7 @@ export default function LoginPage() {
             open={registerDrawerVisible}
             onClose={() => {
               setRegisterDrawerVisible(false);
-              setRegisterType('select');
+              setRegisterType('personal');
             }}
             registerType={registerType}
             setRegisterType={setRegisterType}
@@ -2032,7 +2009,6 @@ export default function LoginPage() {
             setTenantSearchOptions={setTenantSearchOptions}
             setSelectedTenant={setSelectedTenant}
             setTenantCheckResult={setTenantCheckResult}
-            onSendVerificationCode={handleSendVerificationCode}
           />
         </Suspense>
       )}

@@ -127,7 +127,7 @@
     align-items: center;
     justify-content: center;
     padding: 40px;
-    padding-bottom: 52px;
+    padding-bottom: 120px;
     background: white;
 
     .login-form-wrapper {
@@ -169,11 +169,44 @@
             }
           }
         }
-      }
 
-      .login-footer-links {
-        margin-top: 20px;
-        text-align: center;
+        /* 免注册体验登录：翠绿清新色调 + 动感闪电 */
+        .login-guest-login-btn {
+          font-weight: 600;
+          height: 48px !important;
+          color: #059669 !important;
+          background: #ecfdf5 !important;
+          border: 1px solid #10b98133 !important;
+          box-shadow: 0 4px 10px rgba(16, 185, 129, 0.08) !important;
+          border-radius: 10px !important;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+          &:hover {
+            color: #047857 !important;
+            background: #d1fae5 !important;
+            border-color: #10b98166 !important;
+            box-shadow: 0 6px 15px rgba(16, 185, 129, 0.15) !important;
+            transform: translateY(-1px);
+          }
+
+          &:active {
+            transform: translateY(0);
+            background: #a7f3d0 !important;
+          }
+
+          .login-guest-login-btn-icon,
+          .anticon.login-guest-login-btn-icon {
+            color: #f59e0b !important;
+            font-size: 17px;
+            filter: drop-shadow(0 0 2px rgba(245, 158, 11, 0.4));
+          }
+        }
+
+        .login-guest-login-btn:hover .login-guest-login-btn-icon,
+        .login-guest-login-btn:hover .anticon.login-guest-login-btn-icon {
+          color: #fbbf24 !important;
+          filter: drop-shadow(0 0 3px rgba(245, 158, 11, 0.6));
+        }
       }
 
       .login-client-downloads {
@@ -274,22 +307,42 @@
       }
     }
 
-    .login-browser-hint-footnote {
+    .login-bottom-fixed {
       position: absolute;
       left: 50%;
       bottom: max(16px, env(safe-area-inset-bottom, 0px));
       transform: translateX(-50%);
-      width: calc(100% - 80px);
-      max-width: 400px;
+      width: min(400px, calc(100% - 80px));
+      max-width: 100%;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .login-browser-hint-footnote {
       margin: 0;
       padding: 0 4px;
-      box-sizing: border-box;
       text-align: center;
       font-size: 11px;
-      line-height: 1.45;
+      line-height: 1.5;
       letter-spacing: 0.01em;
       color: rgba(0, 0, 0, 0.32);
       user-select: none;
+    }
+
+    .login-footer-links {
+      margin: 0;
+      text-align: center;
+      font-size: 11px;
+      line-height: 1.5;
+
+      .ant-btn,
+      .ant-typography {
+        font-size: 11px !important;
+        line-height: 1.5 !important;
+      }
     }
   }
 }
@@ -309,7 +362,12 @@
 @media (max-width: 768px) {
   .login-container {
     .login-right {
-      padding: 20px 20px 48px;
+      padding: 20px 20px 100px;
+
+      .login-bottom-fixed {
+        width: min(400px, calc(100% - 40px));
+        bottom: max(12px, env(safe-area-inset-bottom, 0px));
+      }
 
       .login-form-wrapper {
         .login-form-header {
@@ -317,11 +375,6 @@
             font-size: 24px !important;
           }
         }
-      }
-
-      .login-browser-hint-footnote {
-        width: calc(100% - 40px);
-        bottom: max(12px, env(safe-area-inset-bottom, 0px));
       }
     }
   }
@@ -334,4 +387,159 @@
 .register-form .ant-input-affix-wrapper .ant-input::placeholder,
 .register-form .ant-input-password .ant-input::placeholder {
   font-size: 14px !important;
+}
+
+/* 注册弹窗：基础重置与优化 */
+.register-modal.ant-modal {
+  .ant-modal-content {
+    padding: 0 !important;
+    max-height: calc(100vh - 48px);
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.15);
+  }
+
+  .ant-modal-body {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+}
+
+.register-modal-inner {
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+/* 注册弹窗行布局 */
+.register-modal-row {
+  display: flex;
+  gap: 40px;
+  align-items: flex-start;
+  min-height: 500px;
+
+  &--personal {
+    flex-direction: row;
+  }
+
+  &--organization {
+    flex-direction: row-reverse;
+  }
+
+  .register-modal-aside {
+    flex: 0 0 380px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    position: sticky;
+    top: 0;
+
+    .register-modal-illustration-slot {
+      width: 100%;
+      height: 280px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #f0f7ff 0%, #e6f4ff 100%);
+      border-radius: 12px;
+      overflow: hidden;
+      
+      .register-modal-illustration-img {
+        width: 80%;
+        max-height: 80%;
+        object-fit: contain;
+      }
+    }
+
+    .register-modal-aside-text {
+      padding: 0 8px;
+
+      .register-modal-bullets {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+
+        .register-bullet-item {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+
+          .bullet-icon {
+            color: #52c41a;
+            font-size: 14px;
+            flex-shrink: 0;
+          }
+        }
+      }
+    }
+  }
+
+  .register-modal-main {
+    flex: 1;
+    min-width: 0;
+
+    .ant-pro-form-group-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #262626;
+      margin-bottom: 16px;
+    }
+
+    .register-form-submitter-row {
+      display: flex;
+      gap: 12px;
+      margin-top: 12px;
+
+      .ant-btn {
+        height: 44px;
+        font-size: 15px;
+      }
+    }
+  }
+}
+
+/* 表单项说明文案统一对齐 */
+.form-item-extra {
+  font-size: 12px;
+  color: #8c8c8c;
+  line-height: 1.5;
+  margin-top: 4px;
+  
+  .tenant-status {
+    margin-top: 4px;
+    font-weight: 500;
+    
+    .ant-typography {
+      font-size: 12px !important;
+    }
+  }
+}
+
+/* 响应式调整 */
+@media (max-width: 992px) {
+  .register-modal-row {
+    flex-direction: column !important;
+    gap: 32px;
+    
+    .register-modal-aside {
+      flex: none;
+      width: 100%;
+      position: static;
+      
+      .register-modal-illustration-slot {
+        height: 200px;
+      }
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .register-modal-row {
+    .ant-col {
+      width: 100% !important;
+      max-width: 100% !important;
+      flex: 0 0 100% !important;
+    }
+  }
 }

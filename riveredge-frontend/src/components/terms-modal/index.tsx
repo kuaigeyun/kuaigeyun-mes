@@ -40,7 +40,7 @@ const UserTermsContent = () => (
   <div style={{ maxHeight: '60vh', overflowY: 'auto', padding: '0 8px' }}>
     <Title level={4}>用户服务协议</Title>
     <Paragraph>
-      欢迎使用 RiverEdge SaaS 多组织管理框架（以下简称"本服务"）。在使用本服务之前，请您仔细阅读本用户服务协议（以下简称"本协议"）。当您点击"同意"或开始使用本服务时，即表示您已充分理解并同意接受本协议的全部内容。
+      欢迎使用 RiverEdge SaaS 多组织管理框架（以下简称&quot;本服务&quot;）。在使用本服务之前，请您仔细阅读本用户服务协议（以下简称&quot;本协议&quot;）。当您点击&quot;同意&quot;或开始使用本服务时，即表示您已充分理解并同意接受本协议的全部内容。
     </Paragraph>
 
     <Divider />
@@ -100,7 +100,7 @@ const UserTermsContent = () => (
 
     <Title level={5}>五、免责声明</Title>
     <Paragraph>
-      5.1 本服务按"现状"提供，我们不对服务的准确性、完整性、及时性、可靠性作任何明示或暗示的保证。
+      5.1 本服务按&quot;现状&quot;提供，我们不对服务的准确性、完整性、及时性、可靠性作任何明示或暗示的保证。
     </Paragraph>
     <Paragraph>
       5.2 因不可抗力、网络故障、系统维护等原因导致的服务中断或数据丢失，我们不承担责任。
@@ -154,7 +154,7 @@ const PrivacyTermsContent = () => (
   <div style={{ maxHeight: '60vh', overflowY: 'auto', padding: '0 8px' }}>
     <Title level={4}>隐私政策</Title>
     <Paragraph>
-      RiverEdge SaaS 多组织管理框架（以下简称"我们"）非常重视用户的隐私保护。本隐私政策说明了我们如何收集、使用、存储和保护您的个人信息。请您仔细阅读本隐私政策。
+      RiverEdge SaaS 多组织管理框架（以下简称&quot;我们&quot;）非常重视用户的隐私保护。本隐私政策说明了我们如何收集、使用、存储和保护您的个人信息。请您仔细阅读本隐私政策。
     </Paragraph>
 
     <Divider />
@@ -297,8 +297,8 @@ export default function TermsModal({ open, type, onClose }: TermsModalProps) {
       open={open}
       onCancel={onClose}
       footer={null}
-      size={800}
-      style={{ top: 20 }}
+      width={800}
+      style={{ top: 40 }}
       styles={{ body: { padding: '24px' } }}
     >
       {content}
