@@ -898,23 +898,11 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     })
   }, [columns])
 
-  // 预加载 UniImport（UniverSheet ~2MB）：空闲时后台加载，用户点击导入时 chunk 已缓存
+  // 预加载 UniImport（UniverSheet ~2MB）：直接在挂载时触发 import，让浏览器与页面其它资源并行下载。
+  // 不再用 requestIdleCallback 做"空闲时"调度，那属于不确定时序的妥协。
   useEffect(() => {
     if (!showImportButton || !onImport) return
-    const preload = () => {
-      import('../uni-import').catch(() => {})
-    }
-    const id =
-      typeof requestIdleCallback !== 'undefined'
-        ? requestIdleCallback(preload, { timeout: 5000 })
-        : (setTimeout(preload, 2000) as unknown as number)
-    return () => {
-      if (typeof cancelIdleCallback !== 'undefined') {
-        cancelIdleCallback(id as number)
-      } else {
-        clearTimeout(id)
-      }
-    }
+    import('../uni-import').catch(() => {})
   }, [showImportButton, onImport])
 
   // 站点日期格式（用于表格日期列展示，变更时触发列重新计算）
@@ -938,7 +926,17 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
   const normalizeOperationActionNode = useCallback((node: React.ReactNode): React.ReactNode => {
     if (!node) return node
-    if (Array.isArray(node)) return node.map((child) => normalizeOperationActionNode(child))
+    if (Array.isArray(node)) {
+      // 幂等优化：仅当至少一项发生了变化才新建数组，避免上游 React.memo 误判引用变化
+      let mutated = false
+      const next: React.ReactNode[] = []
+      for (const child of node) {
+        const normalized = normalizeOperationActionNode(child)
+        if (normalized !== child) mutated = true
+        next.push(normalized)
+      }
+      return mutated ? next : node
+    }
     if (!React.isValidElement(node)) return node
 
     const elementType = node.type as any
@@ -1050,13 +1048,29 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         return null
       }
       const tone = resolveButtonTone(actionText)
+      const props = (node as React.ReactElement<any>).props || {}
+      const rawChildrenText = readNodeText(props.children)
+      const normalizedText = normalizeActionLabelText(rawChildrenText) || props.children
+      // 幂等优化：若按钮的关键外观属性（type / danger / size / icon / style）与目标态一致，
+      // 且文案无需改写（典型如已规范的"详情 编辑 删除"），直接复用原节点，避免 cloneElement 引起的子树 re-render。
+      const sameTone =
+        props.type === tone.type &&
+        (!!props.danger) === (!!tone.danger) &&
+        props.size === 'small' &&
+        props.icon == null &&
+        props.style == null
+      const sameChildren =
+        typeof normalizedText === 'string'
+          ? normalizedText === rawChildrenText
+          : normalizedText === props.children
+      if (sameTone && sameChildren) return node
       return React.cloneElement(node as React.ReactElement<any>, {
         type: tone.type,
         danger: tone.danger,
         size: 'small',
         icon: undefined,
         style: undefined,
-        children: normalizeActionLabelText(readNodeText((node as React.ReactElement<any>).props?.children)) || (node as React.ReactElement<any>).props?.children,
+        children: normalizedText,
       })
     }
 
@@ -1082,14 +1096,28 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     }
 
     if (node.props?.children) {
-      const normalizedChildren = React.Children.map(node.props.children, (child) =>
-        normalizeOperationActionNode(child)
-      )
-      const normalizedArray = React.Children.toArray(normalizedChildren)
+      // 先做一轮 identity 对比，统计子节点是否全都保持原引用（多数常规表格操作列命中这条快速路径）
+      const originalArray = React.Children.toArray(node.props.children)
+      let normalizedArray: React.ReactNode[] = []
+      let anyChildChanged = false
+      React.Children.forEach(node.props.children, (child) => {
+        const normalizedChild = normalizeOperationActionNode(child)
+        if (normalizedChild !== child) anyChildChanged = true
+        normalizedArray.push(normalizedChild as React.ReactNode)
+      })
+      // 走与原逻辑一致的 toArray，以拿到稳定 key 的数组（避免 fragment 中 null 等边界）
+      normalizedArray = React.Children.toArray(normalizedArray)
       const filledChildren = fillCoreActionPlaceholders(normalizedArray)
-      const childCount = React.Children.count(normalizedChildren)
+      const fillerAddedOrReordered =
+        filledChildren.length !== normalizedArray.length ||
+        filledChildren.some((n, i) => n !== normalizedArray[i])
+      // 幂等优化：没有任何子节点被改写且未发生占位/重排时，原节点即为目标形态，直接复用
+      if (!anyChildChanged && !fillerAddedOrReordered && filledChildren.length === originalArray.length) {
+        return node
+      }
+      const childCount = React.Children.count(normalizedArray)
       const nextChildren =
-        childCount <= 1 ? filledChildren[0] ?? normalizedChildren : filledChildren
+        childCount <= 1 ? filledChildren[0] ?? normalizedArray : filledChildren
       return React.cloneElement(node as React.ReactElement<any>, {
         children: nextChildren,
       })
@@ -1333,21 +1361,24 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     [effectiveTableColumns],
   )
 
-  const [columnsStatePatchEpoch, setColumnsStatePatchEpoch] = React.useState(0)
-
   /**
    * ProTable 对列设置的合并为 merge(defaultValue, localStorage)，用户历史持久化会盖住默认 order，
-   * 仅靠 normalize 列顺序无法纠正展示。此处按规范重写右侧固定列的 order 并触发一次重挂载以重新读 storage。
+   * 仅靠 normalize 列顺序无法纠正展示。此处按规范重写右侧固定列的 order。
+   *
+   * 关键时序优化：
+   * - 首次挂载时，在 render 阶段同步写入 localStorage，使 ProTable 首次渲染读到的就是
+   *   已纠偏的值，无需再触发 epoch 重挂载（消除首屏白屏/回弹感）。
+   * - 之后若 key/结构签名改变，再走 effect 路径 + epoch++，与原有行为一致。
    */
-  React.useLayoutEffect(() => {
-    if (typeof window === 'undefined' || !columnsPersistenceFullKey || !effectiveTableColumns?.length) return
+  const applyColumnsOrderOverlay = React.useCallback((): boolean => {
+    if (typeof window === 'undefined' || !columnsPersistenceFullKey || !effectiveTableColumns?.length) return false
     try {
       const raw = window.localStorage.getItem(columnsPersistenceFullKey)
-      if (!raw) return
+      if (!raw) return false
       const m = JSON.parse(raw) as Record<string, any>
       const overlay = buildFixedRightColumnOrderOverlay(effectiveTableColumns)
       const keys = Object.keys(overlay)
-      if (keys.length === 0) return
+      if (keys.length === 0) return false
       const next = { ...m }
       let changed = false
       for (const k of keys) {
@@ -1361,12 +1392,30 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       }
       if (changed) {
         window.localStorage.setItem(columnsPersistenceFullKey, JSON.stringify(next))
-        setColumnsStatePatchEpoch((e) => e + 1)
       }
+      return changed
     } catch {
-      /* ignore */
+      return false
     }
-  }, [columnsPersistenceFullKey, columnStructureSig, effectiveTableColumns])
+  }, [columnsPersistenceFullKey, effectiveTableColumns])
+
+  const columnsStatePatchSigRef = React.useRef<string | null>(null)
+  const [columnsStatePatchEpoch, setColumnsStatePatchEpoch] = React.useState(0)
+  const currentPatchSig = `${columnsPersistenceFullKey ?? ''}::${columnStructureSig}`
+  // 仅在首次挂载时同步纠偏（render 阶段）；后续 sig 变化由下方 effect 负责
+  if (columnsStatePatchSigRef.current === null && columnsPersistenceFullKey && effectiveTableColumns?.length) {
+    columnsStatePatchSigRef.current = currentPatchSig
+    applyColumnsOrderOverlay()
+  }
+
+  React.useLayoutEffect(() => {
+    // 首次挂载已在 render 阶段完成纠偏，跳过
+    if (columnsStatePatchSigRef.current === currentPatchSig) return
+    columnsStatePatchSigRef.current = currentPatchSig
+    if (applyColumnsOrderOverlay()) {
+      setColumnsStatePatchEpoch((e) => e + 1)
+    }
+  }, [currentPatchSig, applyColumnsOrderOverlay])
 
   /**
    * 将按钮容器移动到 ant-pro-table 内部

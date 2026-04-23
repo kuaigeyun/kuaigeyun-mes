@@ -323,7 +323,7 @@ const MaterialReturnsPage: React.FC = () => {
     setCreateModalVisible(true);
     setSelectedBorrowDetail(null);
     setReturnQuantities({});
-    setTimeout(() => formRef.current?.resetFields(), 0);
+    // FormModalTemplate 设置了 destroyOnHidden，ProForm 每次打开都是全新挂载，无需 setTimeout + resetFields
   };
 
   const handleCreateSubmit = async (values: any) => {

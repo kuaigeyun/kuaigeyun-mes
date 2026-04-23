@@ -23,24 +23,15 @@ if (typeof console !== 'undefined') {
   };
 }
 
-// 性能监控：延后加载，不阻塞首屏（requestIdleCallback 后动态 import）
+// 性能监控 & 图片懒加载初始化：直接同步挂载，避免 requestIdleCallback 延后带来的不确定时序
 if (typeof window !== 'undefined') {
-  const schedule = (cb: () => void) => {
-    if ('requestIdleCallback' in window) {
-      (window as any).requestIdleCallback(cb, { timeout: 2000 });
-    } else {
-      setTimeout(cb, 500);
-    }
-  };
-  schedule(() => {
-    import('./utils/performance').then(({ performanceMonitor, ImageLazyLoader }) => {
-      ImageLazyLoader.init();
-      window.addEventListener('load', () => {
-        const metrics = performanceMonitor.getMetrics();
-        if (metrics.firstContentfulPaint && import.meta.env.DEV) {
-          console.log(`✅ 首屏加载时间: ${metrics.firstContentfulPaint.toFixed(2)}ms`);
-        }
-      });
+  import('./utils/performance').then(({ performanceMonitor, ImageLazyLoader }) => {
+    ImageLazyLoader.init();
+    window.addEventListener('load', () => {
+      const metrics = performanceMonitor.getMetrics();
+      if (metrics.firstContentfulPaint && import.meta.env.DEV) {
+        console.log(`✅ 首屏加载时间: ${metrics.firstContentfulPaint.toFixed(2)}ms`);
+      }
     });
   });
 }

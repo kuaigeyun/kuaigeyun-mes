@@ -35,6 +35,7 @@ import fluentColorIcons from '@iconify-json/fluent-color/icons.json';
 import { translateMenuName, translatePathTitle, translateAppMenuItemName, extractAppCodeFromPath, findMenuTitleWithTranslation, getAppDisplayName } from '../utils/menuTranslation';
 import { prefetchPlugin } from '../utils/pluginLoader';
 import { prefetchKuaizhizaoRoute } from '../apps/kuaizhizao/routePrefetch';
+import { prefetchSystemRoute, prefetchSystemRoutes } from '../routes/systemRoutePrefetch';
 import dayjs from 'dayjs';
 import { getUserMessageStats, getUserMessages, markMessagesRead, type UserMessage } from '../services/userMessage';
 
@@ -4844,6 +4845,42 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           },
         }}
         onMenuHeaderClick={() => navigate('/system/dashboard/workplace')}
+        subMenuItemRender={(item: any, defaultDom) => {
+          // 父分组悬停：一次性预取其下全部子项 chunk，展开即可见、点击即渲染
+          const collectLeafPaths = (node: any, acc: string[]): string[] => {
+            if (!node) return acc;
+            if (Array.isArray(node.children) && node.children.length > 0) {
+              for (const child of node.children) collectLeafPaths(child, acc);
+            } else if (typeof node.path === 'string') {
+              acc.push(node.path);
+            }
+            return acc;
+          };
+          const paths = collectLeafPaths(item, []);
+          const handleEnter = () => {
+            if (paths.length === 0) return;
+            const systemPaths: string[] = [];
+            const pluginCodes = new Set<string>();
+            const kuaiPaths: string[] = [];
+            for (const p of paths) {
+              if (p.startsWith('/apps/')) {
+                const code = extractAppCodeFromPath(p);
+                if (code) pluginCodes.add(code);
+                if (p.startsWith('/apps/kuaizhizao')) kuaiPaths.push(p);
+              } else {
+                systemPaths.push(p);
+              }
+            }
+            pluginCodes.forEach((code) => prefetchPlugin(code));
+            kuaiPaths.forEach((p) => prefetchKuaizhizaoRoute(p));
+            if (systemPaths.length > 0) prefetchSystemRoutes(systemPaths);
+          };
+          return (
+            <span onMouseEnter={handleEnter} style={{ display: 'inline-flex', alignItems: 'center', width: '100%' }}>
+              {defaultDom}
+            </span>
+          );
+        }}
         menuItemRender={(item: any, dom) => {
           // 处理外部链接
           if (item.path && (item.path.startsWith('http://') || item.path.startsWith('https://'))) {
@@ -4983,6 +5020,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                         (m) => m.prefetchDefaultWorkOrderList(queryClient, 20)
                       );
                     }
+                  } else {
+                    // 系统级/平台级/个人中心路由：悬停即预取目标 chunk，点击即渲染
+                    prefetchSystemRoute(path);
                   }
                 }}
                 style={{ display: 'block', width: '100%' }}

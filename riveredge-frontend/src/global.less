@@ -720,6 +720,14 @@ code {
   }
 }
 
+/* 编号规则 / 自定义字段等左侧功能页面列表项 hover 用 CSS 实现，避免 JS 操作 style */
+.code-rule-page-item:not(.is-selected):hover {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+[data-theme='dark'] .code-rule-page-item:not(.is-selected):hover {
+  background-color: rgba(255, 255, 255, 0.06);
+}
+
 /* 全局：Modal 确认按钮组默认居左 */
 .ant-modal .ant-modal-footer,
 .ant-modal .ant-pro-form-submitter {

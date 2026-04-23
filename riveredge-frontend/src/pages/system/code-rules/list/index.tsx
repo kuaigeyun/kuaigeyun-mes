@@ -5,7 +5,7 @@
  * 支持为每个功能页面直接配置编号规则，实现自动编号功能。
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Tag, Alert, Input, theme, Card, Space, Collapse, Spin } from 'antd';
@@ -37,6 +37,78 @@ import {
 import { getCodeRulePageConfigsKey } from '../../../../utils/codeRulePage';
 
 // 去除未使用的 Text, Paragraph
+
+/**
+ * 单个功能页面列表项（memo 化，避免选中态变化导致整张列表重渲染）
+ */
+interface PageListItemProps {
+  page: CodeRulePageConfig;
+  isSelected: boolean;
+  enabledTagText: string;
+  colors: {
+    primary: string;
+    primaryBg: string;
+    fillSecondary: string;
+    textSecondary: string;
+    borderRadius: number;
+  };
+  onSelect: (pageCode: string) => void;
+}
+
+const PageListItem: React.FC<PageListItemProps> = React.memo(
+  ({ page, isSelected, enabledTagText, colors, onSelect }) => {
+    const handleClick = useCallback(() => onSelect(page.pageCode), [onSelect, page.pageCode]);
+    return (
+      <div
+        className={`code-rule-page-item${isSelected ? ' is-selected' : ''}`}
+        onClick={handleClick}
+        style={{
+          padding: '12px',
+          marginBottom: '4px',
+          cursor: 'pointer',
+          borderRadius: colors.borderRadius,
+          backgroundColor: isSelected ? colors.primaryBg : 'transparent',
+          border: `1px solid ${isSelected ? colors.primary : 'transparent'}`,
+          transition: 'background-color 0.15s, border-color 0.15s',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              fontWeight: isSelected ? 500 : 400,
+              marginBottom: '4px',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {page.pageName}
+          </div>
+          <div
+            style={{
+              fontSize: '12px',
+              color: colors.textSecondary,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {page.codeFieldLabel}
+          </div>
+        </div>
+        {page.autoGenerate && (
+          <Tag color="success" style={{ marginLeft: '8px' }}>
+            {enabledTagText}
+          </Tag>
+        )}
+      </div>
+    );
+  },
+);
+PageListItem.displayName = 'PageListItem';
 
 /**
  * 编号规则管理列表页面组件
@@ -120,79 +192,55 @@ const CodeRuleListPage: React.FC = () => {
 
   /**
    * 加载页面配置列表（并行加载应用列表和规则）
+   *
+   * 初始化选中项时不再使用 setTimeout 等 state 提交，
+   * 而是把刚计算出来的 configs/rules 显式传给 handleSelectPage / resetPageRuleForm。
    */
   const loadPageConfigsAndRules = async () => {
     try {
       setPageConfigsLoading(true);
-      // 并行加载所有基础数据，显著缩短首页加载白屏时间
-      const [allPages, apps, _rules] = await Promise.all([
+      const [allPages, apps, rules] = await Promise.all([
         getCodeRulePages(),
         getApplicationList({ is_installed: true, is_active: true }),
-        loadCodeRules(false)
+        loadCodeRules(false),
       ]);
-      
+
       const pages = filterPagesByEnabledApps(allPages, apps);
 
       // 合并保存的配置和默认配置，确保所有页面都存在
+      let nextConfigs: CodeRulePageConfig[] = pages;
       const savedConfigs = localStorage.getItem(getCodeRulePageConfigsKey());
       if (savedConfigs) {
         try {
           const parsed = JSON.parse(savedConfigs);
-          const mergedConfigs = pages.map(defaultPage => {
+          nextConfigs = pages.map(defaultPage => {
             const savedPage = parsed.find((p: any) => p.pageCode === defaultPage.pageCode);
             if (savedPage) {
-              // 合并保存的配置，确保保存的字段（如 ruleCode, autoGenerate）覆盖默认配置
               return {
                 ...defaultPage,
-                // 只覆盖保存的字段，其他字段使用默认值
                 ruleCode: savedPage.ruleCode ?? defaultPage.ruleCode,
                 autoGenerate: savedPage.autoGenerate ?? defaultPage.autoGenerate,
               };
             }
             return defaultPage;
           });
-          setPageConfigs(mergedConfigs);
-
-          // 默认选中第一个页面（仅当没有选中页面时）；若当前选中项已不在列表中（应用被禁用），则重置为第一项并初始化表单
-          if (mergedConfigs.length > 0) {
-            const stillInList =
-              selectedPageCode && mergedConfigs.some((p) => p.pageCode === selectedPageCode);
-            if (!stillInList) setSelectedPageCode(mergedConfigs[0].pageCode);
-            const needInitFirst = !selectedPageCode || !stillInList;
-            if (needInitFirst) {
-              const firstPageCode = mergedConfigs[0].pageCode;
-              setTimeout(() => {
-                const firstPageConfig = mergedConfigs.find(p => p.pageCode === firstPageCode);
-                if (firstPageConfig?.ruleCode) {
-                  setTimeout(() => handleSelectPage(firstPageCode), 200);
-                } else {
-                  resetPageRuleForm(firstPageCode);
-                }
-              }, 100);
-            }
-          }
         } catch (error) {
           console.error('加载功能页面配置失败:', error);
-          setPageConfigs(pages);
+          nextConfigs = pages;
         }
-      } else {
-        setPageConfigs(pages);
-        // 如果没有保存的配置，默认选中第一个页面
-        if (pages.length > 0) {
-          const stillInList = selectedPageCode && pages.some((p) => p.pageCode === selectedPageCode);
-          if (!stillInList) setSelectedPageCode(pages[0].pageCode);
-          const needInitFirst = !selectedPageCode || !stillInList;
-          if (needInitFirst) {
-            const firstPageCode = pages[0].pageCode;
-            setTimeout(() => {
-              const firstPageConfig = pages.find(p => p.pageCode === firstPageCode);
-              if (firstPageConfig?.ruleCode) {
-                setTimeout(() => handleSelectPage(firstPageCode), 200);
-              } else {
-                resetPageRuleForm(firstPageCode);
-              }
-            }, 100);
-          }
+      }
+
+      setPageConfigs(nextConfigs);
+
+      // 默认选中第一个页面（仅当没有选中或当前选中项已不在列表中时）
+      if (nextConfigs.length > 0) {
+        const stillInList =
+          !!selectedPageCode && nextConfigs.some(p => p.pageCode === selectedPageCode);
+        if (!stillInList) {
+          const firstPageCode = nextConfigs[0].pageCode;
+          // 直接用本次算出的 configs / rules 同步驱动，setFieldsValue 是命令式的，
+          // 不依赖 state 已提交
+          handleSelectPage(firstPageCode, rules, nextConfigs);
         }
       }
     } catch (error: any) {
@@ -211,9 +259,11 @@ const CodeRuleListPage: React.FC = () => {
 
   /**
    * 重置页面规则表单（移至 handleSelectPage 之前避免引用错误）
+   * 可显式传入 configsList 以绕过 React state 未提交时取值失败的问题
    */
-  const resetPageRuleForm = (pageCode: string) => {
-    const pageConfig = pageConfigs.find(p => p.pageCode === pageCode);
+  const resetPageRuleForm = (pageCode: string, configsList?: CodeRulePageConfig[]) => {
+    const currentConfigs = configsList ?? pageConfigs;
+    const pageConfig = currentConfigs.find(p => p.pageCode === pageCode);
     const defaultRuleCode = `auto-${pageCode}`;
     const defaultExpression = '{YYYY}{MM}{DD}-{SEQ:4}';
     pageRuleFormRef.current?.setFieldsValue({
@@ -232,13 +282,18 @@ const CodeRuleListPage: React.FC = () => {
 
   /**
    * 处理选择功能页面
+   * 依赖 state 的两处（allRules、pageConfigs）都允许用参数显式传入，
+   * 从而在 "setState 还未提交" 的同步流程里也能拿到最新值，替代此前的 setTimeout 妥协写法。
    */
-  const handleSelectPage = (pageCode: string, rulesList?: CodeRule[]) => {
+  const handleSelectPage = (
+    pageCode: string,
+    rulesList?: CodeRule[],
+    configsList?: CodeRulePageConfig[],
+  ) => {
     setSelectedPageCode(pageCode);
 
-    // 立即从 allRules 或传入的 rulesList 中获取数据，不使用 setTimeout
-    const currentRules = rulesList || allRules;
-    const currentConfigs = pageConfigs; 
+    const currentRules = rulesList ?? allRules;
+    const currentConfigs = configsList ?? pageConfigs;
 
     // 加载该页面对应的编号规则
     const pageConfig = currentConfigs.find(p => p.pageCode === pageCode);
@@ -302,11 +357,11 @@ const CodeRuleListPage: React.FC = () => {
         }
       } catch (error) {
         console.error('加载规则失败:', error);
-        resetPageRuleForm(pageCode);
+        resetPageRuleForm(pageCode, currentConfigs);
       }
     } else {
       // 如果没有关联规则，重置表单
-      resetPageRuleForm(pageCode);
+      resetPageRuleForm(pageCode, currentConfigs);
     }
   };
 
@@ -409,18 +464,29 @@ const CodeRuleListPage: React.FC = () => {
       }
 
       // 重新加载规则列表（不重新加载页面，避免循环）
-      await loadCodeRules(false);
+      const freshRules = await loadCodeRules(false);
 
-      // 更新页面配置，关联规则代码，并根据用户保存的 is_active 同步启用状态
-      handleUpdatePageConfig(selectedPageCode, {
+      // 更新页面配置，关联规则代码，并根据用户保存的 is_active 同步启用状态。
+      // 直接在本地计算出新 configs，避免依赖 setPageConfigs 异步提交，
+      // 从而可以同步把 freshRules / freshConfigs 传给 handleSelectPage，取消 setTimeout 妥协。
+      const updates: Partial<CodeRulePageConfig> = {
         autoGenerate: values.is_active ?? true,
         ruleCode: values.code,
-      });
+      };
+      const freshConfigs = pageConfigs.map(page =>
+        page.pageCode === selectedPageCode ? { ...page, ...updates } : page,
+      );
+      const configsToSave = freshConfigs.map(page => ({
+        pageCode: page.pageCode,
+        ruleCode: page.ruleCode,
+        autoGenerate: page.autoGenerate,
+      }));
+      localStorage.setItem(getCodeRulePageConfigsKey(), JSON.stringify(configsToSave));
+      setPageConfigs(freshConfigs);
+      messageApi.success(t('pages.system.codeRules.configSaved'));
 
-      // 重新加载当前页面的规则，确保表单显示最新数据
-      setTimeout(() => {
-        handleSelectPage(selectedPageCode);
-      }, 200);
+      // 立即用最新数据刷新表单，无需等 state 提交
+      handleSelectPage(selectedPageCode, freshRules, freshConfigs);
 
     } catch (error: any) {
       const errorMessage = error?.message || error?.error?.message || t('pages.system.codeRules.saveRuleFailed');
@@ -432,55 +498,73 @@ const CodeRuleListPage: React.FC = () => {
   };
 
   /**
-   * 使用 useMemo 缓存过滤后的功能页面列表和模块分组，提升侧边栏性能
+   * 一次遍历同时完成过滤 + 按模块分组，避免 O(模块数 × 页面数) 的二次过滤
    */
-  const filteredPages = React.useMemo(() => {
-    if (!pageConfigs || pageConfigs.length === 0) return [];
-    if (!pageSearchValue.trim()) return pageConfigs;
-    const searchLower = pageSearchValue.toLowerCase();
-    return pageConfigs.filter(page =>
-      page?.pageName?.toLowerCase().includes(searchLower) ||
-      page?.codeFieldLabel?.toLowerCase().includes(searchLower) ||
-      page?.pagePath?.toLowerCase().includes(searchLower) ||
-      page?.module?.toLowerCase().includes(searchLower)
-    );
+  const groupedPages = useMemo(() => {
+    if (!pageConfigs || pageConfigs.length === 0) {
+      return [] as { module: string; pages: CodeRulePageConfig[] }[];
+    }
+    const keyword = pageSearchValue.trim().toLowerCase();
+    const groups = new Map<string, CodeRulePageConfig[]>();
+    for (const page of pageConfigs) {
+      if (!page) continue;
+      if (keyword) {
+        const hit =
+          page.pageName?.toLowerCase().includes(keyword) ||
+          page.codeFieldLabel?.toLowerCase().includes(keyword) ||
+          page.pagePath?.toLowerCase().includes(keyword) ||
+          page.module?.toLowerCase().includes(keyword);
+        if (!hit) continue;
+      }
+      const mod = page.module || '';
+      if (!mod) continue;
+      const list = groups.get(mod);
+      if (list) {
+        list.push(page);
+      } else {
+        groups.set(mod, [page]);
+      }
+    }
+    return Array.from(groups, ([module, pages]) => ({ module, pages }));
   }, [pageConfigs, pageSearchValue]);
 
-  const modules = React.useMemo(() => {
-    const mods = new Set<string>();
-    pageConfigs.forEach(page => {
-      if (page.module) mods.add(page.module);
-    });
-    return Array.from(mods);
-  }, [pageConfigs]);
-
-  const selectedPage = React.useMemo(() => {
+  const selectedPage = useMemo(() => {
     if (!selectedPageCode) return undefined;
     return pageConfigs.find(page => page.pageCode === selectedPageCode);
   }, [pageConfigs, selectedPageCode]);
 
   /**
-   * 处理更新功能页面配置
+   * 稳定的回调引用，配合 PageListItem 的 React.memo 实现按需重渲染
    */
-  const handleUpdatePageConfig = (pageCode: string, updates: Partial<CodeRulePageConfig>) => {
-    setPageConfigs(prev => {
-      const updated = prev.map(page =>
-        page.pageCode === pageCode ? { ...page, ...updates } : page
-      );
-      // 保存到 localStorage（实际应该保存到后端）
-      // 只保存需要持久化的字段，避免保存过多数据
-      const configsToSave = updated.map(page => ({
-        pageCode: page.pageCode,
-        ruleCode: page.ruleCode,
-        autoGenerate: page.autoGenerate,
-      }));
-      localStorage.setItem(getCodeRulePageConfigsKey(), JSON.stringify(configsToSave));
-      return updated;
-    });
-    messageApi.success(t('pages.system.codeRules.configSaved'));
-  };
+  const handleSelectPageStable = useCallback(
+    (pageCode: string) => handleSelectPage(pageCode),
+    // handleSelectPage 是组件内闭包，依赖 allRules / pageConfigs；
+    // 这里把依赖暴露出去保证拿到最新数据
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allRules, pageConfigs],
+  );
 
+  /**
+   * 列表项颜色 / 圆角集中传给子组件，使引用稳定，避免无关重渲染
+   */
+  const itemColors = useMemo(
+    () => ({
+      primary: token.colorPrimary,
+      primaryBg: token.colorPrimaryBg,
+      fillSecondary: token.colorFillSecondary,
+      textSecondary: token.colorTextSecondary,
+      borderRadius: token.borderRadius,
+    }),
+    [
+      token.colorPrimary,
+      token.colorPrimaryBg,
+      token.colorFillSecondary,
+      token.colorTextSecondary,
+      token.borderRadius,
+    ],
+  );
 
+  const enabledTagText = t('pages.system.codeRules.enabled');
 
   return (
     <>
@@ -648,78 +732,37 @@ const CodeRuleListPage: React.FC = () => {
                       style={{ marginBottom: '12px' }}
                     />
                   )}
-                  {modules.map(module => {
-                    const modulePages = filteredPages.filter(page => page?.module === module);
-                    if (modulePages.length === 0) return null;
-
-                    return (
-                      <div key={module} style={{ marginBottom: '16px' }}>
-                        <div
-                          style={{
-                            padding: '8px 12px',
-                            fontWeight: 500,
-                            fontSize: '14px',
-                            color: token.colorTextHeading,
-                            backgroundColor: token.colorFillSecondary,
-                            borderRadius: token.borderRadius,
-                            marginBottom: '8px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                          }}
-                        >
-                          <DatabaseOutlined />
-                          {module}
-                        </div>
-                        {modulePages.map(page => {
-                          const isSelected = selectedPageCode === page.pageCode;
-                          const currentPageConfig = pageConfigs.find(p => p.pageCode === page.pageCode);
-                          return (
-                            <div
-                              key={page.pageCode}
-                              onClick={() => handleSelectPage(page.pageCode)}
-                              style={{
-                                padding: '12px',
-                                marginBottom: '4px',
-                                cursor: 'pointer',
-                                borderRadius: token.borderRadius,
-                                backgroundColor: isSelected ? token.colorPrimaryBg : 'transparent',
-                                border: isSelected ? `1px solid ${token.colorPrimary}` : `1px solid transparent`,
-                                transition: 'all 0.2s',
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                              }}
-                              onMouseEnter={(e) => {
-                                if (!isSelected) {
-                                  e.currentTarget.style.backgroundColor = token.colorFillSecondary;
-                                }
-                              }}
-                              onMouseLeave={(e) => {
-                                if (!isSelected) {
-                                  e.currentTarget.style.backgroundColor = 'transparent';
-                                }
-                              }}
-                            >
-                              <div style={{ flex: 1 }}>
-                                <div style={{ fontWeight: isSelected ? 500 : 400, marginBottom: '4px' }}>
-                                  {page.pageName}
-                                </div>
-                                <div style={{ fontSize: '12px', color: token.colorTextSecondary }}>
-                                  {page.codeFieldLabel}
-                                </div>
-                              </div>
-                              {currentPageConfig?.autoGenerate && (
-                                <Tag color="success" style={{ marginLeft: '8px' }}>
-                                  {t('pages.system.codeRules.enabled')}
-                                </Tag>
-                              )}
-                            </div>
-                          );
-                        })}
+                  {groupedPages.map(({ module, pages }) => (
+                    <div key={module} style={{ marginBottom: '16px' }}>
+                      <div
+                        style={{
+                          padding: '8px 12px',
+                          fontWeight: 500,
+                          fontSize: '14px',
+                          color: token.colorTextHeading,
+                          backgroundColor: token.colorFillSecondary,
+                          borderRadius: token.borderRadius,
+                          marginBottom: '8px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                        }}
+                      >
+                        <DatabaseOutlined />
+                        {module}
                       </div>
-                    );
-                  })}
+                      {pages.map(page => (
+                        <PageListItem
+                          key={page.pageCode}
+                          page={page}
+                          isSelected={selectedPageCode === page.pageCode}
+                          enabledTagText={enabledTagText}
+                          colors={itemColors}
+                          onSelect={handleSelectPageStable}
+                        />
+                      ))}
+                    </div>
+                  ))}
                 </>
               )}
             </div>

@@ -9,7 +9,7 @@
  * Date: 2026-01-21
  */
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, Suspense, lazy } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Card,
@@ -35,7 +35,6 @@ import {
   ShopOutlined,
   PlayCircleOutlined,
   AppstoreOutlined,
-  BulbOutlined,
 } from '@ant-design/icons';
 import type { DataNode } from 'antd/es/tree';
 import { useQuery, useMutation } from '@tanstack/react-query';
@@ -62,7 +61,6 @@ import {
 } from '../../../utils/menuTranslation';
 import type { UserPreference } from '../../../services/userPreference';
 import { useUserPreferenceStore } from '../../../stores/userPreferenceStore';
-import { useDeferredEnabled } from '../../../hooks/useDeferredEnabled';
 import { ManufacturingIcons } from '../../../utils/manufacturingIcons';
 import { getAvatarUrl, getAvatarText, getCachedAvatarUrl } from '../../../utils/avatar';
 import { useGlobalStore } from '../../../stores';
@@ -75,8 +73,11 @@ import type { WeatherData } from '../../../services/weather';
 import { formatLunarDate } from '../../../utils/lunarDate';
 import { APP_VERSION } from '../../../constants/version';
 import * as LucideIcons from 'lucide-react';
+import { getUserTaskStats, getUserTasks, type UserTask } from '../../../services/userTask';
 
-const { Title, Text } = Typography;
+const LottiePlayer = lazy(() => import('lottie-react').then((m) => ({ default: m.default })));
+
+const { Title, Text, Paragraph } = Typography;
 const { useToken } = theme;
 const { useBreakpoint } = Grid;
 
@@ -391,127 +392,255 @@ const getGreetingKey = (): string => {
   return 'pages.dashboard.greetingNight';
 };
 
-/** 工作台日期区块：扁平模拟时钟（配色参考浅灰表盘 + 炭灰指针） */
-const ANALOG_CLOCK = {
-  face: '#E0E0E0',
-  outer: '#F0F2F5',
-  primary: '#2C3E50',
-  muted: '#A0A0A0',
-} as const;
+/** 7 段管数码管组件 - 模拟真实 LCD 文字 */
+const LcdDigit = ({ value, size = 36, color = '#2C3E50' }: { value: string; size?: number; color?: string }) => {
+  // 7 段定义: a, b, c, d, e, f, g
+  const segments: Record<string, number[]> = {
+    '0': [1, 1, 1, 1, 1, 1, 0],
+    '1': [0, 1, 1, 0, 0, 0, 0],
+    '2': [1, 1, 0, 1, 1, 0, 1],
+    '3': [1, 1, 1, 1, 0, 0, 1],
+    '4': [0, 1, 1, 0, 0, 1, 1],
+    '5': [1, 0, 1, 1, 0, 1, 1],
+    '6': [1, 0, 1, 1, 1, 1, 1],
+    '7': [1, 1, 1, 0, 0, 0, 0],
+    '8': [1, 1, 1, 1, 1, 1, 1],
+    '9': [1, 1, 1, 1, 0, 1, 1],
+  };
 
-function DashboardLcdClock({ time, compact, inline }: { time: dayjs.Dayjs; compact?: boolean; inline?: boolean }) {
-  const { token } = useToken();
-  const hour = time.hour();
-  const minute = time.minute();
-  const second = time.second();
-  const ms = time.millisecond();
+  const active = segments[value] || [0, 0, 0, 0, 0, 0, 0];
+  const opacityDim = 0.05;
 
-  const smoothSecond = second + ms / 1000;
-  const hourDeg = (hour % 12) * 30 + minute * 0.5;
-  const minuteDeg = minute * 6 + smoothSecond * (6 / 60);
-  const secondDeg = smoothSecond * 6;
+  return (
+    <svg width={size * 0.6} height={size} viewBox="0 0 24 40" style={{ display: 'block' }}>
+      {/* a */} <path d="M 4 2 L 20 2 L 18 4 L 6 4 Z" fill={color} opacity={active[0] ? 1 : opacityDim} />
+      {/* b */} <path d="M 22 4 L 22 18 L 20 16 L 20 6 Z" fill={color} opacity={active[1] ? 1 : opacityDim} />
+      {/* c */} <path d="M 22 22 L 22 36 L 20 34 L 20 24 Z" fill={color} opacity={active[2] ? 1 : opacityDim} />
+      {/* d */} <path d="M 20 38 L 4 38 L 6 36 L 18 36 Z" fill={color} opacity={active[3] ? 1 : opacityDim} />
+      {/* e */} <path d="M 2 36 L 2 22 L 4 24 L 4 34 Z" fill={color} opacity={active[4] ? 1 : opacityDim} />
+      {/* f */} <path d="M 2 18 L 2 4 L 4 6 L 4 16 Z" fill={color} opacity={active[5] ? 1 : opacityDim} />
+      {/* g */} <path d="M 6 19 L 18 19 L 19 20 L 18 21 L 6 21 L 5 20 Z" fill={color} opacity={active[6] ? 1 : opacityDim} />
+    </svg>
+  );
+};
 
-  /** inline：外框为圆角正方形，内留 2px，表盘略放大 */
-  const inlineBox = compact ? 90 : 104;
-  const size = inline ? inlineBox - 4 : compact ? 108 : 132;
-  const cx = 50;
-  const cy = 50;
+function DashboardLcdClock({ 
+  time, 
+  inline, 
+  isDark, 
+  systemCount = 0, 
+  personalCount = 0,
+  onAlarmClick,
+  alertType = 'none' 
+}: { 
+  time: dayjs.Dayjs; 
+  inline?: boolean; 
+  isDark?: boolean;
+  systemCount?: number;
+  personalCount?: number;
+  onAlarmClick?: () => void;
+  alertType?: 'system' | 'personal' | 'none';
+}) {
+  const hour24 = time.get('hour');
+  const hourStr = hour24.toString().padStart(2, '0');
+  const minuteStr = time.get('minute').toString().padStart(2, '0');
+  const secondStr = time.get('second').toString().padStart(2, '0');
 
-  const ticks = Array.from({ length: 60 }, (_, i) => {
-    const isMajor = i % 5 === 0;
-    const a = (i * 6 - 90) * (Math.PI / 180);
-    const r1 = isMajor ? 41 : 43;
-    const r2 = isMajor ? 36 : 40.5;
-    const x1 = cx + Math.cos(a) * r1;
-    const y1 = cy + Math.sin(a) * r1;
-    const x2 = cx + Math.cos(a) * r2;
-    const y2 = cy + Math.sin(a) * r2;
-    return (
-      <line
-        key={i}
-        x1={x1}
-        y1={y1}
-        x2={x2}
-        y2={y2}
-        stroke={isMajor ? ANALOG_CLOCK.primary : ANALOG_CLOCK.muted}
-        strokeWidth={isMajor ? 1.4 : 0.55}
-        strokeLinecap="round"
-        opacity={isMajor ? 1 : 0.85}
-      />
-    );
-  });
+  const weekdays = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+  const currentDayIdx = (time.get('day') + 6) % 7;
+
+  // 仿真设计：表盘背景和数字颜色随系统“关灯”而变
+  const lcdTextDim = isDark ? 'rgba(74, 222, 128, 0.05)' : 'rgba(0,0,0,0.06)';
+  const lcdTextActive = isDark ? '#4ade80' : '#2C3D4F';
+
+  // 恢复字体大小：32px
+  const digitSize = inline ? 36 : 44;
+
+  // 决定闹钟图标的颜色和动画
+  const isAlerting = alertType !== 'none';
+  const isSystemAlert = alertType === 'system';
+  const hasPending = systemCount > 0 || personalCount > 0;
+
+  let alarmColor = lcdTextActive;
+  let alarmFilter = 'none';
+  let alarmClass = '';
+
+  if (isAlerting) {
+    if (isSystemAlert) {
+      alarmColor = '#ff4d4f';
+      alarmFilter = 'drop-shadow(0 0 8px #ff4d4f)';
+      alarmClass = 'lcd-alarm-flash';
+    } else {
+      alarmColor = isDark ? '#9ca3af' : '#6b7280'; // 灰色
+      alarmFilter = isDark ? 'drop-shadow(0 0 8px #9ca3af)' : 'drop-shadow(0 0 5px rgba(107, 114, 128, 0.4))';
+      alarmClass = 'lcd-alarm-flash-gray';
+    }
+  } else if (systemCount > 0) {
+    alarmColor = isDark ? '#f87171' : '#ef4444';
+    alarmFilter = 'drop-shadow(0 0 5px rgba(239, 68, 68, 0.4))';
+    alarmClass = 'lcd-alarm-pulse';
+  } else if (personalCount > 0) {
+    alarmColor = isDark ? 'rgba(74, 222, 128, 0.8)' : '#2C3D4F';
+    alarmClass = 'lcd-alarm-pulse';
+  }
 
   return (
     <div
       style={{
-        ...(inline
-          ? {
-              width: inlineBox,
-              height: inlineBox,
-              flexShrink: 0,
-              borderRadius: token.borderRadiusLG,
-              padding: 2,
-            }
-          : {
-              width: '100%',
-              borderRadius: token.borderRadiusLG,
-              padding: compact ? '8px 10px' : '10px 12px',
-            }),
-        background: ANALOG_CLOCK.outer,
+        width: '100%',
+        height: inline ? 64 : 64,
+        /* 仿真表盘：暗黑时 VFD，明亮时 LCD */
+        background: isDark 
+          ? `linear-gradient(180deg, #0a1f16 0%, #06140e 100%)` 
+          : `linear-gradient(180deg, #E0E2E5 0%, #D1D4D9 100%)`,
+        borderRadius: 8,
+        padding: '0 12px',
         display: 'flex',
+        flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
+        justifyContent: 'space-between',
         boxSizing: 'border-box',
+        border: isDark ? `1px solid rgba(74, 222, 128, 0.3)` : `1px solid rgba(0,0,0,0.15)`,
+        boxShadow: isDark 
+          ? `inset 0 2px 10px rgba(0,0,0,0.5), 0 0 10px rgba(74, 222, 128, 0.1)` 
+          : `inset 0 2px 4px rgba(0,0,0,0.15), inset 0 0 10px rgba(0,0,0,0.05), 0 1px 0 rgba(255,255,255,0.1)`,
+        flexShrink: 0,
+        gap: 4,
+        position: 'relative',
+        overflow: 'hidden',
       }}
     >
-      <svg
-        width={size}
-        height={size}
-        viewBox="0 0 100 100"
-        style={{ display: 'block', maxWidth: '100%', height: 'auto', verticalAlign: 'middle' }}
-        aria-hidden
+      {/* 表盘玻璃反光效果 */}
+      <div 
+        style={{ 
+          position: 'absolute', 
+          top: 0, left: 0, right: 0, height: '45%', 
+          background: 'linear-gradient(180deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0) 100%)',
+          pointerEvents: 'none',
+          opacity: 0.6
+        }} 
+      />
+      <div 
+        style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          opacity: (hasPending || isAlerting) ? 1 : 0.3,
+          cursor: onAlarmClick ? 'pointer' : 'default',
+          position: 'relative',
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        }}
+        onClick={onAlarmClick}
       >
-        <circle cx={cx} cy={cy} r={44} fill={ANALOG_CLOCK.face} />
-        {ticks}
-        {/* 指针默认朝 12 点（-Y），rotate(deg) 为从 12 点顺时针 */}
-        <g transform={`rotate(${hourDeg} ${cx} ${cy})`}>
-          <line
-            x1={cx}
-            y1={cy}
-            x2={cx}
-            y2={cy - 20}
-            stroke={ANALOG_CLOCK.primary}
-            strokeWidth={3.2}
-            strokeLinecap="round"
+        <ClockCircleOutlined 
+          style={{ 
+            fontSize: inline ? 12 : 20, 
+            color: alarmColor,
+            filter: alarmFilter,
+          }} 
+          className={alarmClass}
+        />
+        {systemCount > 0 && (
+          <Badge 
+            count={systemCount} 
+            size="small" 
+            offset={[2, -2]}
+            style={{ 
+              backgroundColor: '#ef4444',
+              boxShadow: '0 0 8px rgba(239, 68, 68, 0.6)',
+              fontSize: '10px',
+              height: '14px',
+              lineHeight: '14px',
+              minWidth: '14px',
+              padding: '0 4px',
+              border: 'none',
+              borderRadius: '7px'
+            }}
           />
-        </g>
-        <g transform={`rotate(${minuteDeg} ${cx} ${cy})`}>
-          <line
-            x1={cx}
-            y1={cy}
-            x2={cx}
-            y2={cy - 28}
-            stroke={ANALOG_CLOCK.primary}
-            strokeWidth={1.8}
-            strokeLinecap="round"
-          />
-        </g>
-        <g transform={`rotate(${secondDeg} ${cx} ${cy})`}>
-          <line
-            x1={cx}
-            y1={cy + 6}
-            x2={cx}
-            y2={cy - 32}
-            stroke={ANALOG_CLOCK.muted}
-            strokeWidth={0.9}
-            strokeLinecap="round"
-          />
-        </g>
-        <circle cx={cx} cy={cy} r={2.4} fill={ANALOG_CLOCK.primary} />
-      </svg>
+        )}
+        
+        <style dangerouslySetInnerHTML={{ __html: `
+          @keyframes lcd-alarm-pulse {
+            0% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(1); opacity: 0.8; }
+          }
+          .lcd-alarm-pulse {
+            animation: lcd-alarm-pulse 2s infinite ease-in-out;
+          }
+          @keyframes lcd-alarm-flash {
+            0% { opacity: 0.2; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.2); }
+            100% { opacity: 0.2; transform: scale(1); }
+          }
+          .lcd-alarm-flash {
+            animation: lcd-alarm-flash 0.5s infinite ease-in-out;
+            color: #ff4d4f !important;
+          }
+          @keyframes lcd-alarm-flash-gray {
+            0% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.15); }
+            100% { opacity: 0.3; transform: scale(1); }
+          }
+          .lcd-alarm-flash-gray {
+            animation: lcd-alarm-flash-gray 0.8s infinite ease-in-out;
+          }
+        `}} />
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+        <div style={{ display: 'flex', gap: 1 }}>
+          <LcdDigit value={hourStr[0]} size={digitSize} color={lcdTextActive} />
+          <LcdDigit value={hourStr[1]} size={digitSize} color={lcdTextActive} />
+        </div>
+        
+        <div style={{ padding: '0 1px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ width: 2, height: 2, borderRadius: '50%', background: lcdTextActive }} />
+          <div style={{ width: 2, height: 2, borderRadius: '50%', background: lcdTextActive }} />
+        </div>
+
+        <div style={{ display: 'flex', gap: 1 }}>
+          <LcdDigit value={minuteStr[0]} size={digitSize} color={lcdTextActive} />
+          <LcdDigit value={minuteStr[1]} size={digitSize} color={lcdTextActive} />
+        </div>
+
+        <div style={{ padding: '0 1px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ width: 2, height: 2, borderRadius: '50%', background: lcdTextActive }} />
+          <div style={{ width: 2, height: 2, borderRadius: '50%', background: lcdTextActive }} />
+        </div>
+
+        <div style={{ display: 'flex', gap: 1 }}>
+          <LcdDigit value={secondStr[0]} size={digitSize} color={lcdTextActive} />
+          <LcdDigit value={secondStr[1]} size={digitSize} color={lcdTextActive} />
+        </div>
+      </div>
+
+      <div style={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        fontSize: 6.5, 
+        fontWeight: 800,
+        gap: 0.5,
+        borderLeft: `1px solid rgba(0,0,0,0.06)`,
+        paddingLeft: 6
+      }}>
+        {weekdays.map((day, idx) => (
+          <span 
+            key={day} 
+            style={{ 
+              color: idx === currentDayIdx ? lcdTextActive : lcdTextDim,
+              lineHeight: 1,
+            }}
+          >
+            {day}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
+
+
+
 
 function formatDashboardMetric(n: number | undefined | null): string {
   if (n == null || Number.isNaN(Number(n))) return '0';
@@ -838,6 +967,12 @@ export default function DashboardPage() {
   };
   const currentUser = useGlobalStore((s) => s.currentUser);
   const [currentTime, setCurrentTime] = useState(dayjs());
+  const [tipAnimationData, setTipAnimationData] = useState<object | null>(null);
+
+  // 加载提示动画
+  useEffect(() => {
+    import('../../../../static/lottie/tips.json').then((m) => setTipAnimationData(m.default));
+  }, []);
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
   /** 天气数据：用于首行天气区块背景渐变 */
   const [weatherForDashboard, setWeatherForDashboard] = useState<WeatherData | null>(null);
@@ -885,14 +1020,11 @@ export default function DashboardPage() {
   const currentUsername = currentUser?.username || userInfo?.username;
   const currentUserUuid = (currentUser as any)?.uuid || userInfo?.uuid;
 
-  // 身份信息（岗位/角色）非首屏关键：延迟到浏览器空闲后再拉，先让 KPI/待办先渲染
-  const identityDeferredEnabled = useDeferredEnabled(400);
-
   // 获取用户详情（优先按 uuid）
   const { data: userDetail } = useQuery({
     queryKey: ['user-detail', currentUserUuid],
     queryFn: () => getUserByUuid(currentUserUuid as string),
-    enabled: identityDeferredEnabled && !!currentUserUuid && !((currentUser as any)?.is_infra_admin),
+    enabled: !!currentUserUuid && !((currentUser as any)?.is_infra_admin),
     staleTime: 5 * 60 * 1000,
   });
   // 兜底：老会话可能没有 uuid，按用户名反查当前用户详情
@@ -903,7 +1035,7 @@ export default function DashboardPage() {
       const exact = response.items.find((u: any) => u.username === currentUsername);
       return exact || response.items[0];
     },
-    enabled: identityDeferredEnabled && !currentUserUuid && !!currentUsername && !((currentUser as any)?.is_infra_admin),
+    enabled: !currentUserUuid && !!currentUsername && !((currentUser as any)?.is_infra_admin),
     staleTime: 5 * 60 * 1000,
   });
   const resolvedUserDetail = userDetail || userDetailFallback;
@@ -977,6 +1109,49 @@ export default function DashboardPage() {
 
   // 消息未读数：复用 BasicLayout 的 ['userMessageStats'] 缓存，避免重复拉 20 条消息列表
   // 同 queryKey + 相同 queryFn，30s staleTime 内由 react-query 命中缓存，不会真正发起请求
+  // 消息未读数：复用 BasicLayout 的 ['userMessageStats'] 缓存，避免重复拉 20 条消息列表
+  // 同 queryKey + 相同 queryFn，30s staleTime 内由 react-query 命中缓存，不会真正发起请求
+  const [systemTaskCount, setSystemTaskCount] = useState<number>(0);
+  const [personalTaskCount, setPersonalTaskCount] = useState<number>(0);
+  const [pendingTasks, setPendingTasks] = useState<UserTask[]>([]);
+
+  const loadTasksData = useCallback(async () => {
+    try {
+      // 1. 获取任务统计（用于 LCD 闹钟气泡）
+      const stats = await getUserTaskStats();
+      setSystemTaskCount((stats as any).pending_system || 0);
+      setPersonalTaskCount((stats as any).pending_personal || 0);
+
+      // 2. 获取任务列表（用于检查提醒时间）
+      const tasksRes = await getUserTasks({ status: 'pending', page_size: 50 });
+      setPendingTasks(tasksRes.items || []);
+    } catch (err) {
+      console.warn('获取任务数据失败:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      await loadTasksData();
+    })();
+    // 每 2 分钟刷新一次任务列表
+    const timer = setInterval(loadTasksData, 120000);
+    return () => clearInterval(timer);
+  }, [loadTasksData]);
+
+  // 实时的告警状态与类型：检查是否有任何任务到达了提醒时间
+  const alertType = useMemo(() => {
+    const activeAlerts = pendingTasks.filter(task => 
+      task.remind_at && !dayjs(task.remind_at).isAfter(currentTime)
+    );
+    
+    if (activeAlerts.length === 0) return 'none';
+    
+    // 如果有任何一个系统任务告警（无 is_personal 标记），定为 system 类型
+    const hasSystemAlert = activeAlerts.some(task => !task.data?.is_personal);
+    return hasSystemAlert ? 'system' : 'personal';
+  }, [pendingTasks, currentTime]);
+
   const { data: messageStats } = useQuery<UserMessageStats>({
     queryKey: ['userMessageStats'],
     queryFn: () => getUserMessageStats(),
@@ -1432,33 +1607,44 @@ export default function DashboardPage() {
               height: dashboardTopCardHeight,
               maxHeight: dashboardTopCardHeight,
               borderRadius: dashboardCardRadius,
-              border: `1px solid ${token.colorBorderSecondary}`,
-              boxShadow: dashboardCardShadow,
+              /* 继续调浅：从深黑灰向更有质感的钛金灰进阶 */
+              background: 'linear-gradient(135deg, #636e7b 0%, #545e6b 100%)',
+              border: '1px solid #788699',
+              boxShadow: `
+                0 4px 12px rgba(0,0,0,0.1), 
+                inset 0 1px 0 rgba(255,255,255,0.2)
+              `,
               overflow: 'hidden',
+              position: 'relative',
             }}
             styles={{
               body: {
-                padding: '10px 14px',
+                padding: '12px 14px',
                 display: 'flex',
-                flexDirection: 'row',
+                flexDirection: 'column',
                 alignItems: 'center',
-                justifyContent: showCalendarText ? 'flex-start' : 'center',
-                gap: 14,
+                justifyContent: 'center',
+                gap: 8,
                 minHeight: 0,
-                /* 背景由 .dashboard-clock-date-card 极浅渐变提供 */
                 background: 'transparent',
-                /* Ant Design 无标题时 body 默认仅下圆角，白底会露出上直角 */
                 borderRadius: dashboardCardRadius,
               },
             }}
           >
-            <DashboardLcdClock time={currentTime} compact={false} inline />
+            <DashboardLcdClock 
+              time={currentTime} 
+              isDark={isDark} 
+              systemCount={systemTaskCount}
+              personalCount={personalTaskCount}
+              alertType={alertType}
+              onAlarmClick={() => navigate('/personal/tasks')}
+            />
             {showCalendarText ? (
-              <Space orientation="vertical" size={2} style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
                 <Text
                   style={{
-                    fontSize: 14,
-                    color: token.colorTextSecondary,
+                    fontSize: 13,
+                    color: 'rgba(255,255,255,0.85)', // 始终浅色文字，因为卡片始终深色
                     lineHeight: 1.35,
                     margin: 0,
                   }}
@@ -1467,21 +1653,21 @@ export default function DashboardPage() {
                 </Text>
                 <Text
                   style={{
-                    fontSize: 14,
-                    color: token.colorTextTertiary ?? token.colorTextSecondary,
+                    fontSize: 13,
+                    color: 'rgba(255,255,255,0.45)', // 始终浅色文字
                     lineHeight: 1.35,
-                    margin: 0,
                   }}
                 >
                   {t('pages.dashboard.lunarLabel')} {lunarDateStr}
                 </Text>
-              </Space>
+              </div>
             ) : null}
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={12} xl={5} style={{ display: 'flex', overflow: 'visible' }}>
-          <div
+          <Card
             className="dashboard-workplace-tip-card"
+            variant="borderless"
             style={{
               flex: 1,
               width: '100%',
@@ -1490,44 +1676,82 @@ export default function DashboardPage() {
               maxHeight: dashboardTopCardHeight,
               position: 'relative',
               display: 'flex',
-              alignItems: 'flex-start',
+              flexDirection: 'column',
               alignSelf: 'stretch',
-              overflow: 'visible',
-              borderRadius: dashboardCardRadius,
-              boxShadow: dashboardCardShadow,
+              overflow: 'hidden',
+              borderRadius: dashboardCardRadius, // 圆角跟随系统
+              /* 拟真便利贴：纸张暖黄渐变 */
+              background: 'linear-gradient(135deg, #fffde6 0%, #fff3b0 100%)',
+              border: '1px solid #ffe58f',
+              boxShadow: `
+                2px 4px 12px rgba(0,0,0,0.08), 
+                0 0 1px rgba(0,0,0,0.05)
+              `,
+            }}
+            styles={{
+              body: {
+                padding: '4px 14px 4px 14px',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 6,
+                height: '100%',
+                position: 'relative',
+              },
             }}
           >
-            <div className="dashboard-workplace-tip-bulb-wrap" aria-hidden>
-              <BulbOutlined
-                style={{
-                  fontSize: 46,
-                  color: token.colorWarning,
-                  display: 'block',
-                }}
-              />
+            <div 
+              style={{ 
+                position: 'absolute',
+                left: 0,
+                top: 16,
+                width: 48,
+                height: 48,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 2,
+              }} 
+              aria-hidden
+            >
+              {tipAnimationData ? (
+                <Suspense fallback={<div style={{ width: 40, height: 40 }} />}>
+                  <LottiePlayer
+                    animationData={tipAnimationData}
+                    loop
+                    style={{ width: 64, height: 64 }}
+                  />
+                </Suspense>
+              ) : (
+                <div style={{ width: 40, height: 40 }} />
+              )}
             </div>
             <div
               className="dashboard-workplace-tip-body"
               style={{
-                width: '100%',
+                flex: 1,
+                minWidth: 0,
                 color: token.colorText,
-                lineHeight: 1.6,
+                lineHeight: 1.45,
+                paddingLeft: 46,
+                paddingTop: 0, // 文本贴顶
               }}
             >
-              <Text strong style={{ fontSize: 14, color: token.colorText, display: 'block', marginBottom: 6 }}>
+              <Text strong style={{ fontSize: 13.5, color: '#856404', display: 'block', marginBottom: 2 }}>
                 {t('pages.dashboard.workplaceTips')}
               </Text>
-              <div
+              <Paragraph
                 key={tipIndex}
-                className="dashboard-workplace-tip-text"
-                style={{
+                ellipsis={{ rows: 3 }}
+                style={{ 
+                  fontSize: 13, 
+                  lineHeight: 1.5, 
+                  marginBottom: 0,
+                  color: '#927238',
                   animation: 'workplace-tip-in 0.4s ease-out',
                 }}
               >
-                <Text type="secondary" style={{ fontSize: 14, display: 'block' }}>
-                  {currentTip}
-                </Text>
-              </div>
+                {currentTip}
+              </Paragraph>
             </div>
             <style>{`
               @keyframes workplace-tip-in {
@@ -1535,7 +1759,7 @@ export default function DashboardPage() {
                 to { opacity: 1; transform: translateY(0); }
               }
             `}</style>
-          </div>
+          </Card>
         </Col>
         
       </Row>

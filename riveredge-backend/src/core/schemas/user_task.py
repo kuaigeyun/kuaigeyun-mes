@@ -23,6 +23,7 @@ class UserTaskResponse(BaseModel):
     current_approver_id: Optional[int] = Field(None, description="当前审批人ID（当前用户）")
     status: str = Field(..., description="任务状态（pending、approved、rejected、cancelled）")
     current_node: Optional[str] = Field(None, description="当前节点")
+    remind_at: Optional[datetime] = Field(None, description="提醒时间")
     submitted_at: Optional[datetime] = Field(None, description="提交时间")
     completed_at: Optional[datetime] = Field(None, description="完成时间")
     created_at: Optional[datetime] = Field(None, description="创建时间")
@@ -43,6 +44,8 @@ class UserTaskStatsResponse(BaseModel):
     """用户任务统计响应 Schema"""
     total: int = Field(..., description="总任务数")
     pending: int = Field(..., description="待处理任务数")
+    pending_system: int = Field(0, description="系统待处理任务数")
+    pending_personal: int = Field(0, description="个人待处理任务数")
     approved: int = Field(..., description="已通过任务数")
     rejected: int = Field(..., description="已拒绝任务数")
     submitted: int = Field(..., description="我提交的任务数")
@@ -52,4 +55,12 @@ class UserTaskActionRequest(BaseModel):
     """用户任务操作请求 Schema"""
     action: str = Field(..., description="操作类型（approve、reject）")
     comment: Optional[str] = Field(None, description="审批意见")
+
+
+class UserTaskCreateRequest(BaseModel):
+    """手动创建个人任务请求 Schema"""
+    title: str = Field(..., description="任务标题")
+    content: Optional[str] = Field(None, description="任务内容")
+    remind_at: Optional[datetime] = Field(None, description="提醒时间")
+    is_personal: bool = Field(True, description="是否为个人任务")
 

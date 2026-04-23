@@ -83,6 +83,7 @@ const MoldsPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [currentMold, setCurrentMold] = useState<Mold | null>(null);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
   const formRef = useRef<any>(null);
 
   // Drawer 相关状态（详情查看）
@@ -105,8 +106,10 @@ const MoldsPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentMold(null);
+    // FormModalTemplate 设置了 destroyOnHidden，ProForm 每次打开都会重新挂载，
+    // 传空 initialValues 即可，无需 setTimeout 等 ref 就绪再 resetFields。
+    setFormInitialValues(undefined);
     setModalVisible(true);
-    setTimeout(() => formRef.current?.resetFields(), 0);
   };
 
   /**
@@ -121,28 +124,29 @@ const MoldsPage: React.FC = () => {
       const detail = await moldApi.get(record.uuid);
       setIsEdit(true);
       setCurrentMold(detail);
+      // 用 initialValues 替代 setTimeout + setFieldsValue：
+      // destroyOnHidden 下 ProForm 重新挂载时会读取最新 initialValues，
+      // 不再依赖 "等 ref 就绪" 的妥协
+      setFormInitialValues({
+        code: detail.code,
+        name: detail.name,
+        type: detail.type,
+        category: detail.category,
+        brand: detail.brand,
+        model: detail.model,
+        serial_number: detail.serial_number,
+        manufacturer: detail.manufacturer,
+        supplier: detail.supplier,
+        purchase_date: detail.purchase_date ? dayjs(detail.purchase_date) : null,
+        installation_date: detail.installation_date ? dayjs(detail.installation_date) : null,
+        warranty_period: detail.warranty_period,
+        status: detail.status,
+        is_active: detail.is_active,
+        cavity_count: detail.cavity_count,
+        design_lifetime: detail.design_lifetime,
+        description: detail.description,
+      });
       setModalVisible(true);
-      setTimeout(() => {
-        formRef.current?.setFieldsValue({
-          code: detail.code,
-          name: detail.name,
-          type: detail.type,
-          category: detail.category,
-          brand: detail.brand,
-          model: detail.model,
-          serial_number: detail.serial_number,
-          manufacturer: detail.manufacturer,
-          supplier: detail.supplier,
-          purchase_date: detail.purchase_date ? dayjs(detail.purchase_date) : null,
-          installation_date: detail.installation_date ? dayjs(detail.installation_date) : null,
-          warranty_period: detail.warranty_period,
-          status: detail.status,
-          is_active: detail.is_active,
-          cavity_count: detail.cavity_count,
-          design_lifetime: detail.design_lifetime,
-          description: detail.description,
-        });
-      }, 100);
     } catch (error) {
       messageApi.error('获取模具详情失败');
     }
@@ -751,12 +755,12 @@ const MoldsPage: React.FC = () => {
         onClose={() => {
           setModalVisible(false);
           setCurrentMold(null);
-          formRef.current?.resetFields();
         }}
         onFinish={handleSubmit}
         isEdit={isEdit}
         width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef}
+        initialValues={formInitialValues}
         grid={false}
       >
         <Row gutter={16}>

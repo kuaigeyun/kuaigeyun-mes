@@ -258,7 +258,7 @@ const OtherOutboundPage: React.FC = () => {
   /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号 */
   const handleCreate = () => {
     setCreateModalVisible(true);
-    setTimeout(() => formRef.current?.resetFields(), 0);
+    // FormModalTemplate 设置了 destroyOnHidden，ProForm 每次打开都是全新挂载，无需 setTimeout + resetFields
   };
 
   const handleCreateSubmit = async (values: any) => {

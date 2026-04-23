@@ -39,6 +39,7 @@ class ApprovalInstance(BaseModel):
     status = fields.CharField(max_length=20, default="pending", description="审批状态（pending、approved、rejected、cancelled）")
     current_node = fields.CharField(max_length=100, null=True, description="当前节点")
     current_approver_id = fields.IntField(null=True, description="当前审批人ID")
+    remind_at = fields.DatetimeField(null=True, description="提醒时间")
     
     # Inngest 关联
     inngest_run_id = fields.CharField(max_length=100, null=True, description="Inngest 运行ID（关联 Inngest 工作流实例）")

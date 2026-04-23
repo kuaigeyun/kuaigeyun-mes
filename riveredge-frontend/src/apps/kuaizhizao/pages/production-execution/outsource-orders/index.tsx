@@ -402,7 +402,7 @@ export const OutsourceOrdersTable: React.FC = () => {
     setIsEdit(false);
     setCurrentOutsourceOrder(null);
     setModalVisible(true);
-    setTimeout(() => formRef.current?.resetFields(), 0);
+    // FormModalTemplate 设置了 destroyOnHidden，ProForm 每次打开都是全新挂载，无需 setTimeout + resetFields
   };
 
   /**

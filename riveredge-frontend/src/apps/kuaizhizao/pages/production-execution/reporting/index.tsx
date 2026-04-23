@@ -200,7 +200,8 @@ const SubOperationReportingForm: React.FC<{
     }
     const b = getWorkerInfo(subOperation);
     subOpProxyWorkerRef.current = { id: b.worker_id, full_name: b.worker_name, username: '' };
-    setTimeout(() => formRef.current?.setFieldsValue({ proxy_worker_uuid: undefined }), 0);
+    // useEffect 已运行在 commit 之后，formRef 必已就绪，直接调用 setFieldsValue
+    formRef.current?.setFieldsValue({ proxy_worker_uuid: undefined });
   }, [subOperation?.operation_id, canProxyReporting, subOperation, formRef]);
 
   // 加载子工序的SOP配置（按工单+工序匹配，支持不同产品相同工序不同SOP）
@@ -640,7 +641,7 @@ const ReportingPage: React.FC = () => {
     }
     if (!reportOperationId) {
       createModalProxyWorkerRef.current = null;
-      setTimeout(() => formRef.current?.setFieldsValue({ proxy_worker_uuid: undefined }), 0);
+      formRef.current?.setFieldsValue({ proxy_worker_uuid: undefined });
       return;
     }
     const operation = (Array.isArray(reportOperations) ? reportOperations : []).find(
@@ -649,7 +650,7 @@ const ReportingPage: React.FC = () => {
     if (!operation) return;
     const b = getWorkerInfo(operation);
     createModalProxyWorkerRef.current = { id: b.worker_id, full_name: b.worker_name, username: '' };
-    setTimeout(() => formRef.current?.setFieldsValue({ proxy_worker_uuid: undefined }), 0);
+    formRef.current?.setFieldsValue({ proxy_worker_uuid: undefined });
   }, [reportingModalVisible, canProxyReporting, reportOperationId, reportOperations]);
 
   useEffect(() => {
@@ -659,7 +660,7 @@ const ReportingPage: React.FC = () => {
     }
     const b = getWorkerInfo(currentOperation);
     scanModalProxyWorkerRef.current = { id: b.worker_id, full_name: b.worker_name, username: '' };
-    setTimeout(() => scanFormRef.current?.setFieldsValue({ proxy_worker_uuid: undefined }), 0);
+    scanFormRef.current?.setFieldsValue({ proxy_worker_uuid: undefined });
   }, [scanModalVisible, canProxyReporting, currentOperation]);
 
   /**
@@ -1184,19 +1185,33 @@ const ReportingPage: React.FC = () => {
   };
 
   /**
-   * 新建报工：工序变更时自动填充
+   * 新建报工：工序变更时只更新状态，实际自动填充由 useEffect 依赖驱动。
+   * 这样就不必用 setTimeout 去 "等条件字段挂载"——useEffect 天然在提交后运行。
    */
   const handleReportOperationChange = (operationId: number) => {
     setReportOperationId(operationId);
-    const operation = (Array.isArray(reportOperations) ? reportOperations : []).find((op: any) => op.operation_id === operationId);
-    const workOrder = (Array.isArray(reportWorkOrders) ? reportWorkOrders : []).find((wo: any) => wo.id === reportWorkOrderId);
+  };
+
+  useEffect(() => {
+    if (!reportOperationId || !reportWorkOrderId) return;
+    const operation = (Array.isArray(reportOperations) ? reportOperations : []).find(
+      (op: any) => op.operation_id === reportOperationId,
+    );
+    const workOrder = (Array.isArray(reportWorkOrders) ? reportWorkOrders : []).find(
+      (wo: any) => wo.id === reportWorkOrderId,
+    );
     if (!operation || !workOrder) return;
     const autoFillValues: any = {};
     if (operation.standard_time) {
-      autoFillValues.work_hours = parseFloat(operation.standard_time.toString()) * parseFloat(workOrder.quantity?.toString() || '1');
+      autoFillValues.work_hours =
+        parseFloat(operation.standard_time.toString()) *
+        parseFloat(workOrder.quantity?.toString() || '1');
     }
     if (operation.reporting_type === 'quantity') {
-      const remaining = getRemainingReportableQuantity(operation, parseFloat(workOrder.quantity?.toString() || '0') || 0);
+      const remaining = getRemainingReportableQuantity(
+        operation,
+        parseFloat(workOrder.quantity?.toString() || '0') || 0,
+      );
       if (remaining > 0) {
         autoFillValues.reported_quantity = remaining;
         autoFillValues.qualified_quantity = remaining;
@@ -1206,9 +1221,10 @@ const ReportingPage: React.FC = () => {
       autoFillValues.completed_status = 'completed';
     }
     if (Object.keys(autoFillValues).length > 0) {
-      setTimeout(() => formRef.current?.setFieldsValue(autoFillValues), 100);
+      formRef.current?.setFieldsValue(autoFillValues);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reportOperationId, reportWorkOrderId, reportOperations, reportWorkOrders]);
 
   /**
    * 处理报工提交

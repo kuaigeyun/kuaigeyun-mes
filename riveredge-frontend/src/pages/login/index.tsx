@@ -147,15 +147,10 @@ export default function LoginPage() {
     ]).then(([w, q, qw, d, f]) => setSocialIcons({ wechat: w, qq: q, qwei: qw, dingtalk: d, feishu: f }));
   }, []);
 
-  // Lottie 动画延后加载（requestIdleCallback 后加载，避免阻塞 FCP/LCP）
+  // Lottie 动画直接异步 import，不再人为延后
   const [animationData, setAnimationData] = useState<object | null>(null);
   useEffect(() => {
-    const loadLottie = () => import('../../../static/lottie/login.json').then((m) => setAnimationData(m.default));
-    if ('requestIdleCallback' in window) {
-      (window as any).requestIdleCallback(() => loadLottie(), { timeout: 2000 });
-    } else {
-      setTimeout(loadLottie, 500);
-    }
+    import('../../../static/lottie/login.json').then((m) => setAnimationData(m.default));
   }, []);
 
   /**

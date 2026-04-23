@@ -1057,7 +1057,8 @@ const WorkOrdersPage: React.FC = () => {
     setSelectedOperations([]) // 清空选中的工序
     setSelectedMaterialSourceInfo(null) // 清空物料来源信息
     setModalVisible(true)
-    setTimeout(() => formRef.current?.resetFields(), 0)
+    // FormModalTemplate 设置了 destroyOnHidden，每次打开 ProForm 都会重新挂载为空，
+    // 不需要用 setTimeout 等 ref 就绪再 resetFields
   }
 
   /**

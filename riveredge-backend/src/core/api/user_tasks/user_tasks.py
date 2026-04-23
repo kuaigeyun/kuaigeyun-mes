@@ -12,6 +12,7 @@ from core.schemas.user_task import (
     UserTaskListResponse,
     UserTaskStatsResponse,
     UserTaskActionRequest,
+    UserTaskCreateRequest,
 )
 from core.services.user.user_task_service import UserTaskService
 from core.api.deps.deps import get_current_tenant
@@ -20,6 +21,37 @@ from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(prefix="/user-tasks", tags=["UserTasks"])
+
+
+@router.post("", response_model=UserTaskResponse, status_code=status.HTTP_201_CREATED)
+async def create_user_task(
+    data: UserTaskCreateRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    手动创建个人任务（TodoList）
+
+    Args:
+        data: 个人任务创建请求
+
+    Returns:
+        UserTaskResponse: 创建后的个人任务
+
+    Raises:
+        HTTPException: 当创建失败（例如校验错误）时抛出
+    """
+    try:
+        return await UserTaskService.create_user_task(
+            tenant_id=tenant_id,
+            user_id=current_user.id,
+            data=data,
+        )
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
 
 
 @router.get("", response_model=UserTaskListResponse)
@@ -139,3 +171,24 @@ async def process_user_task(
             detail=str(e)
         )
 
+
+@router.post("", response_model=UserTaskResponse, status_code=status.HTTP_201_CREATED)
+async def create_user_task(
+    data: UserTaskCreateRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    手动创建个人任务 (TodoList)
+    
+    Args:
+        data: 任务创建数据
+        
+    Returns:
+        UserTaskResponse: 创建的任务对象
+    """
+    return await UserTaskService.create_user_task(
+        tenant_id=tenant_id,
+        user_id=current_user.id,
+        data=data,
+    )

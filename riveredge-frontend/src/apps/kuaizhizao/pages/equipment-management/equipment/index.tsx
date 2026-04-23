@@ -131,6 +131,7 @@ const EquipmentPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [currentEquipment, setCurrentEquipment] = useState<Equipment | null>(null);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
   const formRef = useRef<any>(null);
 
   // Drawer 相关状态（详情查看）
@@ -149,8 +150,9 @@ const EquipmentPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentEquipment(null);
+    // destroyOnHidden 下 ProForm 每次打开都会重新挂载，initialValues 为空即可
+    setFormInitialValues(undefined);
     setModalVisible(true);
-    setTimeout(() => formRef.current?.resetFields(), 0);
   };
 
   /**
@@ -165,28 +167,27 @@ const EquipmentPage: React.FC = () => {
       const detail = await equipmentApi.get(record.uuid);
       setIsEdit(true);
       setCurrentEquipment(detail);
+      // 用 initialValues 替代 setTimeout + setFieldsValue
+      setFormInitialValues({
+        code: detail.code,
+        name: detail.name,
+        type: detail.type,
+        category: detail.category,
+        brand: detail.brand,
+        model: detail.model,
+        serial_number: detail.serial_number,
+        manufacturer: detail.manufacturer,
+        supplier: detail.supplier,
+        purchase_date: detail.purchase_date ? dayjs(detail.purchase_date) : null,
+        installation_date: detail.installation_date ? dayjs(detail.installation_date) : null,
+        warranty_period: detail.warranty_period,
+        workstation_id: detail.workstation_id,
+        work_center_id: detail.work_center_id,
+        status: detail.status,
+        is_active: detail.is_active,
+        description: detail.description,
+      });
       setModalVisible(true);
-      setTimeout(() => {
-        formRef.current?.setFieldsValue({
-          code: detail.code,
-          name: detail.name,
-          type: detail.type,
-          category: detail.category,
-          brand: detail.brand,
-          model: detail.model,
-          serial_number: detail.serial_number,
-          manufacturer: detail.manufacturer,
-          supplier: detail.supplier,
-          purchase_date: detail.purchase_date ? dayjs(detail.purchase_date) : null,
-          installation_date: detail.installation_date ? dayjs(detail.installation_date) : null,
-          warranty_period: detail.warranty_period,
-          workstation_id: detail.workstation_id,
-          work_center_id: detail.work_center_id,
-          status: detail.status,
-          is_active: detail.is_active,
-          description: detail.description,
-        });
-      }, 100);
     } catch (error) {
       messageApi.error('获取设备详情失败');
     }
@@ -715,12 +716,12 @@ const EquipmentPage: React.FC = () => {
         onClose={() => {
           setModalVisible(false);
           setCurrentEquipment(null);
-          formRef.current?.resetFields();
         }}
         onFinish={handleSubmit}
         isEdit={isEdit}
         width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef}
+        initialValues={formInitialValues}
         grid={false}
       >
         <Row gutter={16}>

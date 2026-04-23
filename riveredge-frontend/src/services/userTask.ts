@@ -18,6 +18,7 @@ export interface UserTask {
   current_approver_id?: number;
   status: string;
   current_node?: string;
+  remind_at?: string;
   submitted_at: string;
   completed_at?: string;
   created_at: string;
@@ -82,6 +83,24 @@ export async function processUserTask(
   return apiRequest<UserTask>(`/personal/user-tasks/${taskUuid}/process`, {
     method: 'POST',
     data,
+  });
+}
+
+/**
+ * 手动创建个人任务 (TodoList)
+ */
+export async function createUserTask(data: {
+  title: string;
+  content?: string;
+  remind_at?: string;
+  is_personal?: boolean;
+}): Promise<UserTask> {
+  return apiRequest<UserTask>('/personal/user-tasks', {
+    method: 'POST',
+    data: {
+      ...data,
+      is_personal: true, // 标记为个人手动任务
+    },
   });
 }
 

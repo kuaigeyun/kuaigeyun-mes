@@ -13,6 +13,7 @@ from tortoise.expressions import Q
 from loguru import logger
 
 from core.models.approval_instance import ApprovalInstance
+from core.models.approval_process import ApprovalProcess
 from core.models.approval_task import ApprovalTask
 from core.services.approval.approval_instance_service import ApprovalInstanceService
 from core.schemas.approval_instance import ApprovalInstanceAction
@@ -21,8 +22,13 @@ from core.schemas.user_task import (
     UserTaskListResponse,
     UserTaskStatsResponse,
     UserTaskActionRequest,
+    UserTaskCreateRequest,
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+
+
+# 个人任务在 ApprovalProcess 表里对应的占位流程 code，各租户首次创建个人任务时自动落库
+_PERSONAL_TASK_PROCESS_CODE = "personal_task"
 
 
 class UserTaskService:
@@ -73,6 +79,7 @@ class UserTaskService:
                         current_approver_id=inst.current_approver_id,
                         status=inst.status,
                         current_node=inst.current_node,
+                        remind_at=inst.remind_at,
                         submitted_at=inst.submitted_at,
                         completed_at=inst.completed_at,
                         created_at=inst.created_at,
@@ -104,6 +111,7 @@ class UserTaskService:
                         current_approver_id=user_id,
                         status=task.status,
                         current_node=task.node_id,
+                        remind_at=inst.remind_at,
                         submitted_at=inst.submitted_at,
                         completed_at=inst.completed_at,
                         created_at=task.created_at,
@@ -164,6 +172,7 @@ class UserTaskService:
             "current_approver_id": task.current_approver_id,
             "status": task.status,
             "current_node": task.current_node,
+            "remind_at": task.remind_at,
             "submitted_at": task.submitted_at,
             "completed_at": task.completed_at,
             "created_at": task.created_at,
@@ -245,11 +254,18 @@ class UserTaskService:
         """
         try:
             # 待处理任务（基于任务表）
-            pending = await ApprovalTask.filter(
+            pending_tasks = await ApprovalTask.filter(
                 tenant_id=tenant_id,
                 approver_id=user_id,
                 status="pending"
-            ).count()
+            ).prefetch_related("approval_instance")
+            
+            pending = len(pending_tasks)
+            pending_personal = 0
+            for t in pending_tasks:
+                if t.approval_instance and t.approval_instance.data and t.approval_instance.data.get("is_personal"):
+                    pending_personal += 1
+            pending_system = pending - pending_personal
             
             # 我提交的任务（基于实例表）
             submitted = await ApprovalInstance.filter(
@@ -274,11 +290,90 @@ class UserTaskService:
             return UserTaskStatsResponse(
                 total=pending + submitted,
                 pending=pending,
+                pending_system=pending_system,
+                pending_personal=pending_personal,
                 approved=approved,
                 rejected=rejected,
                 submitted=submitted,
             )
         except Exception as e:
             logger.exception(f"获取用户任务统计失败: {e}")
+            raise e
+            
+    @staticmethod
+    async def _get_or_create_personal_task_process(tenant_id: int) -> ApprovalProcess:
+        """
+        获取或初始化该租户下用于承载「个人任务」的占位审批流程。
+
+        个人任务不走真正的审批链路，但当前复用 ApprovalInstance 模型，
+        ApprovalInstance.process 是必填外键，因此需要一条稳定的流程记录来关联，
+        避免硬编码 process_id=1 在不同租户/环境下缺失导致外键约束失败。
+        """
+        process = await ApprovalProcess.filter(
+            tenant_id=tenant_id,
+            code=_PERSONAL_TASK_PROCESS_CODE,
+        ).first()
+        if process:
+            return process
+        return await ApprovalProcess.create(
+            tenant_id=tenant_id,
+            name="个人任务",
+            code=_PERSONAL_TASK_PROCESS_CODE,
+            description="用户手动创建的个人待办任务占位流程",
+            nodes=[],
+            config={"is_personal": True},
+            is_active=True,
+        )
+
+    @staticmethod
+    async def create_user_task(
+        tenant_id: int,
+        user_id: int,
+        data: UserTaskCreateRequest
+    ) -> UserTaskResponse:
+        """
+        手动创建个人任务 (TodoList)
+        """
+        try:
+            process = await UserTaskService._get_or_create_personal_task_process(tenant_id)
+
+            # 创建审批实例作为个人任务（uuid 由 BaseModel 默认值生成，无需手动指定）
+            inst = await ApprovalInstance.create(
+                tenant_id=tenant_id,
+                process=process,
+                title=data.title,
+                content=data.content,
+                remind_at=data.remind_at,
+                data={"is_personal": True},
+                status="pending",
+                submitter_id=user_id,
+                current_approver_id=user_id,
+                submitted_at=datetime.now(),
+            )
+
+            # 同时创建一条关联任务，方便在"待办"中看到
+            await ApprovalTask.create(
+                tenant_id=tenant_id,
+                approval_instance=inst,
+                node_id="personal_task",
+                approver_id=user_id,
+                status="pending",
+            )
+
+            return UserTaskResponse(
+                uuid=inst.uuid,
+                tenant_id=inst.tenant_id,
+                process_uuid=process.uuid,
+                title=inst.title,
+                content=inst.content,
+                remind_at=inst.remind_at,
+                status=inst.status,
+                submitter_id=inst.submitter_id,
+                submitted_at=inst.submitted_at,
+                created_at=inst.created_at,
+                updated_at=inst.updated_at,
+            )
+        except Exception as e:
+            logger.exception(f"创建个人任务失败: {e}")
             raise e
 

@@ -179,7 +179,7 @@ export default {
   'menu.personal.messages': '我的消息',
   'menu.personal.tasks': '我的任务',
   'menu.infra': '基础设施',
-  'menu.infra.operation': '运营看板',
+  'menu.infra.operation': '平台看板',
   'menu.infra.tenants': '组织管理',
   'menu.infra.packages': '套餐管理',
   'menu.infra.admin': '平台管理',
@@ -566,6 +566,15 @@ export default {
   'pages.personal.tasks.commentLabel': '审批意见',
   'pages.personal.tasks.commentPlaceholderApprove': '请输入审批意见（可选）',
   'pages.personal.tasks.commentPlaceholderReject': '请输入拒绝原因（可选）',
+  'pages.personal.tasks.createButton': '新建任务',
+  'pages.personal.tasks.createModalTitle': '新建个人任务',
+  'pages.personal.tasks.createSuccess': '任务创建成功',
+  'pages.personal.tasks.createFailed': '创建任务失败',
+  'pages.personal.tasks.titlePlaceholder': '请输入任务标题',
+  'pages.personal.tasks.contentPlaceholder': '请输入任务内容（可选）',
+  'pages.personal.tasks.remindAt': '提醒时间',
+  'pages.personal.tasks.remindAtPlaceholder': '请选择提醒时间',
+  'pages.dashboard.pendingTasksAlarm': '你有 {{count}} 个待处理任务',
 
   'pages.system.integrationConfigs.subtitle': '配置外部 API 或数据库连接，用于与 MES、计划、仓储等模块数据对齐。支持 API、数据库、OAuth、Webhook 等类型。',
   'pages.system.integrationConfigs.getDetailFailed': '获取集成配置详情失败',
@@ -1165,7 +1174,7 @@ export default {
   'path.system.print-templates.design': '打印设计',
   'path.infra': '平台管理',
   'path.infra.login': '平台登录',
-  'path.infra.operation': '运营看板',
+  'path.infra.operation': '平台看板',
   'path.infra.tenants': '组织管理',
   'path.infra.packages': '套餐管理',
   'path.infra.monitoring': '系统监控',
@@ -7085,7 +7094,7 @@ export default {
   'pages.infra.login.error': '登录失败，请检查用户名和密码',
   'pages.infra.login.defaultDocTitle': 'RiverEdge SaaS - 多组织管理框架',
 
-  'pages.infra.operation.title': '运营看板',
+  'pages.infra.operation.title': '平台看板',
   'pages.infra.operation.subtitle': '平台级运营数据概览',
   'pages.infra.operation.timeRange': '时间范围：',
   'pages.infra.operation.timeRangeLabel': '时间范围',
@@ -7107,11 +7116,11 @@ export default {
   'pages.infra.operation.suspendedTenants': '已暂停组织',
   'pages.infra.operation.loginFirst': '请先登录',
   'pages.infra.operation.noPermission': '权限不足',
-  'pages.infra.operation.loginHint': '运营看板需要平台超级管理员权限，请先登录',
-  'pages.infra.operation.noPermissionHint': '您没有访问运营看板的权限，需要平台超级管理员权限',
+  'pages.infra.operation.loginHint': '平台看板需要平台超级管理员权限，请先登录',
+  'pages.infra.operation.noPermissionHint': '您没有访问平台看板的权限，需要平台超级管理员权限',
   'pages.infra.operation.goLogin': '前往登录',
   'pages.infra.operation.noDataExport': '暂无数据可导出',
-  'pages.infra.operation.exportStatsTitle': '运营看板统计数据',
+  'pages.infra.operation.exportStatsTitle': '平台看板统计数据',
   'pages.infra.operation.exportTime': '导出时间',
   'pages.infra.operation.timeRangeToday': '今日',
   'pages.infra.operation.timeRangeWeek': '本周',
@@ -7166,7 +7175,7 @@ export default {
   'pages.infra.operation.sourceInvite': '邀请注册',
   'pages.infra.operation.sourceUnknown': '未知',
 
-  'pages.infra.operation.board.title': '平台运营驾驶舱',
+  'pages.infra.operation.board.title': '平台看板',
   'pages.infra.operation.board.subtitle': '租户 · 用户 · 访问 · 地域多维实时态势',
   'pages.infra.operation.board.fullscreen': '全屏',
   'pages.infra.operation.board.exitFullscreen': '退出全屏',
@@ -7581,7 +7590,7 @@ export default {
   'common.autoLogoutInactivity': '由于长时间未操作，您已自动退出登录',
   'common.unknownError': '未知错误',
 
-  // 运营看板 - 日期范围
+  // 平台看板 - 日期范围
   'pages.infra.operation.dateRangeConnector': ' 至 ',
 
   // 应用路由 / 错误边界

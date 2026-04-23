@@ -117,6 +117,7 @@ const ToolLedgerPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [currentTool, setCurrentTool] = useState<Tool | null>(null);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
   const formRef = useRef<any>(null);
 
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -174,8 +175,8 @@ const ToolLedgerPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentTool(null);
+    setFormInitialValues(undefined);
     setModalVisible(true);
-    setTimeout(() => formRef.current?.resetFields(), 0);
   };
 
   const handleEdit = async (record: Tool) => {
@@ -187,25 +188,23 @@ const ToolLedgerPage: React.FC = () => {
       const detail = await toolApi.get(record.uuid);
       setIsEdit(true);
       setCurrentTool(detail);
+      setFormInitialValues({
+        code: detail.code,
+        name: detail.name,
+        type: detail.type,
+        spec: detail.spec,
+        manufacturer: detail.manufacturer,
+        supplier: detail.supplier,
+        purchase_date: detail.purchase_date ? dayjs(detail.purchase_date) : null,
+        warranty_expiry: detail.warranty_expiry ? dayjs(detail.warranty_expiry) : null,
+        status: detail.status,
+        is_active: detail.is_active,
+        maintenance_period: detail.maintenance_period,
+        needs_calibration: detail.needs_calibration,
+        calibration_period: detail.calibration_period,
+        description: detail.description,
+      });
       setModalVisible(true);
-      setTimeout(() => {
-        formRef.current?.setFieldsValue({
-          code: detail.code,
-          name: detail.name,
-          type: detail.type,
-          spec: detail.spec,
-          manufacturer: detail.manufacturer,
-          supplier: detail.supplier,
-          purchase_date: detail.purchase_date ? dayjs(detail.purchase_date) : null,
-          warranty_expiry: detail.warranty_expiry ? dayjs(detail.warranty_expiry) : null,
-          status: detail.status,
-          is_active: detail.is_active,
-          maintenance_period: detail.maintenance_period,
-          needs_calibration: detail.needs_calibration,
-          calibration_period: detail.calibration_period,
-          description: detail.description,
-        });
-      }, 100);
     } catch (error) {
       messageApi.error('获取工装详情失败');
     }
@@ -617,12 +616,12 @@ const ToolLedgerPage: React.FC = () => {
         onClose={() => {
           setModalVisible(false);
           setCurrentTool(null);
-          formRef.current?.resetFields();
         }}
         onFinish={handleSubmit}
         isEdit={isEdit}
         width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef}
+        initialValues={formInitialValues}
         grid={false}
       >
         <Row gutter={16}>

@@ -33,9 +33,12 @@ const InitWizardPage = React.lazy(() => import('../pages/init/wizard'));
 const TemplateSelectPage = React.lazy(() => import('../pages/init/template-select'));
 const QRCodeScanPage = React.lazy(() => import('../pages/qrcode/scan'));
 
-// 懒加载包装（默认骨架屏）
+// 懒加载包装（极简 fallback）
+// 与 hover/父分组 prefetch 配合：大多数点击发生时 chunk 已在缓存，
+// fallback 仅在极短窗口内出现，采用最轻的 Spin（minimal）以避免重骨架的挂载/绘制开销，
+// 从而达到"随点随开"的观感。
 const withSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
-  <Suspense fallback={<PageSkeleton />}><LazyComponent /></Suspense>
+  <Suspense fallback={<PageSkeleton variant="minimal" />}><LazyComponent /></Suspense>
 );
 
 // 登录页专用骨架屏（与登录页布局一致）
