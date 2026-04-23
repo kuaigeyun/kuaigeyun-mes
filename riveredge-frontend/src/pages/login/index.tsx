@@ -9,8 +9,8 @@
 import { Form, Input, App, Typography, Button, Space, Tooltip, ConfigProvider } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { UserOutlined, LockOutlined, ThunderboltOutlined, GlobalOutlined } from '@ant-design/icons';
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { UserOutlined, LockOutlined, ThunderboltOutlined, GlobalOutlined, WindowsFilled, AndroidFilled, DownloadOutlined } from '@ant-design/icons';
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 const LottiePlayer = lazy(() => import('lottie-react').then((m) => ({ default: m.default })));
 import { registerPersonal, registerOrganization, checkTenantExists, searchTenants, sendVerificationCode, type TenantCheckResponse, type TenantSearchOption, type OrganizationRegisterRequest, type SendVerificationCodeRequest } from '../../services/register';
 import { login, guestLogin, wechatLoginCallback, type LoginResponse } from '../../services/auth';
@@ -292,7 +292,10 @@ export default function LoginPage() {
   const [registerDrawerVisible, setRegisterDrawerVisible] = useState(false);
   const [registerType, setRegisterType] = useState<'select' | 'personal' | 'organization'>('select');
 
-  
+  const showClientDownloadPlaceholder = useCallback(() => {
+    message.info(t('pages.login.clientDownloadPlaceholder'));
+  }, [message, t]);
+
   // 个人注册表单状态
   const [tenantCheckResult, setTenantCheckResult] = useState<TenantCheckResponse | null>(null);
   const [checkingTenant, setCheckingTenant] = useState(false);
@@ -1570,7 +1573,7 @@ export default function LoginPage() {
         <div className="login-form-wrapper">
           <div className="login-form-header">
             <Title level={2} className="form-title" style={{
-              opacity: 1, // 不再因平台设置加载中隐藏，避免 API 不可达时长期空白
+              opacity: 1,
               transition: 'opacity 0.3s ease-in-out',
             }}>
               {(platformSettings?.platform_name || cachedPlatformName) ? t('pages.login.welcomeWithName', { name: platformSettings?.platform_name || cachedPlatformName || '' }) : t('pages.login.welcome')}
@@ -1936,7 +1939,45 @@ export default function LoginPage() {
               </Button>
             </Space>
           </div>
+
+          <div
+            className="login-client-downloads"
+            aria-label={`${t('pages.login.clientDownloadWinTitle')}, ${t('pages.login.clientDownloadAndroidTitle')}`}
+          >
+            <div className="login-client-downloads-grid">
+              <button
+                type="button"
+                className="login-client-download-tile"
+                onClick={showClientDownloadPlaceholder}
+                style={{ ['--client-tile-accent' as string]: themeColor }}
+              >
+                <WindowsFilled className="login-client-download-tile-brand login-client-download-tile-brand--win" aria-hidden />
+                <div className="login-client-download-tile-body">
+                  <span className="login-client-download-tile-name">{t('pages.login.clientDownloadWinTitle')}</span>
+                  <span className="login-client-download-tile-meta">{t('pages.login.clientDownloadWinMeta')}</span>
+                </div>
+                <DownloadOutlined className="login-client-download-tile-arrow" aria-hidden />
+              </button>
+              <button
+                type="button"
+                className="login-client-download-tile"
+                onClick={showClientDownloadPlaceholder}
+                style={{ ['--client-tile-accent' as string]: themeColor }}
+              >
+                <AndroidFilled className="login-client-download-tile-brand login-client-download-tile-brand--android" aria-hidden />
+                <div className="login-client-download-tile-body">
+                  <span className="login-client-download-tile-name">{t('pages.login.clientDownloadAndroidTitle')}</span>
+                  <span className="login-client-download-tile-meta">{t('pages.login.clientDownloadAndroidMeta')}</span>
+                </div>
+                <DownloadOutlined className="login-client-download-tile-arrow" aria-hidden />
+              </button>
+            </div>
+          </div>
         </div>
+
+        <p className="login-browser-hint-footnote" role="note">
+          {t('pages.login.browserHintShort')}
+        </p>
       </div>
 
       {/* 组织选择弹窗 - 懒加载，仅多组织登录时加载 */}
@@ -1995,6 +2036,7 @@ export default function LoginPage() {
           />
         </Suspense>
       )}
+
     </div>
     </ConfigProvider>
   );

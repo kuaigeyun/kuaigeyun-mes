@@ -450,6 +450,8 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/infra/operation': ManufacturingIcons.analytics, // 运营中心 - 使用分析图标
       '/infra/tenants': ManufacturingIcons.building, // 租户管理 - 使用建筑图标（保持）
       '/infra/packages': ManufacturingIcons.package, // 应用包管理 - 使用包裹图标
+      '/infra/scripts': ManufacturingIcons.fileCode, // 脚本管理
+      '/infra/scheduled-tasks': ManufacturingIcons.clock, // 定时任务
       '/infra/admin': ManufacturingIcons.shield, // 平台管理 - 使用盾牌图标
 
       // 应用菜单路径图标映射（使用前缀匹配，支持 /apps/{app-code}/... 格式）
@@ -613,6 +615,8 @@ const getMenuConfig = (t: (key: string) => string): PermissionMenuDataItem[] => 
       { path: '/infra/operation', name: t('menu.infra.operation'), icon: getMenuIcon(t('menu.infra.operation'), '/infra/operation') },
       { path: '/infra/tenants', name: t('menu.infra.tenants'), icon: getMenuIcon(t('menu.infra.tenants'), '/infra/tenants') },
       { path: '/infra/packages', name: t('menu.infra.packages'), icon: getMenuIcon(t('menu.infra.packages'), '/infra/packages') },
+      { path: '/infra/scripts', name: t('menu.infra.scripts'), icon: getMenuIcon(t('menu.infra.scripts'), '/infra/scripts') },
+      { path: '/infra/scheduled-tasks', name: t('menu.infra.scheduled-tasks'), icon: getMenuIcon(t('menu.infra.scheduled-tasks'), '/infra/scheduled-tasks') },
       { path: '/infra/admin', name: t('menu.infra.admin'), icon: getMenuIcon(t('menu.infra.admin'), '/infra/admin') },
     ],
   },
@@ -659,13 +663,43 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const [techStackModalOpen, setTechStackModalOpen] = useState(false);
   const [themeEditorOpen, setThemeEditorOpen] = useState(false);
   const [languageDropdownOpen, setLanguageDropdownOpen] = useState(false);
-  const [systemSettingsOpen, setSystemSettingsOpen] = useState(false);
+  /** 开始面板：挂载与退场动画（仿 Win11 自左下上浮/下沉） */
+  const [systemSettingsPanelMounted, setSystemSettingsPanelMounted] = useState(false);
+  const [systemSettingsPanelExiting, setSystemSettingsPanelExiting] = useState(false);
   const [breadcrumbVisible, setBreadcrumbVisible] = useState(true);
   const [userOpenKeys, setUserOpenKeys] = useState<string[]>([]); // 用户手动展开的菜单 key
   const [userClosedKeys, setUserClosedKeys] = useState<string[]>([]); // 用户手动收起的菜单 key
   const breadcrumbRef = useRef<HTMLDivElement>(null);
   const systemSettingsPanelRef = useRef<HTMLDivElement>(null);
   const systemSettingsTriggerRef = useRef<HTMLButtonElement>(null);
+
+  const closeSystemSettingsPanelAnimated = useCallback(() => {
+    if (!systemSettingsPanelMounted || systemSettingsPanelExiting) return;
+    if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setSystemSettingsPanelMounted(false);
+      setSystemSettingsPanelExiting(false);
+      return;
+    }
+    setSystemSettingsPanelExiting(true);
+  }, [systemSettingsPanelMounted, systemSettingsPanelExiting]);
+
+  const openSystemSettingsPanel = useCallback(() => {
+    if (systemSettingsPanelExiting) return;
+    setSystemSettingsPanelExiting(false);
+    setSystemSettingsPanelMounted(true);
+  }, [systemSettingsPanelExiting]);
+
+  const unmountSystemSettingsPanel = useCallback(() => {
+    setSystemSettingsPanelExiting(false);
+    setSystemSettingsPanelMounted(false);
+  }, []);
+
+  const handleSystemSettingsPanelAnimationEnd = useCallback((e: React.AnimationEvent<HTMLDivElement>) => {
+    if (e.target !== e.currentTarget) return;
+    if (e.animationName !== 'riveredgeSystemPanelOut') return;
+    setSystemSettingsPanelMounted(false);
+    setSystemSettingsPanelExiting(false);
+  }, []);
   const currentUser = useGlobalStore((s) => s.currentUser);
   const logout = useGlobalStore((s) => s.logout);
   const isLocked = useGlobalStore((s) => s.isLocked);
@@ -1061,13 +1095,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
   const handleSystemSettingsNavigate = useCallback((path?: string) => {
     if (!path) return;
-    setSystemSettingsOpen(false);
+    unmountSystemSettingsPanel();
     if (path.startsWith('http://') || path.startsWith('https://')) {
       window.open(path, '_blank', 'noopener,noreferrer');
       return;
     }
     navigate(path);
-  }, [navigate]);
+  }, [navigate, unmountSystemSettingsPanel]);
 
   const getSystemPanelIcon = useCallback((path?: string): React.ReactNode => {
     if (!path) return <IconifyIcon icon="fluent-color:apps-24" />;
@@ -1129,11 +1163,11 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   }, [filteredMenuData]);
 
   useEffect(() => {
-    setSystemSettingsOpen(false);
-  }, [location.pathname]);
+    unmountSystemSettingsPanel();
+  }, [location.pathname, unmountSystemSettingsPanel]);
 
   useEffect(() => {
-    if (!systemSettingsOpen) return;
+    if (!systemSettingsPanelMounted) return;
     const handleOutsideClick = (event: MouseEvent) => {
       const target = event.target as Node;
       if (
@@ -1142,11 +1176,11 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       ) {
         return;
       }
-      setSystemSettingsOpen(false);
+      closeSystemSettingsPanelAnimated();
     };
     const handleEsc = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setSystemSettingsOpen(false);
+        closeSystemSettingsPanelAnimated();
       }
     };
     document.addEventListener('mousedown', handleOutsideClick);
@@ -1155,7 +1189,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       document.removeEventListener('mousedown', handleOutsideClick);
       document.removeEventListener('keydown', handleEsc);
     };
-  }, [systemSettingsOpen]);
+  }, [systemSettingsPanelMounted, closeSystemSettingsPanelAnimated]);
 
   const { data: menuBadgeCounts = {} } = useQuery({
     queryKey: ['menuBadgeCounts'],
@@ -2923,6 +2957,26 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .riveredge-footer-collapse-btn:active {
           background: ${siderFooterToken.colorFillQuaternary} !important;
         }
+        @keyframes riveredgeSystemPanelIn {
+          from {
+            opacity: 0;
+            transform: translate3d(0, 14px, 0) scale(0.97);
+          }
+          to {
+            opacity: 1;
+            transform: translate3d(0, 0, 0) scale(1);
+          }
+        }
+        @keyframes riveredgeSystemPanelOut {
+          from {
+            opacity: 1;
+            transform: translate3d(0, 0, 0) scale(1);
+          }
+          to {
+            opacity: 0;
+            transform: translate3d(0, 16px, 0) scale(0.97);
+          }
+        }
         .riveredge-system-settings-panel {
           position: fixed;
           left: 8px;
@@ -2937,6 +2991,18 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           box-shadow: 0 26px 56px rgba(0, 0, 0, 0.58);
           z-index: 1200;
           overflow: hidden;
+          transform-origin: left bottom;
+          animation: riveredgeSystemPanelIn 0.26s cubic-bezier(0.16, 1, 0.3, 1) both;
+          will-change: transform, opacity;
+        }
+        .riveredge-system-settings-panel.riveredge-system-settings-panel--exiting {
+          animation: riveredgeSystemPanelOut 0.22s cubic-bezier(0.4, 0, 0.2, 1) both;
+          pointer-events: none;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .riveredge-system-settings-panel {
+            animation: none;
+          }
         }
         .riveredge-system-settings-panel-header {
           display: flex;
@@ -2949,6 +3015,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           font-size: 16px;
           font-weight: 700;
           color: rgba(255, 255, 255, 0.94);
+        }
+        .riveredge-system-settings-panel-header .riveredge-system-settings-panel-close,
+        .riveredge-system-settings-panel-header .riveredge-system-settings-panel-close .anticon {
+          color: rgba(255, 255, 255, 0.94) !important;
+        }
+        .riveredge-system-settings-panel-header .riveredge-system-settings-panel-close:hover {
+          color: #ffffff !important;
+          background: rgba(255, 255, 255, 0.1) !important;
         }
         .riveredge-system-settings-panel-body {
           padding: 14px;
@@ -4186,7 +4260,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                     className="riveredge-footer-settings-btn"
                     type="default"
                     icon={<AppstoreOutlined style={{ color: settingsAccentColor }} />}
-                    onClick={() => setSystemSettingsOpen((prev) => !prev)}
+                    onClick={() => {
+                      if (systemSettingsPanelExiting) return;
+                      if (systemSettingsPanelMounted) {
+                        closeSystemSettingsPanelAnimated();
+                      } else {
+                        openSystemSettingsPanel();
+                      }
+                    }}
                     style={{
                       color: settingsAccentColor,
                       backgroundColor: settingsBtnBg,
@@ -4194,7 +4275,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                       minHeight: 34,
                     }}
                     title={t('ui.sidebar.systemSettings')}
-                    aria-expanded={systemSettingsOpen}
+                    aria-expanded={!!systemSettingsPanelMounted && !systemSettingsPanelExiting}
                     aria-label={t('ui.sidebar.systemSettings')}
                   />
                 </div>
@@ -4931,20 +5012,22 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         </UniTabs>
         )}
       </ProLayout >
-      {systemSettingsOpen && (
+      {systemSettingsPanelMounted && (
         <div
           ref={systemSettingsPanelRef}
-          className="riveredge-system-settings-panel"
+          className={`riveredge-system-settings-panel${systemSettingsPanelExiting ? ' riveredge-system-settings-panel--exiting' : ''}`}
           role="dialog"
           aria-modal="false"
           aria-label={t('menu.system')}
+          onAnimationEnd={handleSystemSettingsPanelAnimationEnd}
         >
           <div className="riveredge-system-settings-panel-header">
             <span className="riveredge-system-settings-panel-title">{t('menu.system')}</span>
             <Button
               type="text"
               size="small"
-              onClick={() => setSystemSettingsOpen(false)}
+              className="riveredge-system-settings-panel-close"
+              onClick={closeSystemSettingsPanelAnimated}
               title={t('common.close')}
               aria-label={t('common.close')}
               icon={<CloseOutlined />}
