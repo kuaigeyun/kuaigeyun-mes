@@ -31,7 +31,8 @@ export default defineConfig({
             if (id.includes('@tanstack/react-query')) return 'vendor-query';
             if (id.includes('react-router')) return 'vendor-router';
             if (id.includes('i18next') || id.includes('react-i18next')) return 'vendor-i18n';
-            return 'vendor-other';
+            // 其余 node_modules 交给 Rollup 自动拆分，避免单块 vendor-other 过大拖慢首屏
+            return undefined;
           }
         },
       },

@@ -32,6 +32,7 @@
 
 /* 与 src/constants/statusBadges.ts 中 RE_STATUS_BADGE_DRAFT_CLASS 配套 */
 .ant-tag.re-status-badge-draft {
+  background: #f5f5f5; /* ⚠️ 兼容性修复：Safari < 16.2 不支持 color-mix */
   background: var(--re-badge-draft-bg) !important;
   color: var(--re-badge-draft-color) !important;
   border-color: var(--re-badge-draft-border) !important;
@@ -1013,7 +1014,7 @@ code {
   display: flex;
 }
 
-/* 工作台主区：左侧快捷+版本与右侧 KPI 等高；高度随内容，整页超高由外层 overflow-y:auto 滚动 */
+/* 工作台主区：大屏左 19 主体、右 5 时钟+快捷+版本（DOM 顺序与视觉一致，无需 row-reverse） */
 .dashboard-main-body.ant-row {
   align-items: stretch;
 }
@@ -1059,7 +1060,7 @@ code {
   min-height: 0;
 }
 
-/* KPI 两行与右侧日期条同高：Row 交叉轴拉伸，子列可撑满 */
+/* KPI 行：时间筛在左、指标列在右；Row 交叉轴拉伸，子列可撑满 */
 .dashboard-kpi-strip-row.ant-row {
   align-items: stretch;
 }
@@ -1116,4 +1117,53 @@ code {
 [data-theme='dark'] .dashboard-date-strip--bare .dashboard-date-strip-btn.ant-btn-primary {
   background: var(--ant-colorPrimary) !important;
   border-color: var(--ant-colorPrimary) !important;
+}
+
+/**
+ * -----------------------------------------------------------------------------
+ * 平板/小屏设备响应式优化 (最小改动，最高收益方案)
+ * -----------------------------------------------------------------------------
+ */
+@media screen and (max-width: 1024px) {
+  // 1. 强制缩小页面全局边距，为内容腾出更多空间
+  .ant-pro-layout-content, 
+  .ant-layout-content {
+    padding: 8px !important;
+  }
+
+  // 2. 解决深嵌套 Flex 容器在内容溢出时导致的布局错位
+  // 设置 min-width: 0 允许 Flex Item 正常收缩
+  .ant-row, .ant-col, .ant-space-item {
+    min-width: 0;
+  }
+
+  // 3. 防止图片在小容器内拉伸失真
+  img {
+    max-width: 100%;
+    object-fit: contain;
+  }
+
+  // 4. 优化表格在小屏下的表现，防止操作列被挤出
+  .ant-table {
+    .ant-table-content {
+      overflow-x: auto !important;
+      -webkit-overflow-scrolling: touch;
+    }
+  }
+
+  // 5. 缩小 Modal/Drawer 默认内边距
+  .ant-modal-body,
+  .ant-drawer-body {
+    padding: 12px !important;
+  }
+}
+
+@media screen and (max-width: 768px) {
+  // 针对手机和平板竖屏的进一步压缩
+  .ant-statistic-content-value {
+    font-size: 20px !important;
+  }
+  .ant-pro-page-container-children-content {
+    margin-top: 8px !important;
+  }
 }

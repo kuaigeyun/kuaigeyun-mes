@@ -21,7 +21,6 @@ import { deliveryNoticeApi } from '../../../services/delivery-notice';
 import { getDeliveryNoticeLifecycle } from '../../../utils/deliveryNoticeLifecycle';
 import { useTranslation } from 'react-i18next';
 import type { DocumentPrintApiResult } from '../../../../../utils/printResponseHelpers';
-import type { DocumentPrintApiResult } from '../../../../../utils/printResponseHelpers';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import {
   DocumentTrackingRelationsBody,

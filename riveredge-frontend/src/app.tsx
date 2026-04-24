@@ -134,7 +134,8 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     if (isPublicPath) {
       return false;
     }
-    return !!token && !currentUser && initializedRef.current;
+    // ⚠️ 关键修复：不再在 render 期间访问 ref.current
+    return !!token && !currentUser;
   }, [currentUser, isPublicPath]);
 
   const { data: userData, isLoading, isError, error } = useQuery({
@@ -578,13 +579,54 @@ export default function App() {
     [resolved.algorithm, resolved.token]
   );
 
-  const antLocale = useMemo(
+  // 响应式布局优化：针对小屏设备（平板/手机）自动缩小组件尺寸和边距
+  const [screenSize, setScreenSize] = React.useState({
+    isMobile: typeof window !== 'undefined' && window.innerWidth < 768,
+    isTablet: typeof window !== 'undefined' && window.innerWidth >= 768 && window.innerWidth < 1024,
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setScreenSize({
+        isMobile: window.innerWidth < 768,
+        isTablet: window.innerWidth >= 768 && window.innerWidth < 1024,
+      });
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const responsiveThemeConfig = React.useMemo(() => {
+    const { algorithm, token } = finalThemeConfig;
+    const isSmall = screenSize.isMobile || screenSize.isTablet;
+    
+    return {
+      algorithm,
+      token: {
+        ...token,
+        // 缩小内容区边距
+        paddingContentHorizontal: isSmall ? 10 : 16,
+        paddingContentVertical: isSmall ? 10 : 16,
+        // 针对手机端进一步微调基础间距
+        padding: isSmall ? 12 : 16,
+        margin: isSmall ? 12 : 16,
+      },
+    };
+  }, [finalThemeConfig, screenSize]);
+
+  const antLocale = React.useMemo(
     () => ANT_LOCALE_MAP[i18n.language] || ANT_LOCALE_MAP[i18n.language?.split('-')[0]] || zhCN,
     [i18n.language]
   );
 
+  const componentSize = screenSize.isMobile ? 'small' : 'middle';
+
   return (
-    <ConfigProvider theme={finalThemeConfig} locale={antLocale}>
+    <ConfigProvider 
+      theme={responsiveThemeConfig} 
+      locale={antLocale}
+      componentSize={componentSize}
+    >
       <AntdApp>
         <AppContent />
       </AntdApp>

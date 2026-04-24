@@ -66,6 +66,7 @@ export const QuickEntryIcon: React.FC<QuickEntryIconProps> = ({
         style={{
           width: '64px',
           height: '64px',
+          flexShrink: 0, // ⚠️ 防止小屏挤压变成矩形
           borderRadius: token.borderRadiusLG,
           background: bgColor,
           boxShadow: token.boxShadowTertiary,

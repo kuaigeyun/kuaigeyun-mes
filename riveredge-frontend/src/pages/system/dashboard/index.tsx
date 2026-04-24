@@ -9,7 +9,7 @@
  * Date: 2026-01-21
  */
 
-import React, { useState, useMemo, useEffect, useCallback, Suspense, lazy } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Card,
@@ -74,10 +74,16 @@ import { formatLunarDate } from '../../../utils/lunarDate';
 import { APP_VERSION } from '../../../constants/version';
 import * as LucideIcons from 'lucide-react';
 import { getUserTaskStats, getUserTasks, type UserTask } from '../../../services/userTask';
+import WorkplaceToolkit from './WorkplaceToolkit';
+import {
+  dashboardTopBarTheme,
+  dashboardTopBarUserCardBackground,
+  dashboardTopBarUserCardOuterBorder,
+} from './dashboardTopBarTheme';
 
-const LottiePlayer = lazy(() => import('lottie-react').then((m) => ({ default: m.default })));
 
-const { Title, Text, Paragraph } = Typography;
+
+const { Title, Text } = Typography;
 const { useToken } = theme;
 const { useBreakpoint } = Grid;
 
@@ -371,12 +377,6 @@ const buildQuickEntriesFromMenuTree = (
   }));
 };
 
-/** 工作台 TIPS 的 i18n 键（共 12 条，随机展示一条） */
-const WORKPLACE_TIP_KEYS = [
-  'pages.dashboard.tip1', 'pages.dashboard.tip2', 'pages.dashboard.tip3', 'pages.dashboard.tip4',
-  'pages.dashboard.tip5', 'pages.dashboard.tip6', 'pages.dashboard.tip7', 'pages.dashboard.tip8',
-  'pages.dashboard.tip9', 'pages.dashboard.tip10', 'pages.dashboard.tip11', 'pages.dashboard.tip12',
-];
 
 /**
  * 获取问候语 i18n 键（精细时间段划分，按北京时间）
@@ -392,17 +392,17 @@ const getGreetingKey = (): string => {
   return 'pages.dashboard.greetingNight';
 };
 
-function DashboardLcdClock({ 
-  time, 
-  inline, 
-  isDark, 
-  systemCount = 0, 
+function DashboardLcdClock({
+  time,
+  inline,
+  isDark,
+  systemCount = 0,
   personalCount = 0,
   onAlarmClick,
-  alertType = 'none' 
-}: { 
-  time: dayjs.Dayjs; 
-  inline?: boolean; 
+  alertType = 'none',
+}: {
+  time: dayjs.Dayjs;
+  inline?: boolean;
   isDark?: boolean;
   systemCount?: number;
   personalCount?: number;
@@ -417,7 +417,7 @@ function DashboardLcdClock({
   const weekdays = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
   const currentDayIdx = (time.get('day') + 6) % 7;
 
-  // 仿真设计：表盘背景和数字颜色随系统“关灯”而变
+  // 仿真设计：表盘背景和数字颜色随系统暗色主题切换
   const lcdTextDim = isDark ? 'rgba(74, 222, 128, 0.05)' : 'rgba(0,0,0,0.06)';
   const lcdTextActive = isDark ? '#4ade80' : '#2C3D4F';
 
@@ -438,8 +438,10 @@ function DashboardLcdClock({
       alarmFilter = 'drop-shadow(0 0 8px #ff4d4f)';
       alarmClass = 'lcd-alarm-flash';
     } else {
-      alarmColor = isDark ? '#9ca3af' : '#6b7280'; // 灰色
-      alarmFilter = isDark ? 'drop-shadow(0 0 8px #9ca3af)' : 'drop-shadow(0 0 5px rgba(107, 114, 128, 0.4))';
+      alarmColor = isDark ? '#9ca3af' : '#6b7280';
+      alarmFilter = isDark
+        ? 'drop-shadow(0 0 8px #9ca3af)'
+        : 'drop-shadow(0 0 5px rgba(107, 114, 128, 0.4))';
       alarmClass = 'lcd-alarm-flash-gray';
     }
   } else if (systemCount > 0) {
@@ -456,9 +458,9 @@ function DashboardLcdClock({
       style={{
         width: '100%',
         height: inline ? 64 : 64,
-        /* 仿真表盘：暗黑时 VFD，明亮时 LCD */
-        background: isDark 
-          ? `linear-gradient(180deg, #0a1f16 0%, #06140e 100%)` 
+        /* 仿真表盘：暗色 VFD；亮色浅灰 LCD */
+        background: isDark
+          ? `linear-gradient(180deg, #0a1f16 0%, #06140e 100%)`
           : `linear-gradient(180deg, #E0E2E5 0%, #D1D4D9 100%)`,
         borderRadius: 8,
         padding: '0 12px',
@@ -467,9 +469,11 @@ function DashboardLcdClock({
         alignItems: 'center',
         justifyContent: 'space-between',
         boxSizing: 'border-box',
-        border: isDark ? `1px solid rgba(74, 222, 128, 0.3)` : `1px solid rgba(0,0,0,0.15)`,
-        boxShadow: isDark 
-          ? `inset 0 2px 10px rgba(0,0,0,0.5), 0 0 10px rgba(74, 222, 128, 0.1)` 
+        border: isDark
+          ? `1px solid rgba(74, 222, 128, 0.3)`
+          : `1px solid rgba(0,0,0,0.15)`,
+        boxShadow: isDark
+          ? `inset 0 2px 10px rgba(0,0,0,0.5), 0 0 10px rgba(74, 222, 128, 0.1)`
           : `inset 0 2px 4px rgba(0,0,0,0.15), inset 0 0 10px rgba(0,0,0,0.05), 0 1px 0 rgba(255,255,255,0.1)`,
         flexShrink: 0,
         gap: 4,
@@ -478,19 +482,23 @@ function DashboardLcdClock({
       }}
     >
       {/* 表盘玻璃反光效果 */}
-      <div 
-        style={{ 
-          position: 'absolute', 
-          top: 0, left: 0, right: 0, height: '45%', 
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: '45%',
           background: 'linear-gradient(180deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0) 100%)',
           pointerEvents: 'none',
-          opacity: 0.6
-        }} 
+          opacity: isDark ? 0.35 : 0.6,
+        }}
       />
       <div 
         style={{ 
           display: 'flex', 
           alignItems: 'center', 
+          flexShrink: 0, // ⚠️ 防止小屏挤压
           opacity: (hasPending || isAlerting) ? 1 : 0.3,
           cursor: onAlarmClick ? 'pointer' : 'default',
           position: 'relative',
@@ -559,6 +567,7 @@ function DashboardLcdClock({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
+          flexShrink: 0, // ⚠️ 保护时间数字不被挤压
           height: '100%',
         }}
       >
@@ -573,7 +582,9 @@ function DashboardLcdClock({
             fontVariantNumeric: 'tabular-nums',
             fontFamily:
               '"Inter Tight", "DIN Alternate", "Bahnschrift", "Segoe UI", "Arial Black", "PingFang SC", "Microsoft YaHei", sans-serif',
-            textShadow: isDark ? '0 0 7px rgba(125, 232, 174, 0.2)' : '0 1px 0 rgba(255,255,255,0.55)',
+            textShadow: isDark
+              ? '0 0 7px rgba(125, 232, 174, 0.2)'
+              : '0 1px 0 rgba(255,255,255,0.55)',
           }}
         >
           {timeText}
@@ -586,7 +597,7 @@ function DashboardLcdClock({
         fontSize: 6.5, 
         fontWeight: 800,
         gap: 0.5,
-        borderLeft: `1px solid rgba(0,0,0,0.06)`,
+        borderLeft: `1px solid ${isDark ? 'rgba(74,222,128,0.12)' : 'rgba(0,0,0,0.06)'}`,
         paddingLeft: 6
       }}>
         {weekdays.map((day, idx) => (
@@ -635,7 +646,7 @@ function resolveDashboardKpiMainColor(
   token: ReturnType<typeof theme.useToken>['token'],
 ): string {
   if (!semantic) {
-    return isDark ? '#ffffff' : '#0f172a';
+    return isDark ? '#ffffff' : '#18181b';
   }
   const n = rawNumeric == null || Number.isNaN(Number(rawNumeric)) ? 0 : Number(rawNumeric);
 
@@ -659,7 +670,7 @@ function resolveDashboardKpiMainColor(
       if (n >= 60) return isDark ? '#fcd34d' : token.colorWarning;
       return isDark ? '#fca5a5' : token.colorError;
     default:
-      return isDark ? '#ffffff' : '#0f172a';
+      return isDark ? '#ffffff' : '#18181b';
   }
 }
 
@@ -699,8 +710,11 @@ function DashboardKpiRichCard({
     title: isDark ? 'rgba(255,255,255,0.8)' : '#64748b',
     main: mainColor,
     secondary: isDark ? 'rgba(255,255,255,0.9)' : '#475569',
+    /** 右侧副指标：刻意弱于左侧主数，避免抢视觉 */
+    rightLabel: isDark ? 'rgba(255,255,255,0.52)' : '#94a3b8',
+    rightValue: isDark ? 'rgba(255,255,255,0.72)' : '#64748b',
     muted: isDark ? 'rgba(255,255,255,0.6)' : '#94a3b8',
-    divider: isDark ? 'rgba(255,255,255,0.16)' : 'rgba(15, 23, 42, 0.1)',
+    divider: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(15, 23, 42, 0.07)',
   } as const;
 
   return (
@@ -722,12 +736,12 @@ function DashboardKpiRichCard({
       }}
       styles={{
         body: {
-          padding: '18px 18px',
+          padding: '16px 12px', // 稍微紧凑点
           flex: 1,
           display: 'flex',
           flexDirection: 'row',
           alignItems: 'stretch',
-          gap: 14,
+          gap: 10,
           position: 'relative',
           zIndex: 1,
           minHeight: 0,
@@ -803,40 +817,61 @@ function DashboardKpiRichCard({
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'center',
-          gap: 11,
+          gap: 10,
           textAlign: 'right',
-          minWidth: 64,
+          flexShrink: 0,
+          minWidth: 50,
           position: 'relative',
           zIndex: 1,
         }}
       >
         <div>
-          <div style={{ fontSize: 14, color: text.title, marginBottom: 2, lineHeight: 1.3 }}>
+          <div
+            style={{
+              fontSize: 12,
+              color: text.rightLabel,
+              fontWeight: 400,
+              marginBottom: 1,
+              lineHeight: 1.35,
+              letterSpacing: '0.01em',
+            }}
+          >
             {rightTop.label}
           </div>
           <div
             style={{
-              fontSize: 18,
-              color: text.secondary,
-              fontWeight: 700,
+              fontSize: 15,
+              color: text.rightValue,
+              fontWeight: 500,
               fontVariantNumeric: 'tabular-nums',
-              lineHeight: 1.2,
+              lineHeight: 1.25,
+              letterSpacing: '0.01em',
             }}
           >
             {rightTop.value}
           </div>
         </div>
         <div>
-          <div style={{ fontSize: 14, color: text.title, marginBottom: 2, lineHeight: 1.3 }}>
+          <div
+            style={{
+              fontSize: 12,
+              color: text.rightLabel,
+              fontWeight: 400,
+              marginBottom: 1,
+              lineHeight: 1.35,
+              letterSpacing: '0.01em',
+            }}
+          >
             {rightBottom.label}
           </div>
           <div
             style={{
-              fontSize: 18,
-              color: text.secondary,
-              fontWeight: 700,
+              fontSize: 15,
+              color: text.rightValue,
+              fontWeight: 500,
               fontVariantNumeric: 'tabular-nums',
-              lineHeight: 1.2,
+              lineHeight: 1.25,
+              letterSpacing: '0.01em',
             }}
           >
             {rightBottom.value}
@@ -913,7 +948,7 @@ export default function DashboardPage() {
   const { token } = useToken();
   const screens = useBreakpoint();
   const isDark = useThemeStore((s) => s.resolved.isDark);
-  // 右侧两个小统计卡在空间不足时优先隐藏，避免欢迎区内容换行
+  // 欢迎条右侧仅保留「实时消息」；待办在下方专用卡片展示，xxl 以下隐藏整块避免顶栏拥挤
   const showUserStatTiles = !!screens.xxl;
   // 首行宽度不足时，日历卡仅显示模拟时钟，避免撑高布局
   const showCalendarText = !!screens.xxl;
@@ -924,6 +959,8 @@ export default function DashboardPage() {
   const dashboardTopCardHeight = 126;
   /** 底部待办 / 最新操作两卡统一固定高度（整张 Card，含标题栏），列表在卡片内滚动 */
   const dashboardBottomThreeCardsFixedHeight = 500;
+  /** 工作台：主 Row gutter、纵向 flex gap、相邻区块 margin 与 antd 默认 gutter 对齐，统一 16px */
+  const DASHBOARD_LAYOUT_GUTTER = 16;
   /** 卡片内列表区：占满 body 剩余空间并滚动 */
   const bottomCardListScrollBoxStyle: React.CSSProperties = {
     flex: '1 1 0%',
@@ -933,12 +970,6 @@ export default function DashboardPage() {
   };
   const currentUser = useGlobalStore((s) => s.currentUser);
   const [currentTime, setCurrentTime] = useState(dayjs());
-  const [tipAnimationData, setTipAnimationData] = useState<object | null>(null);
-
-  // 加载提示动画
-  useEffect(() => {
-    import('../../../../static/lottie/tips.json').then((m) => setTipAnimationData(m.default));
-  }, []);
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
   /** 天气数据：用于首行天气区块背景渐变 */
   const [weatherForDashboard, setWeatherForDashboard] = useState<WeatherData | null>(null);
@@ -948,23 +979,6 @@ export default function DashboardPage() {
     'today' | 'yesterday' | 'thisWeek' | 'thisMonth' | 'last7days' | 'last30days'
   >('thisMonth');
 
-  // 工作台小 TIPS：每 10 秒随机换一条（避免与当前相同）
-  const [tipIndex, setTipIndex] = useState(() =>
-    Math.floor(Math.random() * WORKPLACE_TIP_KEYS.length),
-  );
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTipIndex((prev) => {
-        let next = Math.floor(Math.random() * WORKPLACE_TIP_KEYS.length);
-        if (WORKPLACE_TIP_KEYS.length > 1) {
-          while (next === prev) next = Math.floor(Math.random() * WORKPLACE_TIP_KEYS.length);
-        }
-        return next;
-      });
-    }, 10000);
-    return () => clearInterval(timer);
-  }, []);
-  const currentTip = t(WORKPLACE_TIP_KEYS[tipIndex]);
   const calendarDayKey = currentTime.format('YYYY-MM-DD');
   const lunarDateStr = useMemo(
     () => formatLunarDate(dayjs(calendarDayKey, 'YYYY-MM-DD')),
@@ -1325,12 +1339,12 @@ export default function DashboardPage() {
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'center',
-        borderLeft: '1px solid rgba(255,255,255,0.32)',
+        borderLeft: '1px solid rgba(255,255,255,0.28)',
       }}
     >
       <Space size={4} align="center" wrap={false}>
         <BellOutlined style={{ fontSize: 14, color: 'rgba(255,255,255,0.9)', flexShrink: 0 }} />
-        <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.9)', margin: 0, whiteSpace: 'nowrap' }}>
+        <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.95)', margin: 0, whiteSpace: 'nowrap' }}>
           {t('pages.dashboard.realtimeMessages')}
         </Text>
       </Space>
@@ -1338,56 +1352,13 @@ export default function DashboardPage() {
         style={{
           fontSize: 20,
           fontWeight: 700,
-          color: '#fff',
+          color: '#ffffff',
           marginTop: 4,
           fontVariantNumeric: 'tabular-nums',
           lineHeight: 1.2,
         }}
       >
         {unreadCount}
-      </div>
-    </div>
-  );
-
-  const todoStatTile = (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders')}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          navigate('/apps/kuaizhizao/production-execution/work-orders');
-        }
-      }}
-      style={{
-        padding: '4px 0 4px 14px',
-        cursor: 'pointer',
-        minWidth: 92,
-        whiteSpace: 'nowrap',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        borderLeft: '1px solid rgba(255,255,255,0.32)',
-      }}
-    >
-      <Space size={4} align="center" wrap={false}>
-        <ClockCircleOutlined style={{ fontSize: 14, color: 'rgba(255,255,255,0.9)', flexShrink: 0 }} />
-        <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.9)', margin: 0, whiteSpace: 'nowrap' }}>
-          {t('pages.dashboard.todoPendingShort')}
-        </Text>
-      </Space>
-      <div
-        style={{
-          fontSize: 20,
-          fontWeight: 700,
-          color: '#fff',
-          marginTop: 4,
-          fontVariantNumeric: 'tabular-nums',
-          lineHeight: 1.2,
-        }}
-      >
-        {todos.length}
       </div>
     </div>
   );
@@ -1419,17 +1390,20 @@ export default function DashboardPage() {
           flexDirection: 'column',
           boxSizing: 'border-box',
           /* 顶/左右留白；底边 0 贴内容区底，避免底部两卡下方大块留白 */
-          padding: `16px ${PAGE_SPACING.PADDING}px 0 ${PAGE_SPACING.PADDING}px`,
+          padding: `${DASHBOARD_LAYOUT_GUTTER}px ${PAGE_SPACING.PADDING}px 0 ${PAGE_SPACING.PADDING}px`,
         }}
       >
-      {/* 第一行便当：人员 / 操作提示 / 日期+钟 / 天气；xl 栅格 9+5+5+5=24 */}
+      {/* 左右两大组：左 19（顶行三卡 + KPI + 下区）；右 5（时钟 + 快捷 + 版本） */}
+      <Row gutter={[DASHBOARD_LAYOUT_GUTTER, DASHBOARD_LAYOUT_GUTTER]} align="stretch" className="dashboard-main-body" style={{ flexShrink: 0 }}>
+        <Col xs={24} lg={19} style={{ display: 'flex', flexDirection: 'column', gap: DASHBOARD_LAYOUT_GUTTER, minHeight: 0, minWidth: 0 }}>
+      {/* 第一行便当：人员 / 天气 / 工业工具；md+ 用 24 栅格 span 10+7+7（勿用 flex 数字，否则按 grow 分剩余空间，比例会偏） */}
       <Row
-        gutter={[16, 16]}
+        gutter={[DASHBOARD_LAYOUT_GUTTER, DASHBOARD_LAYOUT_GUTTER]}
         align="stretch"
         className="dashboard-bento-top-row"
-        style={{ marginBottom: 16, flexShrink: 0 }}
+        style={{ flexShrink: 0 }}
       >
-        <Col xs={24} sm={12} lg={12} xl={9} style={{ display: 'flex' }}>
+        <Col xs={24} md={10} style={{ display: 'flex' }}>
           <Card
             style={{
               marginTop: 0,
@@ -1439,8 +1413,8 @@ export default function DashboardPage() {
               minHeight: dashboardTopCardHeight,
               maxHeight: dashboardTopCardHeight,
               borderRadius: dashboardCardRadius,
-              border: 'none',
-              background: `linear-gradient(145deg, ${token.colorPrimary} 0%, ${token.colorPrimaryActive} 100%)`,
+              border: dashboardTopBarUserCardOuterBorder,
+              background: dashboardTopBarUserCardBackground(token.colorPrimary),
               boxShadow: dashboardCardShadow,
               overflow: 'hidden',
             }}
@@ -1468,15 +1442,15 @@ export default function DashboardPage() {
                   flexWrap: 'nowrap',
                 }}
               >
-                <Space size="large" align="center">
+                <Space size="large" align="center" style={{ minWidth: 0, width: '100%' }}>
                   <div
                     style={{
                       position: 'relative',
                       padding: 4,
                       borderRadius: '50%',
-                      background: 'rgba(255,255,255,0.2)',
-                      boxShadow: '0 0 0 1px rgba(255,255,255,0.35)',
-                      flexShrink: 0,
+                      background: 'rgba(255,255,255,0.12)',
+                      boxShadow: '0 0 0 1px rgba(255,255,255,0.22)',
+                      flexShrink: 0, // ⚠️ 极致保护：外层 div 不缩
                     }}
                   >
                     <Avatar
@@ -1487,7 +1461,8 @@ export default function DashboardPage() {
                         color: token.colorPrimary,
                         fontSize: 24,
                         fontWeight: 'bold',
-                        border: '2px solid rgba(255,255,255,0.85)',
+                        border: '2px solid #ffffff',
+                        flexShrink: 0, // ⚠️ 极致保护：Avatar 自身不缩
                       }}
                     >
                       {!avatarUrl && getAvatarText(currentUser?.full_name || userInfo?.full_name, currentUser?.username || userInfo?.username)}
@@ -1499,7 +1474,7 @@ export default function DashboardPage() {
                       style={{
                         margin: '0 0 8px 0',
                         fontWeight: 700,
-                        color: '#fff',
+                        color: '#ffffff',
                         whiteSpace: 'nowrap',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
@@ -1513,9 +1488,9 @@ export default function DashboardPage() {
                           key={chip.key}
                           style={{
                             marginInlineEnd: 0,
-                            color: 'rgba(255,255,255,0.95)',
-                            background: 'rgba(255,255,255,0.18)',
-                            border: '1px solid rgba(255,255,255,0.35)',
+                            color: 'rgba(255,255,255,0.92)',
+                            background: 'rgba(255,255,255,0.14)',
+                            border: '1px solid rgba(255,255,255,0.28)',
                             whiteSpace: 'nowrap',
                           }}
                         >
@@ -1528,14 +1503,13 @@ export default function DashboardPage() {
                 {showUserStatTiles ? (
                   <Space size={0} wrap={false} style={{ flexShrink: 0 }} align="center">
                     {messageStatTile}
-                    {todoStatTile}
                   </Space>
                 ) : null}
               </div>
             </div>
           </Card>
         </Col>
-        <Col xs={24} sm={12} lg={12} xl={5} style={{ display: 'flex' }}>
+        <Col xs={24} md={7} style={{ display: 'flex' }}>
           <Card
             style={{
               flex: 1,
@@ -1560,401 +1534,32 @@ export default function DashboardPage() {
               },
             }}
           >
-            <WeatherWidget onWeatherChange={setWeatherForDashboard} />
+            <WeatherWidget tone="light" onWeatherChange={setWeatherForDashboard} />
           </Card>
         </Col>
-        <Col xs={24} sm={12} lg={12} xl={5} style={{ display: 'flex' }}>
-          <Card
-            className="dashboard-clock-date-card"
-            style={{
-              flex: 1,
-              width: '100%',
-              minHeight: dashboardTopCardHeight,
-              height: dashboardTopCardHeight,
-              maxHeight: dashboardTopCardHeight,
-              borderRadius: dashboardCardRadius,
-              /* 继续调浅：从深黑灰向更有质感的钛金灰进阶 */
-              background: 'linear-gradient(135deg, #636e7b 0%, #545e6b 100%)',
-              border: '1px solid #788699',
-              boxShadow: `
-                0 4px 12px rgba(0,0,0,0.1), 
-                inset 0 1px 0 rgba(255,255,255,0.2)
-              `,
-              overflow: 'hidden',
-              position: 'relative',
-            }}
-            styles={{
-              body: {
-                padding: '12px 14px',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 8,
-                minHeight: 0,
-                background: 'transparent',
-                borderRadius: dashboardCardRadius,
-              },
-            }}
-          >
-            <DashboardLcdClock 
-              time={currentTime} 
-              isDark={isDark} 
-              systemCount={systemTaskCount}
-              personalCount={personalTaskCount}
-              alertType={alertType}
-              onAlarmClick={() => navigate('/personal/tasks')}
-            />
-            {showCalendarText ? (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-                <Text
-                  style={{
-                    fontSize: 13,
-                    color: 'rgba(255,255,255,0.85)', // 始终浅色文字，因为卡片始终深色
-                    lineHeight: 1.35,
-                    margin: 0,
-                  }}
-                >
-                  {currentTime.format(t('pages.dashboard.dateFormatFull'))}
-                </Text>
-                <Text
-                  style={{
-                    fontSize: 13,
-                    color: 'rgba(255,255,255,0.45)', // 始终浅色文字
-                    lineHeight: 1.35,
-                  }}
-                >
-                  {t('pages.dashboard.lunarLabel')} {lunarDateStr}
-                </Text>
-              </div>
-            ) : null}
-          </Card>
+        <Col xs={24} md={7} style={{ display: 'flex', overflow: 'visible' }}>
+          <WorkplaceToolkit
+            cardHeight={dashboardTopCardHeight}
+            cardRadius={dashboardCardRadius}
+          />
         </Col>
-        <Col xs={24} sm={12} lg={12} xl={5} style={{ display: 'flex', overflow: 'visible' }}>
-          <Card
-            className="dashboard-workplace-tip-card"
-            variant="borderless"
-            style={{
-              flex: 1,
-              width: '100%',
-              minHeight: dashboardTopCardHeight,
-              height: dashboardTopCardHeight,
-              maxHeight: dashboardTopCardHeight,
-              position: 'relative',
-              display: 'flex',
-              flexDirection: 'column',
-              alignSelf: 'stretch',
-              overflow: 'hidden',
-              borderRadius: dashboardCardRadius, // 圆角跟随系统
-              /* 拟真便利贴：纸张暖黄渐变 */
-              background: 'linear-gradient(135deg, #fffde6 0%, #fff3b0 100%)',
-              border: '1px solid #ffe58f',
-              boxShadow: `
-                2px 4px 12px rgba(0,0,0,0.08), 
-                0 0 1px rgba(0,0,0,0.05)
-              `,
-            }}
-            styles={{
-              body: {
-                padding: '4px 14px 4px 14px',
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: 6,
-                height: '100%',
-                position: 'relative',
-              },
-            }}
-          >
-            <div 
-              style={{ 
-                position: 'absolute',
-                left: 0,
-                top: 16,
-                width: 48,
-                height: 48,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                zIndex: 2,
-              }} 
-              aria-hidden
-            >
-              {tipAnimationData ? (
-                <Suspense fallback={<div style={{ width: 40, height: 40 }} />}>
-                  <LottiePlayer
-                    animationData={tipAnimationData}
-                    loop
-                    style={{ width: 64, height: 64 }}
-                  />
-                </Suspense>
-              ) : (
-                <div style={{ width: 40, height: 40 }} />
-              )}
-            </div>
-            <div
-              className="dashboard-workplace-tip-body"
-              style={{
-                flex: 1,
-                minWidth: 0,
-                color: token.colorText,
-                lineHeight: 1.45,
-                paddingLeft: 46,
-                paddingTop: 0, // 文本贴顶
-              }}
-            >
-              <Text strong style={{ fontSize: 13.5, color: '#856404', display: 'block', marginBottom: 2 }}>
-                {t('pages.dashboard.workplaceTips')}
-              </Text>
-              <Paragraph
-                key={tipIndex}
-                ellipsis={{ rows: 3 }}
-                style={{ 
-                  fontSize: 13, 
-                  lineHeight: 1.5, 
-                  marginBottom: 0,
-                  color: '#927238',
-                  animation: 'workplace-tip-in 0.4s ease-out',
-                }}
-              >
-                {currentTip}
-              </Paragraph>
-            </div>
-            <style>{`
-              @keyframes workplace-tip-in {
-                from { opacity: 0; transform: translateY(4px); }
-                to { opacity: 1; transform: translateY(0); }
-              }
-            `}</style>
-          </Card>
-        </Col>
-        
       </Row>
 
-      {/* 主区：左侧快捷+版本 | 右侧 KPI + 日期条 + 三列表（示意图） */}
-      <Row gutter={[16, 16]} align="stretch" className="dashboard-main-body" style={{ flexShrink: 0 }}>
-        <Col xs={24} lg={5} style={{ display: 'flex', flexDirection: 'column', gap: 16, minHeight: 0, minWidth: 0 }}>
-          <div
-            className="dashboard-bento-left-quick"
-            style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
-          >
-            <QuickEntryGrid
-              title={
-                <Space>
-                  <AppstoreOutlined />
-                  <span>{t('pages.dashboard.quickEntry')}</span>
-                </Space>
-              }
-              items={useMemo(() => {
-                if (quickEntryLoading) {
-                  return [];
-                }
-                const quickEntries = userPreference?.preferences?.dashboard_quick_entries as QuickEntryItem[] | undefined;
-
-                // 用户偏好优先：只要有保存项，始终优先展示用户自己的快捷入口
-                if (Array.isArray(quickEntries) && quickEntries.length > 0) {
-                  return quickEntries
-                    .sort((a, b) => a.sort_order - b.sort_order)
-                    .map((entry) => {
-                      const menu = quickEntryMenuTree.length ? findMenuInTree(quickEntryMenuTree, entry.menu_uuid) : null;
-                      const resolvedPath = entry.menu_path || menu?.path || '';
-                      if (!resolvedPath) return null;
-
-                      return {
-                        ...entry,
-                        menu_name: entry.menu_name || (menu ? getTranslatedMenuTitle(menu, t) : ''),
-                        menu_path: resolvedPath,
-                        menu_icon: menu ? renderMenuIcon(menu) : getMenuIconByPath(resolvedPath, entry.menu_name),
-                      };
-                    })
-                    .filter((item): item is any => item !== null);
-                }
-
-                if (!quickEntryMenuTree.length) {
-                  return [];
-                }
-
-                // 无用户配置时：直接使用真实业务菜单生成快捷入口
-                return buildQuickEntriesFromMenuTree(quickEntryMenuTree, renderMenuIcon, t, 10);
-              }, [quickEntryLoading, userPreference, quickEntryMenuTree, t])}
-              loading={quickEntryLoading}
-              menuTree={useMemo(() => {
-                if (!quickEntryMenuTree.length) return [];
-                return convertMenuTreeToTreeData(quickEntryMenuTree, t);
-              }, [quickEntryMenuTree, t])}
-              showConfig={true}
-              onSave={async (items: QuickEntryItem[]) => {
-                // 偏好设置需要可 JSON 序列化，不能保存 ReactNode（menu_icon）
-                const serializableItems = items.map(({ menu_icon, ...rest }) => rest);
-                // updatePreferences 直接写入 useUserPreferenceStore，组件会因 store 变更自动重渲染，无需再 invalidate queries
-                await updatePreferences({ dashboard_quick_entries: serializableItems });
-              }}
-              renderMenuIcon={(menuUuid: string) => {
-                if (!quickEntryMenuTree.length) return <ShopOutlined />;
-                const menu = findMenuInTree(quickEntryMenuTree, menuUuid);
-                return menu ? renderMenuIcon(menu) : <ShopOutlined />;
-              }}
-            />
-          </div>
-          <Card
-            size="small"
-            style={{ borderRadius: dashboardCardRadius, boxShadow: dashboardCardShadow, flexShrink: 0 }}
-            styles={{ body: { padding: '10px 14px', borderRadius: dashboardCardRadius } }}
-          >
-            <Text type="secondary" style={{ fontSize: 14 }}>
-              {t('pages.dashboard.versionLabel')} v{APP_VERSION}
-            </Text>
-          </Card>
-        </Col>
-
-        {/* 主体第二块：19；内部再分两层 7773 / 7710 */}
-        <Col xs={24} lg={19} style={{ display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0 }}>
           <div style={{ display: 'flex', flexDirection: 'column', flex: '0 0 auto', minWidth: 0 }}>
             <Row
-              gutter={[16, 16]}
-              wrap={!screens.lg}
+              gutter={[DASHBOARD_LAYOUT_GUTTER, DASHBOARD_LAYOUT_GUTTER]}
+              wrap={true} // ⚠️ 允许换行，防止跨宽度挤压变形
               align="stretch"
               className="dashboard-kpi-strip-row"
               style={{ flexShrink: 0 }}
             >
-              <Col xs={24} lg={7} style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {/* 工单总数 */}
-                <div style={{ display: 'flex', minWidth: 0, minHeight: 0 }}>
-                  <DashboardKpiRichCard
-                    gradient={isDark ? 'linear-gradient(102deg, #1d2633 0%, #1a2230 45%, #161e2b 100%)' : 'linear-gradient(102deg, #eef2f7 0%, #e6edf6 45%, #dfe8f3 100%)'}
-                    title={t('pages.dashboard.statWorkOrderTotal')}
-                    mainValue={formatDashboardMetric(statistics?.production?.total)}
-                    mainSuffix={t('pages.dashboard.unitOrder')}
-                    subtitle={t('pages.dashboard.kpiSubWorkOrdersInRange')}
-                    rightTop={{
-                      label: t('pages.dashboard.kpiSideCompleted'),
-                      value: `${formatDashboardMetric(statistics?.production?.completed)}${t('pages.dashboard.unitOrder')}`,
-                    }}
-                    rightBottom={{
-                      label: t('pages.dashboard.kpiSideInProgress'),
-                      value: `${formatDashboardMetric(statistics?.production?.in_progress)}${t('pages.dashboard.unitOrder')}`,
-                    }}
-                    isDark={isDark}
-                    mainSemantic="work_order_total"
-                    mainNumeric={statistics?.production?.total ?? null}
-                    onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders')}
-                  />
-                </div>
-                {/* 完工数量 */}
-                <div style={{ display: 'flex', minWidth: 0, minHeight: 0 }}>
-                  <DashboardKpiRichCard
-                    gradient={isDark ? 'linear-gradient(102deg, #2a261f 0%, #252118 50%, #201c15 100%)' : 'linear-gradient(102deg, #f7f4ef 0%, #f0ebe4 50%, #e8e2d9 100%)'}
-                    title={t('pages.dashboard.statCompletedQuantity')}
-                    mainValue={formatDashboardMetric(statistics?.production?.completed_quantity)}
-                    mainSuffix={t('pages.dashboard.unitPiece')}
-                    subtitle={t('pages.dashboard.kpiSubOutputInRange')}
-                    rightTop={{
-                      label: t('pages.dashboard.statCapacityRate'),
-                      value: `${formatDashboardRate(statistics?.production?.capacity_achievement_rate)}%`,
-                    }}
-                    rightBottom={{
-                      label: t('pages.dashboard.kpiSideClosedWorkOrders'),
-                      value: `${formatDashboardMetric(statistics?.production?.completed)}${t('pages.dashboard.unitOrder')}`,
-                    }}
-                    isDark={isDark}
-                    mainSemantic="output_quantity"
-                    mainNumeric={statistics?.production?.completed_quantity ?? null}
-                    onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders')}
-                  />
-                </div>
-              </Col>
-              <Col xs={24} lg={7} style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {/* 进行中工单 */}
-                <div style={{ display: 'flex', minWidth: 0, minHeight: 0 }}>
-                  <DashboardKpiRichCard
-                    gradient={isDark ? 'linear-gradient(102deg, #1c2a31 0%, #18262d 50%, #15222a 100%)' : 'linear-gradient(102deg, #ecf4f7 0%, #e3eef4 50%, #dbe8ef 100%)'}
-                    title={t('pages.dashboard.statWorkOrderInProgress')}
-                    mainValue={formatDashboardMetric(statistics?.production?.in_progress)}
-                    mainSuffix={t('pages.dashboard.unitOrder')}
-                    subtitle={t('pages.dashboard.kpiSubWorkOrdersExecuting')}
-                    rightTop={{
-                      label: t('pages.dashboard.kpiSideCompleted'),
-                      value: `${formatDashboardMetric(statistics?.production?.completed)}${t('pages.dashboard.unitOrder')}`,
-                    }}
-                    rightBottom={{
-                      label: t('pages.dashboard.statWorkOrderCompletion'),
-                      value: `${formatDashboardRate(statistics?.production?.completion_rate)}%`,
-                    }}
-                    isDark={isDark}
-                    mainSemantic="work_order_wip"
-                    mainNumeric={statistics?.production?.in_progress ?? null}
-                    onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders?status=in_progress')}
-                  />
-                </div>
-                {/* 库存预警 */}
-                <div style={{ display: 'flex', minWidth: 0, minHeight: 0 }}>
-                  <DashboardKpiRichCard
-                    gradient={isDark ? 'linear-gradient(102deg, #23272d 0%, #1f2329 50%, #1b1f24 100%)' : 'linear-gradient(102deg, #f1f3f5 0%, #eaecef 50%, #e3e6ea 100%)'}
-                    title={t('pages.dashboard.statInventoryAlert')}
-                    mainValue={formatDashboardMetric(statistics?.inventory?.alert_count)}
-                    mainSuffix={t('pages.dashboard.unitAlert')}
-                    subtitle={t('pages.dashboard.kpiSubInventoryAlerts')}
-                    rightTop={{
-                      label: t('pages.dashboard.kpiSideTurnoverRate'),
-                      value: `${formatDashboardRate(statistics?.inventory?.turnover_rate)}%`,
-                    }}
-                    rightBottom={{
-                      label: t('pages.dashboard.kpiSideStockQuantity'),
-                      value: formatDashboardMetric(statistics?.inventory?.total_quantity),
-                    }}
-                    isDark={isDark}
-                    mainSemantic="inventory_alert"
-                    mainNumeric={statistics?.inventory?.alert_count ?? null}
-                    onClick={() => navigate('/apps/kuaizhizao/warehouse-management/inventory')}
-                  />
-                </div>
-              </Col>
-              <Col xs={24} lg={7} style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {/* 工单完成率 */}
-                <div style={{ display: 'flex', minWidth: 0, minHeight: 0 }}>
-                  <DashboardKpiRichCard
-                    gradient={isDark ? 'linear-gradient(102deg, #1f2a26 0%, #1a2521 48%, #15201c 100%)' : 'linear-gradient(102deg, #f0f5f2 0%, #e8f0eb 48%, #dfe9e3 100%)'}
-                    title={t('pages.dashboard.statWorkOrderCompletion')}
-                    mainValue={formatDashboardRate(statistics?.production?.completion_rate)}
-                    mainSuffix="%"
-                    subtitle={t('pages.dashboard.kpiSubCompletionByOrders')}
-                    rightTop={{
-                      label: t('pages.dashboard.kpiSideCompletedOrders'),
-                      value: `${formatDashboardMetric(statistics?.production?.completed)}${t('pages.dashboard.unitOrder')}`,
-                    }}
-                    rightBottom={{
-                      label: t('pages.dashboard.kpiSideTotalOrders'),
-                      value: `${formatDashboardMetric(statistics?.production?.total)}${t('pages.dashboard.unitOrder')}`,
-                    }}
-                    isDark={isDark}
-                    onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders?status=completed')}
-                  />
-                </div>
-                {/* 质量概览 */}
-                <div style={{ display: 'flex', minWidth: 0, minHeight: 0 }}>
-                  <DashboardKpiRichCard
-                    gradient={isDark ? 'linear-gradient(102deg, #292327 0%, #241f23 48%, #1f1a1e 100%)' : 'linear-gradient(102deg, #f5f1f3 0%, #ede8ec 48%, #e6dfe5 100%)'}
-                    title={t('pages.dashboard.statQualitySummary')}
-                    mainValue={formatDashboardRate(statistics?.quality?.quality_rate)}
-                    mainSuffix="%"
-                    subtitle={t('pages.dashboard.kpiSubQualityInRange')}
-                    rightTop={{
-                      label: t('pages.dashboard.statQualityOpenSuffix'),
-                      value: formatDashboardMetric(statistics?.quality?.open_exceptions),
-                    }}
-                    rightBottom={{
-                      label: t('pages.dashboard.kpiSideTotalExceptions'),
-                      value: formatDashboardMetric(statistics?.quality?.total_exceptions),
-                    }}
-                    isDark={isDark}
-                    mainSemantic="quality_rate"
-                    mainNumeric={statistics?.quality?.quality_rate ?? null}
-                    onClick={() => navigate('/apps/kuaizhizao/quality-management')}
-                  />
-                </div>
-              </Col>
               <Col
                 xs={24}
-                lg={3}
+                sm={24}
+                md={24}
+                lg={24}
+                xl={3}
+                xxl={3}
                 style={{
                   display: 'flex',
                   flexDirection: 'column',
@@ -1989,9 +1594,14 @@ export default function DashboardPage() {
                         key={key}
                         type={timeRange === key ? 'primary' : 'default'}
                         size="small"
-                        block
                         className="dashboard-date-strip-btn"
-                        style={{ flex: '1 1 0', minHeight: 0, height: 'auto' }}
+                        style={{
+                          flex: '1 1 auto',
+                          minWidth: screens.xl ? '100%' : '80px',
+                          margin: screens.xl ? '0 0 8px 0' : '0 4px 4px 0',
+                          minHeight: 0,
+                          height: 'auto',
+                        }}
                         onClick={() => setTimeRange(key)}
                       >
                         {label}
@@ -2000,16 +1610,152 @@ export default function DashboardPage() {
                   </div>
                 </div>
               </Col>
+              <Col xs={24} sm={12} md={12} lg={8} xl={7} xxl={7} style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: DASHBOARD_LAYOUT_GUTTER }}>
+                {/* 工单总数 */}
+                <div style={{ display: 'flex', minWidth: 0, minHeight: 0 }}>
+                  <DashboardKpiRichCard
+                    gradient={isDark ? 'linear-gradient(102deg, #1d2633 0%, #1a2230 45%, #161e2b 100%)' : '#ffffff'}
+                    title={t('pages.dashboard.statWorkOrderTotal')}
+                    mainValue={formatDashboardMetric(statistics?.production?.total)}
+                    mainSuffix={t('pages.dashboard.unitOrder')}
+                    subtitle={t('pages.dashboard.kpiSubWorkOrdersInRange')}
+                    rightTop={{
+                      label: t('pages.dashboard.kpiSideCompleted'),
+                      value: `${formatDashboardMetric(statistics?.production?.completed)}${t('pages.dashboard.unitOrder')}`,
+                    }}
+                    rightBottom={{
+                      label: t('pages.dashboard.kpiSideInProgress'),
+                      value: `${formatDashboardMetric(statistics?.production?.in_progress)}${t('pages.dashboard.unitOrder')}`,
+                    }}
+                    isDark={isDark}
+                    mainSemantic="work_order_total"
+                    mainNumeric={statistics?.production?.total ?? null}
+                    onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders')}
+                  />
+                </div>
+                {/* 完工数量 */}
+                <div style={{ display: 'flex', minWidth: 0, minHeight: 0 }}>
+                  <DashboardKpiRichCard
+                    gradient={isDark ? 'linear-gradient(102deg, #2a261f 0%, #252118 50%, #201c15 100%)' : '#ffffff'}
+                    title={t('pages.dashboard.statCompletedQuantity')}
+                    mainValue={formatDashboardMetric(statistics?.production?.completed_quantity)}
+                    mainSuffix={t('pages.dashboard.unitPiece')}
+                    subtitle={t('pages.dashboard.kpiSubOutputInRange')}
+                    rightTop={{
+                      label: t('pages.dashboard.statCapacityRate'),
+                      value: `${formatDashboardRate(statistics?.production?.capacity_achievement_rate)}%`,
+                    }}
+                    rightBottom={{
+                      label: t('pages.dashboard.kpiSideClosedWorkOrders'),
+                      value: `${formatDashboardMetric(statistics?.production?.completed)}${t('pages.dashboard.unitOrder')}`,
+                    }}
+                    isDark={isDark}
+                    mainSemantic="output_quantity"
+                    mainNumeric={statistics?.production?.completed_quantity ?? null}
+                    onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders')}
+                  />
+                </div>
+              </Col>
+              <Col xs={24} sm={12} md={12} lg={8} xl={7} xxl={7} style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: DASHBOARD_LAYOUT_GUTTER }}>
+                {/* 进行中工单 */}
+                <div style={{ display: 'flex', minWidth: 0, minHeight: 0 }}>
+                  <DashboardKpiRichCard
+                    gradient={isDark ? 'linear-gradient(102deg, #1c2a31 0%, #18262d 50%, #15222a 100%)' : '#ffffff'}
+                    title={t('pages.dashboard.statWorkOrderInProgress')}
+                    mainValue={formatDashboardMetric(statistics?.production?.in_progress)}
+                    mainSuffix={t('pages.dashboard.unitOrder')}
+                    subtitle={t('pages.dashboard.kpiSubWorkOrdersExecuting')}
+                    rightTop={{
+                      label: t('pages.dashboard.kpiSideCompleted'),
+                      value: `${formatDashboardMetric(statistics?.production?.completed)}${t('pages.dashboard.unitOrder')}`,
+                    }}
+                    rightBottom={{
+                      label: t('pages.dashboard.statWorkOrderCompletion'),
+                      value: `${formatDashboardRate(statistics?.production?.completion_rate)}%`,
+                    }}
+                    isDark={isDark}
+                    mainSemantic="work_order_wip"
+                    mainNumeric={statistics?.production?.in_progress ?? null}
+                    onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders?status=in_progress')}
+                  />
+                </div>
+                {/* 库存预警 */}
+                <div style={{ display: 'flex', minWidth: 0, minHeight: 0 }}>
+                  <DashboardKpiRichCard
+                    gradient={isDark ? 'linear-gradient(102deg, #23272d 0%, #1f2329 50%, #1b1f24 100%)' : '#ffffff'}
+                    title={t('pages.dashboard.statInventoryAlert')}
+                    mainValue={formatDashboardMetric(statistics?.inventory?.alert_count)}
+                    mainSuffix={t('pages.dashboard.unitAlert')}
+                    subtitle={t('pages.dashboard.kpiSubInventoryAlerts')}
+                    rightTop={{
+                      label: t('pages.dashboard.kpiSideTurnoverRate'),
+                      value: `${formatDashboardRate(statistics?.inventory?.turnover_rate)}%`,
+                    }}
+                    rightBottom={{
+                      label: t('pages.dashboard.kpiSideStockQuantity'),
+                      value: formatDashboardMetric(statistics?.inventory?.total_quantity),
+                    }}
+                    isDark={isDark}
+                    mainSemantic="inventory_alert"
+                    mainNumeric={statistics?.inventory?.alert_count ?? null}
+                    onClick={() => navigate('/apps/kuaizhizao/warehouse-management/inventory')}
+                  />
+                </div>
+              </Col>
+              <Col xs={24} sm={12} md={12} lg={8} xl={7} xxl={7} style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: DASHBOARD_LAYOUT_GUTTER }}>
+                {/* 工单完成率 */}
+                <div style={{ display: 'flex', minWidth: 0, minHeight: 0 }}>
+                  <DashboardKpiRichCard
+                    gradient={isDark ? 'linear-gradient(102deg, #1f2a26 0%, #1a2521 48%, #15201c 100%)' : '#ffffff'}
+                    title={t('pages.dashboard.statWorkOrderCompletion')}
+                    mainValue={formatDashboardRate(statistics?.production?.completion_rate)}
+                    mainSuffix="%"
+                    subtitle={t('pages.dashboard.kpiSubCompletionByOrders')}
+                    rightTop={{
+                      label: t('pages.dashboard.kpiSideCompletedOrders'),
+                      value: `${formatDashboardMetric(statistics?.production?.completed)}${t('pages.dashboard.unitOrder')}`,
+                    }}
+                    rightBottom={{
+                      label: t('pages.dashboard.kpiSideTotalOrders'),
+                      value: `${formatDashboardMetric(statistics?.production?.total)}${t('pages.dashboard.unitOrder')}`,
+                    }}
+                    isDark={isDark}
+                    onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders?status=completed')}
+                  />
+                </div>
+                {/* 质量概览 */}
+                <div style={{ display: 'flex', minWidth: 0, minHeight: 0 }}>
+                  <DashboardKpiRichCard
+                    gradient={isDark ? 'linear-gradient(102deg, #292327 0%, #241f23 48%, #1f1a1e 100%)' : '#ffffff'}
+                    title={t('pages.dashboard.statQualitySummary')}
+                    mainValue={formatDashboardRate(statistics?.quality?.quality_rate)}
+                    mainSuffix="%"
+                    subtitle={t('pages.dashboard.kpiSubQualityInRange')}
+                    rightTop={{
+                      label: t('pages.dashboard.statQualityOpenSuffix'),
+                      value: formatDashboardMetric(statistics?.quality?.open_exceptions),
+                    }}
+                    rightBottom={{
+                      label: t('pages.dashboard.kpiSideTotalExceptions'),
+                      value: formatDashboardMetric(statistics?.quality?.total_exceptions),
+                    }}
+                    isDark={isDark}
+                    mainSemantic="quality_rate"
+                    mainNumeric={statistics?.quality?.quality_rate ?? null}
+                    onClick={() => navigate('/apps/kuaizhizao/quality-management')}
+                  />
+                </div>
+              </Col>
             </Row>
             <Row
-              gutter={[16, 16]}
+              gutter={[DASHBOARD_LAYOUT_GUTTER, DASHBOARD_LAYOUT_GUTTER]}
               className="dashboard-four-cards-row dashboard-bento-main-row"
               wrap={!screens.lg}
               style={{
                 flexShrink: 0,
                 display: 'flex',
                 alignItems: 'stretch',
-                marginTop: 16,
+                marginTop: DASHBOARD_LAYOUT_GUTTER,
               }}
             >
         <style>{`
@@ -2058,7 +1804,136 @@ export default function DashboardPage() {
           }
         `}</style>
 
-        {/* 待办事项 */}
+        {/* 最新操作（生产播报）：大屏在左，md=10 / 待办 md=14 */}
+        <Col
+          xs={24}
+          sm={12}
+          md={10}
+          lg={10}
+          style={{ display: 'flex', minHeight: 0 }}
+        >
+          <Card
+            title={
+              <Space>
+                <PlayCircleOutlined />
+                <span>{t('pages.dashboard.latestOperations')}</span>
+              </Space>
+            }
+            loading={productionBroadcastLoading}
+            extra={
+              <Button
+                type="link"
+                size="small"
+                onClick={() => {
+                  navigate('/apps/kuaizhizao/production-execution/reporting');
+                }}
+              >
+                {t('pages.dashboard.viewMore')} <RightOutlined />
+              </Button>
+            }
+            style={{
+              width: '100%',
+              borderRadius: dashboardCardRadius,
+              boxShadow: dashboardCardShadow,
+              height: dashboardBottomThreeCardsFixedHeight,
+              minHeight: dashboardBottomThreeCardsFixedHeight,
+              maxHeight: dashboardBottomThreeCardsFixedHeight,
+            }}
+            styles={{ 
+              body: {
+                flex: '1 1 0%',
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+                padding: '0 24px 24px 24px',
+                minHeight: 0,
+              }
+            }}
+          >
+            {productionBroadcast && productionBroadcast.length > 0 ? (
+              <div className="dashboard-bottom-card-scroll" style={bottomCardListScrollBoxStyle}>
+                {productionBroadcast.map((item, index) => (
+                  <div
+                    key={item.id}
+                    style={{
+                      padding: '10px 0',
+                      borderBottom: index < productionBroadcast.length - 1 ? `1px solid ${token.colorBorder}` : 'none',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: 12,
+                    }}
+                    onClick={() => {
+                      navigate(`/apps/kuaizhizao/production-execution/reporting?work_order=${item.work_order_no}`);
+                    }}
+                  >
+                    <ProductionBroadcastOperatorAvatar
+                      avatarUuid={item.operator_avatar}
+                      displayName={item.operator_name}
+                    />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {/* 第 1 行：人员/工序 + 时间 */}
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          gap: 8,
+                          marginBottom: 4,
+                          minWidth: 0,
+                        }}
+                      >
+                        <Text strong style={{ fontSize: 14, flex: 1, minWidth: 0 }} ellipsis>
+                          {item.operator_name} | {item.process_name}
+                        </Text>
+                        <Text type="secondary" style={{ fontSize: 13, flexShrink: 0 }}>
+                          {item.created_at ? dayjs(item.created_at).format('MM-DD HH:mm') : item.date}
+                        </Text>
+                      </div>
+                      {/* 第 2 行：工单 + 产品（省略） + 合格/不合格 */}
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          gap: 10,
+                          minWidth: 0,
+                        }}
+                      >
+                        <Text
+                          type="secondary"
+                          style={{ fontSize: 13, flex: 1, minWidth: 0, lineHeight: 1.45 }}
+                          ellipsis={{ tooltip: true }}
+                        >
+                          {`${item.work_order_no}${item.product_name ? ` · ${item.product_name}` : ''}`}
+                        </Text>
+                        <Space size={6} style={{ flexShrink: 0 }}>
+                          <Text type="success" style={{ fontSize: 13, whiteSpace: 'nowrap' }}>
+                            {t('pages.dashboard.qualified')} {item.qualified_quantity.toFixed(0)}
+                          </Text>
+                          {item.unqualified_quantity > 0 && (
+                            <Text type="danger" style={{ fontSize: 13, whiteSpace: 'nowrap' }}>
+                              {t('pages.dashboard.unqualified')} {item.unqualified_quantity.toFixed(0)}
+                            </Text>
+                          )}
+                        </Space>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Empty 
+                  description={t('pages.dashboard.emptyBroadcast')} 
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                />
+              </div>
+            )}
+          </Card>
+        </Col>
+
+        {/* 待办事项：大屏在右，md=14 */}
         <Col
           xs={24}
           sm={12}
@@ -2420,138 +2295,143 @@ export default function DashboardPage() {
           </Card>
         </Col>
 
-
-        {/* 最新操作（生产播报） */}
-        <Col
-          xs={24}
-          sm={12}
-          md={10}
-          lg={10}
-          style={{ display: 'flex', minHeight: 0 }}
-        >
-          <Card
-            title={
-              <Space>
-                <PlayCircleOutlined />
-                <span>{t('pages.dashboard.latestOperations')}</span>
-              </Space>
-            }
-            loading={productionBroadcastLoading}
-            extra={
-              <Button
-                type="link"
-                size="small"
-                onClick={() => {
-                  navigate('/apps/kuaizhizao/production-execution/reporting');
-                }}
-              >
-                {t('pages.dashboard.viewMore')} <RightOutlined />
-              </Button>
-            }
-            style={{
-              width: '100%',
-              borderRadius: dashboardCardRadius,
-              boxShadow: dashboardCardShadow,
-              height: dashboardBottomThreeCardsFixedHeight,
-              minHeight: dashboardBottomThreeCardsFixedHeight,
-              maxHeight: dashboardBottomThreeCardsFixedHeight,
-            }}
-            styles={{ 
-              body: {
-                flex: '1 1 0%',
-                display: 'flex',
-                flexDirection: 'column',
-                overflow: 'hidden',
-                padding: '0 24px 24px 24px',
-                minHeight: 0,
-              }
-            }}
-          >
-            {productionBroadcast && productionBroadcast.length > 0 ? (
-              <div className="dashboard-bottom-card-scroll" style={bottomCardListScrollBoxStyle}>
-                {productionBroadcast.map((item, index) => (
-                  <div
-                    key={item.id}
-                    style={{
-                      padding: '10px 0',
-                      borderBottom: index < productionBroadcast.length - 1 ? `1px solid ${token.colorBorder}` : 'none',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      gap: 12,
-                    }}
-                    onClick={() => {
-                      navigate(`/apps/kuaizhizao/production-execution/reporting?work_order=${item.work_order_no}`);
-                    }}
-                  >
-                    <ProductionBroadcastOperatorAvatar
-                      avatarUuid={item.operator_avatar}
-                      displayName={item.operator_name}
-                    />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      {/* 第 1 行：人员/工序 + 时间 */}
-                      <div
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          gap: 8,
-                          marginBottom: 4,
-                          minWidth: 0,
-                        }}
-                      >
-                        <Text strong style={{ fontSize: 14, flex: 1, minWidth: 0 }} ellipsis>
-                          {item.operator_name} | {item.process_name}
-                        </Text>
-                        <Text type="secondary" style={{ fontSize: 13, flexShrink: 0 }}>
-                          {item.created_at ? dayjs(item.created_at).format('MM-DD HH:mm') : item.date}
-                        </Text>
-                      </div>
-                      {/* 第 2 行：工单 + 产品（省略） + 合格/不合格 */}
-                      <div
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          gap: 10,
-                          minWidth: 0,
-                        }}
-                      >
-                        <Text
-                          type="secondary"
-                          style={{ fontSize: 13, flex: 1, minWidth: 0, lineHeight: 1.45 }}
-                          ellipsis={{ tooltip: true }}
-                        >
-                          {`${item.work_order_no}${item.product_name ? ` · ${item.product_name}` : ''}`}
-                        </Text>
-                        <Space size={6} style={{ flexShrink: 0 }}>
-                          <Text type="success" style={{ fontSize: 13, whiteSpace: 'nowrap' }}>
-                            {t('pages.dashboard.qualified')} {item.qualified_quantity.toFixed(0)}
-                          </Text>
-                          {item.unqualified_quantity > 0 && (
-                            <Text type="danger" style={{ fontSize: 13, whiteSpace: 'nowrap' }}>
-                              {t('pages.dashboard.unqualified')} {item.unqualified_quantity.toFixed(0)}
-                            </Text>
-                          )}
-                        </Space>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Empty 
-                  description={t('pages.dashboard.emptyBroadcast')} 
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                />
-              </div>
-            )}
-          </Card>
-        </Col>
-
       </Row>
           </div>
+        </Col>
+
+        <Col xs={24} lg={5} style={{ display: 'flex', flexDirection: 'column', gap: DASHBOARD_LAYOUT_GUTTER, minHeight: 0, minWidth: 0 }}>
+          <Card
+            className="dashboard-clock-date-card"
+            style={{
+              flexShrink: 0,
+              width: '100%',
+              minHeight: dashboardTopCardHeight,
+              height: dashboardTopCardHeight,
+              maxHeight: dashboardTopCardHeight,
+              borderRadius: dashboardCardRadius,
+              background: dashboardTopBarTheme.clockCardBackground,
+              border: dashboardTopBarTheme.clockCardBorder,
+              boxShadow: dashboardTopBarTheme.clockCardShadow,
+              overflow: 'hidden',
+              position: 'relative',
+            }}
+            styles={{
+              body: {
+                padding: '12px 14px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                minHeight: 0,
+                background: 'transparent',
+                borderRadius: dashboardCardRadius,
+              },
+            }}
+          >
+            <DashboardLcdClock
+              time={currentTime}
+              isDark={isDark}
+              systemCount={systemTaskCount}
+              personalCount={personalTaskCount}
+              alertType={alertType}
+              onAlarmClick={() => navigate('/personal/tasks')}
+            />
+            {showCalendarText ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+                <Text
+                  style={{
+                    fontSize: 13,
+                    color: 'rgba(24,24,27,0.78)',
+                    lineHeight: 1.35,
+                    margin: 0,
+                  }}
+                >
+                  {currentTime.format(t('pages.dashboard.dateFormatFull'))}
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 13,
+                    color: 'rgba(24,24,27,0.48)',
+                    lineHeight: 1.35,
+                  }}
+                >
+                  {t('pages.dashboard.lunarLabel')} {lunarDateStr}
+                </Text>
+              </div>
+            ) : null}
+          </Card>
+          <div
+            className="dashboard-bento-left-quick"
+            style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+          >
+            <QuickEntryGrid
+              title={
+                <Space>
+                  <AppstoreOutlined />
+                  <span>{t('pages.dashboard.quickEntry')}</span>
+                </Space>
+              }
+              items={useMemo(() => {
+                if (quickEntryLoading) {
+                  return [];
+                }
+                const quickEntries = userPreference?.preferences?.dashboard_quick_entries as QuickEntryItem[] | undefined;
+
+                // 用户偏好优先：只要有保存项，始终优先展示用户自己的快捷入口
+                if (Array.isArray(quickEntries) && quickEntries.length > 0) {
+                  return quickEntries
+                    .sort((a, b) => a.sort_order - b.sort_order)
+                    .map((entry) => {
+                      const menu = quickEntryMenuTree.length ? findMenuInTree(quickEntryMenuTree, entry.menu_uuid) : null;
+                      const resolvedPath = entry.menu_path || menu?.path || '';
+                      if (!resolvedPath) return null;
+
+                      return {
+                        ...entry,
+                        menu_name: entry.menu_name || (menu ? getTranslatedMenuTitle(menu, t) : ''),
+                        menu_path: resolvedPath,
+                        menu_icon: menu ? renderMenuIcon(menu) : getMenuIconByPath(resolvedPath, entry.menu_name),
+                      };
+                    })
+                    .filter((item): item is any => item !== null);
+                }
+
+                if (!quickEntryMenuTree.length) {
+                  return [];
+                }
+
+                // 无用户配置时：直接使用真实业务菜单生成快捷入口
+                return buildQuickEntriesFromMenuTree(quickEntryMenuTree, renderMenuIcon, t, 10);
+              }, [quickEntryLoading, userPreference, quickEntryMenuTree, t])}
+              loading={quickEntryLoading}
+              menuTree={useMemo(() => {
+                if (!quickEntryMenuTree.length) return [];
+                return convertMenuTreeToTreeData(quickEntryMenuTree, t);
+              }, [quickEntryMenuTree, t])}
+              showConfig={true}
+              onSave={async (items: QuickEntryItem[]) => {
+                // 偏好设置需要可 JSON 序列化，不能保存 ReactNode（menu_icon）
+                const serializableItems = items.map(({ menu_icon, ...rest }) => rest);
+                // updatePreferences 直接写入 useUserPreferenceStore，组件会因 store 变更自动重渲染，无需再 invalidate queries
+                await updatePreferences({ dashboard_quick_entries: serializableItems });
+              }}
+              renderMenuIcon={(menuUuid: string) => {
+                if (!quickEntryMenuTree.length) return <ShopOutlined />;
+                const menu = findMenuInTree(quickEntryMenuTree, menuUuid);
+                return menu ? renderMenuIcon(menu) : <ShopOutlined />;
+              }}
+            />
+          </div>
+          <Card
+            size="small"
+            style={{ borderRadius: dashboardCardRadius, boxShadow: dashboardCardShadow, flexShrink: 0 }}
+            styles={{ body: { padding: '10px 14px', borderRadius: dashboardCardRadius } }}
+          >
+            <Text type="secondary" style={{ fontSize: 14 }}>
+              {t('pages.dashboard.versionLabel')} v{APP_VERSION}
+            </Text>
+          </Card>
         </Col>
       </Row>
       </div>

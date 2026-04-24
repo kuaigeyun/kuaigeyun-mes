@@ -3524,6 +3524,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-layout-header .ant-btn {
           width: 32px !important;
           height: 32px !important;
+          flex-shrink: 0 !important; // ⚠️ 防止挤压变形
           padding: 0 !important;
           display: flex !important;
           align-items: center !important;
@@ -3544,6 +3545,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-layout-header .ant-badge .ant-btn {
           width: 32px !important;
           height: 32px !important;
+          flex-shrink: 0 !important; // ⚠️ 防止挤压变形
           padding: 0 !important;
           border-radius: 50% !important;
           background-color: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'} !important;
@@ -3917,7 +3919,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           align-items: center !important;
           vertical-align: middle !important;
           line-height: 1.5 !important;
+          flex-shrink: 0 !important; // ⚠️ 防止 LOGO 组被挤压
           color: ${isDarkMode ? 'var(--ant-colorText)' : (isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)')} !important;
+        }
+        .ant-pro-global-header-logo img {
+          flex-shrink: 0 !important; // ⚠️ 防止图片变成椭圆
+          object-fit: contain !important;
         }
         /* LOGO 后标题文字（H1元素）颜色 - 根据顶栏背景色自动适配，浅色模式深色背景时与深色模式文字颜色一致 */
         .ant-pro-layout .ant-pro-layout-header .ant-pro-global-header-logo h1,
@@ -4777,6 +4784,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                       height: '32px',
                       display: 'flex',
                       alignItems: 'center',
+                      maxWidth: 100, // ⚠️ 防止姓名过长挤压顶栏
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
                     }}
                   >
                     {/* 优先显示全名，如果全名为空则显示用户名，文字跟随系统 */}
@@ -4799,7 +4810,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             </Tooltip>
           );
 
-          return <Space size={8} align="center">{actions}</Space>;
+          return <Space size={8} align="center" style={{ flexShrink: 0 }}>{actions}</Space>;
         }}
         menuDataRender={() => {
           return filteredMenuData.filter((item) => item.path !== '/system');

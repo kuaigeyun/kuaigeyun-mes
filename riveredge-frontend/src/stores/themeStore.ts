@@ -278,8 +278,21 @@ export const useThemeStore = create<ThemeState>((set, get) => {
       const handler = () => {
         doApplyTheme('auto', get().config);
       };
-      mediaQuery.addEventListener('change', handler);
-      return () => mediaQuery.removeEventListener('change', handler);
+      
+      // ⚠️ 兼容性修复：Safari < 14 不支持 addEventListener，需使用 addListener
+      if (mediaQuery.addEventListener) {
+        mediaQuery.addEventListener('change', handler);
+      } else {
+        (mediaQuery as any).addListener(handler);
+      }
+
+      return () => {
+        if (mediaQuery.removeEventListener) {
+          mediaQuery.removeEventListener('change', handler);
+        } else {
+          (mediaQuery as any).removeListener(handler);
+        }
+      };
     },
 
     clearForLogout: () => {

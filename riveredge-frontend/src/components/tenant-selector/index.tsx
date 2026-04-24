@@ -66,7 +66,8 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
             value={currentTenantId || undefined}
             placeholder={tenantData?.items?.length ? "请选择组织" : "加载中..."}
             style={{
-              minWidth: 200,
+              minWidth: 120,
+              maxWidth: 240,
               height: 32,
             }}
             size="small"
@@ -93,6 +94,10 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
     <span
       style={{
         display: 'inline-block',
+        maxWidth: 200, // ⚠️ 防止组织名过长挤压顶栏
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
         padding: '4px 12px',
         borderRadius: '16px',
         backgroundColor: token.colorFillTertiary,
@@ -101,6 +106,7 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
         fontWeight: 500,
         height: 32,
         lineHeight: '24px',
+        verticalAlign: 'middle',
       }}
     >
       {tenantName}

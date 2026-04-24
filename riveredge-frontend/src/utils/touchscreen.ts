@@ -104,11 +104,19 @@ export function enterFullscreen(): Promise<void> {
     if (element.requestFullscreen) {
       element.requestFullscreen().then(resolve).catch(reject);
     } else if ((element as any).webkitRequestFullscreen) {
-      (element as any).webkitRequestFullscreen().then(resolve).catch(reject);
+      // ⚠️ 兼容性修复：旧版 Safari webkitRequestFullscreen 不返回 Promise
+      const result = (element as any).webkitRequestFullscreen();
+      if (result && typeof result.then === 'function') {
+        result.then(resolve).catch(reject);
+      } else {
+        resolve(); // 假设成功
+      }
     } else if ((element as any).mozRequestFullScreen) {
-      (element as any).mozRequestFullScreen().then(resolve).catch(reject);
+      (element as any).mozRequestFullScreen();
+      resolve();
     } else if ((element as any).msRequestFullscreen) {
-      (element as any).msRequestFullscreen().then(resolve).catch(reject);
+      (element as any).msRequestFullscreen();
+      resolve();
     } else {
       reject(new Error('浏览器不支持全屏模式'));
     }
@@ -123,11 +131,19 @@ export function exitFullscreen(): Promise<void> {
     if (document.exitFullscreen) {
       document.exitFullscreen().then(resolve).catch(reject);
     } else if ((document as any).webkitExitFullscreen) {
-      (document as any).webkitExitFullscreen().then(resolve).catch(reject);
+      // ⚠️ 兼容性修复：旧版 Safari webkitExitFullscreen 不返回 Promise
+      const result = (document as any).webkitExitFullscreen();
+      if (result && typeof result.then === 'function') {
+        result.then(resolve).catch(reject);
+      } else {
+        resolve(); // 假设成功
+      }
     } else if ((document as any).mozCancelFullScreen) {
-      (document as any).mozCancelFullScreen().then(resolve).catch(reject);
+      (document as any).mozCancelFullScreen();
+      resolve();
     } else if ((document as any).msExitFullscreen) {
-      (document as any).msExitFullscreen().then(resolve).catch(reject);
+      (document as any).msExitFullscreen();
+      resolve();
     } else {
       reject(new Error('浏览器不支持全屏模式'));
     }

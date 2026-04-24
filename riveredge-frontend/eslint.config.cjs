@@ -19,6 +19,8 @@ module.exports = [
         window: "readonly",
         document: "readonly",
         navigator: "readonly",
+        HTMLElement: "readonly",
+        HTMLDivElement: "readonly",
       },
       parserOptions: {
         ecmaFeatures: {

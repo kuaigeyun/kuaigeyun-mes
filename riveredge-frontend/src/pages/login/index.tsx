@@ -12,11 +12,19 @@ import { useTranslation } from 'react-i18next';
 import { UserOutlined, LockOutlined, ThunderboltOutlined, GlobalOutlined, WindowsFilled, AndroidFilled, DownloadOutlined } from '@ant-design/icons';
 import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 const LottiePlayer = lazy(() => import('lottie-react').then((m) => ({ default: m.default })));
-import { registerPersonal, registerOrganization, checkTenantExists, searchTenants, type TenantCheckResponse, type TenantSearchOption, type OrganizationRegisterRequest } from '../../services/register';
-import { login, guestLogin, wechatLoginCallback, type LoginResponse } from '../../services/auth';
+import {
+  registerPersonal,
+  registerOrganization,
+  searchTenants,
+  login,
+  guestLogin,
+  wechatLoginCallback,
+  type TenantCheckResponse,
+  type TenantSearchOption,
+  type OrganizationRegisterRequest,
+  type LoginResponse,
+} from '../../services/publicAuth';
 import { setToken, setTenantId, setUserInfo } from '../../utils/auth';
-import { useGlobalStore } from '../../stores/globalStore';
-import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
 const TenantSelectionModal = lazy(() => import('../../components/tenant-selection-modal'));
 const TermsModal = lazy(() => import('../../components/terms-modal'));
 const LongPressVerify = lazy(() => import('../../components/long-press-verify'));
@@ -24,7 +32,7 @@ import { Spin } from 'antd';
 
 const LazyRegisterDrawer = lazy(() => import('./RegisterDrawer'));
 import { theme } from 'antd';
-import { getPlatformSettingsPublic, type PlatformSettings } from '../../services/platformSettings';
+import { getPlatformSettingsPublic } from '../../services/publicPlatformSettings';
 import { useQuery } from '@tanstack/react-query';
 import './index.less';
 
@@ -66,11 +74,24 @@ export default function LoginPage() {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const { token } = theme.useToken(); // 获取主题 token
-  // 使用全局状态管理（Zustand状态管理规范）
-  const setCurrentUser = useGlobalStore((s) => s.setCurrentUser);
+
+  /** 登录成功后再异步同步 store，避免首屏静态引入 globalStore / userPreferenceStore 重依赖 */
+  const syncUserStateAfterLogin = useCallback((userInfo: Parameters<typeof setUserInfo>[0]) => {
+    setUserInfo(userInfo);
+    void import('../../stores/globalStore')
+      .then(({ useGlobalStore }) => {
+        useGlobalStore.getState().setCurrentUser(userInfo);
+      })
+      .catch(() => {});
+    void import('../../stores/userPreferenceStore')
+      .then(({ useUserPreferenceStore }) => {
+        useUserPreferenceStore.getState().rehydrateFromStorage();
+      })
+      .catch(() => {});
+  }, []);
 
   // 获取平台设置（公开接口）
-  const { data: platformSettings, isLoading: isLoadingPlatformSettings, failureCount, status } = useQuery({
+  const { data: platformSettings, isLoading: isLoadingPlatformSettings } = useQuery({
     queryKey: ['platformSettingsPublic'],
     queryFn: getPlatformSettingsPublic,
     staleTime: 5 * 60 * 1000, // 5分钟缓存
@@ -135,22 +156,59 @@ export default function LoginPage() {
     return () => link.remove();
   }, [logoUrl]);
 
-  // 社交图标延后加载，减小登录 chunk 体积
+  // 社交图标延后加载，减小登录 chunk 体积；空闲时再拉，避免抢首屏主线程
   const [socialIcons, setSocialIcons] = useState<Record<string, string>>({});
   useEffect(() => {
-    Promise.all([
-      import('../../assets/social/wechat.svg').then((m) => m.default),
-      import('../../assets/social/qq.svg').then((m) => m.default),
-      import('../../assets/social/qwei.svg').then((m) => m.default),
-      import('../../assets/social/dingtalk.svg').then((m) => m.default),
-      import('../../assets/social/feishu.svg').then((m) => m.default),
-    ]).then(([w, q, qw, d, f]) => setSocialIcons({ wechat: w, qq: q, qwei: qw, dingtalk: d, feishu: f }));
+    let cancelled = false;
+    const loadIcons = () => {
+      Promise.all([
+        import('../../assets/social/wechat.svg').then((m) => m.default),
+        import('../../assets/social/qq.svg').then((m) => m.default),
+        import('../../assets/social/qwei.svg').then((m) => m.default),
+        import('../../assets/social/dingtalk.svg').then((m) => m.default),
+        import('../../assets/social/feishu.svg').then((m) => m.default),
+      ]).then(([w, q, qw, d, f]) => {
+        if (!cancelled) setSocialIcons({ wechat: w, qq: q, qwei: qw, dingtalk: d, feishu: f });
+      });
+    };
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      const id = (window as any).requestIdleCallback(loadIcons, { timeout: 1200 });
+      return () => {
+        cancelled = true;
+        (window as any).cancelIdleCallback?.(id);
+      };
+    }
+    const t = window.setTimeout(loadIcons, 300);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
   }, []);
 
-  // Lottie 动画直接异步 import，不再人为延后
+  // Lottie：空闲加载；小屏不加载动效，优先表单可交互
   const [animationData, setAnimationData] = useState<object | null>(null);
   useEffect(() => {
-    import('../../../static/lottie/login.json').then((m) => setAnimationData(m.default));
+    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 992px)').matches) {
+      return;
+    }
+    let cancelled = false;
+    const loadAnimation = () => {
+      import('../../../static/lottie/login.json').then((m) => {
+        if (!cancelled) setAnimationData(m.default);
+      });
+    };
+    if ('requestIdleCallback' in window) {
+      const id = (window as any).requestIdleCallback(loadAnimation, { timeout: 1800 });
+      return () => {
+        cancelled = true;
+        (window as any).cancelIdleCallback?.(id);
+      };
+    }
+    const t = window.setTimeout(loadAnimation, 600);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
   }, []);
 
   /**
@@ -498,9 +556,7 @@ export default function LoginPage() {
               tenant_name: tenantName,
               user_type: 'user',
             };
-      setCurrentUser(userInfo);
-      setUserInfo(userInfo);
-      useUserPreferenceStore.getState().rehydrateFromStorage();
+      syncUserStateAfterLogin(userInfo);
       setRegisterDrawerVisible(false);
       setRegisterType('personal');
       // 延迟执行消息提示和导航，避免阻塞主线程
@@ -593,9 +649,7 @@ export default function LoginPage() {
               tenant_name: tenantName,
               user_type: 'user',
             };
-      setCurrentUser(userInfo);
-      setUserInfo(userInfo);
-      useUserPreferenceStore.getState().rehydrateFromStorage();
+      syncUserStateAfterLogin(userInfo);
       setRegisterDrawerVisible(false);
       setRegisterType('personal');
       // 延迟执行消息提示和导航，避免阻塞主线程
@@ -686,9 +740,7 @@ export default function LoginPage() {
         tenant_name: tenantName,
         user_type: 'infra_superadmin',
       };
-      setCurrentUser(userInfo);
-      setUserInfo(userInfo);
-      useUserPreferenceStore.getState().rehydrateFromStorage();
+      syncUserStateAfterLogin(userInfo);
 
       // 触发用户登录事件，通知布局组件清除菜单缓存
       
@@ -738,9 +790,7 @@ export default function LoginPage() {
         tenant_name: tenantName,
         user_type: 'user',
       };
-      setCurrentUser(userInfo);
-      setUserInfo(userInfo);
-      useUserPreferenceStore.getState().rehydrateFromStorage();
+      syncUserStateAfterLogin(userInfo);
 
       // 触发用户登录事件，通知布局组件清除菜单缓存
       const urlParams = new URL(window.location.href).searchParams;
@@ -1159,9 +1209,7 @@ export default function LoginPage() {
             tenant_name: tenantName,
             user_type: 'guest',
           };
-          setCurrentUser(userInfo);
-          setUserInfo(userInfo);
-          useUserPreferenceStore.getState().rehydrateFromStorage();
+          syncUserStateAfterLogin(userInfo);
 
           // 延迟执行消息提示和导航，避免阻塞主线程
           const urlParams = new URL(window.location.href).searchParams;
@@ -1249,9 +1297,7 @@ export default function LoginPage() {
           tenant_name: tenantName,
           user_type: 'user',
         };
-        setCurrentUser(userInfo);
-        setUserInfo(userInfo);
-        useUserPreferenceStore.getState().rehydrateFromStorage();
+        syncUserStateAfterLogin(userInfo);
         setTenantSelectionVisible(false);
         setLoginResponse(null);
         setLoginCredentials(null);
@@ -1661,6 +1707,7 @@ export default function LoginPage() {
                       style={{
                         width: '40px',
                         height: '40px',
+                        flexShrink: 0, // ⚠️ 关键修复：防止小屏下 Flex 挤压变形
                         backgroundColor: 'rgba(7, 193, 96, 0.7)',
                         borderColor: 'rgba(7, 193, 96, 0.7)',
                         borderWidth: '0',
@@ -1699,6 +1746,7 @@ export default function LoginPage() {
                       style={{
                         width: '40px',
                         height: '40px',
+                        flexShrink: 0, // ⚠️ 关键修复：防止小屏下 Flex 挤压变形
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -1737,6 +1785,7 @@ export default function LoginPage() {
                       style={{
                         width: '40px',
                         height: '40px',
+                        flexShrink: 0, // ⚠️ 关键修复：防止小屏下 Flex 挤压变形
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -1775,6 +1824,7 @@ export default function LoginPage() {
                       style={{
                         width: '40px',
                         height: '40px',
+                        flexShrink: 0, // ⚠️ 关键修复：防止小屏下 Flex 挤压变形
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -1813,6 +1863,7 @@ export default function LoginPage() {
                       style={{
                         width: '40px',
                         height: '40px',
+                        flexShrink: 0, // ⚠️ 关键修复：防止小屏下 Flex 挤压变形
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',

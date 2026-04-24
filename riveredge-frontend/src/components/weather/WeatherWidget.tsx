@@ -25,16 +25,19 @@ interface WeatherWidgetProps {
   onWeatherChange?: (data: WeatherData | null) => void;
   /** 紧凑布局（窄列、工作台首行） */
   compact?: boolean;
+  /** 浅色卡上用深色字；深色背景卡用 light（默认） */
+  tone?: 'light' | 'dark';
 }
 
 /**
  * 天气组件
  */
-export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ 
+export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
   showRefresh = true,
   style,
   onWeatherChange,
   compact = false,
+  tone = 'dark',
 }) => {
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -81,11 +84,24 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
   const tempSize = compact ? 24 : 20;
   const metaSize = compact ? 12 : 13;
 
+  const tc =
+    tone === 'light'
+      ? {
+          primary: '#18181b',
+          meta: 'rgba(24, 24, 27, 0.78)',
+          muted: 'rgba(24, 24, 27, 0.52)',
+        }
+      : {
+          primary: '#ffffff',
+          meta: 'rgba(255, 255, 255, 0.85)',
+          muted: 'rgba(255, 255, 255, 0.65)',
+        };
+
   if (loading) {
     return (
       <Space style={style} size={compact ? 'small' : 'middle'}>
         <Spin size="small" />
-        <Text style={{ color: 'rgba(255, 255, 255, 0.85)', fontSize: compact ? 12 : 14 }}>
+        <Text style={{ color: tc.meta, fontSize: compact ? 12 : 14 }}>
           加载天气...
         </Text>
       </Space>
@@ -95,13 +111,13 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
   if (error || !weather) {
     return (
       <Space style={style} size={compact ? 'small' : 'middle'}>
-        <Text style={{ color: 'rgba(255, 255, 255, 0.65)', fontSize: compact ? 12 : 14 }}>
+        <Text style={{ color: tc.muted, fontSize: compact ? 12 : 14 }}>
           天气信息暂不可用
         </Text>
         {showRefresh && (
-          <ReloadOutlined 
-            style={{ 
-              color: 'rgba(255, 255, 255, 0.85)', 
+          <ReloadOutlined
+            style={{
+              color: tc.meta,
               cursor: 'pointer',
               fontSize: 14,
             }}
@@ -128,20 +144,21 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
       {/* 天气信息 */}
       <Space orientation="vertical" size={compact ? 2 : 0}>
         <Space size="small">
-          <Text 
-            style={{ 
-              color: '#ffffff', 
-              fontSize: tempSize, 
+          <Text
+            style={{
+              color: tc.primary,
+              fontSize: tempSize,
               fontWeight: 600,
               lineHeight: 1,
+              whiteSpace: 'nowrap', // ⚠️ 防止温度符号由于宽度极窄而换行
             }}
           >
             {weather.temperature}°C
           </Text>
           {weather.feelsLike !== undefined && weather.feelsLike !== weather.temperature && (
-            <Text 
-              style={{ 
-                color: 'rgba(255, 255, 255, 0.65)', 
+            <Text
+              style={{
+                color: tc.muted,
                 fontSize: compact ? 11 : 12,
                 lineHeight: 1,
               }}
@@ -151,18 +168,18 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
           )}
         </Space>
         <Space size="small" wrap>
-          <Text 
-            style={{ 
-              color: 'rgba(255, 255, 255, 0.85)', 
+          <Text
+            style={{
+              color: tc.meta,
               fontSize: metaSize,
               lineHeight: 1.2,
             }}
           >
             {weather.city}
           </Text>
-          <Text 
-            style={{ 
-              color: 'rgba(255, 255, 255, 0.65)', 
+          <Text
+            style={{
+              color: tc.muted,
               fontSize: metaSize,
               lineHeight: 1.2,
             }}
@@ -175,9 +192,9 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
       {/* 刷新按钮 */}
       {showRefresh && (
         <Tooltip title="刷新天气">
-          <ReloadOutlined 
-            style={{ 
-              color: 'rgba(255, 255, 255, 0.65)', 
+          <ReloadOutlined
+            style={{
+              color: tc.muted,
               cursor: 'pointer',
               fontSize: compact ? 13 : 14,
             }}
