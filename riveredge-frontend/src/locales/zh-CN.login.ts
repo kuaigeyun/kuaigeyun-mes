@@ -1,6 +1,8 @@
 /**
  * 登录页专用语言包（精简版）
  * 包含 pages.login.* 及登录流程内嵌组件所需 key（如多组织选择弹窗），减少首屏 bundle 约 400KB
+ *
+ * 与 zh-CN.ts 中同名 key 的文案、标点需保持一致；主应用若加载完整 zh-CN，会与登录 MPA 共用 RegisterDrawer 等组件，分叉会导致「本地无句号、线上有句號」类问题。
  */
 export default {
   'pages.login.title': '登录',

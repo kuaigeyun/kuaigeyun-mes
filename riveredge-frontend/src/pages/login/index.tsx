@@ -32,8 +32,7 @@ import { Spin } from 'antd';
 
 const LazyRegisterDrawer = lazy(() => import('./RegisterDrawer'));
 import { theme } from 'antd';
-import { getPlatformSettingsPublic } from '../../services/publicPlatformSettings';
-import { useQuery } from '@tanstack/react-query';
+import { getPlatformSettingsPublic, type PlatformSettings } from '../../services/publicPlatformSettings';
 import './index.less';
 
 const { Title, Text } = Typography;
@@ -59,6 +58,18 @@ const fetchWithRetry = async (url: string, retries = 3): Promise<Response> => {
 interface LoginFormData {
   username: string;
   password: string;
+}
+
+function readPlatformSettingsPublicCache(): PlatformSettings | null {
+  try {
+    const raw = localStorage.getItem('platformSettingsPublic');
+    if (!raw) return null;
+    const p = JSON.parse(raw) as unknown;
+    if (p && typeof p === 'object') return p as PlatformSettings;
+  } catch {
+    /* ignore */
+  }
+  return null;
 }
 
 /**
@@ -90,13 +101,29 @@ export default function LoginPage() {
       .catch(() => {});
   }, []);
 
-  // 获取平台设置（公开接口）
-  const { data: platformSettings, isLoading: isLoadingPlatformSettings } = useQuery({
-    queryKey: ['platformSettingsPublic'],
-    queryFn: getPlatformSettingsPublic,
-    staleTime: 5 * 60 * 1000, // 5分钟缓存
-    retry: false, // 后端不可达时不无限重试，避免长时间 loading
-  });
+  const [platformSettings, setPlatformSettings] = useState<PlatformSettings | null>(() =>
+    readPlatformSettingsPublicCache(),
+  );
+  const [isLoadingPlatformSettings, setIsLoadingPlatformSettings] = useState(
+    () => readPlatformSettingsPublicCache() === null,
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    void getPlatformSettingsPublic()
+      .then((data) => {
+        if (!cancelled) setPlatformSettings(data);
+      })
+      .catch(() => {
+        if (!cancelled) setPlatformSettings((prev) => prev);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingPlatformSettings(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // 从缓存读取平台设置作为初始值，避免闪烁
   const [cachedPlatformName, setCachedPlatformName] = useState<string | null>(() => {
