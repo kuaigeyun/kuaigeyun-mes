@@ -24,8 +24,9 @@ import { hasAnyPermission } from '../utils/permission';
 import IndexPage from '../pages';
 import NotFoundPage from '../pages/404';
 
-// 登录页懒加载（第一印象页，按需加载以减小主包）
-const LoginPage = React.lazy(() => import('../pages/login'));
+// 注意：/login 已彻底切到独立 MPA（src/login.html + src/login.tsx + vite.login.config.ts），
+// 主应用 SystemRoutes 不再注册 /login 路由，避免"首次访问 / 经 SPA navigate 进入主应用 LoginPage、
+// 而刷新走 Caddy @login 加载独立 MPA bundle"的双轨制问题。
 // 公开页面按需懒加载，减小主包体积，加快登录首屏
 const InfraLoginPage = React.lazy(() => import('../pages/infra/login'));
 const LockScreenPage = React.lazy(() => import('../pages/lock-screen'));
@@ -39,11 +40,6 @@ const QRCodeScanPage = React.lazy(() => import('../pages/qrcode/scan'));
 // 从而达到"随点随开"的观感。
 const withSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
   <Suspense fallback={<PageSkeleton variant="minimal" />}><LazyComponent /></Suspense>
-);
-
-// 登录页专用骨架屏（与登录页布局一致）
-const withLoginSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
-  <Suspense fallback={<LoginSkeleton />}><LazyComponent /></Suspense>
 );
 
 // 工作台/分析页专用，骨架屏边距与 DashboardTemplate 一致
@@ -156,7 +152,7 @@ const PlatformAdminPage = React.lazy(() => import('../pages/infra/admin'));
 const SystemRoutes: React.FC = () => (
   <Routes>
     <Route path="/" element={<IndexPage />} />
-    <Route path="/login" element={withLoginSuspense(LoginPage)} />
+    {/* /login 由独立 MPA 处理（Caddy @login → login.html），主应用不再注册此路由 */}
     <Route path="/infra/login" element={<Suspense fallback={<LoginSkeleton />}><InfraLoginPage /></Suspense>} />
     <Route path="/lock-screen" element={<Suspense fallback={<PageSkeleton />}><LockScreenPage /></Suspense>} />
     <Route path="/init/wizard" element={<Suspense fallback={<PageSkeleton />}><InitWizardPage /></Suspense>} />

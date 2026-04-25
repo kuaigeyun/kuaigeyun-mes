@@ -86,7 +86,8 @@ export default function LockScreenPage() {
     const password = values.password || realPassword;
     if (!currentUser) {
       message.error(t('pages.lockScreen.userInfoNotFound'));
-      navigate('/login');
+      // 必须用浏览器真实导航跳到独立 MPA /login，而非 SPA navigate；详见 IndexPage 注释。
+      window.location.replace('/login');
       return;
     }
 
@@ -175,9 +176,9 @@ export default function LockScreenPage() {
     }
   };
 
-  // 如果没有用户信息，重定向到登录页
+  // 如果没有用户信息，重定向到登录页（独立 MPA login.html，需用浏览器真实导航）
   if (!currentUser && !getToken()) {
-    navigate('/login');
+    window.location.replace('/login');
     return null;
   }
 

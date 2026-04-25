@@ -381,12 +381,15 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   // 如果不是公开页面且未登录，自动重定向到登录页
   if (!isPublicPath && !currentUser && !getToken()) {
-    // infra级路由重定向到infra登录页
+    // infra 级路由重定向到 infra 登录页（仍是 SPA 内部 /infra/login）
     if (location.pathname.startsWith('/infra')) {
       return <Navigate to="/infra/login" replace />;
     }
-    // 系统级路由重定向到用户登录页
-    return <Navigate to="/login" replace />;
+    // 系统级路由：必须用浏览器真实导航跳到 /login（独立 MPA login.html）
+    // 而非 React Router 内部 navigate，否则会让用户停留在主应用 bundle 中渲染 /login，
+    // 一旦刷新就会切到 MPA bundle 造成"首次正常 刷新异常"的双轨制问题。
+    window.location.replace('/login');
+    return null;
   }
 
   return <>{children}</>;
@@ -781,8 +784,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const performLogout = useCallback(() => {
     clearSessionScopedQueries(queryClient);
     logout();
-    navigate('/login', { replace: true });
-  }, [queryClient, logout, navigate]);
+    // 使用浏览器真实导航跳转到 /login（独立 MPA login.html），与 IndexPage、AuthGuard 保持一致；
+    // 否则 SPA 内部 navigate 会让登录页跑在主应用 bundle 中，刷新后切换到 MPA bundle 行为不一致。
+    window.location.replace('/login');
+  }, [queryClient, logout]);
 
   // 站点设置：统一从 configStore 获取（app.tsx 初始化时已 fetchConfigs，site-settings 保存时会 refresh）
   const siteName = (useConfigStore((s) => (s.getConfig('site_name', '') as string)?.trim()) || '') || 'RiverEdge SaaS';
