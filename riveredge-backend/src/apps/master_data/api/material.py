@@ -1421,7 +1421,7 @@ async def create_material(
 @router.get("", response_model=List[MaterialResponse], summary="获取物料列表")
 async def list_materials(
     skip: int = Query(0, ge=0, description="跳过数量"),
-    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    limit: int = Query(100, ge=1, le=2000, description="限制数量"),
     group_id: Optional[int] = Query(None, alias="groupId", description="物料分组ID（过滤）"),
     is_active: Optional[bool] = Query(None, alias="isActive", description="是否启用"),
     keyword: Optional[str] = Query(None, description="搜索关键词（物料编码或名称）"),

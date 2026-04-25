@@ -126,12 +126,10 @@ export const CANVAS_PAGE_LAYOUT = {
   CANVAS_MIN_HEIGHT: 600,
 } as const;
 
-/**
- * 画板网格样式（浅色主题，流程图/BOM/SOP 等设计器统一使用）
- */
 export const CANVAS_GRID_STYLE: CSSProperties = {
-  backgroundImage: 'radial-gradient(#e0e0e0 1px, transparent 1px)',
-  backgroundSize: '12px 12px',
+  backgroundColor: '#f1f5f9', // Slightly deeper Tech Gray (Slate 100)
+  backgroundImage: 'radial-gradient(#94a3b8 1.5px, transparent 1.5px)', // More obvious dots
+  backgroundSize: '24px 24px',
 };
 
 /**
@@ -139,9 +137,12 @@ export const CANVAS_GRID_STYLE: CSSProperties = {
  */
 export const CANVAS_GRID_REACTFLOW = {
   variant: 'dots' as const,
-  gap: 12,
-  size: 1,
-  color: '#e0e0e0',
+  gap: 24,
+  size: 1.5,
+  color: '#94a3b8', // Slate 400 for more distinct dots
+  style: {
+    backgroundColor: '#f1f5f9', // Slate 100
+  },
 } as const;
 
 /**

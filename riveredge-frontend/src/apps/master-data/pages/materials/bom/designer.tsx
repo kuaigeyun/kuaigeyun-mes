@@ -179,8 +179,17 @@ const BOMDesignerPage: React.FC = () => {
   
   const [unitMap, setUnitMap] = useState<Record<string, string>>({}); // value -> label
 
-  /** 操作指南是否展开（默认展开） */
+  /** 操作指南是否展开（默认展开，但 3 秒后自动收起） */
   const [guideExpanded, setGuideExpanded] = useState(true);
+
+  useEffect(() => {
+    if (guideExpanded) {
+      const timer = setTimeout(() => {
+        setGuideExpanded(false);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [guideExpanded]);
 
   /** 当前物料的版本列表（用于版本切换下拉） */
   const [versionOptions, setVersionOptions] = useState<Array<{ value: string; label: string; isObsolete?: boolean }>>([]);
