@@ -616,6 +616,7 @@ const MenuListPage: React.FC = () => {
             dataSource={detailData || {}}
             loading={detailLoading}
             width={DRAWER_CONFIG.STANDARD_WIDTH}
+            column={1}
             columns={[
                 {
                   title: t('pages.system.menus.name'),
