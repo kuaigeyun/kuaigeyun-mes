@@ -8,7 +8,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ProFormText, ProFormTextArea, ProFormSwitch, ProColumns, ProFormTreeSelect, ProFormSelect } from '@ant-design/pro-components';
-import { EditOutlined, DeleteOutlined, PlusOutlined, AppstoreOutlined, LinkOutlined, CheckCircleOutlined, EyeOutlined, SyncOutlined } from '@ant-design/icons';
+import { DeleteOutlined, PlusOutlined, AppstoreOutlined, LinkOutlined, CheckCircleOutlined, SyncOutlined } from '@ant-design/icons';
 import { App, Button, Tag, Space, Popconfirm, Tooltip } from 'antd';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
 import { UniTable } from '../../../components/uni-table';
@@ -443,17 +443,17 @@ const MenuListPage: React.FC = () => {
     {
         title: t('common.actions'),
         valueType: 'option',
-        width: 220,
+        width: 360,
         fixed: 'right',
         render: (_, record) => {
             const isAppMenu = !!record.application_uuid;
             const deleteCheck = checkCanDelete(record);
             const canDelete = !isAppMenu && deleteCheck.can;
             return (
-            <Space size="small">
-                <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>{t('pages.system.menus.view')}</Button>
-                <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>{t('pages.system.menus.edit')}</Button>
-                <Button type="link" size="small" icon={<PlusOutlined />} onClick={() => handleCreate(record.uuid)}>{t('pages.system.menus.addChild')}</Button>
+            <Space size="small" wrap>
+                <Button type="default" size="small" onClick={() => handleView(record)}>{t('common.detail')}</Button>
+                <Button type="primary" size="small" onClick={() => handleEdit(record)}>{t('pages.system.menus.edit')}</Button>
+                <Button type="default" size="small" icon={<PlusOutlined />} onClick={() => handleCreate(record.uuid)}>{t('pages.system.menus.addChild')}</Button>
                 <Popconfirm
                     title={t('pages.system.menus.deleteConfirm')}
                     onConfirm={() => handleDelete(record)}
@@ -461,7 +461,7 @@ const MenuListPage: React.FC = () => {
                 >
                     <Tooltip title={isAppMenu ? t('menu.system.appMenuDeleteDisabled', { defaultValue: '应用菜单不可删除，请在应用中心同步更新' }) : deleteCheck.reason}>
                         <span>
-                            <Button type="link" size="small" danger icon={<DeleteOutlined />} disabled={!canDelete}>{t('pages.system.menus.delete')}</Button>
+                            <Button type="default" size="small" danger icon={<DeleteOutlined />} disabled={!canDelete}>{t('pages.system.menus.delete')}</Button>
                         </span>
                     </Tooltip>
                 </Popconfirm>

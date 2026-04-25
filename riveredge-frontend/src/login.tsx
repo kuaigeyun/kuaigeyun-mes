@@ -5,6 +5,7 @@
  * 登录成功后 window.location.href 跳转主应用，实现首屏快速加载
  */
 
+import './pages/login/index.less';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
@@ -15,7 +16,6 @@ import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import zhCNLocale from './locales/zh-CN.login';
 import LoginPage from './pages/login';
-import './pages/login/index.less';
 
 // 登录页最小 i18n：仅加载 zh-CN，不请求后端
 i18n.use(initReactI18next).init({

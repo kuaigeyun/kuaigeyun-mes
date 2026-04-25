@@ -27,7 +27,6 @@ import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
 import { useTranslation } from 'react-i18next';
 import type { DocumentPrintApiResult } from '../../../../../utils/printResponseHelpers';
-import type { DocumentPrintApiResult } from '../../../../../utils/printResponseHelpers';
 
 interface MaterialBorrow {
   id?: number;

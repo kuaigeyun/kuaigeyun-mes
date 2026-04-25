@@ -3990,6 +3990,7 @@ export default {
   'field.dataDictionary.itemIconPlaceholder': 'Enter icon name',
   'field.dataDictionary.itemDeleteConfirm': 'Are you sure to delete this item?',
   'field.dataDictionary.systemItemNoDelete': 'System dictionary items cannot be deleted',
+  'field.dataDictionary.systemDictionaryNoDelete': 'System dictionary cannot be deleted',
 
   // Permission (read-only list)
   'field.permission.name': 'Permission Name',
@@ -4299,6 +4300,9 @@ export default {
   'pages.system.siteSettings.tabBasic': 'Basic',
   'pages.system.siteSettings.tabFunction': 'Features',
   'pages.system.siteSettings.tabSystem': 'System',
+  'pages.system.siteSettings.groupSecurity': 'Security & session',
+  'pages.system.siteSettings.groupUi': 'UI & tables',
+  'pages.system.siteSettings.groupNetwork': 'Network & retries',
   'pages.system.siteSettings.cropTitle': 'Crop site logo',
   'pages.system.siteSettings.currencyCNY': 'CNY (RMB)',
   'pages.system.siteSettings.currencyUSD': 'USD',

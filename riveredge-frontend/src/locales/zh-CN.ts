@@ -4025,6 +4025,7 @@ export default {
   'field.dataDictionary.itemIconPlaceholder': '请输入图标名称',
   'field.dataDictionary.itemDeleteConfirm': '确定要删除这个字典项吗？',
   'field.dataDictionary.systemItemNoDelete': '系统字典项不允许删除',
+  'field.dataDictionary.systemDictionaryNoDelete': '系统字典不可删除',
 
   // 权限管理（只读列表）
   'field.permission.name': '权限名称',
@@ -4334,6 +4335,9 @@ export default {
   'pages.system.siteSettings.tabBasic': '基本信息',
   'pages.system.siteSettings.tabFunction': '功能设置',
   'pages.system.siteSettings.tabSystem': '系统设置',
+  'pages.system.siteSettings.groupSecurity': '安全与会话',
+  'pages.system.siteSettings.groupUi': '界面与表格',
+  'pages.system.siteSettings.groupNetwork': '网络与重试',
   'pages.system.siteSettings.cropTitle': '剪裁站点Logo',
   'pages.system.siteSettings.currencyCNY': '人民币 (CNY)',
   'pages.system.siteSettings.currencyUSD': '美元 (USD)',

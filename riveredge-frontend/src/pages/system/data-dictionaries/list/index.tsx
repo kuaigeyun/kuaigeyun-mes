@@ -9,8 +9,8 @@
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, Table } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, SettingOutlined, PlusOutlined } from '@ant-design/icons';
+import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, Table, Tooltip } from 'antd';
+import { SettingOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import { DataDictionaryFormModal } from '../components/DataDictionaryFormModal';
@@ -310,28 +310,22 @@ const DataDictionaryListPage: React.FC = () => {
     {
       title: t('common.actions'),
       valueType: 'option',
-      width: 250,
+      width: 340,
       fixed: 'right',
       render: (_, record) => (
-        <Space>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
-            {t('field.dataDictionary.view')}
+        <Space size="small" wrap>
+          <Button type="default" size="small" onClick={() => handleView(record)}>
+            {t('common.detail')}
           </Button>
           <Button
-            type="link"
+            type="primary"
             size="small"
-            icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
             disabled={record.is_system}
           >
             {t('field.dataDictionary.edit')}
           </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<SettingOutlined />}
-            onClick={() => handleManageItems(record)}
-          >
+          <Button type="default" size="small" onClick={() => handleManageItems(record)}>
             {t('field.dataDictionary.items')}
           </Button>
           <Popconfirm
@@ -339,15 +333,15 @@ const DataDictionaryListPage: React.FC = () => {
             onConfirm={() => handleDelete(record)}
             disabled={record.is_system}
           >
-            <Button
-              type="link"
-              danger
-              size="small"
-              icon={<DeleteOutlined />}
-              disabled={record.is_system}
+            <Tooltip
+              title={record.is_system ? t('field.dataDictionary.systemDictionaryNoDelete') : undefined}
             >
-              {t('field.dataDictionary.delete')}
-            </Button>
+              <span>
+                <Button type="default" danger size="small" disabled={record.is_system}>
+                  {t('field.dataDictionary.delete')}
+                </Button>
+              </span>
+            </Tooltip>
           </Popconfirm>
         </Space>
       ),
@@ -358,29 +352,41 @@ const DataDictionaryListPage: React.FC = () => {
    * 字典项表格列定义
    */
   const itemColumns = [
-    { title: t('field.dataDictionary.itemLabel'), dataIndex: 'label', key: 'label', width: 150 },
-    { title: t('field.dataDictionary.itemValue'), dataIndex: 'value', key: 'value', width: 150 },
-    { title: t('field.dataDictionary.description'), dataIndex: 'description', key: 'description', ellipsis: true },
+    {
+      title: t('field.dataDictionary.itemLabel'),
+      dataIndex: 'label',
+      key: 'label',
+      width: 120,
+      ellipsis: true,
+    },
+    {
+      title: t('field.dataDictionary.itemValue'),
+      dataIndex: 'value',
+      key: 'value',
+      width: 140,
+      ellipsis: { showTitle: true },
+    },
+    { title: t('field.dataDictionary.description'), dataIndex: 'description', key: 'description', ellipsis: true, width: 200 },
     {
       title: t('field.dataDictionary.itemColor'),
       dataIndex: 'color',
       key: 'color',
-      width: 100,
+      width: 80,
       render: (color: string) => (color ? <Tag color={color}>{color}</Tag> : '-'),
     },
-    { title: t('field.dataDictionary.itemIcon'), dataIndex: 'icon', key: 'icon', width: 100 },
+    { title: t('field.dataDictionary.itemIcon'), dataIndex: 'icon', key: 'icon', width: 72, ellipsis: true },
     {
       title: t('field.department.sortOrder'),
       dataIndex: 'sort_order',
       key: 'sort_order',
-      width: 80,
+      width: 72,
       sorter: (a: DictionaryItem, b: DictionaryItem) => a.sort_order - b.sort_order,
     },
     {
       title: t('field.role.status'),
       dataIndex: 'is_active',
       key: 'is_active',
-      width: 100,
+      width: 88,
       render: (isActive: boolean) => (
         <Tag color={isActive ? 'success' : 'default'}>
           {isActive ? t('field.role.enabled') : t('field.role.disabled')}
@@ -390,26 +396,26 @@ const DataDictionaryListPage: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'action',
-      width: 150,
+      width: 140,
       render: (_: any, record: DictionaryItem) => (
-        <Space>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEditItem(record)}>
+        <Space size="small" wrap>
+          <Button type="primary" size="small" onClick={() => handleEditItem(record)}>
             {t('field.dataDictionary.edit')}
           </Button>
           <Popconfirm
             title={t('field.dataDictionary.itemDeleteConfirm')}
             onConfirm={() => handleDeleteItem(record)}
+            disabled={currentDictionaryForItems?.is_system}
           >
-            <Button
-              type="link"
-              danger
-              size="small"
-              icon={<DeleteOutlined />}
-              disabled={currentDictionaryForItems?.is_system}
+            <Tooltip
               title={currentDictionaryForItems?.is_system ? t('field.dataDictionary.systemItemNoDelete') : undefined}
             >
-              {t('field.dataDictionary.delete')}
-            </Button>
+              <span>
+                <Button type="default" danger size="small" disabled={currentDictionaryForItems?.is_system}>
+                  {t('field.dataDictionary.delete')}
+                </Button>
+              </span>
+            </Tooltip>
           </Popconfirm>
         </Space>
       ),
@@ -529,6 +535,7 @@ const DataDictionaryListPage: React.FC = () => {
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
+        column={1}
         dataSource={detailData}
         columns={[
           { title: t('field.dataDictionary.name'), dataIndex: 'name' },
@@ -558,19 +565,23 @@ const DataDictionaryListPage: React.FC = () => {
           setCurrentDictionaryForItems(null);
           setItems([]);
         }}
-        size={800}
+        width="70%"
+        styles={{ body: { paddingBottom: 24 } }}
       >
         <div style={{ marginBottom: 16 }}>
           <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateItem}>
             {t('field.dataDictionary.createItem')}
           </Button>
         </div>
-        <Table
+        <Table<DictionaryItem>
+          size="small"
           columns={itemColumns}
           dataSource={items}
           rowKey="uuid"
           loading={itemsLoading}
           pagination={false}
+          tableLayout="fixed"
+          style={{ width: '100%' }}
         />
       </Drawer>
 
@@ -596,11 +607,6 @@ const DataDictionaryListPage: React.FC = () => {
             rules={[{ required: true, message: t('field.dataDictionary.itemValueRequired') }]}
             placeholder={t('field.dataDictionary.itemValuePlaceholder')}
           />
-          <ProFormTextArea
-            name="description"
-            label={t('field.dataDictionary.description')}
-            placeholder={t('field.dataDictionary.descriptionPlaceholder')}
-          />
           <ProFormText
             name="color"
             label={t('field.dataDictionary.itemColor')}
@@ -616,6 +622,11 @@ const DataDictionaryListPage: React.FC = () => {
             label={t('field.department.sortOrder')}
             fieldProps={{ type: 'number' }}
             initialValue={0}
+          />
+          <ProFormTextArea
+            name="description"
+            label={t('field.dataDictionary.description')}
+            placeholder={t('field.dataDictionary.descriptionPlaceholder')}
           />
           <ProFormSwitch name="is_active" label={t('field.dataDictionary.isActive')} />
         </ProForm>

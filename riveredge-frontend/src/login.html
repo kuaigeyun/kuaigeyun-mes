@@ -35,12 +35,14 @@
       .login-fp{
         display:flex;min-height:100vh;font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
       }
+      /* 与 pages/login 默认 themeColor（#1677ff）及 login-left 纯色背景一致，避免挂载时色相跳变 */
       .login-fp-left{
-        flex:1;min-height:120px;background:linear-gradient(145deg,#1677ff 0%,#0958d9 100%);
+        flex:1;min-height:120px;background:#1677ff;
       }
+      /* 与 .login-right 一致：整半幅白底、无 max-width，避免宽屏下骨架与真实布局切换时「闪一下」 */
       .login-fp-right{
-        flex:1;max-width:560px;display:flex;flex-direction:column;justify-content:center;
-        padding:40px 48px;background:#fff;box-shadow:-12px 0 40px rgba(0,0,0,.06);
+        flex:1;display:flex;flex-direction:column;justify-content:center;
+        padding:40px;background:#fff;box-shadow:-12px 0 40px rgba(0,0,0,.06);
       }
       .login-fp-bar{border-radius:8px;background:rgba(0,0,0,.06);animation:login-fp-pulse 1.1s ease-in-out infinite}
       .login-fp-bar--title{height:18px;width:38%;max-width:160px;margin-bottom:28px}

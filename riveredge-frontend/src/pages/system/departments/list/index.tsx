@@ -529,6 +529,7 @@ const DepartmentListPage: React.FC = () => {
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
+        column={1}
         dataSource={detailData as any}
         columns={[
           { title: t('field.department.name'), dataIndex: 'name' },
@@ -536,7 +537,6 @@ const DepartmentListPage: React.FC = () => {
           {
             title: t('field.department.parentName'),
             dataIndex: ['parent', 'name'],
-            span: 2,
             render: (_: any, record: any) => record?.parent_name || '-',
           },
           {
@@ -550,7 +550,7 @@ const DepartmentListPage: React.FC = () => {
           { title: t('field.department.queryCode'), dataIndex: 'query_code' },
           { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
           { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
-          { title: t('field.department.remark'), dataIndex: 'description', span: 2 },
+          { title: t('field.department.remark'), dataIndex: 'description' },
         ]}
       />
     </ListPageTemplate>

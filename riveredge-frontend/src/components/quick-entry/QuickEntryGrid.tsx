@@ -46,6 +46,8 @@ export interface QuickEntryGridProps {
   renderMenuIcon?: (menuUuid: string) => React.ReactNode;
   /** 标题（支持ReactNode，用于添加图标） */
   title?: React.ReactNode;
+  /** 是否为深色模式 */
+  isDark?: boolean;
 }
 
 /**
@@ -59,6 +61,7 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
   onSave,
   renderMenuIcon,
   title,
+  isDark = false,
 }) => {
   const { token } = useToken();
   const navigate = useNavigate();
@@ -161,24 +164,46 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
     });
   };
 
-  // 生成渐变色（根据索引生成不同颜色，使用不透明实色）
+  // 生成渐变色（深浅色模式分别优化）
   const generateGradient = (index: number): string => {
+    if (isDark) {
+      // 深色模式：使用略带透明度或更深邃、低饱和度的渐变，呈现“发光”感而非“色块”感
+      const darkGradients = [
+        'linear-gradient(135deg, #0A4A8F 0%, #06305C 100%)', // 深蓝
+        'linear-gradient(135deg, #3C3A8F 0%, #29285C 100%)', // 深靛
+        'linear-gradient(135deg, #7A3A9F 0%, #52286B 100%)', // 深紫
+        'linear-gradient(135deg, #8F1A35 0%, #5C1122 100%)', // 深粉
+        'linear-gradient(135deg, #A1223C 0%, #691627 100%)', // 深玫
+        'linear-gradient(135deg, #8F5906 0%, #5C3A04 100%)', // 深橙
+        'linear-gradient(135deg, #8F7200 0%, #5C4A00 100%)', // 深黄
+        'linear-gradient(135deg, #1A6B3E 0%, #114528 100%)', // 深绿
+        'linear-gradient(135deg, #006B66 0%, #004542 100%)', // 深薄荷
+        'linear-gradient(135deg, #2D6B82 0%, #1D4554 100%)', // 深天空
+        'linear-gradient(135deg, #6B5941 0%, #453A2A 100%)', // 深沙金
+        'linear-gradient(135deg, #3E4E8F 0%, #28325C 100%)', // 深冷紫
+        'linear-gradient(135deg, #1D6B30 0%, #13451F 100%)', // 深青草
+        'linear-gradient(135deg, #8F3C3C 0%, #5C2626 100%)', // 深珊瑚
+        'linear-gradient(135deg, #21457A 0%, #152C4D 100%)', // 深海洋
+      ];
+      return darkGradients[index % darkGradients.length];
+    }
+    
     const gradients = [
-      'linear-gradient(135deg, #0A84FF 0%, #5AC8FA 100%)',     // iOS 蓝
-      'linear-gradient(135deg, #5E5CE6 0%, #7D7AFF 100%)',     // iOS 靛蓝
-      'linear-gradient(135deg, #BF5AF2 0%, #DA8FFF 100%)',     // iOS 紫
-      'linear-gradient(135deg, #FF2D55 0%, #FF6482 100%)',     // iOS 粉红
-      'linear-gradient(135deg, #FF375F 0%, #FF7A95 100%)',     // 玫红
-      'linear-gradient(135deg, #FF9F0A 0%, #FFC15A 100%)',     // iOS 橙
-      'linear-gradient(135deg, #FFCC00 0%, #FFE066 100%)',     // iOS 黄
-      'linear-gradient(135deg, #30D158 0%, #6DE28A 100%)',     // iOS 绿
-      'linear-gradient(135deg, #00C7BE 0%, #5EDFD7 100%)',     // iOS 薄荷
-      'linear-gradient(135deg, #64D2FF 0%, #9BE4FF 100%)',     // 天空蓝
-      'linear-gradient(135deg, #AC8E68 0%, #C8A983 100%)',     // 沙金
-      'linear-gradient(135deg, #6C8CF5 0%, #9AAEF9 100%)',     // 冷紫蓝
-      'linear-gradient(135deg, #34C759 0%, #7FDF95 100%)',     // 青草绿
-      'linear-gradient(135deg, #FF6B6B 0%, #FF9A8B 100%)',     // 珊瑚红
-      'linear-gradient(135deg, #3A7BD5 0%, #6FB1FC 100%)',     // 海洋蓝
+      'linear-gradient(135deg, #0A84FF 0%, #5AC8FA 100%)', // iOS 蓝
+      'linear-gradient(135deg, #5E5CE6 0%, #7D7AFF 100%)', // iOS 靛蓝
+      'linear-gradient(135deg, #BF5AF2 0%, #DA8FFF 100%)', // iOS 紫
+      'linear-gradient(135deg, #FF2D55 0%, #FF6482 100%)', // iOS 粉红
+      'linear-gradient(135deg, #FF375F 0%, #FF7A95 100%)', // 玫红
+      'linear-gradient(135deg, #FF9F0A 0%, #FFC15A 100%)', // iOS 橙
+      'linear-gradient(135deg, #FFCC00 0%, #FFE066 100%)', // iOS 黄
+      'linear-gradient(135deg, #30D158 0%, #6DE28A 100%)', // iOS 绿
+      'linear-gradient(135deg, #00C7BE 0%, #5EDFD7 100%)', // iOS 薄荷
+      'linear-gradient(135deg, #64D2FF 0%, #9BE4FF 100%)', // 天空蓝
+      'linear-gradient(135deg, #AC8E68 0%, #C8A983 100%)', // 沙金
+      'linear-gradient(135deg, #6C8CF5 0%, #9AAEF9 100%)', // 冷紫蓝
+      'linear-gradient(135deg, #34C759 0%, #7FDF95 100%)', // 青草绿
+      'linear-gradient(135deg, #FF6B6B 0%, #FF9A8B 100%)', // 珊瑚红
+      'linear-gradient(135deg, #3A7BD5 0%, #6FB1FC 100%)', // 海洋蓝
     ];
     return gradients[index % gradients.length];
   };

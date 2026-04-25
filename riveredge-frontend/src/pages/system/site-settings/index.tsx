@@ -727,92 +727,131 @@ const SiteSettingsPage: React.FC = () => {
   );
 
   const systemSettingsContent = (
-    <Row gutter={[24, 16]}>
-      <Col xs={24} md={8}>
-        <Card title={t('pages.system.siteSettings.tabFunction')} size="small" style={{ marginBottom: 16 }}>
-          <Form.Item name="enable_invitation" label={t('pages.system.siteSettings.enableInvitation')} valuePropName="checked">
-            <Switch />
-          </Form.Item>
-          <Form.Item name="enable_register" label={t('pages.system.siteSettings.enableRegister')} valuePropName="checked">
-            <Switch />
-          </Form.Item>
-        </Card>
-        <Card title={t('pages.system.configCenter.param.security_token_check_interval')} size="small" style={{ marginBottom: 16 }}>
-          <Form.Item
-            name="security.token_check_interval"
-            label={t('pages.system.configCenter.param.security_token_check_interval')}
-            tooltip={t('pages.system.configCenter.param.security_token_check_interval_desc')}
-          >
-            <InputNumber min={10} max={300} style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item
-            name="security.inactivity_timeout"
-            label={t('pages.system.configCenter.param.security_inactivity_timeout')}
-            tooltip={t('pages.system.configCenter.param.security_inactivity_timeout_desc')}
-          >
-            <InputNumber min={0} style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item
-            name="security.user_cache_time"
-            label={t('pages.system.configCenter.param.security_user_cache_time')}
-            tooltip={t('pages.system.configCenter.param.security_user_cache_time_desc')}
-          >
-            <InputNumber min={0} style={{ width: '100%' }} />
-          </Form.Item>
+    <Row gutter={[0, 16]}>
+      <Col span={24}>
+        <Card title={t('pages.system.siteSettings.tabFunction')} size="small">
+          <Row gutter={[16, 0]}>
+            <Col xs={24} sm={12} md={12} lg={12} xl={12}>
+              <Form.Item name="enable_invitation" label={t('pages.system.siteSettings.enableInvitation')} valuePropName="checked">
+                <Switch />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} md={12} lg={12} xl={12}>
+              <Form.Item name="enable_register" label={t('pages.system.siteSettings.enableRegister')} valuePropName="checked">
+                <Switch />
+              </Form.Item>
+            </Col>
+          </Row>
         </Card>
       </Col>
-      <Col xs={24} md={8}>
-        <Card title={t('pages.system.configCenter.param.ui_max_tabs')} size="small" style={{ marginBottom: 16 }}>
-          <Form.Item
-            name="ui.max_tabs"
-            label={t('pages.system.configCenter.param.ui_max_tabs')}
-            tooltip={t('pages.system.configCenter.param.ui_max_tabs_desc')}
-          >
-            <InputNumber min={5} max={50} style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item
-            name="ui.default_page_size"
-            label={t('pages.system.configCenter.param.ui_default_page_size')}
-            tooltip={t('pages.system.configCenter.param.ui_default_page_size_desc')}
-          >
-            <InputNumber min={5} max={100} style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item
-            name="ui.table_loading_delay"
-            label={t('pages.system.configCenter.param.ui_table_loading_delay')}
-            tooltip={t('pages.system.configCenter.param.ui_table_loading_delay_desc')}
-          >
-            <InputNumber min={0} max={1000} style={{ width: '100%' }} />
-          </Form.Item>
-        </Card>
-        <Card title={t('pages.system.configCenter.param.theme_config_colorPrimary')} size="small" style={{ marginBottom: 16 }}>
-          <Form.Item
-            name="theme_config.colorPrimary"
-            label={t('pages.system.configCenter.param.theme_config_colorPrimary')}
-            tooltip={t('pages.system.configCenter.param.theme_config_colorPrimary_desc')}
-            getValueFromEvent={(c: any) => (typeof c?.toHexString === 'function' ? c.toHexString() : c)}
-          >
-            <ColorPicker showText />
-          </Form.Item>
+      <Col span={24}>
+        <Card title={t('pages.system.siteSettings.groupSecurity')} size="small">
+          <Row gutter={[16, 0]}>
+            <Col xs={24} sm={12} md={8}>
+              <Form.Item
+                name="security.token_check_interval"
+                label={t('pages.system.configCenter.param.security_token_check_interval')}
+                tooltip={t('pages.system.configCenter.param.security_token_check_interval_desc')}
+              >
+                <InputNumber min={10} max={300} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} md={8}>
+              <Form.Item
+                name="security.inactivity_timeout"
+                label={t('pages.system.configCenter.param.security_inactivity_timeout')}
+                tooltip={t('pages.system.configCenter.param.security_inactivity_timeout_desc')}
+              >
+                <InputNumber min={0} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} md={8}>
+              <Form.Item
+                name="security.user_cache_time"
+                label={t('pages.system.configCenter.param.security_user_cache_time')}
+                tooltip={t('pages.system.configCenter.param.security_user_cache_time_desc')}
+              >
+                <InputNumber min={0} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+          </Row>
         </Card>
       </Col>
-      <Col xs={24} md={8}>
-        <Card title={t('pages.system.configCenter.param.network_timeout')} size="small" style={{ marginBottom: 16 }}>
-          <Form.Item
-            name="network.timeout"
-            label={t('pages.system.configCenter.param.network_timeout')}
-            tooltip={t('pages.system.configCenter.param.network_timeout_desc')}
-          >
-            <InputNumber min={1000} style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item
-            name="system.max_retries"
-            label={t('pages.system.configCenter.param.system_max_retries')}
-            tooltip={t('pages.system.configCenter.param.system_max_retries_desc')}
-          >
-            <InputNumber min={0} max={5} style={{ width: '100%' }} />
-          </Form.Item>
+      <Col span={24}>
+        <Card title={t('pages.system.siteSettings.groupUi')} size="small">
+          <Row gutter={[16, 0]}>
+            <Col xs={24} sm={12} md={8}>
+              <Form.Item
+                name="ui.max_tabs"
+                label={t('pages.system.configCenter.param.ui_max_tabs')}
+                tooltip={t('pages.system.configCenter.param.ui_max_tabs_desc')}
+              >
+                <InputNumber min={5} max={50} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} md={8}>
+              <Form.Item
+                name="ui.default_page_size"
+                label={t('pages.system.configCenter.param.ui_default_page_size')}
+                tooltip={t('pages.system.configCenter.param.ui_default_page_size_desc')}
+              >
+                <InputNumber min={5} max={100} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} md={8}>
+              <Form.Item
+                name="ui.table_loading_delay"
+                label={t('pages.system.configCenter.param.ui_table_loading_delay')}
+                tooltip={t('pages.system.configCenter.param.ui_table_loading_delay_desc')}
+              >
+                <InputNumber min={0} max={1000} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+          </Row>
         </Card>
+      </Col>
+      <Col span={24}>
+        <Row gutter={[16, 16]}>
+          <Col xs={24} lg={12}>
+            <Card title={t('pages.system.configCenter.param.theme_config_colorPrimary')} size="small">
+              <Form.Item
+                name="theme_config.colorPrimary"
+                label={t('pages.system.configCenter.param.theme_config_colorPrimary')}
+                tooltip={t('pages.system.configCenter.param.theme_config_colorPrimary_desc')}
+                getValueFromEvent={(c: any) => (typeof c?.toHexString === 'function' ? c.toHexString() : c)}
+                style={{ marginBottom: 0 }}
+              >
+                <ColorPicker showText />
+              </Form.Item>
+            </Card>
+          </Col>
+          <Col xs={24} lg={12}>
+            <Card title={t('pages.system.siteSettings.groupNetwork')} size="small">
+              <Row gutter={[16, 0]}>
+                <Col xs={24} sm={12}>
+                  <Form.Item
+                    name="network.timeout"
+                    label={t('pages.system.configCenter.param.network_timeout')}
+                    tooltip={t('pages.system.configCenter.param.network_timeout_desc')}
+                    style={{ marginBottom: 0 }}
+                  >
+                    <InputNumber min={1000} style={{ width: '100%' }} />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12}>
+                  <Form.Item
+                    name="system.max_retries"
+                    label={t('pages.system.configCenter.param.system_max_retries')}
+                    tooltip={t('pages.system.configCenter.param.system_max_retries_desc')}
+                    style={{ marginBottom: 0 }}
+                  >
+                    <InputNumber min={0} max={5} style={{ width: '100%' }} />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </Card>
+          </Col>
+        </Row>
       </Col>
     </Row>
   );

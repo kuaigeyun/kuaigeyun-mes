@@ -21,7 +21,6 @@ import { warehouseApi } from '../../../services/production';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { getMaterialReturnLifecycle } from '../../../utils/materialReturnLifecycle';
 import type { DocumentPrintApiResult } from '../../../../../utils/printResponseHelpers';
-import type { DocumentPrintApiResult } from '../../../../../utils/printResponseHelpers';
 
 interface MaterialReturn {
   id?: number;

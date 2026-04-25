@@ -17,6 +17,7 @@ import enUS from 'antd/locale/en_US';
 import { useQuery } from '@tanstack/react-query';
 import { getCurrentUser } from './services/auth';
 import { getToken, clearAuth, getUserInfo, setUserInfo, setTenantId, getTenantId, isTokenExpired, getTokenRemainingTime } from './utils/auth';
+import { buildRestoredUserFromStorage } from './utils/restoredUser';
 import { refreshAccessTokenSilently } from './utils/tokenRefresh';
 import { prefetchAvatarUrl } from './utils/avatar';
 import { useGlobalStore } from './stores';
@@ -39,30 +40,6 @@ import ErrorBoundary from './components/error-boundary';
 if (typeof window !== 'undefined') {
   // 先设置一个占位符，实际实例会在 App 组件内部设置
   (window as any).__ANTD_MESSAGE__ = null;
-}
-
-/** 从 localStorage 恢复登录用户信息的单一实现，挂载初始化与拉取失败兜底共用 */
-function buildRestoredUserFromStorage() {
-  const savedUserInfo = getUserInfo();
-  if (!savedUserInfo) return null;
-  return {
-    id: savedUserInfo.id || 1,
-    username: savedUserInfo.username || 'admin',
-    email: savedUserInfo.email,
-    full_name: savedUserInfo.full_name,
-    is_infra_admin:
-      savedUserInfo.user_type === 'infra_superadmin' ||
-      savedUserInfo.is_infra_admin ||
-      false,
-    is_tenant_admin: savedUserInfo.is_tenant_admin || false,
-    tenant_id: savedUserInfo.tenant_id,
-    tenant_name: savedUserInfo.tenant_name,
-    permissions: Array.isArray(savedUserInfo.permissions) ? savedUserInfo.permissions : [],
-    permission_version: savedUserInfo.permission_version || 1,
-    department: savedUserInfo.department,
-    position: savedUserInfo.position,
-    roles: Array.isArray(savedUserInfo.roles) ? savedUserInfo.roles : [],
-  };
 }
 
 // 权限守卫组件（memo 阻断上层频繁重渲染的级联）
@@ -516,6 +493,13 @@ const ANT_LOCALE_MAP: Record<string, typeof zhCN> = {
 // 主应用组件
 export default function App() {
   const { i18n } = useTranslation();
+
+  // 移除 index.html 静态首屏占位（旧 #app-loading / data-app-first-paint），避免与内层 Spin 叠显或长期不卸
+  useEffect(() => {
+    document.getElementById('app-loading')?.remove();
+    document.querySelector('[data-app-first-paint]')?.remove();
+  }, []);
+
   const currentUser = useGlobalStore((s) => s.currentUser);
   const initFromApi = useThemeStore((s) => s.initFromApi);
   const themeInitialized = useThemeStore((s) => s.initialized);

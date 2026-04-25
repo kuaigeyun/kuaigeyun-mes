@@ -6,7 +6,7 @@
  */
 
 import React, { useCallback, useRef, useState } from 'react';
-import { Card, Popover } from 'antd';
+import { Card, Popover, theme } from 'antd';
 import * as LucideIcons from 'lucide-react';
 import {
   TaxCalculator,
@@ -20,11 +20,17 @@ import {
   QrGenerator,
 } from './ToolkitComponents';
 import { AppstoreOutlined, CloseOutlined } from '@ant-design/icons';
-import { dashboardTopBarTheme } from './dashboardTopBarTheme';
+import {
+  getDashboardTopBarCardBorder,
+  getDashboardTopBarCardShadow,
+  getDashboardTopBarTheme,
+} from './dashboardTopBarTheme';
 
 interface WorkplaceToolkitProps {
   cardHeight: string | number;
   cardRadius: string | number;
+  backgroundTint?: string;
+  isDark?: boolean;
 }
 
 /**
@@ -41,7 +47,8 @@ const TrayToolButton: React.FC<{
   onPopoverOpenChange: (open: boolean) => void;
   /** 挂到抽屉容器内，避免与 body 上多个 portal 叠层时受控 open 不同步导致旧浮层残留 */
   getPopupContainer: (triggerNode: HTMLElement) => HTMLElement;
-}> = ({ icon, label, color, render, onClick, popoverKey, popoverOpen, onPopoverOpenChange, getPopupContainer }) => {
+  theme: ReturnType<typeof getDashboardTopBarTheme>;
+}> = ({ icon, label, color, render, onClick, popoverKey, popoverOpen, onPopoverOpenChange, getPopupContainer, theme }) => {
   const [hover, setHover] = useState(false);
   
   const content = (
@@ -64,8 +71,8 @@ const TrayToolButton: React.FC<{
         height: 72,
         borderRadius: 12,
         cursor: 'pointer',
-        background: hover ? 'rgba(24,24,27,0.06)' : 'rgba(24,24,27,0.02)',
-        border: `1px solid ${hover ? 'rgba(24,24,27,0.12)' : 'rgba(24,24,27,0.06)'}`,
+        background: hover ? theme.itemHoverBg : 'transparent',
+        border: hover ? theme.itemBorder : '1px solid transparent',
         transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
         transform: hover ? 'translateY(-1px)' : 'translateY(0)',
       }}
@@ -86,7 +93,7 @@ const TrayToolButton: React.FC<{
       <span
         style={{
           fontSize: 11,
-          color: hover ? '#18181b' : 'rgba(24,24,27,0.55)',
+          color: hover ? theme.textColor : theme.textSecondaryColor,
           fontWeight: 500,
           whiteSpace: 'nowrap',
         }}
@@ -120,12 +127,16 @@ const TrayToolButton: React.FC<{
 export const WorkplaceToolkit: React.FC<WorkplaceToolkitProps> = ({
   cardHeight,
   cardRadius,
+  backgroundTint,
+  isDark = false,
 }) => {
   const [showTray, setShowTray] = useState(false);
+  const currentTheme = getDashboardTopBarTheme(isDark);
   /** 本卡片内同时只保留一个工具 Popover（主区 + 托盘共用） */
   const [activeToolPopoverKey, setActiveToolPopoverKey] = useState<string | null>(null);
   const trayPopoverMountRef = useRef<HTMLDivElement | null>(null);
 
+  const { token } = theme.useToken();
   const getTrayPopupContainer = useCallback(
     (triggerNode: HTMLElement) => trayPopoverMountRef.current ?? triggerNode.ownerDocument.body,
     [],
@@ -176,10 +187,14 @@ export const WorkplaceToolkit: React.FC<WorkplaceToolkitProps> = ({
           height: cardHeight,
           maxHeight: cardHeight,
           borderRadius: cardRadius,
-          background: dashboardTopBarTheme.toolkitCardBackground,
-          border: '1px solid rgba(24,24,27,0.08)',
-          boxShadow: '0 2px 12px rgba(24,24,27,0.06), inset 0 1px 0 rgba(255,255,255,0.85)',
-          overflow: 'hidden',
+          background: backgroundTint 
+            ? `${backgroundTint}, ${currentTheme.toolkitCardBackground}` 
+            : currentTheme.toolkitCardBackground,
+          border: getDashboardTopBarCardBorder(isDark),
+          borderBottom: '0 solid transparent',
+          borderBottomLeftRadius: showTray ? 0 : cardRadius,
+          borderBottomRightRadius: showTray ? 0 : cardRadius,
+          boxShadow: getDashboardTopBarCardShadow(isDark),
           zIndex: 11,
           position: 'relative',
         }}
@@ -212,19 +227,19 @@ export const WorkplaceToolkit: React.FC<WorkplaceToolkitProps> = ({
                 gap: 10,
                 padding: '6px 10px',
                 borderRadius: 8,
-                background: 'rgba(24,24,27,0.04)',
-                border: '1px solid rgba(24,24,27,0.08)',
+                background: currentTheme.itemHoverBg,
+                border: currentTheme.itemBorder,
                 cursor: 'pointer',
                 transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
                 overflow: 'hidden',
               }}
               onMouseEnter={e => {
-                e.currentTarget.style.background = 'rgba(24,24,27,0.07)';
-                e.currentTarget.style.borderColor = 'rgba(24,24,27,0.12)';
+                e.currentTarget.style.background = currentTheme.itemActiveBg;
+                e.currentTarget.style.borderColor = isDark ? 'rgba(255,255,255,0.15)' : 'rgba(24,24,27,0.12)';
               }}
               onMouseLeave={e => {
-                e.currentTarget.style.background = 'rgba(24,24,27,0.04)';
-                e.currentTarget.style.borderColor = 'rgba(24,24,27,0.08)';
+                e.currentTarget.style.background = currentTheme.itemHoverBg;
+                e.currentTarget.style.borderColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(24,24,27,0.08)';
               }}
             >
               <div 
@@ -244,11 +259,11 @@ export const WorkplaceToolkit: React.FC<WorkplaceToolkitProps> = ({
                 {tool.icon}
               </div>
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: '#18181b', lineHeight: 1.2 }}>{tool.label}</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: currentTheme.textColor, lineHeight: 1.2 }}>{tool.label}</div>
                 <div
                   style={{
                     fontSize: 10,
-                    color: 'rgba(24,24,27,0.45)',
+                    color: currentTheme.textSecondaryColor,
                     marginTop: 2,
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
@@ -276,21 +291,21 @@ export const WorkplaceToolkit: React.FC<WorkplaceToolkitProps> = ({
             gap: 10,
             padding: '6px 10px',
             borderRadius: 8,
-            background: showTray ? 'rgba(24,24,27,0.09)' : 'rgba(24,24,27,0.04)',
-            border: showTray ? '1px solid rgba(24,24,27,0.16)' : '1px dashed rgba(24,24,27,0.14)',
+            background: showTray ? currentTheme.itemActiveBg : currentTheme.itemHoverBg,
+            border: showTray ? (isDark ? '1px solid rgba(255,255,255,0.2)' : '1px solid rgba(24,24,27,0.16)') : (isDark ? '1px dashed rgba(255,255,255,0.15)' : '1px dashed rgba(24,24,27,0.14)'),
             cursor: 'pointer',
             transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           }}
           onMouseEnter={(e) => {
             if (!showTray) {
-              e.currentTarget.style.borderColor = 'rgba(24,24,27,0.22)';
-              e.currentTarget.style.background = 'rgba(24,24,27,0.07)';
+              e.currentTarget.style.borderColor = isDark ? 'rgba(255,255,255,0.25)' : 'rgba(24,24,27,0.22)';
+              e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(24,24,27,0.07)';
             }
           }}
           onMouseLeave={(e) => {
             if (!showTray) {
-              e.currentTarget.style.borderColor = 'rgba(24,24,27,0.14)';
-              e.currentTarget.style.background = 'rgba(24,24,27,0.04)';
+              e.currentTarget.style.borderColor = isDark ? 'rgba(255,255,255,0.15)' : 'rgba(24,24,27,0.14)';
+              e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(24,24,27,0.04)';
             }
           }}
         >
@@ -299,8 +314,8 @@ export const WorkplaceToolkit: React.FC<WorkplaceToolkitProps> = ({
               width: 32,
               height: 32,
               borderRadius: '50%',
-              background: 'rgba(24,24,27,0.06)',
-              color: 'rgba(24,24,27,0.65)',
+              background: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(24,24,27,0.06)',
+              color: isDark ? 'rgba(255,255,255,0.65)' : 'rgba(24,24,27,0.65)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -311,7 +326,7 @@ export const WorkplaceToolkit: React.FC<WorkplaceToolkitProps> = ({
           >
             {showTray ? <CloseOutlined style={{ fontSize: 16 }} /> : <AppstoreOutlined style={{ fontSize: 17 }} />}
           </div>
-          <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(24,24,27,0.78)' }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: currentTheme.textColor, opacity: 0.85 }}>
             {showTray ? '收起托盘' : '扩展托盘'}
           </div>
         </div>
@@ -322,25 +337,30 @@ export const WorkplaceToolkit: React.FC<WorkplaceToolkitProps> = ({
         ref={trayPopoverMountRef}
         style={{
           position: 'absolute',
-          top: showTray ? '100%' : '80%',
+          top: '100%',
           left: 0,
           right: 0,
-          background: dashboardTopBarTheme.toolkitTrayBackground,
-          borderRadius: '0 0 16px 16px',
-          boxShadow: showTray ? '0 20px 40px -12px rgba(24, 24, 27, 0.12)' : 'none',
-          padding: '14px 14px 14px 14px',
-          border: '1px solid rgba(24,24,27,0.08)',
+          background: backgroundTint 
+            ? `${backgroundTint}, ${isDark ? 'rgba(24, 24, 27, 0.7)' : 'rgba(255, 255, 255, 0.75)'}` 
+            : (isDark ? 'rgba(24, 24, 27, 0.7)' : 'rgba(255, 255, 255, 0.75)'),
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          borderRadius: `0 0 ${cardRadius || token.borderRadiusLG}px ${cardRadius || token.borderRadiusLG}px`,
+          boxShadow: showTray ? (isDark ? '0 20px 40px -12px rgba(0, 0, 0, 0.4)' : '0 12px 24px -10px rgba(24, 24, 27, 0.1)') : 'none',
+          padding: showTray ? '16px 14px 14px 14px' : '0',
+          border: showTray ? getDashboardTopBarCardBorder(isDark) : '0 solid transparent',
           borderTop: 'none',
           display: 'flex',
           flexDirection: 'column',
           gap: 12,
-          /* 展开时盖在卡片之上，避免与卡片负 margin 叠层把首行 hover 光晕裁掉 */
-          zIndex: showTray ? 12 : 10,
+          zIndex: 12, // 保持恒定层级，仅靠透明度和位移控制，防止层级突变导致动画失效
           opacity: showTray ? 1 : 0,
-          visibility: showTray ? 'visible' : 'hidden',
-          transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
-          marginTop: -8,
+          transform: showTray ? 'translateY(0)' : 'translateY(-24px)', // 增大位移，使动效更明显
+          transition: 'opacity 0.4s ease, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+          marginTop: -1,
+          pointerEvents: showTray ? 'auto' : 'none',
           overflow: 'visible',
+          backfaceVisibility: 'hidden', // 提示浏览器开启 GPU 加速
         }}
       >
         <div
@@ -367,6 +387,7 @@ export const WorkplaceToolkit: React.FC<WorkplaceToolkitProps> = ({
             label="金额大写"
             color="#f59e0b"
             render={<RmbCapitalizer />}
+            theme={currentTheme}
           />
           <TrayToolButton
             getPopupContainer={getTrayPopupContainer}
@@ -377,6 +398,7 @@ export const WorkplaceToolkit: React.FC<WorkplaceToolkitProps> = ({
             label="文本整理"
             color="#10b981"
             render={<TextTransformer />}
+            theme={currentTheme}
           />
           <TrayToolButton
             getPopupContainer={getTrayPopupContainer}
@@ -387,6 +409,7 @@ export const WorkplaceToolkit: React.FC<WorkplaceToolkitProps> = ({
             label="单位换算"
             color="#8b5cf6"
             render={<UnitConverter />}
+            theme={currentTheme}
           />
           <TrayToolButton
             getPopupContainer={getTrayPopupContainer}
@@ -397,6 +420,7 @@ export const WorkplaceToolkit: React.FC<WorkplaceToolkitProps> = ({
             label="密码生成"
             color="#ec4899"
             render={<PasswordGen />}
+            theme={currentTheme}
           />
           <TrayToolButton
             getPopupContainer={getTrayPopupContainer}
@@ -407,6 +431,7 @@ export const WorkplaceToolkit: React.FC<WorkplaceToolkitProps> = ({
             label="随手便签"
             color="#f97316"
             render={<MemoTool />}
+            theme={currentTheme}
           />
           <TrayToolButton
             getPopupContainer={getTrayPopupContainer}
@@ -417,6 +442,7 @@ export const WorkplaceToolkit: React.FC<WorkplaceToolkitProps> = ({
             label="二维码"
             color="#22d3ee"
             render={<QrGenerator />}
+            theme={currentTheme}
           />
         </div>
       </div>

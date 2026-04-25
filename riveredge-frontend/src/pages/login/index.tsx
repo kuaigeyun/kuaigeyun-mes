@@ -711,7 +711,8 @@ export default function LoginPage() {
   };
 
   // 平台主题颜色（与 infra 登录页一致，从平台设置读取）
-  const themeColor = platformSettings?.theme_color || '#1890ff';
+  /** 与 login.html 首屏骨架、Ant Design 5 默认主色一致，避免 MPA 首帧与 React 首帧色差闪烁 */
+  const themeColor = platformSettings?.theme_color || '#1677ff';
 
   /**
    * 处理登录成功后的逻辑

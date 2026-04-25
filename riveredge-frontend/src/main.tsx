@@ -6,6 +6,8 @@ import { ConfigProvider } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import App from './app'
 import './global.less'
+import { useGlobalStore } from './stores/globalStore'
+import { seedCurrentUserFromAuthStorage } from './utils/restoredUser'
 
 // ⚠️ 关键修复：同步导入i18n配置，确保应用启动前语言包已加载
 // 这解决了菜单标题显示英文的问题
@@ -130,5 +132,15 @@ const AppWrapper = import.meta.env.DEV ? (
   </React.StrictMode>
 );
 
-ReactDOM.createRoot(document.getElementById('root')!).render(AppWrapper)
+async function mountApp() {
+  try {
+    await useGlobalStore.persist.rehydrate()
+  } catch {
+    // 持久化损坏时不阻塞挂载
+  }
+  seedCurrentUserFromAuthStorage()
+  ReactDOM.createRoot(document.getElementById('root')!).render(AppWrapper)
+}
+
+void mountApp()
 

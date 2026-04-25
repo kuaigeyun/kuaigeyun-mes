@@ -68,7 +68,7 @@ import { useThemeStore } from '../../../stores/themeStore';
 import { getUserInfo } from '../../../utils/auth';
 import { getUserByUuid, getUserList } from '../../../services/user';
 import WeatherWidget from '../../../components/weather/WeatherWidget';
-import { getWeatherCardGradient } from '../../../components/weather/weatherBackground';
+import { getWeatherCardGradient, getWeatherAdaptiveTint } from '../../../components/weather/weatherBackground';
 import type { WeatherData } from '../../../services/weather';
 import { formatLunarDate } from '../../../utils/lunarDate';
 import { APP_VERSION } from '../../../constants/version';
@@ -76,9 +76,10 @@ import * as LucideIcons from 'lucide-react';
 import { getUserTaskStats, getUserTasks, type UserTask } from '../../../services/userTask';
 import WorkplaceToolkit from './WorkplaceToolkit';
 import {
-  dashboardTopBarTheme,
   dashboardTopBarUserCardBackground,
-  dashboardTopBarUserCardOuterBorder,
+  getDashboardTopBarCardBorder,
+  getDashboardTopBarCardShadow,
+  getDashboardTopBarTheme,
 } from './dashboardTopBarTheme';
 
 
@@ -1332,14 +1333,13 @@ export default function DashboardPage() {
         }
       }}
       style={{
-        padding: '4px 12px 4px 14px',
+        padding: '4px 12px',
         cursor: 'pointer',
         minWidth: 92,
         whiteSpace: 'nowrap',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'center',
-        borderLeft: '1px solid rgba(255,255,255,0.28)',
       }}
     >
       <Space size={4} align="center" wrap={false}>
@@ -1413,9 +1413,9 @@ export default function DashboardPage() {
               minHeight: dashboardTopCardHeight,
               maxHeight: dashboardTopCardHeight,
               borderRadius: dashboardCardRadius,
-              border: dashboardTopBarUserCardOuterBorder,
-              background: dashboardTopBarUserCardBackground(token.colorPrimary),
-              boxShadow: dashboardCardShadow,
+              border: getDashboardTopBarCardBorder(isDark),
+              background: dashboardTopBarUserCardBackground(token.colorPrimary, isDark),
+              boxShadow: getDashboardTopBarCardShadow(isDark),
               overflow: 'hidden',
             }}
             styles={{
@@ -1428,10 +1428,30 @@ export default function DashboardPage() {
                 minHeight: 0,
                 overflow: 'hidden',
                 borderRadius: dashboardCardRadius,
+                position: 'relative',
               },
             }}
           >
-            <div style={{ width: '100%' }}>
+            <div
+              aria-hidden
+              style={{
+                position: 'absolute',
+                right: 0,
+                top: 0,
+                bottom: 0,
+                width: 'min(85%, 650px)',
+                pointerEvents: 'none',
+                zIndex: 0,
+                /* 终极密集版赛博帷幕：14条跨维度交织曲线。通过极细微的线宽变化实现如同“数字极光”般的深邃纹理 */
+                backgroundImage: `url("data:image/svg+xml,%3Csvg width='400' height='120' viewBox='0 0 400 120' preserveAspectRatio='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M400 0 C 250 0, 150 120, 0 120' stroke='white' fill='none' stroke-width='3.5' stroke-opacity='0.28' /%3E%3Cpath d='M340 0 C 200 0, 100 100, 0 100' stroke='white' fill='none' stroke-width='2.4' stroke-opacity='0.20' /%3E%3Cpath d='M400 35 C 280 35, 180 115, 100 115' stroke='white' fill='none' stroke-width='1.8' stroke-opacity='0.16' /%3E%3Cpath d='M280 0 C 160 0, 60 85, 0 85' stroke='white' fill='none' stroke-width='1.5' stroke-opacity='0.14' /%3E%3Cpath d='M400 75 C 320 75, 120 110, 0 110' stroke='white' fill='none' stroke-width='1.2' stroke-opacity='0.12' /%3E%3Cpath d='M360 0 C 220 0, 80 105, 20 105' stroke='white' fill='none' stroke-width='1.0' stroke-opacity='0.10' /%3E%3Cpath d='M400 15 C 300 15, 200 45, 0 45' stroke='white' fill='none' stroke-width='0.8' stroke-opacity='0.08' /%3E%3Cpath d='M390 0 C 290 0, 150 115, 60 115' stroke='white' fill='none' stroke-width='0.7' stroke-opacity='0.08' /%3E%3Cpath d='M220 0 C 120 0, 40 70, 0 70' stroke='white' fill='none' stroke-width='0.6' stroke-opacity='0.07' /%3E%3Cpath d='M400 55 C 340 55, 240 85, 0 85' stroke='white' fill='none' stroke-width='0.5' stroke-opacity='0.06' /%3E%3Cpath d='M400 95 C 350 95, 250 110, 110 110' stroke='white' fill='none' stroke-width='0.5' stroke-opacity='0.05' /%3E%3Cpath d='M150 0 C 85 0, 35 55, 0 55' stroke='white' fill='none' stroke-width='0.4' stroke-opacity='0.05' /%3E%3Cpath d='M400 10 C 310 10, 200 40, 60 40' stroke='white' fill='none' stroke-width='0.4' stroke-opacity='0.04' /%3E%3Cpath d='M290 0 C 200 0, 110 65, 55 65' stroke='white' fill='none' stroke-width='0.3' stroke-opacity='0.04' /%3E%3C/svg%3E")`,
+                backgroundSize: '100% 100%',
+                backgroundRepeat: 'no-repeat',
+                opacity: isDark ? 0.35 : 0.6,
+                maskImage: 'linear-gradient(90deg, transparent, rgba(0,0,0,0.4) 15%, #000 100%)',
+                WebkitMaskImage: 'linear-gradient(90deg, transparent, rgba(0,0,0,0.3) 15%, #000 100%)',
+              }}
+            />
+            <div style={{ width: '100%', position: 'relative', zIndex: 1 }}>
               <div
                 style={{
                   display: 'flex',
@@ -1518,9 +1538,9 @@ export default function DashboardPage() {
               height: dashboardTopCardHeight,
               maxHeight: dashboardTopCardHeight,
               borderRadius: dashboardCardRadius,
-              border: 'none',
-              background: getWeatherCardGradient(weatherForDashboard),
-              boxShadow: dashboardCardShadow,
+              border: getDashboardTopBarCardBorder(isDark),
+              background: getWeatherCardGradient(weatherForDashboard, isDark),
+              boxShadow: getDashboardTopBarCardShadow(isDark),
               overflow: 'hidden',
             }}
             styles={{
@@ -1534,13 +1554,15 @@ export default function DashboardPage() {
               },
             }}
           >
-            <WeatherWidget tone="light" onWeatherChange={setWeatherForDashboard} />
+            <WeatherWidget tone={isDark ? 'dark' : 'light'} onWeatherChange={setWeatherForDashboard} />
           </Card>
         </Col>
         <Col xs={24} md={7} style={{ display: 'flex', overflow: 'visible' }}>
           <WorkplaceToolkit
             cardHeight={dashboardTopCardHeight}
             cardRadius={dashboardCardRadius}
+            backgroundTint={getWeatherAdaptiveTint(weatherForDashboard, isDark)}
+            isDark={isDark}
           />
         </Col>
       </Row>
@@ -1614,7 +1636,7 @@ export default function DashboardPage() {
                 {/* 工单总数 */}
                 <div style={{ display: 'flex', minWidth: 0, minHeight: 0 }}>
                   <DashboardKpiRichCard
-                    gradient={isDark ? 'linear-gradient(102deg, #1d2633 0%, #1a2230 45%, #161e2b 100%)' : '#ffffff'}
+                    gradient={isDark ? 'var(--ant-colorBgContainer)' : '#ffffff'}
                     title={t('pages.dashboard.statWorkOrderTotal')}
                     mainValue={formatDashboardMetric(statistics?.production?.total)}
                     mainSuffix={t('pages.dashboard.unitOrder')}
@@ -1636,7 +1658,7 @@ export default function DashboardPage() {
                 {/* 完工数量 */}
                 <div style={{ display: 'flex', minWidth: 0, minHeight: 0 }}>
                   <DashboardKpiRichCard
-                    gradient={isDark ? 'linear-gradient(102deg, #2a261f 0%, #252118 50%, #201c15 100%)' : '#ffffff'}
+                    gradient={isDark ? 'var(--ant-colorBgContainer)' : '#ffffff'}
                     title={t('pages.dashboard.statCompletedQuantity')}
                     mainValue={formatDashboardMetric(statistics?.production?.completed_quantity)}
                     mainSuffix={t('pages.dashboard.unitPiece')}
@@ -1660,7 +1682,7 @@ export default function DashboardPage() {
                 {/* 进行中工单 */}
                 <div style={{ display: 'flex', minWidth: 0, minHeight: 0 }}>
                   <DashboardKpiRichCard
-                    gradient={isDark ? 'linear-gradient(102deg, #1c2a31 0%, #18262d 50%, #15222a 100%)' : '#ffffff'}
+                    gradient={isDark ? 'var(--ant-colorBgContainer)' : '#ffffff'}
                     title={t('pages.dashboard.statWorkOrderInProgress')}
                     mainValue={formatDashboardMetric(statistics?.production?.in_progress)}
                     mainSuffix={t('pages.dashboard.unitOrder')}
@@ -1682,7 +1704,7 @@ export default function DashboardPage() {
                 {/* 库存预警 */}
                 <div style={{ display: 'flex', minWidth: 0, minHeight: 0 }}>
                   <DashboardKpiRichCard
-                    gradient={isDark ? 'linear-gradient(102deg, #23272d 0%, #1f2329 50%, #1b1f24 100%)' : '#ffffff'}
+                    gradient={isDark ? 'var(--ant-colorBgContainer)' : '#ffffff'}
                     title={t('pages.dashboard.statInventoryAlert')}
                     mainValue={formatDashboardMetric(statistics?.inventory?.alert_count)}
                     mainSuffix={t('pages.dashboard.unitAlert')}
@@ -1706,7 +1728,7 @@ export default function DashboardPage() {
                 {/* 工单完成率 */}
                 <div style={{ display: 'flex', minWidth: 0, minHeight: 0 }}>
                   <DashboardKpiRichCard
-                    gradient={isDark ? 'linear-gradient(102deg, #1f2a26 0%, #1a2521 48%, #15201c 100%)' : '#ffffff'}
+                    gradient={isDark ? 'var(--ant-colorBgContainer)' : '#ffffff'}
                     title={t('pages.dashboard.statWorkOrderCompletion')}
                     mainValue={formatDashboardRate(statistics?.production?.completion_rate)}
                     mainSuffix="%"
@@ -1726,7 +1748,7 @@ export default function DashboardPage() {
                 {/* 质量概览 */}
                 <div style={{ display: 'flex', minWidth: 0, minHeight: 0 }}>
                   <DashboardKpiRichCard
-                    gradient={isDark ? 'linear-gradient(102deg, #292327 0%, #241f23 48%, #1f1a1e 100%)' : '#ffffff'}
+                    gradient={isDark ? 'var(--ant-colorBgContainer)' : '#ffffff'}
                     title={t('pages.dashboard.statQualitySummary')}
                     mainValue={formatDashboardRate(statistics?.quality?.quality_rate)}
                     mainSuffix="%"
@@ -2309,9 +2331,11 @@ export default function DashboardPage() {
               height: dashboardTopCardHeight,
               maxHeight: dashboardTopCardHeight,
               borderRadius: dashboardCardRadius,
-              background: dashboardTopBarTheme.clockCardBackground,
-              border: dashboardTopBarTheme.clockCardBorder,
-              boxShadow: dashboardTopBarTheme.clockCardShadow,
+              background: getWeatherAdaptiveTint(weatherForDashboard, isDark)
+                ? `${getWeatherAdaptiveTint(weatherForDashboard, isDark)}, ${getDashboardTopBarTheme(isDark).clockCardBackground}`
+                : getDashboardTopBarTheme(isDark).clockCardBackground,
+              border: getDashboardTopBarCardBorder(isDark),
+              boxShadow: getDashboardTopBarCardShadow(isDark),
               overflow: 'hidden',
               position: 'relative',
             }}
@@ -2342,7 +2366,7 @@ export default function DashboardPage() {
                 <Text
                   style={{
                     fontSize: 13,
-                    color: 'rgba(24,24,27,0.78)',
+                    color: isDark ? 'rgba(255,255,255,0.78)' : 'rgba(24,24,27,0.78)',
                     lineHeight: 1.35,
                     margin: 0,
                   }}
@@ -2352,7 +2376,7 @@ export default function DashboardPage() {
                 <Text
                   style={{
                     fontSize: 13,
-                    color: 'rgba(24,24,27,0.48)',
+                    color: isDark ? 'rgba(255,255,255,0.48)' : 'rgba(24,24,27,0.48)',
                     lineHeight: 1.35,
                   }}
                 >
@@ -2416,6 +2440,7 @@ export default function DashboardPage() {
                 // updatePreferences 直接写入 useUserPreferenceStore，组件会因 store 变更自动重渲染，无需再 invalidate queries
                 await updatePreferences({ dashboard_quick_entries: serializableItems });
               }}
+              isDark={isDark}
               renderMenuIcon={(menuUuid: string) => {
                 if (!quickEntryMenuTree.length) return <ShopOutlined />;
                 const menu = findMenuInTree(quickEntryMenuTree, menuUuid);

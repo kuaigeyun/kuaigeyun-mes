@@ -1527,7 +1527,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     const updateLogoTitleColor = () => {
       // 计算应该使用的文字颜色
       const logoTitleColor = isDarkMode
-        ? 'var(--ant-colorText)'
+        ? '#ffffff'
         : (isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)');
 
       // 直接查找 h1 元素（LOGO 后的标题文字）

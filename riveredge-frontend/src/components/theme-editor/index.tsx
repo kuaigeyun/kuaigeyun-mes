@@ -17,6 +17,79 @@ import { clearTabsData } from '../../stores/tabsStorage';
 const { Text } = Typography;
 
 /**
+ * 带提示按钮的标题组件属性
+ */
+interface TitleWithHintProps {
+  /** 标题文本 */
+  title: string;
+  /** 提示内容 */
+  hint?: React.ReactNode;
+  /** 标题右侧内联提示（用于压缩卡片高度） */
+  inlineTip?: React.ReactNode;
+}
+
+const TitleWithHint: React.FC<TitleWithHintProps> = ({ title, hint, inlineTip }) => {
+  const { token } = theme.useToken();
+  if (!hint) {
+    return <span>{title}</span>;
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+      <span>{title}</span>
+      {inlineTip ? (
+        <div style={{
+          backgroundColor: token.colorWarningBg,
+          padding: '4px 12px',
+          borderRadius: 20, // 使用全圆角更现代
+          display: 'inline-flex',
+          alignItems: 'center',
+          border: `1px solid ${token.colorWarningBorder}`,
+          margin: '0 4px',
+          boxShadow: '0 1px 2px rgba(0, 0, 0, 0.02)', // 增加微弱投影增强质感
+        }}>
+          <Text type="warning" style={{ fontSize: 11, fontWeight: 600, lineHeight: 1.2 }}>
+            {inlineTip}
+          </Text>
+        </div>
+      ) : null}
+      <Popover
+        content={
+          <div style={{
+            fontSize: 12,
+            color: token.colorTextSecondary,
+            lineHeight: 1.6,
+            maxWidth: 300
+          }}>
+            {hint}
+          </div>
+        }
+        title={null}
+        trigger="click"
+        placement="topLeft"
+        overlayStyle={{ maxWidth: 320 }}
+      >
+        <Button
+          type="text"
+          size="small"
+          icon={<QuestionCircleOutlined style={{ fontSize: 14 }} />}
+          style={{
+            padding: '2px 4px',
+            height: 20,
+            width: 20,
+            minWidth: 20,
+            color: token.colorTextTertiary,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        />
+      </Popover>
+    </div>
+  );
+};
+
+/**
  * 主题编辑面板组件属性
  */
 interface ThemeEditorProps {
@@ -28,9 +101,6 @@ interface ThemeEditorProps {
   onThemeUpdate?: (themeConfig: any) => void;
 }
 
-/**
- * 主题编辑面板组件
- */
 const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate }) => {
   const { token } = theme.useToken(); // 获取当前实际使用的主题 token
   const [form] = Form.useForm();
@@ -60,12 +130,9 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
   // 预设主题颜色（B端主流配色）
   const presetColors = [
     { color: '#1890ff', label: '经典蓝' },      // Ant Design 默认蓝
-    { color: '#1677ff', label: '现代蓝' },      // Ant Design 5.x 新蓝
-    { color: '#0958d9', label: '深蓝' },        // 深蓝色
     { color: '#13c2c2', label: '青蓝' },        // 青色系
     { color: '#52c41a', label: '绿色' },        // 成功色
     { color: '#722ed1', label: '紫色' },        // 紫色系
-    { color: '#eb2f96', label: '粉色' },        // 粉色系
     { color: '#fa8c16', label: '橙色' },        // 警告色
     { color: '#f5222d', label: '红色' },        // 错误色
   ];
@@ -218,60 +285,6 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
   const normalizedTabsBgColor = useMemo(() => {
     return normalizeBackgroundColor(tabsBgColorValue, '') || '';
   }, [tabsBgColorValue]);
-
-  /**
-   * 带提示按钮的标题组件
-   */
-  interface TitleWithHintProps {
-    /** 标题文本 */
-    title: string;
-    /** 提示内容 */
-    hint?: React.ReactNode;
-  }
-
-  const TitleWithHint: React.FC<TitleWithHintProps> = ({ title, hint }) => {
-    if (!hint) {
-      return <span>{title}</span>;
-    }
-
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span>{title}</span>
-        <Popover
-          content={
-            <div style={{
-              fontSize: 12,
-              color: token.colorTextSecondary,
-              lineHeight: 1.6,
-              maxWidth: 300
-            }}>
-              {hint}
-            </div>
-          }
-          title={null}
-          trigger="click"
-          placement="topLeft"
-          overlayStyle={{ maxWidth: 320 }}
-        >
-          <Button
-            type="text"
-            size="small"
-            icon={<QuestionCircleOutlined style={{ fontSize: 14 }} />}
-            style={{
-              padding: '2px 4px',
-              height: 20,
-              width: 20,
-              minWidth: 20,
-              color: token.colorTextTertiary,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          />
-        </Popover>
-      </div>
-    );
-  };
 
 
   /**
@@ -631,7 +644,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       };
 
       // 2. 更新本地表单和状态
-      setTabsPersistenceValue(false);
+      setTabsPersistenceValue(true);
       setCompactValue(false);
       setColorMode('light');
       setColorPrimaryValue('#1890ff');
@@ -642,7 +655,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       form.setFieldsValue({
         ...defaultThemeConfig,
         colorMode: 'light',
-        tabsPersistence: false,
+        tabsPersistence: true,
         layoutMode: 'mix',
       });
 
@@ -657,7 +670,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         await Promise.all([
           useUserPreferenceStore.getState().updatePreferences({
             theme: 'light',
-            tabs_persistence: false,
+            tabs_persistence: true,
             theme_config: defaultThemeConfig,
           }).catch(err => console.warn('Failed to reset user preferences:', err)),
           updateSiteSetting({
@@ -732,6 +745,13 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       <style>{`
         .theme-editor-drawer .ant-card {
           box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+        /* 修复大圆角时 Tooltip 变成圆形或变形的问题 */
+        .ant-tooltip-inner {
+          border-radius: 6px !important;
+          padding: 4px 8px !important;
+          min-width: 32px;
+          text-align: center;
         }
       `}</style>
       {open && form && (
@@ -898,69 +918,78 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
               style={{ marginBottom: 16 }}
               styles={{ body: { padding: '16px' } }}
             >
-              {/* 预设颜色 */}
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ marginBottom: 8, fontSize: 13, fontWeight: 500 }}>快速选择</div>
-                <Space wrap>
-                  {presetColors.map((preset, index) => (
-                    <Tooltip key={index} title={preset.label || preset.color} placement="top">
-                      <div
-                        style={{
-                          width: 32,
-                          height: 32,
-                          borderRadius: '50%',
-                          backgroundColor: preset.color,
-                          border: form.getFieldValue('colorPrimary') === preset.color
-                            ? `2px solid ${preset.color}`
-                            : '2px solid transparent',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s',
-                          boxShadow: form.getFieldValue('colorPrimary') === preset.color
-                            ? `0 0 0 2px ${preset.color}40`
-                            : 'none',
-                        }}
-                        onClick={() => {
-                          form.setFieldValue('colorPrimary', preset.color);
-                        }}
-                        onMouseEnter={(e) => {
-                          if (form.getFieldValue('colorPrimary') !== preset.color) {
-                            e.currentTarget.style.transform = 'scale(1.1)';
-                            e.currentTarget.style.boxShadow = `0 0 0 2px ${preset.color}40`;
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (form.getFieldValue('colorPrimary') !== preset.color) {
-                            e.currentTarget.style.transform = 'scale(1)';
-                            e.currentTarget.style.boxShadow = 'none';
-                          }
-                        }}
-                      />
-                    </Tooltip>
-                  ))}
-                </Space>
-              </div>
-
-              {/* 自定义颜色 */}
-              <Form.Item
-                name="colorPrimary"
-                label="自定义颜色"
-                getValueFromEvent={(color) => {
-                  return normalizeColorValue(color, '#1890ff');
-                }}
-                normalize={(value) => {
-                  return normalizeColorValue(value, '#1890ff');
+              {/* 快速选择 + 自定义颜色：并排展示，减少面板高度与滚动 */}
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'minmax(0, 1fr) 150px',
+                  gap: 16,
+                  alignItems: 'start',
                 }}
               >
-                <ColorPicker
-                  showText
-                  format="hex"
-                  value={normalizedColorPrimary}
-                  onChange={(color) => {
-                    const colorValue = normalizeColorValue(color, token.colorPrimary || '#1890ff');
-                    form.setFieldValue('colorPrimary', colorValue);
+                <div>
+                  <div style={{ marginBottom: 8, fontSize: 13, fontWeight: 500 }}>快速选择</div>
+                  <Space wrap size={10}>
+                    {presetColors.map((preset, index) => (
+                      <Tooltip key={index} title={preset.label || preset.color} placement="top">
+                        <div
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: '50%',
+                            backgroundColor: preset.color,
+                            border: form.getFieldValue('colorPrimary') === preset.color
+                              ? `2px solid ${preset.color}`
+                              : '2px solid transparent',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            boxShadow: form.getFieldValue('colorPrimary') === preset.color
+                              ? `0 0 0 2px ${preset.color}40`
+                              : 'none',
+                          }}
+                          onClick={() => {
+                            form.setFieldValue('colorPrimary', preset.color);
+                          }}
+                          onMouseEnter={(e) => {
+                            if (form.getFieldValue('colorPrimary') !== preset.color) {
+                              e.currentTarget.style.transform = 'scale(1.1)';
+                              e.currentTarget.style.boxShadow = `0 0 0 2px ${preset.color}40`;
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (form.getFieldValue('colorPrimary') !== preset.color) {
+                              e.currentTarget.style.transform = 'scale(1)';
+                              e.currentTarget.style.boxShadow = 'none';
+                            }
+                          }}
+                        />
+                      </Tooltip>
+                    ))}
+                  </Space>
+                </div>
+
+                <Form.Item
+                  name="colorPrimary"
+                  label="自定义颜色"
+                  style={{ marginBottom: 0 }}
+                  getValueFromEvent={(color) => {
+                    return normalizeColorValue(color, '#1890ff');
                   }}
-                />
-              </Form.Item>
+                  normalize={(value) => {
+                    return normalizeColorValue(value, '#1890ff');
+                  }}
+                >
+                  <ColorPicker
+                    showText
+                    format="hex"
+                    value={normalizedColorPrimary}
+                    onChange={(color) => {
+                      const colorValue = normalizeColorValue(color, token.colorPrimary || '#1890ff');
+                      form.setFieldValue('colorPrimary', colorValue);
+                    }}
+                  />
+                </Form.Item>
+              </div>
             </Card>
 
             {/* 左侧菜单栏设置（仅浅色模式支持自定义背景色） */}
@@ -971,73 +1000,68 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                   <TitleWithHint
                     title="左侧菜单栏"
                     hint="自定义左侧菜单栏的背景颜色"
+                    inlineTip="提示：仅在浅色模式下生效"
                   />
                 }
                 style={{ marginBottom: 16 }}
                 styles={{ body: { padding: '16px' } }}
               >
-                {/* 重要提示：仅在浅色模式下生效 - 直接展示 */}
-                <div style={{
-                  marginBottom: 12,
-                  padding: '6px 10px',
-                  backgroundColor: token.colorWarningBg || '#fff7e6',
-                  borderRadius: 6,
-                  fontSize: 12,
-                  color: token.colorWarning || '#fa8c16',
-                  border: `1px solid ${token.colorWarningBorder || '#ffe7ba'}`
-                }}>
-                  <Text type="warning" style={{ fontSize: 12 }}>
-                    提示：仅在浅色模式下生效
-                  </Text>
-                </div>
-                {/* 预设颜色 - 左侧菜单栏使用3个浅色+3个深色预设（按深度排序） */}
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ marginBottom: 8, fontSize: 13, fontWeight: 500 }}>快速选择</div>
-                  <Space wrap>
-                    {presetSiderAndHeaderColors
-                      .map((preset, index) => (
-                        <Tooltip key={index} title={preset.label || preset.color} placement="top">
-                          <div
-                            style={{
-                              width: 32,
-                              height: 32,
-                              borderRadius: '50%',
-                              backgroundColor: preset.color,
-                              border: form.getFieldValue('siderBgColor') === preset.color
-                                ? `2px solid ${preset.color}`
-                                : '2px solid transparent',
-                              cursor: 'pointer',
-                              transition: 'all 0.2s',
-                              boxShadow: form.getFieldValue('siderBgColor') === preset.color
-                                ? `0 0 0 2px ${preset.color}40`
-                                : 'none',
-                              position: 'relative',
-                            }}
-                            onClick={() => {
-                              form.setFieldValue('siderBgColor', preset.color);
-                            }}
-                            onMouseEnter={(e) => {
-                              if (form.getFieldValue('siderBgColor') !== preset.color) {
-                                e.currentTarget.style.transform = 'scale(1.1)';
-                                e.currentTarget.style.boxShadow = `0 0 0 2px ${preset.color}40`;
-                              }
-                            }}
-                            onMouseLeave={(e) => {
-                              if (form.getFieldValue('siderBgColor') !== preset.color) {
-                                e.currentTarget.style.transform = 'scale(1)';
-                                e.currentTarget.style.boxShadow = 'none';
-                              }
-                            }}
-                          />
-                        </Tooltip>
-                      ))}
-                  </Space>
-                </div>
+                {/* 快速选择 + 自定义颜色：并排展示，减少面板高度与滚动 */}
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'minmax(0, 1fr) 150px',
+                    gap: 16,
+                    alignItems: 'start',
+                  }}
+                >
+                  <div>
+                    <div style={{ marginBottom: 8, fontSize: 13, fontWeight: 500 }}>快速选择</div>
+                    <Space wrap size={10}>
+                      {presetSiderAndHeaderColors
+                        .map((preset, index) => (
+                          <Tooltip key={index} title={preset.label || preset.color} placement="top">
+                            <div
+                              style={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: '50%',
+                                backgroundColor: preset.color,
+                                border: form.getFieldValue('siderBgColor') === preset.color
+                                  ? `2px solid ${preset.color}`
+                                  : '2px solid transparent',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                boxShadow: form.getFieldValue('siderBgColor') === preset.color
+                                  ? `0 0 0 2px ${preset.color}40`
+                                  : 'none',
+                                position: 'relative',
+                              }}
+                              onClick={() => {
+                                form.setFieldValue('siderBgColor', preset.color);
+                              }}
+                              onMouseEnter={(e) => {
+                                if (form.getFieldValue('siderBgColor') !== preset.color) {
+                                  e.currentTarget.style.transform = 'scale(1.1)';
+                                  e.currentTarget.style.boxShadow = `0 0 0 2px ${preset.color}40`;
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                if (form.getFieldValue('siderBgColor') !== preset.color) {
+                                  e.currentTarget.style.transform = 'scale(1)';
+                                  e.currentTarget.style.boxShadow = 'none';
+                                }
+                              }}
+                            />
+                          </Tooltip>
+                        ))}
+                    </Space>
+                  </div>
 
-                {/* 自定义颜色 */}
-                <Form.Item
+                  <Form.Item
                   name="siderBgColor"
                   label="自定义颜色"
+                  style={{ marginBottom: 0 }}
                   getValueFromEvent={(color) => {
                     if (!color) return '';
                     if (typeof color === 'string') return color;
@@ -1114,7 +1138,8 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                     }}
                     allowClear
                   />
-                </Form.Item>
+                  </Form.Item>
+                </div>
               </Card>
             )}
 
@@ -1126,102 +1151,97 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                   <TitleWithHint
                     title="顶栏背景色"
                     hint="自定义顶栏的背景颜色，使用 hex 格式（如：#ffffff，带透明度为 8 位 #rrggbbaa）"
+                    inlineTip="提示：仅在浅色模式下生效"
                   />
                 }
                 style={{ marginBottom: 16 }}
                 styles={{ body: { padding: '16px' } }}
               >
-                {/* 重要提示：仅在浅色模式下生效 - 直接展示 */}
-                <div style={{
-                  marginBottom: 12,
-                  padding: '6px 10px',
-                  backgroundColor: token.colorWarningBg || '#fff7e6',
-                  borderRadius: 6,
-                  fontSize: 12,
-                  color: token.colorWarning || '#fa8c16',
-                  border: `1px solid ${token.colorWarningBorder || '#ffe7ba'}`
-                }}>
-                  <Text type="warning" style={{ fontSize: 12 }}>
-                    提示：仅在浅色模式下生效
-                  </Text>
-                </div>
-
-                {/* 预设颜色 - 顶栏使用3个浅色+3个深色预设（按深度排序） */}
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ marginBottom: 8, fontSize: 13, fontWeight: 500 }}>快速选择</div>
-                  <Space wrap>
-                    {presetSiderAndHeaderColors
-                      .map((preset, index) => (
-                        <Tooltip key={index} title={preset.label || preset.color} placement="top">
-                          <div
-                            style={{
-                              width: 32,
-                              height: 32,
-                              borderRadius: '50%',
-                              backgroundColor: preset.color,
-                              border: form.getFieldValue('headerBgColor') === preset.color
-                                ? `2px solid ${preset.color}`
-                                : '2px solid transparent',
-                              cursor: 'pointer',
-                              transition: 'all 0.2s',
-                              boxShadow: form.getFieldValue('headerBgColor') === preset.color
-                                ? `0 0 0 2px ${preset.color}40`
-                                : 'none',
-                              position: 'relative',
-                            }}
-                            onClick={() => {
-                              form.setFieldValue('headerBgColor', preset.color);
-                            }}
-                            onMouseEnter={(e) => {
-                              if (form.getFieldValue('headerBgColor') !== preset.color) {
-                                e.currentTarget.style.transform = 'scale(1.1)';
-                                e.currentTarget.style.boxShadow = `0 0 0 2px ${preset.color}40`;
-                              }
-                            }}
-                            onMouseLeave={(e) => {
-                              if (form.getFieldValue('headerBgColor') !== preset.color) {
-                                e.currentTarget.style.transform = 'scale(1)';
-                                e.currentTarget.style.boxShadow = 'none';
-                              }
-                            }}
-                          />
-                        </Tooltip>
-                      ))}
-                  </Space>
-                </div>
-
-                {/* 自定义颜色 */}
-                <Form.Item
-                  name="headerBgColor"
-                  label="自定义颜色"
-                  getValueFromEvent={(color) => {
-                    if (!color) return '';
-                    if (typeof color === 'string') return color;
-                    if (color && typeof color.toHexString === 'function') {
-                      try {
-                        return color.toHexString();
-                      } catch (e) {
-                        console.warn('Color toHexString failed:', e);
-                      }
-                    }
-                    return '';
+                {/* 快速选择 + 自定义颜色：并排展示，减少面板高度与滚动 */}
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'minmax(0, 1fr) 150px',
+                    gap: 16,
+                    alignItems: 'start',
                   }}
                 >
-                  <ColorPicker
-                    showText
-                    format="hex"
-                    value={normalizedHeaderBgColor || undefined}
-                    onChange={(color) => {
-                      if (!color || color === null) {
-                        form.setFieldValue('headerBgColor', '');
-                        return;
+                  <div>
+                    <div style={{ marginBottom: 8, fontSize: 13, fontWeight: 500 }}>快速选择</div>
+                    <Space wrap size={10}>
+                      {presetSiderAndHeaderColors
+                        .map((preset, index) => (
+                          <Tooltip key={index} title={preset.label || preset.color} placement="top">
+                            <div
+                              style={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: '50%',
+                                backgroundColor: preset.color,
+                                border: form.getFieldValue('headerBgColor') === preset.color
+                                  ? `2px solid ${preset.color}`
+                                  : '2px solid transparent',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                boxShadow: form.getFieldValue('headerBgColor') === preset.color
+                                  ? `0 0 0 2px ${preset.color}40`
+                                  : 'none',
+                                position: 'relative',
+                              }}
+                              onClick={() => {
+                                form.setFieldValue('headerBgColor', preset.color);
+                              }}
+                              onMouseEnter={(e) => {
+                                if (form.getFieldValue('headerBgColor') !== preset.color) {
+                                  e.currentTarget.style.transform = 'scale(1.1)';
+                                  e.currentTarget.style.boxShadow = `0 0 0 2px ${preset.color}40`;
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                if (form.getFieldValue('headerBgColor') !== preset.color) {
+                                  e.currentTarget.style.transform = 'scale(1)';
+                                  e.currentTarget.style.boxShadow = 'none';
+                                }
+                              }}
+                            />
+                          </Tooltip>
+                        ))}
+                    </Space>
+                  </div>
+
+                  <Form.Item
+                    name="headerBgColor"
+                    label="自定义颜色"
+                    style={{ marginBottom: 0 }}
+                    getValueFromEvent={(color) => {
+                      if (!color) return '';
+                      if (typeof color === 'string') return color;
+                      if (color && typeof color.toHexString === 'function') {
+                        try {
+                          return color.toHexString();
+                        } catch (e) {
+                          console.warn('Color toHexString failed:', e);
+                        }
                       }
-                      const colorValue = normalizeBackgroundColor(color, '');
-                      form.setFieldValue('headerBgColor', colorValue);
+                      return '';
                     }}
-                    allowClear
-                  />
-                </Form.Item>
+                  >
+                    <ColorPicker
+                      showText
+                      format="hex"
+                      value={normalizedHeaderBgColor || undefined}
+                      onChange={(color) => {
+                        if (!color || color === null) {
+                          form.setFieldValue('headerBgColor', '');
+                          return;
+                        }
+                        const colorValue = normalizeBackgroundColor(color, '');
+                        form.setFieldValue('headerBgColor', colorValue);
+                      }}
+                      allowClear
+                    />
+                  </Form.Item>
+                </div>
               </Card>
             )}
 
@@ -1233,102 +1253,97 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                   <TitleWithHint
                     title="标签栏背景色"
                     hint="自定义标签栏的背景颜色，使用 hex 格式（如：#ffffff，带透明度为 8 位 #rrggbbaa）"
+                    inlineTip="提示：仅在浅色模式下生效"
                   />
                 }
                 style={{ marginBottom: 16 }}
                 styles={{ body: { padding: '16px' } }}
               >
-                {/* 重要提示：仅在浅色模式下生效 - 直接展示 */}
-                <div style={{
-                  marginBottom: 12,
-                  padding: '6px 10px',
-                  backgroundColor: token.colorWarningBg || '#fff7e6',
-                  borderRadius: 6,
-                  fontSize: 12,
-                  color: token.colorWarning || '#fa8c16',
-                  border: `1px solid ${token.colorWarningBorder || '#ffe7ba'}`
-                }}>
-                  <Text type="warning" style={{ fontSize: 12 }}>
-                    提示：仅在浅色模式下生效
-                  </Text>
-                </div>
-
-                {/* 预设颜色 - 标签栏使用6个浅色预设（按深度排序） */}
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ marginBottom: 8, fontSize: 13, fontWeight: 500 }}>快速选择</div>
-                  <Space wrap>
-                    {presetTabsColors
-                      .map((preset, index) => (
-                        <Tooltip key={index} title={preset.label || preset.color} placement="top">
-                          <div
-                            style={{
-                              width: 32,
-                              height: 32,
-                              borderRadius: '50%',
-                              backgroundColor: preset.color,
-                              border: form.getFieldValue('tabsBgColor') === preset.color
-                                ? `2px solid ${preset.color}`
-                                : '2px solid transparent',
-                              cursor: 'pointer',
-                              transition: 'all 0.2s',
-                              boxShadow: form.getFieldValue('tabsBgColor') === preset.color
-                                ? `0 0 0 2px ${preset.color}40`
-                                : 'none',
-                              position: 'relative',
-                            }}
-                            onClick={() => {
-                              form.setFieldValue('tabsBgColor', preset.color);
-                            }}
-                            onMouseEnter={(e) => {
-                              if (form.getFieldValue('tabsBgColor') !== preset.color) {
-                                e.currentTarget.style.transform = 'scale(1.1)';
-                                e.currentTarget.style.boxShadow = `0 0 0 2px ${preset.color}40`;
-                              }
-                            }}
-                            onMouseLeave={(e) => {
-                              if (form.getFieldValue('tabsBgColor') !== preset.color) {
-                                e.currentTarget.style.transform = 'scale(1)';
-                                e.currentTarget.style.boxShadow = 'none';
-                              }
-                            }}
-                          />
-                        </Tooltip>
-                      ))}
-                  </Space>
-                </div>
-
-                {/* 自定义颜色 */}
-                <Form.Item
-                  name="tabsBgColor"
-                  label="自定义颜色"
-                  getValueFromEvent={(color) => {
-                    if (!color) return '';
-                    if (typeof color === 'string') return color;
-                    if (color && typeof color.toHexString === 'function') {
-                      try {
-                        return color.toHexString();
-                      } catch (e) {
-                        console.warn('Color toHexString failed:', e);
-                      }
-                    }
-                    return '';
+                {/* 快速选择 + 自定义颜色：并排展示，减少面板高度与滚动 */}
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'minmax(0, 1fr) 150px',
+                    gap: 16,
+                    alignItems: 'start',
                   }}
                 >
-                  <ColorPicker
-                    showText
-                    format="hex"
-                    value={normalizedTabsBgColor || undefined}
-                    onChange={(color) => {
-                      if (!color || color === null) {
-                        form.setFieldValue('tabsBgColor', '');
-                        return;
+                  <div>
+                    <div style={{ marginBottom: 8, fontSize: 13, fontWeight: 500 }}>快速选择</div>
+                    <Space wrap size={10}>
+                      {presetTabsColors
+                        .map((preset, index) => (
+                          <Tooltip key={index} title={preset.label || preset.color} placement="top">
+                            <div
+                              style={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: '50%',
+                                backgroundColor: preset.color,
+                                border: form.getFieldValue('tabsBgColor') === preset.color
+                                  ? `2px solid ${preset.color}`
+                                  : '2px solid transparent',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                boxShadow: form.getFieldValue('tabsBgColor') === preset.color
+                                  ? `0 0 0 2px ${preset.color}40`
+                                  : 'none',
+                                position: 'relative',
+                              }}
+                              onClick={() => {
+                                form.setFieldValue('tabsBgColor', preset.color);
+                              }}
+                              onMouseEnter={(e) => {
+                                if (form.getFieldValue('tabsBgColor') !== preset.color) {
+                                  e.currentTarget.style.transform = 'scale(1.1)';
+                                  e.currentTarget.style.boxShadow = `0 0 0 2px ${preset.color}40`;
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                if (form.getFieldValue('tabsBgColor') !== preset.color) {
+                                  e.currentTarget.style.transform = 'scale(1)';
+                                  e.currentTarget.style.boxShadow = 'none';
+                                }
+                              }}
+                            />
+                          </Tooltip>
+                        ))}
+                    </Space>
+                  </div>
+
+                  <Form.Item
+                    name="tabsBgColor"
+                    label="自定义颜色"
+                    style={{ marginBottom: 0 }}
+                    getValueFromEvent={(color) => {
+                      if (!color) return '';
+                      if (typeof color === 'string') return color;
+                      if (color && typeof color.toHexString === 'function') {
+                        try {
+                          return color.toHexString();
+                        } catch (e) {
+                          console.warn('Color toHexString failed:', e);
+                        }
                       }
-                      const colorValue = normalizeBackgroundColor(color, '');
-                      form.setFieldValue('tabsBgColor', colorValue);
+                      return '';
                     }}
-                    allowClear
-                  />
-                </Form.Item>
+                  >
+                    <ColorPicker
+                      showText
+                      format="hex"
+                      value={normalizedTabsBgColor || undefined}
+                      onChange={(color) => {
+                        if (!color || color === null) {
+                          form.setFieldValue('tabsBgColor', '');
+                          return;
+                        }
+                        const colorValue = normalizeBackgroundColor(color, '');
+                        form.setFieldValue('tabsBgColor', colorValue);
+                      }}
+                      allowClear
+                    />
+                  </Form.Item>
+                </div>
               </Card>
             )}
 
@@ -1444,7 +1459,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                     form.setFieldsValue({ tabsPersistence: checked });
                   }} />
                   <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>
-                    启用后，关闭浏览器后重新打开，已打开的标签页会自动恢复；关闭后只保留仪表板、钉住标签和当前页面
+                    重新进入系统时，自动恢复上次未关闭的标签页
                   </Text>
                 </div>
               </Form.Item>

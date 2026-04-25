@@ -465,13 +465,24 @@ const LanguageListPage: React.FC = () => {
       title: t('field.language.translationValue'),
       dataIndex: 'value',
       width: '50%',
+      render: (_: string, record: { key: string; value: string }) => (
+        <Input.TextArea
+          value={record.value}
+          onChange={(e) => {
+            const v = e.target.value;
+            setTranslations((prev) => ({ ...prev, [record.key]: v }));
+          }}
+          autoSize={{ minRows: 1, maxRows: 8 }}
+          style={{ width: '100%' }}
+        />
+      ),
     },
     {
       title: t('common.actions'),
-      width: '10%',
+      width: 100,
       render: (_: any, record: { key: string }) => (
         <Button
-          type="link"
+          type="default"
           danger
           size="small"
           onClick={() => handleDeleteTranslation(record.key)}
@@ -647,6 +658,7 @@ const LanguageListPage: React.FC = () => {
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
+        column={1}
         dataSource={detailData || undefined}
         columns={[
           {
@@ -706,7 +718,7 @@ const LanguageListPage: React.FC = () => {
           setCurrentLanguageForTranslation(null);
           setTranslations({});
         }}
-        size={800}
+        width="70%"
         loading={translationLoading}
         styles={{
           body: {
@@ -757,10 +769,13 @@ const LanguageListPage: React.FC = () => {
         </div>
         <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
           <Table
+            size="small"
             columns={translationColumns}
             dataSource={translationTableData}
             rowKey="key"
             pagination={false}
+            tableLayout="fixed"
+            style={{ width: '100%' }}
             scroll={{ y: 'calc(100vh - 220px)' }}
           />
         </div>
