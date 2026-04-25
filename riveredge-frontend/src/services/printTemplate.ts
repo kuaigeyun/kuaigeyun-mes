@@ -61,10 +61,38 @@ export interface RenderPrintTemplateData {
 
 export interface PrintTemplateRenderResponse {
   success: boolean;
+  output_format?: string;
+  content?: string;
+  content_encoding?: string;
+  mime_type?: string;
+  message?: string;
   file_url?: string;
   file_uuid?: string;
   error?: string;
   inngest_run_id?: string;
+}
+
+export interface CompilePrintTemplateData {
+  source_type?: 'designer_json' | 'html_jinja';
+  source: Record<string, any> | string;
+  target_engine?: 'jinja2';
+  document_type?: string;
+}
+
+export interface PrintTemplateCompileResponse {
+  success: boolean;
+  compiled_template: string;
+  schema_version?: string;
+  warnings?: string[];
+}
+
+export interface CompilePreviewPrintTemplateData extends CompilePrintTemplateData {
+  preview_data?: Record<string, any>;
+  strict_variables?: boolean;
+}
+
+export interface PrintTemplateCompilePreviewResponse extends PrintTemplateCompileResponse {
+  rendered_html?: string;
 }
 
 /**
@@ -117,6 +145,26 @@ export async function deletePrintTemplate(printTemplateUuid: string): Promise<vo
  */
 export async function renderPrintTemplate(printTemplateUuid: string, data: RenderPrintTemplateData): Promise<PrintTemplateRenderResponse> {
   return apiRequest<PrintTemplateRenderResponse>(`/core/print-templates/${printTemplateUuid}/render`, {
+    method: 'POST',
+    data,
+  });
+}
+
+/**
+ * 编译可视化模板 schema
+ */
+export async function compilePrintTemplate(data: CompilePrintTemplateData): Promise<PrintTemplateCompileResponse> {
+  return apiRequest<PrintTemplateCompileResponse>('/core/print-templates/compile', {
+    method: 'POST',
+    data,
+  });
+}
+
+/**
+ * 编译并预览可视化模板 schema
+ */
+export async function compilePreviewPrintTemplate(data: CompilePreviewPrintTemplateData): Promise<PrintTemplateCompilePreviewResponse> {
+  return apiRequest<PrintTemplateCompilePreviewResponse>('/core/print-templates/compile-preview', {
     method: 'POST',
     data,
   });

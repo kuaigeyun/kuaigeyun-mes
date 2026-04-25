@@ -4,11 +4,8 @@
 提供打印模板的 CRUD 操作和模板渲染功能。
 """
 
-from typing import Optional, List
-from uuid import UUID
+from typing import Optional, List, Any
 from datetime import datetime
-import io
-import re
 
 from tortoise.exceptions import IntegrityError
 
@@ -16,16 +13,17 @@ from core.models.print_template import PrintTemplate
 from core.services.print.print_device_service import PrintDeviceService
 from core.services.print.template_renderer import (
     is_pdfme_template,
-    render_plain_template,
+    render_template,
     render_template_to_html,
 )
 from core.schemas.print_template import (
     PrintTemplateCreate,
     PrintTemplateUpdate,
     PrintTemplateRenderRequest,
+    PrintTemplateCompileRequest,
+    PrintTemplateCompilePreviewRequest,
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
-from core.schemas.print_template import PrintTemplateCreate
 from loguru import logger
 
 
@@ -61,6 +59,19 @@ PRESET_PRINT_TEMPLATES = [
 
 
 class PrintTemplateService:
+    @staticmethod
+    def _resolve_render_engine(print_template: PrintTemplate) -> str:
+        config = print_template.config or {}
+        engine = config.get("engine")
+        if isinstance(engine, str) and engine.strip():
+            return engine.strip().lower()
+        return "plain"
+
+    @staticmethod
+    def _resolve_strict_variables(print_template: PrintTemplate) -> bool:
+        config = print_template.config or {}
+        return bool(config.get("strict_variables", False))
+
     """
     打印模板管理服务类
     
@@ -297,7 +308,10 @@ class PrintTemplateService:
     @staticmethod
     def render_template(
         template_content: str,
-        data: dict
+        data: dict,
+        *,
+        engine: str = "plain",
+        strict_variables: bool = False,
     ) -> str:
         """
         渲染模板内容（变量替换）
@@ -313,7 +327,145 @@ class PrintTemplateService:
         """
         if is_pdfme_template(template_content):
             raise ValidationError("pdfme 模板不在该服务直接渲染范围内")
-        return render_plain_template(template_content, data)
+        return render_template(
+            template_content,
+            data,
+            engine=engine,
+            strict_variables=strict_variables,
+        )
+
+    @staticmethod
+    def compile_designer_schema(
+        data: PrintTemplateCompileRequest
+    ) -> dict[str, Any]:
+        """
+        将可视化 schema 编译为 Jinja 模板（MVP）。
+        """
+        source_type = (data.source_type or "designer_json").strip().lower()
+        target_engine = (data.target_engine or "jinja2").strip().lower()
+        if target_engine != "jinja2":
+            raise ValidationError("当前仅支持编译到 jinja2 引擎")
+
+        warnings: list[str] = []
+        schema_version: Optional[str] = None
+
+        if source_type == "html_jinja":
+            if not isinstance(data.source, str):
+                raise ValidationError("html_jinja 源码必须为字符串")
+            return {
+                "success": True,
+                "compiled_template": data.source,
+                "schema_version": None,
+                "warnings": warnings,
+            }
+
+        if source_type != "designer_json":
+            raise ValidationError(f"不支持的 source_type: {source_type}")
+        if not isinstance(data.source, dict):
+            raise ValidationError("designer_json 源码必须为对象")
+
+        schema = data.source
+        schema_version = str(schema.get("version") or "v1")
+        blocks = schema.get("blocks")
+        if not isinstance(blocks, list):
+            raise ValidationError("designer_schema.blocks 必须为数组")
+
+        lines: list[str] = []
+        for index, blk in enumerate(blocks):
+            if not isinstance(blk, dict):
+                warnings.append(f"block[{index}] 非对象，已跳过")
+                continue
+            blk_type = str(blk.get("type") or "").strip().lower()
+            if blk_type == "text":
+                lines.append(str(blk.get("content") or ""))
+            elif blk_type == "field":
+                field_key = str(blk.get("key") or "").strip()
+                if not field_key:
+                    warnings.append(f"block[{index}] field 缺少 key，已跳过")
+                    continue
+                lines.append(f"{{{{ {field_key} }}}}")
+            elif blk_type == "if":
+                condition = str(blk.get("condition") or "").strip()
+                content = str(blk.get("content") or "")
+                if not condition:
+                    warnings.append(f"block[{index}] if 缺少 condition，已跳过")
+                    continue
+                lines.append(f"{{% if {condition} %}}{content}{{% endif %}}")
+            elif blk_type == "for":
+                item = str(blk.get("item") or "item").strip()
+                collection = str(blk.get("collection") or "").strip()
+                row_template = str(blk.get("template") or "")
+                if not collection:
+                    warnings.append(f"block[{index}] for 缺少 collection，已跳过")
+                    continue
+                if not row_template:
+                    warnings.append(f"block[{index}] for 缺少 template，将生成空循环体")
+                lines.append(f"{{% for {item} in {collection} %}}{row_template}{{% endfor %}}")
+            elif blk_type == "detail_table":
+                collection = str(blk.get("collection") or "").strip()
+                row_alias = str(blk.get("row_alias") or "row").strip()
+                columns = blk.get("columns")
+                if not collection:
+                    warnings.append(f"block[{index}] detail_table 缺少 collection，已跳过")
+                    continue
+                if not isinstance(columns, list) or len(columns) == 0:
+                    warnings.append(f"block[{index}] detail_table 缺少 columns，已跳过")
+                    continue
+                header_cells: list[str] = []
+                body_cells: list[str] = []
+                for col in columns:
+                    if not isinstance(col, dict):
+                        continue
+                    label = str(col.get("label") or "").strip()
+                    key = str(col.get("key") or "").strip()
+                    if not key:
+                        continue
+                    header_cells.append(f"<th>{label or key}</th>")
+                    body_cells.append(f"<td>{{{{ {row_alias}.{key} }}}}</td>")
+                if len(body_cells) == 0:
+                    warnings.append(f"block[{index}] detail_table columns 无有效 key，已跳过")
+                    continue
+                table_html = (
+                    "<table border=\"1\" cellpadding=\"4\" style=\"width:100%;border-collapse:collapse;\">"
+                    f"<thead><tr>{''.join(header_cells)}</tr></thead>"
+                    f"<tbody>{{% for {row_alias} in {collection} %}}<tr>{''.join(body_cells)}</tr>{{% endfor %}}</tbody>"
+                    "</table>"
+                )
+                lines.append(table_html)
+            elif blk_type == "html":
+                lines.append(str(blk.get("content") or ""))
+            else:
+                warnings.append(f"block[{index}] 类型 {blk_type or 'unknown'} 暂不支持，已跳过")
+
+        compiled = "\n".join(lines).strip()
+        if not compiled:
+            raise ValidationError("编译后模板为空，请检查设计器数据")
+        return {
+            "success": True,
+            "compiled_template": compiled,
+            "schema_version": schema_version,
+            "warnings": warnings,
+        }
+
+    @staticmethod
+    def compile_and_preview_designer_schema(
+        data: PrintTemplateCompilePreviewRequest
+    ) -> dict[str, Any]:
+        """
+        编译 schema 并使用预览数据执行一次 Jinja 渲染，返回 HTML 预览内容。
+        """
+        compiled = PrintTemplateService.compile_designer_schema(data)
+        preview_data = data.preview_data or {}
+        rendered_html = render_template(
+            compiled["compiled_template"],
+            preview_data,
+            engine="jinja2",
+            strict_variables=bool(data.strict_variables),
+        )
+        return {
+            **compiled,
+            "rendered_html": rendered_html,
+        }
 
     @staticmethod
     async def render_print_template(
@@ -365,12 +517,21 @@ class PrintTemplateService:
             raise ValidationError("异步执行功能待实现")
         
         # 同步渲染模板（pdfme 模板在上层服务中会提前降级）
+        engine = PrintTemplateService._resolve_render_engine(print_template)
+        strict_variables = PrintTemplateService._resolve_strict_variables(print_template)
         if data.output_format == "html" and not is_pdfme_template(print_template.content):
-            rendered_content = render_template_to_html(print_template.content, data.data)
+            rendered_content = render_template_to_html(
+                print_template.content,
+                data.data,
+                engine=engine,
+                strict_variables=strict_variables,
+            )
         else:
             rendered_content = PrintTemplateService.render_template(
                 print_template.content,
-                data.data
+                data.data,
+                engine=engine,
+                strict_variables=strict_variables,
             )
         
         # 更新使用统计
@@ -382,75 +543,9 @@ class PrintTemplateService:
         # 目前只返回渲染后的内容
         return {
             "success": True,
+            "output_format": data.output_format or "html",
             "content": rendered_content,
+            "mime_type": "text/html" if (data.output_format or "html") == "html" else "text/plain",
             "message": "模板渲染成功"
         }
-
-    # 预设打印模板（中国中小制造业常用）
-    PRESET_PRINT_TEMPLATES = [
-        {
-            "name": "标签模板",
-            "code": "label_default",
-            "type": "html",
-            "description": "通用标签打印模板，支持 {{code}}、{{name}} 等变量",
-            "content": """<div style="padding:8px;border:1px solid #ccc;font-size:12px;">
-  <div><strong>{{code}}</strong></div>
-  <div>{{name}}</div>
-  <div>{{quantity}}</div>
-</div>""",
-            "config": {"document_type": "label"},
-            "is_active": True,
-        },
-        {
-            "name": "收货单模板",
-            "code": "receipt_default",
-            "type": "html",
-            "description": "采购收货单打印模板",
-            "content": """<div style="padding:16px;font-family:SimSun;">
-  <h3>收货单</h3>
-  <p>单号：{{receipt_code}}</p>
-  <p>日期：{{date}}</p>
-  <p>供应商：{{supplier_name}}</p>
-  <table border="1" cellpadding="4" style="width:100%;border-collapse:collapse;">
-    <tr><th>物料编码</th><th>物料名称</th><th>数量</th></tr>
-    {{#items}}
-    <tr><td>{{code}}</td><td>{{name}}</td><td>{{quantity}}</td></tr>
-    {{/items}}
-  </table>
-</div>""",
-            "config": {"document_type": "receipt"},
-            "is_active": True,
-        },
-    ]
-
-    @staticmethod
-    async def load_preset_sme(tenant_id: int) -> int:
-        """
-        加载中国中小制造业极简打印模板预设数据。
-        仅创建不存在的模板（按 code 去重）。
-        """
-        from loguru import logger
-
-        created = 0
-        for item in PrintTemplateService.PRESET_PRINT_TEMPLATES:
-            exists = await PrintTemplate.filter(
-                tenant_id=tenant_id,
-                code=item["code"],
-                deleted_at__isnull=True,
-            ).exists()
-            if not exists:
-                try:
-                    data = PrintTemplateCreate(
-                        name=item["name"],
-                        code=item["code"],
-                        type=item["type"],
-                        description=item.get("description"),
-                        content=item["content"],
-                        config=item.get("config"),
-                    )
-                    await PrintTemplateService.create_print_template(tenant_id, data)
-                    created += 1
-                except Exception as e:
-                    logger.warning(f"创建打印模板 {item['code']} 失败: {e}")
-        return created
 

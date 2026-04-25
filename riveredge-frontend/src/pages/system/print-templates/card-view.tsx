@@ -25,7 +25,6 @@ import {
   PrintTemplateRenderResponse,
 } from '../../../services/printTemplate';
 import { DOCUMENT_TYPE_OPTIONS, DOCUMENT_TYPE_TO_CODE } from '../../../config/printTemplateSchemas';
-import { isStructuredPrintTemplate } from '../../../utils/printTemplateFormat';
 import { EMPTY_HTML_TEMPLATE } from '../../../utils/printTemplateDefaults';
 import { handleError, handleSuccess } from '../../../utils/errorHandler';
 import { CODE_FONT_FAMILY } from '../../../constants/fonts';
@@ -193,10 +192,6 @@ const CardView: React.FC = () => {
    * 打开设计器
    */
   const handleOpenDesigner = (template: PrintTemplate) => {
-    if (!isStructuredPrintTemplate(template.content || '')) {
-      messageApi.warning('当前模板为 HTML 模板，请直接编辑模板内容。');
-      return;
-    }
     navigate(`/system/print-templates/design/${template.uuid}`);
   };
 

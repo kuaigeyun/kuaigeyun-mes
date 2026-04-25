@@ -11,8 +11,12 @@ from core.schemas.print_template import (
     PrintTemplateCreate,
     PrintTemplateUpdate,
     PrintTemplateRenderRequest,
+    PrintTemplateCompileRequest,
+    PrintTemplateCompilePreviewRequest,
     PrintTemplateResponse,
     PrintTemplateRenderResponse,
+    PrintTemplateCompileResponse,
+    PrintTemplateCompilePreviewResponse,
 )
 from core.services.print.print_template_service import PrintTemplateService
 from core.api.deps.deps import get_current_tenant
@@ -224,6 +228,44 @@ async def render_print_template(
         )
         return PrintTemplateRenderResponse(**result)
     except (NotFoundError, ValidationError) as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e)
+        )
+
+
+@router.post("/compile", response_model=PrintTemplateCompileResponse)
+async def compile_print_template(
+    data: PrintTemplateCompileRequest,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    编译可视化模板 schema 为可执行 Jinja 模板。
+    """
+    try:
+        result = PrintTemplateService.compile_designer_schema(data)
+        return PrintTemplateCompileResponse(**result)
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e)
+        )
+
+
+@router.post("/compile-preview", response_model=PrintTemplateCompilePreviewResponse)
+async def compile_preview_print_template(
+    data: PrintTemplateCompilePreviewRequest,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    编译可视化模板并使用样本数据返回预览 HTML。
+    """
+    try:
+        result = PrintTemplateService.compile_and_preview_designer_schema(data)
+        return PrintTemplateCompilePreviewResponse(**result)
+    except ValidationError as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(e)

@@ -11,7 +11,7 @@ import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspens
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, List, Typography, Alert, theme as AntdTheme, Descriptions, Empty, Spin, Dropdown, Tooltip } from 'antd';
+import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, List, Typography, Alert, theme as AntdTheme, Descriptions, Empty, Spin, Dropdown, Tooltip, Select } from 'antd';
 import type { DescriptionsProps } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, AppstoreAddOutlined, SendOutlined, CommentOutlined, RollbackOutlined, CheckOutlined, CloseCircleOutlined, UndoOutlined, ArrowDownOutlined, BranchesOutlined } from '@ant-design/icons';
 import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
@@ -44,6 +44,9 @@ import {
   reopenQuotation,
   revokePushQuotation,
   createQuotationRevision,
+  printQuotation,
+  getQuotationPrintVariables,
+  recordQuotationPrint,
   Quotation,
 } from '../../../services/quotation';
 import { getSalesOrder, type SalesOrder } from '../../../services/sales-order';
@@ -57,6 +60,7 @@ import {
 } from '../../../../../components/document-tracking-panel';
 import { apiRequest } from '../../../../../services/api';
 import type { DocumentPrintApiResult } from '../../../../../utils/printResponseHelpers';
+import { getPrintTemplateList, type PrintTemplate } from '../../../../../services/printTemplate';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import dayjs from 'dayjs';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
@@ -302,6 +306,12 @@ const QuotationsPage: React.FC = () => {
   const [pdfPreviewVisible, setPdfPreviewVisible] = useState(false);
   const [pdfPreviewBlobUrl, setPdfPreviewBlobUrl] = useState<string | null>(null);
   const [pdfPreviewFileName, setPdfPreviewFileName] = useState<string>('报价单.pdf');
+  const [printModalVisible, setPrintModalVisible] = useState(false);
+  const [printingRecord, setPrintingRecord] = useState<Quotation | null>(null);
+  const [printTemplates, setPrintTemplates] = useState<PrintTemplate[]>([]);
+  const [selectedPrintTemplateUuid, setSelectedPrintTemplateUuid] = useState<string | undefined>(undefined);
+  const [printSubmitting, setPrintSubmitting] = useState(false);
+  const [printVariablesPreview, setPrintVariablesPreview] = useState<Record<string, any> | null>(null);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [importModalVisible, setImportModalVisible] = useState(false);
@@ -1240,6 +1250,35 @@ const QuotationsPage: React.FC = () => {
   };
 
   const handlePrint = async (record: Quotation) => {
+    try {
+      const templates = await getPrintTemplateList({
+        is_active: true,
+        document_type: 'quotation',
+      });
+      setPrintTemplates(templates || []);
+      const defaultTpl = templates.find((t) => t.is_default) ?? templates[0];
+      setSelectedPrintTemplateUuid(defaultTpl?.uuid);
+    } catch {
+      setPrintTemplates([]);
+      setSelectedPrintTemplateUuid(undefined);
+    }
+    try {
+      if (record.id != null) {
+        const vars = await getQuotationPrintVariables(record.id);
+        setPrintVariablesPreview(vars);
+      } else {
+        setPrintVariablesPreview(null);
+      }
+    } catch {
+      setPrintVariablesPreview(null);
+    }
+    setPrintingRecord(record);
+    setPrintModalVisible(true);
+  };
+
+  const handleConfirmPrint = async () => {
+    const record = printingRecord;
+    if (!record) return;
     const qid = record.id;
     if (qid == null) {
       messageApi.warning('报价单 ID 无效');
@@ -1259,13 +1298,12 @@ const QuotationsPage: React.FC = () => {
     };
 
     try {
-      const result = await apiRequest<DocumentPrintApiResult>(
-        `/apps/kuaizhizao/quotations/${qid}/print`,
-        {
-          method: 'GET',
-          params: { response_format: 'json', output_format: 'pdf' },
-        }
-      );
+      setPrintSubmitting(true);
+      const result: DocumentPrintApiResult = await printQuotation(qid, {
+        templateUuid: selectedPrintTemplateUuid,
+        outputFormat: 'pdf',
+        responseFormat: 'json',
+      });
       const raw = result?.content || '';
       if (
         result?.content_encoding === 'base64' &&
@@ -1280,12 +1318,17 @@ const QuotationsPage: React.FC = () => {
         const blob = new Blob([bytes], { type: 'application/pdf' });
         const blobUrl = URL.createObjectURL(blob);
         openPdfPreview(blobUrl);
+        setPrintModalVisible(false);
+        setPrintingRecord(null);
+        void recordQuotationPrint(qid).catch(() => undefined);
         messageApi.success('已打开预览');
         return;
       }
       messageApi.warning('打印内容为空');
     } catch (error: any) {
       messageApi.error(error.message || '打印失败');
+    } finally {
+      setPrintSubmitting(false);
     }
   };
 
@@ -2526,6 +2569,36 @@ const QuotationsPage: React.FC = () => {
           maxLength={500}
           showCount
         />
+      </Modal>
+
+      <Modal
+        open={printModalVisible}
+        title="选择打印模板"
+        onCancel={() => {
+          if (printSubmitting) return;
+          setPrintModalVisible(false);
+          setPrintingRecord(null);
+        }}
+        onOk={handleConfirmPrint}
+        okText="预览打印"
+        confirmLoading={printSubmitting}
+        destroyOnHidden
+      >
+        <Space direction="vertical" style={{ width: '100%' }} size={12}>
+          <Typography.Text type="secondary">
+            报价单：{printingRecord?.quotation_code ?? printingRecord?.id ?? '-'}
+          </Typography.Text>
+          <Select
+            allowClear
+            placeholder="请选择模板（为空则使用后端默认模板）"
+            value={selectedPrintTemplateUuid}
+            onChange={(v) => setSelectedPrintTemplateUuid(v)}
+            options={printTemplates.map((tpl) => ({ label: tpl.name, value: tpl.uuid }))}
+          />
+          <Typography.Text type="secondary">
+            变量预览字段数：{Object.keys(printVariablesPreview?.variables || printVariablesPreview || {}).length}
+          </Typography.Text>
+        </Space>
       </Modal>
 
       <Modal

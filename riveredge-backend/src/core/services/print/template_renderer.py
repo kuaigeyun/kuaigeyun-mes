@@ -1,15 +1,27 @@
 """
 打印模板渲染模块
 
-支持纯文本 {{key}} 变量替换。
-历史 pdfme 模板由上层服务降级，不在该模块渲染。
+支持两种渲染引擎：
+- plain：纯文本 {{key}} 变量替换（向后兼容）
+- jinja2：Jinja2 沙箱渲染（支持循环/条件/过滤器）
 """
 
 import json
 import re
-from typing import Any, Dict
+from datetime import date, datetime
+from decimal import Decimal
+from typing import Any, Dict, Mapping, Optional
 
 from infra.exceptions.exceptions import ValidationError
+
+try:
+    from jinja2 import StrictUndefined
+    from jinja2.exceptions import TemplateError
+    from jinja2.sandbox import SandboxedEnvironment
+except Exception:  # pragma: no cover - 缺依赖时运行期显式报错
+    StrictUndefined = None
+    TemplateError = Exception
+    SandboxedEnvironment = None
 
 
 def is_pdfme_template(content: str) -> bool:
@@ -77,7 +89,118 @@ def render_plain_template(template_content: str, data: Dict[str, Any]) -> str:
     return result
 
 
-def render_template_to_html(template_content: str, data: Dict[str, Any]) -> str:
+def _jinja_filter_money(value: Any) -> str:
+    if value is None or value == "":
+        return "0.00"
+    try:
+        return f"{float(value):,.2f}"
+    except Exception:
+        return str(value)
+
+
+def _jinja_filter_date(value: Any, fmt: str = "%Y-%m-%d") -> str:
+    if value is None or value == "":
+        return ""
+    try:
+        if isinstance(value, datetime):
+            return value.strftime(fmt)
+        if isinstance(value, date):
+            return value.strftime(fmt)
+        if isinstance(value, str):
+            txt = value.strip()
+            if not txt:
+                return ""
+            iso = txt.replace("Z", "+00:00")
+            dt = datetime.fromisoformat(iso)
+            return dt.strftime(fmt)
+    except Exception:
+        return str(value)
+    return str(value)
+
+
+def _jinja_filter_number(value: Any, digits: int = 2) -> str:
+    if value is None or value == "":
+        return ""
+    try:
+        d = Decimal(str(value))
+        q = Decimal("1") if digits <= 0 else Decimal(f"1.{'0' * digits}")
+        return format(d.quantize(q), "f")
+    except Exception:
+        return str(value)
+
+
+def _build_jinja_environment(
+    *,
+    strict_variables: bool = False,
+    extra_filters: Optional[Mapping[str, Any]] = None,
+) -> SandboxedEnvironment:
+    if SandboxedEnvironment is None or StrictUndefined is None:
+        raise ValidationError("Jinja2 依赖未安装，无法使用 jinja2 渲染引擎")
+    env_kwargs = {
+        "autoescape": False,
+        "trim_blocks": True,
+        "lstrip_blocks": True,
+    }
+    if strict_variables:
+        env_kwargs["undefined"] = StrictUndefined
+    env = SandboxedEnvironment(**env_kwargs)
+    env.filters["money"] = _jinja_filter_money
+    env.filters["date"] = _jinja_filter_date
+    env.filters["number"] = _jinja_filter_number
+    if extra_filters:
+        for k, v in extra_filters.items():
+            env.filters[k] = v
+    return env
+
+
+def render_jinja_template(
+    template_content: str,
+    data: Dict[str, Any],
+    *,
+    strict_variables: bool = False,
+) -> str:
+    """
+    使用 Jinja2 沙箱渲染模板。
+    """
+    if is_pdfme_template(template_content):
+        raise ValidationError("pdfme 模板不在该渲染器处理范围内")
+    try:
+        env = _build_jinja_environment(strict_variables=strict_variables)
+        template = env.from_string(template_content)
+        return template.render(**(data or {}))
+    except TemplateError as exc:
+        raise ValidationError(f"Jinja2 模板渲染失败: {exc}") from exc
+
+
+def render_template(
+    template_content: str,
+    data: Dict[str, Any],
+    *,
+    engine: str = "plain",
+    strict_variables: bool = False,
+) -> str:
+    """
+    统一模板渲染入口。
+    """
+    render_engine = (engine or "plain").strip().lower()
+    if render_engine == "jinja2":
+        return render_jinja_template(
+            template_content,
+            data,
+            strict_variables=strict_variables,
+        )
+    if render_engine == "plain":
+        return render_plain_template(template_content, data)
+    raise ValidationError(f"不支持的模板渲染引擎: {render_engine}")
+
+
+def render_template_to_html(
+    template_content: str,
+    data: Dict[str, Any],
+    *,
+    engine: str = "plain",
+    strict_variables: bool = False,
+) -> str:
     """
     渲染模板并输出为 HTML，用于服务端打印接口
 
@@ -90,7 +213,12 @@ def render_template_to_html(template_content: str, data: Dict[str, Any]) -> str:
     """
     if is_pdfme_template(template_content):
         raise ValidationError("pdfme 模板不在该渲染器处理范围内")
-    text = render_plain_template(template_content, data)
+    text = render_template(
+        template_content,
+        data,
+        engine=engine,
+        strict_variables=strict_variables,
+    )
     html_body = text.replace("\n", "<br>").replace("  ", "&nbsp;&nbsp;")
     return f"""<!DOCTYPE html>
 <html>

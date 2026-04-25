@@ -8,6 +8,7 @@
  */
 
 import { apiRequest } from '../../../services/api';
+import type { DocumentPrintApiResult } from '../../../utils/printResponseHelpers';
 
 export interface QuotationItem {
   id?: number;
@@ -207,6 +208,36 @@ export interface ConvertToOrderResponse {
 
 export async function convertQuotationToOrder(quotationId: number): Promise<ConvertToOrderResponse> {
   return apiRequest<ConvertToOrderResponse>(`/apps/kuaizhizao/quotations/${quotationId}/convert-to-order`, {
+    method: 'POST',
+  });
+}
+
+export async function printQuotation(
+  quotationId: number,
+  options?: {
+    templateUuid?: string;
+    outputFormat?: 'html' | 'pdf';
+    responseFormat?: 'json' | 'html';
+  }
+): Promise<DocumentPrintApiResult> {
+  return apiRequest<DocumentPrintApiResult>(`/apps/kuaizhizao/quotations/${quotationId}/print`, {
+    method: 'GET',
+    params: {
+      template_uuid: options?.templateUuid,
+      output_format: options?.outputFormat ?? 'pdf',
+      response_format: options?.responseFormat ?? 'json',
+    },
+  });
+}
+
+export async function getQuotationPrintVariables(quotationId: number): Promise<Record<string, any>> {
+  return apiRequest<Record<string, any>>(`/apps/kuaizhizao/quotations/${quotationId}/print-variables`, {
+    method: 'GET',
+  });
+}
+
+export async function recordQuotationPrint(quotationId: number): Promise<{ success: boolean; timestamp?: string }> {
+  return apiRequest<{ success: boolean; timestamp?: string }>(`/apps/kuaizhizao/quotations/${quotationId}/record-print`, {
     method: 'POST',
   });
 }

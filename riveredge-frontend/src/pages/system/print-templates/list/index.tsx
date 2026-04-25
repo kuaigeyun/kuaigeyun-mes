@@ -29,7 +29,6 @@ import {
 } from '../../../../services/printTemplate';
 import { DOCUMENT_TYPE_OPTIONS, DOCUMENT_TYPE_TO_CODE, getSchemaByType } from '../../../../config/printTemplateSchemas';
 import { EMPTY_HTML_TEMPLATE, DEFAULT_WORK_ORDER_HTML_TEMPLATE } from '../../../../utils/printTemplateDefaults';
-import { isStructuredPrintTemplate } from '../../../../utils/printTemplateFormat';
 import { countWithPagedRequests } from '../../../../utils/pagedCount';
 
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
@@ -262,10 +261,6 @@ const PrintTemplateListPage: React.FC = () => {
    * 打开设计器 (新标签页)
    */
   const handleOpenDesigner = (record: PrintTemplate) => {
-    if (!isStructuredPrintTemplate(record.content || '')) {
-      messageApi.warning('当前模板为 HTML 模板，请直接编辑模板内容。');
-      return;
-    }
     // 在当前标签页打开
     navigate(`/system/print-templates/design/${record.uuid}`);
   };

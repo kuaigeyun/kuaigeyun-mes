@@ -51,6 +51,33 @@ class PrintTemplateRenderRequest(BaseModel):
     async_execution: bool = Field(False, description="是否异步执行（通过 Inngest）")
 
 
+class PrintTemplateCompileRequest(BaseModel):
+    """编译可视化模板请求"""
+    source_type: str = Field("designer_json", description="源码类型：designer_json 或 html_jinja")
+    source: Dict[str, Any] | str = Field(..., description="设计器 schema 或原始模板源码")
+    target_engine: str = Field("jinja2", description="目标渲染引擎")
+    document_type: Optional[str] = Field(None, description="业务单据类型")
+
+
+class PrintTemplateCompilePreviewRequest(PrintTemplateCompileRequest):
+    """编译并预览可视化模板请求"""
+    preview_data: Optional[Dict[str, Any]] = Field(None, description="预览渲染数据")
+    strict_variables: bool = Field(False, description="是否严格变量模式")
+
+
+class PrintTemplateCompileResponse(BaseModel):
+    """编译可视化模板响应"""
+    success: bool = Field(..., description="是否成功")
+    compiled_template: str = Field(..., description="编译后的模板")
+    schema_version: Optional[str] = Field(None, description="schema 版本")
+    warnings: Optional[list[str]] = Field(None, description="编译告警")
+
+
+class PrintTemplateCompilePreviewResponse(PrintTemplateCompileResponse):
+    """编译并预览响应"""
+    rendered_html: Optional[str] = Field(None, description="使用 preview_data 渲染后的 HTML")
+
+
 class PrintTemplateResponse(PrintTemplateBase):
     """打印模板响应 Schema"""
     uuid: UUID = Field(..., description="打印模板UUID")
@@ -69,6 +96,11 @@ class PrintTemplateResponse(PrintTemplateBase):
 class PrintTemplateRenderResponse(BaseModel):
     """打印模板渲染响应 Schema"""
     success: bool = Field(..., description="是否成功")
+    output_format: Optional[str] = Field(None, description="输出格式")
+    content: Optional[str] = Field(None, description="渲染内容（HTML 或 base64 PDF）")
+    content_encoding: Optional[str] = Field(None, description="内容编码（如 base64）")
+    mime_type: Optional[str] = Field(None, description="MIME 类型")
+    message: Optional[str] = Field(None, description="返回信息")
     file_url: Optional[str] = Field(None, description="生成文件URL")
     file_uuid: Optional[str] = Field(None, description="生成文件UUID")
     error: Optional[str] = Field(None, description="错误信息")
