@@ -940,8 +940,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     if (!React.isValidElement(node)) return node
 
     const elementType = node.type as any
-    const displayName = elementType?.displayName || elementType?.name
-    const isButtonLike = displayName === 'Button' || typeof elementType === 'string' && elementType === 'button'
+    // antd Button 仅在 NODE_ENV !== 'production' 时设置 displayName='Button'（见 antd/es/button/Button.js:318）
+    // 生产构建里 displayName/name 都不再等于 'Button'，旧的字符串判断会让按钮规范化失效（页面回退为"图标+文字 链接样式"）。
+    // 必须用引用比较 (node.type === Button)，与 renderRowActionsOverflow 工具函数保持一致。
+    const isButtonLike = elementType === Button || (typeof elementType === 'string' && elementType === 'button')
 
     const readNodeText = (input: React.ReactNode): string => {
       if (input == null || typeof input === 'boolean') return ''
