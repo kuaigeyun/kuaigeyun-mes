@@ -16,24 +16,10 @@
 <body>
     <div id="root">
         <!--
-          后台壳骨架（非登录页布局），强刷时减轻「被踢回登录」错觉；无「加载中」文案以免 JS 失败时长期误导。
+          首屏占位：保持最简洁，不再渲染后台壳骨架（顶部栏/侧边栏/正文条纹）。
           React 挂载后会替换 #root 子节点；若 main 未执行，15s 后下方脚本提示重试。
         -->
-        <!-- 后台壳骨架：避免与登录页左右分栏一致，已登录用户强刷时不产生「回到登录」错觉 -->
-        <div class="app-first-paint" data-app-first-paint aria-busy="true" aria-label="应用启动">
-            <div class="app-fp-shell">
-                <div class="app-fp-topbar"></div>
-                <div class="app-fp-body">
-                    <div class="app-fp-sider"></div>
-                    <div class="app-fp-main">
-                        <div class="app-fp-bar app-fp-bar--title"></div>
-                        <div class="app-fp-bar app-fp-bar--line"></div>
-                        <div class="app-fp-bar app-fp-bar--line app-fp-bar--short"></div>
-                        <div class="app-fp-bar app-fp-bar--line"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <div class="app-first-paint" data-app-first-paint aria-busy="true" aria-label="应用启动"></div>
     </div>
     <!-- 首屏加载超时：多为网络或静态资源路径错误（如 base 不一致导致 main.js 404） -->
     <script>
@@ -56,22 +42,9 @@
       html,body{margin:0;padding:0;height:100%;box-sizing:border-box}
       *{box-sizing:border-box}
       .app-first-paint{
-        min-height:100vh;font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
-        background:#f0f2f5;
-      }
-      .app-fp-shell{display:flex;flex-direction:column;min-height:100vh}
-      .app-fp-topbar{height:48px;background:#001529;flex-shrink:0}
-      .app-fp-body{display:flex;flex:1;min-height:0}
-      .app-fp-sider{width:208px;flex-shrink:0;background:#fff;border-right:1px solid #f0f0f0}
-      .app-fp-main{flex:1;padding:24px;background:#f0f2f5}
-      .app-fp-bar{border-radius:6px;background:rgba(0,0,0,.06);animation:app-fp-pulse 1.1s ease-in-out infinite}
-      .app-fp-bar--title{height:22px;width:32%;max-width:280px;margin-bottom:20px;background:rgba(0,0,0,.08)}
-      .app-fp-bar--line{height:14px;width:100%;max-width:720px;margin-bottom:12px}
-      .app-fp-bar--short{width:55%}
-      @keyframes app-fp-pulse{0%,100%{opacity:1}50%{opacity:.55}}
-      @media (max-width:768px){
-        .app-fp-sider{width:0;min-width:0;border:none;overflow:hidden}
-        .app-fp-main{padding:16px}
+        min-height:100vh;
+        font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+        background:#fff;
       }
     </style>
     <script type="module" src="./main.tsx"></script>

@@ -30,6 +30,7 @@ import {
 import { DOCUMENT_TYPE_OPTIONS, DOCUMENT_TYPE_TO_CODE, getSchemaByType } from '../../../../config/printTemplateSchemas';
 import { EMPTY_HTML_TEMPLATE, DEFAULT_WORK_ORDER_HTML_TEMPLATE } from '../../../../utils/printTemplateDefaults';
 import { isStructuredPrintTemplate } from '../../../../utils/printTemplateFormat';
+import { countWithPagedRequests } from '../../../../utils/pagedCount';
 
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import dayjs from 'dayjs';
@@ -652,7 +653,10 @@ const PrintTemplateListPage: React.FC = () => {
             };
             
             try {
-              const data = await getPrintTemplateList(listParams);
+              const [data, total] = await Promise.all([
+                getPrintTemplateList(listParams),
+                countWithPagedRequests(getPrintTemplateList, searchFormValues || {}, { chunkSize: 100 }),
+              ]);
               
               // 同时获取所有数据用于统计（如果当前页是第一页）
               if (current === 1) {
@@ -667,7 +671,7 @@ const PrintTemplateListPage: React.FC = () => {
               return {
                 data,
                 success: true,
-                total: data.length, // 注意：这里应该返回实际总数，如果API支持的话
+                total,
               };
             } catch (error: any) {
               console.error('获取打印模板列表失败:', error);

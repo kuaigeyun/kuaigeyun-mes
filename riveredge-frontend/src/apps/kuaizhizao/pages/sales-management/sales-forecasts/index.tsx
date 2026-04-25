@@ -53,11 +53,11 @@ import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions'
 import { DocumentTrackingRelationsBody, DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel'
 import { downloadFile } from '../../../services/common'
+import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow'
 
 
 
 export default function SalesForecastsPage() {
-  const SALES_FORECAST_ROW_ACTIONS_INLINE_MAX = 4;
   const { t } = useTranslation();
   const { message: messageApi, modal: modalApi } = App.useApp()
   const navigate = useNavigate();
@@ -137,24 +137,7 @@ export default function SalesForecastsPage() {
   };
 
   const renderSalesForecastRowActions = (nodes: React.ReactNode[], keyPrefix: string): React.ReactNode => {
-    const wrapped = nodes.map((node, i) => <span key={`${keyPrefix}-${i}`}>{node}</span>);
-    if (wrapped.length <= SALES_FORECAST_ROW_ACTIONS_INLINE_MAX) return <Space size="small" wrap>{wrapped}</Space>;
-    return (
-      <Space size="small" wrap>
-        {wrapped.slice(0, SALES_FORECAST_ROW_ACTIONS_INLINE_MAX)}
-        <Dropdown
-          trigger={['click']}
-          menu={{
-            items: wrapped.slice(SALES_FORECAST_ROW_ACTIONS_INLINE_MAX).map((node, i) => ({
-              key: `${keyPrefix}-more-${i}`,
-              label: node,
-            })),
-          }}
-        >
-          <Button type="link" size="small">更多</Button>
-        </Dropdown>
-      </Space>
-    );
+    return renderRowActionsOverflow(nodes, keyPrefix);
   };
 
   useEffect(() => {

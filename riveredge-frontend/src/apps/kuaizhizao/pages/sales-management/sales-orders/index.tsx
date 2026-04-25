@@ -129,10 +129,6 @@ function canOpenDirectWorkOrderPush(order: SalesOrder | null | undefined, nodeEn
   return true;
 }
 
-const SALES_ORDER_ROW_ACTIONS_INLINE_MAX = 4;
-
-
-
 function formatMoneyYuan(n: number): string {
   return `¥${(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
@@ -1726,7 +1722,7 @@ const SalesOrdersPage: React.FC = () => {
             {t('app.kuaizhizao.customerFollowUp.addFollowUpFromDocument')}
           </Button>
         );
-        return renderRowActionsOverflow(parts, `sales-order-${record.id ?? 'row'}`, SALES_ORDER_ROW_ACTIONS_INLINE_MAX);
+        return renderRowActionsOverflow(parts, `sales-order-${record.id ?? 'row'}`);
       },
     },
   ];

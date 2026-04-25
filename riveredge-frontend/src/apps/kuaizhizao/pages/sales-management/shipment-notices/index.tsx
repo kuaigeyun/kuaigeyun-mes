@@ -34,6 +34,7 @@ import { customerApi } from '../../../../master-data/services/supply-chain';
 import { listSalesOrders, getSalesOrder } from '../../../services/sales-order';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
+import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import { useTranslation } from 'react-i18next';
 
 interface ShipmentNotice {
@@ -70,7 +71,6 @@ const STATUS_MAP: Record<string, { text: string; color: string }> = {
 };
 
 const defaultNoticeItem = { material_id: undefined, material_code: '', material_name: '', material_spec: '', material_unit: '件', notice_quantity: 1, unit_price: 0 };
-const SHIPMENT_NOTICE_ROW_ACTIONS_INLINE_MAX = 4;
 
 const ShipmentNoticesPage: React.FC = () => {
   const { t } = useTranslation();
@@ -153,25 +153,7 @@ const ShipmentNoticesPage: React.FC = () => {
   };
 
   const renderShipmentNoticeRowActions = (actions: React.ReactNode[]) => {
-    const valid = actions.filter(Boolean);
-    if (valid.length <= SHIPMENT_NOTICE_ROW_ACTIONS_INLINE_MAX) {
-      return <Space size={4}>{valid}</Space>;
-    }
-    const inline = valid.slice(0, SHIPMENT_NOTICE_ROW_ACTIONS_INLINE_MAX);
-    const folded = valid.slice(SHIPMENT_NOTICE_ROW_ACTIONS_INLINE_MAX);
-    return (
-      <Space size={4}>
-        {inline}
-        <Dropdown
-          trigger={['click']}
-          menu={{
-            items: folded.map((node, index) => ({ key: `more-${index}`, label: node as React.ReactNode })),
-          }}
-        >
-          <Button type="link" size="small" icon={<MoreOutlined />}>更多</Button>
-        </Dropdown>
-      </Space>
-    );
+    return renderRowActionsOverflow(actions, 'shipment-notice');
   };
 
   const columns: ProColumns<ShipmentNotice>[] = [

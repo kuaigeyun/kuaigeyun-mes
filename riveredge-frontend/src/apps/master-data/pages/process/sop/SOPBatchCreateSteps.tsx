@@ -12,6 +12,7 @@ import { ApartmentOutlined, FormOutlined, PlusOutlined, DeleteOutlined } from '@
 import { useNavigate } from 'react-router-dom';
 import { processRouteApi, operationApi, sopApi } from '../../../services/process';
 import { materialApi, materialGroupApi } from '../../../services/material';
+import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import type { ProcessRoute, Operation } from '../../../types/process';
 import type { Material, MaterialGroup } from '../../../types/material';
 import type { SOP } from '../../../types/process';
@@ -392,18 +393,31 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
                   {
                     title: '操作',
                     width: 120,
-                    render: (_: any, record: OperationItem, index: number) => (
-                      <Space>
-                        <Button size="small" onClick={() => moveUp(index)} disabled={index === 0}>
+                  render: (_: any, record: OperationItem, index: number) =>
+                    renderRowActionsOverflow(
+                      [
+                        <Button key="move-up" size="small" onClick={() => moveUp(index)} disabled={index === 0}>
                           上移
-                        </Button>
-                        <Button size="small" onClick={() => moveDown(index)} disabled={index === operations.length - 1}>
+                        </Button>,
+                        <Button
+                          key="move-down"
+                          size="small"
+                          onClick={() => moveDown(index)}
+                          disabled={index === operations.length - 1}
+                        >
                           下移
-                        </Button>
-                        <Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleRemoveOperation(record.uuid)}>
+                        </Button>,
+                        <Button
+                          key="delete"
+                          size="small"
+                          danger
+                          icon={<DeleteOutlined />}
+                          onClick={() => handleRemoveOperation(record.uuid)}
+                        >
                           删除
-                        </Button>
-                      </Space>
+                        </Button>,
+                      ],
+                      `sop-op-${record.uuid ?? index}`,
                     ),
                   },
                 ]}
@@ -462,26 +476,30 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
                 {
                   title: '操作',
                   width: 220,
-                  render: (_: any, record: SOP) => (
-                    <Space>
-                      <Button
-                        type="link"
-                        size="small"
-                        icon={<ApartmentOutlined />}
-                        onClick={() => navigate(`/apps/master-data/process/sop/designer?uuid=${record.uuid}`)}
-                      >
-                        设计流程
-                      </Button>
-                      <Button
-                        type="link"
-                        size="small"
-                        icon={<FormOutlined />}
-                        onClick={() => handleOpenEdit(record.uuid, 'formConfig')}
-                      >
-                        编辑
-                      </Button>
-                    </Space>
-                  ),
+                  render: (_: any, record: SOP) =>
+                    renderRowActionsOverflow(
+                      [
+                        <Button
+                          key="design"
+                          type="link"
+                          size="small"
+                          icon={<ApartmentOutlined />}
+                          onClick={() => navigate(`/apps/master-data/process/sop/designer?uuid=${record.uuid}`)}
+                        >
+                          设计流程
+                        </Button>,
+                        <Button
+                          key="edit"
+                          type="link"
+                          size="small"
+                          icon={<FormOutlined />}
+                          onClick={() => handleOpenEdit(record.uuid, 'formConfig')}
+                        >
+                          编辑
+                        </Button>,
+                      ],
+                      `sop-created-${record.uuid ?? 'row'}`,
+                    ),
                 },
               ]}
             />

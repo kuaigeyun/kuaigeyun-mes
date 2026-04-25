@@ -46,6 +46,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { warehouseApi } from '../../../services/production';
 import { getPurchaseReturnLifecycle } from '../../../utils/purchaseReturnLifecycle';
+import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 
 interface PurchaseReturn {
   id?: number;
@@ -100,8 +101,6 @@ interface PurchaseReturnItem {
 
 const PR_DETAIL_ITEMS_MIN_WIDTH = 1000;
 
-const PURCHASE_RETURN_ROW_ACTIONS_INLINE_MAX = 4;
-
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
   cols: ProDescriptionsItemProps<T>[]
@@ -128,30 +127,7 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
 }
 
 function renderPurchaseReturnRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  const wrapped = nodes.map((node, i) => <span key={`${keyPrefix}-${i}`}>{node}</span>);
-  if (wrapped.length <= PURCHASE_RETURN_ROW_ACTIONS_INLINE_MAX) {
-    return <Space size="small" wrap>{wrapped}</Space>;
-  }
-  const inline = wrapped.slice(0, PURCHASE_RETURN_ROW_ACTIONS_INLINE_MAX);
-  const overflow = wrapped.slice(PURCHASE_RETURN_ROW_ACTIONS_INLINE_MAX);
-  return (
-    <Space size="small" wrap>
-      {inline}
-      <Dropdown
-        menu={{
-          items: overflow.map((node, i) => ({
-            key: `${keyPrefix}-more-${i}`,
-            label: node,
-          })),
-        }}
-        trigger={['click']}
-      >
-        <Button type="link" size="small">
-          更多
-        </Button>
-      </Dropdown>
-    </Space>
-  );
+  return renderRowActionsOverflow(nodes, keyPrefix);
 }
 
 const PurchaseReturnsPage: React.FC = () => {

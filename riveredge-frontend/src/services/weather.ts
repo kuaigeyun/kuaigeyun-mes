@@ -64,7 +64,9 @@ export async function getLocationByIP(): Promise<LocationData | null> {
     }
     return null;
   } catch (error) {
-    console.error('获取IP定位失败:', error);
+    if (typeof window !== 'undefined') {
+      window.console.error('获取IP定位失败:', error);
+    }
     return null;
   }
 }
@@ -75,7 +77,7 @@ export async function getLocationByIP(): Promise<LocationData | null> {
 async function geocodeCity(cityName: string): Promise<{ lat: number; lon: number } | null> {
   try {
     const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cityName)}&count=1&language=zh`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    const res = await window.fetch(url, { signal: (window.AbortSignal as any).timeout(5000) });
     if (!res.ok) return null;
     const data = await res.json();
     const results = data.results;
@@ -97,7 +99,7 @@ async function geocodeCity(cityName: string): Promise<{ lat: number; lon: number
 async function getWeatherByCoords(lat: number, lon: number, cityLabel?: string): Promise<WeatherData | null> {
   try {
     const meteoUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto`;
-    const res = await fetch(meteoUrl, { signal: AbortSignal.timeout(6000) });
+    const res = await window.fetch(meteoUrl, { signal: (window.AbortSignal as any).timeout(6000) });
     if (!res.ok) return null;
     const data = await res.json();
     const current = data.current;
@@ -146,9 +148,9 @@ export async function getWeather(city: string): Promise<WeatherData | null> {
     // 3. 备选：wttr.in（国内可能超时）
     try {
       const wttrUrl = `https://wttr.in/${encodeURIComponent(city)}?format=j1&lang=zh`;
-      const wttrResponse = await fetch(wttrUrl, {
+      const wttrResponse = await window.fetch(wttrUrl, {
         headers: { Accept: 'application/json' },
-        signal: AbortSignal.timeout(4000),
+        signal: (window.AbortSignal as any).timeout(4000),
       });
       if (wttrResponse.ok) {
         const data = await wttrResponse.json();
@@ -173,7 +175,9 @@ export async function getWeather(city: string): Promise<WeatherData | null> {
 
     return null;
   } catch (error) {
-    console.error('获取天气信息失败:', error);
+    if (typeof window !== 'undefined') {
+      window.console.error('获取天气信息失败:', error);
+    }
     return null;
   }
 }
@@ -217,12 +221,64 @@ function getWeatherDescription(code: number): string {
   return codeMap[code] || '未知';
 }
 
+const WEATHER_CACHE_KEY = 'RIVEREDGE_WEATHER_CACHE';
+const WEATHER_CACHE_DURATION = 60 * 60 * 1000; // 缓存1小时
+
+interface WeatherCachePayload {
+  data: WeatherData;
+  timestamp: number;
+}
+
+function readWeatherCache(): WeatherCachePayload | null {
+  try {
+    if (typeof window === 'undefined') return null;
+    const cached = window.localStorage.getItem(WEATHER_CACHE_KEY);
+    if (!cached) return null;
+    const parsed = JSON.parse(cached) as WeatherCachePayload;
+    if (!parsed?.data || typeof parsed.timestamp !== 'number') {
+      window.localStorage.removeItem(WEATHER_CACHE_KEY);
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 获取本地缓存的天气数据
+ */
+export function getCachedWeather(): WeatherData | null {
+  return readWeatherCache()?.data ?? null;
+}
+
+/**
+ * 本地天气缓存是否超过有效期
+ */
+export function isWeatherCacheExpired(maxAge = WEATHER_CACHE_DURATION): boolean {
+  const cached = readWeatherCache();
+  if (!cached) return true;
+  return Date.now() - cached.timestamp > maxAge;
+}
+
 /**
  * 根据IP自动获取天气
  * 先获取IP定位，再获取天气
+ * 增加本地缓存逻辑，减少拉取频率
+ * 
+ * @param force 是否强制拉取最新数据（跳过缓存）
  */
-export async function getWeatherByIP(): Promise<WeatherData | null> {
+export async function getWeatherByIP(force = false): Promise<WeatherData | null> {
   try {
+    // 1. 尝试从缓存读取
+    if (!force) {
+      const cached = readWeatherCache();
+      if (cached && Date.now() - cached.timestamp < WEATHER_CACHE_DURATION) {
+        return cached.data;
+      }
+    }
+
+    // 2. 无缓存、已过期或强制刷新，则拉取新数据
     const location = await getLocationByIP();
     if (!location || (!location.city && (location.lat == null || location.lon == null))) {
       return null;
@@ -230,13 +286,23 @@ export async function getWeatherByIP(): Promise<WeatherData | null> {
     const locationParam = location.lat != null && location.lon != null
       ? `${location.lat},${location.lon}`
       : location.city;
+      
     const weather = await getWeather(locationParam);
     if (weather) {
       weather.city = location.city || location.region || weather.city;
+      
+      // 3. 存入本地缓存
+      const cacheData = {
+        data: weather,
+        timestamp: Date.now()
+      };
+      window.localStorage.setItem(WEATHER_CACHE_KEY, JSON.stringify(cacheData));
     }
     return weather;
   } catch (error) {
-    console.error('根据IP获取天气失败:', error);
+    if (typeof window !== 'undefined') {
+      window.console.error('根据IP获取天气失败:', error);
+    }
     return null;
   }
 }

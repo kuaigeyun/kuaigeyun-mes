@@ -1,112 +1,112 @@
 /**
  * 页面骨架屏组件
  *
- * 用于页面加载时的占位显示，提供更好的用户体验
+ * 用于页面加载时的占位显示，提供简约、专业的工业化美感。
+ * 针对不同页面模板提供对应的骨架形态，减少首屏加载时的视觉突变。
  *
  * Author: Luigi Lu
  * Date: 2025-12-27
+ * Modified: 2024-04-25
  */
 
 import React from 'react';
-import { Skeleton, Spin } from 'antd';
+import { Skeleton, theme } from 'antd';
 import { PAGE_SPACING } from '../layout-templates/constants';
+
+const { useToken } = theme;
 
 export interface PageSkeletonProps {
   /**
-   * - default：完整表格骨架（较慢网络）
-   * - minimal：轻量居中 Spin，路由懒加载时优先即显、减少主线程与布局计算
-   * - dashboard / rolesPermissions：与对应模板边距一致
+   * - default：极简基础骨架（标题 + 少量正文行）
+   * - minimal：最简洁骨架（仅三行占位），用于局部加载或路由闪过
+   * - dashboard：对齐工作台页面的边距与结构
+   * - rolesPermissions：对齐角色权限页的左右分栏结构
    */
   variant?: 'default' | 'minimal' | 'dashboard' | 'rolesPermissions';
 }
 
-const P = PAGE_SPACING.PADDING;
-
 /**
  * 页面骨架屏组件
- *
- * 提供统一的页面加载占位效果。
- * - default: 无内边距，适用于多数列表/表单页
- * - dashboard: 边距 0 16px 16px 16px，仅工作台/分析页使用，与 DashboardTemplate 一致
- * - rolesPermissions: 边距与角色权限页一致（0 16px 16px 16px），左右分栏布局
  */
 const PageSkeleton: React.FC<PageSkeletonProps> = ({ variant = 'default' }) => {
+  const { token } = useToken();
+  const P = PAGE_SPACING.PADDING;
+  
   const padding =
     variant === 'dashboard' || variant === 'rolesPermissions'
       ? `${P}px`
-      : 0;
+      : `${P}px`;
 
+  // 极简变体：用于路由极速切换或局部加载
   if (variant === 'minimal') {
     return (
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: 200,
-          padding: `${P}px`,
-          boxSizing: 'border-box',
-        }}
-        aria-busy="true"
-        aria-label="Loading"
-      >
-        <Spin />
+      <div style={{ padding, width: '100%', maxWidth: 600 }}>
+        <Skeleton
+          active
+          title={false}
+          paragraph={{ rows: 2, width: ['70%', '40%'] }}
+        />
       </div>
     );
   }
 
+  // 角色权限页专用：保持左右分栏结构一致，防止页面抖动
   if (variant === 'rolesPermissions') {
     return (
-      <div style={{ padding, display: 'flex', height: '100%', gap: 0, boxSizing: 'border-box' }}>
-        {/* 左侧栏骨架（与角色树宽度一致） */}
-        <div style={{ width: 300, flexShrink: 0, padding: 8 }}>
-          <Skeleton.Input active size="small" style={{ width: '100%', marginBottom: 8 }} />
-          <Skeleton.Button active block style={{ marginBottom: 8 }} />
-          <Skeleton active paragraph={{ rows: 6, width: ['100%', '100%', '80%', '80%', '60%', '60%'] }} />
+      <div style={{ padding, display: 'flex', height: '100%', gap: 16, boxSizing: 'border-box' }}>
+        {/* 左侧栏骨架 */}
+        <div style={{ width: 260, flexShrink: 0 }}>
+          <Skeleton.Input active size="small" style={{ width: '100%', height: 24, marginBottom: 12 }} />
+          <Skeleton active paragraph={{ rows: 6, width: '100%' }} title={false} />
         </div>
         {/* 右侧主区骨架 */}
-        <div style={{ flex: 1, padding: 16, minWidth: 0 }}>
-          <div style={{ marginBottom: 16 }}>
-            <Skeleton.Input active size="default" style={{ width: 120, marginRight: 8 }} />
-            <Skeleton.Input active size="default" style={{ width: 200 }} />
-          </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Skeleton.Input active size="small" style={{ width: 120, height: 24, marginBottom: 20 }} />
           <Skeleton
             active
-            paragraph={{
-              rows: 10,
-              width: ['100%', '100%', '100%', '100%', '100%', '100%', '100%', '100%', '90%', '70%'],
-            }}
-            title={{ width: '60%' }}
+            title={{ width: '40%', style: { marginBottom: 24 } }}
+            paragraph={{ rows: 5, width: ['100%', '100%', '95%', '90%', '60%'] }}
           />
         </div>
       </div>
     );
   }
 
+  // 工作台专用：顶部大标题 + 栅格卡片感
+  if (variant === 'dashboard') {
+    return (
+      <div style={{ padding }}>
+        <Skeleton.Input active size="small" style={{ width: 140, height: 24, marginBottom: 24 }} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+          {[1, 2, 3].map(i => (
+            <div key={i} style={{ padding: 16, border: `1px solid ${token.colorBorderSecondary}`, borderRadius: token.borderRadius }}>
+              <Skeleton active paragraph={{ rows: 2 }} title={{ width: '40%' }} />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // 默认：工业极简风（标题 + 四行正文）
   return (
-    <div style={{ padding }}>
-      {/* 页面标题骨架 */}
-      <Skeleton.Input
-        active
-        size="large"
-        style={{ width: 200, height: 32, marginBottom: 24 }}
-      />
-      
-      {/* 操作栏骨架 */}
-      <div style={{ marginBottom: 16 }}>
-        <Skeleton.Button active size="default" style={{ marginRight: 8 }} />
-        <Skeleton.Button active size="default" style={{ marginRight: 8 }} />
-        <Skeleton.Input active size="default" style={{ width: 200, display: 'inline-block' }} />
+    <div style={{ padding, width: '100%' }}>
+      <div style={{ marginBottom: 32 }}>
+        <Skeleton.Input
+          active
+          size="small"
+          style={{ width: 160, height: 24 }}
+        />
       </div>
       
-      {/* 表格骨架 */}
       <Skeleton
         active
         paragraph={{
-          rows: 8,
-          width: ['100%', '100%', '100%', '100%', '100%', '100%', '100%', '100%'],
+          rows: 4,
+          width: ['100%', '95%', '90%', '40%'],
+          style: { marginTop: 0 }
         }}
-        title={{ width: '100%' }}
+        title={{ width: '60%', style: { marginBottom: 20 } }}
       />
     </div>
   );

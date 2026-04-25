@@ -5,11 +5,11 @@
  * 支持用户的 CRUD 操作、导入导出和批量操作。
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormSwitch, ProDescriptionsItemProps, ProFormInstance } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal, Card, List, Typography } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, ReloadOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
@@ -62,6 +62,22 @@ const UserListPage: React.FC = () => {
   const [detailLoading, setDetailLoading] = useState(false);
 
   /**
+   * 处理查看详情
+   */
+  const handleView = useCallback(async (record: User) => {
+    try {
+      setDetailLoading(true);
+      setDrawerVisible(true);
+      const detail = await getUserByUuid(record.uuid);
+      setDetailData(detail);
+    } catch (error: any) {
+      messageApi.error(error.message || t('field.user.fetchDetailFailed'));
+    } finally {
+      setDetailLoading(false);
+    }
+  }, [messageApi, t]);
+
+  /**
    * 处理URL参数（从二维码扫描跳转过来时自动打开详情）
    */
   useEffect(() => {
@@ -69,13 +85,13 @@ const UserListPage: React.FC = () => {
     const action = searchParams.get('action');
     
     if (userUuid && action === 'detail') {
-      // 自动打开用户详情
-      handleView({ uuid: userUuid } as User);
-      // 清除URL参数
+      // 延迟调用，避免 React concurrent mode 警告或同步 setState 问题
+      window.setTimeout(() => {
+        handleView({ uuid: userUuid } as User);
+      }, 0);
       setSearchParams({}, { replace: true });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams, setSearchParams]);
+  }, [searchParams, setSearchParams, handleView]);
 
   /**
    * 处理批量生成二维码
@@ -93,7 +109,9 @@ const UserListPage: React.FC = () => {
           try {
             return await getUserByUuid(key as string);
           } catch (error) {
-            console.error(`获取用户失败: ${key}`, error);
+            if (typeof window !== 'undefined') {
+              window.console.error(`获取用户失败: ${key}`, error);
+            }
             return null;
           }
         })
@@ -160,7 +178,9 @@ const UserListPage: React.FC = () => {
           value: role.uuid,
         })));
       } catch (error) {
-        console.error('加载选项数据失败:', error);
+        if (typeof window !== 'undefined') {
+          window.console.error('加载选项数据失败:', error);
+        }
       }
     };
     loadOptions();
@@ -208,21 +228,6 @@ const UserListPage: React.FC = () => {
     }
   };
 
-  /**
-   * 处理查看详情
-   */
-  const handleView = async (record: User) => {
-    try {
-      setDetailLoading(true);
-      setDrawerVisible(true);
-      const detail = await getUserByUuid(record.uuid);
-      setDetailData(detail);
-    } catch (error: any) {
-      messageApi.error(error.message || t('field.user.fetchDetailFailed'));
-    } finally {
-      setDetailLoading(false);
-    }
-  };
 
   /**
    * 处理删除用户
@@ -932,18 +937,17 @@ const UserListPage: React.FC = () => {
         columns={detailColumns}
       >
         {detailData && (
-          <div style={{ marginTop: 24 }}>
-            <Card title={t('field.user.qrcodeCardTitle')}>
-              <QRCodeGenerator
-                qrcodeType="EMP"
-                data={{
-                  employee_uuid: detailData.uuid,
-                  employee_code: detailData.username,
-                  employee_name: detailData.full_name || detailData.username,
-                }}
-                autoGenerate={true}
-              />
-            </Card>
+          <div style={{ marginTop: 24, maxWidth: 280, marginLeft: 'auto', marginRight: 'auto' }}>
+            <QRCodeGenerator
+              qrcodeType="EMP"
+              data={{
+                employee_uuid: detailData.uuid,
+                employee_code: detailData.username,
+                employee_name: detailData.full_name || detailData.username,
+              }}
+              autoGenerate={true}
+              showCardTitle={false}
+            />
           </div>
         )}
       </DetailDrawerTemplate>

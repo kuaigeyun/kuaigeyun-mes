@@ -11,13 +11,11 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { Button, Space, Form, Select, InputNumber, Input, Switch, Tag, Modal, theme, Row, Col, List, Descriptions, Spin } from 'antd';
-import { EditOutlined, LeftOutlined, QuestionCircleOutlined } from '@ant-design/icons';
-import { SaveOutlined, CloseOutlined, PlusOutlined, DeleteOutlined, DragOutlined, CloseCircleOutlined, SettingOutlined, ClusterOutlined, ReloadOutlined, UpOutlined, DownOutlined, CopyOutlined, DiffOutlined } from '@ant-design/icons';
-import { App } from 'antd';
+import { Button, Space, Form, Select, InputNumber, Input, Switch, Tag, Modal, theme, Row, Col, List, Descriptions, Spin, App } from 'antd';
+import { EditOutlined, LeftOutlined, SaveOutlined, CloseOutlined, PlusOutlined, DeleteOutlined, DragOutlined, CloseCircleOutlined, SettingOutlined, ClusterOutlined, ReloadOutlined, CopyOutlined, DiffOutlined } from '@ant-design/icons';
 import { MindMap, RCNode } from '@ant-design/graphs';
 
-const { TextNode } = RCNode;
+const { TextNode: G6TextNode } = RCNode;
 
 const DEFAULT_EXPAND_LEVEL = 5;
 
@@ -218,6 +216,56 @@ const BOMDesignerPage: React.FC = () => {
   const [copyBomModalVisible, setCopyBomModalVisible] = useState(false);
   const [copyBomNewRootMaterial, setCopyBomNewRootMaterial] = useState<Material | null>(null);
   const [copyBomLoading, setCopyBomLoading] = useState(false);
+
+  /**
+   * 将 MindMap 数据转换为 BOM 批量导入格式（含递归：用于草稿保存时整树写入）
+   */
+  const convertMindMapToBOMItems = useCallback((data: MindMapNode, parentMaterial: Material): any[] => {
+    const items: any[] = [];
+    const parentCode = (parentMaterial as any).mainCode ?? (parentMaterial as any).main_code ?? parentMaterial.code ?? '';
+
+    if (data.children) {
+      data.children.forEach((child: MindMapNode, index: number) => {
+        if (child.material && child.componentId) {
+          const compCode = (child.material as any).mainCode ?? (child.material as any).main_code ?? child.material.code ?? '';
+          items.push({
+            parentCode,
+            componentCode: compCode,
+            quantity: child.quantity || 1,
+            unit: child.unit ?? undefined,
+            wasteRate: child.wasteRate ?? undefined,
+            isRequired: child.isRequired !== false,
+            isConfigurable: child.isConfigurable ?? false,
+            configurableGroupId: child.isConfigurable ? (child.configurableGroupId ?? undefined) : undefined,
+            isDefaultConfigurable: child.isConfigurable ? false : undefined,
+            isAlternative: child.isAlternative ?? false,
+            alternativeGroupId: child.isAlternative ? (child.alternativeGroupId ?? undefined) : undefined,
+            priority: child.priority ?? index,
+          });
+
+          if (child.children && child.children.length > 0) {
+            items.push(...convertMindMapToBOMItems(child, child.material!));
+          }
+        }
+      });
+    }
+
+    return items;
+  }, []);
+
+  /**
+   * 在 MindMap 树中根据 componentId 查找节点
+   */
+  const findNodeByComponentId = useCallback((node: MindMapNode, componentId: number): MindMapNode | null => {
+    if (node.componentId === componentId) return node;
+    if (node.children) {
+      for (const child of node.children) {
+        const found = findNodeByComponentId(child, componentId);
+        if (found) return found;
+      }
+    }
+    return null;
+  }, []);
   /** 版本比对弹窗 */
   const [versionCompareModalVisible, setVersionCompareModalVisible] = useState(false);
   const [versionCompareV1, setVersionCompareV1] = useState<string | null>(null);
@@ -1010,38 +1058,6 @@ const BOMDesignerPage: React.FC = () => {
   /**
    * 将 MindMap 数据转换为 BOM 批量导入格式（含递归：用于草稿保存时整树写入）
    */
-  const convertMindMapToBOMItems = useCallback((data: MindMapNode, parentMaterial: Material): any[] => {
-    const items: any[] = [];
-    const parentCode = (parentMaterial as any).mainCode ?? (parentMaterial as any).main_code ?? parentMaterial.code ?? '';
-
-    if (data.children) {
-      data.children.forEach((child: MindMapNode, index: number) => {
-        if (child.material && child.componentId) {
-          const compCode = (child.material as any).mainCode ?? (child.material as any).main_code ?? child.material.code ?? '';
-          items.push({
-            parentCode,
-            componentCode: compCode,
-            quantity: child.quantity || 1,
-            unit: child.unit ?? undefined,
-            wasteRate: child.wasteRate ?? undefined,
-            isRequired: child.isRequired !== false,
-            isConfigurable: child.isConfigurable ?? false,
-            configurableGroupId: child.isConfigurable ? (child.configurableGroupId ?? undefined) : undefined,
-            isDefaultConfigurable: child.isConfigurable ? false : undefined,
-            isAlternative: child.isAlternative ?? false,
-            alternativeGroupId: child.isAlternative ? (child.alternativeGroupId ?? undefined) : undefined,
-            priority: child.priority ?? index,
-          });
-
-          if (child.children && child.children.length > 0) {
-            items.push(...convertMindMapToBOMItems(child, child.material!));
-          }
-        }
-      });
-    }
-
-    return items;
-  }, []);
 
   /**
    * 仅导出当前物料（根）的直接子件，不递归子 BOM。
@@ -2032,8 +2048,16 @@ const BOMDesignerPage: React.FC = () => {
         animation: false,
       },
       behaviors: ['drag-canvas', 'zoom-canvas'],
+      autoFit: true,
       theme: 'light' as const,
+      backgroundColor: 'transparent',
       labelField: 'value',
+      edge: {
+        style: {
+          stroke: '#cbd5e1',
+          lineWidth: 1.2,
+        }
+      },
       node: {
         style: {
           // 节点尺寸与渲染一致，使连线锚点始终在右侧垂直中心（不随高度变化偏移）
@@ -2140,15 +2164,29 @@ const BOMDesignerPage: React.FC = () => {
                    alignItems: 'center',
                    height: nodeHeight,
                    boxSizing: 'border-box',
-                   background: isRoot ? BOM_COLORS.root : (sourceColors?.bg ?? BOM_COLORS.defaultBg),
-                   border: `1px solid ${isRoot ? BOM_COLORS.root : (isConfigurable ? BOM_COLORS.configurableBorder : (sourceColors?.border ?? BOM_COLORS.defaultBorder))}`,
-                   borderRadius: 8,
-                   padding: '6px 10px',
+                   background: isRoot ? token.colorPrimary : token.colorBgContainer,
+                   border: `1px solid ${isSelected ? (sourceColors?.border ?? token.colorPrimary) : (isRoot ? token.colorPrimary : token.colorBorderSecondary)}`,
+                   borderRadius: token.borderRadiusLG,
+                   padding: '6px 12px 6px 14px',
                    minWidth: 'fit-content',
-                   boxShadow: isSelected ? `0 0 0 2px ${BOM_COLORS.rootRing}` : (data.data?.active ? `0 0 0 2px ${BOM_COLORS.dragActiveRing}` : 'none'),
-                   borderColor: isSelected ? BOM_COLORS.root : (data.data?.active ? BOM_COLORS.dragActive : (isRoot ? BOM_COLORS.root : (isConfigurable ? BOM_COLORS.configurableBorder : BOM_COLORS.defaultBorder))),
+                   boxShadow: isSelected ? `0 0 0 2px ${isSelected && isRoot ? token.colorPrimaryBg : (sourceColors?.border ?? token.colorPrimaryBorder)}44, ${token.boxShadowSecondary}` : token.boxShadowTertiary,
+                   position: 'relative',
+                   overflow: 'hidden',
+                   transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                 }}
               >
+                {/* 统一化的左侧状态条 (Tech Accent Bar) */}
+                <div style={{
+                  position: 'absolute',
+                  left: 0,
+                  top: '20%',
+                  bottom: '20%',
+                  width: 3,
+                  borderRadius: '0 2px 2px 0',
+                  background: isRoot ? '#fff' : (isConfigurable ? BOM_COLORS.configurableBorder : (sourceColors?.border ?? token.colorTextSecondary)),
+                  opacity: isRoot ? 0.8 : 1,
+                  transition: 'all 0.3s ease',
+                }} />
                 {!isRoot && (
                   <span style={{ marginRight: 6, cursor: 'move', color: BOM_COLORS.textMuted, display: 'flex', alignItems: 'center' }}>
                      <DragOutlined />
@@ -2567,9 +2605,7 @@ const BOMDesignerPage: React.FC = () => {
               </div>
             </div>
           ) : (
-            <Button
-              type="text"
-              icon={<QuestionCircleOutlined style={{ fontSize: 18 }} />}
+            <div
               onClick={() => setGuideExpanded(true)}
               title={t('app.master-data.bom.expandGuide')}
               style={{
@@ -2580,15 +2616,32 @@ const BOMDesignerPage: React.FC = () => {
                 width: 36,
                 height: 36,
                 borderRadius: '50%',
-                padding: 0,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 background: 'rgba(255,255,255,0.96)',
                 boxShadow: '0 4px 16px rgba(15, 23, 42, 0.08)',
-                border: `1px solid ${BOM_COLORS.defaultBorder}`,
+                border: `1px solid ${token.colorBorderSecondary}`,
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                color: token.colorTextSecondary,
               }}
-            />
+              onMouseEnter={(e) => {
+                 e.currentTarget.style.color = token.colorPrimary;
+                 e.currentTarget.style.borderColor = token.colorPrimary;
+                 e.currentTarget.style.background = '#fff';
+              }}
+              onMouseLeave={(e) => {
+                 e.currentTarget.style.color = token.colorTextSecondary;
+                 e.currentTarget.style.borderColor = token.colorBorderSecondary;
+                 e.currentTarget.style.background = 'rgba(255,255,255,0.96)';
+              }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: 'block' }}>
+                <rect x="3" y="7" width="18" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.8"/>
+                <path d="M7 10H7.01M10 10H10.01M14 10H14.01M17 10H17.01M7 14H7.01M10 14H14M17 14H17.01" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+              </svg>
+            </div>
           )}
 
           {/* 画板左下角：物料来源颜色图例 */}

@@ -446,13 +446,34 @@ const ApprovalInstanceListPage: React.FC = () => {
               ...searchFormValues,
             };
             
-            const data = await getApprovalInstanceList(listParams);
+            const countTotal = async (): Promise<number> => {
+              const chunkSize = 1000;
+              let total = 0;
+              let offset = 0;
+              for (let i = 0; i < 100; i += 1) {
+                const chunk = await getApprovalInstanceList({
+                  skip: offset,
+                  limit: chunkSize,
+                  ...searchFormValues,
+                });
+                total += chunk.length;
+                if (chunk.length < chunkSize) break;
+                offset += chunkSize;
+              }
+              return total;
+            };
+
+            const [data, total] = await Promise.all([
+              getApprovalInstanceList(listParams),
+              // 接口无 total 字段，按后端上限分批统计总量
+              countTotal(),
+            ]);
             // 更新表格数据用于统计
             setTableData(data);
             return {
               data,
               success: true,
-              total: data.length,
+              total,
             };
           }}
           rowKey="uuid"

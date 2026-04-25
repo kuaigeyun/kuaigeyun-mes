@@ -32,6 +32,7 @@ export interface FileListParams {
   search?: string;
   category?: string;
   file_type?: string;
+  include_preview_url?: boolean;
 }
 
 export interface FileListResponse {

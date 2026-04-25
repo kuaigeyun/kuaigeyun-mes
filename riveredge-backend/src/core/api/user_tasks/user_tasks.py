@@ -58,8 +58,8 @@ async def create_user_task(
 async def get_user_tasks(
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=100, description="每页数量"),
-    status: str = Query(None, description="任务状态过滤（pending、approved、rejected、cancelled）"),
-    task_type: str = Query(None, description="任务类型（pending=待处理, submitted=我提交的）"),
+    status: str = Query(None, description="任务状态过滤（支持逗号分隔，如 approved,rejected）"),
+    task_type: str = Query(None, description="任务类型（pending=待处理, processed=已处理, submitted=我提交的）"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -70,7 +70,7 @@ async def get_user_tasks(
         page: 页码
         page_size: 每页数量
         status: 任务状态过滤
-        task_type: 任务类型（pending=待处理, submitted=我提交的）
+        task_type: 任务类型（pending=待处理, processed=已处理, submitted=我提交的）
         
     Returns:
         UserTaskListResponse: 用户任务列表
@@ -172,23 +172,34 @@ async def process_user_task(
         )
 
 
-@router.post("", response_model=UserTaskResponse, status_code=status.HTTP_201_CREATED)
-async def create_user_task(
-    data: UserTaskCreateRequest,
+@router.delete("/{task_uuid}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user_task(
+    task_uuid: str,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
-    手动创建个人任务 (TodoList)
+    删除用户任务
     
     Args:
-        data: 任务创建数据
+        task_uuid: 任务UUID
         
-    Returns:
-        UserTaskResponse: 创建的任务对象
+    Raises:
+        HTTPException: 当任务不存在或无权删除时抛出
     """
-    return await UserTaskService.create_user_task(
-        tenant_id=tenant_id,
-        user_id=current_user.id,
-        data=data,
-    )
+    try:
+        await UserTaskService.delete_user_task(
+            tenant_id=tenant_id,
+            user_id=current_user.id,
+            task_uuid=task_uuid,
+        )
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )

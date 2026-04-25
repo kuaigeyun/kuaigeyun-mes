@@ -1882,7 +1882,7 @@ export default function DashboardPage() {
                       borderBottom: index < productionBroadcast.length - 1 ? `1px solid ${token.colorBorder}` : 'none',
                       cursor: 'pointer',
                       display: 'flex',
-                      alignItems: 'flex-start',
+                      alignItems: 'center',
                       gap: 12,
                     }}
                     onClick={() => {

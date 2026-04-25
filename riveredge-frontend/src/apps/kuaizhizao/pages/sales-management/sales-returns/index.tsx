@@ -29,6 +29,7 @@ import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { getSalesReturnLifecycle } from '../../../utils/salesReturnLifecycle';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingRelationsBody, DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
+import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 
 // 销售退货单接口定义
 interface SalesReturn {
@@ -144,7 +145,6 @@ const SalesReturnsPage: React.FC = () => {
   const [returnTypeOptions, setReturnTypeOptions] = useState(FALLBACK_RETURN_TYPE);
   const [shippingMethodOptions, setShippingMethodOptions] = useState(FALLBACK_SHIPPING_METHOD);
   const [dictOptionsLoading, setDictOptionsLoading] = useState(false);
-  const SALES_RETURN_ROW_ACTIONS_INLINE_MAX = 4;
 
   /** 打开表单时拉取字典；若租户未初始化则尝试同步系统字典（与 core 配置一致） */
   useEffect(() => {
@@ -185,25 +185,7 @@ const SalesReturnsPage: React.FC = () => {
   }, [modalVisible]);
 
   const renderSalesReturnRowActions = (actions: React.ReactNode[]) => {
-    const valid = actions.filter(Boolean);
-    if (valid.length <= SALES_RETURN_ROW_ACTIONS_INLINE_MAX) {
-      return <Space size={4}>{valid}</Space>;
-    }
-    const inline = valid.slice(0, SALES_RETURN_ROW_ACTIONS_INLINE_MAX);
-    const folded = valid.slice(SALES_RETURN_ROW_ACTIONS_INLINE_MAX);
-    return (
-      <Space size={4}>
-        {inline}
-        <Dropdown
-          trigger={['click']}
-          menu={{
-            items: folded.map((node, index) => ({ key: `more-${index}`, label: node as React.ReactNode })),
-          }}
-        >
-          <Button type="link" size="small" icon={<MoreOutlined />}>更多</Button>
-        </Dropdown>
-      </Space>
-    );
+    return renderRowActionsOverflow(actions, 'sales-return');
   };
 
   // 表格列定义

@@ -61,11 +61,15 @@ class FilePreviewService:
         Returns:
             str: JWT token
         """
+        # 使 Token 在一小时内保持稳定，避免因 iat/exp 微小变化导致 URL 变动引发前端图片闪烁
+        now = datetime.utcnow()
+        stable_now = now.replace(minute=0, second=0, microsecond=0)
+        
         payload = {
             "file_uuid": file_uuid,
             "tenant_id": tenant_id,
-            "exp": datetime.utcnow() + timedelta(seconds=expires_in),
-            "iat": datetime.utcnow(),
+            "exp": stable_now + timedelta(seconds=expires_in + 3600), # 增加额外缓冲
+            "iat": stable_now,
         }
         
         token = jwt.encode(payload, FilePreviewService.TOKEN_SECRET, algorithm="HS256")

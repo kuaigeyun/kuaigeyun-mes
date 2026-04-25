@@ -4,8 +4,10 @@
 提供审批流程的 CRUD 操作。
 """
 
-from typing import Optional, List
+from typing import Optional, List, Any, Dict
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from loguru import logger
+from pydantic import ValidationError as PydanticValidationError
 
 from core.schemas.approval_process import (
     ApprovalProcessCreate,
@@ -19,6 +21,40 @@ from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(prefix="/approval-processes", tags=["ApprovalProcesses"])
+
+
+def _normalize_json_object(value: Any, field_name: str, process_uuid: Any) -> Dict[str, Any]:
+    """
+    将历史脏数据归一化为对象，避免响应序列化 ValidationError 直接打断列表接口。
+    """
+    if isinstance(value, dict):
+        return value
+    if value is None:
+        return {}
+    logger.warning(
+        "审批流程 {} 字段 {} 非对象类型({})，已降级为空对象返回",
+        process_uuid,
+        field_name,
+        type(value).__name__,
+    )
+    return {}
+
+
+def _to_response_model(approval_process: Any) -> ApprovalProcessResponse:
+    payload = {
+        "uuid": approval_process.uuid,
+        "tenant_id": approval_process.tenant_id,
+        "name": approval_process.name,
+        "code": approval_process.code,
+        "description": approval_process.description,
+        "nodes": _normalize_json_object(getattr(approval_process, "nodes", None), "nodes", approval_process.uuid),
+        "config": _normalize_json_object(getattr(approval_process, "config", None), "config", approval_process.uuid),
+        "is_active": approval_process.is_active,
+        "inngest_workflow_id": approval_process.inngest_workflow_id,
+        "created_at": approval_process.created_at,
+        "updated_at": approval_process.updated_at,
+    }
+    return ApprovalProcessResponse.model_validate(payload)
 
 
 @router.post("", response_model=ApprovalProcessResponse, status_code=status.HTTP_201_CREATED)
@@ -47,7 +83,7 @@ async def create_approval_process(
             tenant_id=tenant_id,
             data=data
         )
-        return ApprovalProcessResponse.model_validate(approval_process)
+        return _to_response_model(approval_process)
     except ValidationError as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -82,7 +118,13 @@ async def list_approval_processes(
         limit=limit,
         is_active=is_active
     )
-    return [ApprovalProcessResponse.model_validate(ap) for ap in approval_processes]
+    result: List[ApprovalProcessResponse] = []
+    for ap in approval_processes:
+        try:
+            result.append(_to_response_model(ap))
+        except PydanticValidationError as e:
+            logger.exception("审批流程序列化失败，uuid={}，已跳过。错误: {}", getattr(ap, "uuid", None), e)
+    return result
 
 
 @router.get("/{uuid}", response_model=ApprovalProcessResponse)
@@ -110,7 +152,7 @@ async def get_approval_process(
             tenant_id=tenant_id,
             uuid=uuid
         )
-        return ApprovalProcessResponse.model_validate(approval_process)
+        return _to_response_model(approval_process)
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -147,7 +189,7 @@ async def update_approval_process(
             uuid=uuid,
             data=data
         )
-        return ApprovalProcessResponse.model_validate(approval_process)
+        return _to_response_model(approval_process)
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

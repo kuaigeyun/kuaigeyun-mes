@@ -21,8 +21,7 @@ import {
 } from '../services/kuaireport';
 import { UniLifecycle } from '../../../components/uni-lifecycle';
 import { getPublishDraftLifecycle } from '../utils/publishLifecycle';
-
-const DASHBOARD_ROW_ACTIONS_MAX = 4;
+import { renderRowActionsOverflow } from '../../../utils/renderRowActionsOverflow';
 
 interface Dashboard {
     id: number;
@@ -131,30 +130,7 @@ const DashboardList: React.FC = () => {
                 删除
             </Button>,
         ];
-        const wrapped = nodes.map((node, i) => <span key={`db-act-${record.id}-${i}`}>{node}</span>);
-        if (wrapped.length <= DASHBOARD_ROW_ACTIONS_MAX) {
-            return <Space size="small">{wrapped}</Space>;
-        }
-        const inline = wrapped.slice(0, DASHBOARD_ROW_ACTIONS_MAX);
-        const overflow = wrapped.slice(DASHBOARD_ROW_ACTIONS_MAX);
-        return (
-            <Space size="small" wrap>
-                {inline}
-                <Dropdown
-                    menu={{
-                        items: overflow.map((node, i) => ({
-                            key: `db-more-${record.id}-${i}`,
-                            label: node,
-                        })),
-                    }}
-                    trigger={['click']}
-                >
-                    <Button type="link" size="small">
-                        更多
-                    </Button>
-                </Dropdown>
-            </Space>
-        );
+        return renderRowActionsOverflow(nodes, `db-act-${record.id}`);
     };
 
     const columns: ProColumns<Dashboard>[] = [

@@ -18,7 +18,6 @@ from core.schemas.message_config import (
     MessageConfigTestResponse
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
-import aiosmtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from loguru import logger
@@ -245,6 +244,7 @@ class MessageConfigService:
             return False, "参数不完整", "缺少 host, username 或 password"
 
         try:
+            import aiosmtplib
             message = MIMEMultipart()
             message["From"] = f"{from_name} <{username}>"
             message["To"] = target

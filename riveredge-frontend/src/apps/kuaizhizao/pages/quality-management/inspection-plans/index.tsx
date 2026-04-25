@@ -38,6 +38,7 @@ import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni
 import type { LifecycleResult } from '../../../../../components/uni-lifecycle/types';
 import { inspectionPlanApi } from '../../../services/production';
 import { InspectionPlanStepEditor, type InspectionPlanStepItem } from '../../../components/InspectionPlanStepEditor';
+import { countWithPagedRequests } from '../../../../../utils/pagedCount';
 import dayjs from 'dayjs';
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
@@ -436,17 +437,27 @@ const InspectionPlansPage: React.FC = () => {
         columns={columns}
         request={async (params: any) => {
           try {
-            const response = await inspectionPlanApi.list({
-              skip: (params.current! - 1) * params.pageSize!,
-              limit: params.pageSize,
+            const filters = {
               plan_type: params.plan_type,
               is_active: params.is_active,
               plan_code: params.plan_code,
               plan_name: params.plan_name,
               keyword: params.keyword,
-            });
+            };
+            const [response, total] = await Promise.all([
+              inspectionPlanApi.list({
+                skip: (params.current! - 1) * params.pageSize!,
+                limit: params.pageSize,
+                ...filters,
+              }),
+              countWithPagedRequests(
+                (p) => inspectionPlanApi.list(p),
+                filters,
+                { chunkSize: 100 },
+              ),
+            ]);
             const data = Array.isArray(response) ? response : response?.data || [];
-            return { data, success: true, total: data.length };
+            return { data, success: true, total };
           } catch (error) {
             messageApi.error('获取质检方案列表失败');
             return { data: [], success: false, total: 0 };

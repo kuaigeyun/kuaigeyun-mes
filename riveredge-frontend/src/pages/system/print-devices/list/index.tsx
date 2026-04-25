@@ -28,6 +28,7 @@ import {
   PrintDevicePrintData,
   PrintDevicePrintResponse,
 } from '../../../../services/printDevice';
+import { countWithPagedRequests } from '../../../../utils/pagedCount';
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -624,7 +625,10 @@ const PrintDeviceListPage: React.FC = () => {
             };
 
             try {
-              const data = await getPrintDeviceList(listParams);
+              const [data, total] = await Promise.all([
+                getPrintDeviceList(listParams),
+                countWithPagedRequests(getPrintDeviceList, searchFormValues || {}, { chunkSize: 100 }),
+              ]);
               
               // 同时获取所有数据用于统计（如果当前页是第一页）
               if (current === 1) {
@@ -639,7 +643,7 @@ const PrintDeviceListPage: React.FC = () => {
               return {
                 data,
                 success: true,
-                total: data.length, // 注意：这里应该返回实际总数，如果API支持的话
+                total,
               };
             } catch (error: any) {
               console.error('获取打印设备列表失败:', error);

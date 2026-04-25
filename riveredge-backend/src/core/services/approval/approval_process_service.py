@@ -24,6 +24,93 @@ class ApprovalProcessService:
     提供审批流程的 CRUD 操作和 Inngest 工作流集成功能。
     """
     
+    CANONICAL_PROCESS_NAMES: Dict[str, str] = {
+        "personal_task": "个人任务",
+        "demand": "需求审核",
+        "sales_forecast": "销售预测审核",
+        "sales_order": "销售订单审核",
+        "quotation": "报价审核",
+        "production_plan": "生产计划审核",
+        "purchase_request": "采购申请审核",
+        "purchase_order": "采购订单审核",
+        "reporting_record": "报工审核",
+        "quality_inspection": "质检审核",
+        "incoming_inspection": "来料检验审核",
+        "process_inspection": "工序检验审核",
+        "finished_goods_inspection": "成品检验审核",
+        "sales_delivery": "销售发货审核",
+        "purchase_receipt": "采购收货审核",
+        "finished_goods_receipt": "成品入库审核",
+        "other_inbound": "其他入库审核",
+        "other_outbound": "其他出库审核",
+        "production_picking": "生产领料审核",
+        "production_return": "生产退料审核",
+        "material_borrow": "物料借用审核",
+        "material_return": "物料退料审核",
+        "sales_return": "销售退货审核",
+        "purchase_return": "采购退货审核",
+        # 历史别名（兼容旧 code）
+        "demand_audit": "需求审核",
+        "purchase_receipt_audit": "采购收货审核",
+        "other_outbound_audit": "其他出库审核",
+        "finished_goods_inspection_audit": "成品检验审核",
+        "process_inspection_audit": "工序检验审核",
+        "production_picking_audit": "生产领料审核",
+        "quality_inspection_audit": "质量检验审核",
+        "production_return_audit": "生产退料审核",
+        "material_return_audit": "物料退料审核",
+        "incoming_inspection_audit": "来料检验审核",
+        "purchase_return_audit": "采购退货审核",
+        "sales_delivery_audit": "销售发货审核",
+        "material_borrow_audit": "物料借用审核",
+        "finished_goods_receipt_audit": "成品入库审核",
+        "sales_return_audit": "销售退货审核",
+        "production_plan_audit": "生产计划审核",
+        "quotation_audit": "报价审核",
+    }
+
+    @staticmethod
+    def _normalize_name_token(value: Optional[str]) -> str:
+        if not value:
+            return ""
+        return str(value).strip().lower().replace("-", "_").replace(" ", "_")
+
+    @staticmethod
+    def _resolve_canonical_name(code: Optional[str], name: Optional[str]) -> Optional[str]:
+        code_key = ApprovalProcessService._normalize_name_token(code)
+        if not code_key:
+            return None
+        canonical = ApprovalProcessService.CANONICAL_PROCESS_NAMES.get(code_key)
+        if not canonical:
+            return None
+
+        name_key = ApprovalProcessService._normalize_name_token(name)
+        # 仅修正明显的英文/机器名，避免覆盖用户已维护的中文自定义名称
+        if name_key in {
+            "",
+            code_key,
+            f"{code_key}_audit",
+            "reporting_record",
+            "reporting_record_audit",
+            "reporting",
+            "sales_forecast",
+            "sales_forecast_audit",
+        }:
+            return canonical
+        if name and all(ord(ch) < 128 for ch in str(name)):
+            return canonical
+        return None
+
+    @staticmethod
+    async def _normalize_process_name_if_needed(approval_process: ApprovalProcess) -> None:
+        canonical = ApprovalProcessService._resolve_canonical_name(
+            getattr(approval_process, "code", None),
+            getattr(approval_process, "name", None),
+        )
+        if canonical and canonical != approval_process.name:
+            approval_process.name = canonical
+            await approval_process.save(update_fields=["name", "updated_at"])
+
     @staticmethod
     def convert_proflow_to_inngest(proflow_config: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -75,9 +162,16 @@ class ApprovalProcessService:
             ValidationError: 当流程代码已存在时抛出
         """
         try:
+            payload = data.model_dump()
+            canonical_name = ApprovalProcessService._resolve_canonical_name(
+                payload.get("code"),
+                payload.get("name"),
+            )
+            if canonical_name:
+                payload["name"] = canonical_name
             approval_process = ApprovalProcess(
                 tenant_id=tenant_id,
-                **data.model_dump()
+                **payload
             )
             await approval_process.save()
 
@@ -118,6 +212,7 @@ class ApprovalProcessService:
         if not approval_process:
             raise NotFoundError("审批流程不存在")
         
+        await ApprovalProcessService._normalize_process_name_if_needed(approval_process)
         return approval_process
     
     @staticmethod
@@ -147,7 +242,10 @@ class ApprovalProcessService:
         if is_active is not None:
             query = query.filter(is_active=is_active)
         
-        return await query.order_by("-created_at").offset(skip).limit(limit).all()
+        result = await query.order_by("-created_at").offset(skip).limit(limit).all()
+        for item in result:
+            await ApprovalProcessService._normalize_process_name_if_needed(item)
+        return result
     
     @staticmethod
     async def update_approval_process(
@@ -172,6 +270,13 @@ class ApprovalProcessService:
         approval_process = await ApprovalProcessService.get_approval_process_by_uuid(tenant_id, uuid)
         
         update_data = data.model_dump(exclude_unset=True)
+        if "name" in update_data:
+            canonical_name = ApprovalProcessService._resolve_canonical_name(
+                getattr(approval_process, "code", None),
+                update_data.get("name"),
+            )
+            if canonical_name:
+                update_data["name"] = canonical_name
         for key, value in update_data.items():
             setattr(approval_process, key, value)
         

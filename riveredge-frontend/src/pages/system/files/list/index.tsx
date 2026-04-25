@@ -114,6 +114,35 @@ type SortOrder = 'ascend' | 'descend' | null;
 type ViewType = 'icons' | 'list' | 'details';
 
 /**
+ * 缩略图渲染组件 - 抽离到外部避免 Parent Re-render 时物理销毁重建组件（解决闪烁根本原因）
+ */
+const FileThumbnail = React.memo(({ file, size }: { file: File; size: number }) => {
+  const [error, setError] = useState(false);
+  const isImage = isImageFile(file);
+  const hasThumb = isImage && file.preview_url && !error;
+
+  if (hasThumb) {
+    return (
+      <img
+        src={file.preview_url}
+        alt={file.original_name}
+        loading="lazy"
+        style={{
+          width: size,
+          height: size,
+          objectFit: 'cover',
+          borderRadius: '4px',
+          backgroundColor: '#f5f5f5',
+        }}
+        onError={() => setError(true)}
+      />
+    );
+  }
+  return getFileIcon(file.file_type, size * 0.75);
+});
+FileThumbnail.displayName = 'FileThumbnail';
+
+/**
  * 文件管理列表页面组件
  */
 const FileListPage: React.FC = () => {
@@ -125,6 +154,7 @@ const FileListPage: React.FC = () => {
   const [viewType, setViewType] = useState<ViewType>('icons');
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [fileList, setFileList] = useState<File[]>([]);
+  const [allFiles, setAllFiles] = useState<File[]>([]); // 核心：维护一份全量文件列表用于构建树，避免过滤时树节点消失
   const [loading, setLoading] = useState(false);
 
   // 排序（Windows 资源管理器逻辑：默认按名称升序）
@@ -161,11 +191,6 @@ const FileListPage: React.FC = () => {
   // 剪贴板状态（用于复制/剪切）
   const [clipboard, setClipboard] = useState<{ type: 'copy' | 'cut' | null; files: File[] }>({ type: null, files: [] });
 
-  // 图标视图中图片的预览 URL（用于缩略图）
-  const [imagePreviewUrls, setImagePreviewUrls] = useState<Record<string, string>>({});
-  const [imageLoadFailed, setImageLoadFailed] = useState<Set<string>>(new Set());
-  const requestedPreviewRef = useRef<Set<string>>(new Set());
-
   /**
    * 加载文件列表
    */
@@ -176,22 +201,29 @@ const FileListPage: React.FC = () => {
         page: 1,
         page_size: 1000, // 加载所有文件
         category: category,
+        include_preview_url: true, // 核心优化：一次性返回缩略图 URL，减少数百个请求
       };
       const response = await getFileList(params);
       setFileList(response.items);
+      
+      // 如果没有筛选分类，更新全量列表以同步树形菜单
+      if (!category) {
+        setAllFiles(response.items);
+      }
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.files.loadListFailed'));
     } finally {
       setLoading(false);
     }
-  }, [messageApi]);
+  }, [messageApi, t]);
 
   /**
    * 初始化文件夹树：仅一个根节点「全部文件」，其他文件夹作为其子节点
+   * 优化：基于 allFiles（全量列表）构建，点击分类时不会导致其他文件夹消失
    */
   useEffect(() => {
     const categories = new Set<string>();
-    fileList.forEach(file => {
+    allFiles.forEach(file => {
       if (file.category) {
         categories.add(file.category);
       }
@@ -225,7 +257,7 @@ const FileListPage: React.FC = () => {
     if (categoryNodes.length > 0) {
       setExpandedKeys(prev => (prev.includes('all') ? prev : ['all', ...prev]));
     }
-  }, [fileList, treeSearchValue]);
+  }, [allFiles, t, selectedTreeKeys.length, treeSearchValue]);
 
   /**
    * 过滤文件夹树（根据搜索关键词）：保留「全部文件」根节点，只过滤其子文件夹
@@ -268,23 +300,6 @@ const FileListPage: React.FC = () => {
   useEffect(() => {
     loadFileList();
   }, [loadFileList]);
-
-  /**
-   * 图标视图下为图片文件拉取预览 URL，用于显示缩略图
-   */
-  useEffect(() => {
-    if (viewType !== 'icons') return;
-    const imageFiles = fileList.filter(isImageFile);
-    imageFiles.forEach((file) => {
-      if (requestedPreviewRef.current.has(file.uuid)) return;
-      requestedPreviewRef.current.add(file.uuid);
-      getFilePreview(file.uuid)
-        .then((res) => {
-          setImagePreviewUrls((prev) => ({ ...prev, [file.uuid]: res.preview_url }));
-        })
-        .catch(() => {});
-    });
-  }, [viewType, fileList]);
 
   /**
    * 排序后的文件列表（Windows 资源管理器逻辑：名称自然排序，支持按大小/类型/日期）
@@ -623,7 +638,6 @@ const FileListPage: React.FC = () => {
    */
   const renderIconsView = () => {
     const imageThumbSize = 64;
-    const thumbUrl = (file: File) => imagePreviewUrls[file.uuid];
 
     return (
       <div
@@ -636,9 +650,6 @@ const FileListPage: React.FC = () => {
         onContextMenu={(e) => handleContextMenu(e)}
       >
         {sortedFileList.map(file => {
-          const isImage = isImageFile(file);
-          const thumbFailed = imageLoadFailed.has(file.uuid);
-          const hasThumb = isImage && thumbUrl(file) && !thumbFailed;
           return (
             <div
               key={file.uuid}
@@ -649,8 +660,9 @@ const FileListPage: React.FC = () => {
                 padding: '12px',
                 borderRadius: '4px',
                 cursor: 'pointer',
-                border: selectedRowKeys.includes(file.uuid) ? '2px solid #1890ff' : '2px solid transparent',
-                backgroundColor: selectedRowKeys.includes(file.uuid) ? '#e6f7ff' : 'transparent',
+                transition: 'all 0.2s',
+                border: selectedRowKeys.includes(file.uuid) ? `2px solid ${token.colorPrimary}` : '2px solid transparent',
+                backgroundColor: selectedRowKeys.includes(file.uuid) ? `${token.colorPrimary}10` : 'transparent',
               }}
               onClick={(e) => {
                 if (e.ctrlKey || e.metaKey) {
@@ -666,21 +678,15 @@ const FileListPage: React.FC = () => {
               onDoubleClick={() => handlePreview(file)}
               onContextMenu={(e) => handleContextMenu(e, file)}
             >
-              {hasThumb ? (
-                <img
-                  src={thumbUrl(file)}
-                  alt={file.original_name}
-                  style={{
-                    width: imageThumbSize,
-                    height: imageThumbSize,
-                    objectFit: 'cover',
-                    borderRadius: '4px',
-                  }}
-                  onError={() => setImageLoadFailed((prev) => new Set(prev).add(file.uuid))}
-                />
-              ) : (
-                getFileIcon(file.file_type, 48)
-              )}
+              <div style={{ 
+                width: imageThumbSize, 
+                height: imageThumbSize, 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center' 
+              }}>
+                <FileThumbnail file={file} size={imageThumbSize} />
+              </div>
               <div
                 style={{
                   marginTop: '8px',
@@ -688,6 +694,11 @@ const FileListPage: React.FC = () => {
                   fontSize: '12px',
                   wordBreak: 'break-word',
                   maxWidth: '100px',
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                  lineHeight: '1.4',
                 }}
                 title={file.original_name}
               >
@@ -1034,22 +1045,44 @@ const FileListPage: React.FC = () => {
         />
       </FormModalTemplate>
 
-      {/* 右键菜单 */}
+      {/* 右键菜单与全屏遮罩 */}
       {contextMenuVisible && (
-        <div
-          style={{
-            position: 'fixed',
-            left: contextMenuPosition.x,
-            top: contextMenuPosition.y,
-            zIndex: 1000,
-          }}
-          onClick={() => setContextMenuVisible(false)}
-        >
-          <Menu
-            items={contextMenuItems}
+        <>
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 999,
+              backgroundColor: 'transparent',
+            }}
             onClick={() => setContextMenuVisible(false)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setContextMenuVisible(false);
+            }}
           />
-        </div>
+          <div
+            style={{
+              position: 'fixed',
+              left: contextMenuPosition.x,
+              top: contextMenuPosition.y,
+              zIndex: 1000,
+              boxShadow: '0 6px 16px 0 rgba(0, 0, 0, 0.08), 0 3px 6px -4px rgba(0, 0, 0, 0.12), 0 9px 28px 8px rgba(0, 0, 0, 0.05)',
+              borderRadius: '8px',
+              overflow: 'hidden',
+            }}
+          >
+            <Menu
+              items={contextMenuItems}
+              onClick={() => setContextMenuVisible(false)}
+              selectable={false}
+              style={{ border: 'none', minWidth: '160px' }}
+            />
+          </div>
+        </>
       )}
     </>
   );

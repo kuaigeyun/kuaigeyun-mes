@@ -62,8 +62,9 @@ export const QRCodeGenerator: React.FC<QRCodeGeneratorProps> = ({
   /**
    * 生成二维码
    */
+  const dataString = JSON.stringify(data);
   // 使用 JSON.stringify 比较 data 内容，避免因引用变化导致频繁重新生成
-  const stableData = useMemo(() => data, [JSON.stringify(data)]);
+  const stableData = useMemo(() => data, [dataString]);
 
   const generateQRCode = useCallback(async (silent: boolean = false) => {
     try {
@@ -102,23 +103,23 @@ export const QRCodeGenerator: React.FC<QRCodeGeneratorProps> = ({
     try {
       // 从data URI中提取base64数据
       const base64Data = qrcodeResponse.qrcode_image.split(',')[1];
-      const byteCharacters = atob(base64Data);
+      const byteCharacters = window.atob(base64Data);
       const byteNumbers = new Array(byteCharacters.length);
       for (let i = 0; i < byteCharacters.length; i++) {
         byteNumbers[i] = byteCharacters.charCodeAt(i);
       }
       const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: 'image/png' });
+      const blob = new window.Blob([byteArray], { type: 'image/png' });
 
       // 创建下载链接
-      const url = URL.createObjectURL(blob);
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       link.download = `qrcode-${qrcodeType}-${Date.now()}.png`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      window.URL.revokeObjectURL(url);
 
       message.success('二维码下载成功');
     } catch (error: any) {
@@ -131,35 +132,66 @@ export const QRCodeGenerator: React.FC<QRCodeGeneratorProps> = ({
    */
   useEffect(() => {
     if (autoGenerate && stableData && Object.keys(stableData).length > 0) {
-      generateQRCode(true);
+      // 延迟调用，避免同步 setState 问题
+      const timer = window.setTimeout(() => {
+        generateQRCode(true);
+      }, 0);
+      return () => window.clearTimeout(timer);
     }
+    return undefined;
   }, [autoGenerate, generateQRCode, stableData]);
 
   return (
     <Card
       title={showCardTitle ? '二维码' : undefined}
       extra={
-        <Space>
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={() => generateQRCode(false)}
-            loading={loading}
-            disabled={!data || Object.keys(data).length === 0}
-          >
-            重新生成
-          </Button>
-          {qrcodeResponse && (
+        showCardTitle ? (
+          <Space>
             <Button
-              icon={<DownloadOutlined />}
-              onClick={downloadQRCode}
+              icon={<ReloadOutlined />}
+              onClick={() => generateQRCode(false)}
+              loading={loading}
+              disabled={!data || Object.keys(data).length === 0}
             >
-              下载
+              重新生成
             </Button>
-          )}
-        </Space>
+            {qrcodeResponse && (
+              <Button
+                icon={<DownloadOutlined />}
+                onClick={downloadQRCode}
+              >
+                下载
+              </Button>
+            )}
+          </Space>
+        ) : undefined
       }
     >
       <Spin spinning={loading}>
+        {!showCardTitle && (
+          <div style={{ textAlign: 'center', marginBottom: 16 }}>
+            <Space>
+              <Button
+                size="small"
+                icon={<ReloadOutlined />}
+                onClick={() => generateQRCode(false)}
+                loading={loading}
+                disabled={!data || Object.keys(data).length === 0}
+              >
+                重新生成
+              </Button>
+              {qrcodeResponse && (
+                <Button
+                  size="small"
+                  icon={<DownloadOutlined />}
+                  onClick={downloadQRCode}
+                >
+                  下载
+                </Button>
+              )}
+            </Space>
+          </div>
+        )}
         {qrcodeResponse?.qrcode_image ? (
           <div style={{ textAlign: 'center' }}>
             <img

@@ -11,6 +11,8 @@ import { ListPageTemplate } from '../../../components/layout-templates';
 import { UniLifecycle } from '../../../components/uni-lifecycle';
 import { getReports } from '../services/kuaireport';
 import { getPublishDraftLifecycle } from '../utils/publishLifecycle';
+import { countWithPagedRequests } from '../../../utils/pagedCount';
+import { renderRowActionsOverflow } from '../../../utils/renderRowActionsOverflow';
 
 interface ReportRow {
   id: number;
@@ -20,8 +22,6 @@ interface ReportRow {
   status?: string;
   updated_at?: string;
 }
-
-const ROW_ACTIONS_MAX = 4;
 
 const ReportList: React.FC = () => {
   const navigate = useNavigate();
@@ -98,25 +98,7 @@ const ReportList: React.FC = () => {
             删除
           </Button>,
         ];
-        const wrapped = nodes.map((node, i) => <span key={`${record.id}-${i}`}>{node}</span>);
-        if (wrapped.length <= ROW_ACTIONS_MAX) {
-          return <Space size="small">{wrapped}</Space>;
-        }
-        const inline = wrapped.slice(0, ROW_ACTIONS_MAX);
-        const overflow = wrapped.slice(ROW_ACTIONS_MAX);
-        return (
-          <Space size="small" wrap>
-            {inline}
-            <Dropdown
-              menu={{ items: overflow.map((node, i) => ({ key: `more-${i}`, label: node })) }}
-              trigger={['click']}
-            >
-              <Button type="link" size="small">
-                更多
-              </Button>
-            </Dropdown>
-          </Space>
-        );
+        return renderRowActionsOverflow(nodes, `report-${record.id}`);
       },
     },
   ];
@@ -131,10 +113,18 @@ const ReportList: React.FC = () => {
         columns={columns}
         request={async (params) => {
           try {
-            const res = await getReports({});
-            const raw = res?.data ?? [];
-            const data = Array.isArray(raw) ? raw : [];
-            return { data, success: true, total: data.length };
+            const skip = ((params.current ?? 1) - 1) * (params.pageSize ?? 20);
+            const limit = params.pageSize ?? 20;
+            const readList = async (query: { skip?: number; limit?: number }) => {
+              const res = await getReports(query);
+              const raw = res?.data ?? res;
+              return Array.isArray(raw) ? raw : [];
+            };
+            const [data, total] = await Promise.all([
+              readList({ skip, limit }),
+              countWithPagedRequests(readList, {}, { chunkSize: 100 }),
+            ]);
+            return { data, success: true, total };
           } catch {
             messageApi.error('获取列表失败');
             return { data: [], success: false, total: 0 };

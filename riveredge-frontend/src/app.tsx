@@ -7,11 +7,12 @@
  * - Ant Design 6.1.0 + Pro Components 2.8.2 (UI组件)
  */
 
-import React, { useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import { useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { setNavigateRef } from './utils/navigation';
-import { App as AntdApp, Spin, ConfigProvider, message } from 'antd';
+import { App as AntdApp, ConfigProvider, message } from 'antd';
+import PageSkeleton, { PageSkeletonProps } from './components/page-skeleton';
 import zhCN from 'antd/locale/zh_CN';
 import enUS from 'antd/locale/en_US';
 import { useQuery } from '@tanstack/react-query';
@@ -350,7 +351,7 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
       cancelled = true;
       document.removeEventListener('visibilitychange', onTokenVisibility);
       if (checkTimerRef.current) {
-        clearInterval(checkTimerRef.current);
+        window.clearInterval(checkTimerRef.current);
         checkTimerRef.current = null;
       }
     };
@@ -369,7 +370,7 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
   const hasToken = !!token;
 
   // 使用 useMemo 稳定重定向逻辑，避免无限循环
-  const redirectTarget = React.useMemo(() => {
+  const redirectTarget = useMemo(() => {
     // ⚠️ 核心逻辑：只有真正已登录（有 token 且 currentUser 存在）时才重定向
     // 如果只有 token 但没有 currentUser，说明可能还在加载中，不重定向
     const isAuthenticated = hasToken && currentUser;
@@ -414,24 +415,56 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
   }
 
   if (shouldShowLoading) {
-    return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh'
-      }}>
-        <Spin size="large" />
-      </div>
-    );
+    // 根节点加载：使用延迟渲染的极简骨架屏，避免超快速跳转时的闪烁
+    return <DelayedFallback variant="minimal" delayMs={200} fullHeight />;
   }
 
   if (shouldRedirect) {
     return <Navigate to={redirectTarget} replace />;
   }
 
-  return <>{children}</>;
+  return (
+    <Suspense fallback={<DelayedFallback variant="minimal" delayMs={200} />}>
+      {children}
+    </Suspense>
+  );
 });
+
+/**
+ * 延迟加载的骨架屏包装器
+ * 针对首屏和应用切入点优化
+ */
+const DelayedFallback: React.FC<{ 
+  variant?: PageSkeletonProps['variant']; 
+  delayMs?: number;
+  fullHeight?: boolean;
+}> = ({ 
+  variant = 'minimal', 
+  delayMs = 150,
+  fullHeight = false
+}) => {
+  const [show, setShow] = useState(delayMs === 0);
+  useEffect(() => {
+    if (delayMs === 0) return;
+    const t = window.setTimeout(() => setShow(true), delayMs);
+    return () => window.clearTimeout(t);
+  }, [delayMs]);
+
+  if (!show) return null;
+
+  return (
+    <div style={fullHeight ? {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      height: '100vh',
+      width: '100vw',
+      background: 'transparent'
+    } : undefined}>
+      <PageSkeleton variant={variant} />
+    </div>
+  );
+};
 
 /**
  * ⚠️ 关键：必须定义在 App 函数外部（模块级别）

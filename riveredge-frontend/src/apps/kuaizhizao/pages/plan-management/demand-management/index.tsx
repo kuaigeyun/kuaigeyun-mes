@@ -65,6 +65,7 @@ import { getDemandLifecycle } from '../../../utils/demandLifecycle';
 import { getDemandBusinessModeLabel, getDemandBusinessModeTagColor } from '../../../utils/businessMode';
 import { getDemandTypeLabel, getDemandTypeTagProps } from '../../../utils/demandType';
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
+import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import dayjs from 'dayjs';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { useTranslation } from 'react-i18next';
@@ -130,9 +131,6 @@ function isDemandRejected(d: Demand): boolean {
     r === '驳回'
   );
 }
-
-/** 列表操作列：非工作流按钮最多平铺数（工作流按钮单独占位，与「更多」规则一致） */
-const DEMAND_ROW_ACTIONS_INLINE_MAX = 4;
 
 const DemandManagementPage: React.FC = () => {
   const { t } = useTranslation();
@@ -543,13 +541,6 @@ const DemandManagementPage: React.FC = () => {
         const canDelete =
           record.demand_type === 'demand_plan' &&
           (isDemandDraft(record) || isDemandPendingReview(record));
-        const workflowButtonCount = isDemandPendingReview(record)
-          ? 2
-          : isDemandDraft(record) || isDemandRejected(record)
-            ? 1
-            : 0;
-        const inlineLimit = Math.max(1, DEMAND_ROW_ACTIONS_INLINE_MAX - workflowButtonCount);
-
         const parts: React.ReactNode[] = [
           <Button
             key="detail"
@@ -614,55 +605,34 @@ const DemandManagementPage: React.FC = () => {
           );
         }
 
-        return (
-          <Space size="small" wrap>
-            {parts
-              .slice(0, inlineLimit)
-              .map((node, i) => (
-                <span key={`demand-${record.id ?? 'row'}-inline-${i}`}>{node}</span>
-              ))}
-            <UniWorkflowActions
-              key="workflow-actions"
-              record={record}
-              entityName="需求"
-              statusField="status"
-              reviewStatusField="review_status"
-              draftStatuses={[DemandStatus.DRAFT, '草稿']}
-              pendingStatuses={[DemandStatus.PENDING_REVIEW, '待审核', '已提交']}
-              approvedStatuses={[DemandStatus.AUDITED, '已审核', ReviewStatus.APPROVED, '审核通过', '通过', '已通过']}
-              rejectedStatuses={[DemandStatus.REJECTED, '已驳回', ReviewStatus.REJECTED, '审核驳回', '驳回']}
-              theme="link"
-              size="small"
-              actions={{
-                submit: submitDemand,
-                approve: approveDemand,
-                reject: async (id, reason) => {
-                  if (!reason?.trim()) throw new Error('请输入驳回原因');
-                  return rejectDemand(id, reason.trim());
-                },
-              }}
-              onSuccess={() => {
-                invalidateStatistics();
-                actionRef.current?.reload();
-              }}
-            />
-            {parts.length > inlineLimit ? (
-              <Dropdown
-                trigger={['click']}
-                menu={{
-                  items: parts.slice(inlineLimit).map((node, i) => ({
-                    key: `demand-${record.id ?? 'row'}-more-${i}`,
-                    label: node,
-                  })),
-                }}
-              >
-                <Button type="link" size="small">
-                  更多
-                </Button>
-              </Dropdown>
-            ) : null}
-          </Space>
+        parts.push(
+          <UniWorkflowActions
+            key="workflow-actions"
+            record={record}
+            entityName="需求"
+            statusField="status"
+            reviewStatusField="review_status"
+            draftStatuses={[DemandStatus.DRAFT, '草稿']}
+            pendingStatuses={[DemandStatus.PENDING_REVIEW, '待审核', '已提交']}
+            approvedStatuses={[DemandStatus.AUDITED, '已审核', ReviewStatus.APPROVED, '审核通过', '通过', '已通过']}
+            rejectedStatuses={[DemandStatus.REJECTED, '已驳回', ReviewStatus.REJECTED, '审核驳回', '驳回']}
+            theme="link"
+            size="small"
+            actions={{
+              submit: submitDemand,
+              approve: approveDemand,
+              reject: async (id, reason) => {
+                if (!reason?.trim()) throw new Error('请输入驳回原因');
+                return rejectDemand(id, reason.trim());
+              },
+            }}
+            onSuccess={() => {
+              invalidateStatistics();
+              actionRef.current?.reload();
+            }}
+          />
         );
+        return renderRowActionsOverflow(parts, `demand-${record.id ?? 'row'}`);
       },
     },
   ];

@@ -8,13 +8,14 @@
  * @date 2026-01-21
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Space, Typography, Spin, Tooltip } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
-import { getWeatherByIP, type WeatherData } from '../../services/weather';
+import { getWeatherByIP, type WeatherData, getCachedWeather, isWeatherCacheExpired } from '../../services/weather';
 import { getWeatherIcon } from './weatherIcons';
 
 const { Text } = Typography;
+const WEATHER_REFRESH_ONCE_PER_PAGE_KEY = 'RIVEREDGE_WEATHER_REFRESH_ONCE_PER_PAGE';
 
 interface WeatherWidgetProps {
   /** 是否显示刷新按钮 */
@@ -39,46 +40,74 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
   compact = false,
   tone = 'dark',
 }) => {
-  const [weather, setWeather] = useState<WeatherData | null>(null);
-  const [loading, setLoading] = useState(true);
+  // 1. 优先从本地缓存读取，实现“秒开”
+  const cachedWeather = getCachedWeather();
+  const [weather, setWeather] = useState<WeatherData | null>(cachedWeather);
+  const [loading, setLoading] = useState(!cachedWeather);
   const [error, setError] = useState<string | null>(null);
+  const weatherRef = useRef<WeatherData | null>(cachedWeather);
+
+  useEffect(() => {
+    weatherRef.current = weather;
+  }, [weather]);
 
   /**
    * 加载天气数据
+   * @param force 是否强制刷新
    */
-  const loadWeather = async () => {
-    setLoading(true);
+  const loadWeather = useCallback(async (force = false) => {
+    const hasCurrentWeather = !!weatherRef.current;
+    // 只有在没数据或者是强制刷新时才显示 loading 状态
+    if (!hasCurrentWeather || force) {
+      setLoading(true);
+    }
     setError(null);
     try {
-      const data = await getWeatherByIP();
+      const data = await getWeatherByIP(force);
       if (data) {
         setWeather(data);
         onWeatherChange?.(data);
-      } else {
+      } else if (!hasCurrentWeather) {
+        // 只有既没有新数据也没有缓存数据时才报错
         setWeather(null);
         setError('无法获取天气信息');
         onWeatherChange?.(null);
       }
-    } catch (err: any) {
-      console.error('加载天气失败:', err);
-      setWeather(null);
-      setError(err.message || '加载天气失败');
-      onWeatherChange?.(null);
+    } catch (err: unknown) {
+      if (typeof window !== 'undefined') {
+        window.console.error('加载天气失败:', err);
+      }
+      if (!hasCurrentWeather) {
+        setWeather(null);
+        setError(err instanceof Error ? err.message : '加载天气失败');
+        onWeatherChange?.(null);
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, [onWeatherChange]);
 
   useEffect(() => {
-    loadWeather();
-    
-    // 每30分钟自动刷新一次
-    const timer = setInterval(() => {
-      loadWeather();
-    }, 30 * 60 * 1000);
-    
-    return () => clearInterval(timer);
-  }, []);
+    // 延迟执行 initial load，避免 effect 期间的同步 setState 警告
+    const timerId = window.setTimeout(() => {
+      // 只在“页面刷新后的首次加载”执行自动更新逻辑。
+      // SPA 内路由切换回来时不再触发，减少 API 调用。
+      const hasCheckedThisPage = window.sessionStorage.getItem(WEATHER_REFRESH_ONCE_PER_PAGE_KEY) === '1';
+      if (hasCheckedThisPage) {
+        return;
+      }
+      window.sessionStorage.setItem(WEATHER_REFRESH_ONCE_PER_PAGE_KEY, '1');
+
+      // 进入工作台：先展示本地缓存，仅当缓存超过1小时再异步拉取一次
+      if (!weatherRef.current || isWeatherCacheExpired()) {
+        loadWeather();
+      }
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timerId);
+    };
+  }, [loadWeather]);
 
   const iconBox = 56;
   const tempSize = compact ? 24 : 20;
@@ -121,7 +150,7 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
               cursor: 'pointer',
               fontSize: 14,
             }}
-            onClick={loadWeather}
+            onClick={() => loadWeather(true)}
           />
         )}
       </Space>
@@ -198,7 +227,7 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
               cursor: 'pointer',
               fontSize: compact ? 13 : 14,
             }}
-            onClick={loadWeather}
+            onClick={() => loadWeather(true)}
           />
         </Tooltip>
       )}

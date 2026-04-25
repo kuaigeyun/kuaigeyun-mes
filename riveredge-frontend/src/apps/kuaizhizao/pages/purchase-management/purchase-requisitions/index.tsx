@@ -46,6 +46,7 @@ import { UniWorkflowActions } from '../../../../../components/uni-workflow-actio
 import { getPurchaseRequisitionLifecycle } from '../../../utils/purchaseRequisitionLifecycle';
 import { formatPurchaseRequisitionSourceType } from '../../../utils/purchaseRequisitionSourceType';
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
+import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import {
   useDocumentTracking,
@@ -60,9 +61,6 @@ import { useGlobalStore } from '../../../../../stores';
 
 /** 采购申请详情只读明细表最小横向宽度 */
 const PURCHASE_REQUISITION_DETAIL_ITEMS_MIN_WIDTH = 980;
-
-/** 操作列平铺上限（最多 4 个），第 5 个起收入「更多」 */
-const PURCHASE_REQUISITION_ROW_ACTIONS_INLINE_MAX = 4;
 
 const INITIAL_PR_FORM_ITEM_ROW = {
   material_id: undefined,
@@ -79,33 +77,7 @@ const INITIAL_PR_FORM_ITEM_ROW = {
 };
 
 function renderPurchaseRequisitionRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  const wrapped = nodes.map((node, i) => (
-    <span key={`${keyPrefix}-${i}`}>{node}</span>
-  ));
-  if (wrapped.length <= PURCHASE_REQUISITION_ROW_ACTIONS_INLINE_MAX) {
-    return <Space size={4} wrap>{wrapped}</Space>;
-  }
-  const inline = wrapped.slice(0, PURCHASE_REQUISITION_ROW_ACTIONS_INLINE_MAX);
-  const overflow = wrapped.slice(PURCHASE_REQUISITION_ROW_ACTIONS_INLINE_MAX);
-  return (
-    <Space size={4} wrap>
-      {inline}
-      <Dropdown
-        menu={{
-          items: overflow.map((node, i) => ({
-            key: `${keyPrefix}-more-${i}`,
-            label: node,
-          })),
-        }}
-        trigger={['click']}
-        placement="bottomRight"
-      >
-        <Button type="link" size="small">
-          更多
-        </Button>
-      </Dropdown>
-    </Space>
-  );
+  return renderRowActionsOverflow(nodes, keyPrefix);
 }
 
 const PurchaseRequisitionsPage: React.FC = () => {

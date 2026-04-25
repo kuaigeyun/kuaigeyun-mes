@@ -84,6 +84,7 @@ import type { CurrentUser } from '../../../../../types/api';
 import { getRemainingReportableQuantity } from '../../../utils/workOrderReporting';
 import { coerceReportingCreateStrings } from '../../../utils/reportingPayload';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
+import { countWithPagedRequests } from '../../../../../utils/pagedCount';
 import dayjs from 'dayjs';
 
 /** 报工记录（后端返回 snake_case） */
@@ -106,7 +107,6 @@ interface ReportingRecord {
   [key: string]: any; // 支持索引访问
 }
 
-const REPORTING_ROW_ACTIONS_INLINE_MAX = 4;
 const REPORTING_DETAIL_BINDINGS_MIN_WIDTH = 1100;
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
@@ -135,7 +135,7 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
 }
 
 function renderReportingRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return renderRowActionsOverflow(nodes, keyPrefix, REPORTING_ROW_ACTIONS_INLINE_MAX);
+  return renderRowActionsOverflow(nodes, keyPrefix);
 }
 
 /** 获取报工员工信息：优先使用工序派工的 assigned_worker，否则使用当前登录用户 */
@@ -1896,9 +1896,7 @@ const ReportingPage: React.FC = () => {
           try {
             const skip = ((params.current ?? 1) - 1) * (params.pageSize ?? 20);
             const limit = params.pageSize ?? 20;
-            const list = await reportingApi.list({
-              skip,
-              limit,
+            const filters = {
               work_order_code: params.keyword || params.work_order_code,
               work_order_name: params.work_order_name,
               operation_name: params.operation_name,
@@ -1906,13 +1904,22 @@ const ReportingPage: React.FC = () => {
               status: params.status,
               reported_at_start: params.reported_at?.[0],
               reported_at_end: params.reported_at?.[1],
-            });
-            const data = Array.isArray(list) ? list : (list as any)?.items ?? [];
-            const total = data.length < limit ? skip + data.length : skip + data.length + 1;
+            };
+            const readList = async (query: { skip?: number; limit?: number }) => {
+              const list = await reportingApi.list({
+                ...filters,
+                ...query,
+              });
+              return Array.isArray(list) ? list : (list as any)?.items ?? [];
+            };
+            const [data, total] = await Promise.all([
+              readList({ skip, limit }),
+              countWithPagedRequests(readList, {}, { chunkSize: 100 }),
+            ]);
             return {
               data,
               success: true,
-              total: data.length < limit ? skip + data.length : total,
+              total,
             };
           } catch (error: any) {
             messageApi.error(error.message || '获取报工记录失败');

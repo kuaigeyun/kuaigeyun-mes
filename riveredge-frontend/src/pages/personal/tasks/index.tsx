@@ -9,7 +9,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormDateTimePicker } from '@ant-design/pro-components';
 import { App, Badge, Tag, Button, Space, Typography } from 'antd';
-import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
 import { theme } from 'antd';
@@ -18,6 +18,7 @@ import {
   getUserTaskStats,
   processUserTask,
   createUserTask,
+  deleteUserTask,
   UserTask,
   UserTaskStats,
   TaskActionRequest,
@@ -28,11 +29,11 @@ import {
  */
 const UserTasksPage: React.FC = () => {
   const { t } = useTranslation();
-  const { message: messageApi } = App.useApp();
+  const { message: messageApi, modal: modalApi } = App.useApp();
   const { token: themeToken } = theme.useToken();
   const actionRef = useRef<ActionType>(null);
   const [stats, setStats] = useState<UserTaskStats | null>(null);
-  const [taskType, setTaskType] = useState<'pending' | 'submitted'>('pending');
+  const [taskType, setTaskType] = useState<'pending' | 'processed' | 'submitted'>('pending');
   const [processModalVisible, setProcessModalVisible] = useState(false);
   const [currentTask, setCurrentTask] = useState<UserTask | null>(null);
   const [actionType, setActionType] = useState<'approve' | 'reject'>('approve');
@@ -67,24 +68,10 @@ const UserTasksPage: React.FC = () => {
   /**
    * 处理任务（审批或拒绝）
    */
-  const handleProcessTask = async (task: UserTask, action: 'approve' | 'reject') => {
-    if (task.data?.is_personal && action === 'approve') {
-      // 个人任务直接执行通过逻辑，跳过弹窗
-      setCurrentTask(task);
-      setActionType(action);
-      // 利用 setTimeout 避开并发状态更新问题，或者直接调用逻辑
-      handleConfirmProcess({}, task, action);
-      return;
-    }
-    setCurrentTask(task);
-    setActionType(action);
-    setProcessModalVisible(true);
-  };
-
   /**
    * 确认处理任务
    */
-  const handleConfirmProcess = async (values: any, taskOverride?: UserTask, actionOverride?: 'approve' | 'reject') => {
+  const handleConfirmProcess = useCallback(async (values: any, taskOverride?: UserTask, actionOverride?: 'approve' | 'reject') => {
     const task = taskOverride || currentTask;
     const action = actionOverride || actionType;
     if (!task) return;
@@ -103,10 +90,29 @@ const UserTasksPage: React.FC = () => {
       loadStats();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.personal.tasks.processFailed'));
+      if (messageApi) {
+        messageApi.error(error.message || t('pages.personal.tasks.processFailed'));
+      }
       throw error;
     }
-  };
+  }, [currentTask, actionType, messageApi, t, loadStats]);
+
+  /**
+   * 处理任务（审批或拒绝）
+   */
+  const handleProcessTask = useCallback(async (task: UserTask, action: 'approve' | 'reject') => {
+    if (task.data?.is_personal && action === 'approve') {
+      // 个人任务直接执行通过逻辑，跳过弹窗
+      setCurrentTask(task);
+      setActionType(action);
+      // 利用 setTimeout 避开并发状态更新问题，或者直接调用逻辑
+      handleConfirmProcess({}, task, action);
+      return;
+    }
+    setCurrentTask(task);
+    setActionType(action);
+    setProcessModalVisible(true);
+  }, [handleConfirmProcess]);
 
   /**
    * 任务状态标签
@@ -217,9 +223,25 @@ const UserTasksPage: React.FC = () => {
   };
 
   /**
+   * 处理删除任务
+   */
+  const handleDeleteTask = useCallback(async (record: UserTask) => {
+    try {
+      await deleteUserTask(record.uuid);
+      messageApi.success(t('pages.personal.tasks.deleteSuccess'));
+      loadStats();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      if (messageApi) {
+        messageApi.error(error.message || t('pages.personal.tasks.deleteFailed'));
+      }
+    }
+  }, [messageApi, t, loadStats]);
+
+  /**
    * 表格列定义
    */
-  const columns: ProColumns<UserTask>[] = [
+  const columns = useMemo<ProColumns<UserTask>[]>(() => [
     {
       title: t('pages.personal.tasks.title'),
       dataIndex: 'title',
@@ -229,8 +251,8 @@ const UserTasksPage: React.FC = () => {
         const isPending = record.status === 'pending' && taskType === 'pending';
         return (
           <Space>
-            {isPending && <Badge dot />}
-            <span style={{ fontWeight: isPending ? 'bold' : 'normal' }}>
+            {isPending && <Badge status="error" dot />}
+            <span style={{ fontWeight: isPending ? 600 : 400 }}>
               {dom}
             </span>
           </Space>
@@ -248,6 +270,7 @@ const UserTasksPage: React.FC = () => {
       title: t('pages.personal.tasks.status'),
       dataIndex: 'status',
       key: 'status',
+      width: 100,
       valueEnum: {
         pending: { text: t('pages.personal.tasks.statusPending') },
         approved: { text: t('pages.personal.tasks.statusApproved') },
@@ -257,25 +280,26 @@ const UserTasksPage: React.FC = () => {
       render: (_: any, record: UserTask) => getStatusTag(record.status),
     },
     {
+      title: taskType === 'submitted' ? t('pages.personal.tasks.currentApproverId') || '当前审批' : t('pages.personal.tasks.submitter') || '提交人',
+      dataIndex: taskType === 'submitted' ? 'current_approver_id' : 'submitter_id',
+      key: 'relation',
+      width: 120,
+      hideInSearch: true,
+      render: (val) => val || '-',
+    },
+    {
       title: t('pages.personal.tasks.submittedAt'),
       dataIndex: 'submitted_at',
       key: 'submitted_at',
       valueType: 'dateTime',
       hideInSearch: true,
       sorter: true,
-    },
-    {
-      title: t('pages.personal.tasks.createdAt'),
-      dataIndex: 'created_at',
-      key: 'created_at',
-      valueType: 'dateTime',
-      hideInSearch: true,
-      sorter: true,
+      width: 160,
     },
     {
       title: t('pages.personal.tasks.actions'),
       valueType: 'option',
-      width: 250,
+      width: 160,
       fixed: 'right',
       render: (_: any, record: UserTask) => {
         const isPending = record.status === 'pending' && taskType === 'pending';
@@ -312,16 +336,34 @@ const UserTasksPage: React.FC = () => {
                 )}
               </>
             )}
+            {taskType === 'submitted' && (
+              <Button
+                type="link"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                onClick={() => {
+                  modalApi.confirm({
+                    title: t('pages.personal.tasks.deleteConfirmTitle'),
+                    centered: true,
+                    okButtonProps: { danger: true },
+                    onOk: () => handleDeleteTask(record),
+                  });
+                }}
+              >
+                {t('pages.personal.tasks.delete')}
+              </Button>
+            )}
           </Space>
         );
       },
     },
-  ];
+  ], [taskType, t, handleView, handleProcessTask, handleDeleteTask, getStatusTag, modalApi]);
 
   /**
    * 详情列定义
    */
-  const detailColumns = [
+  const detailColumns = useMemo(() => [
     { title: t('pages.personal.tasks.title'), dataIndex: 'title' },
     { title: t('pages.personal.tasks.content'), dataIndex: 'content', span: 2 },
     {
@@ -374,49 +416,63 @@ const UserTasksPage: React.FC = () => {
         </div>
       ) : '-',
     },
-  ];
+  ], [t, getStatusTag]);
 
   return (
     <>
       <ListPageTemplate
         statCards={
-          stats
-            ? [
-                {
-                  title: t('pages.personal.tasks.totalTasks'),
-                  value: stats.total,
-                  valueStyle: { color: '#1890ff' },
-                },
-                {
-                  title: t('pages.personal.tasks.pendingTasks'),
-                  value: stats.pending,
-                  valueStyle: { color: '#ff4d4f' },
-                },
-                {
-                  title: t('pages.personal.tasks.approvedTasks'),
-                  value: stats.approved,
-                  valueStyle: { color: '#52c41a' },
-                },
-                {
-                  title: t('pages.personal.tasks.mySubmitted'),
-                  value: stats.submitted,
-                  valueStyle: { color: '#faad14' },
-                },
-              ]
-            : undefined
+          stats ? [
+            {
+              title: t('pages.personal.tasks.totalTasks'),
+              value: stats.total,
+              valueStyle: { color: themeToken.colorPrimary },
+              onClick: () => actionRef.current?.reload(),
+            },
+            {
+              title: t('pages.personal.tasks.pendingTasks'),
+              value: stats.pending,
+              valueStyle: { color: themeToken.colorError },
+              description: taskType === 'pending' ? <Badge status="error" text="Active" /> : null,
+              onClick: () => setTaskType('pending'),
+            },
+            {
+              title: t('pages.personal.tasks.approvedTasks'),
+              value: stats.approved,
+              valueStyle: { color: themeToken.colorSuccess },
+              description: taskType === 'processed' ? <Badge status="success" text="Active" /> : null,
+              onClick: () => setTaskType('processed'),
+            },
+            {
+              title: t('pages.personal.tasks.mySubmitted'),
+              value: stats.submitted,
+              valueStyle: { color: themeToken.colorWarning },
+              description: taskType === 'submitted' ? <Badge status="warning" text="Active" /> : null,
+              onClick: () => setTaskType('submitted'),
+            },
+          ] : undefined
         }
       >
         <UniTable<UserTask>
           headerTitle={t('pages.personal.tasks.headerTitle')}
           actionRef={actionRef}
           columns={columns}
-          request={async (params, sort, _filter, searchFormValues) => {
+          params={{ taskType }} // 声明并绑定 taskType 参数，值变化时由 ProTable 自动触发请求，解决逻辑竞争
+          request={async (params, _sort, _filter, searchFormValues) => {
             try {
+              // 映射逻辑集中管理
+              const reqTaskType = params.taskType === 'submitted'
+                ? 'submitted'
+                : params.taskType === 'processed'
+                  ? 'processed'
+                  : 'pending';
+              const defaultStatus = params.taskType === 'pending' ? 'pending' : (params.taskType === 'processed' ? 'approved,rejected' : undefined);
+              
               const response = await getUserTasks({
                 page: params.current || 1,
                 page_size: params.pageSize || 20,
-                status: searchFormValues?.status as string | undefined,
-                task_type: taskType,
+                status: searchFormValues?.status || defaultStatus,
+                task_type: reqTaskType as any,
               });
               return {
                 data: response.items,
@@ -432,13 +488,24 @@ const UserTasksPage: React.FC = () => {
               };
             }
           }}
+          tanstackQuery={{
+            queryKeyPrefix: ['user-personal-tasks'],
+            staleTime: 5000, // 5秒缓存，兼顾实时性与稳定性
+            prefetchNextPage: true,
+          }}
           rowKey="uuid"
           showAdvancedSearch={true}
           showImportButton={false}
           showExportButton={true}
           onExport={async (type, keys, pageData) => {
             try {
-              const res = await getUserTasks({ page: 1, page_size: 10000, task_type: taskType });
+              const statusFilter = taskType === 'pending' ? 'pending' : (taskType === 'processed' ? 'approved,rejected' : undefined);
+              const res = await getUserTasks({ 
+                page: 1, 
+                page_size: 10000, 
+                task_type: taskType as any,
+                status: statusFilter
+              });
               let items = res.items || [];
               if (type === 'currentPage' && pageData?.length) {
                 items = pageData;
@@ -465,36 +532,44 @@ const UserTasksPage: React.FC = () => {
             defaultPageSize: 20,
             showSizeChanger: true,
           }}
-          toolBarRender={() => [
-            <Button
-              key="create"
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => setCreateModalVisible(true)}
-            >
-              {t('pages.personal.tasks.createButton')}
-            </Button>,
-            <Button
-              key="pending"
-              type={taskType === 'pending' ? 'primary' : 'default'}
-              onClick={() => {
-                setTaskType('pending');
-                actionRef.current?.reload();
-              }}
-            >
-              {t('pages.personal.tasks.pendingTab')}
-            </Button>,
-            <Button
-              key="submitted"
-              type={taskType === 'submitted' ? 'primary' : 'default'}
-              onClick={() => {
-                setTaskType('submitted');
-                actionRef.current?.reload();
-              }}
-            >
-              {t('pages.personal.tasks.mySubmittedTab')}
-            </Button>,
-          ]}
+          toolbar={{
+            menu: {
+              type: 'tab',
+              activeKey: taskType,
+              items: [
+                {
+                  key: 'pending',
+                  label: (
+                    <span>
+                      {t('pages.personal.tasks.pendingTab')}
+                      {stats && stats.pending > 0 && (
+                        <Badge count={stats.pending} style={{ marginLeft: 8 }} size="small" />
+                      )}
+                    </span>
+                  ),
+                },
+                {
+                  key: 'processed',
+                  label: t('pages.personal.tasks.processedTab') || '已处理',
+                },
+                {
+                  key: 'submitted',
+                  label: t('pages.personal.tasks.mySubmittedTab'),
+                },
+              ],
+              onChange: (key) => setTaskType(key as 'pending' | 'processed' | 'submitted'),
+            },
+            actions: [
+              <Button
+                key="create"
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => setCreateModalVisible(true)}
+              >
+                {t('pages.personal.tasks.createButton')}
+              </Button>,
+            ],
+          }}
           viewTypes={['table', 'help']}
           defaultViewType="table"
           kanbanViewConfig={useMemo(() => {

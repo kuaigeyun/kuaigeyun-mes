@@ -35,6 +35,7 @@ import { equipmentApi } from '../../../services/equipment';
 import { workshopApi } from '../../../../master-data/services/factory';
 import { batchImport } from '../../../../../utils/batchOperations';
 import dayjs from 'dayjs';
+import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
@@ -62,33 +63,8 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   });
 }
 
-const EQUIP_ROW_ACTIONS_MAX = 4;
-
 function renderEquipmentRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  const wrapped = nodes.map((node, i) => <span key={`${keyPrefix}-${i}`}>{node}</span>);
-  if (wrapped.length <= EQUIP_ROW_ACTIONS_MAX) {
-    return <Space size="small" wrap>{wrapped}</Space>;
-  }
-  const inline = wrapped.slice(0, EQUIP_ROW_ACTIONS_MAX);
-  const overflow = wrapped.slice(EQUIP_ROW_ACTIONS_MAX);
-  return (
-    <Space size="small" wrap>
-      {inline}
-      <Dropdown
-        menu={{
-          items: overflow.map((node, i) => ({
-            key: `${keyPrefix}-more-${i}`,
-            label: node,
-          })),
-        }}
-        trigger={['click']}
-      >
-        <Button type="link" size="small">
-          更多
-        </Button>
-      </Dropdown>
-    </Space>
-  );
+  return renderRowActionsOverflow(nodes, keyPrefix);
 }
 
 interface Equipment {

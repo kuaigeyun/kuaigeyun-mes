@@ -26,6 +26,7 @@ import {
   ExecuteScriptData,
   ScriptExecuteResponse,
 } from '../../../../services/script';
+import { countWithPagedRequests } from '../../../../utils/pagedCount';
 
 const { TextArea } = Input;
 
@@ -398,11 +399,14 @@ const ScriptListPage: React.FC = () => {
               ...searchFormValues,
             };
             
-            const data = await getScriptList(listParams);
+            const [data, total] = await Promise.all([
+              getScriptList(listParams),
+              countWithPagedRequests(getScriptList, searchFormValues || {}, { chunkSize: 100 }),
+            ]);
             return {
               data,
               success: true,
-              total: data.length,
+              total,
             };
           }}
           rowKey="uuid"

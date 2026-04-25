@@ -15,7 +15,7 @@ import React, { Suspense, useEffect, useRef } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Modal } from 'antd';
 import { useTranslation } from 'react-i18next';
-import PageSkeleton from '../components/page-skeleton';
+import PageSkeleton, { PageSkeletonProps } from '../components/page-skeleton';
 import LoginSkeleton from '../components/login-skeleton';
 import { useGlobalStore } from '../stores/globalStore';
 import { hasAnyPermission } from '../utils/permission';
@@ -36,12 +36,28 @@ const InitWizardPage = React.lazy(() => import('../pages/init/wizard'));
 const TemplateSelectPage = React.lazy(() => import('../pages/init/template-select'));
 const QRCodeScanPage = React.lazy(() => import('../pages/qrcode/scan'));
 
+/**
+ * 延迟显示的 Fallback 组件
+ * 初始 delayMs 内渲染 null，超时后才显示骨架屏，避免快速加载时的闪烁
+ */
+const DelayedFallback: React.FC<{ variant?: PageSkeletonProps['variant']; delayMs?: number }> = ({ 
+  variant = 'minimal', 
+  delayMs = 150 
+}) => {
+  const [show, setShow] = React.useState(delayMs === 0);
+  useEffect(() => {
+    if (delayMs === 0) return;
+    const t = window.setTimeout(() => setShow(true), delayMs);
+    return () => window.clearTimeout(t);
+  }, [delayMs]);
+  return show ? <PageSkeleton variant={variant} /> : null;
+};
+
 // 懒加载包装（极简 fallback）
 // 与 hover/父分组 prefetch 配合：大多数点击发生时 chunk 已在缓存，
-// fallback 仅在极短窗口内出现，采用最轻的 Spin（minimal）以避免重骨架的挂载/绘制开销，
-// 从而达到"随点随开"的观感。
+// fallback 仅在极短窗口内（>150ms）出现，采用最轻量骨架屏。
 const withSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
-  <Suspense fallback={<PageSkeleton variant="minimal" />}><LazyComponent /></Suspense>
+  <Suspense fallback={<DelayedFallback variant="minimal" />}><LazyComponent /></Suspense>
 );
 
 // 登录页专用骨架屏（与登录页布局一致）
@@ -51,12 +67,12 @@ const withLoginSuspense = (LazyComponent: React.LazyExoticComponent<React.Compon
 
 // 工作台/分析页专用，骨架屏边距与 DashboardTemplate 一致
 const withDashboardSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
-  <Suspense fallback={<PageSkeleton variant="dashboard" />}><LazyComponent /></Suspense>
+  <Suspense fallback={<DelayedFallback variant="dashboard" />}><LazyComponent /></Suspense>
 );
 
 // 角色权限页专用，骨架屏边距与左右分栏布局一致
 const withRolesPermissionsSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
-  <Suspense fallback={<PageSkeleton variant="rolesPermissions" />}><LazyComponent /></Suspense>
+  <Suspense fallback={<DelayedFallback variant="rolesPermissions" />}><LazyComponent /></Suspense>
 );
 
 const withPermission = (

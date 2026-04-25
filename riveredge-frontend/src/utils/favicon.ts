@@ -18,14 +18,32 @@ export async function applyFavicon(faviconValue: string | undefined): Promise<vo
   let href: string;
 
   if (isUUID(value)) {
+    const failedKey = `RIVEREDGE_FAVICON_FAILED_${value}`;
+    if (typeof window !== 'undefined' && window.sessionStorage.getItem(failedKey) === '1') {
+      return;
+    }
     try {
       const res = await fetch(
         `/api/v1/core/files/${value}/preview/public?category=platform-favicon`
       );
-      if (!res.ok) return;
+      if (!res.ok) {
+        if (typeof window !== 'undefined') {
+          window.sessionStorage.setItem(failedKey, '1');
+        }
+        return;
+      }
       const { preview_url } = await res.json();
+      if (!preview_url) {
+        if (typeof window !== 'undefined') {
+          window.sessionStorage.setItem(failedKey, '1');
+        }
+        return;
+      }
       href = preview_url;
     } catch {
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.setItem(failedKey, '1');
+      }
       return;
     }
   } else {

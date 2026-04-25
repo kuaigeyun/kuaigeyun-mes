@@ -66,6 +66,7 @@ import { NEW_SHORTCUT_HINT } from '../../utils/globalNewShortcut'
 import { DictionaryLabel } from '../dictionary-label'
 import { stableJsonForQueryKey } from '../../utils/tableQueryKey'
 import { useAuditRequiredMap } from '../../hooks/useAuditRequired'
+import { renderRowActionsOverflow } from '../../utils/renderRowActionsOverflow'
 
 /**
  * 与表内 isOperationColumn 判定一致：用于右侧固定列排序，避免「仅 render、无 dataIndex」的操作列被当成普通列，
@@ -972,68 +973,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       return text || labelNode
     }
 
-    const resolveActionKind = (text: string): 'detail' | 'edit' | 'delete' | 'push' | 'more' | null => {
-      const normalized = text.replace(/\s+/g, '')
-      if (!normalized) return null
-      if (normalized.includes('详情') || normalized.includes('查看')) return 'detail'
-      if (normalized.includes('编辑') || normalized.includes('修改')) return 'edit'
-      if (normalized.includes('删除')) return 'delete'
-      if (normalized.includes('下推')) return 'push'
-      if (normalized.includes('更多')) return 'more'
-      return null
-    }
-
-    const fillCoreActionPlaceholders = (childrenNodes: React.ReactNode[]): React.ReactNode[] => {
-      const kindOf = (child: React.ReactNode) => resolveActionKind(readNodeText(child))
-      const kinds = new Set(
-        childrenNodes.map((child) => kindOf(child)).filter(Boolean) as Array<'detail' | 'edit' | 'delete' | 'push' | 'more'>
-      )
-
-      // 仅在识别出操作列动作时补位，避免误伤其它渲染块
-      if (kinds.size === 0) return childrenNodes
-
-      const placeholders: React.ReactNode[] = []
-      if (!kinds.has('detail')) {
-        placeholders.push(
-          <Button key="placeholder-detail" type="default" size="small" disabled>
-            详情
-          </Button>
-        )
-      }
-      if (!kinds.has('edit')) {
-        placeholders.push(
-          <Button key="placeholder-edit" type="default" size="small" disabled>
-            编辑
-          </Button>
-        )
-      }
-      if (!kinds.has('delete')) {
-        placeholders.push(
-          <Button key="placeholder-delete" type="default" size="small" danger disabled>
-            删除
-          </Button>
-        )
-      }
-      const mergedNodes = placeholders.length > 0 ? [...childrenNodes, ...placeholders] : childrenNodes
-      const coreOrder: Array<'detail' | 'edit' | 'delete'> = ['detail', 'edit', 'delete']
-      const used = new Set<number>()
-      const orderedCoreNodes: React.ReactNode[] = []
-      for (const kind of coreOrder) {
-        const idx = mergedNodes.findIndex((node, i) => !used.has(i) && kindOf(node) === kind)
-        if (idx >= 0) {
-          used.add(idx)
-          orderedCoreNodes.push(mergedNodes[idx])
-        }
-      }
-      const restNodes = mergedNodes.filter((node, i) => {
-        if (used.has(i)) return false
-        const kind = kindOf(node)
-        if (kind === 'detail' || kind === 'edit' || kind === 'delete') return false
-        return true
-      })
-      return [...orderedCoreNodes, ...restNodes]
-    }
-
     const isAuditSemanticAction = (text: string): boolean => {
       const normalized = text.replace(/\s+/g, '')
       return (
@@ -1109,17 +1048,13 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       })
       // 走与原逻辑一致的 toArray，以拿到稳定 key 的数组（避免 fragment 中 null 等边界）
       normalizedArray = React.Children.toArray(normalizedArray)
-      const filledChildren = fillCoreActionPlaceholders(normalizedArray)
-      const fillerAddedOrReordered =
-        filledChildren.length !== normalizedArray.length ||
-        filledChildren.some((n, i) => n !== normalizedArray[i])
-      // 幂等优化：没有任何子节点被改写且未发生占位/重排时，原节点即为目标形态，直接复用
-      if (!anyChildChanged && !fillerAddedOrReordered && filledChildren.length === originalArray.length) {
+      // 幂等优化：没有任何子节点被改写时，原节点即为目标形态，直接复用
+      if (!anyChildChanged && normalizedArray.length === originalArray.length) {
         return node
       }
       const childCount = React.Children.count(normalizedArray)
       const nextChildren =
-        childCount <= 1 ? filledChildren[0] ?? normalizedArray : filledChildren
+        childCount <= 1 ? normalizedArray[0] ?? normalizedArray : normalizedArray
       return React.cloneElement(node as React.ReactElement<any>, {
         children: nextChildren,
       })
@@ -1127,6 +1062,32 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
     return node
   }, [hasAnyAuditEnabled])
+
+  const collectOperationActions = useCallback((node: React.ReactNode): React.ReactNode[] | null => {
+    if (!React.isValidElement(node)) return null
+    const children = React.Children.toArray((node as React.ReactElement<any>).props?.children).filter(Boolean)
+    if (children.length < 2) return null
+
+    const readText = (input: React.ReactNode): string => {
+      if (input == null || typeof input === 'boolean') return ''
+      if (typeof input === 'string' || typeof input === 'number') return String(input)
+      if (Array.isArray(input)) return input.map(readText).join('')
+      if (!React.isValidElement(input)) return ''
+      return readText((input as React.ReactElement<any>).props?.children)
+    }
+
+    const isActionLike = (child: React.ReactNode): boolean => {
+      if (!React.isValidElement(child)) return false
+      const t = child.type as any
+      if (t === Button || t === Popconfirm || t === Dropdown) return true
+      const text = readText(child).replace(/\s+/g, '')
+      return /详情|查看|编辑|修改|删除|提交|审核|确认|启用|停用|同步|下推|添加|新增|子项|更多/.test(text)
+    }
+
+    const candidateCount = children.filter(isActionLike).length
+    if (candidateCount < 2) return null
+    return children
+  }, [])
 
   // 为 date/dateTime 列注入站点格式的展示，使站点设置中的日期格式在单据表格中生效
   // 操作列：自适应宽度、不换行（whiteSpace: nowrap，移除固定 width）
@@ -1174,13 +1135,27 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
             },
           }),
           render: baseRender
-            ? (...args: any[]) => normalizeOperationActionNode(baseRender(...args))
+            ? (...args: any[]) => {
+                const rendered = baseRender(...args)
+                if (Array.isArray(rendered)) {
+                  const record = args[1] as Record<string, any> | undefined
+                  const rowKey = String(record?.id ?? record?.uuid ?? args[2] ?? 'row')
+                  return renderRowActionsOverflow(rendered as React.ReactNode[], `uni-op-${rowKey}`)
+                }
+                const collected = collectOperationActions(rendered)
+                if (collected) {
+                  const record = args[1] as Record<string, any> | undefined
+                  const rowKey = String(record?.id ?? record?.uuid ?? args[2] ?? 'row')
+                  return renderRowActionsOverflow(collected, `uni-op-${rowKey}`)
+                }
+                return normalizeOperationActionNode(rendered)
+              }
             : undefined,
         }
       }
       return col
     })
-  }, [effectiveColumns, dateFormatKey, normalizeOperationActionNode])
+  }, [effectiveColumns, dateFormatKey, normalizeOperationActionNode, collectOperationActions])
 
   // 列宽拖拽：遵循 use-antd-resizable-header 与 ProTable 固定列规范
     // - 至少一列不设置 width（自适应），固定列必须保留 width
@@ -1545,8 +1520,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         const fullQueryKey = [
           'uniTable',
           ...tq.queryKeyPrefix,
-          current,
-          pageSize,
+          stableJsonForQueryKey(params), // 包含 current, pageSize 以及通过 params 传递的自定义参数
           stableJsonForQueryKey(sort),
           stableJsonForQueryKey(filter),
           stableJsonForQueryKey(searchFormValues ?? {}),

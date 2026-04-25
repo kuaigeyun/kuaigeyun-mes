@@ -37,6 +37,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../../../../../services/api';
 import { qualityApi, workOrderApi } from '../../../services/production';
 import { downloadFile } from '../../../services/common';
+import { countWithPagedRequests } from '../../../../../utils/pagedCount';
+import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import dayjs from 'dayjs';
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
@@ -62,33 +64,8 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   });
 }
 
-const FG_ROW_ACTIONS_MAX = 4;
-
 function renderFinishedRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  const wrapped = nodes.map((node, i) => <span key={`${keyPrefix}-${i}`}>{node}</span>);
-  if (wrapped.length <= FG_ROW_ACTIONS_MAX) {
-    return <Space size="small" wrap>{wrapped}</Space>;
-  }
-  const inline = wrapped.slice(0, FG_ROW_ACTIONS_MAX);
-  const overflow = wrapped.slice(FG_ROW_ACTIONS_MAX);
-  return (
-    <Space size="small" wrap>
-      {inline}
-      <Dropdown
-        menu={{
-          items: overflow.map((node, i) => ({
-            key: `${keyPrefix}-more-${i}`,
-            label: node,
-          })),
-        }}
-        trigger={['click']}
-      >
-        <Button type="link" size="small">
-          更多
-        </Button>
-      </Dropdown>
-    </Space>
-  );
+  return renderRowActionsOverflow(nodes, keyPrefix);
 }
 
 // 成品检验接口定义
@@ -690,20 +667,30 @@ const FinishedGoodsInspectionPage: React.FC = () => {
         showAdvancedSearch={true}
         request={async (params: any) => {
           try {
-            const response = await qualityApi.finishedGoodsInspection.list({
-              skip: (params.current! - 1) * params.pageSize!,
-              limit: params.pageSize,
+            const filters = {
               status: params.status,
               quality_status: params.quality_status,
               work_order_id: params.work_order_id,
               keyword: params.keyword,
-            });
+            };
+            const [response, total] = await Promise.all([
+              qualityApi.finishedGoodsInspection.list({
+                skip: (params.current! - 1) * params.pageSize!,
+                limit: params.pageSize,
+                ...filters,
+              }),
+              countWithPagedRequests(
+                (p) => qualityApi.finishedGoodsInspection.list(p),
+                filters,
+                { chunkSize: 100 },
+              ),
+            ]);
             // 后端返回的是数组
             const data = Array.isArray(response) ? response : (response.data || []);
             return {
               data: data,
               success: true,
-              total: data.length,
+              total,
             };
           } catch (error) {
             messageApi.error('获取成品检验列表失败');

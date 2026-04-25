@@ -58,6 +58,7 @@ import {
 } from '../../../../../components/document-tracking-panel';
 import { getPackingBindingLifecycle } from '../../../utils/packingBindingLifecycle';
 import dayjs from 'dayjs';
+import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 
 interface PackingBinding {
   id?: number;
@@ -82,8 +83,6 @@ interface PackingBinding {
   created_at?: string;
   updated_at?: string;
 }
-
-const PB_ROW_ACTIONS_INLINE_MAX = 4;
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
@@ -111,30 +110,7 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
 }
 
 function renderPbRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  const wrapped = nodes.map((node, i) => <span key={`${keyPrefix}-${i}`}>{node}</span>);
-  if (wrapped.length <= PB_ROW_ACTIONS_INLINE_MAX) {
-    return <Space size="small" wrap>{wrapped}</Space>;
-  }
-  const inline = wrapped.slice(0, PB_ROW_ACTIONS_INLINE_MAX);
-  const overflow = wrapped.slice(PB_ROW_ACTIONS_INLINE_MAX);
-  return (
-    <Space size="small" wrap>
-      {inline}
-      <Dropdown
-        menu={{
-          items: overflow.map((node, i) => ({
-            key: `${keyPrefix}-more-${i}`,
-            label: node,
-          })),
-        }}
-        trigger={['click']}
-      >
-        <Button type="link" size="small">
-          更多
-        </Button>
-      </Dropdown>
-    </Space>
-  );
+  return renderRowActionsOverflow(nodes, keyPrefix);
 }
 
 const PB_STAT_SPARK_1 = [3, 4, 5, 4, 6, 5, 7];

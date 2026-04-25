@@ -45,6 +45,7 @@ import { getPurchaseOrder, listPurchaseOrders, pushPurchaseOrderToReceipt } from
 import { receiptNoticeApi } from '../../../services/receipt-notice';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { materialApi, materialBatchApi } from '../../../../master-data/services/material';
+import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 
 // 统一的入库单接口（结合采购入库、成品入库、生产退料）
 interface InboundOrder {
@@ -241,7 +242,6 @@ async function fetchStorageLocationsForWarehouse(
   return parts.flat().sort((a, b) => a.label.localeCompare(b.label));
 }
 
-const INBOUND_ROW_ACTIONS_INLINE_MAX = 4;
 const INBOUND_DETAIL_ITEMS_MIN_WIDTH = 1100;
 
 function inboundDocumentTrackingType(
@@ -279,32 +279,7 @@ function isInboundStockPosted(record: InboundOrder): boolean {
 }
 
 function renderInboundRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  const wrapped = nodes.map((node, i) => (
-    <span key={`${keyPrefix}-${i}`}>{node}</span>
-  ));
-  if (wrapped.length <= INBOUND_ROW_ACTIONS_INLINE_MAX) {
-    return <Space size="small" wrap>{wrapped}</Space>;
-  }
-  const inline = wrapped.slice(0, INBOUND_ROW_ACTIONS_INLINE_MAX);
-  const overflow = wrapped.slice(INBOUND_ROW_ACTIONS_INLINE_MAX);
-  return (
-    <Space size="small" wrap>
-      {inline}
-      <Dropdown
-        menu={{
-          items: overflow.map((node, i) => ({
-            key: `${keyPrefix}-more-${i}`,
-            label: node,
-          })),
-        }}
-        trigger={['click']}
-      >
-        <Button type="link" size="small">
-          更多
-        </Button>
-      </Dropdown>
-    </Space>
-  );
+  return renderRowActionsOverflow(nodes, keyPrefix);
 }
 
 const InboundPage: React.FC = () => {

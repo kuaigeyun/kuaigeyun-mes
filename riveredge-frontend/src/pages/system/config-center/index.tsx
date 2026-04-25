@@ -391,9 +391,11 @@ const ConfigCenterPage: React.FC = () => {
       if (exists) {
         await updateApprovalProcess(exists.uuid, { is_active: checked });
       } else if (checked) {
+        const switchMeta = AUDIT_SWITCH_ITEMS.find((item) => item.code === code);
+        const processName = switchMeta ? renderText(switchMeta.labelKey, `${code}_audit`) : `${code}_audit`;
         await createApprovalProcess({
           code,
-          name: `${code}_audit`,
+          name: processName,
           description: '单据审核开关（配置中心创建）',
           nodes: {
             nodes: [{ id: 'start', type: 'start', position: { x: 250, y: 50 }, data: { label: '开始' } }, { id: 'end', type: 'end', position: { x: 250, y: 350 }, data: { label: '结束' } }],
@@ -641,7 +643,7 @@ const ConfigCenterPage: React.FC = () => {
                         <Button key="edit" type="link" size="small" onClick={() => handleEditNotificationRule(row)}>编辑</Button>,
                         <Button key="delete" type="link" size="small" danger onClick={() => handleDeleteNotificationRule(row)}>删除</Button>,
                       ];
-                      return renderRowActionsOverflow(actions, `notification-rule-${row.id}`, 4);
+                      return renderRowActionsOverflow(actions, `notification-rule-${row.id}`);
                     },
                   },
                 ]}

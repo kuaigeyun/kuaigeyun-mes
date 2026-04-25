@@ -61,6 +61,7 @@ import {
 import { supplierApi } from '../../../../master-data/services/supply-chain';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
+import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 
 interface OutsourceOrder {
   id?: number;
@@ -101,8 +102,6 @@ interface Supplier {
   isActive: boolean;
 }
 
-const OO_ROW_ACTIONS_INLINE_MAX = 4;
-
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
   cols: ProDescriptionsItemProps<T>[]
@@ -129,30 +128,7 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
 }
 
 function renderOoRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  const wrapped = nodes.map((node, i) => <span key={`${keyPrefix}-${i}`}>{node}</span>);
-  if (wrapped.length <= OO_ROW_ACTIONS_INLINE_MAX) {
-    return <Space size="small" wrap>{wrapped}</Space>;
-  }
-  const inline = wrapped.slice(0, OO_ROW_ACTIONS_INLINE_MAX);
-  const overflow = wrapped.slice(OO_ROW_ACTIONS_INLINE_MAX);
-  return (
-    <Space size="small" wrap>
-      {inline}
-      <Dropdown
-        menu={{
-          items: overflow.map((node, i) => ({
-            key: `${keyPrefix}-more-${i}`,
-            label: node,
-          })),
-        }}
-        trigger={['click']}
-      >
-        <Button type="link" size="small">
-          更多
-        </Button>
-      </Dropdown>
-    </Space>
-  );
+  return renderRowActionsOverflow(nodes, keyPrefix);
 }
 
 const OO_STAT_SPARK_1 = [2, 3, 4, 3, 5, 4, 6];

@@ -197,11 +197,8 @@ const QUOTATION_DETAIL_ITEMS_SCROLL_X = 1060;
 const LINKED_DOCUMENT_DRAWER_WIDTH = '45%';
 const LINKED_DOCUMENT_DRAWER_Z_INDEX = 1050;
 
-/** 操作列平铺按钮上限（最多 4 个），第 5 个起收入「更多」 */
-const QUOTATION_ROW_ACTIONS_INLINE_MAX = 4;
-
 function renderQuotationRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return renderRowActionsOverflow(nodes, keyPrefix, QUOTATION_ROW_ACTIONS_INLINE_MAX);
+  return renderRowActionsOverflow(nodes, keyPrefix);
 }
 
 /** 与销售订单明细表同一套 Table + Form.List 用法；物料列样式见 .quotation-detail-table */

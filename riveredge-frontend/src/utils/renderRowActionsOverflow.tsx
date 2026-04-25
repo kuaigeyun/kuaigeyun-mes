@@ -1,10 +1,14 @@
 import React from 'react';
 import { Button, Dropdown, Space } from 'antd';
 
-/** 列表操作列：最多平铺个数，从第 (maxInline+1) 个起收入「更多」 */
-export const ROW_ACTIONS_INLINE_MAX = 4;
-
-const PRIMARY_ACTION_ORDER = ['详情', '编辑', '删除', '下推'];
+/**
+ * 统一规则：
+ * - 详情/编辑/删除固定排在前 3 位（存在时）
+ * - 第 4 位放最常用动作（按 priority 或语义推断）
+ * - 总数 <= 5：直接展示全部
+ * - 总数 > 5：仅展示前 4 + 第 5 个「更多」
+ */
+export const ROW_ACTIONS_DIRECT_MAX = 5;
 
 function readNodeText(node: React.ReactNode): string {
   if (node == null || typeof node === 'boolean') return '';
@@ -21,24 +25,47 @@ function normalizeActionLabelText(text: string): string {
   return trimmed;
 }
 
-function resolvePrimaryActionRank(node: React.ReactNode): number {
-  const text = readNodeText(node).replace(/\s+/g, '').trim();
-  if (!text) return Number.MAX_SAFE_INTEGER;
-  if (text.includes('详情')) return 0;
-  if (text.includes('编辑')) return 1;
-  if (text.includes('删除')) return 2;
-  if (text.includes('下推')) return 3;
-  return Number.MAX_SAFE_INTEGER;
-}
+type ActionKind = 'detail' | 'edit' | 'delete' | 'common' | 'other';
 
-function resolveActionKind(node: React.ReactNode): 'detail' | 'edit' | 'delete' | 'push' | null {
+function resolveActionKind(node: React.ReactNode): ActionKind {
   const text = readNodeText(node).replace(/\s+/g, '').trim();
-  if (!text) return null;
+  if (!text) return 'other';
   if (text.includes('详情') || text.includes('查看')) return 'detail';
   if (text.includes('编辑') || text.includes('修改')) return 'edit';
   if (text.includes('删除')) return 'delete';
-  if (text.includes('下推')) return 'push';
-  return null;
+  if (/下推|提交|审核|确认|执行|发布|启用|停用|同步|添加|新增|子项/.test(text)) return 'common';
+  return 'other';
+}
+
+function readActionPriority(node: React.ReactNode): number | undefined {
+  if (!React.isValidElement(node)) return undefined;
+  const raw = (node.props as any)?.['data-action-priority'];
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function normalizeAndSortActions(nodes: React.ReactNode[]): React.ReactNode[] {
+  const flat = (nodes.filter(Boolean) as React.ReactNode[]).map((node) => normalizeActionNode(node));
+
+  const withMeta = flat.map((node, index) => {
+    const kind = resolveActionKind(node);
+    const explicitPriority = readActionPriority(node);
+    const kindRank =
+      kind === 'detail' ? 0 :
+      kind === 'edit' ? 1 :
+      kind === 'delete' ? 2 :
+      kind === 'common' ? 3 : 4;
+    const finalPriority = explicitPriority ?? kindRank;
+    return { node, index, finalPriority, kindRank };
+  });
+
+  withMeta.sort((a, b) => {
+    if (a.finalPriority !== b.finalPriority) return a.finalPriority - b.finalPriority;
+    if (a.kindRank !== b.kindRank) return a.kindRank - b.kindRank;
+    return a.index - b.index;
+  });
+
+  return withMeta.map((x) => x.node);
 }
 
 function toMenuItem(node: React.ReactNode, key: string) {
@@ -65,6 +92,22 @@ function normalizeActionNode(node: React.ReactNode): React.ReactNode {
   if (node.type === Button) {
     return normalizeButtonNode(node);
   }
+  if (typeof node.type === 'string' && node.type.toLowerCase() === 'a') {
+    const props = (node.props || {}) as Record<string, unknown>;
+    const text = normalizeActionLabelText(readNodeText(node));
+    const tone = resolveButtonTone(text);
+    return (
+      <Button
+        type={tone.type}
+        danger={tone.danger}
+        size="small"
+        onClick={typeof props.onClick === 'function' ? (props.onClick as any) : undefined}
+        disabled={!!props.disabled}
+      >
+        {text || props.children}
+      </Button>
+    );
+  }
 
   const hasDropdownMenuItems = Array.isArray(node.props?.menu?.items);
   if (hasDropdownMenuItems) {
@@ -84,6 +127,18 @@ function normalizeActionNode(node: React.ReactNode): React.ReactNode {
       } as Record<string, unknown>);
     }
     return React.cloneElement(node, { children: nextChild });
+  }
+
+  if (node.props?.children != null) {
+    let mutated = false;
+    const nextChildren = React.Children.map(node.props.children, (child) => {
+      const normalized = normalizeActionNode(child);
+      if (normalized !== child) mutated = true;
+      return normalized;
+    });
+    if (mutated) {
+      return React.cloneElement(node, { children: nextChildren } as Record<string, unknown>);
+    }
   }
 
   return node;
@@ -115,62 +170,30 @@ function normalizeButtonNode(node: React.ReactElement): React.ReactElement {
 }
 
 /**
- * 列表操作列渲染：平铺前 maxInline 个按钮，其余收入「更多」下拉。
+ * 列表操作列渲染（统一顺序 + 更多收纳）
  */
 export function renderRowActionsOverflow(
   nodes: React.ReactNode[],
   keyPrefix: string,
-  maxInline: number = ROW_ACTIONS_INLINE_MAX,
+  directMax: number = ROW_ACTIONS_DIRECT_MAX,
 ): React.ReactNode {
-  const flat = (nodes.filter(Boolean) as React.ReactNode[]).map((node) => normalizeActionNode(node));
-  const hasDetail = flat.some((node) => resolveActionKind(node) === 'detail');
-  const hasEdit = flat.some((node) => resolveActionKind(node) === 'edit');
-  const hasDelete = flat.some((node) => resolveActionKind(node) === 'delete');
-
-  // 统一占位：详情/编辑/删除在每一行都可见，缺失时灰色禁用，保证同页对齐。
-  if (!hasDetail) {
-    flat.unshift(
-      <Button key={`${keyPrefix}-placeholder-detail`} type="default" size="small" disabled>
-        详情
-      </Button>,
-    );
-  }
-  if (!hasEdit) {
-    flat.push(
-      <Button key={`${keyPrefix}-placeholder-edit`} type="default" size="small" disabled>
-        编辑
-      </Button>,
-    );
-  }
-  if (!hasDelete) {
-    flat.push(
-      <Button key={`${keyPrefix}-placeholder-delete`} type="default" size="small" danger disabled>
-        删除
-      </Button>,
-    );
-  }
-
-  const primaryNodes = flat
-    .map((node) => ({ node, rank: resolvePrimaryActionRank(node) }))
-    .filter((item) => item.rank !== Number.MAX_SAFE_INTEGER)
-    .sort((a, b) => a.rank - b.rank)
-    .map((item) => item.node);
-  const inlineByRule = primaryNodes.slice(0, Math.min(maxInline, PRIMARY_ACTION_ORDER.length));
-  const overflowByRule = flat.filter((node) => !inlineByRule.includes(node));
-
-  if (overflowByRule.length === 0) {
+  const sorted = normalizeAndSortActions(nodes);
+  if (sorted.length <= directMax) {
     return (
       <Space size="small" wrap>
-        {inlineByRule}
+        {sorted}
       </Space>
     );
   }
+  const inline = sorted.slice(0, Math.max(1, directMax - 1));
+  const overflow = sorted.slice(Math.max(1, directMax - 1));
+
   return (
     <Space size="small" wrap>
-      {inlineByRule}
+      {inline}
       <Dropdown
         menu={{
-          items: overflowByRule.map((node, i) => toMenuItem(node, `${keyPrefix}-more-${i}`)),
+          items: overflow.map((node, i) => toMenuItem(node, `${keyPrefix}-more-${i}`)),
         }}
         trigger={['click']}
       >

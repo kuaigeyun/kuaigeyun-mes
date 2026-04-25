@@ -104,3 +104,11 @@ export async function createUserTask(data: {
   });
 }
 
+/**
+ * 删除用户任务 (仅限个人任务或草稿状态)
+ */
+export async function deleteUserTask(taskUuid: string): Promise<void> {
+  return apiRequest<void>(`/personal/user-tasks/${taskUuid}`, {
+    method: 'DELETE',
+  });
+}

@@ -107,6 +107,7 @@ import { getDemandComputationLifecycle } from '../../../utils/demandComputationL
 import { getDemandBusinessModeLabel, getDemandBusinessModeTagColor } from '../../../utils/businessMode'
 import { getDemandTypeLabel, getDemandTypeTagProps } from '../../../utils/demandType'
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag'
+import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow'
 import { listDemands, getDemand, Demand, DemandStatus, ReviewStatus } from '../../../services/demand'
 import { getBusinessConfig } from '../../../../../services/businessConfig'
 import { bomApi } from '../../../../master-data/services/material'
@@ -136,38 +137,12 @@ interface MaterialInfo {
   bomVersions?: BomVersionOption[]
 }
 
-/** 操作列最多平铺 4 个，第 5 个起收入「更多」（与全局 ROW_ACTIONS_INLINE_MAX 一致） */
-const DEMAND_COMPUTATION_ROW_ACTIONS_INLINE_MAX = 4
-
 /** 详情明细表最小宽度（外层横滚） */
 /** 明细表列宽合计下限，保证横滚与「尽量不换行」 */
 const DEMAND_COMPUTATION_DETAIL_ITEMS_MIN_WIDTH = 1920
 
 function renderDemandComputationRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  const wrapped = nodes.map((node, i) => <span key={`${keyPrefix}-${i}`}>{node}</span>)
-  if (wrapped.length <= DEMAND_COMPUTATION_ROW_ACTIONS_INLINE_MAX) {
-    return <Space size="small" wrap>{wrapped}</Space>
-  }
-  const inline = wrapped.slice(0, DEMAND_COMPUTATION_ROW_ACTIONS_INLINE_MAX)
-  const overflow = wrapped.slice(DEMAND_COMPUTATION_ROW_ACTIONS_INLINE_MAX)
-  return (
-    <Space size="small" wrap>
-      {inline}
-      <Dropdown
-        menu={{
-          items: overflow.map((node, i) => ({
-            key: `${keyPrefix}-more-${i}`,
-            label: node,
-          })),
-        }}
-        trigger={['click']}
-      >
-        <Button type="link" size="small">
-          更多
-        </Button>
-      </Dropdown>
-    </Space>
-  )
+  return renderRowActionsOverflow(nodes, keyPrefix)
 }
 
 /** 可用库存列：hover 展示分仓库构成与净需求计算说明（依赖 detail_results.inventory_breakdown） */

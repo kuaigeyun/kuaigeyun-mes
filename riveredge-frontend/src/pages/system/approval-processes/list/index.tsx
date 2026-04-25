@@ -276,22 +276,52 @@ const ApprovalProcessListPage: React.FC = () => {
         actionRef={actionRef}
         columns={columns}
         request={async (params, _sort, _filter, searchFormValues) => {
-          const { current = 1, pageSize = 20 } = params;
-          const skip = (current - 1) * pageSize;
-          const limit = pageSize;
-          
-          const listParams: any = {
-            skip,
-            limit,
-            ...searchFormValues,
-          };
-          
-          const data = await getApprovalProcessList(listParams);
-          return {
-            data,
-            success: true,
-            total: data.length,
-          };
+          try {
+            const { current = 1, pageSize = 20 } = params;
+            const skip = (current - 1) * pageSize;
+            const limit = pageSize;
+
+            const listParams: any = {
+              skip,
+              limit,
+              ...searchFormValues,
+            };
+
+            const countTotal = async (): Promise<number> => {
+              const chunkSize = 1000;
+              let total = 0;
+              let offset = 0;
+              for (let i = 0; i < 100; i += 1) {
+                const chunk = await getApprovalProcessList({
+                  skip: offset,
+                  limit: chunkSize,
+                  ...searchFormValues,
+                });
+                total += chunk.length;
+                if (chunk.length < chunkSize) break;
+                offset += chunkSize;
+              }
+              return total;
+            };
+
+            const [data, total] = await Promise.all([
+              getApprovalProcessList(listParams),
+              // 接口无 total 字段，按后端上限分批统计总量
+              countTotal(),
+            ]);
+            return {
+              data,
+              success: true,
+              total,
+            };
+          } catch (error: any) {
+            messageApi.error(error?.message || t('pages.system.approvalProcesses.operationFailed'));
+            return {
+              data: [],
+              success: false,
+              total: 0,
+            };
+          }
         }}
         rowKey="uuid"
         rowSelection={{

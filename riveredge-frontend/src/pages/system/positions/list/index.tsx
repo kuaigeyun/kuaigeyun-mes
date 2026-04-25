@@ -9,7 +9,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal, message } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, message } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../components/layout-templates';
@@ -65,7 +65,10 @@ const PositionListPage: React.FC = () => {
 
   const handleImport = async (data: any[][]) => {
     message.info(t('pages.system.importDeveloping'));
-    console.log('导入数据:', data);
+    if (typeof window !== 'undefined') {
+      window.console.log('导入数据:', data);
+    }
+
   };
 
   const handleExport = (
@@ -74,7 +77,10 @@ const PositionListPage: React.FC = () => {
     currentPageData?: Position[]
   ) => {
     message.info(t('pages.system.exportDeveloping'));
-    console.log('导出类型:', type, '选中行:', selectedRowKeys, '当前页数据:', currentPageData);
+    if (typeof window !== 'undefined') {
+      window.console.log('导出类型:', type, '选中行:', selectedRowKeys, '当前页数据:', currentPageData);
+    }
+
   };
 
   const handleView = async (record: Position) => {
@@ -309,14 +315,14 @@ const PositionListPage: React.FC = () => {
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
         dataSource={detailData as any}
+        column={1}
         columns={[
           { title: t('field.position.name'), dataIndex: 'name' },
           { title: t('field.position.code'), dataIndex: 'code' },
-          { title: t('field.position.remark'), dataIndex: 'description', span: 2 },
+          { title: t('field.position.remark'), dataIndex: 'description' },
           {
             title: t('field.position.departmentUuid'),
             dataIndex: ['department', 'name'],
-            span: 2,
             render: (_: any, record: any) => record?.department?.name || '-',
           },
           {

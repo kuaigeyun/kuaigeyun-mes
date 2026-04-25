@@ -194,6 +194,7 @@ async def list_files(
     search: Optional[str] = Query(None, description="搜索关键词（搜索文件名、原始文件名）"),
     category: Optional[str] = Query(None, description="文件分类筛选"),
     file_type: Optional[str] = Query(None, description="文件类型筛选"),
+    include_preview_url: bool = Query(False, description="是否包含预览URL（缩略图）"),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
@@ -207,6 +208,7 @@ async def list_files(
         search: 搜索关键词（搜索文件名、原始文件名）
         category: 文件分类筛选
         file_type: 文件类型筛选
+        include_preview_url: 是否包含预览URL（缩略图）
         tenant_id: 当前组织ID（依赖注入）
         
     Returns:
@@ -221,8 +223,22 @@ async def list_files(
         file_type=file_type,
     )
     
+    items = []
+    from core.services.file.file_preview_service import FilePreviewService
+    for file in result["items"]:
+        file_dict = FileResponse.model_validate(file).model_dump()
+        if include_preview_url and file.file_type and file.file_type.startswith("image/"):
+            # 优化：直接生成预览 URL，避免 get_preview_info 内部再次查询数据库 (N+1问题修复)
+            preview_url = await FilePreviewService.generate_simple_preview_url(
+                file_uuid=file.uuid,
+                tenant_id=tenant_id,
+                size=128, # 使用 128px 缩略图加速加载
+            )
+            file_dict["preview_url"] = preview_url
+        items.append(file_dict)
+    
     return FileListResponse(
-        items=[FileResponse.model_validate(file) for file in result["items"]],
+        items=items,
         total=result["total"],
         page=result["page"],
         page_size=result["page_size"],
@@ -363,20 +379,47 @@ async def download_file(
         # 缩略图：仅图片且指定 size 时，返回缩放后的图片
         # PNG 透明图保留透明通道输出 PNG，避免白底；其他输出 JPEG
         file_type = file.file_type or "application/octet-stream"
+        # 缩略图：仅图片且指定 size 时，通过磁盘缓存或实时生成返回缩放后的图片
         if size and file_type.startswith("image/"):
             try:
                 from io import BytesIO
                 from PIL import Image
+                import os
+                
+                # 磁盘缓存路径逻辑
+                thumb_cache_dir = os.path.join(FS.UPLOAD_DIR, "thumbnails")
+                os.makedirs(thumb_cache_dir, exist_ok=True)
+                thumb_cache_path = os.path.join(thumb_cache_dir, f"{uuid}_{size}.bin")
+                
+                # 1. 尝试命中缓存
+                if os.path.exists(thumb_cache_path):
+                    with open(thumb_cache_path, "rb") as f:
+                        thumb_bytes = f.read()
+                    # 根据原始类型决定返回格式（简单起见，缓存中存原始 bytes，输出头保持一致）
+                    is_png = file_type == "image/png"
+                    return StreamingResponse(
+                        iter([thumb_bytes]),
+                        media_type="image/png" if is_png else "image/jpeg",
+                        headers={
+                            "Content-Disposition": f"inline; filename=\"thumb_{size}.{'png' if is_png else 'jpg'}\"",
+                            "Content-Length": str(len(thumb_bytes)),
+                            "Cache-Control": "public, max-age=86400",
+                            "X-Cache": "HIT" # 标记命中缓存
+                        },
+                    )
+
+                # 2. 缓存未命中，实时生成
                 img = Image.open(BytesIO(file_content))
-                # RGBA/LA 有透明通道；P 模式（调色板）可能含透明，统一按透明处理以保留 Logo 透明底
                 has_alpha = img.mode in ("RGBA", "LA", "P")
                 if has_alpha:
                     img = img.convert("RGBA")
                     img.thumbnail((size, size), Image.Resampling.LANCZOS)
                     buf = BytesIO()
                     img.save(buf, format="PNG", optimize=True)
-                    buf.seek(0)
                     thumb_bytes = buf.getvalue()
+                    # 写入缓存
+                    with open(thumb_cache_path, "wb") as f:
+                        f.write(thumb_bytes)
                     return StreamingResponse(
                         iter([thumb_bytes]),
                         media_type="image/png",
@@ -384,6 +427,7 @@ async def download_file(
                             "Content-Disposition": "inline; filename=\"thumb.png\"",
                             "Content-Length": str(len(thumb_bytes)),
                             "Cache-Control": "public, max-age=86400",
+                            "X-Cache": "MISS"
                         },
                     )
                 else:
@@ -394,20 +438,22 @@ async def download_file(
                     img.thumbnail((size, size), Image.Resampling.LANCZOS)
                     buf = BytesIO()
                     img.save(buf, format="JPEG", quality=85, optimize=True)
-                    buf.seek(0)
                     thumb_bytes = buf.getvalue()
+                    # 写入缓存
+                    with open(thumb_cache_path, "wb") as f:
+                        f.write(thumb_bytes)
                     return StreamingResponse(
                         iter([thumb_bytes]),
                         media_type="image/jpeg",
                         headers={
-                            "Content-Disposition": "inline; filename=\"avatar-thumb.jpg\"",
+                            "Content-Disposition": "inline; filename=\"thumb.jpg\"",
                             "Content-Length": str(len(thumb_bytes)),
                             "Cache-Control": "public, max-age=86400",
+                            "X-Cache": "MISS"
                         },
                     )
             except Exception as e:
                 logger.warning(f"缩略图生成失败，回退原图: {e}")
-                # 回退到原图
                 pass
         
         # 构建完整路径（用于获取文件类型）

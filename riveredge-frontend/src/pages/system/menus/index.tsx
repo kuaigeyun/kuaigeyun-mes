@@ -27,6 +27,7 @@ import { useGlobalStore } from '../../../stores';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { translateAppMenuItemName } from '../../../utils/menuTranslation';
+import { renderRowActionsOverflow } from '../../../utils/renderRowActionsOverflow';
 
 // 动态图标组件
 const IconItem = ({ icon }: { icon?: string }) => {
@@ -449,24 +450,46 @@ const MenuListPage: React.FC = () => {
             const isAppMenu = !!record.application_uuid;
             const deleteCheck = checkCanDelete(record);
             const canDelete = !isAppMenu && deleteCheck.can;
-            return (
-            <Space size="small" wrap>
-                <Button type="default" size="small" onClick={() => handleView(record)}>{t('common.detail')}</Button>
-                <Button type="primary" size="small" onClick={() => handleEdit(record)}>{t('pages.system.menus.edit')}</Button>
-                <Button type="default" size="small" icon={<PlusOutlined />} onClick={() => handleCreate(record.uuid)}>{t('pages.system.menus.addChild')}</Button>
-                <Popconfirm
-                    title={t('pages.system.menus.deleteConfirm')}
-                    onConfirm={() => handleDelete(record)}
-                    disabled={!canDelete}
+            const actions: React.ReactNode[] = [
+              <Button key="detail" type="default" size="small" onClick={() => handleView(record)}>
+                {t('common.detail')}
+              </Button>,
+              <Button key="edit" type="primary" size="small" onClick={() => handleEdit(record)}>
+                {t('pages.system.menus.edit')}
+              </Button>,
+              <Popconfirm
+                key="delete"
+                title={t('pages.system.menus.deleteConfirm')}
+                onConfirm={() => handleDelete(record)}
+                disabled={!canDelete}
+              >
+                <Tooltip
+                  title={
+                    isAppMenu
+                      ? t('menu.system.appMenuDeleteDisabled', {
+                          defaultValue: '应用菜单不可删除，请在应用中心同步更新',
+                        })
+                      : deleteCheck.reason
+                  }
                 >
-                    <Tooltip title={isAppMenu ? t('menu.system.appMenuDeleteDisabled', { defaultValue: '应用菜单不可删除，请在应用中心同步更新' }) : deleteCheck.reason}>
-                        <span>
-                            <Button type="default" size="small" danger icon={<DeleteOutlined />} disabled={!canDelete}>{t('pages.system.menus.delete')}</Button>
-                        </span>
-                    </Tooltip>
-                </Popconfirm>
-            </Space>
-            );
+                  <span>
+                    <Button type="default" size="small" danger icon={<DeleteOutlined />} disabled={!canDelete}>
+                      {t('pages.system.menus.delete')}
+                    </Button>
+                  </span>
+                </Tooltip>
+              </Popconfirm>,
+              <Button
+                key="addChild"
+                type="default"
+                size="small"
+                icon={<PlusOutlined />}
+                onClick={() => handleCreate(record.uuid)}
+              >
+                {t('pages.system.menus.addChild')}
+              </Button>,
+            ];
+            return renderRowActionsOverflow(actions, `menu-${record.uuid ?? 'row'}`);
         }
     }
   ];

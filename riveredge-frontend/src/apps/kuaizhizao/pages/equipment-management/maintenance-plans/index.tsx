@@ -35,6 +35,7 @@ import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni
 import { getMaintenancePlanLifecycle } from '../../../utils/equipmentLifecycle';
 import { maintenancePlanApi, equipmentApi } from '../../../services/equipment';
 import dayjs from 'dayjs';
+import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
@@ -62,33 +63,8 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   });
 }
 
-const PLAN_ROW_ACTIONS_MAX = 4;
-
 function renderPlanRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  const wrapped = nodes.map((node, i) => <span key={`${keyPrefix}-${i}`}>{node}</span>);
-  if (wrapped.length <= PLAN_ROW_ACTIONS_MAX) {
-    return <Space size="small" wrap>{wrapped}</Space>;
-  }
-  const inline = wrapped.slice(0, PLAN_ROW_ACTIONS_MAX);
-  const overflow = wrapped.slice(PLAN_ROW_ACTIONS_MAX);
-  return (
-    <Space size="small" wrap>
-      {inline}
-      <Dropdown
-        menu={{
-          items: overflow.map((node, i) => ({
-            key: `${keyPrefix}-more-${i}`,
-            label: node,
-          })),
-        }}
-        trigger={['click']}
-      >
-        <Button type="link" size="small">
-          更多
-        </Button>
-      </Dropdown>
-    </Space>
-  );
+  return renderRowActionsOverflow(nodes, keyPrefix);
 }
 
 interface MaintenancePlan {

@@ -71,6 +71,7 @@ import dayjs from 'dayjs';
 import { AmountDisplay } from '../../../../../components/permission';
 import { useGlobalStore } from '../../../../../stores/globalStore';
 import { canViewKuaizhizaoPricing } from '../../../../../utils/kuaizhizaoPricingPermission';
+import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 
 interface OutsourceWorkOrder {
   id?: number;
@@ -134,8 +135,6 @@ const PRIORITY_FALLBACK = [
   { label: '紧急', value: 'urgent' },
 ];
 
-const OWO_ROW_ACTIONS_INLINE_MAX = 4;
-
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
   cols: ProDescriptionsItemProps<T>[]
@@ -162,30 +161,7 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
 }
 
 function renderOwoRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  const wrapped = nodes.map((node, i) => <span key={`${keyPrefix}-${i}`}>{node}</span>);
-  if (wrapped.length <= OWO_ROW_ACTIONS_INLINE_MAX) {
-    return <Space size="small" wrap>{wrapped}</Space>;
-  }
-  const inline = wrapped.slice(0, OWO_ROW_ACTIONS_INLINE_MAX);
-  const overflow = wrapped.slice(OWO_ROW_ACTIONS_INLINE_MAX);
-  return (
-    <Space size="small" wrap>
-      {inline}
-      <Dropdown
-        menu={{
-          items: overflow.map((node, i) => ({
-            key: `${keyPrefix}-more-${i}`,
-            label: node,
-          })),
-        }}
-        trigger={['click']}
-      >
-        <Button type="link" size="small">
-          更多
-        </Button>
-      </Dropdown>
-    </Space>
-  );
+  return renderRowActionsOverflow(nodes, keyPrefix);
 }
 
 const OWO_STAT_SPARK_1 = [2, 3, 4, 3, 5, 4, 6];

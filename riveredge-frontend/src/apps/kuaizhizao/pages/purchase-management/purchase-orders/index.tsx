@@ -44,6 +44,7 @@ import LandingCostAllocationModal from './LandingCostAllocationModal';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
 import { getApprovalStatus, ApprovalStatusResponse } from '../../../../../services/approvalInstance';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
+import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import {
   DocumentTrackingRelationsBody,
   DocumentTrackingTimelineBody,
@@ -99,9 +100,6 @@ const PO_STAT_SPARKLINE_OVERDUE = [5, 8, 3, 12, 7, 15, 10];
 /** 详情只读明细表最小宽度（外层横滚） */
 const PO_DETAIL_ITEMS_MIN_WIDTH = 1200;
 
-/** 列表操作列最多平铺 4 个，第 5 个起收入「更多」（与全局 ROW_ACTIONS_INLINE_MAX 一致） */
-const PO_ROW_ACTIONS_INLINE_MAX = 4;
-
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
   cols: ProDescriptionsItemProps<T>[]
@@ -128,30 +126,7 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
 }
 
 function renderPurchaseOrderRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  const wrapped = nodes.map((node, i) => <span key={`${keyPrefix}-${i}`}>{node}</span>);
-  if (wrapped.length <= PO_ROW_ACTIONS_INLINE_MAX) {
-    return <Space size="small" wrap>{wrapped}</Space>;
-  }
-  const inline = wrapped.slice(0, PO_ROW_ACTIONS_INLINE_MAX);
-  const overflow = wrapped.slice(PO_ROW_ACTIONS_INLINE_MAX);
-  return (
-    <Space size="small" wrap>
-      {inline}
-      <Dropdown
-        menu={{
-          items: overflow.map((node, i) => ({
-            key: `${keyPrefix}-more-${i}`,
-            label: node,
-          })),
-        }}
-        trigger={['click']}
-      >
-        <Button type="link" size="small">
-          更多
-        </Button>
-      </Dropdown>
-    </Space>
-  );
+  return renderRowActionsOverflow(nodes, keyPrefix);
 }
 
 // 使用从服务文件导入的接口

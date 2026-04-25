@@ -127,8 +127,8 @@ export const CANVAS_PAGE_LAYOUT = {
 } as const;
 
 export const CANVAS_GRID_STYLE: CSSProperties = {
-  backgroundColor: '#f1f5f9', // Slightly deeper Tech Gray (Slate 100)
-  backgroundImage: 'radial-gradient(#94a3b8 1.5px, transparent 1.5px)', // More obvious dots
+  backgroundColor: '#f1f5f9', // Slate 100
+  backgroundImage: 'radial-gradient(circle, #94a3b8 1px, transparent 1px)', // Sharp, round 1px dots
   backgroundSize: '24px 24px',
 };
 
@@ -138,8 +138,8 @@ export const CANVAS_GRID_STYLE: CSSProperties = {
 export const CANVAS_GRID_REACTFLOW = {
   variant: 'dots' as const,
   gap: 24,
-  size: 1.5,
-  color: '#94a3b8', // Slate 400 for more distinct dots
+  size: 1, // Standardized 1px dots
+  color: '#94a3b8', // Slate 400
   style: {
     backgroundColor: '#f1f5f9', // Slate 100
   },

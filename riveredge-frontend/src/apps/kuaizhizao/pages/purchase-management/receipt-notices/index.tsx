@@ -52,6 +52,7 @@ import {
 } from '../../../../../components/layout-templates';
 import { SimpleSparkline } from '../../../../../components';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import {
   DocumentTrackingRelationsBody,
   DocumentTrackingTimelineBody,
@@ -106,8 +107,6 @@ const RN_STAT_SPARK_4 = [18, 20, 22, 24, 26, 28, 30];
 
 const RN_DETAIL_ITEMS_MIN_WIDTH = 960;
 
-const RECEIPT_NOTICE_ROW_ACTIONS_INLINE_MAX = 4;
-
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
   cols: ProDescriptionsItemProps<T>[]
@@ -134,30 +133,7 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
 }
 
 function renderReceiptNoticeRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  const wrapped = nodes.map((node, i) => <span key={`${keyPrefix}-${i}`}>{node}</span>);
-  if (wrapped.length <= RECEIPT_NOTICE_ROW_ACTIONS_INLINE_MAX) {
-    return <Space size="small" wrap>{wrapped}</Space>;
-  }
-  const inline = wrapped.slice(0, RECEIPT_NOTICE_ROW_ACTIONS_INLINE_MAX);
-  const overflow = wrapped.slice(RECEIPT_NOTICE_ROW_ACTIONS_INLINE_MAX);
-  return (
-    <Space size="small" wrap>
-      {inline}
-      <Dropdown
-        menu={{
-          items: overflow.map((node, i) => ({
-            key: `${keyPrefix}-more-${i}`,
-            label: node,
-          })),
-        }}
-        trigger={['click']}
-      >
-        <Button type="link" size="small">
-          更多
-        </Button>
-      </Dropdown>
-    </Space>
-  );
+  return renderRowActionsOverflow(nodes, keyPrefix);
 }
 
 const ReceiptNoticesPage: React.FC = () => {

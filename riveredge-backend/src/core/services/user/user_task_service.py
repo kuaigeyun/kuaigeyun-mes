@@ -31,6 +31,16 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 _PERSONAL_TASK_PROCESS_CODE = "personal_task"
 
 
+def _parse_status_filter(status: Optional[str]) -> Optional[List[str]]:
+    """
+    解析状态筛选参数，兼容单值与逗号分隔多值（如 approved,rejected）。
+    """
+    if not status:
+        return None
+    values = [s.strip() for s in status.split(",") if s and s.strip()]
+    return values or None
+
+
 class UserTaskService:
     """
     用户任务管理服务类
@@ -46,20 +56,21 @@ class UserTaskService:
         page: int = 1,
         page_size: int = 20,
         status: Optional[str] = None,
-        task_type: Optional[str] = None,  # "pending" 待处理, "submitted" 我提交的
+        task_type: Optional[str] = None,  # "pending" 待处理, "processed" 已处理, "submitted" 我提交的
     ) -> UserTaskListResponse:
         """
         获取用户任务列表
         """
         try:
             offset = (page - 1) * page_size
+            status_values = _parse_status_filter(status)
             
             items = []
             if task_type == "submitted":
                 # 查询我提交的任务（基于实例）
                 query = Q(tenant_id=tenant_id, submitter_id=user_id)
-                if status:
-                    query &= Q(status=status)
+                if status_values:
+                    query &= Q(status__in=status_values)
                 total = await ApprovalInstance.filter(query).count()
                 instances = await ApprovalInstance.filter(query).prefetch_related("process").order_by("-created_at").offset(offset).limit(page_size)
                 for inst in instances:
@@ -84,6 +95,41 @@ class UserTaskService:
                         completed_at=inst.completed_at,
                         created_at=inst.created_at,
                         updated_at=inst.updated_at
+                    ))
+            elif task_type == "processed":
+                # 查询我已处理的任务（基于任务表）
+                query = Q(tenant_id=tenant_id, approver_id=user_id)
+                if status_values:
+                    query &= Q(status__in=status_values)
+                else:
+                    query &= Q(status__in=["approved", "rejected", "cancelled"])
+                total = await ApprovalTask.filter(query).count()
+                tasks = await ApprovalTask.filter(query).prefetch_related("approval_instance__process").order_by("-created_at").offset(offset).limit(page_size)
+                for task in tasks:
+                    inst = task.approval_instance
+                    if not inst:
+                        continue
+
+                    process_uuid = None
+                    if hasattr(inst, "process") and inst.process:
+                        process_uuid = getattr(inst.process, "uuid", None)
+
+                    items.append(UserTaskResponse(
+                        uuid=task.uuid,
+                        tenant_id=task.tenant_id,
+                        process_uuid=process_uuid,
+                        title=inst.title,
+                        content=inst.content,
+                        data=inst.data,
+                        submitter_id=inst.submitter_id,
+                        current_approver_id=user_id,
+                        status=task.status,
+                        current_node=task.node_id,
+                        remind_at=inst.remind_at,
+                        submitted_at=inst.submitted_at,
+                        completed_at=inst.completed_at,
+                        created_at=task.created_at,
+                        updated_at=task.updated_at
                     ))
             else:
                 # 查询我的待办任务（基于任务表）
@@ -376,4 +422,37 @@ class UserTaskService:
         except Exception as e:
             logger.exception(f"创建个人任务失败: {e}")
             raise e
+
+    @staticmethod
+    async def delete_user_task(
+        tenant_id: int,
+        user_id: int,
+        task_uuid: str
+    ) -> None:
+        """
+        删除用户任务
+        
+        仅限：
+        1. 手动创建的个人任务（is_personal=True）
+        2. 处于待审批状态且由本人提交的任务（撤回/删除）
+        """
+        instance = await ApprovalInstance.filter(
+            uuid=task_uuid,
+            tenant_id=tenant_id
+        ).first()
+        
+        if not instance:
+            raise NotFoundError("任务不存在")
+            
+        # 权限校验：必须是提交者才能删除
+        if instance.submitter_id != user_id:
+            raise ValidationError("无权删除非本人提交的任务")
+            
+        # 业务校验：个人任务随时可删；正式任务仅待处理时可删
+        is_personal = instance.data and instance.data.get("is_personal")
+        if not is_personal and instance.status != "pending":
+            raise ValidationError("正式流程任务已处理，无法删除")
+            
+        # 执行物理删除（Cascade 会自动处理关联的 ApprovalTask）
+        await instance.delete()
 

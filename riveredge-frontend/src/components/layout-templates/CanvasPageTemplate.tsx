@@ -7,23 +7,6 @@
  *
  * Author: Luigi Lu
  * Date: 2026-01-27
- *
- * @example
- * ```tsx
- * <CanvasPageTemplate
- *   toolbar={
- *     <Space>
- *       <Button type="primary" icon={<SaveOutlined />}>保存</Button>
- *       <Button icon={<CloseOutlined />}>返回</Button>
- *     </Space>
- *   }
- *   canvas={<MindMap {...config} />}
- *   rightPanel={{
- *     title: '节点配置',
- *     children: <Form>...</Form>,
- *   }}
- * />
- * ```
  */
 
 import React, { ReactNode, useEffect } from 'react';
@@ -55,8 +38,6 @@ export interface CanvasPageTemplateProps {
   rightPanel?: CanvasPageSidePanelConfig;
   /** 右侧面板宽度，默认 400 */
   rightPanelWidth?: number;
-  /** 画板最小高度，默认 600 */
-  canvasMinHeight?: number;
   /** 外层容器样式 */
   style?: React.CSSProperties;
   /** 外层容器类名 */
@@ -77,7 +58,6 @@ export const CanvasPageTemplate: React.FC<CanvasPageTemplateProps> = ({
   leftPanelWidth = CANVAS_PAGE_LAYOUT.LEFT_PANEL_WIDTH,
   rightPanel,
   rightPanelWidth = CANVAS_PAGE_LAYOUT.RIGHT_PANEL_WIDTH,
-  canvasMinHeight = CANVAS_PAGE_LAYOUT.CANVAS_MIN_HEIGHT,
   style,
   className,
   functionalTitle = '设计器',
@@ -86,13 +66,14 @@ export const CanvasPageTemplate: React.FC<CanvasPageTemplateProps> = ({
 
   useEffect(() => {
     // 发送自定义事件更新 UniTabs 内部标签标题
-    // 浏览器标题 document.title 仍由 BasicLayout 统一标准化设置（包含组织名称）
     const tabKey = location.pathname + location.search;
-    window.dispatchEvent(
-      new CustomEvent('riveredge:update-tab-title', {
-        detail: { key: tabKey, title: functionalTitle },
-      })
-    );
+    if (typeof window !== 'undefined' && (window as any).CustomEvent) {
+      window.dispatchEvent(
+        new (window as any).CustomEvent('riveredge:update-tab-title', {
+          detail: { key: tabKey, title: functionalTitle },
+        })
+      );
+    }
   }, [location.pathname, location.search, functionalTitle]);
 
   const padding = PAGE_SPACING.PADDING;
@@ -105,6 +86,7 @@ export const CanvasPageTemplate: React.FC<CanvasPageTemplateProps> = ({
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
+        minHeight: 'calc(100vh - 132px)',
         overflow: 'hidden',
         ...style,
       }}
@@ -171,7 +153,6 @@ export const CanvasPageTemplate: React.FC<CanvasPageTemplateProps> = ({
               width: '100%',
               height: '100%',
               flex: 1,
-              minHeight: canvasMinHeight,
               position: 'relative',
             }}
           >
