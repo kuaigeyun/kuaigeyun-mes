@@ -391,6 +391,7 @@ async def print_quotation(
     """打印报价单"""
     from apps.kuaizhizao.services.print_service import DocumentPrintService
     from fastapi.responses import HTMLResponse, JSONResponse
+
     try:
         result = await DocumentPrintService().print_document(
             tenant_id=tenant_id,
@@ -404,6 +405,7 @@ async def print_quotation(
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
     except BusinessLogicError as e:
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
     if response_format == "html":
         return HTMLResponse(content=result.get("content", ""), status_code=200)
     return JSONResponse(content=result, status_code=200)

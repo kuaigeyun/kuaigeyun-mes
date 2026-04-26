@@ -352,6 +352,11 @@ const BarcodeBlock: React.FC<{ block: DesignerNodeSchema & { type: 'barcode' }; 
 };
 
 const ImageBlock: React.FC<{ block: DesignerNodeSchema & { type: 'image' }; selected?: boolean; onSelect?: () => void }> = ({ block, selected, onSelect }) => {
+  // 模板里的 {{ logo }} / {{ company_logo }} 等占位符会在后端打印时替换为站点 Logo；
+  // 设计器内为了所见即所得，直接用当前站点 Logo URL 进行可视化。
+  const siteLogoUrl = useSiteLogoUrl();
+  const rawUrl = block.url || '';
+  const previewUrl = /\{\{\s*(logo|company_logo)\s*\}\}/i.test(rawUrl) ? siteLogoUrl : rawUrl;
   return (
     <div
       style={{
@@ -365,9 +370,9 @@ const ImageBlock: React.FC<{ block: DesignerNodeSchema & { type: 'image' }; sele
       onClick={onSelect}
     >
       <div style={{ display: 'inline-block', maxWidth: '100%' }}>
-        {block.url ? (
+        {previewUrl ? (
           <img 
-            src={block.url} 
+            src={previewUrl} 
             alt="Logo" 
             style={{ 
               width: block.width, 
@@ -1368,7 +1373,7 @@ const PrintTemplateDesignPage: React.FC = () => {
         verticalAlign: 'top',
         cols: [
           { id: `c1-${Date.now()}`, width: '1', blocks: [{ id: `txt-${Date.now()}-1`, type: 'text', content: '### 某某制造有限公司', tag: 'h3' }] },
-          { id: `c2-${Date.now()}`, width: '1', horizontalAlign: 'end', blocks: [{ id: `img-${Date.now()}-2`, type: 'image', url: siteLogoUrl || '{{ logo }}', width: 80, height: 40, style: { textAlign: 'right' } }] }
+          { id: `c2-${Date.now()}`, width: '1', horizontalAlign: 'end', blocks: [{ id: `img-${Date.now()}-2`, type: 'image', url: '{{ logo }}', width: 80, height: 40, style: { textAlign: 'right' } }] }
         ]
       };
     } else {
@@ -2442,35 +2447,34 @@ const PrintTemplateDesignPage: React.FC = () => {
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                         <div>
                           <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>水平对齐</div>
-                          <Select
+                          <Radio.Group
                             size="small"
-                            style={{ width: '100%' }}
+                            buttonStyle="solid"
+                            style={{ width: '100%', display: 'flex', flexWrap: 'wrap', gap: 4 }}
                             value={selectedBlock.horizontalAlign || 'start'}
-                            onChange={(val) => updateSelectedBlock({ horizontalAlign: val })}
-                            options={[
-                              { label: '左对齐', value: 'start' },
-                              { label: '居中', value: 'center' },
-                              { label: '右对齐', value: 'end' },
-                              { label: '两端对齐', value: 'space-between' },
-                              { label: '环绕分布', value: 'space-around' },
-                              { label: '均匀分布', value: 'space-evenly' },
-                            ]}
-                          />
+                            onChange={(e) => updateSelectedBlock({ horizontalAlign: e.target.value })}
+                          >
+                            <Radio.Button value="start" title="左对齐"><AlignLeftOutlined /></Radio.Button>
+                            <Radio.Button value="center" title="居中"><AlignCenterOutlined /></Radio.Button>
+                            <Radio.Button value="end" title="右对齐"><AlignRightOutlined /></Radio.Button>
+                            <Radio.Button value="space-between" title="两端对齐"><OrderedListOutlined /></Radio.Button>
+                            <Radio.Button value="space-around" title="环绕分布"><AppstoreOutlined /></Radio.Button>
+                            <Radio.Button value="space-evenly" title="均匀分布"><AppstoreAddOutlined /></Radio.Button>
+                          </Radio.Group>
                         </div>
                         <div>
                           <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>垂直对齐</div>
-                          <Select
+                          <Radio.Group
                             size="small"
-                            style={{ width: '100%' }}
+                            buttonStyle="solid"
+                            style={{ width: '100%', display: 'flex', flexWrap: 'wrap', gap: 4 }}
                             value={selectedBlock.verticalAlign || 'top'}
-                            onChange={(val) => updateSelectedBlock({ verticalAlign: val })}
-                            options={[
-                              { label: '顶部', value: 'top' },
-                              { label: '居中', value: 'middle' },
-                              { label: '底部', value: 'bottom' },
-                              { label: '拉伸', value: 'stretch' },
-                            ]}
-                          />
+                            onChange={(e) => updateSelectedBlock({ verticalAlign: e.target.value })}
+                          >
+                            <Radio.Button value="top" title="顶部"><VerticalAlignTopOutlined /></Radio.Button>
+                            <Radio.Button value="middle" title="居中"><AlignCenterOutlined /></Radio.Button>
+                            <Radio.Button value="bottom" title="底部"><VerticalAlignBottomOutlined /></Radio.Button>
+                          </Radio.Group>
                         </div>
                       </div>
                       {selectedBlock.cols.map((col, idx) => (
@@ -2499,33 +2503,34 @@ const PrintTemplateDesignPage: React.FC = () => {
                             }} 
                           />
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
-                            <Select
+                            <Radio.Group
                               size="small"
+                              buttonStyle="solid"
+                              style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}
                               value={col.horizontalAlign || 'start'}
-                              onChange={(val) => {
-                                const newCols = selectedBlock.cols.map(c => c.id === col.id ? { ...c, horizontalAlign: val } : c);
+                              onChange={(e) => {
+                                const newCols = selectedBlock.cols.map(c => c.id === col.id ? { ...c, horizontalAlign: e.target.value } : c);
                                 updateSelectedBlock({ cols: newCols });
                               }}
-                              options={[
-                                { label: '左对齐', value: 'start' },
-                                { label: '居中', value: 'center' },
-                                { label: '右对齐', value: 'end' },
-                              ]}
-                            />
-                            <Select
+                            >
+                              <Radio.Button value="start" title="左对齐"><AlignLeftOutlined /></Radio.Button>
+                              <Radio.Button value="center" title="居中"><AlignCenterOutlined /></Radio.Button>
+                              <Radio.Button value="end" title="右对齐"><AlignRightOutlined /></Radio.Button>
+                            </Radio.Group>
+                            <Radio.Group
                               size="small"
+                              buttonStyle="solid"
+                              style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}
                               value={col.verticalAlign || 'top'}
-                              onChange={(val) => {
-                                const newCols = selectedBlock.cols.map(c => c.id === col.id ? { ...c, verticalAlign: val } : c);
+                              onChange={(e) => {
+                                const newCols = selectedBlock.cols.map(c => c.id === col.id ? { ...c, verticalAlign: e.target.value } : c);
                                 updateSelectedBlock({ cols: newCols });
                               }}
-                              options={[
-                                { label: '顶对齐', value: 'top' },
-                                { label: '垂直居中', value: 'middle' },
-                                { label: '底对齐', value: 'bottom' },
-                                { label: '拉伸', value: 'stretch' },
-                              ]}
-                            />
+                            >
+                              <Radio.Button value="top" title="顶对齐"><VerticalAlignTopOutlined /></Radio.Button>
+                              <Radio.Button value="middle" title="垂直居中"><AlignCenterOutlined /></Radio.Button>
+                              <Radio.Button value="bottom" title="底对齐"><VerticalAlignBottomOutlined /></Radio.Button>
+                            </Radio.Group>
                           </div>
                         </div>
                       ))}

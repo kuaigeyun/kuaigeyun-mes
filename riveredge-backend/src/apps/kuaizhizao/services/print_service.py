@@ -8,11 +8,17 @@ Date: 2025-01-01
 """
 
 import base64
+import html as html_lib
 import os
+import platform
 from io import BytesIO
 from typing import Optional, Dict, Any, Tuple
 from datetime import datetime
 from loguru import logger
+import asyncio
+import uuid as _uuid
+import re
+from urllib.parse import urlsplit, parse_qs
 
 from core.services.print.print_template_service import PrintTemplateService
 from core.schemas.print_template import PrintTemplateRenderRequest
@@ -51,80 +57,291 @@ from apps.kuaizhizao.models.material_borrow_item import MaterialBorrowItem
 from apps.kuaizhizao.models.material_return import MaterialReturn
 from apps.kuaizhizao.models.material_return_item import MaterialReturnItem
 
+_FILE_DOWNLOAD_PATH_RE = re.compile(
+    r"^/?api/v\d+/core/files/(?P<uuid>[0-9a-fA-F-]{32,36})/download/?$"
+)
+
+
+def _parse_local_file_download_src(src: str) -> Tuple[str, Optional[int]]:
+    """
+    判断 <img src="..."> 是否指向后端本地 /api/v{n}/core/files/{uuid}/download 资源。
+
+    返回 (file_uuid, size)：
+      - file_uuid 非空表示该 URL 是本地下载链接，可由后端直接读取文件内容内联；
+      - size 解析自 query 参数，便于按缩略图大小压缩，控制 PDF 体积；
+      - 若不是本地下载 URL，返回 ("", None)。
+    """
+    if not src:
+        return ("", None)
+    # 模板渲染后 src 中的 `&` 通常仍以 HTML 实体形式存在（&amp;），需先解码再切 query
+    s = html_lib.unescape(src).strip()
+    if not s or s.startswith("data:"):
+        return ("", None)
+    try:
+        parts = urlsplit(s)
+    except Exception:
+        return ("", None)
+    path = parts.path or ""
+    m = _FILE_DOWNLOAD_PATH_RE.match(path)
+    if not m:
+        return ("", None)
+    file_uuid = m.group("uuid")
+    size_val: Optional[int] = None
+    if parts.query:
+        try:
+            qs = parse_qs(parts.query, keep_blank_values=True)
+            raw = (qs.get("size") or [None])[0]
+            if raw is not None and str(raw).strip():
+                size_val = int(str(raw).strip())
+        except Exception:
+            size_val = None
+    return (file_uuid, size_val)
+
+
+async def _build_image_data_url_for_local_file(
+    tenant_id: int, file_uuid: str, size: Optional[int]
+) -> str:
+    """
+    将本地文件 UUID 转换为可直接嵌入 <img src> 的 base64 data URL。
+    透明处理 RGBA / RGB / 调色板等图像模式，按 size 缩略以控制 PDF 体积。
+    解析失败返回空串，让上层保留原 src（兜底，不影响其他内容渲染）。
+    """
+    try:
+        file = await FileService.get_file_by_uuid(tenant_id, file_uuid)
+    except Exception as e:
+        logger.debug("打印内联图片：未能定位文件记录 uuid={} err={}", file_uuid, e)
+        return ""
+    file_type = (getattr(file, "file_type", "") or "").lower()
+    if not file_type.startswith("image/"):
+        return ""
+    try:
+        raw = await FileService.get_file_content(tenant_id, file_uuid)
+    except Exception as e:
+        logger.warning("打印内联图片：文件内容读取失败 uuid={}: {}", file_uuid, e)
+        return ""
+
+    target = size if isinstance(size, int) and size > 0 else 512
+    target = max(64, min(target, 1024))
+
+    safety_padding = 2
+
+    try:
+        from PIL import Image
+
+        img = Image.open(BytesIO(raw))
+        if img.mode in ("RGBA", "LA", "P"):
+            img = img.convert("RGBA")
+            img.thumbnail((target, target), Image.Resampling.LANCZOS)
+            canvas = Image.new(
+                "RGBA",
+                (img.width + safety_padding * 2, img.height + safety_padding * 2),
+                (255, 255, 255, 0),
+            )
+            canvas.paste(img, (safety_padding, safety_padding), img)
+            buf = BytesIO()
+            canvas.save(buf, format="PNG", optimize=True)
+            mime = "image/png"
+        else:
+            if img.mode not in ("RGB", "L"):
+                img = img.convert("RGB")
+            img.thumbnail((target, target), Image.Resampling.LANCZOS)
+            canvas = Image.new(
+                "RGB",
+                (img.width + safety_padding * 2, img.height + safety_padding * 2),
+                (255, 255, 255),
+            )
+            canvas.paste(img, (safety_padding, safety_padding))
+            buf = BytesIO()
+            canvas.save(buf, format="JPEG", quality=85, optimize=True)
+            mime = "image/jpeg"
+        data = buf.getvalue()
+    except Exception as e:
+        logger.warning("打印内联图片：缩略失败，回退原图 uuid={}: {}", file_uuid, e)
+        data = raw
+        mime = file_type.split(";")[0].strip() or "image/jpeg"
+
+    return f"data:{mime};base64,{base64.standard_b64encode(data).decode('ascii')}"
+
+
+_HTML_IMG_TAG_RE = re.compile(
+    r"(<img\b[^>]*?\bsrc\s*=\s*)(['\"])(?P<src>.*?)\2",
+    flags=re.IGNORECASE | re.DOTALL,
+)
+
+
+async def _inline_local_file_images_in_html(tenant_id: int, html_string: str) -> str:
+    """
+    将渲染好的 HTML 中所有指向后端本地下载 URL 的 <img> 替换为 base64 data URL。
+
+    设计器历史上会把 site_logo 等图片以 `/api/v{n}/core/files/{uuid}/download?token=...&size=128`
+    的方式硬编码到模板内容里。打印转 PDF 时，Playwright 的 Chromium 进程访问后端可能因
+    network/防火墙/CORS/token 过期等原因失败，导致 PDF 中图片裂掉。
+    渲染前把这类资源直接内联为 data URL，可避开所有外部依赖，老模板也能稳定打印。
+    """
+    if not html_string or "<img" not in html_string.lower():
+        return html_string
+
+    matches = list(_HTML_IMG_TAG_RE.finditer(html_string))
+    if not matches:
+        return html_string
+
+    cache: Dict[str, str] = {}
+    pieces: list[str] = []
+    cursor = 0
+    for m in matches:
+        src = m.group("src")
+        file_uuid, size = _parse_local_file_download_src(src)
+        if not file_uuid:
+            continue
+        cache_key = f"{file_uuid}:{size or 0}"
+        data_url = cache.get(cache_key)
+        if data_url is None:
+            data_url = await _build_image_data_url_for_local_file(tenant_id, file_uuid, size)
+            cache[cache_key] = data_url
+        if not data_url:
+            continue
+        pieces.append(html_string[cursor:m.start("src")])
+        pieces.append(data_url)
+        cursor = m.end("src")
+    if cursor == 0:
+        return html_string
+    pieces.append(html_string[cursor:])
+    return "".join(pieces)
+
+
+def _inject_base_href_for_playwright(html_string: str, base_url: str) -> str:
+    """
+    Playwright 的 set_content 默认页面地址为 about:blank，相对 /api/... 资源无法解析。
+    通过注入 <base href="..."> 让相对 URL（尤其 /api/...）可被正确请求。
+    """
+    if not base_url:
+        return html_string
+    base = base_url.rstrip("/") + "/"
+    if re.search(r"<base\b", html_string, flags=re.IGNORECASE):
+        return html_string
+    if re.search(r"<head[^>]*>", html_string, flags=re.IGNORECASE):
+        return re.sub(
+            r"(<head[^>]*>)",
+            lambda m: m.group(1) + f'<base href="{base}"/>',
+            html_string,
+            count=1,
+            flags=re.IGNORECASE,
+        )
+    if re.search(r"<html[^>]*>", html_string, flags=re.IGNORECASE):
+        return re.sub(
+            r"(<html[^>]*>)",
+            lambda m: m.group(1) + f'<head><base href="{base}"/></head>',
+            html_string,
+            count=1,
+            flags=re.IGNORECASE,
+        )
+    return f'<!DOCTYPE html><html><head><base href="{base}"/></head><body>{html_string}</body></html>'
+
 
 def _html_to_pdf_engine_pref() -> str:
-    """环境变量 RIVEREDGE_HTML_TO_PDF_ENGINE：auto | weasyprint | xhtml2pdf"""
+    """环境变量保留兼容；当前仅支持 playwright。"""
     return os.environ.get("RIVEREDGE_HTML_TO_PDF_ENGINE", "auto").strip().lower()
 
 
-def _html_to_pdf_bytes_xhtml2pdf(html_string: str) -> bytes:
-    from xhtml2pdf import pisa
+async def _html_to_pdf_bytes_playwright_async(html_string: str) -> bytes:
+    """
+    使用 Playwright(Chromium) 将 HTML 转为 PDF。
+    优点：对现代 CSS（含 flex）支持更好，接近浏览器预览效果。
+    """
+    try:
+        from playwright.async_api import async_playwright
+    except Exception as e:
+        raise RuntimeError(
+            "Playwright 不可用，请先安装依赖：pip install playwright "
+            "并执行：playwright install chromium。"
+        ) from e
 
-    from core.services.print.pdf_cjk_font import ensure_reportlab_cjk_font, inject_cjk_font_css
+    launch_args: list[str] = []
+    # Linux 容器常见需求；Windows 下可保持空参数
+    if platform.system() == "Linux":
+        launch_args.extend(["--no-sandbox", "--disable-dev-shm-usage"])
 
-    font_name = ensure_reportlab_cjk_font()
-    html_for_pisa = inject_cjk_font_css(html_string, font_name)
-    out = BytesIO()
-    status = pisa.CreatePDF(html_for_pisa, dest=out, encoding="utf-8")
-    if status.err:
-        raise RuntimeError(f"xhtml2pdf 渲染错误计数: {status.err}")
-    pdf_bytes = out.getvalue()
-    if not pdf_bytes:
-        raise RuntimeError("xhtml2pdf 产出为空")
-    return pdf_bytes
+    from infra.config.infra_config import infra_settings as settings
+    base_url = settings.BASE_URL
+    if not base_url:
+        host = "localhost" if settings.HOST == "0.0.0.0" else settings.HOST
+        base_url = f"http://{host}:{settings.PORT}"
+    html_for_playwright = _inject_base_href_for_playwright(html_string, base_url)
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=launch_args)
+        try:
+            page = await browser.new_page()
+            # 打印模板中常含受鉴权图片/外链资源，networkidle 在部分场景会无意义超时；
+            # 关键的本地后端图片已在外层被预先内联为 data URL，
+            # 这里使用 domcontentloaded 更稳，后续由 print_background + CSS 控制输出一致性。
+            await page.set_content(html_for_playwright, wait_until="domcontentloaded")
+            return await page.pdf(
+                format="A4",
+                print_background=True,
+                prefer_css_page_size=True,
+                margin={"top": "0mm", "right": "0mm", "bottom": "0mm", "left": "0mm"},
+            )
+        finally:
+            await browser.close()
 
 
-def _html_to_pdf_bytes_weasyprint(html_string: str) -> bytes:
-    from weasyprint import HTML
+def _run_playwright_with_dedicated_loop(html_string: str) -> bytes:
+    """
+    在线程中创建独立事件循环执行 Playwright，避免 Windows 下默认线程 loop
+    触发 subprocess NotImplementedError。
+    """
+    if platform.system() == "Windows":
+        loop = asyncio.ProactorEventLoop()
+    else:
+        loop = asyncio.new_event_loop()
+    try:
+        asyncio.set_event_loop(loop)
+        return loop.run_until_complete(_html_to_pdf_bytes_playwright_async(html_string))
+    finally:
+        try:
+            loop.run_until_complete(loop.shutdown_asyncgens())
+        except Exception:
+            pass
+        asyncio.set_event_loop(None)
+        loop.close()
 
-    return HTML(string=html_string, base_url="/").write_pdf()
+
+async def _html_to_pdf_bytes_playwright(html_string: str) -> bytes:
+    # 在线程中运行并显式设置事件循环策略，规避 Windows 下 subprocess NotImplementedError。
+    return await asyncio.to_thread(_run_playwright_with_dedicated_loop, html_string)
 
 
-def _html_to_pdf_bytes(html_string: str) -> bytes:
+async def _html_to_pdf_bytes(html_string: str, *, tenant_id: Optional[int] = None) -> Tuple[bytes, str]:
     """
     将完整 HTML 转为 PDF。
-    - auto：优先 WeasyPrint，失败则 xhtml2pdf
-    - weasyprint：仅 WeasyPrint（生产可配合 Linux + GTK 固定版式）
-    - xhtml2pdf：仅 xhtml2pdf（免 GTK，版式可能与 WeasyPrint 不同）
+    当前仅支持 Playwright（需安装 Chromium）。
+
+    若提供 tenant_id，会先把 HTML 中指向后端 /api/v{n}/core/files/{uuid}/download 的
+    <img> 资源内联为 base64 data URL，避免 Playwright 浏览器跨进程访问后端时
+    出现 token 过期 / 网络拒绝 / CORS 等导致的"图片裂掉"。
     """
-    pref = _html_to_pdf_engine_pref()
-    weasy_err: Optional[BaseException] = None
-
-    if pref == "xhtml2pdf":
+    prepared_html = html_string
+    if tenant_id is not None:
         try:
-            return _html_to_pdf_bytes_xhtml2pdf(html_string)
+            prepared_html = await _inline_local_file_images_in_html(tenant_id, html_string)
         except Exception as e:
-            raise BusinessLogicError(
-                "无法使用 xhtml2pdf 生成 PDF。"
-                f" 详情: {e!s}"
-            ) from e
-
-    if pref == "weasyprint":
-        try:
-            return _html_to_pdf_bytes_weasyprint(html_string)
-        except Exception as e:
-            raise BusinessLogicError(
-                "无法使用 WeasyPrint 生成 PDF。请检查 GTK 依赖或改用 RIVEREDGE_HTML_TO_PDF_ENGINE=auto|xhtml2pdf。"
-                f" 详情: {e!s}"
-            ) from e
-
+            logger.warning("打印 HTML 图片内联失败，回退使用原始 HTML: {}", e)
+            prepared_html = html_string
     try:
-        return _html_to_pdf_bytes_weasyprint(html_string)
-    except (ImportError, OSError, RuntimeError) as e:
-        weasy_err = e
-        logger.warning("WeasyPrint 不可用或生成失败，尝试 xhtml2pdf：{}", e)
+        return await _html_to_pdf_bytes_playwright(prepared_html), "playwright"
     except Exception as e:
-        weasy_err = e
-        logger.warning("WeasyPrint 生成 PDF 异常，尝试 xhtml2pdf：{}", e)
-
-    try:
-        return _html_to_pdf_bytes_xhtml2pdf(html_string)
-    except Exception as e2:
+        pref = _html_to_pdf_engine_pref()
+        if pref and pref not in ("", "playwright", "auto"):
+            logger.warning("检测到已废弃 PDF 引擎配置 {}，当前仅支持 playwright", pref)
+        logger.exception("Playwright 生成 PDF 失败")
+        err_detail = f"{type(e).__name__}: {e!r}"
         raise BusinessLogicError(
-            "无法生成 PDF：WeasyPrint 与 xhtml2pdf 均失败。"
-            "可选：在 Windows 安装 GTK 运行时以使用 WeasyPrint（见官方文档），或设置 RIVEREDGE_HTML_TO_PDF_ENGINE=xhtml2pdf。"
-            f" WeasyPrint: {weasy_err!s}；xhtml2pdf: {e2!s}"
-        ) from e2
+            "无法使用 Playwright 生成 PDF。请确认已安装 playwright 并执行 "
+            "`playwright install chromium`，并在后端进程环境设置 "
+            "RIVEREDGE_HTML_TO_PDF_ENGINE=playwright。"
+            f" 详情: {err_detail}"
+        ) from e
 
 
 def _quotation_formal_print_allowed(quotation: Quotation) -> bool:
@@ -222,6 +439,48 @@ async def _material_image_data_url_for_pdfme(tenant_id: int, images: Any) -> str
     return f"data:{mime};base64,{b64}"
 
 
+def _is_uuid_like(value: str) -> bool:
+    try:
+        _uuid.UUID(value)
+        return True
+    except Exception:
+        return False
+
+
+async def _resolve_company_logo_for_print(tenant_id: int) -> str:
+    """
+    解析站点 Logo 为可打印值：
+    - 优先返回 data URL（UUID 文件）
+    - 其次返回 http(s)/data URL 原值
+    - 其他格式返回空串
+    """
+    try:
+        from core.services.system.site_setting_service import SiteSettingService
+        from infra.config.infra_config import infra_settings as settings
+
+        settings = await SiteSettingService.get_settings_with_platform_fallback(tenant_id)
+        logo_raw = str((settings or {}).get("site_logo") or "").strip()
+        if not logo_raw:
+            return ""
+        if logo_raw.startswith("data:image/"):
+            return logo_raw
+        if logo_raw.startswith("http://") or logo_raw.startswith("https://"):
+            return logo_raw
+        if logo_raw.startswith("/"):
+            base_url = settings.BASE_URL
+            if not base_url:
+                host = "localhost" if settings.HOST == "0.0.0.0" else settings.HOST
+                base_url = f"http://{host}:{settings.PORT}"
+            return f"{base_url}{logo_raw}"
+        if _is_uuid_like(logo_raw):
+            data_url = await _material_image_data_url_for_pdfme(tenant_id, logo_raw)
+            return data_url or ""
+        return ""
+    except Exception as e:
+        logger.warning("解析打印 Logo 失败 tenant_id={}: {}", tenant_id, e)
+        return ""
+
+
 class DocumentPrintService:
     """单据打印服务"""
 
@@ -258,20 +517,22 @@ class DocumentPrintService:
         "delivery_notice": "DELIVERY_NOTICE_PRINT",
     }
 
-    def _finalize_print_payload(
+    async def _finalize_print_payload(
         self,
         *,
+        tenant_id: Optional[int] = None,
         document_type: str,
         document_id: int,
         template_code: Optional[str],
         html_content: str,
         output_format: str,
         message: str,
+        pdf_engine_used: Optional[str] = None,
     ) -> Dict[str, Any]:
         """统一在 HTML 成稿后按 output_format 返回 html 或 base64 PDF。"""
         of = (output_format or "html").lower()
         if of == "pdf":
-            pdf_bytes = _html_to_pdf_bytes(html_content)
+            pdf_bytes, actual_engine = await _html_to_pdf_bytes(html_content, tenant_id=tenant_id)
             return {
                 "success": True,
                 "document_type": document_type,
@@ -281,6 +542,7 @@ class DocumentPrintService:
                 "content": base64.b64encode(pdf_bytes).decode("ascii"),
                 "content_encoding": "base64",
                 "mime_type": "application/pdf",
+                "pdf_engine_used": actual_engine,
                 "message": message,
             }
         return {
@@ -290,6 +552,7 @@ class DocumentPrintService:
             "template_code": template_code,
             "output_format": "html",
             "content": html_content,
+            "pdf_engine_used": pdf_engine_used or "html",
             "message": message,
         }
 
@@ -318,7 +581,13 @@ class DocumentPrintService:
         """
         # 获取单据数据
         document_data = await self._get_document_data(tenant_id, document_type, document_id)
-        
+        # 补充通用模板变量：company_logo（供设计器 Logo 组件/字段引用）
+        if not document_data.get("company_logo"):
+            document_data["company_logo"] = await _resolve_company_logo_for_print(tenant_id)
+        # 兼容历史模板字段名 {{ logo }}
+        if not document_data.get("logo") and document_data.get("company_logo"):
+            document_data["logo"] = document_data["company_logo"]
+
         # 查找打印模板：优先 template_uuid，其次 template_code，最后默认模板
         try:
             from core.models.print_template import PrintTemplate
@@ -341,7 +610,7 @@ class DocumentPrintService:
                     is_active=True,
                     deleted_at__isnull=True
                 ).first()
-            
+
             if not template:
                 # 如果没有找到模板，返回基础HTML格式
                 logger.warning(f"未找到打印模板 {template_code}，使用默认格式")
@@ -351,7 +620,8 @@ class DocumentPrintService:
                 await self._maybe_stamp_quotation_formal(
                     tenant_id, document_type, document_id
                 )
-                return self._finalize_print_payload(
+                return await self._finalize_print_payload(
+                    tenant_id=tenant_id,
                     document_type=document_type,
                     document_id=document_id,
                     template_code=template_code,
@@ -367,7 +637,8 @@ class DocumentPrintService:
             await self._maybe_stamp_quotation_formal(
                 tenant_id, document_type, document_id
             )
-            return self._finalize_print_payload(
+            return await self._finalize_print_payload(
+                tenant_id=tenant_id,
                 document_type=document_type,
                 document_id=document_id,
                 template_code=template_code,
@@ -392,7 +663,8 @@ class DocumentPrintService:
             await self._maybe_stamp_quotation_formal(
                 tenant_id, document_type, document_id
             )
-            return self._finalize_print_payload(
+            return await self._finalize_print_payload(
+                tenant_id=tenant_id,
                 document_type=document_type,
                 document_id=document_id,
                 template_code=template_code or getattr(template, "code", None),
@@ -419,7 +691,8 @@ class DocumentPrintService:
                 tenant_id, document_type, document_id
             )
 
-        return self._finalize_print_payload(
+        return await self._finalize_print_payload(
+            tenant_id=tenant_id,
             document_type=document_type,
             document_id=document_id,
             template_code=template_code or getattr(template, "code", None),
