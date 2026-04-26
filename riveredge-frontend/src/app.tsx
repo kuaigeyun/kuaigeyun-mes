@@ -616,7 +616,10 @@ export default function App() {
   const responsiveThemeConfig = React.useMemo(() => {
     const { algorithm, token } = finalThemeConfig;
     const isSmall = screenSize.isMobile || screenSize.isTablet;
-    
+    /** 与 @ant-design/pro-layout 侧栏 collapsedWidth=64 一致。默认 Menu 令牌的 collapsedWidth 常为 2*controlHeightLG(≈80)，
+     * 与 64px 侧栏不同宽时，inline-collapsed 用「百分比 padding」的居中在错误宽度上计算，整列会表现成贴左。 */
+    const proLayoutSiderCollapsedWidth = 64;
+
     return {
       algorithm,
       token: {
@@ -627,6 +630,11 @@ export default function App() {
         // 针对手机端进一步微调基础间距
         padding: isSmall ? 12 : 16,
         margin: isSmall ? 12 : 16,
+      },
+      components: {
+        Menu: {
+          collapsedWidth: proLayoutSiderCollapsedWidth,
+        },
       },
     };
   }, [finalThemeConfig, screenSize]);

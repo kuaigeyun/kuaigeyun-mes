@@ -2,13 +2,13 @@ import React from 'react';
 import { Button, Dropdown, Space } from 'antd';
 
 /**
- * 统一规则：
- * - 详情/编辑/删除固定排在前 3 位（存在时）
- * - 第 4 位放最常用动作（按 priority 或语义推断）
- * - 总数 <= 5：直接展示全部
- * - 总数 > 5：仅展示前 4 + 第 5 个「更多」
+ * 统一规则（2024-2025 最新设计趋势）：
+ * - 重点突出：详情/编辑固定排在前位。
+ * - 去线条化：取消垂直分割线，改用 12px 间距。
+ * - 感知反馈：采用 type="text" 幽灵按钮，悬浮时显示背景。
+ * - 精简收纳：总数 > 3 时收纳进入「更多」。
  */
-export const ROW_ACTIONS_DIRECT_MAX = 5;
+export const ROW_ACTIONS_DIRECT_MAX = 3;
 
 function readNodeText(node: React.ReactNode): string {
   if (node == null || typeof node === 'boolean') return '';
@@ -68,19 +68,41 @@ function normalizeAndSortActions(nodes: React.ReactNode[]): React.ReactNode[] {
   return withMeta.map((x) => x.node);
 }
 
+function findInteractiveElement(node: React.ReactNode): React.ReactElement | null {
+  if (!React.isValidElement(node)) return null;
+  if (node.type === Button || (typeof node.type === 'string' && node.type === 'a')) {
+    return node;
+  }
+  if (node.props?.children) {
+    if (React.isValidElement(node.props.children)) {
+      return findInteractiveElement(node.props.children);
+    }
+    if (Array.isArray(node.props.children)) {
+      for (const child of node.props.children) {
+        const found = findInteractiveElement(child);
+        if (found) return found;
+      }
+    }
+  }
+  return null;
+}
+
 function toMenuItem(node: React.ReactNode, key: string) {
   const text = normalizeActionLabelText(readNodeText(node)) || '操作';
-  if (React.isValidElement(node) && node.type === Button) {
-    const props = (node.props || {}) as Record<string, unknown>;
+  const interactive = findInteractiveElement(node);
+  
+  if (interactive) {
+    const props = (interactive.props || {}) as Record<string, unknown>;
     const onClick = typeof props.onClick === 'function' ? (props.onClick as () => void) : undefined;
     return {
       key,
       label: text,
-      danger: !!props.danger,
+      danger: !!props.danger || resolveButtonTone(text).danger,
       disabled: !!props.disabled,
       onClick,
     };
   }
+  
   return {
     key,
     label: text,
@@ -144,15 +166,12 @@ function normalizeActionNode(node: React.ReactNode): React.ReactNode {
   return node;
 }
 
-function resolveButtonTone(text: string): { type: 'default' | 'primary'; danger?: boolean } {
+function resolveButtonTone(text: string): { type: 'text'; danger?: boolean } {
   const normalized = text.replace(/\s+/g, '');
   if (/删除|驳回|报废/.test(normalized)) {
-    return { type: 'default', danger: true };
+    return { type: 'text', danger: true };
   }
-  if (/详情|编辑|下推|提交|确认|审核|通过/.test(normalized)) {
-    return { type: 'primary' };
-  }
-  return { type: 'default' };
+  return { type: 'text' };
 }
 
 function normalizeButtonNode(node: React.ReactElement): React.ReactElement {
@@ -180,7 +199,7 @@ export function renderRowActionsOverflow(
   const sorted = normalizeAndSortActions(nodes);
   if (sorted.length <= directMax) {
     return (
-      <Space size="small" wrap>
+      <Space size={12} wrap>
         {sorted}
       </Space>
     );
@@ -189,7 +208,7 @@ export function renderRowActionsOverflow(
   const overflow = sorted.slice(Math.max(1, directMax - 1));
 
   return (
-    <Space size="small" wrap>
+    <Space size={12} wrap>
       {inline}
       <Dropdown
         menu={{
@@ -197,8 +216,8 @@ export function renderRowActionsOverflow(
         }}
         trigger={['click']}
       >
-        <Button type="default" size="small">
-          更多
+        <Button type="text" size="small">
+          {overflow.length > 0 ? '更多' : ''}
         </Button>
       </Dropdown>
     </Space>

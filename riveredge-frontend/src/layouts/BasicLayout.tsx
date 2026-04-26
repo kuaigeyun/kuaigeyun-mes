@@ -664,6 +664,21 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const screens = Grid.useBreakpoint?.() ?? {};
   const isMobileOrTablet = screens.lg === false;
   const [isFullscreen, setIsFullscreen] = useState(false);
+  /**
+   * 侧栏收起时，antd 会把 `display: inline-flex` 等写进 `span.ant-menu-title-content` 的 **style**（与 Pro 的 CSS 叠加），
+   * 在 DevTools 里「圈掉」的就是这一段。仅选子 `span` 无法命中，因为 Pro 的标题包装是 `div...-item-title`。
+   * 在 Menu 的语义 styles 里覆盖，等价于删掉那段 inline。展开侧栏不传入，避免影响非收起态。
+   */
+  const collapsedSiderMenuStyles = useMemo<MenuProps['styles'] | undefined>(
+    () =>
+      !isFullscreen && collapsed
+        ? {
+            itemContent: { display: 'block' },
+            subMenu: { itemContent: { display: 'block' } },
+          }
+        : undefined,
+    [collapsed, isFullscreen]
+  );
   const [techStackModalOpen, setTechStackModalOpen] = useState(false);
   const [themeEditorOpen, setThemeEditorOpen] = useState(false);
   const [languageDropdownOpen, setLanguageDropdownOpen] = useState(false);
@@ -2595,17 +2610,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           padding: 0 !important;
           margin: 0 !important;
         }
-          font-weight: normal !important;
-          padding: 12px 16px 12px 0 !important;
-          margin: 0 0 8px 0 !important;
-          border-bottom: 1px solid var(--river-divider-color) !important;
-          background: transparent !important;
-          cursor: default !important;
-          user-select: none !important;
-          pointer-events: none !important;
-          text-transform: none !important;
-          letter-spacing: 0 !important;
-        }
         /* 浅色模式下，菜单收起时弹出的二级菜单中的分组标题 - 使用深色文字 */
         /* 弹出菜单通常在 body 下，不在 .ant-pro-layout 内，所以使用全局选择器 */
         /* 只在浅色模式下应用（非深色模式），确保优先级足够高，放在最后以覆盖其他规则 */
@@ -2638,13 +2642,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         /* ==================== 一级菜单项 - 完全遵循 Ant Design 原生样式 ==================== */
         /* 不做任何修改，完全使用 Ant Design 的原生样式和垂直居中 */
         /* 统一所有一级菜单项的图标样式 */
-        /* 统一所有菜单图标大小：16px，背景容器：20x20 */
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item .ant-menu-item-icon,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item .anticon,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-item-icon,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title .anticon,
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item .ant-menu-item-icon,
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item .anticon {
+        /* 统一所有菜单图标大小：16px，背景容器：20x20（仅展开态；收起态见文末，避免 margin-right 压过 antd 居中） */
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-item .ant-menu-item-icon,
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-item .anticon,
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-submenu-title .ant-menu-item-icon,
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-submenu-title .anticon,
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) > .ant-menu-item .ant-menu-item-icon,
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) > .ant-menu-item .anticon {
           font-size: 16px !important;
           width: 16px !important;
           height: 16px !important;
@@ -2663,10 +2667,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           vertical-align: middle !important;
         }
         /* 为图标添加统一的 20x20 背景容器（使用伪元素，配合主题色但更淡） */
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item .ant-menu-item-icon::before,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item .anticon::before,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-item-icon::before,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title .anticon::before {
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-item .ant-menu-item-icon::before,
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-item .anticon::before,
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-submenu-title .ant-menu-item-icon::before,
+        .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-submenu-title .anticon::before {
           content: '' !important;
           position: absolute !important;
           left: 50% !important;
@@ -4235,6 +4239,70 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           color: var(--ant-colorText) !important;
         }
         ` : ''}
+        /* ========== 侧栏收起（inline-collapsed）图标居中：根因修复 ========== */
+        /* 1) 曾用 margin-right:12px !important 未排除收起态，覆盖 antd 对图标的 margin:0，视觉整体偏左。已在上方改为仅 :not(.ant-menu-inline-collapsed)。 */
+        /* 2) Pro BaseMenu 令一级项 padding-inline:0 且 .ant-menu-title-content 仍 flex 占位时，用主轴居中 + 收标题宽。 */
+        /* 3) ant-pro-sider-menu 与 ant-menu 在同一 ul 上，禁止使用中间带空格的 .ant-pro-sider-menu .ant-menu 误选子代。 */
+        .ant-layout-sider-collapsed .ant-layout-sider-children {
+          padding-inline: 0 !important;
+        }
+        .ant-layout-sider-collapsed
+          .ant-pro-sider-menu.ant-menu.ant-menu-inline.ant-menu-inline-collapsed
+          > .ant-menu-item,
+        .ant-layout-sider-collapsed
+          .ant-pro-sider-menu.ant-menu.ant-menu-inline.ant-menu-inline-collapsed
+          > .ant-menu-item-group
+          > .ant-menu-item-group-list
+          > .ant-menu-item,
+        .ant-layout-sider-collapsed
+          .ant-pro-sider-menu.ant-menu.ant-menu-inline.ant-menu-inline-collapsed
+          > .ant-menu-item-group
+          > .ant-menu-item-group-list
+          > .ant-menu-submenu
+          > .ant-menu-submenu-title,
+        .ant-layout-sider-collapsed
+          .ant-pro-sider-menu.ant-menu.ant-menu-inline.ant-menu-inline-collapsed
+          > .ant-menu-submenu
+          > .ant-menu-submenu-title {
+          justify-content: center !important;
+        }
+        .ant-layout-sider-collapsed
+          .ant-pro-sider-menu.ant-menu.ant-menu-inline.ant-menu-inline-collapsed
+          > .ant-menu-item
+          .ant-menu-title-content,
+        .ant-layout-sider-collapsed
+          .ant-pro-sider-menu.ant-menu.ant-menu-inline.ant-menu-inline-collapsed
+          > .ant-menu-item-group
+          > .ant-menu-item-group-list
+          > .ant-menu-item
+          .ant-menu-title-content,
+        .ant-layout-sider-collapsed
+          .ant-pro-sider-menu.ant-menu.ant-menu-inline.ant-menu-inline-collapsed
+          > .ant-menu-item-group
+          > .ant-menu-item-group-list
+          > .ant-menu-submenu
+          > .ant-menu-submenu-title
+          .ant-menu-title-content,
+        .ant-layout-sider-collapsed
+          .ant-pro-sider-menu.ant-menu.ant-menu-inline.ant-menu-inline-collapsed
+          > .ant-menu-submenu
+          > .ant-menu-submenu-title
+          .ant-menu-title-content {
+          /* 与 menuProps.styles.itemContent 一致，盖过 Pro/Token 的 inline-flex，避免在 DevTools 里「删不掉」的观感 */
+          display: block !important;
+          flex: 0 0 0 !important;
+          min-width: 0 !important;
+          max-width: 0 !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          overflow: hidden !important;
+        }
+        .ant-layout-sider-collapsed .ant-pro-sider-footer,
+        .ant-layout-sider-collapsed .ant-pro-sider-footer > div {
+          width: 100% !important;
+          max-width: 100% !important;
+          box-sizing: border-box !important;
+        }
       `}</style>
       <ProLayout
         title={siteName}
@@ -4822,6 +4890,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }}
         menuProps={{
           mode: 'inline',
+          /** 显式与侧栏收起同步。Pro BaseMenu 在未传时仅依赖 Sider 上下文，混排/时序下偶发与 props 不一致。 */
+          inlineCollapsed: !isFullscreen && collapsed,
+          /** 见 `collapsedSiderMenuStyles`：覆盖 title-content 上 antd/Pro 注入的 display，避免仅靠 CSS 选错节点无效。 */
+          styles: collapsedSiderMenuStyles,
           openKeys: openKeys, // 受控的 openKeys，合并用户手动展开的菜单和当前路径的父菜单
           selectedKeys: selectedKeys, // 受控的 selectedKeys，只选中精确匹配的路径
           // ⚠️ 关键修复：阻止 Ant Design Menu 的默认链接行为，防止整页刷新
@@ -4891,8 +4963,18 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             kuaiPaths.forEach((p) => prefetchKuaizhizaoRoute(p));
             if (systemPaths.length > 0) prefetchSystemRoutes(systemPaths);
           };
+          /* 侧栏收起时不要写 display:inline-flex + width:100%：会套在 .ant-menu-title-content 与 Pro 的 item-title 之间，
+           * 在 DevTools 里看到的就是这一层，挤压图标。展开态保留 flex 以便父级子菜单标题与预取热区排布。 */
+          const siderForMenuCollapsed = !isFullscreen && collapsed;
           return (
-            <span onMouseEnter={handleEnter} style={{ display: 'inline-flex', alignItems: 'center', width: '100%' }}>
+            <span
+              onMouseEnter={handleEnter}
+              style={
+                siderForMenuCollapsed
+                  ? { display: 'block', width: '100%' }
+                  : { display: 'inline-flex', alignItems: 'center', width: '100%' }
+              }
+            >
               {defaultDom}
             </span>
           );
