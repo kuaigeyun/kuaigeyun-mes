@@ -8,6 +8,8 @@
 
 import json
 import re
+import io
+import base64
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Dict, Mapping, Optional
@@ -129,6 +131,80 @@ def _jinja_filter_number(value: Any, digits: int = 2) -> str:
         return str(value)
 
 
+def _jinja_filter_qrcode(value: Any, size: int = 120) -> str:
+    """生成二维码并返回 base64 data URL"""
+    if not value:
+        return ""
+    try:
+        import qrcode
+        from PIL import Image
+
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=1,
+        )
+        qr.add_data(str(value))
+        qr.make(fit=True)
+
+        img = qr.make_image(fill_color="black", back_color="white")
+        # Resize according to size param (roughly)
+        # box_size=10 means 10px per module.
+        # For a better control, we resize the final image.
+        resampling = getattr(Image, "Resampling", None)
+        if resampling is not None:
+            resample_filter = resampling.LANCZOS
+        else:
+            # Pillow<9 兼容分支
+            resample_filter = getattr(Image, "LANCZOS", getattr(Image, "ANTIALIAS", Image.BICUBIC))
+        img = img.resize((size, size), resample_filter)
+
+        buffered = io.BytesIO()
+        img.save(buffered, format="PNG")
+        img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+        return f"data:image/png;base64,{img_str}"
+    except Exception as e:
+        return ""
+
+
+def _jinja_filter_barcode(value: Any, fmt: str = "CODE128", height: int = 40) -> str:
+    """生成条形码并返回 base64 data URL"""
+    if not value:
+        return ""
+    try:
+        import barcode
+        from barcode.writer import ImageWriter
+
+        fmt_map = {
+            "CODE128": "code128",
+            "EAN13": "ean13",
+            "EAN": "ean13",
+            "UPC": "upca",
+            "CODE39": "code39",
+            "ITF": "itf",
+        }
+        b_type = fmt_map.get(fmt.upper(), "code128")
+        coder = barcode.get_barcode_class(b_type)
+        
+        # python-barcode options
+        # module_height is in mm by default in some writers, but in ImageWriter it's px?
+        # Actually ImageWriter uses dpi (default 300).
+        options = {
+            "module_height": height / 2, # Rough adjustment
+            "text_distance": 1,
+            "font_size": 8,
+            "quiet_zone": 2,
+        }
+        
+        buffered = io.BytesIO()
+        coder(str(value), writer=ImageWriter()).write(buffered, options=options)
+        img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+        return f"data:image/png;base64,{img_str}"
+    except Exception as e:
+        return ""
+
+
 def _build_jinja_environment(
     *,
     strict_variables: bool = False,
@@ -147,6 +223,8 @@ def _build_jinja_environment(
     env.filters["money"] = _jinja_filter_money
     env.filters["date"] = _jinja_filter_date
     env.filters["number"] = _jinja_filter_number
+    env.filters["qrcode"] = _jinja_filter_qrcode
+    env.filters["barcode"] = _jinja_filter_barcode
     if extra_filters:
         for k, v in extra_filters.items():
             env.filters[k] = v

@@ -370,74 +370,254 @@ class PrintTemplateService:
         if not isinstance(blocks, list):
             raise ValidationError("designer_schema.blocks 必须为数组")
 
-        lines: list[str] = []
-        for index, blk in enumerate(blocks):
-            if not isinstance(blk, dict):
-                warnings.append(f"block[{index}] 非对象，已跳过")
-                continue
-            blk_type = str(blk.get("type") or "").strip().lower()
-            if blk_type == "text":
-                lines.append(str(blk.get("content") or ""))
-            elif blk_type == "field":
-                field_key = str(blk.get("key") or "").strip()
-                if not field_key:
-                    warnings.append(f"block[{index}] field 缺少 key，已跳过")
-                    continue
-                lines.append(f"{{{{ {field_key} }}}}")
-            elif blk_type == "if":
-                condition = str(blk.get("condition") or "").strip()
-                content = str(blk.get("content") or "")
-                if not condition:
-                    warnings.append(f"block[{index}] if 缺少 condition，已跳过")
-                    continue
-                lines.append(f"{{% if {condition} %}}{content}{{% endif %}}")
-            elif blk_type == "for":
-                item = str(blk.get("item") or "item").strip()
-                collection = str(blk.get("collection") or "").strip()
-                row_template = str(blk.get("template") or "")
-                if not collection:
-                    warnings.append(f"block[{index}] for 缺少 collection，已跳过")
-                    continue
-                if not row_template:
-                    warnings.append(f"block[{index}] for 缺少 template，将生成空循环体")
-                lines.append(f"{{% for {item} in {collection} %}}{row_template}{{% endfor %}}")
-            elif blk_type == "detail_table":
-                collection = str(blk.get("collection") or "").strip()
-                row_alias = str(blk.get("row_alias") or "row").strip()
-                columns = blk.get("columns")
-                if not collection:
-                    warnings.append(f"block[{index}] detail_table 缺少 collection，已跳过")
-                    continue
-                if not isinstance(columns, list) or len(columns) == 0:
-                    warnings.append(f"block[{index}] detail_table 缺少 columns，已跳过")
-                    continue
-                header_cells: list[str] = []
-                body_cells: list[str] = []
-                for col in columns:
-                    if not isinstance(col, dict):
-                        continue
-                    label = str(col.get("label") or "").strip()
-                    key = str(col.get("key") or "").strip()
-                    if not key:
-                        continue
-                    header_cells.append(f"<th>{label or key}</th>")
-                    body_cells.append(f"<td>{{{{ {row_alias}.{key} }}}}</td>")
-                if len(body_cells) == 0:
-                    warnings.append(f"block[{index}] detail_table columns 无有效 key，已跳过")
-                    continue
-                table_html = (
-                    "<table border=\"1\" cellpadding=\"4\" style=\"width:100%;border-collapse:collapse;\">"
-                    f"<thead><tr>{''.join(header_cells)}</tr></thead>"
-                    f"<tbody>{{% for {row_alias} in {collection} %}}<tr>{''.join(body_cells)}</tr>{{% endfor %}}</tbody>"
-                    "</table>"
-                )
-                lines.append(table_html)
-            elif blk_type == "html":
-                lines.append(str(blk.get("content") or ""))
-            else:
-                warnings.append(f"block[{index}] 类型 {blk_type or 'unknown'} 暂不支持，已跳过")
+        page_size = str(schema.get("pageSize") or "A4")
+        orientation = str(schema.get("orientation") or "portrait")
 
-        compiled = "\n".join(lines).strip()
+        # Map paper size keys to dimensions for @page
+        paper_size_map = {
+            "A4": "210mm 297mm",
+            "A3": "297mm 420mm",
+            "A5": "148mm 210mm",
+            "Letter": "216mm 279mm",
+            "Legal": "216mm 356mm",
+            "A4-2": "210mm 148.5mm",
+            "A4-3": "210mm 99mm",
+            "241-1": "241mm 280mm",
+            "241-2": "241mm 140mm",
+            "241-3": "241mm 93mm",
+        }
+        page_size_val = paper_size_map.get(page_size, page_size)
+
+        margins = schema.get("margins", {"top": 10, "right": 10, "bottom": 10, "left": 10})
+        margin_str = f"{margins.get('top', 10)}mm {margins.get('right', 10)}mm {margins.get('bottom', 10)}mm {margins.get('left', 10)}mm"
+
+
+
+        def _get_style_str(blk: dict) -> str:
+            style = blk.get("style", {})
+            if not style:
+                return ""
+            css_parts = []
+            if style.get("fontSize"):
+                css_parts.append(f"font-size:{style['fontSize']};")
+            if style.get("fontWeight"):
+                css_parts.append(f"font-weight:{style['fontWeight']};")
+            if style.get("textAlign"):
+                css_parts.append(f"text-align:{style['textAlign']};")
+            if style.get("color"):
+                css_parts.append(f"color:{style['color']};")
+            if style.get("letterSpacing"):
+                css_parts.append(f"letter-spacing:{style['letterSpacing']};")
+            return "".join(css_parts)
+
+        lines: list[str] = []
+        def _render_blocks(blocks_list: list, warnings_list: list) -> str:
+            lines: list[str] = []
+            for index, blk in enumerate(blocks_list):
+                if not isinstance(blk, dict):
+                    warnings_list.append(f"block[{index}] 非对象，已跳过")
+                    continue
+                blk_type = str(blk.get("type") or "").strip().lower()
+                
+                if blk_type == "text":
+                    content = str(blk.get("content") or "")
+                    tag = str(blk.get("tag") or "div").strip().lower()
+                    style_str = _get_style_str(blk)
+                    # For semantic tags like h1-h4, p, etc., we always wrap. 
+                    # Default div also wraps if there is style.
+                    if tag != "div":
+                        # Add margin:0 to match designer behavior
+                        s = f'margin:0;{style_str}'
+                        lines.append(f'<{tag} style="{s}">{content}</{tag}>')
+                    elif style_str:
+                        lines.append(f'<div style="{style_str}">{content}</div>')
+                    else:
+                        lines.append(content)
+                elif blk_type == "field":
+                    field_key = str(blk.get("key") or "").strip()
+                    label = str(blk.get("label") or field_key).strip()
+                    show_label = blk.get("showLabel") is not False
+                    
+                    if not field_key:
+                        warnings_list.append(f"block[{index}] field 缺少 key，已跳过")
+                        continue
+                    
+                    content = f"{{{{ {field_key} }}}}"
+                    if show_label:
+                        content = f"{label}：{content}"
+                        
+                    style_str = _get_style_str(blk)
+                    # 保留多行字段（如备注）里的换行符，避免在 HTML 中被折叠为空格。
+                    field_style = f"{style_str}white-space:pre-wrap;"
+                    lines.append(f'<div style="{field_style}">{content}</div>')
+                elif blk_type == "if":
+                    condition = str(blk.get("condition") or "").strip()
+                    content = str(blk.get("content") or "")
+                    if not condition:
+                        warnings_list.append(f"block[{index}] if 缺少 condition，已跳过")
+                        continue
+                    lines.append(f"{{% if {condition} %}}{content}{{% endif %}}")
+                elif blk_type == "for":
+                    item = str(blk.get("item") or "item").strip()
+                    collection = str(blk.get("collection") or "").strip()
+                    row_template = str(blk.get("template") or "")
+                    if not collection:
+                        warnings_list.append(f"block[{index}] for 缺少 collection，已跳过")
+                        continue
+                    if not row_template:
+                        warnings_list.append(f"block[{index}] for 缺少 template，将生成空循环体")
+                    lines.append(f"{{% for {item} in {collection} %}}{row_template}{{% endfor %}}")
+                elif blk_type == "qrcode":
+                    field_key = str(blk.get("key") or "").strip()
+                    size = blk.get("size", 120)
+                    if not field_key:
+                        warnings_list.append(f"block[{index}] qrcode 缺少 key，已跳过")
+                        continue
+                    style_str = _get_style_str(blk)
+                    css = f' style="{style_str}"' if style_str else ""
+                    # 预览样本缺少字段时，回退为字段名，避免空 src 导致破图。
+                    qr_expr = f"{field_key} | default('{field_key}', true) | qrcode(size={size})"
+                    lines.append(f'<div{css}><img src="{{{{ {qr_expr} }}}}" width="{size}" height="{size}" /></div>')
+                elif blk_type == "barcode":
+                    field_key = str(blk.get("key") or "").strip()
+                    height = blk.get("height", 40)
+                    fmt = str(blk.get("format") or "CODE128").strip()
+                    if not field_key:
+                        warnings_list.append(f"block[{index}] barcode 缺少 key，已跳过")
+                        continue
+                    style_str = _get_style_str(blk)
+                    css = f' style="{style_str}"' if style_str else ""
+                    # 与二维码一致：字段缺失时回退为字段名，保证预览可见。
+                    barcode_expr = f"{field_key} | default('{field_key}', true) | barcode(fmt='{fmt}', height={height})"
+                    lines.append(f'<div{css}><img src="{{{{ {barcode_expr} }}}}" height="{height}" /></div>')
+                elif blk_type == "image":
+                    url = str(blk.get("url") or "").strip()
+                    width = blk.get("width", 100)
+                    height = blk.get("height", 60)
+                    preserve_ratio = blk.get("preserveAspectRatio", False)
+                    if not url:
+                        warnings_list.append(f"block[{index}] image 缺少 url，已跳过")
+                        continue
+                    style_str = _get_style_str(blk)
+                    wrapper_css = f' style="{style_str}"' if style_str else ""
+                    
+                    img_attrs = [f'src="{url}"', f'width="{width}"']
+                    img_styles = ["display:block;"]
+                    
+                    if preserve_ratio:
+                        img_styles.append("height:auto;")
+                    else:
+                        img_attrs.append(f'height="{height}"')
+                    
+                    img_style_str = " ".join(img_styles)
+                    lines.append(f'<div{wrapper_css}><img {" ".join(img_attrs)} style="{img_style_str}" /></div>')
+                elif blk_type == "spacer":
+                    height = blk.get("height", 20)
+                    lines.append(f'<div style="height: {height}px;"></div>')
+                elif blk_type == "divider":
+                    lines.append('<hr style="border: 0; border-top: 1px solid #d9d9d9; margin: 8px 0;" />')
+                elif blk_type == "columns":
+                    cols = blk.get("cols", [])
+                    horizontal_align = str(blk.get("horizontalAlign") or "start").strip().lower()
+                    vertical_align = str(blk.get("verticalAlign") or "top").strip().lower()
+                    justify_map = {
+                        "start": "flex-start",
+                        "center": "center",
+                        "end": "flex-end",
+                        "space-between": "space-between",
+                        "space-around": "space-around",
+                        "space-evenly": "space-evenly",
+                    }
+                    align_map = {
+                        "top": "flex-start",
+                        "middle": "center",
+                        "bottom": "flex-end",
+                        "stretch": "stretch",
+                    }
+                    cross_align_map = {
+                        "start": "flex-start",
+                        "center": "center",
+                        "end": "flex-end",
+                        "stretch": "stretch",
+                    }
+                    text_align_map = {
+                        "start": "left",
+                        "center": "center",
+                        "end": "right",
+                    }
+                    justify_content = justify_map.get(horizontal_align, "flex-start")
+                    align_items = align_map.get(vertical_align, "flex-start")
+                    col_html = []
+                    for col in cols:
+                        if not isinstance(col, dict): continue
+                        width = str(col.get("width") or "1")
+                        col_horizontal_align = str(col.get("horizontalAlign") or "start").strip().lower()
+                        col_vertical_align = str(col.get("verticalAlign") or "top").strip().lower()
+                        col_justify_content = align_map.get(col_vertical_align, "flex-start")
+                        col_align_items = cross_align_map.get(col_horizontal_align, "flex-start")
+                        col_text_align = text_align_map.get(col_horizontal_align, "left")
+                        inner_blocks = col.get("blocks", [])
+                        inner_html = _render_blocks(inner_blocks, warnings_list)
+                        col_html.append(
+                            f'<div style="flex: {width}; display: flex;">'
+                            f'<div style="display: flex; flex-direction: column; justify-content: {col_justify_content}; '
+                            f'align-items: {col_align_items}; text-align: {col_text_align}; width: 100%; min-height: 100%;">'
+                            f'{inner_html}'
+                            f'</div>'
+                            f'</div>'
+                        )
+                    lines.append(
+                        f'<div style="display: flex; gap: 16px; width: 100%; '
+                        f'justify-content: {justify_content}; align-items: stretch;">{ "".join(col_html) }</div>'
+                    )
+                elif blk_type == "detail_table":
+                    collection = str(blk.get("collection") or "").strip()
+                    row_alias = str(blk.get("row_alias") or "row").strip()
+                    columns = blk.get("columns")
+                    if not collection:
+                        warnings_list.append(f"block[{index}] detail_table 缺少 collection，已跳过")
+                        continue
+                    if not isinstance(columns, list) or len(columns) == 0:
+                        warnings_list.append(f"block[{index}] detail_table 缺少 columns，已跳过")
+                        continue
+                    header_cells: list[str] = []
+                    body_cells: list[str] = []
+                    for col in columns:
+                        if not isinstance(col, dict):
+                            continue
+                        label = str(col.get("label") or "").strip()
+                        key = str(col.get("key") or "").strip()
+                        if not key:
+                            continue
+                        header_cells.append(f"<th>{label or key}</th>")
+                        body_cells.append(f"<td>{{{{ {row_alias}.{key} }}}}</td>")
+                    if len(body_cells) == 0:
+                        warnings_list.append(f"block[{index}] detail_table columns 无有效 key，已跳过")
+                        continue
+                    table_html = (
+                        "<table border=\"1\" cellpadding=\"4\" style=\"width:100%;border-collapse:collapse;\">"
+                        f"<thead><tr>{''.join(header_cells)}</tr></thead>"
+                        f"<tbody>{{% for {row_alias} in {collection} %}}<tr>{''.join(body_cells)}</tr>{{% endfor %}}</tbody>"
+                        "</table>"
+                    )
+                    lines.append(table_html)
+                elif blk_type == "html":
+                    lines.append(str(blk.get("content") or ""))
+                else:
+                    warnings_list.append(f"block[{index}] 类型 {blk_type or 'unknown'} 暂不支持，已跳过")
+            return "\n".join(lines).strip()
+
+        compiled_body = _render_blocks(blocks, warnings)
+        parts = []
+        # Inject @page styles for printing
+        parts.append("<style>")
+        parts.append(f"  @page {{ size: {page_size_val} {orientation}; margin: {margin_str}; }}")
+        parts.append("  body { margin: 0; padding: 0; }")
+        parts.append("</style>")
+        if compiled_body:
+            parts.append(compiled_body)
+
+        compiled = "\n".join(parts).strip()
         if not compiled:
             raise ValidationError("编译后模板为空，请检查设计器数据")
         return {
