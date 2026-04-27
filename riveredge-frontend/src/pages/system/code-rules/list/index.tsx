@@ -8,7 +8,7 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
-import { App, Button, Tag, Alert, Input, theme, Card, Space, Collapse, Spin } from 'antd';
+import { App, Button, Tag, Alert, Input, theme, Space, Collapse, Spin } from 'antd';
 import { SearchOutlined, DatabaseOutlined } from '@ant-design/icons';
 import {
   createCodeRule,
@@ -56,7 +56,7 @@ interface PageListItemProps {
 }
 
 const PageListItem: React.FC<PageListItemProps> = React.memo(
-  ({ page, isSelected, enabledTagText, colors, onSelect }) => {
+  ({ page, isSelected, enabledTagText, colors, onSelect }: PageListItemProps) => {
     const handleClick = useCallback(() => onSelect(page.pageCode), [onSelect, page.pageCode]);
     return (
       <div
@@ -134,128 +134,6 @@ const CodeRuleListPage: React.FC = () => {
 
   // 规则组件状态（唯一数据源）
   const [ruleComponents, setRuleComponents] = useState<CodeRuleComponent[]>([]);
-
-  /**
-   * 获取所有编号规则（包括禁用的）
-   */
-  const getAllCodeRules = async (): Promise<CodeRule[]> => {
-    try {
-      // 后端 API 返回的是 List[CodeRuleResponse]（直接是数组），不是分页格式
-      // 直接调用 API 获取列表，使用 skip 和 limit 参数
-      const response = await apiRequest<CodeRule[]>('/core/code-rules', {
-        params: {
-          skip: 0,
-          limit: 1000,
-          // 不传递 is_active 参数，获取所有规则（包括禁用的）
-        },
-      });
-
-      // 后端直接返回数组
-      return Array.isArray(response) ? response : [];
-    } catch (error: any) {
-      console.error('获取编号规则列表失败:', error);
-      return [];
-    }
-  };
-
-  /**
-   * 根据已启用应用过滤页面：只展示已安装且启用的应用下的页面
-   */
-  const filterPagesByEnabledApps = (pages: CodeRulePageConfig[], apps: any[]): CodeRulePageConfig[] => {
-    const enabledPrefixes = apps.map((a) => a.route_path || `/apps/${a.code}`).filter(Boolean);
-    if (enabledPrefixes.length === 0) return [];
-    return pages.filter(
-      (p) =>
-        enabledPrefixes.some(
-          (prefix) => p.pagePath === prefix || p.pagePath.startsWith(prefix + '/'),
-        ),
-    );
-  };
-
-  /**
-   * 加载所有编号规则列表（可用于初始加载或操作后刷新）
-   */
-  const loadCodeRules = async (reloadPage?: boolean) => {
-    try {
-      const rules = await getAllCodeRules();
-      setAllRules(rules);
-      // 如果指定了重新加载页面且当前有选中的页面，重新加载该页面的规则数据到表单
-      if (reloadPage && selectedPageCode) {
-        handleSelectPage(selectedPageCode, rules);
-      }
-      return rules;
-    } catch (error: any) {
-      console.error('加载编号规则列表失败:', error);
-      return [];
-    }
-  };
-
-  /**
-   * 加载页面配置列表（并行加载应用列表和规则）
-   *
-   * 初始化选中项时不再使用 setTimeout 等 state 提交，
-   * 而是把刚计算出来的 configs/rules 显式传给 handleSelectPage / resetPageRuleForm。
-   */
-  const loadPageConfigsAndRules = async () => {
-    try {
-      setPageConfigsLoading(true);
-      const [allPages, apps, rules] = await Promise.all([
-        getCodeRulePages(),
-        getApplicationList({ is_installed: true, is_active: true }),
-        loadCodeRules(false),
-      ]);
-
-      const pages = filterPagesByEnabledApps(allPages, apps);
-
-      // 合并保存的配置和默认配置，确保所有页面都存在
-      let nextConfigs: CodeRulePageConfig[] = pages;
-      const savedConfigs = localStorage.getItem(getCodeRulePageConfigsKey());
-      if (savedConfigs) {
-        try {
-          const parsed = JSON.parse(savedConfigs);
-          nextConfigs = pages.map(defaultPage => {
-            const savedPage = parsed.find((p: any) => p.pageCode === defaultPage.pageCode);
-            if (savedPage) {
-              return {
-                ...defaultPage,
-                ruleCode: savedPage.ruleCode ?? defaultPage.ruleCode,
-                autoGenerate: savedPage.autoGenerate ?? defaultPage.autoGenerate,
-              };
-            }
-            return defaultPage;
-          });
-        } catch (error) {
-          console.error('加载功能页面配置失败:', error);
-          nextConfigs = pages;
-        }
-      }
-
-      setPageConfigs(nextConfigs);
-
-      // 默认选中第一个页面（仅当没有选中或当前选中项已不在列表中时）
-      if (nextConfigs.length > 0) {
-        const stillInList =
-          !!selectedPageCode && nextConfigs.some(p => p.pageCode === selectedPageCode);
-        if (!stillInList) {
-          const firstPageCode = nextConfigs[0].pageCode;
-          // 直接用本次算出的 configs / rules 同步驱动，setFieldsValue 是命令式的，
-          // 不依赖 state 已提交
-          handleSelectPage(firstPageCode, rules, nextConfigs);
-        }
-      }
-    } catch (error: any) {
-      console.error('加载页面配置列表失败:', error);
-      messageApi.error(t('pages.system.codeRules.loadPageConfigFailed'));
-    } finally {
-      setPageConfigsLoading(false);
-    }
-  };
-
-
-  // 初始化加载页面配置和编号规则
-  useEffect(() => {
-    loadPageConfigsAndRules();
-  }, []);
 
   /**
    * 重置页面规则表单（移至 handleSelectPage 之前避免引用错误）
@@ -356,7 +234,7 @@ const CodeRuleListPage: React.FC = () => {
           });
         }
       } catch (error) {
-        console.error('加载规则失败:', error);
+        window.console.error('加载规则失败:', error);
         resetPageRuleForm(pageCode, currentConfigs);
       }
     } else {
@@ -364,6 +242,130 @@ const CodeRuleListPage: React.FC = () => {
       resetPageRuleForm(pageCode, currentConfigs);
     }
   };
+
+  /**
+   * 获取所有编号规则（包括禁用的）
+   */
+  const getAllCodeRules = async (): Promise<CodeRule[]> => {
+    try {
+      // 后端 API 返回的是 List[CodeRuleResponse]（直接是数组），不是分页格式
+      // 直接调用 API 获取列表，使用 skip 和 limit 参数
+      const response = await apiRequest<CodeRule[]>('/core/code-rules', {
+        params: {
+          skip: 0,
+          limit: 1000,
+          // 不传递 is_active 参数，获取所有规则（包括禁用的）
+        },
+      });
+
+      // 后端直接返回数组
+      return Array.isArray(response) ? response : [];
+    } catch (error: unknown) {
+      window.console.error('获取编号规则列表失败:', error);
+      return [];
+    }
+  };
+
+  /**
+   * 根据已启用应用过滤页面：只展示已安装且启用的应用下的页面
+   */
+  const filterPagesByEnabledApps = (pages: CodeRulePageConfig[], apps: unknown[]): CodeRulePageConfig[] => {
+    const enabledPrefixes = (apps as any[]).map((a) => a.route_path || `/apps/${a.code}`).filter(Boolean);
+    if (enabledPrefixes.length === 0) return [];
+    return pages.filter(
+      (p) =>
+        enabledPrefixes.some(
+          (prefix) => p.pagePath === prefix || p.pagePath.startsWith(prefix + '/'),
+        ),
+    );
+  };
+
+  /**
+   * 加载所有编号规则列表（可用于初始加载或操作后刷新）
+   */
+  const loadCodeRules = async (reloadPage?: boolean) => {
+    try {
+      const rules = await getAllCodeRules();
+      setAllRules(rules);
+      // 如果指定了重新加载页面且当前有选中的页面，重新加载该页面的规则数据到表单
+      if (reloadPage && selectedPageCode) {
+        handleSelectPage(selectedPageCode, rules);
+      }
+      return rules;
+    } catch (error) {
+      window.console.error('加载编号规则列表失败:', error);
+      return [];
+    }
+  };
+
+  /**
+   * 加载页面配置列表（并行加载应用列表和规则）
+   *
+   * 初始化选中项时不再使用 setTimeout 等 state 提交，
+   * 而是把刚计算出来的 configs/rules 显式传给 handleSelectPage / resetPageRuleForm。
+   */
+  const loadPageConfigsAndRules = async () => {
+    try {
+      setPageConfigsLoading(true);
+      const [allPages, apps, rules] = await Promise.all([
+        getCodeRulePages(),
+        getApplicationList({ is_installed: true, is_active: true }),
+        loadCodeRules(false),
+      ]);
+
+      const pages = filterPagesByEnabledApps(allPages, apps);
+
+      // 合并保存的配置和默认配置，确保所有页面都存在
+      let nextConfigs: CodeRulePageConfig[] = pages;
+      const savedConfigs = window.localStorage.getItem(getCodeRulePageConfigsKey());
+      if (savedConfigs) {
+        try {
+          const parsed = JSON.parse(savedConfigs);
+          nextConfigs = pages.map(defaultPage => {
+            const savedPage = parsed.find((p: any) => p.pageCode === defaultPage.pageCode);
+            if (savedPage) {
+              return {
+                ...defaultPage,
+                ruleCode: savedPage.ruleCode ?? defaultPage.ruleCode,
+                autoGenerate: savedPage.autoGenerate ?? defaultPage.autoGenerate,
+              };
+            }
+            return defaultPage;
+          });
+        } catch (error) {
+          console.error('加载功能页面配置失败:', error);
+          nextConfigs = pages;
+        }
+      }
+
+      setPageConfigs(nextConfigs);
+
+      // 默认选中第一个页面（仅当没有选中或当前选中项已不在列表中时）
+      if (nextConfigs.length > 0) {
+        const stillInList =
+          !!selectedPageCode && nextConfigs.some(p => p.pageCode === selectedPageCode);
+        if (!stillInList) {
+          const firstPageCode = nextConfigs[0].pageCode;
+          // 直接用本次算出的 configs / rules 同步驱动，setFieldsValue 是命令式的，
+          // 不依赖 state 已提交
+          handleSelectPage(firstPageCode, rules, nextConfigs);
+        }
+      }
+    } catch (error) {
+      window.console.error('加载页面配置列表失败:', error);
+      messageApi.error(t('pages.system.codeRules.loadPageConfigFailed'));
+    } finally {
+      setPageConfigsLoading(false);
+    }
+  };
+
+
+  // 初始化加载页面配置和编号规则
+  useEffect(() => {
+    loadPageConfigsAndRules();
+  }, []);
+
+
 
 
   /**
@@ -481,17 +483,18 @@ const CodeRuleListPage: React.FC = () => {
         ruleCode: page.ruleCode,
         autoGenerate: page.autoGenerate,
       }));
-      localStorage.setItem(getCodeRulePageConfigsKey(), JSON.stringify(configsToSave));
+      window.localStorage.setItem(getCodeRulePageConfigsKey(), JSON.stringify(configsToSave));
       setPageConfigs(freshConfigs);
       messageApi.success(t('pages.system.codeRules.configSaved'));
 
       // 立即用最新数据刷新表单，无需等 state 提交
       handleSelectPage(selectedPageCode, freshRules, freshConfigs);
 
-    } catch (error: any) {
-      const errorMessage = error?.message || error?.error?.message || t('pages.system.codeRules.saveRuleFailed');
+    } catch (error: unknown) {
+      const err = error as Error;
+      const errorMessage = err?.message || t('pages.system.codeRules.saveRuleFailed');
       messageApi.error(errorMessage);
-      console.error('保存规则失败:', error);
+      window.console.error('保存规则失败:', error);
     } finally {
       setPageRuleFormLoading(false);
     }
@@ -567,377 +570,354 @@ const CodeRuleListPage: React.FC = () => {
   const enabledTagText = t('pages.system.codeRules.enabled');
 
   return (
-    <>
+    <div
+      style={{
+        display: 'flex',
+        width: '100%',
+        height: '100%',
+        border: `1px solid ${token.colorBorder}`,
+        borderRadius: token.borderRadiusLG || token.borderRadius,
+        overflow: 'hidden',
+      }}
+    >
+      {/* 左侧功能页面列表：固定宽度不参与收缩，由右侧区域伸缩 */}
       <div
-        className="code-rule-management-page"
         style={{
+          width: '300px',
+          minWidth: '300px',
+          flexShrink: 0,
+          borderRight: `1px solid ${token.colorBorder}`,
+          backgroundColor: token.colorFillAlter || '#fafafa',
           display: 'flex',
+          flexDirection: 'column',
           height: '100%',
-          margin: 0,
-          boxSizing: 'border-box',
-          borderRadius: token.borderRadiusLG || token.borderRadius,
-          overflow: 'hidden',
         }}
       >
-        {/* 功能页面编号规则配置 - 左右结构 */}
-        <div
-          style={{
-            display: 'flex',
-            width: '100%',
-            height: '100%',
-            borderRadius: token.borderRadiusLG || token.borderRadius,
-            overflow: 'hidden',
-            border: `1px solid ${token.colorBorder}`,
-          }}
-        >
-          {/* 左侧功能页面列表：固定宽度不参与收缩，由右侧区域伸缩 */}
-          <div
-            style={{
-              width: '300px',
-              minWidth: '300px',
-              flexShrink: 0,
-              borderRight: `1px solid ${token.colorBorder}`,
-              backgroundColor: token.colorFillAlter || '#fafafa',
-              display: 'flex',
-              flexDirection: 'column',
-              height: '100%',
-              borderTopLeftRadius: token.borderRadiusLG || token.borderRadius,
-              borderBottomLeftRadius: token.borderRadiusLG || token.borderRadius,
-            }}
-          >
-            {/* 搜索栏 */}
-            <div style={{ padding: '8px', borderBottom: `1px solid ${token.colorBorder}` }}>
-              <Input
-                placeholder={t('pages.system.codeRules.searchPagePlaceholder')}
-                prefix={<SearchOutlined />}
-                value={pageSearchValue}
-                onChange={(e) => setPageSearchValue(e.target.value)}
-                allowClear
-                size="middle"
-              />
-            </div>
-            {/* 恢复全部、启用全部 按钮 */}
-            <div style={{ padding: '8px', borderBottom: `1px solid ${token.colorBorder}` }}>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <Button
-                  type="primary"
-                  block
-                  loading={restoreLoading}
-                  onClick={async () => {
-                    try {
-                      setRestoreLoading(true);
-                      const res = await runInitItems(['code_rule']);
-                      const created = (res.results?.code_rule as any)?.created ?? 0;
-                      messageApi.success(res.message || t('pages.system.codeRules.restoreAllSuccess', { count: created }));
-                      await loadCodeRules(true);
-                      if (selectedPageCode) handleSelectPage(selectedPageCode);
-                    } catch (e: any) {
-                      messageApi.error(e?.message || t('pages.system.codeRules.restoreAllFailed'));
-                    } finally {
-                      setRestoreLoading(false);
-                    }
-                  }}
-                >
-                  {t('pages.system.codeRules.restoreAll')}
-                </Button>
-                <Button
-                  type="primary"
-                  block
-                  loading={enableAllLoading}
-                  onClick={async () => {
-                    try {
-                      setEnableAllLoading(true);
-                      const res = await enableAllRules();
-                      messageApi.success(t('pages.system.codeRules.enableAllSuccess', { count: res?.enabled ?? 0 }));
-                      await loadCodeRules(true);
-                      // 同步页面配置：启用全部后，将所有有规则关联的页面的 autoGenerate 设为 true
-                      const allRules = await getAllCodeRules();
-                      const activeRuleCodes = new Set(allRules.filter(r => r.is_active).map(r => r.code));
-                      setPageConfigs(prev => {
-                        const updated = prev.map(page => {
-                          const ruleCode = page.ruleCode ?? page.pageCode.toUpperCase().replace(/-/g, '_');
-                          const hasActiveRule = activeRuleCodes.has(ruleCode);
-                          return hasActiveRule ? { ...page, autoGenerate: true } : page;
-                        });
-                        const configsToSave = updated.map(p => {
-                          const ruleCode = p.ruleCode ?? p.pageCode.toUpperCase().replace(/-/g, '_');
-                          return {
-                            pageCode: p.pageCode,
-                            ruleCode: p.ruleCode ?? ruleCode,
-                            autoGenerate: p.autoGenerate,
-                          };
-                        });
-                        localStorage.setItem(getCodeRulePageConfigsKey(), JSON.stringify(configsToSave));
-                        return updated;
-                      });
-                      if (selectedPageCode) handleSelectPage(selectedPageCode);
-                    } catch (e: any) {
-                      messageApi.error(e?.message || t('pages.system.codeRules.enableAllFailed'));
-                    } finally {
-                      setEnableAllLoading(false);
-                    }
-                  }}
-                >
-                  {t('pages.system.codeRules.enableAll')}
-                </Button>
+        {/* 搜索栏 */}
+        <div style={{ padding: '8px', borderBottom: `1px solid ${token.colorBorder}` }}>
+          <Input
+            placeholder={t('pages.system.codeRules.searchPagePlaceholder')}
+            prefix={<SearchOutlined />}
+            value={pageSearchValue}
+            onChange={(e) => setPageSearchValue(e.target.value)}
+            allowClear
+            size="middle"
+          />
+        </div>
+        {/* 恢复全部、启用全部 按钮 */}
+        <div style={{ padding: '8px', borderBottom: `1px solid ${token.colorBorder}` }}>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button
+              type="primary"
+              block
+              loading={restoreLoading}
+              onClick={async () => {
+                try {
+                  setRestoreLoading(true);
+                  const res = await runInitItems(['code_rule']);
+                  const created = ((res.results?.code_rule as any) || {}).created ?? 0;
+                  messageApi.success(res.message || t('pages.system.codeRules.restoreAllSuccess', { count: created }));
+                  await loadCodeRules(true);
+                  if (selectedPageCode) handleSelectPage(selectedPageCode);
+                } catch (e: any) {
+                  messageApi.error(e?.message || t('pages.system.codeRules.restoreAllFailed'));
+                } finally {
+                  setRestoreLoading(false);
+                }
+              }}
+            >
+              {t('pages.system.codeRules.restoreAll')}
+            </Button>
+            <Button
+              type="primary"
+              block
+              loading={enableAllLoading}
+              onClick={async () => {
+                try {
+                  setEnableAllLoading(true);
+                  const res = await enableAllRules();
+                  messageApi.success(t('pages.system.codeRules.enableAllSuccess', { count: res?.enabled ?? 0 }));
+                  await loadCodeRules(true);
+                  const allRules = await getAllCodeRules();
+                  const activeRuleCodes = new Set(allRules.filter(r => r.is_active).map(r => r.code));
+                  setPageConfigs(prev => {
+                    const updated = prev.map(page => {
+                      const ruleCode = page.ruleCode ?? page.pageCode.toUpperCase().replace(/-/g, '_');
+                      const hasActiveRule = activeRuleCodes.has(ruleCode);
+                      return hasActiveRule ? { ...page, autoGenerate: true } : page;
+                    });
+                    const configsToSave = updated.map(p => {
+                      const ruleCode = p.ruleCode ?? p.pageCode.toUpperCase().replace(/-/g, '_');
+                      return {
+                        pageCode: p.pageCode,
+                        ruleCode: p.ruleCode ?? ruleCode,
+                        autoGenerate: p.autoGenerate,
+                      };
+                    });
+                    window.localStorage.setItem(getCodeRulePageConfigsKey(), JSON.stringify(configsToSave));
+                    return updated;
+                  });
+                  if (selectedPageCode) handleSelectPage(selectedPageCode);
+                } catch (e: any) {
+                  messageApi.error(e?.message || t('pages.system.codeRules.enableAllFailed'));
+                } finally {
+                  setEnableAllLoading(false);
+                }
+              }}
+            >
+              {t('pages.system.codeRules.enableAll')}
+            </Button>
+          </div>
+        </div>
+
+        {/* 功能页面列表 */}
+        <div className="scrollbar-like-modal" style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '8px' }}>
+          {pageConfigsLoading ? (
+            <div style={{ textAlign: 'center', padding: '40px' }}>
+              <Spin size="large" />
+              <div style={{ marginTop: '16px', color: token.colorTextSecondary }}>
+                {t('pages.system.codeRules.loadingPageConfig')}
               </div>
             </div>
-
-            {/* 功能页面列表 */}
-            <div className="scrollbar-like-modal" style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '8px' }}>
-              {pageConfigsLoading ? (
-                <div style={{ textAlign: 'center', padding: '40px' }}>
-                  <Spin size="large" />
-                  <div style={{ marginTop: '16px', color: token.colorTextSecondary }}>
-                    {t('pages.system.codeRules.loadingPageConfig')}
-                  </div>
-                </div>
-              ) : (
-                <>
-                  {/* 提示：仅当列表较少或为空时展示，避免干扰；详细排查步骤折叠 */}
-                  {pageConfigs.length < 10 && (
-                    <Alert
-                      message={t('pages.system.codeRules.tip')}
-                      description={
-                        <div style={{ fontSize: '12px' }}>
-                          <p style={{ margin: 0, marginBottom: '6px' }}>
-                            {t('pages.system.codeRules.tipAppFilter')}
-                          </p>
-                          <Collapse
-                            size="small"
-                            items={[
-                              {
-                                key: '1',
-                                label: t('pages.system.codeRules.tipExpandLabel'),
-                                children: (
-                                  <>
-                                    <p style={{ margin: '0 0 6px 0' }}>{t('pages.system.codeRules.tipDescription')}</p>
-                                    <ul style={{ margin: 0, paddingLeft: '20px' }}>
-                                      <li>{t('pages.system.codeRules.tipCheck1')} <code>isAutoGenerateEnabled</code> / <code>getPageRuleCode</code></li>
-                                      <li>{t('pages.system.codeRules.tipCheck2')} <code>code_rule_pages.py</code></li>
-                                      <li>{t('pages.system.codeRules.tipCheck3')} <code>codeRulePages.ts</code></li>
-                                    </ul>
-                                    <p style={{ margin: '6px 0 0 0', color: token.colorTextSecondary }}>💡 {t('pages.system.codeRules.tipSuggestion')}</p>
-                                  </>
-                                ),
-                              },
-                            ]}
-                            style={{ marginTop: '6px', background: 'transparent', border: 'none' }}
-                          />
-                        </div>
-                      }
-                      type="info"
-                      showIcon
-                      closable
-                      style={{ marginBottom: '12px' }}
-                    />
-                  )}
-                  {groupedPages.map(({ module, pages }) => (
-                    <div key={module} style={{ marginBottom: '16px' }}>
-                      <div
-                        style={{
-                          padding: '8px 12px',
-                          fontWeight: 500,
-                          fontSize: '14px',
-                          color: token.colorTextHeading,
-                          backgroundColor: token.colorFillSecondary,
-                          borderRadius: token.borderRadius,
-                          marginBottom: '8px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                        }}
-                      >
-                        <DatabaseOutlined />
-                        {module}
-                      </div>
-                      {pages.map(page => (
-                        <PageListItem
-                          key={page.pageCode}
-                          page={page}
-                          isSelected={selectedPageCode === page.pageCode}
-                          enabledTagText={enabledTagText}
-                          colors={itemColors}
-                          onSelect={handleSelectPageStable}
-                        />
-                      ))}
+          ) : (
+            <>
+              {pageConfigs.length < 10 && (
+                <Alert
+                  message={t('pages.system.codeRules.tip')}
+                  description={
+                    <div style={{ fontSize: '12px' }}>
+                      <p style={{ margin: 0, marginBottom: '6px' }}>
+                        {t('pages.system.codeRules.tipAppFilter')}
+                      </p>
+                      <Collapse
+                        size="small"
+                        items={[
+                          {
+                            key: '1',
+                            label: t('pages.system.codeRules.tipExpandLabel'),
+                            children: (
+                              <>
+                                <p style={{ margin: '0 0 6px 0' }}>{t('pages.system.codeRules.tipDescription')}</p>
+                                <ul style={{ margin: 0, paddingLeft: '20px' }}>
+                                  <li>{t('pages.system.codeRules.tipCheck1')} <code>isAutoGenerateEnabled</code> / <code>getPageRuleCode</code></li>
+                                  <li>{t('pages.system.codeRules.tipCheck2')} <code>code_rule_pages.py</code></li>
+                                  <li>{t('pages.system.codeRules.tipCheck3')} <code>codeRulePages.ts</code></li>
+                                </ul>
+                                <p style={{ margin: '6px 0 0 0', color: token.colorTextSecondary }}>💡 {t('pages.system.codeRules.tipSuggestion')}</p>
+                              </>
+                            ),
+                          },
+                        ]}
+                        style={{ marginTop: '6px', background: 'transparent', border: 'none' }}
+                      />
                     </div>
-                  ))}
-                </>
+                  }
+                  type="info"
+                  showIcon
+                  closable
+                  style={{ marginBottom: '12px' }}
+                />
               )}
-            </div>
-          </div>
+              {groupedPages.map(({ module, pages }) => (
+                <div key={module} style={{ marginBottom: '16px' }}>
+                  <div
+                    style={{
+                      padding: '8px 12px',
+                      fontWeight: 500,
+                      fontSize: '14px',
+                      color: token.colorTextHeading,
+                      backgroundColor: token.colorFillSecondary,
+                      borderRadius: token.borderRadius,
+                      marginBottom: '8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                    }}
+                  >
+                    <DatabaseOutlined />
+                    {module}
+                  </div>
+                  {pages.map(page => (
+                    <PageListItem
+                      key={page.pageCode}
+                      page={page}
+                      isSelected={selectedPageCode === page.pageCode}
+                      enabledTagText={enabledTagText}
+                      colors={itemColors}
+                      onSelect={handleSelectPageStable}
+                    />
+                  ))}
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      </div>
 
-          {/* 右侧配置区域：占据剩余空间，不足时可收缩并滚动 */}
+      {/* 右侧配置区域：占据剩余空间，不足时可收缩并滚动 */}
+      <div
+        style={{
+          flex: 1,
+          minWidth: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          backgroundColor: token.colorBgContainer,
+        }}
+      >
+        {selectedPage ? (
+          <>
+            {/* 统一头部标题与操作工具栏 */}
+            <div
+              style={{
+                padding: '16px 24px',
+                borderBottom: `1px solid ${token.colorBorderSecondary}`,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                backgroundColor: token.colorFillAlter,
+              }}
+            >
+              <div>
+                <div style={{ fontSize: '16px', fontWeight: 500, marginBottom: '4px' }}>
+                  {selectedPage.pageName}
+                </div>
+                <div style={{ fontSize: '12px', color: token.colorTextSecondary }}>
+                  {selectedPage.pagePath}
+                </div>
+              </div>
+              <Space>
+                <Button
+                  loading={restoreSingleLoading}
+                  onClick={async () => {
+                    if (!selectedPageCode) {
+                      messageApi.warning(t('pages.system.codeRules.selectPageToRestore'));
+                      return;
+                    }
+                    try {
+                      setRestoreSingleLoading(true);
+                      await restorePresetRules('page', selectedPageCode);
+                      messageApi.success(t('pages.system.codeRules.restorePresetSuccess'));
+                      await loadCodeRules(true);
+                      handleSelectPage(selectedPageCode);
+                    } catch (e: any) {
+                      messageApi.error(e?.message || t('pages.system.codeRules.restorePresetFailed'));
+                    } finally {
+                      setRestoreSingleLoading(false);
+                    }
+                  }}
+                >
+                  {t('pages.system.codeRules.restoreSingle')}
+                </Button>
+                <Button
+                  type="primary"
+                  loading={pageRuleFormLoading}
+                  onClick={handleSavePageRule}
+                >
+                  {t('pages.system.codeRules.saveRule')}
+                </Button>
+              </Space>
+            </div>
+
+            {/* 配置表单 */}
+            <div className="scrollbar-like-modal" style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '24px' }}>
+              <div style={{ marginBottom: '24px' }}>
+                <ProForm
+                  formRef={pageRuleFormRef}
+                  submitter={false}
+                  layout="vertical"
+                  initialValues={{
+                    seq_start: 1,
+                    seq_step: 1,
+                    seq_reset_rule: 'never',
+                    is_active: true,
+                  }}
+                >
+                  <div style={{ marginBottom: '16px', padding: '12px', backgroundColor: token.colorFillAlter, borderRadius: token.borderRadius }}>
+                    <div style={{ fontSize: '12px', color: token.colorTextSecondary, marginBottom: '4px' }}>
+                      {t('pages.system.codeRules.codeField')}
+                    </div>
+                    <div style={{ fontWeight: 500 }}>
+                      {selectedPage.codeFieldLabel} ({selectedPage.codeField})
+                    </div>
+                  </div>
+
+                  {/* 隐藏字段：规则名称和规则代码，自动填充 */}
+                  <ProFormText
+                    name="name"
+                    hidden
+                    rules={[{ required: true, message: t('pages.system.codeRules.ruleNameRequired') }]}
+                  />
+
+                  <ProFormText
+                    name="code"
+                    hidden
+                    rules={[{ required: true, message: t('pages.system.codeRules.ruleCodeRequired') }]}
+                  />
+
+                  <div>
+                    <label style={{ fontWeight: 500, display: 'block', marginBottom: '8px' }}>
+                      {t('pages.system.codeRules.expressionLabel')}
+                    </label>
+                    <div style={{ marginBottom: '16px' }}>
+                      <CodeRuleComponentBuilder
+                        value={ruleComponents}
+                        onChange={(components) => {
+                          setRuleComponents(components);
+                          pageRuleFormRef.current?.setFieldValue(
+                            'expression',
+                            CodeRuleComponentService.componentsToExpression(components)
+                          );
+                        }}
+                        availableFields={(() => {
+                          const currentPageConfig = pageConfigs.find(p => p.pageCode === selectedPageCode);
+                          return (currentPageConfig?.availableFields || []).map(field => ({
+                            field_name: field.fieldName,
+                            field_label: field.fieldLabel,
+                            field_type: field.fieldType,
+                          }));
+                        })()}
+                      />
+                    </div>
+                    <ProFormText name="expression" hidden />
+                  </div>
+
+                  <ProFormTextArea name="description" hidden />
+
+                  <div style={{
+                    padding: '12px',
+                    backgroundColor: token.colorFillAlter,
+                    borderRadius: token.borderRadius,
+                    marginBottom: '16px'
+                  }}>
+                    <div style={{ fontSize: '12px', color: token.colorTextSecondary }}>
+                      {t('pages.system.codeRules.seqIntegratedHint')}
+                    </div>
+                  </div>
+
+                  <ProFormSwitch
+                    name="is_active"
+                    label={t('pages.system.codeRules.isActive')}
+                  />
+                </ProForm>
+              </div>
+            </div>
+          </>
+        ) : (
           <div
             style={{
               flex: 1,
-              minWidth: 0,
               display: 'flex',
-              flexDirection: 'column',
-              backgroundColor: token.colorBgContainer,
-              borderTopRightRadius: token.borderRadiusLG || token.borderRadius,
-              borderBottomRightRadius: token.borderRadiusLG || token.borderRadius,
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: token.colorTextSecondary,
+              backgroundColor: token.colorFillAlter,
             }}
           >
-            {selectedPage ? (
-              <>
-                {/* 顶部标题栏 */}
-                <div
-                  style={{
-                    borderBottom: `1px solid ${token.colorBorder}`,
-                    padding: '16px',
-                    backgroundColor: token.colorFillAlter,
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                  }}
-                >
-                  <div>
-                    <div style={{ fontSize: '16px', fontWeight: 500, marginBottom: '4px' }}>
-                      {selectedPage.pageName}
-                    </div>
-                    <div style={{ fontSize: '12px', color: token.colorTextSecondary }}>
-                      {selectedPage.pagePath}
-                    </div>
-                  </div>
-                  <Space>
-                    <Button
-                      loading={restoreSingleLoading}
-                      onClick={async () => {
-                        if (!selectedPageCode) {
-                          messageApi.warning(t('pages.system.codeRules.selectPageToRestore'));
-                          return;
-                        }
-                        try {
-                          setRestoreSingleLoading(true);
-                          await restorePresetRules('page', selectedPageCode);
-                          messageApi.success(t('pages.system.codeRules.restorePresetSuccess'));
-                          await loadCodeRules(true);
-                          handleSelectPage(selectedPageCode);
-                        } catch (e: any) {
-                          messageApi.error(e?.message || t('pages.system.codeRules.restorePresetFailed'));
-                        } finally {
-                          setRestoreSingleLoading(false);
-                        }
-                      }}
-                    >
-                      {t('pages.system.codeRules.restoreSingle')}
-                    </Button>
-                    <Button
-                      type="primary"
-                      loading={pageRuleFormLoading}
-                      onClick={handleSavePageRule}
-                    >
-                      {t('pages.system.codeRules.saveRule')}
-                    </Button>
-                  </Space>
-                </div>
-
-                {/* 配置表单 */}
-                <div className="scrollbar-like-modal" style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '24px' }}>
-                  <Card
-                    title={t('pages.system.codeRules.configTitle')}
-                    size="small"
-                  >
-                    <ProForm
-                      formRef={pageRuleFormRef}
-                      submitter={false}
-                      layout="vertical"
-                      initialValues={{
-                        seq_start: 1,
-                        seq_step: 1,
-                        seq_reset_rule: 'never',
-                        is_active: true,
-                      }}
-                    >
-                      <div style={{ marginBottom: '16px', padding: '12px', backgroundColor: token.colorFillAlter, borderRadius: token.borderRadius }}>
-                        <div style={{ fontSize: '12px', color: token.colorTextSecondary, marginBottom: '4px' }}>
-                          {t('pages.system.codeRules.codeField')}
-                        </div>
-                        <div style={{ fontWeight: 500 }}>
-                          {selectedPage.codeFieldLabel} ({selectedPage.codeField})
-                        </div>
-                      </div>
-
-                      {/* 隐藏字段：规则名称和规则代码，自动填充 */}
-                      <ProFormText
-                        name="name"
-                        hidden
-                        rules={[{ required: true, message: t('pages.system.codeRules.ruleNameRequired') }]}
-                      />
-
-                      <ProFormText
-                        name="code"
-                        hidden
-                        rules={[{ required: true, message: t('pages.system.codeRules.ruleCodeRequired') }]}
-                      />
-
-                      <div>
-                        <label style={{ fontWeight: 500, display: 'block', marginBottom: '8px' }}>
-                          {t('pages.system.codeRules.expressionLabel')}
-                        </label>
-                        <div style={{ marginBottom: '16px' }}>
-                          <CodeRuleComponentBuilder
-                            value={ruleComponents}
-                            onChange={(components) => {
-                              setRuleComponents(components);
-                              pageRuleFormRef.current?.setFieldValue(
-                                'expression',
-                                CodeRuleComponentService.componentsToExpression(components)
-                              );
-                            }}
-                            availableFields={(() => {
-                              const currentPageConfig = pageConfigs.find(p => p.pageCode === selectedPageCode);
-                              return (currentPageConfig?.availableFields || []).map(field => ({
-                                field_name: field.fieldName,
-                                field_label: field.fieldLabel,
-                                field_type: field.fieldType,
-                              }));
-                            })()}
-                          />
-                        </div>
-                        <ProFormText name="expression" hidden />
-                      </div>
-
-                      <ProFormTextArea name="description" hidden />
-
-                      <div style={{
-                        padding: '12px',
-                        backgroundColor: token.colorFillAlter,
-                        borderRadius: token.borderRadius,
-                        marginBottom: '16px'
-                      }}>
-                        <div style={{ fontSize: '12px', color: token.colorTextSecondary }}>
-                          {t('pages.system.codeRules.seqIntegratedHint')}
-                        </div>
-                      </div>
-
-                      <ProFormSwitch
-                        name="is_active"
-                        label={t('pages.system.codeRules.isActive')}
-                      />
-                    </ProForm>
-                  </Card>
-                </div>
-              </>
-            ) : (
-              <div
-                style={{
-                  flex: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: token.colorTextSecondary,
-                }}
-              >
-                {t('pages.system.codeRules.selectPageHint')}
-              </div>
-            )}
+            {t('pages.system.codeRules.selectPageHint')}
           </div>
-        </div>
+        )}
       </div>
-    </>
+    </div>
   );
 };
 

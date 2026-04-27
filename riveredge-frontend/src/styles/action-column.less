@@ -1,0 +1,115 @@
+/**
+ * 2026-2027 B端表格操作列：Soft Minimalism & Calm Design
+ *
+ * 趋势：去极致黑白、高触感悬浮、毛玻璃质感、呼吸感动画
+ */
+
+/* 操作按钮基础样式：2026 柔和态 */
+.ant-btn-row-action {
+  color: var(--ant-colorText, #1e293b) !important;
+
+  padding: 4px 10px !important;
+  gap: 6px !important;
+  height: 28px !important;
+  border-radius: var(--ant-border-radius, 8px) !important;
+  transition:
+    color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    background 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-weight: 500 !important;
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+  border: none !important;
+  background: transparent !important;
+  backface-visibility: hidden !important;
+  transform: translateZ(0) !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+
+  &:focus-visible {
+    outline: 2px solid var(--ant-color-primary-border, #91caff) !important;
+    outline-offset: 2px !important;
+  }
+
+  /* 特殊处理：详情动作使用主题色 */
+  &.ant-btn-row-action-detail {
+    color: var(--ant-color-primary, #1677ff) !important;
+    font-weight: 600 !important;
+
+    &:hover:not(:disabled) {
+      background: var(--ant-color-primary-bg, rgba(22, 119, 255, 0.08)) !important;
+      color: var(--ant-color-primary-hover, #4096ff) !important;
+    }
+  }
+
+  &:hover:not(:disabled) {
+    background: var(--ant-colorFillTertiary, rgba(30, 41, 59, 0.08)) !important;
+    color: var(--ant-colorTextHeading, #020617) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  }
+
+  &:active:not(:disabled) {
+    background: var(--ant-colorFillSecondary, rgba(15, 23, 42, 0.1)) !important;
+    transform: translateZ(0) !important;
+  }
+
+  &.ant-btn-dangerous {
+    color: var(--ant-colorError, #ef4444) !important;
+    &:hover:not(:disabled) {
+      background: var(--ant-colorErrorBg, rgba(239, 68, 68, 0.08)) !important;
+      color: var(--ant-colorErrorHover, #dc2626) !important;
+    }
+  }
+
+  &:disabled {
+    color: var(--ant-colorTextDisabled, #cbd5e1) !important;
+    background: transparent !important;
+    cursor: not-allowed;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ant-btn-row-action {
+    transition: none !important;
+    &:active:not(:disabled) {
+      transform: translateZ(0) !important;
+    }
+  }
+}
+
+html[data-theme='dark'] body .ant-btn-row-action {
+  color: var(--ant-colorText) !important;
+
+  &:hover:not(:disabled) {
+    background: var(--ant-colorFillTertiary) !important;
+    color: var(--ant-colorTextHeading) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  }
+
+  &:active:not(:disabled) {
+    background: var(--ant-colorFillSecondary) !important;
+  }
+
+  &:disabled {
+    color: var(--ant-colorTextDisabled) !important;
+  }
+
+  &.ant-btn-dangerous {
+    color: var(--ant-colorError) !important;
+    &:hover:not(:disabled) {
+      background: var(--ant-colorErrorBg) !important;
+      color: var(--ant-colorErrorHover) !important;
+    }
+  }
+}
+
+/* 更多菜单项样式微调：延续毛玻璃感 */
+.ant-dropdown-menu-item-row-action {
+  border-radius: 6px !important;
+  margin: 2px 4px !important;
+  padding: 6px 12px !important;
+  font-weight: 500 !important;
+}

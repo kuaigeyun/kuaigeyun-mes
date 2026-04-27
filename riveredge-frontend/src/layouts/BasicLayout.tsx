@@ -1148,7 +1148,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       '/system/approval-instances': 'fluent-color:checkmark-circle-24',
       '/system/messages/template': 'fluent-color:drafts-24',
       '/system/messages/config': 'fluent-color:chat-24',
-      '/system/print-devices': 'fluent-color:wrench-24',
+      // fluent-color 无专用打印机图标；receipt 与实体票据/热敏打印输出最接近，视觉与同套彩色图标一致
+      '/system/print-devices': 'fluent-color:receipt-24',
       '/system/print-templates': 'fluent-color:document-24',
       '/system/operation-logs': 'fluent-color:history-24',
       '/system/login-logs': 'fluent-color:clock-24',

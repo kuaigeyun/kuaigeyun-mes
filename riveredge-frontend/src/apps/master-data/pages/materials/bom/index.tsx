@@ -25,6 +25,7 @@ import { testGenerateCode, getCodeRulePageConfig } from '../../../../../services
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { downloadFile } from '../../../../../utils';
+import { getUserList, User } from '../../../../../services/user';
 
 /**
  * 单位列展示：接收 Form 的 value（单位 code），渲染字典标签，表格渲染前已映射
@@ -134,6 +135,9 @@ const BOMPage: React.FC = () => {
   // 单位字典映射（value -> label）
   const [unitValueToLabel, setUnitValueToLabel] = useState<Record<string, string>>({});
 
+  // 用户列表（用于渲染审核人姓名）
+  const [users, setUsers] = useState<User[]>([]);
+
   /** BOM 视图类型（与 UniTable 视图联动）：productBom=成品 | semiProductBom=半成品 | allBom=全部 */
   const bomViewTypeRef = useRef<'productBom' | 'semiProductBom' | 'allBom'>('productBom');
 
@@ -142,6 +146,21 @@ const BOMPage: React.FC = () => {
 
   /** 物料选中的版本 materialId -> groupKey，切换版本时更新并 reload */
   const [selectedVersionByMaterial, setSelectedVersionByMaterial] = useState<Record<number, string>>({});
+
+  /**
+   * 加载用户列表
+   */
+  useEffect(() => {
+    const loadUsers = async () => {
+      try {
+        const result = await getUserList({ page_size: 1000 });
+        setUsers(result.items);
+      } catch (error: any) {
+        console.error('加载用户列表失败:', error);
+      }
+    };
+    loadUsers();
+  }, []);
 
   /**
    * 加载物料列表
@@ -1796,13 +1815,11 @@ const BOMPage: React.FC = () => {
       title: t('app.master-data.bom.effectiveDateTitle'),
       dataIndex: 'effectiveDate',
       valueType: 'dateTime',
-      render: (_, record) => record.effectiveDate || '-',
     },
     {
       title: t('app.master-data.bom.expiryDateTitle'),
       dataIndex: 'expiryDate',
       valueType: 'dateTime',
-      render: (_, record) => record.expiryDate || '-',
     },
     {
       title: t('app.master-data.bom.alternativeTitle'),
@@ -1850,19 +1867,21 @@ const BOMPage: React.FC = () => {
     {
       title: t('app.master-data.bom.approverTitle'),
       dataIndex: 'approvedBy',
-      render: (_, record) => record.approvedBy ? `用户ID: ${record.approvedBy}` : '-',
+      render: (_, record) => {
+        if (!record.approvedBy) return '-';
+        const user = users.find(u => u.id === record.approvedBy);
+        return user ? (user.full_name || user.username) : `${t('app.master-data.bom.approverTitle')}: ${record.approvedBy}`;
+      },
     },
     {
       title: t('app.master-data.bom.approvalTimeTitle'),
       dataIndex: 'approvedAt',
       valueType: 'dateTime',
-      render: (_, record) => record.approvedAt || '-',
     },
     {
       title: t('app.master-data.bom.approvalCommentTitle'),
       dataIndex: 'approvalComment',
       span: 2,
-      render: (_, record) => record.approvalComment || '-',
     },
     {
       title: t('app.master-data.bom.enabledStatusTitle'),
@@ -2247,28 +2266,32 @@ const BOMPage: React.FC = () => {
                           rowKey="uuid"
                           pagination={false}
                           size="small"
+                          scroll={{ x: 'max-content' }}
                           columns={[
                             {
                               title: t('app.master-data.bom.serialNo'),
                               key: 'index',
-                              width: 60,
+                              width: 50,
+                              align: 'center',
                               render: (_, __, index) => index + 1,
                             },
                             {
                               title: t('app.master-data.bom.childMaterialTitle'),
                               dataIndex: 'componentId',
+                              minWidth: 200,
                               render: (_, record) => getMaterialName(record.componentId),
                             },
                             {
                               title: t('app.master-data.bom.quantityTitle'),
                               dataIndex: 'quantity',
-                              width: 100,
+                              width: 80,
                               align: 'right',
                             },
                             {
                               title: t('app.master-data.bom.unitTitle'),
                               dataIndex: 'unit',
-                              width: 80,
+                              width: 60,
+                              align: 'center',
                               render: (_, record) => {
                                 const unitValue = record.unit;
                                 const unitLabel = unitValueToLabel[unitValue || ''] || unitValue || '-';
@@ -2278,16 +2301,17 @@ const BOMPage: React.FC = () => {
                             {
                               title: t('app.master-data.bom.wasteRateTitle'),
                               dataIndex: 'wasteRate',
-                              width: 100,
+                              width: 80,
                               align: 'right',
                               render: (_, record) => record.wasteRate ? `${record.wasteRate}%` : '0%',
                             },
                             {
                               title: t('app.master-data.bom.isRequiredTitle'),
                               dataIndex: 'isRequired',
-                              width: 100,
+                              width: 70,
+                              align: 'center',
                               render: (_, record) => (
-                                <Tag color={record.isRequired !== false ? 'success' : 'default'}>
+                                <Tag color={record.isRequired !== false ? 'success' : 'default'} style={{ marginRight: 0 }}>
                                   {record.isRequired !== false ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
                                 </Tag>
                               ),
@@ -2295,15 +2319,17 @@ const BOMPage: React.FC = () => {
                             {
                               title: t('app.master-data.bom.levelTitle'),
                               dataIndex: 'level',
-                              width: 80,
+                              width: 50,
+                              align: 'center',
                               render: (_, record) => record.level ?? 0,
                             },
                             {
                               title: t('app.master-data.bom.alternativeTitle'),
                               dataIndex: 'isAlternative',
-                              width: 80,
+                              width: 70,
+                              align: 'center',
                               render: (_, record) => (
-                                <Tag color={record.isAlternative ? 'orange' : 'default'}>
+                                <Tag color={record.isAlternative ? 'orange' : 'default'} style={{ marginRight: 0 }}>
                                   {record.isAlternative ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
                                 </Tag>
                               ),
@@ -2311,14 +2337,15 @@ const BOMPage: React.FC = () => {
                             {
                               title: t('app.master-data.bom.isConfigurableColumn'),
                               dataIndex: 'isConfigurable',
-                              width: 100,
+                              width: 70,
+                              align: 'center',
                               render: (_, record) => {
                                 const manualCfg = record.isConfigurable === true;
                                 const componentMaterial = materials.find((m) => m.id === record.componentId);
                                 const autoCfg = !!componentMaterial?.variantManaged;
                                 const isConfigurableItem = manualCfg || autoCfg;
                                 return (
-                                  <Tag color={isConfigurableItem ? 'cyan' : 'default'}>
+                                  <Tag color={isConfigurableItem ? 'cyan' : 'default'} style={{ marginRight: 0 }}>
                                     {isConfigurableItem ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
                                   </Tag>
                                 );
@@ -2327,18 +2354,21 @@ const BOMPage: React.FC = () => {
                             {
                               title: t('app.master-data.bom.alternativeGroupIdLabel'),
                               dataIndex: 'alternativeGroupId',
-                              width: 100,
+                              width: 80,
+                              align: 'center',
                               render: (_, record) => (record.isAlternative && record.alternativeGroupId != null) ? record.alternativeGroupId : '-',
                             },
                             {
                               title: t('app.master-data.bom.priorityTitle'),
                               dataIndex: 'priority',
-                              width: 80,
+                              width: 60,
+                              align: 'center',
                               render: (_, record) => record.priority ?? 0,
                             },
                             {
                               title: t('app.master-data.bom.descTitle'),
                               dataIndex: 'description',
+                              width: 150,
                               ellipsis: true,
                               render: (_, record) => record.description || '-',
                             },

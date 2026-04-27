@@ -54,8 +54,7 @@ class PrintDeviceService:
             )
             await print_device.save()
             
-            # TODO: 可选集成 Inngest 函数注册
-            # 如果需要通过 Inngest 异步执行打印，可以在这里注册函数
+            # TODO: 可选接入 Taskiq（print/execute 等事件 + dispatcher）
             
             return print_device
         except IntegrityError:
@@ -301,27 +300,20 @@ class PrintDeviceService:
         if not print_device.is_online:
             raise ValidationError("打印设备不在线")
         
-        # 如果选择异步执行，通过 Inngest 执行
+        # 如果选择异步执行，应通过 Taskiq（dispatch_event 等）执行
         if data.async_execution:
-            # TODO: 集成 Inngest 异步执行
-            # from core.inngest.client import inngest_client
-            # from inngest import Event
-            # await inngest_client.send_event(
-            #     event=Event(
-            #         name="print/execute",
-            #         data={
-            #             "tenant_id": tenant_id,
-            #             "device_id": str(print_device.uuid),
-            #             "template_id": data.template_uuid,
-            #             "data": data.data
-            #         }
-            #     )
-            # )
-            # return {
-            #     "success": True,
-            #     "async": True,
-            #     "message": "打印任务已提交异步执行"
-            # }
+            # TODO: 集成 Taskiq 异步执行
+            # from core.tasks.dispatcher import dispatch_event, TaskEvent
+            # await dispatch_event(TaskEvent(
+            #     name="print/execute",
+            #     data={
+            #         "tenant_id": tenant_id,
+            #         "device_id": str(print_device.uuid),
+            #         "template_id": data.template_uuid,
+            #         "data": data.data,
+            #     },
+            # ))
+            # return {"success": True, "async": True, "message": "打印任务已提交异步执行"}
             raise ValidationError("异步执行功能待实现")
         
         # 同步执行打印

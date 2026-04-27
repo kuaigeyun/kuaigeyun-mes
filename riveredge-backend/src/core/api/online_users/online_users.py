@@ -26,7 +26,7 @@ router = APIRouter(prefix="/online-users", tags=["OnlineUsers"])
 @router.get("", response_model=OnlineUserListResponse)
 async def list_online_users(
     tenant_id: Optional[int] = Query(None, description="组织ID（可选，管理员可以查看其他组织）"),
-    current_user: User = Depends(get_current_user),
+    _current_user: User = Depends(get_current_user),
     current_tenant_id: int = Depends(get_current_tenant),
 ):
     """
@@ -34,7 +34,7 @@ async def list_online_users(
     
     Args:
         tenant_id: 组织ID（可选，管理员可以查看其他组织）
-        current_user: 当前用户
+        _current_user: 当前用户（仅用于鉴权依赖）
         current_tenant_id: 当前组织ID
         
     Returns:
@@ -44,7 +44,7 @@ async def list_online_users(
         tenant_id = current_tenant_id
 
     online_users = await OnlineUserService.list_online_users(tenant_id=tenant_id)
-    
+
     return OnlineUserListResponse(
         items=online_users,
         total=len(online_users),

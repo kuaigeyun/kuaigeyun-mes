@@ -1,7 +1,7 @@
 """
 审批流程管理服务模块
 
-提供审批流程的 CRUD 操作和 Inngest 工作流集成功能。
+提供审批流程的 CRUD 操作与异步工作流（Taskiq）注册能力。
 """
 
 from typing import Optional, List, Dict, Any
@@ -21,7 +21,7 @@ class ApprovalProcessService:
     """
     审批流程管理服务类
     
-    提供审批流程的 CRUD 操作和 Inngest 工作流集成功能。
+    提供审批流程的 CRUD 操作与异步工作流（Taskiq）注册能力。
     """
     
     CANONICAL_PROCESS_NAMES: Dict[str, str] = {
@@ -114,16 +114,15 @@ class ApprovalProcessService:
     @staticmethod
     def convert_proflow_to_inngest(proflow_config: Dict[str, Any]) -> Dict[str, Any]:
         """
-        将 ProFlow 设计转换为 Inngest 工作流配置
+        将 ProFlow 设计转换为异步工作流配置（供 Taskiq 事件链使用）
         
         Args:
             proflow_config: ProFlow 设计的流程配置
             
         Returns:
-            Inngest 工作流配置
+            异步工作流配置（字典）
         """
-        # TODO: 实现 ProFlow 到 Inngest 的转换逻辑
-        # 将 ProFlow 节点转换为 Inngest 步骤
+        # TODO: 实现 ProFlow 到异步工作流步骤的转换逻辑
         inngest_steps = []
         
         nodes = proflow_config.get("nodes", [])

@@ -119,13 +119,17 @@ export interface LeftPanelConfig {
     [key: string]: any;
   };
   /**
-   * 左侧面板宽度（默认：300px）
+   * 左侧面板宽度（默认：320px）
    */
   width?: number | string;
   /**
    * 左侧面板最小宽度（默认：200px）
    */
   minWidth?: number | string;
+  /**
+   * 左侧面板是否已收起（可选）
+   */
+  collapsed?: boolean;
 }
 
 /**
@@ -203,6 +207,7 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
     tree,
     width = TWO_COLUMN_LAYOUT.LEFT_PANEL_WIDTH,
     minWidth = TWO_COLUMN_LAYOUT.LEFT_PANEL_MIN_WIDTH,
+    collapsed = false,
   } = leftPanel;
 
   const {
@@ -247,19 +252,23 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
       {/* 左侧面板 */}
       <div
         style={{
-          width: typeof width === 'number' ? `${width}px` : width,
-          minWidth: typeof minWidth === 'number' ? `${minWidth}px` : minWidth,
+          width: collapsed ? 0 : (typeof width === 'number' ? `${width}px` : width),
+          minWidth: collapsed ? 0 : (typeof minWidth === 'number' ? `${minWidth}px` : minWidth),
           flexShrink: 0,
           borderTop: `1px solid ${token.colorBorder}`,
           borderBottom: `1px solid ${token.colorBorder}`,
           borderLeft: `1px solid ${token.colorBorder}`,
-          borderRight: `1px solid ${token.colorBorder}`,
+          borderRight: collapsed ? 'none' : `1px solid ${token.colorBorder}`,
           backgroundColor: token.colorFillAlter || '#fafafa',
           display: 'flex',
           flexDirection: 'column',
           height: '100%',
           borderTopLeftRadius: token.borderRadiusLG || token.borderRadius,
           borderBottomLeftRadius: token.borderRadiusLG || token.borderRadius,
+          transition: 'all 0.3s ease',
+          overflow: 'hidden',
+          opacity: collapsed ? 0 : 1,
+          visibility: collapsed ? 'hidden' : 'visible',
         }}
       >
         {/* 搜索栏 */}
@@ -328,9 +337,12 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
           flexDirection: 'column',
           backgroundColor: token.colorBgContainer,
           border: `1px solid ${token.colorBorder}`,
-          borderLeft: 'none',
+          borderLeft: collapsed ? `1px solid ${token.colorBorder}` : 'none',
           borderTopRightRadius: token.borderRadiusLG || token.borderRadius,
           borderBottomRightRadius: token.borderRadiusLG || token.borderRadius,
+          borderTopLeftRadius: collapsed ? token.borderRadiusLG || token.borderRadius : 0,
+          borderBottomLeftRadius: collapsed ? token.borderRadiusLG || token.borderRadius : 0,
+          transition: 'all 0.3s ease',
         }}
       >
         {/* 顶部工具栏 */}

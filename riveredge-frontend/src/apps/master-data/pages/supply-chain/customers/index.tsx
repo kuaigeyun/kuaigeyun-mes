@@ -13,6 +13,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+
 import { customerApi, getUserOptions, getDictionaryOptions } from '../../../services/supply-chain';
 import { CustomerFormModal } from '../../../components/CustomerFormModal';
 import type { Customer, CustomerCreate } from '../../../types/supply-chain';
@@ -862,6 +863,7 @@ const CustomersPage: React.FC = () => {
         columns={detailColumns}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
+        column={1}
       />
 
       {/* 创建/编辑客户 Modal */}

@@ -196,7 +196,7 @@ const WorkGroupsPage: React.FC = () => {
   const detailColumns: ProDescriptionsItemProps<WorkGroup>[] = [
     { title: t('field.workGroup.code'), dataIndex: 'code' },
     { title: t('field.workGroup.name'), dataIndex: 'name' },
-    { title: t('field.workGroup.description'), dataIndex: 'description', span: 2 },
+    { title: t('field.workGroup.description'), dataIndex: 'description' },
     {
       title: t('field.workGroup.members'),
       dataIndex: 'members',
@@ -214,7 +214,6 @@ const WorkGroupsPage: React.FC = () => {
           </div>
         );
       },
-      span: 2,
     },
     {
       title: t('field.workGroup.isActive'),
@@ -224,7 +223,6 @@ const WorkGroupsPage: React.FC = () => {
           {record?.isActive ? t('common.enabled') : t('common.disabled')}
         </Tag>
       ),
-      span: 2,
     },
     { title: t('common.createdAt'), dataIndex: 'createdAt', valueType: 'dateTime' },
     { title: t('common.updatedAt'), dataIndex: 'updatedAt', valueType: 'dateTime' },
@@ -319,6 +317,7 @@ const WorkGroupsPage: React.FC = () => {
         dataSource={workGroupDetail || undefined}
         columns={detailColumns}
         loading={detailLoading}
+        column={1}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
       />
 

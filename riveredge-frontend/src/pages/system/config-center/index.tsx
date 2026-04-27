@@ -601,7 +601,7 @@ const ConfigCenterPage: React.FC = () => {
 
   const renderNotificationTab = () => (
     <Layout style={{ minHeight: 400, height: '100%', minWidth: 0, background: 'transparent' }}>
-      <Content style={{ padding: '24px 0 0 0', height: '100%', minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <Content style={{ padding: '14px 0 0 0', height: '100%', minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         <div className="config-center-scrollable-content">
           <div style={{ marginBottom: 16 }}>
             <Text strong style={{ fontSize: 16 }}>消息提醒</Text>
@@ -681,7 +681,7 @@ const ConfigCenterPage: React.FC = () => {
             onClick={({ key }) => onSelectCat(key)}
           />
         </Sider>
-        <Content style={{ padding: '24px 0 0 24px', height: '100%', minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <Content style={{ padding: '14px 0 0 24px', height: '100%', minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           <div className="config-center-scrollable-content">
             <div style={{ marginBottom: 16 }}>
               <Text strong style={{ fontSize: 16 }}>{renderText(currentCat.nameKey, currentCat.id)}</Text>
@@ -760,11 +760,11 @@ const ConfigCenterPage: React.FC = () => {
         activeTabKey={activeMainTab}
         onTabChange={setActiveMainTab}
         tabs={[
-          { key: 'parameters', label: t('pages.system.configCenter.tabParameters'), children: renderTabContent(PARAMETER_CATEGORIES, selectedParamCat, setSelectedParamCat, <SettingOutlined />) },
-          { key: 'audit', label: t('pages.system.configCenter.tabAudit'), children: renderTabContent(AUDIT_CATEGORIES, selectedAuditCat, setSelectedAuditCat, <AuditOutlined />, true) },
-          { key: 'flow', label: t('pages.system.configCenter.tabFlow'), children: renderTabContent(FLOW_CATEGORIES, selectedFlowCat, setSelectedFlowCat, <NodeIndexOutlined />) },
-          { key: 'automation', label: t('pages.system.configCenter.tabAutomation'), children: renderTabContent(AUTOMATION_CATEGORIES, selectedAutoCat, setSelectedAutoCat, <ControlOutlined />) },
-          { key: 'notification', label: '消息提醒', children: renderNotificationTab(), icon: <BellOutlined /> },
+          { key: 'parameters', label: <Space><SettingOutlined />{t('pages.system.configCenter.tabParameters')}</Space>, children: renderTabContent(PARAMETER_CATEGORIES, selectedParamCat, setSelectedParamCat, <SettingOutlined />) },
+          { key: 'audit', label: <Space><AuditOutlined />{t('pages.system.configCenter.tabAudit')}</Space>, children: renderTabContent(AUDIT_CATEGORIES, selectedAuditCat, setSelectedAuditCat, <AuditOutlined />, true) },
+          { key: 'flow', label: <Space><NodeIndexOutlined />{t('pages.system.configCenter.tabFlow')}</Space>, children: renderTabContent(FLOW_CATEGORIES, selectedFlowCat, setSelectedFlowCat, <NodeIndexOutlined />) },
+          { key: 'automation', label: <Space><ControlOutlined />{t('pages.system.configCenter.tabAutomation')}</Space>, children: renderTabContent(AUTOMATION_CATEGORIES, selectedAutoCat, setSelectedAutoCat, <ControlOutlined />) },
+          { key: 'notification', label: <Space><BellOutlined />消息提醒</Space>, children: renderNotificationTab() },
         ]}
         padding={24}
       />

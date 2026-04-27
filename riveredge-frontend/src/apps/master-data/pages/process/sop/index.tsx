@@ -18,6 +18,7 @@ import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { downloadFile } from '../../../../../utils';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate } from '../../../../../components/layout-templates';
+
 import { sopApi, operationApi, processRouteApi } from '../../../services/process';
 import { materialApi, materialGroupApi } from '../../../services/material';
 import type { SOP, SOPCreate, SOPUpdate, Operation } from '../../../types/process';
@@ -688,12 +689,13 @@ const SOPPage: React.FC = () => {
         dataSource={sopDetail || undefined}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
+        column={1}
         columns={[
           { title: 'SOP编号', dataIndex: 'code' },
           { title: 'SOP名称', dataIndex: 'name' },
           { title: '关联工序', dataIndex: 'operationId', render: (_, record) => getOperationName(record?.operationId ?? (record as any)?.operation_id) },
           { title: '版本号', dataIndex: 'version' },
-          { title: 'SOP内容', dataIndex: 'content', span: 2 },
+          { title: 'SOP内容', dataIndex: 'content' },
           {
             title: '启用状态',
             dataIndex: 'isActive',

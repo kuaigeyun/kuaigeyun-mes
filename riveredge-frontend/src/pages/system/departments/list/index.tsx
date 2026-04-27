@@ -9,8 +9,8 @@
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProColumns } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, List, Popconfirm, Tooltip } from 'antd';
-import { EditOutlined, DeleteOutlined, PlusOutlined, ApartmentOutlined, TeamOutlined, CheckCircleOutlined, EyeOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, List, Popconfirm, Tooltip } from 'antd';
+import { EditOutlined, DeleteOutlined, PlusOutlined, EyeOutlined } from '@ant-design/icons';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import { UniTable } from '../../../../components/uni-table';
 import { DepartmentFormModal } from '../components/DepartmentFormModal';
@@ -24,13 +24,14 @@ import {
   DepartmentTreeItem,
 } from '../../../../services/department';
 import { downloadFile } from '../../../../utils';
+import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 
 const DepartmentListPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi, modal } = App.useApp();
   const actionRef = useRef<any>();
 
-  const [stats, setStats] = useState({ totalCount: 0, activeCount: 0, userCount: 0 });
+
   const [modalVisible, setModalVisible] = useState(false);
   const [currentDepartmentUuid, setCurrentDepartmentUuid] = useState<string | null>(null);
   const [initialParentUuid, setInitialParentUuid] = useState<string | null>(null);
@@ -135,20 +136,16 @@ const DepartmentListPage: React.FC = () => {
 
       const response = await getDepartmentTree({ keyword, is_active });
 
-      let active = 0;
-      let users = 0;
       const allKeys: string[] = [];
       const traverse = (nodes: DepartmentTreeItem[]) => {
         nodes.forEach((node) => {
           allKeys.push(node.uuid);
-          if (node.is_active) active++;
-          users += node.user_count || 0;
           if (node.children) traverse(node.children);
         });
       };
       traverse(response.items);
 
-      setStats({ totalCount: response.total, activeCount: active, userCount: users });
+
 
       const flatDepts: Department[] = [];
       const flatten = (nodes: DepartmentTreeItem[]) => {
@@ -380,70 +377,55 @@ const DepartmentListPage: React.FC = () => {
       valueType: 'option',
       width: 220,
       fixed: 'right',
-      render: (_, record) => (
-        <Space size="small">
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+      render: (_, record) => {
+        const canDelete = checkCanDelete(record);
+        const actions: React.ReactNode[] = [
+          <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
             {t('field.department.view')}
-          </Button>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+          </Button>,
+          <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
             {t('field.department.edit')}
-          </Button>
+          </Button>,
           <Button
+            key="addChild"
             type="link"
             size="small"
             icon={<PlusOutlined />}
             onClick={() => handleCreate(record.uuid)}
           >
             {t('field.department.addChild')}
-          </Button>
+          </Button>,
           <Popconfirm
+            key="delete"
             title={t('field.department.deleteConfirm', { name: record.name })}
             description={t('field.department.deleteConfirmDesc')}
             onConfirm={() => handleDelete(record)}
             okText={t('common.confirm')}
             cancelText={t('common.cancel')}
-            disabled={!checkCanDelete(record).can}
+            disabled={!canDelete.can}
           >
-            <Tooltip title={checkCanDelete(record).reason}>
-              <Button
-                type="link"
-                size="small"
-                danger
-                icon={<DeleteOutlined />}
-                disabled={!checkCanDelete(record).can}
-              >
-                {t('field.department.delete')}
-              </Button>
+            <Tooltip title={!canDelete.can ? canDelete.reason : undefined}>
+              <span>
+                <Button
+                  type="link"
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined />}
+                  disabled={!canDelete.can}
+                >
+                  {t('field.department.delete')}
+                </Button>
+              </span>
             </Tooltip>
-          </Popconfirm>
-        </Space>
-      ),
+          </Popconfirm>,
+        ];
+        return renderRowActionsOverflow(actions, `dept-${record.uuid ?? 'row'}`);
+      },
     },
   ];
 
   return (
-    <ListPageTemplate
-      statCards={[
-        {
-          title: t('field.department.totalCount'),
-          value: stats.totalCount,
-          prefix: <ApartmentOutlined />,
-          valueStyle: { color: '#1890ff' },
-        },
-        {
-          title: t('field.department.activeCount'),
-          value: stats.activeCount,
-          prefix: <CheckCircleOutlined />,
-          valueStyle: { color: '#52c41a' },
-        },
-        {
-          title: t('field.department.totalUserCount'),
-          value: stats.userCount,
-          prefix: <TeamOutlined />,
-          valueStyle: { color: '#722ed1' },
-        },
-      ]}
-    >
+    <ListPageTemplate>
       <UniTable<Department>
         viewTypes={['table', 'help']}
         actionRef={actionRef}

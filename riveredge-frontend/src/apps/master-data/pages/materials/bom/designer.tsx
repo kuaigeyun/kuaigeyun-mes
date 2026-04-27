@@ -177,17 +177,8 @@ const BOMDesignerPage: React.FC = () => {
   
   const [unitMap, setUnitMap] = useState<Record<string, string>>({}); // value -> label
 
-  /** 操作指南是否展开（默认展开，但 3 秒后自动收起） */
-  const [guideExpanded, setGuideExpanded] = useState(true);
-
-  useEffect(() => {
-    if (guideExpanded) {
-      const timer = setTimeout(() => {
-        setGuideExpanded(false);
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [guideExpanded]);
+  /** 操作指南是否展开（默认收起，给画板留足空间；需要时点击键盘图标展开） */
+  const [guideExpanded, setGuideExpanded] = useState(false);
 
   /** 当前物料的版本列表（用于版本切换下拉） */
   const [versionOptions, setVersionOptions] = useState<Array<{ value: string; label: string; isObsolete?: boolean }>>([]);
@@ -254,7 +245,7 @@ const BOMDesignerPage: React.FC = () => {
   }, []);
 
   /**
-   * 在 MindMap 树中根据 componentId 查找节点
+   * 在 MindMap 树中根据 componentId 查找节点（含取半成品节点导出子件等场景）
    */
   const findNodeByComponentId = useCallback((node: MindMapNode, componentId: number): MindMapNode | null => {
     if (node.componentId === componentId) return node;
@@ -1118,18 +1109,6 @@ const BOMDesignerPage: React.FC = () => {
       }
     });
     return items;
-  }, []);
-
-  /** 在树中按 componentId 查找第一个匹配的节点（用于取半成品节点导出其子件） */
-  const findNodeByComponentId = useCallback((tree: MindMapNode, componentId: number): MindMapNode | null => {
-    if (tree.componentId === componentId) return tree;
-    if (tree.children) {
-      for (const c of tree.children) {
-        const found = findNodeByComponentId(c, componentId);
-        if (found) return found;
-      }
-    }
-    return null;
   }, []);
 
   /**

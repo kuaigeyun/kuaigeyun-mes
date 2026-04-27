@@ -26,7 +26,7 @@ class DataBackup(BaseModel):
         file_uuid: 关联的文件ID (若已上传至文件系统)
         file_size: 文件大小 (字节)
         status: 任务状态 (pending, running, success, failed)
-        inngest_run_id: 关联的 Inngest 运行 ID
+        inngest_run_id: 异步任务 ID；历史列名未改
         started_at: 开始时间
         completed_at: 完成时间
         error_message: 错误信息
@@ -53,7 +53,7 @@ class DataBackup(BaseModel):
     source_type = fields.CharField(max_length=20, default="generated", description="备份来源：generated=系统生成，uploaded=用户上传")
     
     status = fields.CharField(max_length=20, default="pending", description="备份状态")
-    inngest_run_id = fields.CharField(max_length=100, null=True, description="Inngest 运行ID")
+    inngest_run_id = fields.CharField(max_length=100, null=True, description="异步任务 ID（历史字段名 inngest_run_id）")
     
     started_at = fields.DatetimeField(null=True, description="开始时间")
     completed_at = fields.DatetimeField(null=True, description="完成时间")

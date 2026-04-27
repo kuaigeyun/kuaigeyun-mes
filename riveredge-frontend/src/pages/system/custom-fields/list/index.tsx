@@ -1091,7 +1091,7 @@ const CustomFieldListPage: React.FC = () => {
                 {/* 顶部标题栏 */}
                 <div
                   style={{
-                    borderBottom: `1px solid ${token.colorBorder}`,
+                    borderBottom: `1px solid ${token.colorBorderSecondary}`,
                     padding: '16px',
                     backgroundColor: token.colorFillAlter,
                     display: 'flex',

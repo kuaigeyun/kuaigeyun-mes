@@ -2,10 +2,9 @@
 操作日志中间件模块
 
 自动记录所有 API 操作日志与在线用户活动时间。
-主链路 fire-and-forget，单次 asyncio.create_task 合并两张表写入，失败不回灌请求。
+在同一请求协程内写入操作日志并更新活动，避免响应结束后上下文失效。
 """
 
-import asyncio
 import re
 from typing import Callable, Optional
 
@@ -48,7 +47,7 @@ class OperationLogMiddleware(BaseHTTPMiddleware):
     操作日志中间件
 
     仅对 `/api/` 下、非排除路径、携带合法 Bearer 的请求记录一次日志。
-    日志写入与在线用户活动更新合并到单一后台任务，完全不阻塞响应。
+    日志写入与在线用户活动更新在响应返回前串行执行。
     """
 
     def __init__(self, app):
@@ -62,8 +61,14 @@ class OperationLogMiddleware(BaseHTTPMiddleware):
             return response
 
         tenant_id, user_id = self._extract_identity(request)
-        if not tenant_id or not user_id:
+        if tenant_id is None or user_id is None:
+            logger.debug(
+                "⚠️ 未能从请求中解析身份 path={} tenant_id={} user_id={}", 
+                request.url.path, tenant_id, user_id
+            )
             return response
+        
+        logger.debug(f"✅ 已提取身份: tenant_id={tenant_id}, user_id={user_id}")
 
         ip_address = self._get_client_ip(request)
         payload = {
@@ -84,7 +89,7 @@ class OperationLogMiddleware(BaseHTTPMiddleware):
             "request_path": request.url.path,
         }
 
-        asyncio.create_task(self._persist(payload, ip_address))
+        await self._persist(payload, ip_address)
         return response
 
     @staticmethod

@@ -6,7 +6,7 @@
 
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProDescriptionsItemProps, ProDescriptions } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
 import { downloadFile } from '../../../../../utils';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
@@ -14,6 +14,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+
 import { WorkshopFormModal } from '../../../components/WorkshopFormModal';
 import { workshopApi, plantApi } from '../../../services/factory';
 import type { Workshop, WorkshopCreate, Plant } from '../../../types/factory';
@@ -687,7 +688,6 @@ const WorkshopsPage: React.FC = () => {
     {
       title: t('app.master-data.workshops.description'),
       dataIndex: 'description',
-      span: 2,
     },
     {
       title: t('app.master-data.workshops.statusLabel'),
@@ -712,24 +712,6 @@ const WorkshopsPage: React.FC = () => {
       valueType: 'dateTime',
     },
   ];
-
-  /**
-   * 详情 Drawer 的自定义内容（包含自定义字段）
-   */
-  const renderDetailContent = () => {
-    if (!workshopDetail) return null;
-    return (
-      <>
-        <ProDescriptions<Workshop>
-          dataSource={workshopDetail}
-          loading={detailLoading}
-          column={2}
-          columns={detailColumns}
-        />
-        <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
-      </>
-    );
-  };
 
   return (
     <>
@@ -857,8 +839,10 @@ const WorkshopsPage: React.FC = () => {
         columns={detailColumns}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        customContent={renderDetailContent()}
-      />
+        column={1}
+      >
+        <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
+      </DetailDrawerTemplate>
 
       <WorkshopFormModal
         open={modalVisible}

@@ -1,16 +1,23 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { IframePageTemplate } from '../../../components/layout-templates';
+import { Alert, Card, Typography } from 'antd';
 
-const InngestDashboard: React.FC = () => {
+const { Paragraph, Title } = Typography;
+
+/**
+ * 历史路由与菜单仍可能指向本页；异步任务已由 Taskiq + PostgreSQL 承载，不再嵌入 Inngest Dev UI。
+ */
+const TaskiqBackgroundTasksPage: React.FC = () => {
   const { t } = useTranslation();
   return (
-    <IframePageTemplate
-      src={`http://${import.meta.env.VITE_INNGEST_HOST || '127.0.0.1'}:${import.meta.env.VITE_INNGEST_PORT || '8300'}/`}
-      title={t('pages.system.inngest.title')}
-    />
+    <div style={{ padding: 24, maxWidth: 720 }}>
+      <Title level={4}>{t('pages.system.inngest.title')}</Title>
+      <Card>
+        <Paragraph>{t('pages.system.inngest.intro')}</Paragraph>
+        <Alert type="info" showIcon message={t('pages.system.inngest.noIframe')} />
+      </Card>
+    </div>
   );
 };
 
-export default InngestDashboard;
-
+export default TaskiqBackgroundTasksPage;

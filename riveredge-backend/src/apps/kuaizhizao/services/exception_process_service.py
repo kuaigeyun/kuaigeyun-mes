@@ -34,8 +34,7 @@ from apps.base_service import AppBaseService
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.kuaizhizao.services.exception_service import ExceptionService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
-from core.inngest.client import inngest_client
-from inngest import Event
+from core.tasks.dispatcher import TaskEvent, dispatch_event
 
 
 class ExceptionProcessService(AppBaseService[ExceptionProcessRecord]):
@@ -115,9 +114,8 @@ class ExceptionProcessService(AppBaseService[ExceptionProcessRecord]):
             comment=f"启动异常处理流程：{data.exception_type}",
         )
 
-        # 发送Inngest事件启动工作流
-        await inngest_client.send(
-            Event(
+        await dispatch_event(
+            TaskEvent(
                 name="exception/process/start",
                 data={
                     "tenant_id": tenant_id,

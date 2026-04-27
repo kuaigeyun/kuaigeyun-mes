@@ -66,27 +66,7 @@ import { NEW_SHORTCUT_HINT } from '../../utils/globalNewShortcut'
 import { DictionaryLabel } from '../dictionary-label'
 import { stableJsonForQueryKey } from '../../utils/tableQueryKey'
 import { useAuditRequiredMap } from '../../hooks/useAuditRequired'
-import { renderRowActionsOverflow } from '../../utils/renderRowActionsOverflow'
-
-/**
- * 与表内 isOperationColumn 判定一致：用于右侧固定列排序，避免「仅 render、无 dataIndex」的操作列被当成普通列，
- * 导致生命周期（rank 1）被排到其后面成为最后一列。
- */
-function isUniTableOperationColumn(col: any): boolean {
-  const dataIndex = col?.dataIndex
-  const fieldName = Array.isArray(dataIndex) ? dataIndex.join('.') : String(dataIndex || '')
-  const key = col?.key ?? fieldName
-  return (
-    col?.valueType === 'option' ||
-    key === 'action' ||
-    key === 'operation' ||
-    key === 'option' ||
-    fieldName === 'action' ||
-    fieldName === 'operation' ||
-    fieldName === 'option' ||
-    (!dataIndex && col?.render && typeof col.render === 'function')
-  )
-}
+import { isUniTableOperationColumn, renderUniTableOperationCell } from '../uni-action'
 
 /**
  * 右侧固定列必须连续排在列定义末尾；规范顺序：其它 right 固定列 → 生命周期（key/dataIndex=lifecycle）→ 操作列。
@@ -925,170 +905,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     [auditRequiredMap]
   )
 
-  const normalizeOperationActionNode = useCallback((node: React.ReactNode): React.ReactNode => {
-    if (!node) return node
-    if (Array.isArray(node)) {
-      // 幂等优化：仅当至少一项发生了变化才新建数组，避免上游 React.memo 误判引用变化
-      let mutated = false
-      const next: React.ReactNode[] = []
-      for (const child of node) {
-        const normalized = normalizeOperationActionNode(child)
-        if (normalized !== child) mutated = true
-        next.push(normalized)
-      }
-      return mutated ? next : node
-    }
-    if (!React.isValidElement(node)) return node
-
-    const elementType = node.type as any
-    // antd Button 仅在 NODE_ENV !== 'production' 时设置 displayName='Button'（见 antd/es/button/Button.js:318）
-    // 生产构建里 displayName/name 都不再等于 'Button'，旧的字符串判断会让按钮规范化失效（页面回退为"图标+文字 链接样式"）。
-    // 必须用引用比较 (node.type === Button)，与 renderRowActionsOverflow 工具函数保持一致。
-    const isButtonLike = elementType === Button || (typeof elementType === 'string' && elementType === 'button')
-
-    const readNodeText = (input: React.ReactNode): string => {
-      if (input == null || typeof input === 'boolean') return ''
-      if (typeof input === 'string' || typeof input === 'number') return String(input)
-      if (Array.isArray(input)) return input.map(readNodeText).join('')
-      if (!React.isValidElement(input)) return ''
-      return readNodeText(input.props?.children)
-    }
-
-    const normalizeActionLabelText = (text: string): string => {
-      const trimmed = (text || '').trim()
-      if (!trimmed) return trimmed
-      if (trimmed === '查看') return '详情'
-      return trimmed
-    }
-
-    const resolveButtonTone = (text: string): { type: 'default' | 'primary'; danger?: boolean } => {
-      const normalized = text.replace(/\s+/g, '')
-      if (/删除|驳回|报废/.test(normalized)) return { type: 'default', danger: true }
-      if (/详情|编辑|下推|提交|确认|审核|通过/.test(normalized)) return { type: 'primary' }
-      return { type: 'default' }
-    }
-
-    const normalizeMenuLabel = (labelNode: React.ReactNode): React.ReactNode => {
-      const text = normalizeActionLabelText(readNodeText(labelNode))
-      return text || labelNode
-    }
-
-    const isAuditSemanticAction = (text: string): boolean => {
-      const normalized = text.replace(/\s+/g, '')
-      return (
-        normalized === '确认' ||
-        normalized.includes('审核') ||
-        normalized.includes('审批') ||
-        normalized.includes('驳回')
-      )
-    }
-
-    if (isButtonLike) {
-      const actionText = normalizeActionLabelText(readNodeText(node))
-      if (!hasAnyAuditEnabled && isAuditSemanticAction(actionText)) {
-        return null
-      }
-      const tone = resolveButtonTone(actionText)
-      const props = (node as React.ReactElement<any>).props || {}
-      const rawChildrenText = readNodeText(props.children)
-      const normalizedText = normalizeActionLabelText(rawChildrenText) || props.children
-      // 幂等优化：若按钮的关键外观属性（type / danger / size / icon / style）与目标态一致，
-      // 且文案无需改写（典型如已规范的"详情 编辑 删除"），直接复用原节点，避免 cloneElement 引起的子树 re-render。
-      const sameTone =
-        props.type === tone.type &&
-        (!!props.danger) === (!!tone.danger) &&
-        props.size === 'small' &&
-        props.icon == null &&
-        props.style == null
-      const sameChildren =
-        typeof normalizedText === 'string'
-          ? normalizedText === rawChildrenText
-          : normalizedText === props.children
-      if (sameTone && sameChildren) return node
-      return React.cloneElement(node as React.ReactElement<any>, {
-        type: tone.type,
-        danger: tone.danger,
-        size: 'small',
-        icon: undefined,
-        style: undefined,
-        children: normalizedText,
-      })
-    }
-
-    const hasDropdownMenuItems = Array.isArray(node.props?.menu?.items)
-    if (hasDropdownMenuItems) {
-      const nextItems = node.props.menu.items
-        .map((item: any) => {
-          if (!item || item.type === 'divider') return item
-          const normalizedLabel = normalizeMenuLabel(item.label)
-          if (!normalizedLabel) return null
-          return {
-            ...item,
-            label: normalizedLabel,
-          }
-        })
-        .filter(Boolean)
-      return React.cloneElement(node as React.ReactElement<any>, {
-        menu: {
-          ...node.props.menu,
-          items: nextItems,
-        },
-      })
-    }
-
-    if (node.props?.children) {
-      // 先做一轮 identity 对比，统计子节点是否全都保持原引用（多数常规表格操作列命中这条快速路径）
-      const originalArray = React.Children.toArray(node.props.children)
-      let normalizedArray: React.ReactNode[] = []
-      let anyChildChanged = false
-      React.Children.forEach(node.props.children, (child) => {
-        const normalizedChild = normalizeOperationActionNode(child)
-        if (normalizedChild !== child) anyChildChanged = true
-        normalizedArray.push(normalizedChild as React.ReactNode)
-      })
-      // 走与原逻辑一致的 toArray，以拿到稳定 key 的数组（避免 fragment 中 null 等边界）
-      normalizedArray = React.Children.toArray(normalizedArray)
-      // 幂等优化：没有任何子节点被改写时，原节点即为目标形态，直接复用
-      if (!anyChildChanged && normalizedArray.length === originalArray.length) {
-        return node
-      }
-      const childCount = React.Children.count(normalizedArray)
-      const nextChildren =
-        childCount <= 1 ? normalizedArray[0] ?? normalizedArray : normalizedArray
-      return React.cloneElement(node as React.ReactElement<any>, {
-        children: nextChildren,
-      })
-    }
-
-    return node
-  }, [hasAnyAuditEnabled])
-
-  const collectOperationActions = useCallback((node: React.ReactNode): React.ReactNode[] | null => {
-    if (!React.isValidElement(node)) return null
-    const children = React.Children.toArray((node as React.ReactElement<any>).props?.children).filter(Boolean)
-    if (children.length < 2) return null
-
-    const readText = (input: React.ReactNode): string => {
-      if (input == null || typeof input === 'boolean') return ''
-      if (typeof input === 'string' || typeof input === 'number') return String(input)
-      if (Array.isArray(input)) return input.map(readText).join('')
-      if (!React.isValidElement(input)) return ''
-      return readText((input as React.ReactElement<any>).props?.children)
-    }
-
-    const isActionLike = (child: React.ReactNode): boolean => {
-      if (!React.isValidElement(child)) return false
-      const t = child.type as any
-      if (t === Button || t === Popconfirm || t === Dropdown) return true
-      const text = readText(child).replace(/\s+/g, '')
-      return /详情|查看|编辑|修改|删除|提交|审核|确认|启用|停用|同步|下推|添加|新增|子项|更多/.test(text)
-    }
-
-    const candidateCount = children.filter(isActionLike).length
-    if (candidateCount < 2) return null
-    return children
-  }, [])
-
   // 为 date/dateTime 列注入站点格式的展示，使站点设置中的日期格式在单据表格中生效
   // 操作列：自适应宽度、不换行（whiteSpace: nowrap，移除固定 width）
   const processedColumns = React.useMemo(() => {
@@ -1137,25 +953,18 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           render: baseRender
             ? (...args: any[]) => {
                 const rendered = baseRender(...args)
-                if (Array.isArray(rendered)) {
-                  const record = args[1] as Record<string, any> | undefined
-                  const rowKey = String(record?.id ?? record?.uuid ?? args[2] ?? 'row')
-                  return renderRowActionsOverflow(rendered as React.ReactNode[], `uni-op-${rowKey}`)
-                }
-                const collected = collectOperationActions(rendered)
-                if (collected) {
-                  const record = args[1] as Record<string, any> | undefined
-                  const rowKey = String(record?.id ?? record?.uuid ?? args[2] ?? 'row')
-                  return renderRowActionsOverflow(collected, `uni-op-${rowKey}`)
-                }
-                return normalizeOperationActionNode(rendered)
+                const record = args[1] as Record<string, any> | undefined
+                const rowKey = String(record?.id ?? record?.uuid ?? args[2] ?? 'row')
+                return renderUniTableOperationCell(rendered, `uni-op-${rowKey}`, {
+                  suppressAuditSemanticActions: !hasAnyAuditEnabled,
+                })
               }
             : undefined,
         }
       }
       return col
     })
-  }, [effectiveColumns, dateFormatKey, normalizeOperationActionNode, collectOperationActions])
+  }, [effectiveColumns, dateFormatKey, hasAnyAuditEnabled])
 
   // 列宽拖拽：遵循 use-antd-resizable-header 与 ProTable 固定列规范
     // - 至少一列不设置 width（自适应），固定列必须保留 width
@@ -1272,21 +1081,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   // 检测是否有操作列（用于决定scroll配置）
   // 没有操作列的表格，ProTable的scroll配置会导致不必要的滚动条
   const hasActionColumn = React.useMemo(() => {
-    return effectiveColumns.some(col => {
-      const dataIndex = col.dataIndex
-      const fieldName = Array.isArray(dataIndex) ? dataIndex.join('.') : String(dataIndex || '')
-      const key = col.key || fieldName
-      // 检查是否是操作列：key或dataIndex为'action'、'operation'、'option'，或者没有dataIndex但有render函数
-      return (
-        key === 'action' ||
-        key === 'operation' ||
-        key === 'option' ||
-        fieldName === 'action' ||
-        fieldName === 'operation' ||
-        fieldName === 'option' ||
-        (!dataIndex && col.render && typeof col.render === 'function')
-      )
-    })
+    return effectiveColumns.some((col) => isUniTableOperationColumn(col))
   }, [effectiveColumns])
 
   // 有操作列时：scroll.x 用 max-content 让表格自适应内容宽度，操作列不换行

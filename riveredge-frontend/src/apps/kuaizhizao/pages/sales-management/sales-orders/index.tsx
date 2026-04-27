@@ -1625,14 +1625,22 @@ const SalesOrdersPage: React.FC = () => {
           </Button>,
         ];
         parts.push(
-          <Button type="link" size="small" disabled={!canEdit} onClick={() => canEdit && handleEdit([record.id!])}>
-            {t('app.kuaizhizao.salesOrder.editAction')}
-          </Button>
+          <Tooltip title={!canEdit ? t('app.kuaizhizao.salesOrder.editDisabledTip', { defaultValue: '已审核、已生效或执行中的订单不可编辑' }) : undefined}>
+            <span>
+              <Button type="link" size="small" disabled={!canEdit} onClick={() => canEdit && handleEdit([record.id!])}>
+                {t('app.kuaizhizao.salesOrder.editAction')}
+              </Button>
+            </span>
+          </Tooltip>
         );
         parts.push(
-          <Button type="link" danger size="small" disabled={!canDelete} onClick={() => canDelete && handleDeleteSingle(record.id!)}>
-            {t('app.kuaizhizao.salesOrder.delete')}
-          </Button>
+          <Tooltip title={!canDelete ? t('app.kuaizhizao.salesOrder.deleteDisabledTip', { defaultValue: '该状态下的订单不可删除' }) : undefined}>
+            <span>
+              <Button type="link" danger size="small" disabled={!canDelete} onClick={() => canDelete && handleDeleteSingle(record.id!)}>
+                {t('app.kuaizhizao.salesOrder.delete')}
+              </Button>
+            </span>
+          </Tooltip>
         );
         parts.push(
           <UniWorkflowActions

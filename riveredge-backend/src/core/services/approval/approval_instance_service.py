@@ -89,24 +89,23 @@ class ApprovalInstanceService:
                 )
             )
             
-            # 触发审批工作流事件
-            from core.inngest.client import inngest_client
-            from inngest import Event
-            
+            # 触发审批工作流（Taskiq + PostgreSQL）
+            from core.tasks.dispatcher import TaskEvent, dispatch_event
+
             try:
-                await inngest_client.send(
-                    Event(
+                await dispatch_event(
+                    TaskEvent(
                         name="approval/submit",
                         data={
                             "tenant_id": tenant_id,
                             "approval_id": str(approval_instance.uuid),
                             "process_id": str(process.uuid),
-                        }
+                        },
                     )
                 )
             except Exception as e:
-                # 如果 Inngest 事件发送失败，记录错误但不影响审批实例创建
                 from loguru import logger
+
                 logger.error(f"发送审批工作流事件失败: {e}")
             
             return approval_instance
@@ -931,10 +930,8 @@ class ApprovalInstanceService:
             )
         )
         
-        # 触发审批操作事件
-        from core.inngest.client import inngest_client
-        from inngest import Event
-        
+        from core.tasks.dispatcher import TaskEvent, dispatch_event
+
         try:
             event_data = {
                 "tenant_id": tenant_id,
@@ -946,16 +943,11 @@ class ApprovalInstanceService:
                 event_data["comment"] = action.comment
             if action.transfer_to_user_id:
                 event_data["transfer_to_user_id"] = action.transfer_to_user_id
-            
-            await inngest_client.send(
-                Event(
-                    name="approval/action",
-                    data=event_data
-                )
-            )
+
+            await dispatch_event(TaskEvent(name="approval/action", data=event_data))
         except Exception as e:
-            # 如果 Inngest 事件发送失败，记录错误但不影响审批操作
             from loguru import logger
+
             logger.error(f"发送审批操作事件失败: {e}")
         
         return approval_instance

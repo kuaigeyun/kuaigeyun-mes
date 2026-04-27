@@ -13,6 +13,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+
 import { supplierApi, getUserOptions, getDictionaryOptions } from '../../../services/supply-chain';
 import { SupplierFormModal } from '../../../components/SupplierFormModal';
 import type { Supplier, SupplierCreate } from '../../../types/supply-chain';
@@ -849,6 +850,7 @@ const SuppliersPage: React.FC = () => {
         columns={detailColumns}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
+        column={1}
       />
 
       {/* 创建/编辑供应商 Modal */}

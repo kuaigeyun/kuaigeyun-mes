@@ -14,6 +14,7 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, DetailDrawerTemplate } from '../../../../../components/layout-templates';
 import { DefectTypeFormModal } from '../../../components/DefectTypeFormModal';
+
 import { defectTypeApi, type PresetDefectTypeItem } from '../../../services/process';
 import type { DefectType, DefectTypeCreate } from '../../../types/process';
 import { DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
@@ -543,13 +544,11 @@ const DefectTypesPage: React.FC = () => {
         open={drawerVisible}
         onClose={handleCloseDetail}
         dataSource={defectTypeDetail || undefined}
-        loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
         columns={[
           { title: '不良品编号', dataIndex: 'code' },
           { title: '不良品名称', dataIndex: 'name' },
           { title: '分类', dataIndex: 'category' },
-          { title: '描述', dataIndex: 'description', span: 2 },
+          { title: '描述', dataIndex: 'description' },
           {
             title: '启用状态',
             dataIndex: 'isActive',
@@ -565,6 +564,9 @@ const DefectTypesPage: React.FC = () => {
           { title: '创建时间', dataIndex: 'createdAt', valueType: 'dateTime' },
           { title: '更新时间', dataIndex: 'updatedAt', valueType: 'dateTime' },
         ]}
+        loading={detailLoading}
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        column={1}
       />
 
       <DefectTypeFormModal

@@ -561,6 +561,12 @@ const MessageTemplateListPage: React.FC = () => {
                 creatorButtonProps={{
                   creatorButtonText: t('pages.system.messageTemplate.addVariable'),
                 }}
+                actionRender={(_, __, defaultAction) => [
+                  defaultAction[0],
+                  <span key="delete" style={{ color: '#ff4d4f' }}>
+                    {defaultAction[1]}
+                  </span>,
+                ]}
                 itemRender={({ listDom, action }) => (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>{listDom}</div>
@@ -568,15 +574,17 @@ const MessageTemplateListPage: React.FC = () => {
                   </div>
                 )}
               >
-                <ProFormGroup key="group" grid colProps={{ span: 12 }}>
+                <ProFormGroup key="group" grid>
                   <ProFormText 
                     name="key" 
                     placeholder={t('pages.system.messageTemplate.varKeyPlaceholder')} 
                     rules={[{ required: true, message: t('pages.system.messageTemplate.required') }]}
+                    colProps={{ span: 12 }}
                   />
                   <ProFormText 
                     name="label" 
                     placeholder={t('pages.system.messageTemplate.varLabelPlaceholder')} 
+                    colProps={{ span: 12 }}
                   />
                 </ProFormGroup>
               </ProFormList>

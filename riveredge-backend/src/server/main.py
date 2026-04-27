@@ -132,6 +132,11 @@ except Exception as e:
     TASK_DISPATCHER_READY = False
     logger.warning(f"⚠️ 任务处理器注册失败: {e}")
 
+try:
+    import core.tasks.taskiq_app  # noqa: F401 — 注册 Taskiq broker 任务（run_event_pipeline 等）
+except Exception as e:
+    logger.warning(f"⚠️ Taskiq 模块预加载失败: {e}")
+
 # 获取运行模式 - 默认为SaaS模式
 MODE = os.getenv("MODE", "saas")
 
@@ -245,6 +250,15 @@ async def lifespan(app: FastAPI):
 
     app.state._cache_purge_task = asyncio.create_task(_cache_purge_loop())
     logger.info("✅ Cache 过期清理任务已启动（10 分钟/次）")
+
+    # Taskiq：API 进程仅启动 broker（供 kiq 投递），实际消费由独立 worker 进程完成
+    try:
+        from core.tasks.taskiq_app import broker as taskiq_broker
+
+        await taskiq_broker.startup()
+        logger.info("✅ Taskiq PostgreSQL broker 已启动（API 可投递异步任务）")
+    except Exception as e:
+        logger.warning(f"⚠️ Taskiq broker 启动失败，异步任务投递将不可用: {e}")
     
     # 验证路由注册情况
     from core.services.application.application_route_manager import get_route_manager
@@ -284,6 +298,14 @@ async def lifespan(app: FastAPI):
         await close_http_client()
     except Exception as e:
         logger.warning(f"关闭全局 httpx.AsyncClient 时出错: {e}")
+
+    try:
+        from core.tasks.taskiq_app import broker as taskiq_broker
+
+        await taskiq_broker.shutdown()
+        logger.info("✅ Taskiq broker 已关闭")
+    except Exception as e:
+        logger.warning(f"关闭 Taskiq broker 时出错: {e}")
 
     # 关闭 Tortoise ORM 数据库连接（统一走 lifespan，不再使用已弃用的 @app.on_event("shutdown")）
     try:

@@ -17,6 +17,7 @@ import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../
 import { warehouseApi, type PresetWarehouseItem } from '../../../services/warehouse';
 import { workshopApi, workCenterApi } from '../../../services/factory';
 import { WarehouseFormModal } from '../../../components/WarehouseFormModal';
+import { QRCodeGenerator } from '../../../../../components/qrcode';
 import type { Warehouse, WarehouseCreate } from '../../../types/warehouse';
 import { batchImport } from '../../../../../utils/batchOperations';
 
@@ -659,7 +660,6 @@ const WarehousesPage: React.FC = () => {
     {
       title: t('app.master-data.warehouses.description'),
       dataIndex: 'description',
-      span: 2,
     },
     {
       title: t('app.master-data.warehouses.status'),
@@ -835,8 +835,40 @@ const WarehousesPage: React.FC = () => {
         dataSource={warehouseDetail || undefined}
         columns={detailColumns}
         loading={detailLoading}
+        column={1}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-      />
+        styles={{ body: { position: 'relative' } }}
+      >
+        {warehouseDetail && (
+          <div style={{
+            position: 'absolute',
+            top: 24,
+            right: 24,
+            width: 220,
+            padding: 24,
+            background: 'rgba(255, 255, 255, 0.6)',
+            backdropFilter: 'blur(10px)',
+            borderRadius: 16,
+            boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.15)',
+            border: '1px solid rgba(255, 255, 255, 0.18)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 10
+          }}>
+            <QRCodeGenerator
+              data={{
+                warehouse_uuid: warehouseDetail.uuid,
+                warehouse_code: warehouseDetail.code,
+                warehouse_name: warehouseDetail.name
+              }}
+              qrcodeType="TRACE"
+              size={8}
+              noCard={true}
+            />
+          </div>
+        )}
+      </DetailDrawerTemplate>
 
       {/* 创建/编辑仓库 Modal */}
       <WarehouseFormModal

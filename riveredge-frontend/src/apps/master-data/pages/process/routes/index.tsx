@@ -16,6 +16,7 @@ import { downloadFile } from '../../../../../utils';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { ListPageTemplate, DetailDrawerTemplate } from '../../../../../components/layout-templates';
 import { RouteFormModal } from '../../../components/RouteFormModal';
+
 import { processRouteApi } from '../../../services/process';
 import { materialApi, materialGroupApi } from '../../../services/material';
 import type { ProcessRoute } from '../../../types/process';
@@ -546,10 +547,11 @@ const ProcessRoutesPage: React.FC = () => {
         dataSource={processRouteDetail || undefined}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
+        column={1}
         columns={[
           { title: '工艺路线编号', dataIndex: 'code' },
           { title: '工艺路线名称', dataIndex: 'name' },
-          { title: '描述', dataIndex: 'description', span: 2 },
+          { title: '描述', dataIndex: 'description' },
           {
             title: '启用状态',
             dataIndex: 'is_active',

@@ -48,7 +48,7 @@ import {
 } from '../../../../../components/layout-templates';
 import { SimpleSparkline } from '../../../../../components';
 import { packingBindingApi } from '../../../services/packing-binding';
-import { QRCodeGenerator } from '../../../../../components/qrcode';
+
 import { qrcodeApi } from '../../../../../services/qrcode';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import {
@@ -673,24 +673,11 @@ const PackingBindingPage: React.FC = () => {
             <>
               <DetailDrawerSection title="基本信息">
                 <Row gutter={16}>
-                  <Col xs={24} lg={16}>
+                  <Col xs={24} lg={24}>
                     <Descriptions
                       column={3}
                       size="small"
                       items={buildDescriptionItemsFromColumns(currentBinding, detailBaseColumns)}
-                    />
-                  </Col>
-                  <Col xs={24} lg={8} style={{ textAlign: 'center' }}>
-                    <div style={{ marginBottom: 8, fontWeight: 600 }}>箱码</div>
-                    <QRCodeGenerator
-                      qrcodeType="BOX"
-                      data={{
-                        box_uuid: currentBinding.box_no || currentBinding.uuid || '',
-                        box_no: currentBinding.box_no || '',
-                        box_name: currentBinding.product_name || currentBinding.box_no || '',
-                      }}
-                      autoGenerate={true}
-                      size={6}
                     />
                   </Col>
                 </Row>

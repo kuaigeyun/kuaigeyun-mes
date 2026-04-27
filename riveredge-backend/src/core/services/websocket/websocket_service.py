@@ -14,6 +14,8 @@ import json
 import asyncio
 from datetime import datetime
 
+from core.services.logging.online_user_service import OnlineUserService
+
 
 class WebSocketManager:
     """
@@ -326,6 +328,10 @@ class WebSocketService:
                     
                     elif message_type == "ping":
                         # 心跳检测
+                        await OnlineUserService.update_user_activity(
+                            tenant_id=tenant_id,
+                            user_id=user_id,
+                        )
                         await websocket_manager.send_personal_message(connection_id, {
                             "type": "pong",
                             "timestamp": datetime.now().isoformat(),

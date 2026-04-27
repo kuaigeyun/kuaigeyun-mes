@@ -1,5 +1,5 @@
 """
-设备维护提醒 Inngest 工作流函数
+设备维护提醒异步工作流（Taskiq 事件处理器）
 
 定时检查维护计划到期情况，创建维护提醒。
 
@@ -7,58 +7,43 @@ Author: Luigi Lu
 Date: 2026-01-16
 """
 
-from inngest import TriggerCron, Event, TriggerEvent
+from inngest import Event, TriggerEvent
 from typing import Dict, Any
 from datetime import datetime
 from loguru import logger
 
 from core.inngest.client import inngest_client
+from core.tasks.dispatcher import TaskEvent, dispatch_event
 from apps.kuaizhizao.services.maintenance_reminder_service import MaintenanceReminderService
 from core.utils.inngest_tenant_isolation import with_tenant_isolation
 from infra.domain.tenant_context import get_current_tenant_id
 
 
-@inngest_client.create_function(
-    fn_id="maintenance-reminder-scheduler",
-    name="设备维护提醒调度器",
-    trigger=TriggerCron(cron="0 8 * * *"),  # 每天上午8点执行
-)
-async def maintenance_reminder_scheduler_function(*args, **kwargs) -> Dict[str, Any]:
-    """
-    设备维护提醒调度器工作流函数
-    
-    每天上午8点执行一次，发送维护提醒检查事件。
-    
-    注意：使用 TriggerCron 时，Inngest 可能会传递 ctx (Context) 参数。
-    使用 *args 和 **kwargs 来接受任意参数，确保兼容不同版本的 SDK。
-    
-    Returns:
-        Dict[str, Any]: 调度结果
-    """
+async def run_maintenance_reminder_scheduler() -> Dict[str, Any]:
+    """由 Taskiq 定时任务每天调用：投递 maintenance-reminder/check。"""
     now = datetime.now()
-    
+
     try:
-        # 发送维护提醒检查事件
-        await inngest_client.send(
-            Event(
+        await dispatch_event(
+            TaskEvent(
                 name="maintenance-reminder/check",
                 data={
                     "timestamp": now.isoformat(),
-                    "advance_days": 7,  # 默认提前7天提醒
-                }
+                    "advance_days": 7,
+                },
             )
         )
         logger.info(f"已发送维护提醒检查事件: {now.isoformat()}")
-        
+
         return {
             "success": True,
-            "timestamp": now.isoformat()
+            "timestamp": now.isoformat(),
         }
     except Exception as e:
         logger.error(f"维护提醒调度器执行失败: {e}")
         return {
             "success": False,
-            "error": str(e)
+            "error": str(e),
         }
 
 

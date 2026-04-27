@@ -132,7 +132,7 @@ const IntegrationConfigListPage: React.FC = () => {
     try {
       setIsEdit(true);
       setCurrentIntegrationUuid(record.uuid);
-      setIntegrationType(record.type);
+      setIntegrationType(record.type as any);
       
       // 获取集成配置详情
       const detail = await getIntegrationConfigByUuid(record.uuid);
@@ -834,9 +834,10 @@ const IntegrationConfigListPage: React.FC = () => {
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
         dataSource={detailData || {}}
         columns={detailColumns}
+        column={1}
       />
     </>
   );

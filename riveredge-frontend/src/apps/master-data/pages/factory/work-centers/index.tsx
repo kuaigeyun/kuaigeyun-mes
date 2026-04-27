@@ -13,6 +13,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+
 import { workCenterApi, workstationApi } from '../../../services/factory';
 import { WorkCenterFormModal } from '../../../components/WorkCenterFormModal';
 import type { WorkCenter, WorkCenterCreate, Workstation } from '../../../types/factory';
@@ -471,7 +472,7 @@ const WorkCentersPage: React.FC = () => {
   const detailColumns: ProDescriptionsItemProps<WorkCenter>[] = [
     { title: t('field.workCenter.code'), dataIndex: 'code' },
     { title: t('field.workCenter.name'), dataIndex: 'name' },
-    { title: t('field.workCenter.description'), dataIndex: 'description', span: 2 },
+    { title: t('field.workCenter.description'), dataIndex: 'description' },
     {
       title: t('field.workCenter.workstationIds'),
       dataIndex: 'workstationIds',
@@ -484,7 +485,6 @@ const WorkCentersPage: React.FC = () => {
           .map((ws) => `${ws.code} - ${ws.name}`);
         return labels.join('；') || '-';
       },
-      span: 2,
     },
     {
       title: t('field.workCenter.isActive'),
@@ -494,7 +494,6 @@ const WorkCentersPage: React.FC = () => {
           {record?.isActive ? t('common.enabled') : t('common.disabled')}
         </Tag>
       ),
-      span: 2,
     },
     { title: t('common.createdAt'), dataIndex: 'createdAt', valueType: 'dateTime' },
     { title: t('common.updatedAt'), dataIndex: 'updatedAt', valueType: 'dateTime' },
@@ -614,6 +613,7 @@ const WorkCentersPage: React.FC = () => {
         dataSource={workCenterDetail || undefined}
         columns={detailColumns}
         loading={detailLoading}
+        column={1}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
       />
 

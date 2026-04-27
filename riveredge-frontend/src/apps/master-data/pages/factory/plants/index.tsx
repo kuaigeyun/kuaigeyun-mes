@@ -6,13 +6,14 @@
 
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProDescriptionsItemProps, ProDescriptions } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+
 import { plantApi } from '../../../services/factory';
 import { PlantFormModal } from '../../../components/PlantFormModal';
 import type { Plant, PlantCreate } from '../../../types/factory';
@@ -566,8 +567,8 @@ const PlantsPage: React.FC = () => {
   const detailColumns: ProDescriptionsItemProps<Plant>[] = [
     { title: t('app.master-data.plants.code'), dataIndex: 'code' },
     { title: t('app.master-data.plants.name'), dataIndex: 'name' },
-    { title: t('app.master-data.plants.address'), dataIndex: 'address', span: 2 },
-    { title: t('app.master-data.plants.description'), dataIndex: 'description', span: 2 },
+    { title: t('app.master-data.plants.address'), dataIndex: 'address' },
+    { title: t('app.master-data.plants.description'), dataIndex: 'description' },
     {
       title: t('app.master-data.plants.status'),
       dataIndex: 'isActive',
@@ -576,29 +577,10 @@ const PlantsPage: React.FC = () => {
           {record?.isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
         </Tag>
       ),
-      span: 2,
     },
     { title: t('common.createdAt'), dataIndex: 'createdAt', valueType: 'dateTime' },
     { title: t('common.updatedAt'), dataIndex: 'updatedAt', valueType: 'dateTime' },
   ];
-
-  /**
-   * 详情 Drawer 的自定义内容（包含自定义字段）
-   */
-  const renderDetailContent = () => {
-    if (!plantDetail) return null;
-    return (
-      <>
-        <ProDescriptions<Plant>
-          dataSource={plantDetail}
-          loading={detailLoading}
-          column={2}
-          columns={detailColumns}
-        />
-        <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
-      </>
-    );
-  };
 
   return (
     <>
@@ -718,8 +700,10 @@ const PlantsPage: React.FC = () => {
         columns={detailColumns}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        customContent={renderDetailContent()}
-      />
+        column={1}
+      >
+        <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
+      </DetailDrawerTemplate>
 
       {/* 创建/编辑厂区 Modal */}
       <PlantFormModal

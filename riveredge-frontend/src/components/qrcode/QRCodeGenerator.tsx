@@ -12,9 +12,6 @@ import { Card, Button, Space, App, Spin } from 'antd';
 import { DownloadOutlined, ReloadOutlined } from '@ant-design/icons';
 import { qrcodeApi, type QRCodeGenerateRequest, type QRCodeGenerateResponse } from '../../services/qrcode';
 
-/**
- * 二维码生成组件属性
- */
 export interface QRCodeGeneratorProps {
   /** 二维码类型 */
   qrcodeType: 'MAT' | 'WO' | 'OP' | 'EQ' | 'EMP' | 'BOX' | 'TRACE';
@@ -32,6 +29,8 @@ export interface QRCodeGeneratorProps {
   onGenerateSuccess?: (response: QRCodeGenerateResponse) => void;
   /** 是否显示卡片标题「二维码」（默认 true；为 false 时仅保留右上角操作按钮） */
   showCardTitle?: boolean;
+  /** 是否不使用外部 Card 容器（用于嵌套或自定义容器场景） */
+  noCard?: boolean;
 }
 
 /**
@@ -46,6 +45,7 @@ export const QRCodeGenerator: React.FC<QRCodeGeneratorProps> = ({
   autoGenerate = true,
   onGenerateSuccess,
   showCardTitle = true,
+  noCard = false,
 }) => {
   const { message } = App.useApp();
   const [loading, setLoading] = useState(false);
@@ -141,6 +141,79 @@ export const QRCodeGenerator: React.FC<QRCodeGeneratorProps> = ({
     return undefined;
   }, [autoGenerate, generateQRCode, stableData]);
 
+  const content = (
+    <Spin spinning={loading}>
+      {(!showCardTitle && !noCard) && (
+        <div style={{ textAlign: 'center', marginBottom: 16 }}>
+          <Space>
+            <Button
+              size="small"
+              icon={<ReloadOutlined />}
+              onClick={() => generateQRCode(false)}
+              loading={loading}
+              disabled={!data || Object.keys(data).length === 0}
+            >
+              重新生成
+            </Button>
+            {qrcodeResponse && (
+              <Button
+                size="small"
+                icon={<DownloadOutlined />}
+                onClick={downloadQRCode}
+              >
+                下载
+              </Button>
+            )}
+          </Space>
+        </div>
+      )}
+      {qrcodeResponse?.qrcode_image ? (
+        <div style={{ textAlign: 'center' }}>
+          {noCard && (
+            <div style={{ marginBottom: 16 }}>
+              <Space>
+                <Button
+                  size="small"
+                  icon={<ReloadOutlined />}
+                  onClick={() => generateQRCode(false)}
+                  loading={loading}
+                  disabled={!data || Object.keys(data).length === 0}
+                >
+                  重新生成
+                </Button>
+                {qrcodeResponse && (
+                  <Button
+                    size="small"
+                    icon={<DownloadOutlined />}
+                    onClick={downloadQRCode}
+                  >
+                    下载
+                  </Button>
+                )}
+              </Space>
+            </div>
+          )}
+          <img
+            src={qrcodeResponse.qrcode_image}
+            alt="二维码"
+            style={{ maxWidth: '100%', height: 'auto' }}
+          />
+          <div style={{ marginTop: 16, color: '#666', fontSize: 12 }}>
+            类型: {qrcodeResponse.qrcode_type}
+          </div>
+        </div>
+      ) : (
+        <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>
+          请生成二维码
+        </div>
+      )}
+    </Spin>
+  );
+
+  if (noCard) {
+    return content;
+  }
+
   return (
     <Card
       title={showCardTitle ? '二维码' : undefined}
@@ -167,48 +240,7 @@ export const QRCodeGenerator: React.FC<QRCodeGeneratorProps> = ({
         ) : undefined
       }
     >
-      <Spin spinning={loading}>
-        {!showCardTitle && (
-          <div style={{ textAlign: 'center', marginBottom: 16 }}>
-            <Space>
-              <Button
-                size="small"
-                icon={<ReloadOutlined />}
-                onClick={() => generateQRCode(false)}
-                loading={loading}
-                disabled={!data || Object.keys(data).length === 0}
-              >
-                重新生成
-              </Button>
-              {qrcodeResponse && (
-                <Button
-                  size="small"
-                  icon={<DownloadOutlined />}
-                  onClick={downloadQRCode}
-                >
-                  下载
-                </Button>
-              )}
-            </Space>
-          </div>
-        )}
-        {qrcodeResponse?.qrcode_image ? (
-          <div style={{ textAlign: 'center' }}>
-            <img
-              src={qrcodeResponse.qrcode_image}
-              alt="二维码"
-              style={{ maxWidth: '100%', height: 'auto' }}
-            />
-            <div style={{ marginTop: 16, color: '#666', fontSize: 12 }}>
-              类型: {qrcodeResponse.qrcode_type}
-            </div>
-          </div>
-        ) : (
-          <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>
-            请生成二维码
-          </div>
-        )}
-      </Spin>
+      {content}
     </Card>
   );
 };

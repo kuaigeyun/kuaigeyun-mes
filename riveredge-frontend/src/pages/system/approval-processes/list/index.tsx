@@ -8,9 +8,12 @@
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, SettingOutlined } from '@ant-design/icons';
+import { App, Popconfirm, Button, Tag, Space } from 'antd';
+import { EditOutlined, DeleteOutlined, EyeOutlined, BuildOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
+import { countWithPagedRequests } from '../../../../utils/pagedCount';
+import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
+import '../../../../styles/action-column.less';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
@@ -131,7 +134,7 @@ const ApprovalProcessListPage: React.FC = () => {
       messageApi.success(t('pages.system.approvalProcesses.batchDeleteSuccess'));
       setSelectedRowKeys([]);
       actionRef.current?.reload();
-    } catch (error: any) {
+    } catch {
       messageApi.error(t('pages.system.approvalProcesses.batchDeleteFailed'));
     }
   };
@@ -220,51 +223,71 @@ const ApprovalProcessListPage: React.FC = () => {
     {
       title: t('pages.system.approvalProcesses.actions'),
       valueType: 'option',
-      width: 200,
+      width: 220,
       fixed: 'right',
-      render: (_, record) => [
-        <Button
-          key="view"
-          type="link"
-          size="small"
-          icon={<EyeOutlined />}
-          onClick={() => handleView(record)}
-        >
-          {t('pages.system.approvalProcesses.view')}
-        </Button>,
-        <Button
-          key="design"
-          type="link"
-          size="small"
-          icon={<SettingOutlined />}
-          onClick={() => handleDesign(record)}
-        >
-          {t('pages.system.approvalProcesses.design')}
-        </Button>,
-        <Button
-          key="edit"
-          type="link"
-          size="small"
-          icon={<EditOutlined />}
-          onClick={() => handleEdit(record)}
-        >
-          {t('pages.system.approvalProcesses.edit')}
-        </Button>,
-        <Popconfirm
-          key="delete"
-          title={t('pages.system.approvalProcesses.confirmDelete')}
-          onConfirm={() => handleDelete(record)}
-        >
+      onHeaderCell: () => ({
+        style: {
+          whiteSpace: 'nowrap',
+          width: '1%',
+        },
+      }),
+      onCell: () => ({
+        style: {
+          whiteSpace: 'nowrap',
+          width: '1%',
+        },
+      }),
+      render: (_, record) => (
+        <Space size="small">
           <Button
+            key="view"
             type="link"
             size="small"
-            danger
-            icon={<DeleteOutlined />}
+            className="ant-btn-row-action ant-btn-row-action-detail"
+            icon={<EyeOutlined />}
+            onClick={() => handleView(record)}
           >
-            {t('pages.system.approvalProcesses.delete')}
+            {t('pages.system.approvalProcesses.view')}
           </Button>
-        </Popconfirm>,
-      ],
+          <Button
+            key="edit"
+            type="link"
+            size="small"
+            className="ant-btn-row-action"
+            icon={<EditOutlined />}
+            onClick={() => handleEdit(record)}
+          >
+            {t('pages.system.approvalProcesses.edit')}
+          </Button>
+          <Popconfirm
+            key="delete"
+            title={t('pages.system.approvalProcesses.deleteConfirmTitle')}
+            onConfirm={() => handleDelete(record)}
+            okText={t('common.confirm')}
+            cancelText={t('common.cancel')}
+          >
+            <Button
+              type="link"
+              size="small"
+              className="ant-btn-row-action"
+              danger
+              icon={<DeleteOutlined />}
+            >
+              {t('pages.system.approvalProcesses.delete')}
+            </Button>
+          </Popconfirm>
+          <Button
+            key="design"
+            type="link"
+            size="small"
+            className="ant-btn-row-action"
+            icon={<BuildOutlined />}
+            onClick={() => handleDesign(record)}
+          >
+            {t('pages.system.approvalProcesses.design')}
+          </Button>
+        </Space>
+      ),
     },
   ];
 
@@ -367,13 +390,13 @@ const ApprovalProcessListPage: React.FC = () => {
             messageApi.warning(t('pages.system.approvalProcesses.exportNoData'));
             return;
           }
-          const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-          const url = URL.createObjectURL(blob);
+          const blob = new window.Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+          const url = window.URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
           a.download = `approval-processes-${new Date().toISOString().slice(0, 10)}.json`;
           a.click();
-          URL.revokeObjectURL(url);
+          window.URL.revokeObjectURL(url);
           messageApi.success(t('pages.system.approvalProcesses.exportSuccess'));
         }}
         search={{
@@ -442,6 +465,7 @@ const ApprovalProcessListPage: React.FC = () => {
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
         dataSource={detailData}
+        column={1}
         columns={[
               {
                 title: t('pages.system.approvalProcesses.name'),
@@ -468,7 +492,14 @@ const ApprovalProcessListPage: React.FC = () => {
                 title: t('pages.system.approvalProcesses.nodesConfig'),
                 dataIndex: 'nodes',
                 render: (value: any) => (
-                  <pre style={{ maxHeight: '200px', overflow: 'auto' }}>
+                  <pre style={{ 
+                    maxHeight: '200px', 
+                    overflow: 'auto', 
+                    padding: '12px', 
+                    background: '#f5f5f5', 
+                    borderRadius: '4px',
+                    margin: 0
+                  }}>
                     {JSON.stringify(value, null, 2)}
                   </pre>
                 ),
@@ -477,7 +508,14 @@ const ApprovalProcessListPage: React.FC = () => {
                 title: t('pages.system.approvalProcesses.flowConfig'),
                 dataIndex: 'config',
                 render: (value: any) => (
-                  <pre style={{ maxHeight: '200px', overflow: 'auto' }}>
+                  <pre style={{ 
+                    maxHeight: '200px', 
+                    overflow: 'auto', 
+                    padding: '12px', 
+                    background: '#f5f5f5', 
+                    borderRadius: '4px',
+                    margin: 0
+                  }}>
                     {JSON.stringify(value, null, 2)}
                   </pre>
                 ),

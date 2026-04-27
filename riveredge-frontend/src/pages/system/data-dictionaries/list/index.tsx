@@ -14,6 +14,7 @@ import { SettingOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import { DataDictionaryFormModal } from '../components/DataDictionaryFormModal';
+import { renderUniTableOperationCell } from '../../../../components/uni-action';
 import {
   getDataDictionaryList,
   getDataDictionaryByUuid,
@@ -397,12 +398,13 @@ const DataDictionaryListPage: React.FC = () => {
       title: t('common.actions'),
       key: 'action',
       width: 140,
-      render: (_: any, record: DictionaryItem) => (
-        <Space size="small" wrap>
-          <Button type="primary" size="small" onClick={() => handleEditItem(record)}>
+      render: (_: any, record: DictionaryItem) => {
+        const actions = [
+          <Button key="edit" type="primary" size="small" onClick={() => handleEditItem(record)}>
             {t('field.dataDictionary.edit')}
-          </Button>
+          </Button>,
           <Popconfirm
+            key="delete"
             title={t('field.dataDictionary.itemDeleteConfirm')}
             onConfirm={() => handleDeleteItem(record)}
             disabled={currentDictionaryForItems?.is_system}
@@ -416,9 +418,10 @@ const DataDictionaryListPage: React.FC = () => {
                 </Button>
               </span>
             </Tooltip>
-          </Popconfirm>
-        </Space>
-      ),
+          </Popconfirm>,
+        ];
+        return renderUniTableOperationCell(actions, `item-${record.uuid}`);
+      },
     },
   ];
 

@@ -48,7 +48,7 @@ class PrintTemplateRenderRequest(BaseModel):
     """渲染打印模板请求 Schema"""
     data: Dict[str, Any] = Field(..., description="模板数据")
     output_format: Optional[str] = Field("pdf", description="输出格式")
-    async_execution: bool = Field(False, description="是否异步执行（通过 Inngest）")
+    async_execution: bool = Field(False, description="是否异步执行（Taskiq 后台任务）")
 
 
 class PrintTemplateCompileRequest(BaseModel):
@@ -84,7 +84,7 @@ class PrintTemplateResponse(PrintTemplateBase):
     tenant_id: int = Field(..., description="组织ID")
     is_active: bool = Field(..., description="是否启用")
     is_default: bool = Field(..., description="是否默认模板")
-    inngest_function_id: Optional[str] = Field(None, description="Inngest 函数ID")
+    inngest_function_id: Optional[str] = Field(None, description="后台任务函数 ID（Taskiq；历史字段名）")
     usage_count: int = Field(..., description="使用次数")
     last_used_at: Optional[datetime] = Field(None, description="最后使用时间")
     created_at: datetime = Field(..., description="创建时间")
@@ -104,5 +104,5 @@ class PrintTemplateRenderResponse(BaseModel):
     file_url: Optional[str] = Field(None, description="生成文件URL")
     file_uuid: Optional[str] = Field(None, description="生成文件UUID")
     error: Optional[str] = Field(None, description="错误信息")
-    inngest_run_id: Optional[str] = Field(None, description="Inngest 运行ID（如果异步执行）")
+    inngest_run_id: Optional[str] = Field(None, description="异步任务 ID / Taskiq task_id（历史字段名 inngest_run_id）")
 

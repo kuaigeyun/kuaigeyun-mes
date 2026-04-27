@@ -111,8 +111,7 @@ class PrintTemplateService:
             )
             await print_template.save()
             
-            # TODO: 可选集成 Inngest 函数注册
-            # 如果需要通过 Inngest 异步执行打印，可以在这里注册函数
+            # TODO: 可选接入 Taskiq（如 print/render 事件 + dispatcher 注册处理器）
             
             return print_template
         except IntegrityError:
@@ -673,27 +672,20 @@ class PrintTemplateService:
         if not print_template.is_active:
             raise ValidationError("打印模板未启用")
         
-        # 如果选择异步执行，通过 Inngest 执行
+        # 如果选择异步执行，应通过 Taskiq（如 dispatch_event + 已注册 handler）执行
         if data.async_execution:
-            # TODO: 集成 Inngest 异步执行
-            # from core.inngest.client import inngest_client
-            # from inngest import Event
-            # await inngest_client.send_event(
-            #     event=Event(
-            #         name="print/render",
-            #         data={
-            #             "tenant_id": tenant_id,
-            #             "template_id": str(print_template.uuid),
-            #             "data": data.data,
-            #             "output_format": data.output_format
-            #         }
-            #     )
-            # )
-            # return {
-            #     "success": True,
-            #     "async": True,
-            #     "message": "打印任务已提交异步执行"
-            # }
+            # TODO: 集成 Taskiq 异步执行，例如：
+            # from core.tasks.dispatcher import dispatch_event, TaskEvent
+            # await dispatch_event(TaskEvent(
+            #     name="print/render",
+            #     data={
+            #         "tenant_id": tenant_id,
+            #         "template_id": str(print_template.uuid),
+            #         "data": data.data,
+            #         "output_format": data.output_format,
+            #     },
+            # ))
+            # return {"success": True, "async": True, "message": "打印任务已提交异步执行"}
             raise ValidationError("异步执行功能待实现")
         
         # 同步渲染模板（pdfme 模板在上层服务中会提前降级）

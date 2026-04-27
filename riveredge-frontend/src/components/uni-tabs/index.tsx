@@ -7,7 +7,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Tabs, Button, Dropdown, MenuProps, theme, Tooltip, message } from 'antd';
-import { CaretLeftFilled, CaretRightFilled, ReloadOutlined, FullscreenOutlined, FullscreenExitOutlined, PushpinOutlined, StarOutlined } from '@ant-design/icons';
+import { CaretLeftFilled, CaretRightFilled, ReloadOutlined, FullscreenOutlined, FullscreenExitOutlined, PushpinFilled, StarFilled } from '@ant-design/icons';
 import type { MenuDataItem } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import { findMenuTitleWithTranslation } from '../../utils/menuTranslation';
@@ -692,7 +692,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       {
         key: 'refresh',
         label: t('tabs.refresh'),
-        icon: <ReloadOutlined />,
+        icon: <ReloadOutlined style={{ color: '#10b981' }} />, // 2026 Emerald Green
       },
       {
         type: 'divider',
@@ -701,12 +701,12 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       {
         key: 'pin',
         label: isPinned ? t('tabs.unpin') : t('tabs.pin'),
-        icon: <PushpinOutlined style={{ transform: isPinned ? 'rotate(-45deg)' : 'none' }} />,
+        icon: <PushpinFilled style={{ color: '#3b82f6', transform: isPinned ? 'rotate(-45deg)' : 'none' }} />, // 2026 Electric Blue
       },
       {
         key: 'favoriteToQuickEntry',
         label: t('tabs.favoriteToQuickEntry', { defaultValue: '收藏' }),
-        icon: <StarOutlined />,
+        icon: <StarFilled style={{ color: '#f59e0b' }} />, // 2026 Amber Gold
         disabled: isWorkplace,
       },
       {
@@ -1748,10 +1748,10 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
                     >
                       {tab.label}
                       {tab.pinned && (
-                        <PushpinOutlined
+                        <PushpinFilled
                           style={{
                             fontSize: 12,
-                            color: 'var(--ant-colorPrimary)',
+                            color: '#3b82f6',
                             transform: 'rotate(-45deg)',
                             flexShrink: 0,
                           }}

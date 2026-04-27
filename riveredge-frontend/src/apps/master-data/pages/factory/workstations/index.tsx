@@ -16,6 +16,7 @@ import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { workstationApi, productionLineApi } from '../../../services/factory';
 import { WorkstationFormModal } from '../../../components/WorkstationFormModal';
+import { QRCodeGenerator } from '../../../../../components/qrcode';
 import type { Workstation, WorkstationCreate, ProductionLine } from '../../../types/factory';
 import { batchImport } from '../../../../../utils/batchOperations';
 
@@ -638,7 +639,6 @@ const WorkstationsPage: React.FC = () => {
     {
       title: t('app.master-data.workstations.description'),
       dataIndex: 'description',
-      span: 2,
     },
     {
       title: t('app.master-data.workstations.status'),
@@ -650,7 +650,6 @@ const WorkstationsPage: React.FC = () => {
           </Tag>
         );
       },
-      span: 2,
     },
     {
       title: t('common.createdAt'),
@@ -795,8 +794,40 @@ const WorkstationsPage: React.FC = () => {
         dataSource={workstationDetail || undefined}
         columns={detailColumns}
         loading={detailLoading}
+        column={1}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-      />
+        styles={{ body: { position: 'relative' } }}
+      >
+        {workstationDetail && (
+          <div style={{
+            position: 'absolute',
+            top: 24,
+            right: 24,
+            width: 220,
+            padding: 24,
+            background: 'rgba(255, 255, 255, 0.6)',
+            backdropFilter: 'blur(10px)',
+            borderRadius: 16,
+            boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.15)',
+            border: '1px solid rgba(255, 255, 255, 0.18)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 10
+          }}>
+            <QRCodeGenerator
+              data={{
+                equipment_uuid: workstationDetail.uuid,
+                equipment_code: workstationDetail.code,
+                equipment_name: workstationDetail.name
+              }}
+              qrcodeType="EQ"
+              size={8}
+              noCard={true}
+            />
+          </div>
+        )}
+      </DetailDrawerTemplate>
 
       {/* 创建/编辑工位 Modal */}
       <WorkstationFormModal

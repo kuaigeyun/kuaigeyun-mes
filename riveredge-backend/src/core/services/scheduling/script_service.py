@@ -54,8 +54,7 @@ class ScriptService:
             )
             await script.save()
             
-            # TODO: 可选集成 Inngest 函数注册
-            # 如果需要通过 Inngest 异步执行，可以在这里注册函数
+            # TODO: 可选接入 Taskiq（script/execute 等事件 + dispatcher）
             
             return script
         except IntegrityError:
@@ -201,26 +200,19 @@ class ScriptService:
         if script.is_running:
             raise ValidationError("脚本正在运行中")
         
-        # 如果选择异步执行，通过 Inngest 执行
+        # 如果选择异步执行，应通过 Taskiq（dispatch_event 等）执行
         if data.async_execution:
-            # TODO: 集成 Inngest 异步执行
-            # from core.inngest.client import inngest_client
-            # from inngest import Event
-            # await inngest_client.send_event(
-            #     event=Event(
-            #         name="script/execute",
-            #         data={
-            #             "tenant_id": tenant_id,
-            #             "script_id": str(script.uuid),
-            #             "parameters": data.parameters or {}
-            #         }
-            #     )
-            # )
-            # return {
-            #     "success": True,
-            #     "async": True,
-            #     "message": "脚本已提交异步执行"
-            # }
+            # TODO: 集成 Taskiq 异步执行
+            # from core.tasks.dispatcher import dispatch_event, TaskEvent
+            # await dispatch_event(TaskEvent(
+            #     name="script/execute",
+            #     data={
+            #         "tenant_id": tenant_id,
+            #         "script_id": str(script.uuid),
+            #         "parameters": data.parameters or {},
+            #     },
+            # ))
+            # return {"success": True, "async": True, "message": "脚本已提交异步执行"}
             raise ValidationError("异步执行功能待实现")
         
         # 同步执行脚本

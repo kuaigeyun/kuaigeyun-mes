@@ -935,9 +935,27 @@ const UserListPage: React.FC = () => {
         width={DRAWER_CONFIG.STANDARD_WIDTH}
         dataSource={detailData || undefined}
         columns={detailColumns}
+        column={1}
+        styles={{ body: { position: 'relative' } }}
       >
         {detailData && (
-          <div style={{ marginTop: 24, maxWidth: 280, marginLeft: 'auto', marginRight: 'auto' }}>
+          <div style={{ 
+            position: 'absolute', 
+            top: 24, 
+            right: 24, 
+            width: 220, 
+            zIndex: 10,
+            background: 'rgba(255, 255, 255, 0.8)',
+            backdropFilter: 'blur(8px)',
+            padding: '16px',
+            borderRadius: '12px',
+            border: '1px solid rgba(0, 0, 0, 0.05)',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
             <QRCodeGenerator
               qrcodeType="EMP"
               data={{
@@ -947,6 +965,8 @@ const UserListPage: React.FC = () => {
               }}
               autoGenerate={true}
               showCardTitle={false}
+              size={8}
+              noCard={true}
             />
           </div>
         )}

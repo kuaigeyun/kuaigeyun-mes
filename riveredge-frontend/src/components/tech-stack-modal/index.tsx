@@ -47,10 +47,10 @@ const techStackData: TechStackItem[] = [
     isCore: true,
   },
   {
-    name: 'Inngest',
-    version: '>=0.3.0',
-    description: '现代化任务调度系统，处理异步任务和工作流',
-    license: 'Apache License 2.0 (开源版)',
+    name: 'Taskiq',
+    version: '0.12.0+',
+    description: '异步任务队列与工作流，PostgreSQL broker + 独立 worker/scheduler 消费',
+    license: 'Apache License 2.0',
     commercialUse: true,
     category: 'backend',
     isCore: true,
@@ -211,10 +211,18 @@ const techStackData: TechStackItem[] = [
     category: 'backend',
   },
   {
-    name: 'weasyprint',
-    version: '>=60.0',
-    description: 'PDF 文件生成库',
-    license: 'BSD License',
+    name: 'Playwright',
+    version: '1.x+',
+    description: 'HTML 转 PDF（Chromium 无头），快智造等打印链路；需 pip install playwright 与 playwright install chromium',
+    license: 'Apache License 2.0',
+    commercialUse: true,
+    category: 'backend',
+  },
+  {
+    name: 'xhtml2pdf',
+    version: '>=0.2.15',
+    description: '服务端 HTML/CSS 转 PDF（报表等），基于 ReportLab',
+    license: 'Apache License 2.0',
     commercialUse: true,
     category: 'backend',
   },
@@ -737,7 +745,7 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
               <Text strong>FastAPI</Text>：{t('components.techStackModal.overview.fastapi')}
             </div>
             <div>
-              <Text strong>Inngest</Text>：{t('components.techStackModal.overview.inngest')}
+              <Text strong>Taskiq</Text>：{t('components.techStackModal.overview.taskiq')}
             </div>
             <div>
               <Text strong>React</Text>：{t('components.techStackModal.overview.react')}

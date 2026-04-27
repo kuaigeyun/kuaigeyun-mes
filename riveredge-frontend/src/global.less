@@ -609,16 +609,67 @@ code {
   width: 16px !important;
 }
 
-/* 若仍发生换行：允许节点增高，避免与下一行图标/文字叠在一起 */
+/* 树节点强制垂直居中对齐，并收紧间距 */
 .left-panel-scroll-container .material-group-tree.ant-tree .ant-tree-treenode {
   height: auto !important;
-  min-height: 32px !important;
+  min-height: 28px !important; // 稍微减小最小高度
+  display: flex !important;
   align-items: center !important;
-  line-height: 1.35 !important;
+  padding: 2px 0 !important; // 减小内边距
+  margin: 2px 4px !important; // 减小垂直外边距
 }
+
+/* 修复 Switcher (小三角) 容器：确保背景大小合适且三角完美居中 */
+.left-panel-scroll-container .material-group-tree.ant-tree .ant-tree-switcher {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  align-self: center !important;
+  width: 24px !important;
+  height: 24px !important;
+  margin-right: 4px !important;
+  line-height: 1 !important;
+  border-radius: 4px !important;
+  transition: all 0.2s;
+  cursor: pointer;
+  
+  &:hover {
+    background-color: rgba(0, 0, 0, 0.06) !important;
+  }
+}
+
+/* 确保内部三角图标没有额外的偏移 */
+.left-panel-scroll-container .material-group-tree.ant-tree .ant-tree-switcher .ant-tree-switcher-icon {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 10px !important; // 稍微调小一点，更精致
+}
+
+/* 修复内容区垂直居中及其内部布局 */
 .left-panel-scroll-container .material-group-tree.ant-tree .ant-tree-node-content-wrapper {
+  display: flex !important;
+  align-items: center !important;
+  flex: 1;
   white-space: normal;
   word-break: break-word;
+  line-height: 1.5 !important;
+  min-height: 24px !important;
+}
+
+/* 确保图标对齐 */
+.left-panel-scroll-container .material-group-tree.ant-tree .ant-tree-iconEle {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  align-self: center !important;
+}
+
+/* 修复标题文字对齐 */
+.left-panel-scroll-container .material-group-tree.ant-tree .ant-tree-title {
+  display: flex !important;
+  align-items: center !important;
+  vertical-align: middle !important;
 }
 
 /* 排除弹窗中的树组件 */
@@ -905,9 +956,7 @@ code {
   background: transparent !important;
 }
 
-:where(.css-dev-only-do-not-override-dbp7pc).ant-tree .ant-tree-switcher:before {
-  top: 4px !important;
-}
+/* 已移除可能导致树组件错位的 top 偏移 hack */
 
 /* 强制所有滚动条轨道透明（覆盖浏览器默认，用于甘特图等） */
 *::-webkit-scrollbar-track {
@@ -1167,3 +1216,5 @@ code {
     margin-top: 8px !important;
   }
 }
+
+@import './styles/action-column.less';

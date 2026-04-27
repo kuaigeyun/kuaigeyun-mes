@@ -1,69 +1,51 @@
 """
-异常自动检测 Inngest 工作流函数
+异常自动检测异步工作流（Taskiq 事件处理器）
 
 定时检测异常（缺料异常、延期异常、质量异常）并创建异常记录。
 """
 
-from inngest import TriggerCron, Event, TriggerEvent
+from inngest import Event, TriggerEvent
 from typing import Dict, Any, Optional
 from datetime import datetime
 from loguru import logger
 
 from core.inngest.client import inngest_client
+from core.tasks.dispatcher import TaskEvent, dispatch_event
 from apps.kuaizhizao.services.exception_service import ExceptionService
 from apps.kuaizhizao.models.work_order import WorkOrder
 from core.utils.inngest_tenant_isolation import with_tenant_isolation
 from infra.domain.tenant_context import get_current_tenant_id
 
 
-@inngest_client.create_function(
-    fn_id="exception-detection-scheduler",
-    name="异常自动检测调度器",
-    trigger=TriggerCron(cron="0 */1 * * *"),  # 每小时执行一次
-)
-async def exception_detection_scheduler_function(*args, **kwargs) -> Dict[str, Any]:
+async def run_exception_detection_scheduler() -> Dict[str, Any]:
     """
-    异常自动检测调度器工作流函数
-    
-    每小时执行一次，检测所有租户的异常情况。
-    为每个租户发送异常检测事件。
-    
-    注意：使用 TriggerCron 时，Inngest 可能会传递 ctx (Context) 参数。
-    使用 *args 和 **kwargs 来接受任意参数，确保兼容不同版本的 SDK。
-    
-    Returns:
-        Dict[str, Any]: 调度结果
+    由 Taskiq 定时任务每小时调用：投递 exception/detect-all。
     """
     now = datetime.now()
     tenant_count = 0
-    
+
     try:
-        # 获取所有活跃的租户（这里简化处理，实际应该从租户表获取）
-        # 为了支持多租户，我们需要为每个租户发送事件
-        # 这里先实现单租户版本，后续可以扩展为多租户
-        
-        # 发送异常检测事件（不指定tenant_id，由检测函数处理所有租户）
-        await inngest_client.send(
-            Event(
+        await dispatch_event(
+            TaskEvent(
                 name="exception/detect-all",
                 data={
                     "timestamp": now.isoformat(),
-                }
+                },
             )
         )
         tenant_count = 1
         logger.info(f"已发送异常检测事件: {now.isoformat()}")
-        
+
         return {
             "success": True,
             "tenant_count": tenant_count,
-            "timestamp": now.isoformat()
+            "timestamp": now.isoformat(),
         }
     except Exception as e:
         logger.error(f"异常检测调度器执行失败: {e}")
         return {
             "success": False,
-            "error": str(e)
+            "error": str(e),
         }
 
 

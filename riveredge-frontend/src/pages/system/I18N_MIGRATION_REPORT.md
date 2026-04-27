@@ -44,7 +44,7 @@
 | 自定义字段 | `custom-fields/list/index.tsx` | **已补全**：关联字段选项（getTableFieldOptions）、选项示例文案（选项1/选项2）均已改为 t() |
 | 配置中心 | `config-center/index.tsx` | **已迁移**：参数分类、业务蓝图、配置模板弹窗、分类与参数名称/描述等均已改为 t() |
 | 编码规则 | `code-rules/list/index.tsx` | **已迁移**：列表/配置表单、提示、保存/更新/创建消息、序号与启用、规则名称/描述模板等均已改为 t() |
-| Inngest | `inngest/index.tsx` | **已迁移**：页面标题已改为 t() |
+| 异步任务（Taskiq） | `inngest/index.tsx` | **已迁移**：说明页 + t()；路由键 `path.infra.inngest` 仍兼容旧菜单 |
 | 数据备份 | `data-backups/index.tsx` | **已迁移**：统计卡片、表格/卡片/详情、创建/恢复/删除/下载、导出等均已改为 t() |
 | 文件管理 | `files/list/index.tsx` | **已迁移**：面包屑/树、上传/新建/删除、排序/视图、表格列、右键菜单、弹窗与提示等均已改为 t() |
 | 打印模板 | `print-templates/list/index.tsx` | **已迁移**：list 页统计/表格/详情、新建/编辑/渲染/删除等；`card-view.tsx` 未接入，见第二节 |
@@ -153,7 +153,7 @@
 
 | 状态 | 范围 | 说明 |
 |------|------|------|
-| **已接入且已迁移** | 系统级约 40 文件 | 操作/登录日志、在线用户、应用中心、站点/消息配置与模板、菜单、数据字典、配置中心、编码规则、脚本、数据备份、文件、打印模板 list/card-view、打印设备、接口、数据源 list/card-view、应用连接器 list/市场、设备/模具/设备故障、部门/职位/角色/权限/用户/邀请码/语言、Inngest 等 |
+| **已接入且已迁移** | 系统级约 40 文件 | 操作/登录日志、在线用户、应用中心、站点/消息配置与模板、菜单、数据字典、配置中心、编码规则、脚本、数据备份、文件、打印模板 list/card-view、打印设备、接口、数据源 list/card-view、应用连接器 list/市场、设备/模具/设备故障、部门/职位/角色/权限/用户/邀请码/语言、异步任务（Taskiq）等 |
 | **已接入待补全** | 系统级约 25 文件 + 布局 | 设备追溯、保养计划、审批流程、数据集、报表模板、自定义字段、工作台、站点设置、files、launch-progress、operation-guide、data-quality、roles-permissions 等；BasicLayout 内消息/设置/面包屑 |
 | **未接入** | 平台级 4 处 + 系统级 6 文件 | 平台：主登录、个人中心、初始化、锁屏；系统：`AppConnectorMarket.tsx`、`application-connections/connectors.tsx`、`data-sources/connectors.tsx`、`BusinessBlueprintNode.tsx`、`onboarding-wizard/index.tsx`、`print-templates/card-view.tsx` |
 

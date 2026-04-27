@@ -6,7 +6,7 @@
  * 布局与部门管理对齐。
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { ProFormText, ProFormTextArea, ProFormSwitch, ProColumns, ProFormTreeSelect, ProFormSelect } from '@ant-design/pro-components';
 import { DeleteOutlined, PlusOutlined, AppstoreOutlined, LinkOutlined, CheckCircleOutlined, SyncOutlined } from '@ant-design/icons';
 import { App, Button, Tag, Space, Popconfirm, Tooltip } from 'antd';
@@ -32,23 +32,32 @@ import { renderRowActionsOverflow } from '../../../utils/renderRowActionsOverflo
 // 动态图标组件
 const IconItem = ({ icon }: { icon?: string }) => {
   if (!icon) return null;
-  const Icon = (Icons as any)[icon];
+  const AntdIcons = Icons as Record<string, React.ComponentType>;
+  const Icon = AntdIcons[icon];
   return Icon ? <Icon /> : null;
 };
 
+  /**
+   * 递归获取所有菜单 UUID（用于一键展开）
+   */
+  const getAllKeys = (data: MenuTree[]): string[] => {
+    let keys: string[] = [];
+    data.forEach((item) => {
+      keys.push(item.uuid);
+      if (item.children && item.children.length > 0) {
+        keys.push(...getAllKeys(item.children));
+      }
+    });
+    return keys;
+  };
+  
 const MenuListPage: React.FC = () => {
-  const { message: messageApi, modal } = App.useApp();
+  const { message: messageApi } = App.useApp();
   const currentUser = useGlobalStore((s) => s.currentUser);
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const actionRef = useRef<any>();
 
-  /** 菜单变更后刷新侧边栏/UniTabs/面包屑（统一数据源） */
-  const refreshLayoutMenus = () => {
-    useGlobalStore.getState().incrementApplicationMenuVersion();
-    queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
-  };
-  
   // 统计数据状态
   const [stats, setStats] = useState({
     totalCount: 0,
@@ -80,25 +89,17 @@ const MenuListPage: React.FC = () => {
   const [detailData, setDetailData] = useState<Menu | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  /**
-   * 递归获取所有菜单 UUID（用于一键展开）
-   */
-  const getAllKeys = (data: MenuTree[]): string[] => {
-    let keys: string[] = [];
-    data.forEach((item) => {
-      keys.push(item.uuid);
-      if (item.children && item.children.length > 0) {
-        keys.push(...getAllKeys(item.children));
-      }
-    });
-    return keys;
-  };
+  /** 菜单变更后刷新侧边栏/UniTabs/面包屑（统一数据源） */
+  const refreshLayoutMenus = useCallback(() => {
+    useGlobalStore.getState().incrementApplicationMenuVersion();
+    queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
+  }, [queryClient]);
 
   /**
    * 加载应用列表（用于新建/编辑表单的关联应用下拉）
    * 页面挂载时即请求，与菜单树并行，不阻塞首屏
    */
-  const loadApplications = async () => {
+  const loadApplications = useCallback(async () => {
     try {
       const apps = await getApplicationList();
       setApplications(
@@ -110,17 +111,19 @@ const MenuListPage: React.FC = () => {
     } catch (error: any) {
       console.warn('加载应用列表失败:', error);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    if (currentUser) loadApplications();
-  }, [currentUser]);
+    if (currentUser?.uuid && applications.length === 0) {
+      loadApplications();
+    }
+  }, [currentUser, applications.length, loadApplications]);
 
   /**
    * 加载数据（仅请求菜单树，应用列表已在上方并行加载）
    */
-  const loadData = async (_params: any, _sort: any, _filter: any, searchFormValues?: any) => {
-     if (!currentUser) return { data: [], success: false, total: 0 };
+  const loadData = useCallback(async (_params: any, _sort: any, _filter: any, searchFormValues?: any) => {
+    if (!currentUser) return { data: [], success: false, total: 0 };
 
     try {
       const response = await getMenuTree({
@@ -190,24 +193,24 @@ const MenuListPage: React.FC = () => {
       messageApi.error(error.message || t('pages.system.menus.loadMenuFailed'));
       return { data: [], success: false, total: 0 };
     }
-  };
+  }, [currentUser, expandedRowKeys.length, messageApi, t]);
 
   /**
    * 校验是否可删除
    */
-  const checkCanDelete = (record: Menu): { can: boolean; reason?: string } => {
+  const checkCanDelete = useCallback((record: Menu): { can: boolean; reason?: string } => {
      // UniTable 的 record 是来自 loadData 返回的 tree items
-     const item = record as any as MenuTree; 
+     const item = record as unknown as MenuTree; 
      if (item.children && item.children.length > 0) {
          return { can: false, reason: t('pages.system.menus.deleteChildFirst') };
      }
      return { can: true };
-  };
+  }, [t]);
 
   /**
    * 处理删除
    */
-  const handleDelete = async (record: Menu) => {
+  const handleDelete = useCallback(async (record: Menu) => {
     try {
       await deleteMenu(record.uuid);
       messageApi.success(t('pages.system.deleteSuccess'));
@@ -216,12 +219,9 @@ const MenuListPage: React.FC = () => {
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.deleteFailed'));
     }
-  };
+  }, [messageApi, refreshLayoutMenus, t]);
 
-  /**
-   * 批量删除
-   */
-  const handleBatchDelete = async (keys: React.Key[]) => {
+  const handleBatchDelete = useCallback(async (keys: React.Key[]) => {
     const canDeleteKeys: string[] = [];
     const cannotDeleteNames: string[] = [];
 
@@ -252,9 +252,9 @@ const MenuListPage: React.FC = () => {
     } catch (e: any) {
       messageApi.error(e.message || t('pages.system.menus.batchDeleteFailed'));
     }
-  };
+  }, [allMenus, messageApi, refreshLayoutMenus, t]);
 
-  const handleCreate = (parentUuid?: string) => {
+  const handleCreate = useCallback((parentUuid?: string) => {
     setIsEdit(false);
     setCurrentMenuUuid(null);
     setFormInitialValues({
@@ -264,9 +264,9 @@ const MenuListPage: React.FC = () => {
       sort_order: 0,
     });
     setModalVisible(true);
-  };
+  }, []);
 
-  const handleEdit = async (record: Menu) => {
+  const handleEdit = useCallback(async (record: Menu) => {
     try {
         setIsEdit(true);
         setCurrentMenuUuid(record.uuid);
@@ -280,9 +280,9 @@ const MenuListPage: React.FC = () => {
     } catch (error: any) {
         messageApi.error(error.message || t('pages.system.menus.getDetailFailed'));
     }
-  };
+  }, [messageApi, t]);
   
-    const handleView = async (record: Menu) => {
+  const handleView = useCallback(async (record: Menu) => {
     try {
       setDetailLoading(true);
       setDrawerVisible(true);
@@ -293,9 +293,9 @@ const MenuListPage: React.FC = () => {
     } finally {
       setDetailLoading(false);
     }
-  };
+  }, [messageApi, t]);
 
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = useCallback(async (values: any) => {
     try {
         setFormLoading(true);
         // 处理 meta：空串不传，避免后端 422（meta 须为 object）；合法 JSON 字符串则解析
@@ -336,10 +336,10 @@ const MenuListPage: React.FC = () => {
         });
         
         if (isEdit && currentMenuUuid) {
-            await updateMenu(currentMenuUuid, payload);
+            await updateMenu(currentMenuUuid, payload as any);
             messageApi.success(t('pages.system.updateSuccess'));
         } else {
-            await createMenu(payload);
+            await createMenu(payload as any);
             messageApi.success(t('pages.system.createSuccess'));
         }
         setModalVisible(false);
@@ -350,16 +350,16 @@ const MenuListPage: React.FC = () => {
     } finally {
         setFormLoading(false);
     }
-  };
+  }, [currentMenuUuid, isEdit, messageApi, refreshLayoutMenus, t]);
 
-  const columns: ProColumns<Menu>[] = [
+  const columns: ProColumns<Menu>[] = useMemo(() => [
     {
         title: t('pages.system.menus.menuName'),
         dataIndex: 'name',
         width: 250,
         fixed: 'left',
-        render: (_, record) => {
-             const treeItem = record as MenuTree;
+        render: (_: any, record: Menu) => {
+             const treeItem = record as unknown as MenuTree;
              const displayName = translateAppMenuItemName(
                record.name,
                record.path,
@@ -385,7 +385,7 @@ const MenuListPage: React.FC = () => {
         dataIndex: 'icon',
         width: 100,
         hideInSearch: true,
-        render: (_, record) => record.icon ? <Tag>{record.icon}</Tag> : '-'
+        render: (_: any, record: Menu) => record.icon ? <Tag>{record.icon}</Tag> : '-'
     },
     {
         title: t('pages.system.menus.component'),
@@ -399,7 +399,7 @@ const MenuListPage: React.FC = () => {
         width: 80,
         valueType: 'digit',
         hideInSearch: true,
-        sorter: (a, b) => a.sort_order - b.sort_order,
+        sorter: (a: Menu, b: Menu) => a.sort_order - b.sort_order,
     },
     {
         title: t('pages.system.menus.status'),
@@ -410,7 +410,7 @@ const MenuListPage: React.FC = () => {
             true: { text: t('pages.system.applications.enabled'), status: 'Success' },
             false: { text: t('pages.system.applications.disabled'), status: 'Default' },
         },
-        render: (_, record) => (
+        render: (_: any, record: Menu) => (
             <Tag color={record.is_active ? 'success' : 'default'}>
                 {record.is_active ? t('pages.system.applications.enabled') : t('pages.system.applications.disabled')}
             </Tag>
@@ -421,7 +421,7 @@ const MenuListPage: React.FC = () => {
       dataIndex: 'is_external',
       width: 100,
       hideInSearch: true,
-      render: (_, record) => (
+      render: (_: any, record: Menu) => (
         record.is_external ? <Tag color="orange">{t('pages.system.menus.externalYes')}</Tag> : <span style={{color: '#ccc'}}>-</span>
       ),
     },
@@ -430,7 +430,7 @@ const MenuListPage: React.FC = () => {
         dataIndex: 'application_uuid',
         width: 100,
         hideInSearch: true,
-        render: (_, record) =>
+        render: (_: any, record: Menu) =>
           record.application_uuid ? (
             <Tooltip title={t('menu.system.appMenuSyncTip', { defaultValue: '应用菜单由 manifest 同步，在应用中心同步菜单可更新' })}>
               <Tag color="blue" icon={<SyncOutlined />}>
@@ -446,7 +446,7 @@ const MenuListPage: React.FC = () => {
         valueType: 'option',
         width: 360,
         fixed: 'right',
-        render: (_, record) => {
+        render: (_: any, record: Menu) => {
             const isAppMenu = !!record.application_uuid;
             const deleteCheck = checkCanDelete(record);
             const canDelete = !isAppMenu && deleteCheck.can;
@@ -479,46 +479,32 @@ const MenuListPage: React.FC = () => {
                   </span>
                 </Tooltip>
               </Popconfirm>,
-              <Button
+              <Tooltip
                 key="addChild"
-                type="default"
-                size="small"
-                icon={<PlusOutlined />}
-                onClick={() => handleCreate(record.uuid)}
+                title={isAppMenu ? t('pages.system.menus.externalNo', { defaultValue: '菜单由 manifest 同步，不可在此添加子项' }) : undefined}
               >
-                {t('pages.system.menus.addChild')}
-              </Button>,
+                <span>
+                  <Button
+                    type="default"
+                    size="small"
+                    icon={<PlusOutlined />}
+                    onClick={() => handleCreate(record.uuid)}
+                    disabled={isAppMenu}
+                  >
+                    {t('pages.system.menus.addChild')}
+                  </Button>
+                </span>
+              </Tooltip>,
             ];
-            return renderRowActionsOverflow(actions, `menu-${record.uuid ?? 'row'}`);
+            return renderRowActionsOverflow(actions, `menu-${record.uuid ?? 'row'}`, 4);
         }
     }
-  ];
+  ], [checkCanDelete, handleCreate, handleDelete, handleEdit, handleView, t]);
 
   if (!currentUser) return null;
 
   return (
-    <ListPageTemplate
-        statCards={[
-            {
-                title: t('pages.system.menus.totalCount'),
-                value: stats.totalCount,
-                prefix: <AppstoreOutlined />,
-                valueStyle: { color: '#1890ff' },
-            },
-            {
-                title: t('pages.system.menus.activeCount'),
-                value: stats.activeCount,
-                prefix: <CheckCircleOutlined />,
-                valueStyle: { color: '#52c41a' },
-            },
-            {
-                title: t('pages.system.menus.externalCount'),
-                value: stats.externalCount,
-                prefix: <LinkOutlined />,
-                valueStyle: { color: '#faad14' },
-            },
-        ]}
-    >
+    <ListPageTemplate>
         <UniTable<Menu>
             actionRef={actionRef}
             headerTitle={t('pages.system.menus.listTitle')}
@@ -534,6 +520,7 @@ const MenuListPage: React.FC = () => {
             deleteConfirmTitle={t('pages.system.menus.batchDeleteTitle')}
             deleteConfirmDescription={(c) => t('pages.system.menus.batchDeleteDescription', { count: c })}
             enableRowSelection
+            selectedRowKeys={selectedRowKeys}
             onRowSelectionChange={setSelectedRowKeys}
             showImportButton={false}
             showExportButton={true}
@@ -555,13 +542,13 @@ const MenuListPage: React.FC = () => {
                 messageApi.warning(t('pages.system.menus.noDataToExport'));
                 return;
               }
-              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
+              const blob = new window.Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+              const url = window.URL.createObjectURL(blob);
               const a = document.createElement('a');
               a.href = url;
               a.download = `menus-${new Date().toISOString().slice(0, 10)}.json`;
               a.click();
-              URL.revokeObjectURL(url);
+              window.URL.revokeObjectURL(url);
               messageApi.success(t('pages.system.menus.exportedCount', { count: items.length }));
             }}
             toolBarRender={() => [
@@ -622,12 +609,12 @@ const MenuListPage: React.FC = () => {
                 options={applications}
                 placeholder={t('pages.system.menus.relatedAppPlaceholder')}
                 fieldProps={{ variant: 'outlined' }}
-                colProps={{ span: 12 }}
+                colProps={{ span: 8 }}
              />
-             <ProFormText name="permission_code" label={t('pages.system.menus.permissionCode')} colProps={{ span: 12 }} />
-             <ProFormText name="sort_order" label={t('pages.system.menus.sort')} fieldProps={{ type: 'number' }} colProps={{ span: 12 }} />
-             <ProFormSwitch name="is_external" label={t('pages.system.menus.externalLink')} colProps={{ span: 12 }} />
-             <ProFormText name="external_url" label={t('pages.system.menus.externalUrl')} colProps={{ span: 24 }} />
+             <ProFormText name="permission_code" label={t('pages.system.menus.permissionCode')} colProps={{ span: 8 }} />
+             <ProFormText name="sort_order" label={t('pages.system.menus.sort')} fieldProps={{ type: 'number' }} colProps={{ span: 8 }} />
+             <ProFormSwitch name="is_external" label={t('pages.system.menus.externalLink')} colProps={{ span: 6 }} />
+             <ProFormText name="external_url" label={t('pages.system.menus.externalUrl')} colProps={{ span: 18 }} />
              <ProFormTextArea name="meta" label={t('pages.system.menus.metadataJson')} fieldProps={{ rows: 3 }} colProps={{ span: 24 }} />
              <ProFormSwitch name="is_active" label={t('pages.system.menus.enabled')} colProps={{ span: 12 }} />
         </FormModalTemplate>
@@ -657,7 +644,21 @@ const MenuListPage: React.FC = () => {
                 { title: t('pages.system.menus.externalUrl'), dataIndex: 'external_url' },
                 { title: t('pages.system.menus.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
                 { title: t('pages.system.menus.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
-                { title: t('pages.system.menus.metadata'), dataIndex: 'meta', render: (_: any, entity: any) => <pre>{JSON.stringify(entity?.meta, null, 2)}</pre> }
+                { title: t('pages.system.menus.metadata'), dataIndex: 'meta', render: (_: any, entity: any) => (
+                  <pre style={{
+                    backgroundColor: '#f6f8fa',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    border: '1px solid #d0d7de',
+                    fontSize: '12px',
+                    fontFamily: 'monospace',
+                    margin: 0,
+                    maxHeight: '200px',
+                    overflow: 'auto'
+                  }}>
+                    {JSON.stringify(entity?.meta, null, 2)}
+                  </pre>
+                ) }
             ]}
         />
     </ListPageTemplate>

@@ -1944,17 +1944,15 @@ async def trigger_exception_detection(
     - **work_order_id**: 工单ID（可选，如果指定则只检测该工单）
     """
     try:
-        from core.inngest.client import inngest_client
-        from inngest import Event
-        
-        # 发送异常检测事件
-        await inngest_client.send(
-            Event(
+        from core.tasks.dispatcher import TaskEvent, dispatch_event
+
+        await dispatch_event(
+            TaskEvent(
                 name="exception/detect",
                 data={
                     "tenant_id": tenant_id,
                     "work_order_id": work_order_id,
-                }
+                },
             )
         )
         

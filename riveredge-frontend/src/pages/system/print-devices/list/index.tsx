@@ -7,10 +7,10 @@
 
 import React, { useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormInstance, ProForm } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProForm } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Drawer, Modal, message, Input, Form, Space, Badge, Typography, Tooltip, Card, theme } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, PrinterOutlined, CheckCircleOutlined, PrinterFilled } from '@ant-design/icons';
+import { App, Popconfirm, Button, Tag, Modal, Form, Space, Badge, Typography, Tooltip, Card, theme } from 'antd';
+import { EditOutlined, DeleteOutlined, EyeOutlined, PrinterOutlined, CheckCircleOutlined, PrinterFilled } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
@@ -28,14 +28,15 @@ import {
   PrintDevicePrintData,
   PrintDevicePrintResponse,
 } from '../../../../services/printDevice';
+import { getPrintTemplateList } from '../../../../services/printTemplate';
 import { countWithPagedRequests } from '../../../../utils/pagedCount';
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
+import '../../../../styles/action-column.less';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 
 dayjs.extend(relativeTime);
 
-const { TextArea } = Input;
 const { Text, Paragraph } = Typography;
 const { useToken } = theme;
 
@@ -85,7 +86,6 @@ const PrintDeviceListPage: React.FC = () => {
   const { token } = useToken();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const [allDevices, setAllDevices] = useState<PrintDevice[]>([]); // 用于统计
   
   // Modal 相关状态（创建/编辑打印设备）
   const [modalVisible, setModalVisible] = useState(false);
@@ -93,11 +93,11 @@ const PrintDeviceListPage: React.FC = () => {
   const [currentPrintDeviceUuid, setCurrentPrintDeviceUuid] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
+  const [allDevices, setAllDevices] = useState<PrintDevice[]>([]); // 用于统计
   
   // Modal 相关状态（测试连接）
   const [testModalVisible, setTestModalVisible] = useState(false);
   const [testFormLoading, setTestFormLoading] = useState(false);
-  const [currentTestDeviceUuid, setCurrentTestDeviceUuid] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<PrintDeviceTestResponse | null>(null);
   
   // Modal 相关状态（执行打印）
@@ -175,7 +175,6 @@ const PrintDeviceListPage: React.FC = () => {
    * 处理测试连接
    */
   const handleTest = async (record: PrintDevice) => {
-    setCurrentTestDeviceUuid(record.uuid);
     setTestModalVisible(true);
     setTestResult(null);
     
@@ -205,8 +204,8 @@ const PrintDeviceListPage: React.FC = () => {
     setCurrentPrintDeviceUuidForPrint(record.uuid);
     setPrintModalVisible(true);
     setPrintResult(null);
-    printFormRef.current?.resetFields();
-    printFormRef.current?.setFieldsValue({
+    printFormRef.resetFields();
+    printFormRef.setFieldsValue({
       async_execution: false,
     });
   };
@@ -241,6 +240,48 @@ const PrintDeviceListPage: React.FC = () => {
       messageApi.error(error.message || t('pages.system.printDevices.printFailed'));
     } finally {
       setPrintFormLoading(false);
+    }
+  };
+
+  /**
+   * 处理打印测试页
+   */
+  const handlePrintTestPage = async (record: PrintDevice) => {
+    try {
+      messageApi.loading({ content: t('pages.system.printDevices.testing'), key: 'test-print' });
+      
+      // 动态获取一个可用的模板作为测试页
+      const templates = await getPrintTemplateList({ is_active: true });
+      if (templates.length === 0) {
+        messageApi.error({ content: t('pages.system.printTemplates.noTemplateAvailable'), key: 'test-print' });
+        return;
+      }
+      
+      // 优先选择名字包含“测试”的模板
+      const testTemplate = templates.find(t => t.name.includes('测试') || t.name.toLowerCase().includes('test')) || templates[0];
+      
+      const data: PrintDevicePrintData = {
+        template_uuid: testTemplate.uuid,
+        data: {
+          title: 'RiverEdge System Test Print',
+          device_name: record.name,
+          device_code: record.code,
+          print_time: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+          test_message: 'If you can see this, the printer is working correctly.',
+          organization: 'RiverEdge Industrial',
+        },
+        async_execution: false,
+      };
+      
+      const result = await printWithDevice(record.uuid, data);
+      
+      if (result.success) {
+        messageApi.success({ content: t('pages.system.printDevices.printSubmitted'), key: 'test-print' });
+      } else {
+        messageApi.error({ content: result.error || t('pages.system.printDevices.printFailed'), key: 'test-print' });
+      }
+    } catch (error: any) {
+      messageApi.error({ content: error.message || t('pages.system.printDevices.printFailed'), key: 'test-print' });
     }
   };
 
@@ -554,12 +595,87 @@ const PrintDeviceListPage: React.FC = () => {
       valueType: 'dateTime',
       hideInSearch: true,
     },
+    {
+      title: t('pages.system.printDevices.columnActions'),
+      dataIndex: 'option',
+      valueType: 'option',
+      width: 320,
+      fixed: 'right',
+      render: (_, record) => (
+        <Space size="small">
+          <Button
+            type="link"
+            size="small"
+            className="ant-btn-row-action ant-btn-row-action-detail"
+            icon={<EyeOutlined />}
+            onClick={() => handleView(record)}
+          >
+            {t('pages.system.printTemplates.detail')}
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            className="ant-btn-row-action"
+            icon={<EditOutlined />}
+            onClick={() => handleEdit(record)}
+          >
+            {t('pages.system.printTemplates.edit')}
+          </Button>
+          <Popconfirm
+            title={t('pages.system.printDevices.deleteConfirmTitle')}
+            onConfirm={() => handleDelete(record)}
+            okText={t('common.confirm')}
+            cancelText={t('common.cancel')}
+          >
+            <Button
+              type="link"
+              size="small"
+              className="ant-btn-row-action"
+              danger
+              icon={<DeleteOutlined />}
+            >
+              {t('pages.system.printDevices.deleteTooltip')}
+            </Button>
+          </Popconfirm>
+          <Button
+            type="link"
+            size="small"
+            className="ant-btn-row-action"
+            icon={<CheckCircleOutlined />}
+            onClick={() => handleTest(record)}
+            disabled={!record.is_active}
+          >
+            {t('pages.system.printDevices.testConnection')}
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            className="ant-btn-row-action"
+            icon={<PrinterOutlined />}
+            onClick={() => handlePrint(record)}
+            disabled={!record.is_active || !record.is_online}
+          >
+            {t('pages.system.printDevices.printTask')}
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            className="ant-btn-row-action"
+            icon={<PrinterOutlined />}
+            onClick={() => handlePrintTestPage(record)}
+            disabled={!record.is_active || !record.is_online}
+          >
+            {t('pages.system.printDevices.printTestPage')}
+          </Button>
+        </Space>
+      ),
+    },
   ];
 
   /**
    * 详情列定义
    */
-  const detailColumns = [
+  const detailColumns: any[] = [
     { title: t('pages.system.printDevices.columnName'), dataIndex: 'name' },
     { title: t('pages.system.printDevices.columnCode'), dataIndex: 'code' },
     { title: t('pages.system.printDevices.columnType'), dataIndex: 'type' },
@@ -806,7 +922,7 @@ const PrintDeviceListPage: React.FC = () => {
         width={700}
       >
         <ProForm
-          formRef={printFormRef}
+          form={printFormRef}
           loading={printFormLoading}
           onFinish={handlePrintSubmit}
           submitter={{
@@ -815,10 +931,24 @@ const PrintDeviceListPage: React.FC = () => {
             },
           }}
         >
-          <ProFormText
+          <ProFormSelect
             name="template_uuid"
             label={t('pages.system.printDevices.labelTemplateUuid')}
             rules={[{ required: true, message: t('pages.system.printDevices.templateUuidRequired') }]}
+            request={async () => {
+              try {
+                const templates = await getPrintTemplateList({ is_active: true });
+                return templates.map(t => ({
+                  label: `${t.name} (${t.code})`,
+                  value: t.uuid,
+                }));
+              } catch (e) {
+                console.error('Failed to load templates:', e);
+                return [];
+              }
+            }}
+            placeholder={t('pages.system.printDevices.templateUuidRequired')}
+            showSearch
           />
           <ProFormTextArea
             name="data"
@@ -861,8 +991,9 @@ const PrintDeviceListPage: React.FC = () => {
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
-        dataSource={detailData || {}}
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        column={1}
+        dataSource={detailData || undefined}
         columns={detailColumns}
       />
     </>

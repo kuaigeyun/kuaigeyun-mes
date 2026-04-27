@@ -641,7 +641,6 @@ const ProductionLinesPage: React.FC = () => {
     {
       title: t('app.master-data.productionLines.description'),
       dataIndex: 'description',
-      span: 2,
     },
     {
       title: t('app.master-data.productionLines.statusLabel'),
@@ -798,6 +797,7 @@ const ProductionLinesPage: React.FC = () => {
         dataSource={productionLineDetail || undefined}
         columns={detailColumns}
         loading={detailLoading}
+        column={1}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
       />
 

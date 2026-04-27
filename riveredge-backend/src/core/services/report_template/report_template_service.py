@@ -26,13 +26,6 @@ from loguru import logger
 
 from infra.infrastructure.http import get_http_client
 
-# 延迟导入 PDFEngine，因为在 Windows 上可能不可用
-try:
-    from core.services.report_engines import PDFEngine
-except ImportError:
-    PDFEngine = None  # type: ignore
-
-
 class ReportTemplateService(BaseService):
     """
     报表模板服务类
@@ -288,11 +281,11 @@ class ReportTemplateService(BaseService):
             file_stream = engine.generate(template.config, data)
             return file_stream.read()
         elif format == "pdf":
-            if PDFEngine is None:
+            try:
+                from core.services.report_engines import PDFEngine
+            except Exception as e:
                 raise ValidationError(
-                    "PDF 生成功能不可用。"
-                    "在 Windows 上需要安装 GTK+ 运行时库。"
-                    "请参考：https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#installation"
+                    f"PDF 生成功能不可用：{e}"
                 )
             engine = PDFEngine()
             file_stream = engine.generate(template.config, data)

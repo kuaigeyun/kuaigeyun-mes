@@ -1307,13 +1307,11 @@ class MaterialService:
         await _enrich_inspection_plan_name(resp_data)
         response = MaterialResponse.model_validate(resp_data)
 
-        # 发送 Inngest 事件，触发物料变更通知工作流（下游单据提示）
         try:
-            from core.inngest.client import inngest_client
-            from inngest import Event
+            from core.tasks.dispatcher import TaskEvent, dispatch_event
 
-            await inngest_client.send(
-                Event(
+            await dispatch_event(
+                TaskEvent(
                     name="material/updated",
                     data={
                         "tenant_id": tenant_id,
@@ -1325,9 +1323,9 @@ class MaterialService:
                     },
                 )
             )
-            logger.info(f"已发送物料更新事件到 Inngest: material_id={material.id}")
+            logger.info(f"已发送物料更新任务: material_id={material.id}")
         except Exception as e:
-            logger.warning(f"发送物料更新事件到 Inngest 失败: {e}")
+            logger.warning(f"发送物料更新任务失败: {e}")
 
         return response
 

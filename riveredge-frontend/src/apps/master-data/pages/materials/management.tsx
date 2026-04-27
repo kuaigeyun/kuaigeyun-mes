@@ -28,6 +28,7 @@ import {
   Row,
   Col,
   Divider,
+  Tooltip,
 } from 'antd'
 import {
   EditOutlined,
@@ -40,6 +41,9 @@ import {
   TagsOutlined,
   BarcodeOutlined,
   NumberOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
+  CopyOutlined,
 } from '@ant-design/icons'
 import {
   ActionType,
@@ -138,6 +142,7 @@ const MaterialsManagementPage: React.FC = () => {
   const [materialGroups, setMaterialGroups] = useState<MaterialGroup[]>([])
   const [materialGroupsLoading, setMaterialGroupsLoading] = useState(false)
   const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null)
+  const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false)
   const selectedGroupIdRef = useRef<number | null>(null)
 
   // 右键菜单状态
@@ -145,10 +150,15 @@ const MaterialsManagementPage: React.FC = () => {
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 })
   const [contextMenuGroup, setContextMenuGroup] = useState<MaterialGroup | null>(null)
 
+  const [baseUnitOptions, setBaseUnitOptions] = useState<Array<{ label: string; value: string }>>(
+    []
+  )
+  const [loadingBaseUnitOptions, setLoadingBaseUnitOptions] = useState(false)
+
   const emitAgentDebugLog = useCallback(
     (runId: string, hypothesisId: string, location: string, message: string, data: Record<string, any>) => {
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/b117966e-dad0-4d01-bd6a-e3ba9296abb4', {
+      window.fetch('http://127.0.0.1:7242/ingest/b117966e-dad0-4d01-bd6a-e3ba9296abb4', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '8e3a76' },
         body: JSON.stringify({
@@ -166,51 +176,90 @@ const MaterialsManagementPage: React.FC = () => {
     []
   )
 
-  // 恢复暂存的物料表单（从悬浮按钮返回时：URL 带 restore=1 + sessionStorage 有数据）
-  useEffect(() => {
-    const state = getSuspendedModal()
-    const isRestoreUrl = searchParams.get('restore') === '1'
-    const isMaterialsPath = location.pathname.endsWith('/materials') && !location.pathname.includes('/materials/')
-    if (state?.formData && (isRestoreUrl || (isMaterialsPath && state.returnPath?.endsWith('/materials')))) {
-      setMaterialRestoreInitialValues(state.formData)
-      setMaterialModalVisible(true)
-      setMaterialIsEdit(false)
-      setCurrentMaterial(null)
-      clearSuspendedModal()
-      if (isRestoreUrl) {
-        const next = new URLSearchParams(searchParams)
-        next.delete('restore')
-        setSearchParams(next, { replace: true })
+  /**
+   * 递归收集所有节点的key
+   */
+  const collectAllKeys = useCallback((nodes: DataNode[]): React.Key[] => {
+    const getAll = (data: DataNode[]): React.Key[] => {
+      let keys: React.Key[] = []
+      data.forEach(node => {
+        keys.push(node.key)
+        if (node.children && node.children.length > 0) {
+          keys = keys.concat(getAll(node.children))
+        }
+      })
+      return keys
+    }
+    return getAll(nodes)
+  }, [])
+
+  /**
+   * 递归过滤树数据（支持搜索子分组）
+   * 如果父分组匹配，显示父分组及其所有子分组
+   * 如果子分组匹配，显示父分组和匹配的子分组
+   */
+  const filterTreeData = useCallback((nodes: DataNode[], keyword: string): DataNode[] => {
+    if (!keyword.trim()) {
+      return nodes
+    }
+
+    const keywordLower = keyword.toLowerCase()
+    const filter = (data: DataNode[]): DataNode[] => {
+      const filtered: DataNode[] = []
+      data.forEach(node => {
+        // 检查当前节点是否匹配（排除"全部物料"节点）
+        const matches =
+          node.key !== 'all' && node.title?.toString().toLowerCase().includes(keywordLower)
+
+        // 递归过滤子节点
+        const filteredChildren = node.children ? filter(node.children) : []
+
+        // 如果当前节点匹配，或者有子节点匹配，则包含此节点
+        if (matches || filteredChildren.length > 0) {
+          filtered.push({
+            ...node,
+            children:
+              filteredChildren.length > 0 ? filteredChildren : matches ? node.children : undefined,
+          })
+        }
+      })
+      return filtered
+    }
+
+    return filter(nodes)
+  }, [])
+
+  const handleEditMaterial = useCallback(
+    async (record: Material) => {
+      try {
+        setMaterialIsEdit(true)
+        // 获取物料详情
+        const detail = await materialApi.get(record.uuid)
+        setCurrentMaterial(detail)
+        setMaterialModalVisible(true)
+      } catch (error: any) {
+        messageApi.error(error.message || t('app.master-data.materials.getDetailFailed'))
       }
-    }
-  }, [location.pathname, searchParams])
-
-  // 点击外部关闭右键菜单
-  useEffect(() => {
-    const handleClickOutside = () => {
-      if (contextMenuVisible) {
-        setContextMenuVisible(false)
-      }
-    }
-
-    document.addEventListener('click', handleClickOutside)
-    return () => {
-      document.removeEventListener('click', handleClickOutside)
-    }
-  }, [contextMenuVisible])
-
-  // 物料来源类型选项（用于搜索下拉框和列表展示，使用 i18n）
-  const sourceTypeOptions = useMemo(() => [
-    { label: t('app.master-data.materialForm.sourceMake'), value: 'Make' },
-    { label: t('app.master-data.materialForm.sourceBuy'), value: 'Buy' },
-    { label: t('app.master-data.materialForm.sourceOutsource'), value: 'Outsource' },
-    { label: t('app.master-data.materialForm.sourcePhantom'), value: 'Phantom' },
-    { label: t('app.master-data.materialForm.sourceService'), value: 'Service' },
-  ], [t])
-  const [baseUnitOptions, setBaseUnitOptions] = useState<Array<{ label: string; value: string }>>(
-    []
+    },
+    [messageApi, t]
   )
-  const [loadingBaseUnitOptions, setLoadingBaseUnitOptions] = useState(false)
+
+  const handleViewMaterial = useCallback(
+    async (record: Material) => {
+      try {
+        setMaterialDetailLoading(true)
+        // 获取物料详情
+        const detail = await materialApi.get(record.uuid)
+        setCurrentMaterial(detail)
+        setMaterialDrawerVisible(true)
+      } catch (error: any) {
+        messageApi.error(error.message || t('app.master-data.materials.getDetailFailed'))
+      } finally {
+        setMaterialDetailLoading(false)
+      }
+    },
+    [messageApi, t]
+  )
 
   /**
    * 将后端树形数据转换为Ant Design Tree组件格式
@@ -236,20 +285,6 @@ const MaterialsManagementPage: React.FC = () => {
       },
     ]
   }, [t])
-
-  /**
-   * 递归收集所有节点的key
-   */
-  const collectAllKeys = useCallback((nodes: DataNode[]): React.Key[] => {
-    let keys: React.Key[] = []
-    nodes.forEach(node => {
-      keys.push(node.key)
-      if (node.children && node.children.length > 0) {
-        keys = keys.concat(collectAllKeys(node.children))
-      }
-    })
-    return keys
-  }, [])
 
   /**
    * 加载物料分组树形结构
@@ -279,7 +314,7 @@ const MaterialsManagementPage: React.FC = () => {
     } finally {
       setMaterialGroupsLoading(false)
     }
-  }, [messageApi, convertToTreeData])
+  }, [messageApi, convertToTreeData, collectAllKeys, t])
 
   /**
    * 加载数据字典选项（基础单位）
@@ -302,80 +337,53 @@ const MaterialsManagementPage: React.FC = () => {
     }
   }, [])
 
-  /**
-   * 处理分组树选择
-   */
-  const handleGroupSelect: TreeProps['onSelect'] = selectedKeys => {
-    if (selectedKeys.length > 0) {
-      const key = selectedKeys[0] as string
-      setSelectedGroupKeys(selectedKeys)
-
-      if (key === 'all') {
-        selectedGroupIdRef.current = null
-        setSelectedGroupId(null)
-      } else {
-        const groupId = parseInt(key)
-        selectedGroupIdRef.current = groupId
-        setSelectedGroupId(groupId)
-      }
-
-      // 刷新物料列表
-      actionRef.current?.reload()
+  // 恢复暂存的物料表单（从悬浮按钮返回时：URL 带 restore=1 + sessionStorage 有数据）
+  useEffect(() => {
+    const state = getSuspendedModal()
+    const isRestoreUrl = searchParams.get('restore') === '1'
+    const isMaterialsPath = location.pathname.endsWith('/materials') && !location.pathname.includes('/materials/')
+    if (state?.formData && (isRestoreUrl || (isMaterialsPath && state.returnPath?.endsWith('/materials')))) {
+      // 使用 setTimeout 避免在 Effect 中同步触发 setState 警告
+      setTimeout(() => {
+        setMaterialRestoreInitialValues(state.formData)
+        setMaterialModalVisible(true)
+        setMaterialIsEdit(false)
+        setCurrentMaterial(null)
+        clearSuspendedModal()
+        if (isRestoreUrl) {
+          const next = new window.URLSearchParams(searchParams)
+          next.delete('restore')
+          setSearchParams(next, { replace: true })
+        }
+      }, 0)
     }
-  }
+  }, [location.pathname, searchParams, setSearchParams])
 
-  /**
-   * 处理分组树展开/收起
-   */
-  const handleGroupExpand: TreeProps['onExpand'] = expandedKeys => {
-    setExpandedKeys(expandedKeys)
-  }
-
-  /**
-   * 处理分组右键菜单
-   */
-  const handleGroupContextMenu = (e: React.MouseEvent, group: MaterialGroup | null) => {
-    e.preventDefault()
-    e.stopPropagation()
-
-    setContextMenuGroup(group)
-    setContextMenuPosition({ x: e.clientX, y: e.clientY })
-    setContextMenuVisible(true)
-  }
-
-  /**
-   * 递归过滤树数据（支持搜索子分组）
-   * 如果父分组匹配，显示父分组及其所有子分组
-   * 如果子分组匹配，显示父分组和匹配的子分组
-   */
-  const filterTreeData = useCallback((nodes: DataNode[], keyword: string): DataNode[] => {
-    if (!keyword.trim()) {
-      return nodes
+  // 点击外部关闭右键菜单
+  useEffect(() => {
+    const handleClickOutside = () => {
+      if (contextMenuVisible) {
+        setContextMenuVisible(false)
+      }
     }
 
-    const filtered: DataNode[] = []
-    const keywordLower = keyword.toLowerCase()
+    document.addEventListener('click', handleClickOutside)
+    return () => {
+      document.removeEventListener('click', handleClickOutside)
+    }
+  }, [contextMenuVisible])
 
-    nodes.forEach(node => {
-      // 检查当前节点是否匹配（排除"全部物料"节点）
-      const matches =
-        node.key !== 'all' && node.title?.toString().toLowerCase().includes(keywordLower)
+  // 物料来源类型选项（用于搜索下拉框和列表展示，使用 i18n）
+  const sourceTypeOptions = useMemo(() => [
+    { label: t('app.master-data.materialForm.sourceMake'), value: 'Make' },
+    { label: t('app.master-data.materialForm.sourceBuy'), value: 'Buy' },
+    { label: t('app.master-data.materialForm.sourceOutsource'), value: 'Outsource' },
+    { label: t('app.master-data.materialForm.sourcePhantom'), value: 'Phantom' },
+    { label: t('app.master-data.materialForm.sourceService'), value: 'Service' },
+  ], [t])
 
-      // 递归过滤子节点
-      const filteredChildren = node.children ? filterTreeData(node.children, keyword) : []
 
-      // 如果当前节点匹配，或者有子节点匹配，则包含此节点
-      if (matches || filteredChildren.length > 0) {
-        filtered.push({
-          ...node,
-          children:
-            filteredChildren.length > 0 ? filteredChildren : matches ? node.children : undefined,
-        })
-      }
-    })
 
-    return filtered
-  }, [])
 
   /**
    * 处理URL参数（从二维码扫描跳转过来时自动打开详情）
@@ -396,7 +404,7 @@ const MaterialsManagementPage: React.FC = () => {
       setSearchParams({}, { replace: true })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams, setSearchParams])
+  }, [searchParams, setSearchParams, handleViewMaterial, handleEditMaterial])
 
   /**
    * 处理分组搜索
@@ -412,7 +420,7 @@ const MaterialsManagementPage: React.FC = () => {
       const allKeys = collectAllKeys(filtered)
       setExpandedKeys(allKeys)
     }
-  }, [groupTreeData, groupSearchValue, filterTreeData])
+  }, [groupTreeData, groupSearchValue, filterTreeData, collectAllKeys])
 
   /**
    * 初始化加载
@@ -508,37 +516,37 @@ const MaterialsManagementPage: React.FC = () => {
   // Alt+N 绑定到新建物料（与新建分组区分，仅新建物料响应快捷键）
   useNewShortcut(handleCreateMaterial)
 
-  const handleEditMaterial = useCallback(
-    async (record: Material) => {
-      try {
-        setMaterialIsEdit(true)
-        // 获取物料详情
-        const detail = await materialApi.get(record.uuid)
-        setCurrentMaterial(detail)
-        setMaterialModalVisible(true)
-      } catch (error: any) {
-        messageApi.error(error.message || t('app.master-data.materials.getDetailFailed'))
-      }
-    },
-    [messageApi]
-  )
+  const handleGroupSelect: TreeProps['onSelect'] = selectedKeys => {
+    if (selectedKeys.length > 0) {
+      const key = selectedKeys[0] as string
+      setSelectedGroupKeys(selectedKeys)
 
-  const handleViewMaterial = useCallback(
-    async (record: Material) => {
-      try {
-        setMaterialDetailLoading(true)
-        // 获取物料详情
-        const detail = await materialApi.get(record.uuid)
-        setCurrentMaterial(detail)
-        setMaterialDrawerVisible(true)
-      } catch (error: any) {
-        messageApi.error(error.message || t('app.master-data.materials.getDetailFailed'))
-      } finally {
-        setMaterialDetailLoading(false)
+      if (key === 'all') {
+        selectedGroupIdRef.current = null
+        setSelectedGroupId(null)
+      } else {
+        const groupId = parseInt(key)
+        selectedGroupIdRef.current = groupId
+        setSelectedGroupId(groupId)
       }
-    },
-    [messageApi]
-  )
+
+      // 刷新物料列表
+      actionRef.current?.reload()
+    }
+  }
+
+  const handleGroupExpand: TreeProps['onExpand'] = expandedKeys => {
+    setExpandedKeys(expandedKeys)
+  }
+
+  const handleGroupContextMenu = (e: React.MouseEvent, group: MaterialGroup | null) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    setContextMenuGroup(group)
+    setContextMenuPosition({ x: e.clientX, y: e.clientY })
+    setContextMenuVisible(true)
+  }
 
   /**
    * 处理批量生成二维码
@@ -956,11 +964,11 @@ const MaterialsManagementPage: React.FC = () => {
   /**
    * 获取物料分组名称
    */
-  const getMaterialGroupName = (groupId?: number): string => {
+  const getMaterialGroupName = useCallback((groupId?: number): string => {
     if (!groupId) return '-'
     const group = materialGroups.find(g => g.id === groupId)
     return group ? `${group.code} - ${group.name}` : `${t('app.master-data.materials.materialGroup')} ID: ${groupId}`
-  }
+  }, [materialGroups, t])
 
   /**
    * 表格列定义
@@ -972,7 +980,29 @@ const MaterialsManagementPage: React.FC = () => {
         dataIndex: ['mainCode', 'code'],
         width: 150,
         fixed: 'left',
-        render: (_, record) => (record as any).mainCode || (record as any).code || '-',
+        render: (_, record) => {
+          const val = (record as any).mainCode || (record as any).code || '-'
+          return (
+            <Space size={4}>
+              <Typography.Text>{val}</Typography.Text>
+              {val !== '-' && (
+                <Tooltip title={t('common.copy')}>
+                  <Button
+                    type="link"
+                    size="small"
+                    icon={<CopyOutlined style={{ fontSize: 13, color: token.colorPrimary }} />}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      window.navigator.clipboard.writeText(val as string)
+                      messageApi.success(t('common.copySuccess'))
+                    }}
+                    style={{ padding: 0, height: 'auto' }}
+                  />
+                </Tooltip>
+              )}
+            </Space>
+          )
+        },
       },
       {
         title: t('app.master-data.materials.materialName'),
@@ -1175,8 +1205,12 @@ const MaterialsManagementPage: React.FC = () => {
     [
       t,
       materialGroups,
+      getMaterialGroupName,
       sourceTypeOptions,
       baseUnitOptions,
+      loadingBaseUnitOptions,
+      messageApi,
+      token,
       handleViewMaterial,
       handleEditMaterial,
       handleDeleteMaterial,
@@ -1187,6 +1221,7 @@ const MaterialsManagementPage: React.FC = () => {
     <>
       <TwoColumnLayout
         leftPanel={{
+          collapsed: leftPanelCollapsed,
           search: {
             placeholder: t('app.master-data.materials.searchGroup'),
             value: groupSearchValue,
@@ -1242,6 +1277,15 @@ const MaterialsManagementPage: React.FC = () => {
               size="small"
               actionRef={actionRef}
               columns={columns}
+              beforeSearchButtons={
+                <Tooltip title={leftPanelCollapsed ? t('app.master-data.materials.expandGroup') : t('app.master-data.materials.collapseGroup')}>
+                  <Button
+                    icon={leftPanelCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+                    onClick={() => setLeftPanelCollapsed(!leftPanelCollapsed)}
+                    style={{ marginRight: 8 }}
+                  />
+                </Tooltip>
+              }
               headerActions={
                 <Space>
                   <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateMaterial}>
@@ -1741,12 +1785,13 @@ const MaterialsManagementPage: React.FC = () => {
         open={materialDrawerVisible}
         onClose={() => setMaterialDrawerVisible(false)}
         loading={materialDetailLoading}
+        styles={{ body: { position: 'relative' } }}
       >
         {currentMaterial && (
           <>
             <ProDescriptions<Material>
               dataSource={currentMaterial}
-              column={2}
+              column={1}
               columns={[
                 {
                   title: t('app.master-data.materials.materialCode'),
@@ -1833,7 +1878,23 @@ const MaterialsManagementPage: React.FC = () => {
             />
 
             {/* 物料二维码 */}
-            <div style={{ marginTop: 24 }}>
+            <div style={{ 
+              position: 'absolute', 
+              top: 24, 
+              right: 24, 
+              width: 220, 
+              zIndex: 10,
+              background: 'rgba(255, 255, 255, 0.8)',
+              backdropFilter: 'blur(8px)',
+              padding: '16px',
+              borderRadius: '12px',
+              border: '1px solid rgba(0, 0, 0, 0.05)',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
               <QRCodeGenerator
                 qrcodeType="MAT"
                 data={{
@@ -1842,6 +1903,9 @@ const MaterialsManagementPage: React.FC = () => {
                   material_name: currentMaterial.name,
                 }}
                 autoGenerate={true}
+                showCardTitle={false}
+                size={8}
+                noCard={true}
               />
             </div>
           </>

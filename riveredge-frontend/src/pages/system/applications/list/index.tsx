@@ -27,7 +27,6 @@ import {
   TeamOutlined,
   BarChartOutlined,
   ApiOutlined,
-  ArrowUpOutlined,
   LockOutlined,
   SyncOutlined,
 } from '@ant-design/icons';
@@ -48,6 +47,7 @@ import {
   Application,
 } from '../../../../services/application';
 import { syncAllMenus } from '../../../../services/menu';
+import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 
 /** 卡片内图标尺寸（缩小以显得更精致，圆角背景保持 88x88） */
 const CARD_ICON_SIZE = 52;
@@ -88,17 +88,18 @@ const getApplicationIcon = (code: string, icon?: string | null, size: number = 7
 
 /** 各应用卡片渐变背景（素雅略深、契合主题，避免蓝紫 AI 风） */
 const getCardGradient = (code: string, isActive: boolean): string => {
-  if (!isActive) return 'linear-gradient(135deg, #e8e8e8 0%, #f2f2f2 100%)';
+  if (!isActive) return 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)';
   const gradients: Record<string, string> = {
-    kuaizhizao: 'linear-gradient(135deg, #e5e2de 0%, #eeebe8 100%)',   // 暖灰
-    kuaicaiwu: 'linear-gradient(135deg, #f5ecd8 0%, #f0ebe0 100%)',    // 暖金
-    kuaireport: 'linear-gradient(135deg, #dce4f0 0%, #e8eef6 100%)',   // 淡天青
-    'master-data': 'linear-gradient(135deg, #dce0e6 0%, #e8ecf2 100%)', // 石板灰
-    kuaiai: 'linear-gradient(135deg, #f8e8e0 0%, #f2ebe6 100%)',       // 暖杏
-    kuaimes: 'linear-gradient(135deg, #e5e2de 0%, #eeebe8 100%)',      // 暖灰
-    bi: 'linear-gradient(135deg, #dce4f0 0%, #e8eef6 100%)',          // 淡天青
+    // 采用更明快、高明度的渐变色，提升活力感
+    kuaizhizao: 'linear-gradient(135deg, #f0f9ff 0%, #bae6fd 100%)',  // 天蓝色
+    kuaicaiwu: 'linear-gradient(135deg, #fffbeb 0%, #fde68a 100%)',   // 琥珀金
+    kuaireport: 'linear-gradient(135deg, #f0fdf4 0%, #bbf7d0 100%)',  // 翡翠绿
+    'master-data': 'linear-gradient(135deg, #f5f3ff 0%, #ddd6fe 100%)', // 丁香紫
+    kuaiai: 'linear-gradient(135deg, #fff1f2 0%, #fecdd3 100%)',      // 玫瑰粉
+    kuaimes: 'linear-gradient(135deg, #f0f9ff 0%, #bae6fd 100%)',     // 天蓝色
+    bi: 'linear-gradient(135deg, #f0fdf4 0%, #bbf7d0 100%)',          // 翡翠绿
   };
-  return gradients[code] || 'linear-gradient(135deg, #e8e8e8 0%, #f0f0f0 100%)';
+  return gradients[code] || 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)';
 };
 
 /**
@@ -111,7 +112,6 @@ const ApplicationListPage: React.FC = () => {
   const queryClient = useQueryClient();
   const actionRef = useRef<ActionType>(null);
   const editFormRef = useRef<ProFormInstance>(null);
-  const upgradeFormRef = useRef<ProFormInstance>(null);
   const proKeyFormRef = useRef<ProFormInstance>(null);
 
   // Drawer 相关状态（详情查看）
@@ -123,9 +123,6 @@ const ApplicationListPage: React.FC = () => {
   const [editingApp, setEditingApp] = useState<Application | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // 升版相关状态
-  const [upgradeModalVisible, setUpgradeModalVisible] = useState(false);
-  const [upgradingApp, setUpgradingApp] = useState<Application | null>(null);
   const [scanning, setScanning] = useState(false);
   const [syncAllLoading, setSyncAllLoading] = useState(false);
   const [proKeyModalVisible, setProKeyModalVisible] = useState(false);
@@ -277,7 +274,8 @@ const ApplicationListPage: React.FC = () => {
   const handleToggleActive = async (record: Application, checked: boolean) => {
     try {
       if (checked) {
-        if (record.is_pro && !record.can_access) {
+        const isProApp = record.is_pro || record.code === 'kuaireport' || record.code === 'bi';
+        if (isProApp && !record.can_access) {
           setProKeyTargetApp(record);
           setPendingEnableAfterActivation(true);
           setProKeyModalVisible(true);
@@ -351,22 +349,7 @@ const ApplicationListPage: React.FC = () => {
 
 
 
-  /**
-   * 处理应用升版
-   */
-  const handleUpgradeApp = async (record: Application, version: string, changelog: string) => {
-    try {
-      setSubmitting(true);
-      await updateApplication(record.uuid, { version, changelog });
-      messageApi.success(t('pages.system.applications.upgradeSuccess'));
-      setUpgradeModalVisible(false);
-      actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.applications.operationFailed'));
-    } finally {
-      setSubmitting(false);
-    }
-  };
+
 
 
   /**
@@ -452,11 +435,13 @@ const ApplicationListPage: React.FC = () => {
     {
       title: t('pages.system.applications.actions'),
       valueType: 'option',
-      width: 200,
+      width: 250,
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
+      render: (_, record) => {
+        const canSync = record.is_installed && record.is_active;
+        const actions: React.ReactNode[] = [
           <Button
+            key="view"
             type="link"
             size="small"
             icon={<EyeOutlined />}
@@ -464,8 +449,119 @@ const ApplicationListPage: React.FC = () => {
           >
             {t('pages.system.applications.view')}
           </Button>
-        </Space>
-      ),
+        ];
+
+        // 更多操作同步自 Card View 的 menuItems 逻辑
+        actions.push(
+          <Button
+            key="edit"
+            type="link"
+            size="small"
+            icon={<SettingOutlined />}
+            onClick={() => {
+              setEditingApp(record);
+              setEditModalVisible(true);
+            }}
+          >
+            {t('pages.system.applications.appSettings')}
+          </Button>
+        );
+
+        if (canSync) {
+          actions.push(
+            <Button
+              key="sync"
+              type="link"
+              size="small"
+              icon={<SyncOutlined />}
+              onClick={async () => {
+                modalApi.confirm({
+                  title: t('pages.system.applications.syncMenu'),
+                  content: t('pages.system.applications.syncMenuConfirm'),
+                  onOk: async () => {
+                    messageApi.loading({ content: t('pages.system.applications.syncMenuLoading'), key: 'sync-manifest' });
+                    try {
+                      const result = await syncApplicationManifest(record.code);
+                      if (result.success) {
+                        messageApi.success({ content: result.message || t('pages.system.applications.syncMenuSuccess'), key: 'sync-manifest' });
+                        actionRef.current?.reload();
+                        useGlobalStore.getState().incrementApplicationMenuVersion();
+                      } else {
+                        throw new Error(result.message || t('pages.system.applications.syncFailed'));
+                      }
+                    } catch (error: any) {
+                      messageApi.error({ content: error.message || t('pages.system.applications.syncFailed'), key: 'sync-manifest' });
+                    }
+                  },
+                });
+              }}
+            >
+              {t('pages.system.applications.syncMenu')}
+            </Button>
+          );
+        }
+
+        if (record.is_installed) {
+          if (record.code === "kuaizhizao") {
+            actions.push(
+              <Button
+                key="reset"
+                type="link"
+                danger
+                size="small"
+                icon={<SyncOutlined />}
+                onClick={() => {
+                  setResetTargetApp(record);
+                  setResetStage(1);
+                  setResetConfirmText('');
+                  setResetModalVisible(true);
+                }}
+              >
+                {t('pages.system.applications.resetData', { defaultValue: '重置数据' })}
+              </Button>
+            );
+          }
+
+          actions.push(
+            <Button
+              key="uninstall"
+              type="link"
+              danger
+              size="small"
+              disabled={record.is_system}
+              icon={<StopOutlined />}
+              onClick={() => {
+                if (record.is_system) return;
+                modalApi.confirm({
+                  title: t('pages.system.applications.uninstallConfirm'),
+                  onOk: () => handleUninstall(record),
+                });
+              }}
+            >
+              {t('pages.system.applications.uninstall')}
+            </Button>
+          );
+        } else {
+          actions.push(
+            <Button
+              key="install"
+              type="link"
+              size="small"
+              icon={<DownloadOutlined />}
+              onClick={() => {
+                modalApi.confirm({
+                  title: t('pages.system.applications.installConfirm'),
+                  onOk: () => handleInstall(record),
+                });
+              }}
+            >
+              {t('pages.system.applications.install')}
+            </Button>
+          );
+        }
+
+        return renderRowActionsOverflow(actions, `app-${record.uuid}`);
+      },
     },
   ];
 
@@ -480,6 +576,15 @@ const ApplicationListPage: React.FC = () => {
         label: t('pages.system.applications.viewDetail'),
         icon: <EyeOutlined />,
         onClick: () => handleView(application),
+      },
+      {
+        key: 'edit-app',
+        label: t('pages.system.applications.appSettings'),
+        icon: <SettingOutlined />,
+        onClick: () => {
+          setEditingApp(application);
+          setEditModalVisible(true);
+        },
       },
       {
         key: 'sync-manifest',
@@ -521,24 +626,7 @@ const ApplicationListPage: React.FC = () => {
           }
         },
       },
-      {
-        key: 'edit-app',
-        label: t('pages.system.applications.appSettings'),
-        icon: <SettingOutlined />,
-        onClick: () => {
-          setEditingApp(application);
-          setEditModalVisible(true);
-        },
-      },
-      {
-        key: 'upgrade-app',
-        label: t('pages.system.applications.appUpgrade'),
-        icon: <ArrowUpOutlined />,
-        onClick: () => {
-          setUpgradingApp(application);
-          setUpgradeModalVisible(true);
-        },
-      },
+
       application.code === "kuaizhizao" ? {
         key: 'reset-data',
         label: t('pages.system.applications.resetData', { defaultValue: '重置数据' }),
@@ -661,51 +749,87 @@ const ApplicationListPage: React.FC = () => {
         <Card.Meta
           title={
             <div style={{ marginBottom: 8 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <span style={{ fontWeight: 600, fontSize: 16, color: '#262626', display: 'flex', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12, overflow: 'hidden' }}>
+                <span style={{ fontWeight: 600, fontSize: 16, color: '#262626', whiteSpace: 'nowrap', marginRight: 4, flexShrink: 0 }}>
                   {application.name}
-                  {application.is_custom_name && (
-                    <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 'normal', color: '#faad14' }} title={t('pages.system.applications.customNameTag')}>
-                      ({t('pages.system.applications.customNameTag')})
-                    </span>
-                  )}
-                  {application.code === 'master-data' && (
-                     <Tag color="geekblue" style={{ marginLeft: 8, fontSize: 10, lineHeight: '18px', transform: 'scale(0.9)' }}>Base</Tag>
-                  )}
-                  {(application.code === 'kuaimes' || application.code === 'kuaizhizao') && (
-                     <Tag color="purple" style={{ marginLeft: 8, fontSize: 10, lineHeight: '18px', transform: 'scale(0.9)' }}>Lite</Tag>
-                  )}
-                  {['kuaicaiwu'].includes(application.code) && (
-                     <>
-                       <Tag color="purple" style={{ marginLeft: 8, fontSize: 10, lineHeight: '18px', transform: 'scale(0.9)' }}>Lite</Tag>
-                       <Tag color="blue" style={{ marginLeft: 4, fontSize: 10, lineHeight: '18px', transform: 'scale(0.9)' }}>{t('pages.system.applications.planningTag')}</Tag>
-                     </>
-                  )}
-                  {(application.code === 'bi' || application.code === 'kuaireport') && (
-                     <Tag color="cyan" style={{ marginLeft: 8, fontSize: 10, lineHeight: '18px', transform: 'scale(0.9)' }}>BI</Tag>
-                  )}
-                  {application.is_pro && (
-                     <Tag color="gold" style={{ marginLeft: 8, fontSize: 10, lineHeight: '18px', transform: 'scale(0.9)' }}>PRO</Tag>
-                  )}
-                  {application.is_pro && !application.can_access && (
-                     <Tag icon={<LockOutlined />} color="default" style={{ marginLeft: 8, fontSize: 10, lineHeight: '18px', transform: 'scale(0.9)' }}>
-                       {t('pages.system.applications.proLockedTag')}
-                     </Tag>
-                  )}
                 </span>
-                <Space size={4}>
-                  {application.is_system && (
-                    <Tag color="default" style={{ margin: 0 }}>{t('pages.system.applications.systemTag')}</Tag>
-                  )}
-                  {application.is_installed ? (
-                    <Tag color="success" style={{ margin: 0 }}>{t('pages.system.applications.installed')}</Tag>
-                  ) : (
-                    <Tag style={{ margin: 0 }}>{t('pages.system.applications.notInstalled')}</Tag>
-                  )}
-                </Space>
+                
+                {/* 使用统一样式的徽章组 */}
+                {(() => {
+                  const badgeBaseStyle: React.CSSProperties = {
+                    height: 18,
+                    padding: '0 5px',
+                    fontSize: 10,
+                    borderRadius: 4,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    whiteSpace: 'nowrap',
+                    border: 'none',
+                    marginLeft: 4,
+                    flexShrink: 0,
+                  };
+
+                    const renderBadge = (text: string, bg: string, color: string, icon?: React.ReactNode) => (
+                      <span style={{ ...badgeBaseStyle, backgroundColor: bg, color }}>
+                        {icon && <span style={{ display: 'inline-flex', marginRight: 4 }}>{icon}</span>}
+                        {text}
+                      </span>
+                    );
+
+                    return (
+                      <div style={{ display: 'flex', alignItems: 'center', width: '100%', overflow: 'hidden' }}>
+                        {/* 左侧组：应用类型、档位、锁定状态 */}
+                        <div style={{ display: 'flex', alignItems: 'center', flexShrink: 1, overflow: 'hidden' }}>
+                          {application.code === 'master-data' && (
+                            <>
+                              {renderBadge('BASE', '#f0f5ff', '#2f54eb')}
+                              {renderBadge('FREE', '#f6ffed', '#52c41a')}
+                            </>
+                          )}
+                          {['kuaizhizao', 'kuaimes', 'kuaicaiwu'].includes(application.code) && (
+                            <>
+                              {renderBadge('APP', '#f9f0ff', '#722ed1')}
+                              {renderBadge('FREE', '#f6ffed', '#52c41a')}
+                            </>
+                          )}
+                          {['kuaireport', 'bi'].includes(application.code) && (
+                            <>
+                              {renderBadge('APP', '#f9f0ff', '#722ed1')}
+                              {renderBadge('PRO', '#fffbe6', '#faad14')}
+                            </>
+                          )}
+                          {application.code === 'kuaiai' && (
+                            <>
+                              {renderBadge('AI', '#fff7e6', '#fa8c16')}
+                              {renderBadge('PRO', '#fffbe6', '#faad14')}
+                            </>
+                          )}
+
+                          {/* 锁定提示 */}
+                          {(application.is_pro || application.code === 'kuaireport' || application.code === 'bi') && !application.can_access && (
+                             renderBadge(t('pages.system.applications.proLockedTag'), '#f5f5f5', '#595959', <LockOutlined style={{ fontSize: 11 }} />)
+                          )}
+                        </div>
+
+                        {/* 弹性占位，将后续徽章推向右侧 */}
+                        <div style={{ flex: 1, minWidth: 8 }} />
+
+                        {/* 右侧组：安装状态、系统状态 */}
+                        <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                          {application.is_installed ? (
+                            renderBadge(t('pages.system.applications.installed'), '#f6ffed', '#52c41a')
+                          ) : (
+                            renderBadge(t('pages.system.applications.notInstalled'), '#fff1f0', '#f5222d')
+                          )}
+                          {application.is_system && renderBadge(t('pages.system.applications.systemTag'), '#fafafa', '#8c8c8c')}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
               </div>
-            </div>
-          }
+            }
           description={
             <div>
               <div
@@ -813,7 +937,13 @@ const ApplicationListPage: React.FC = () => {
               }
 
               const allData = await getApplicationList(apiParams);
-              let filteredData = allData || [];
+              let filteredData = (allData || []).map(app => {
+                // 强制将快报表和 BI 识别为非授权 PRO 模式，与 AI 保持一致
+                if (app.code === 'kuaireport' || app.code === 'bi') {
+                  return { ...app, is_pro: true, can_access: false };
+                }
+                return app;
+              });
 
               // 前端筛选（因为后端可能不支持某些筛选）
               if (searchFormValues?.is_system !== undefined && searchFormValues.is_system !== '' && searchFormValues.is_system !== null) {
@@ -1148,45 +1278,7 @@ const ApplicationListPage: React.FC = () => {
         </div>
       </FormModalTemplate>
 
-      <FormModalTemplate
-        key={upgradingApp?.uuid ?? 'upgrade'}
-        title={t('pages.system.applications.upgradeModalTitle', { name: upgradingApp?.name ?? '' })}
-        open={upgradeModalVisible}
-        onClose={() => setUpgradeModalVisible(false)}
-        onFinish={async (values: any) => {
-          if (upgradingApp) {
-            await handleUpgradeApp(upgradingApp, values.version, values.changelog ?? '');
-          }
-        }}
-        isEdit={true}
-        loading={submitting}
-        formRef={upgradeFormRef}
-        width={MODAL_CONFIG.SMALL_WIDTH}
-        initialValues={
-          upgradingApp
-            ? {
-                version: upgradingApp.version ?? '',
-                changelog: upgradingApp.changelog ?? '',
-              }
-            : undefined
-        }
-      >
-        <ProFormText
-          name="version"
-          label={t('pages.system.applications.newVersionLabel')}
-          placeholder={t('pages.system.applications.newVersionPlaceholder')}
-          rules={[{ required: true, message: t('common.required', { defaultValue: '必填' }) }]}
-        />
-        <ProFormTextArea
-          name="changelog"
-          label={t('pages.system.applications.changelogLabel')}
-          placeholder={t('pages.system.applications.changelogPlaceholder')}
-          fieldProps={{ rows: 5 }}
-        />
-        <div style={{ color: '#8c8c8c', fontSize: 12, marginTop: 8 }}>
-          {t('pages.system.applications.upgradeHint')}
-        </div>
-      </FormModalTemplate>
+
     </>
   );
 };

@@ -7,7 +7,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptions } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Card, Modal, Table } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Modal, Table } from 'antd';
 import { useSearchParams } from 'react-router-dom';
 import { EditOutlined, DeleteOutlined, PlusOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -44,6 +44,23 @@ const OperationsPage: React.FC = () => {
   const [presetList, setPresetList] = useState<PresetOperationItem[]>([]);
   const [selectedPresetCodes, setSelectedPresetCodes] = useState<string[]>([]);
   const [presetConfirmLoading, setPresetConfirmLoading] = useState(false);
+
+  /**
+   * 处理打开详情
+   */
+  const handleOpenDetail = async (record: Operation) => {
+    try {
+      setDrawerVisible(true);
+      setDetailLoading(true);
+      
+      const detail = await operationApi.get(record.uuid);
+      setOperationDetail(detail);
+    } catch (error: any) {
+      messageApi.error(error.message || t('app.master-data.operations.getDetailFailed'));
+    } finally {
+      setDetailLoading(false);
+    }
+  };
 
   useEffect(() => {
     const operationUuid = searchParams.get('operationUuid');
@@ -131,23 +148,6 @@ const OperationsPage: React.FC = () => {
         }
       },
     });
-  };
-
-  /**
-   * 处理打开详情
-   */
-  const handleOpenDetail = async (record: Operation) => {
-    try {
-      setDrawerVisible(true);
-      setDetailLoading(true);
-      
-      const detail = await operationApi.get(record.uuid);
-      setOperationDetail(detail);
-    } catch (error: any) {
-      messageApi.error(error.message || t('app.master-data.operations.getDetailFailed'));
-    } finally {
-      setDetailLoading(false);
-    }
   };
 
   const handleImport = async (data: any[][]) => {
@@ -610,11 +610,12 @@ const OperationsPage: React.FC = () => {
         dataSource={operationDetail || undefined}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
+        styles={{ body: { position: 'relative' } }}
         customContent={
           <>
             <ProDescriptions<Operation>
               dataSource={operationDetail || undefined}
-              column={2}
+              column={1}
               columns={[
                 { title: '工序编号', dataIndex: 'code' },
                 { title: '工序名称', dataIndex: 'name' },
@@ -685,18 +686,35 @@ const OperationsPage: React.FC = () => {
             
             {/* 工序二维码 */}
             {operationDetail && (
-              <div style={{ marginTop: 24 }}>
-                <Card title="工序二维码">
-                  <QRCodeGenerator
-                    qrcodeType="OP"
-                    data={{
-                      operation_uuid: operationDetail.uuid,
-                      operation_code: operationDetail.code || '',
-                      operation_name: operationDetail.name || '',
-                    }}
-                    autoGenerate={true}
-                  />
-                </Card>
+              <div style={{ 
+                position: 'absolute', 
+                top: 24, 
+                right: 24, 
+                width: 220, 
+                zIndex: 10,
+                background: 'rgba(255, 255, 255, 0.8)',
+                backdropFilter: 'blur(8px)',
+                padding: '16px',
+                borderRadius: '12px',
+                border: '1px solid rgba(0, 0, 0, 0.05)',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <QRCodeGenerator
+                  qrcodeType="OP"
+                  data={{
+                    operation_uuid: operationDetail.uuid,
+                    operation_code: operationDetail.code || '',
+                    operation_name: operationDetail.name || '',
+                  }}
+                  autoGenerate={true}
+                  showCardTitle={false}
+                  size={8}
+                  noCard={true}
+                />
               </div>
             )}
           </>

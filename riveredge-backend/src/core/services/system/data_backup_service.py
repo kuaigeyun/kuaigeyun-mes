@@ -13,8 +13,7 @@ from tortoise.exceptions import DoesNotExist
 
 from core.models.data_backup import DataBackup
 from core.schemas.data_backup import DataBackupCreate
-from inngest import Event
-from core.inngest.client import inngest_client
+from core.tasks.dispatcher import TaskEvent, dispatch_event
 
 
 class DataBackupService:
@@ -75,7 +74,7 @@ class DataBackupService:
     @staticmethod
     async def create_backup_task(tenant_id: int, data: DataBackupCreate) -> DataBackup:
         """
-        创建备份任务记录并触发 Inngest
+        创建备份任务记录并通过 PostgreSQL 队列异步执行备份
         """
         # 1. 创建备份记录
         backup = await DataBackup.create(
@@ -87,25 +86,28 @@ class DataBackupService:
             status="pending"
         )
         
-        # 2. 触发 Inngest 事件
+        # 2. 分发后台任务
         try:
-            # 发送事件到 Inngest
-            # 注意：Inngest 会异步处理后续的物理备份操作
-            await inngest_client.send(
-                Event(
+            task_ids = await dispatch_event(
+                TaskEvent(
                     name="database/backup.requested",
                     data={
-                        "backup_uuid": backup.uuid,
+                        "backup_uuid": str(backup.uuid),
                         "tenant_id": tenant_id,
                         "backup_type": data.backup_type,
                         "backup_scope": data.backup_scope,
-                        "backup_tables": data.backup_tables
-                    }
+                        "backup_tables": data.backup_tables,
+                    },
+                    id=str(backup.uuid),
                 )
             )
-            logger.info(f"已发送备份请求事件: {backup.uuid}")
+            if not task_ids:
+                raise RuntimeError("未注册 database/backup.requested 处理器，请确认事件处理器已加载")
+            backup.inngest_run_id = task_ids[0]
+            await backup.save()
+            logger.info(f"已分发备份任务: {backup.uuid} task_id={task_ids[0]}")
         except Exception as e:
-            logger.exception(f"发送 Inngest 事件失败: {e}")
+            logger.exception(f"分发备份任务失败: {e}")
             backup.status = "failed"
             backup.error_message = f"触发后台任务失败: {str(e)}"
             await backup.save()
@@ -154,7 +156,7 @@ class DataBackupService:
     @staticmethod
     async def delete_backup(tenant_id: int, uuid: str) -> None:
         """
-        删除备份记录（同时应处理物理文件，这通常由 Inngest 或服务层手动处理）
+        删除备份记录（同时应处理物理文件，通常由 Taskiq 任务或服务层手动处理）
         """
         backup = await DataBackupService.get_backup_by_uuid(tenant_id, uuid)
         
@@ -191,20 +193,21 @@ class DataBackupService:
         src = source_tenant_id if source_tenant_id is not None else backup.tenant_id
 
         try:
-            await inngest_client.send(
-                Event(
+            await dispatch_event(
+                TaskEvent(
                     name="database/restore.requested",
                     data={
-                        "backup_uuid": backup.uuid,
+                        "backup_uuid": str(backup.uuid),
                         "target_tenant_id": tenant_id,
                         "source_tenant_id": src,
                         "file_path": backup.file_path,
                         "create_pre_restore_backup": create_pre_restore_backup,
-                    }
+                    },
+                    id=f"restore-{backup.uuid}",
                 )
             )
-            logger.info(f"已发送恢复请求事件: {backup.uuid}")
+            logger.info(f"已分发恢复任务: {backup.uuid}")
             return True
         except Exception as e:
-            logger.exception(f"发送恢复 Inngest 事件失败: {e}")
+            logger.exception(f"分发恢复任务失败: {e}")
             return False

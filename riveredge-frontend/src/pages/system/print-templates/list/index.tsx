@@ -10,8 +10,8 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProForm } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Modal, Input, Form, Space, Typography, Tooltip, Card, theme } from 'antd';
-import { DeleteOutlined, EyeOutlined, PrinterOutlined, FileTextOutlined } from '@ant-design/icons';
+import { App, Popconfirm, Button, Tag, Modal, Form, Space, Typography, Tooltip, Card, theme } from 'antd';
+import { DeleteOutlined, EyeOutlined, PrinterOutlined, FileTextOutlined, EditOutlined, BuildOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
@@ -32,10 +32,9 @@ import { EMPTY_HTML_TEMPLATE, DEFAULT_WORK_ORDER_HTML_TEMPLATE } from '../../../
 import { countWithPagedRequests } from '../../../../utils/pagedCount';
 
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
+import '../../../../styles/action-column.less';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
-
-dayjs.extend(relativeTime);
 
 dayjs.extend(relativeTime);
 
@@ -252,7 +251,7 @@ const PrintTemplateListPage: React.FC = () => {
       messageApi.success(t('pages.system.printTemplates.batchDeleteSuccess'));
       setSelectedRowKeys([]);
       actionRef.current?.reload();
-    } catch (error: any) {
+    } catch {
       messageApi.error(t('pages.system.printTemplates.batchDeleteFailed'));
     }
   };
@@ -310,17 +309,12 @@ const PrintTemplateListPage: React.FC = () => {
       if (successCount === 0 && failCount > 0) {
         messageApi.error(t('pages.system.printTemplates.createWorkOrderFailed'));
       }
-    } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.printTemplates.createWorkOrderFailed'));
+    } catch (_error: any) {
+      messageApi.error(_error.message || t('pages.system.printTemplates.createWorkOrderFailed'));
     } finally {
       setPresetLoading(false);
     }
   };
-
-  /**
-   * 保存设计器内容
-   */
-
 
   /**
    * 处理表单提交
@@ -388,7 +382,7 @@ const PrintTemplateListPage: React.FC = () => {
   /**
    * 卡片渲染函数
    */
-  const renderCard = (template: PrintTemplate, index: number) => {
+  const renderCard = (template: PrintTemplate) => {
     const typeInfo = getTypeInfo(template.type, t('pages.system.printTemplates.typeOther'));
     const variables = extractVariables(template.content);
     
@@ -552,27 +546,76 @@ const PrintTemplateListPage: React.FC = () => {
         </Tag>
       ),
     },
-    { title: t('pages.system.printTemplates.columnUsage'), dataIndex: 'usage_count', width: 100, hideInSearch: true },
-    { title: t('pages.system.printTemplates.columnLastUsed'), dataIndex: 'last_used_at', width: 180, valueType: 'dateTime', hideInSearch: true },
-    { title: t('pages.system.printTemplates.columnCreatedAt'), dataIndex: 'created_at', width: 180, valueType: 'dateTime', hideInSearch: true },
     {
-      title: t('pages.system.printTemplates.columnActions'),
-      dataIndex: 'option',
+      title: t('pages.system.printTemplates.columnUsage'),
+      dataIndex: 'usage_count',
+      width: 100,
+      hideInSearch: true,
+    },
+    {
+      title: t('pages.system.printTemplates.columnLastUsed'),
+      dataIndex: 'last_used_at',
+      width: 180,
+      valueType: 'dateTime',
+      hideInSearch: true,
+    },
+    {
+      title: t('pages.system.printTemplates.columnCreatedAt'),
+      dataIndex: 'created_at',
+      width: 180,
+      valueType: 'dateTime',
+      hideInSearch: true,
+    },
+    {
+      title: t('common.actions'),
       valueType: 'option',
-      width: 200,
+      width: 250,
+      fixed: 'right',
       render: (_, record) => (
-        <Space>
-          <a onClick={() => handleEdit(record)}>{t('pages.system.printTemplates.edit')}</a>
-          <a onClick={() => handleOpenDesigner(record)}>{t('pages.system.printTemplates.design')}</a>
-          <a onClick={() => handleView(record)}>{t('pages.system.printTemplates.detail')}</a>
+        <Space size="small">
+          <Button
+            type="link"
+            size="small"
+            className="ant-btn-row-action ant-btn-row-action-detail"
+            icon={<EyeOutlined />}
+            onClick={() => handleView(record)}
+          >
+            {t('pages.system.printTemplates.detail')}
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            className="ant-btn-row-action"
+            icon={<EditOutlined />}
+            onClick={() => handleEdit(record)}
+          >
+            {t('pages.system.printTemplates.edit')}
+          </Button>
           <Popconfirm
             title={t('pages.system.printTemplates.deleteConfirmTitle')}
             onConfirm={() => handleDelete(record)}
             okText={t('common.confirm')}
             cancelText={t('common.cancel')}
           >
-            <a style={{ color: '#ff4d4f' }}>{t('pages.system.printTemplates.deleteTooltip')}</a>
+            <Button
+              type="link"
+              size="small"
+              className="ant-btn-row-action"
+              danger
+              icon={<DeleteOutlined />}
+            >
+              {t('pages.system.printTemplates.deleteTooltip')}
+            </Button>
           </Popconfirm>
+          <Button
+            type="link"
+            size="small"
+            className="ant-btn-row-action"
+            icon={<BuildOutlined />}
+            onClick={() => handleOpenDesigner(record)}
+          >
+            {t('pages.system.printTemplates.design')}
+          </Button>
         </Space>
       ),
     },
@@ -636,7 +679,7 @@ const PrintTemplateListPage: React.FC = () => {
         <UniTable<PrintTemplate>
           actionRef={actionRef}
           columns={columns}
-          request={async (params, sort, _filter, searchFormValues) => {
+          request={async (params, _sort, _filter, searchFormValues) => {
             const { current = 1, pageSize = 20 } = params;
             const skip = (current - 1) * pageSize;
             const limit = pageSize;
@@ -658,7 +701,7 @@ const PrintTemplateListPage: React.FC = () => {
                 try {
                   const allData = await getPrintTemplateList({ skip: 0, limit: 1000 });
                   setAllTemplates(allData);
-                } catch (e) {
+                } catch {
                   // 忽略统计数据的错误
                 }
               }
@@ -669,7 +712,7 @@ const PrintTemplateListPage: React.FC = () => {
                 total,
               };
             } catch (error: any) {
-              console.error('获取打印模板列表失败:', error);
+              window.console.error('获取打印模板列表失败:', error);
               messageApi.error(error?.message || t('pages.system.printTemplates.loadListFailed'));
               return {
                 data: [],
@@ -706,13 +749,13 @@ const PrintTemplateListPage: React.FC = () => {
               messageApi.warning(t('pages.system.printTemplates.noDataToExport'));
               return;
             }
-            const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
+            const blob = new window.Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+            const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
             a.download = `print-templates-${new Date().toISOString().slice(0, 10)}.json`;
             a.click();
-            URL.revokeObjectURL(url);
+            window.URL.revokeObjectURL(url);
             messageApi.success(t('pages.system.printTemplates.exportSuccess'));
           }}
           rowSelection={{
@@ -801,7 +844,7 @@ const PrintTemplateListPage: React.FC = () => {
         width={700}
       >
         <ProForm
-          formRef={renderFormRef}
+          form={renderFormRef}
           loading={renderFormLoading}
           onFinish={handleRenderSubmit}
           submitter={{
@@ -862,9 +905,10 @@ const PrintTemplateListPage: React.FC = () => {
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
         dataSource={detailData || undefined}
         columns={detailColumns as any}
+        column={1}
       />
     </>
   );

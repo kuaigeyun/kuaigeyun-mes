@@ -48,6 +48,22 @@ start_backend() {
     log_success "后端就绪!"
 }
 
+start_worker() {
+    log_info "正在拉起 Taskiq Worker/Scheduler..."
+    cd riveredge-backend
+    # 启动 Worker
+    [ -f "../.logs/worker.pid" ] && rm -f "../.logs/worker.pid"
+    PYTHONPATH="src" nohup uv run taskiq worker core.tasks.taskiq_app:broker --fs-discover --modules src.core.services > ../.logs/worker.log 2>&1 &
+    echo $! > ../.logs/worker.pid
+    
+    # 启动 Scheduler
+    [ -f "../.logs/scheduler.pid" ] && rm -f "../.logs/scheduler.pid"
+    PYTHONPATH="src" nohup uv run taskiq scheduler core.tasks.taskiq_app:scheduler --fs-discover --modules src.core.services > ../.logs/scheduler.log 2>&1 &
+    echo $! > ../.logs/scheduler.pid
+    cd ..
+    log_success "Taskiq 异步引擎已就绪!"
+}
+
 start_frontend() {
     log_info "正在拉起前端 (${FRONTEND_PORT})..."
     cd riveredge-frontend
@@ -64,6 +80,15 @@ stop_all() {
     log_info "停止所有服务..."
     kill_port "${BACKEND_PORT}"
     kill_port "${FRONTEND_PORT}"
+    
+    # 清理 Worker 和 Scheduler
+    for pidfile in .logs/worker.pid .logs/scheduler.pid; do
+        if [ -f "$pidfile" ]; then
+            local pid=$(cat "$pidfile")
+            [ ! -z "$pid" ] && taskkill.exe //F //PID $pid 2>/dev/null || true
+            rm -f "$pidfile"
+        fi
+    done
 }
 
 case "$1" in
@@ -71,13 +96,15 @@ case "$1" in
     status)
         check_port "${BACKEND_PORT}" && log_success "Backend [OK]" || log_warn "Backend [OFF]"
         check_port "${FRONTEND_PORT}" && log_success "Frontend [OK]" || log_warn "Frontend [OFF]"
+        [ -f ".logs/worker.pid" ] && log_success "Worker [OK]" || log_warn "Worker [OFF]"
+        [ -f ".logs/scheduler.pid" ] && log_success "Scheduler [OK]" || log_warn "Scheduler [OFF]"
         ;;
     be) kill_port "${BACKEND_PORT}"; start_backend ;;
     fe) kill_port "${FRONTEND_PORT}"; start_frontend ;;
     *)
         mkdir -p .logs
         stop_all
-        start_backend && start_frontend
+        start_backend && start_worker && start_frontend
         log_success "🚀 RiverEdge 系统已恢复就绪!"
         echo "  - Web端: http://localhost:${FRONTEND_PORT}"
         echo "  - API: http://localhost:${BACKEND_PORT}"

@@ -1,3 +1,8 @@
+"""
+兼容层：保留 ``Event`` / ``Inngest.create_function`` / ``Inngest.send`` 等 API 形态，
+内部映射到 ``core.tasks.dispatcher``（由 Taskiq + PostgreSQL broker 执行）。
+"""
+
 from dataclasses import dataclass
 from typing import Any, Callable, Awaitable
 

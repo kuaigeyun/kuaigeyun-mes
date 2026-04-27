@@ -20,6 +20,7 @@ export interface DataBackup {
   file_size?: number;
   source_type?: 'generated' | 'uploaded';
   status: string;
+  /** 异步任务 ID（Taskiq）；历史字段名 inngest_run_id 保持不变以兼容 API */
   inngest_run_id?: string;
   started_at?: string;
   completed_at?: string;

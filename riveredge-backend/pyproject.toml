@@ -26,7 +26,6 @@ dependencies = [
     "pypinyin>=0.51.0",
     "aiofiles>=23.2.1",  # 异步文件操作库,用于文件上传、下载等操作
     "openpyxl>=3.1.0",  # Excel文件生成（MIT许可证，商业友好）
-    "weasyprint>=60.0",  # PDF文件生成（BSD许可证，商业友好）
     "qrcode[pil]>=7.4.0",  # 二维码生成库（支持PIL图片生成）
     "pyzbar>=0.1.9",  # 二维码解析库（可选，用于从图片解析二维码）
     "aiosmtplib>=3.0.1", # 异步 SMTP 客户端
@@ -36,6 +35,8 @@ dependencies = [
     # svglib 1.6+ 依赖 rlpycairo→pycairo；pycairo 在 Linux 常无 wheel 需源码编译（pkg-config、cairo-dev）。
     # 迁移/极简镜像未装系统库时会失败；1.5.x 仍为 ReportLab 路径，不强制 Cairo。
     "svglib>=1.5.1,<1.6",
+    "taskiq>=0.12.0",
+    "taskiq-postgres[asyncpg]>=0.7.0",
 ]
 
 [project.optional-dependencies]

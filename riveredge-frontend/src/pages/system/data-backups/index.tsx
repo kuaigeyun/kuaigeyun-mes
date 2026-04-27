@@ -465,7 +465,7 @@ const DataBackupsPage: React.FC = () => {
       width: 180,
       fixed: 'right',
       render: (_: any, record: DataBackup) => [
-        <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>{t('pages.system.dataBackups.viewDetail')}</Button>,
+        <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>{t('common.detail')}</Button>,
         record.status === 'success' && (
           <Button key="download" type="link" size="small" icon={<DownloadOutlined />} onClick={() => handleDownload(record)}>{t('pages.system.dataBackups.downloadBackup')}</Button>
         ),
@@ -747,6 +747,8 @@ const DataBackupsPage: React.FC = () => {
         }}
         dataSource={currentBackup || {}}
         columns={detailColumns}
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        column={1}
       />
     </>
   );

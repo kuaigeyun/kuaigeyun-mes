@@ -16,6 +16,7 @@ import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { storageAreaApi, warehouseApi } from '../../../services/warehouse';
 import { StorageAreaFormModal } from '../../../components/StorageAreaFormModal';
+import { QRCodeGenerator } from '../../../../../components/qrcode';
 import type { StorageArea, StorageAreaCreate, Warehouse } from '../../../types/warehouse';
 import { batchImport } from '../../../../../utils/batchOperations';
 
@@ -639,7 +640,6 @@ const StorageAreasPage: React.FC = () => {
     {
       title: t('app.master-data.warehouses.description'),
       dataIndex: 'description',
-      span: 2,
     },
     {
       title: t('app.master-data.warehouses.status'),
@@ -795,8 +795,40 @@ const StorageAreasPage: React.FC = () => {
         dataSource={storageAreaDetail || undefined}
         columns={detailColumns}
         loading={detailLoading}
+        column={1}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-      />
+        styles={{ body: { position: 'relative' } }}
+      >
+        {storageAreaDetail && (
+          <div style={{
+            position: 'absolute',
+            top: 24,
+            right: 24,
+            width: 220,
+            padding: 24,
+            background: 'rgba(255, 255, 255, 0.6)',
+            backdropFilter: 'blur(10px)',
+            borderRadius: 16,
+            boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.15)',
+            border: '1px solid rgba(255, 255, 255, 0.18)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 10
+          }}>
+            <QRCodeGenerator
+              data={{
+                area_uuid: storageAreaDetail.uuid,
+                area_code: storageAreaDetail.code,
+                area_name: storageAreaDetail.name
+              }}
+              qrcodeType="TRACE"
+              size={8}
+              noCard={true}
+            />
+          </div>
+        )}
+      </DetailDrawerTemplate>
 
       {/* 创建/编辑库区 Modal */}
       <StorageAreaFormModal
