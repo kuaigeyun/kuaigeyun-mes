@@ -385,7 +385,7 @@ const WorkCentersPage: React.FC = () => {
     {
       title: t('field.workCenter.code'),
       dataIndex: 'code',
-      width: 150,
+      copyable: true,width: 150,
       fixed: 'left',
       ellipsis: true,
       copyable: true,

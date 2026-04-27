@@ -96,6 +96,21 @@ async def list_print_templates(
     return [PrintTemplateResponse.model_validate(pt) for pt in print_templates]
 
 
+@router.get("/next-code")
+async def get_next_print_template_code(
+    base_code: str = Query(..., min_length=1, description="模板代码基名（如 QUOTATION_PRINT）"),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取下一个模板代码预览（不占号）。
+    """
+    code = await PrintTemplateService.preview_next_template_code(
+        tenant_id=tenant_id,
+        raw_code=base_code,
+    )
+    return {"code": code}
+
+
 @router.get("/{uuid}", response_model=PrintTemplateResponse)
 async def get_print_template(
     uuid: str,

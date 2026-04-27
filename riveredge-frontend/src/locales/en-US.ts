@@ -5895,7 +5895,7 @@ export default {
   'pages.system.printTemplates.documentTypeTooltip': 'Code is auto-generated; designer will show available variables',
   'pages.system.printTemplates.labelCode': 'Code',
   'pages.system.printTemplates.codeRequired': 'Please select document type first',
-  'pages.system.printTemplates.codeTooltip': 'Auto-generated from document type, cannot be changed after creation',
+  'pages.system.printTemplates.codeTooltip': 'Auto-generated from document type with an appended serial suffix (for example QUOTATION_PRINT_001); cannot be changed after creation',
   'pages.system.printTemplates.labelOutputFormat': 'Output format',
   'pages.system.printTemplates.outputFormatRequired': 'Please select output format',
   'pages.system.printTemplates.labelDescription': 'Description',

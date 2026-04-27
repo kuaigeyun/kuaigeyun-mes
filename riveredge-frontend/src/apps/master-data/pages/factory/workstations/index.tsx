@@ -531,7 +531,7 @@ const WorkstationsPage: React.FC = () => {
     {
       title: t('app.master-data.workstations.code'),
       dataIndex: 'code',
-      width: 150,
+      copyable: true,width: 150,
       fixed: 'left',
       ellipsis: true,
       copyable: true,
@@ -626,7 +626,7 @@ const WorkstationsPage: React.FC = () => {
     {
       title: t('app.master-data.workstations.code'),
       dataIndex: 'code',
-    },
+    copyable: true,},
     {
       title: t('app.master-data.workstations.name'),
       dataIndex: 'name',

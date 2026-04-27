@@ -531,7 +531,7 @@ const StorageAreasPage: React.FC = () => {
     {
       title: t('app.master-data.storageAreas.code'),
       dataIndex: 'code',
-      width: 150,
+      copyable: true,width: 150,
       fixed: 'left',
       ellipsis: true,
       copyable: true,
@@ -627,7 +627,7 @@ const StorageAreasPage: React.FC = () => {
     {
       title: t('app.master-data.storageAreas.code'),
       dataIndex: 'code',
-    },
+    copyable: true,},
     {
       title: t('app.master-data.storageAreas.name'),
       dataIndex: 'name',

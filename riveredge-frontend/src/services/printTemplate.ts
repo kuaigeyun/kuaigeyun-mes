@@ -72,6 +72,10 @@ export interface PrintTemplateRenderResponse {
   inngest_run_id?: string;
 }
 
+export interface NextPrintTemplateCodeResponse {
+  code: string;
+}
+
 export interface CompilePrintTemplateData {
   source_type?: 'designer_json' | 'html_jinja';
   source: Record<string, any> | string;
@@ -118,6 +122,15 @@ export async function createPrintTemplate(data: CreatePrintTemplateData): Promis
   return apiRequest<PrintTemplate>('/core/print-templates', {
     method: 'POST',
     data,
+  });
+}
+
+/**
+ * 获取打印模板代码预览（带流水号，不占号）
+ */
+export async function getNextPrintTemplateCode(baseCode: string): Promise<NextPrintTemplateCodeResponse> {
+  return apiRequest<NextPrintTemplateCodeResponse>('/core/print-templates/next-code', {
+    params: { base_code: baseCode },
   });
 }
 

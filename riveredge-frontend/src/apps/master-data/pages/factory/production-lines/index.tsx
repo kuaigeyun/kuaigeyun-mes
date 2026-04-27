@@ -522,7 +522,7 @@ const ProductionLinesPage: React.FC = () => {
     {
       title: t('app.master-data.productionLines.code'),
       dataIndex: 'code',
-      width: 150,
+      copyable: true,width: 150,
       fixed: 'left',
       ellipsis: true,
       copyable: true,
@@ -628,7 +628,7 @@ const ProductionLinesPage: React.FC = () => {
     {
       title: t('app.master-data.productionLines.code'),
       dataIndex: 'code',
-    },
+    copyable: true,},
     {
       title: t('app.master-data.productionLines.name'),
       dataIndex: 'name',

@@ -563,7 +563,7 @@ const WorkshopsPage: React.FC = () => {
       {
         title: t('app.master-data.workshops.code'),
         dataIndex: 'code',
-        width: 150,
+        copyable: true,width: 150,
         fixed: 'left' as const,
         ellipsis: true,
         copyable: true,
@@ -672,7 +672,7 @@ const WorkshopsPage: React.FC = () => {
     {
       title: t('app.master-data.workshops.code'),
       dataIndex: 'code',
-    },
+    copyable: true,},
     {
       title: t('app.master-data.workshops.name'),
       dataIndex: 'name',

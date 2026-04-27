@@ -104,7 +104,7 @@ const WorkGroupsPage: React.FC = () => {
     {
       title: t('field.workGroup.code'),
       dataIndex: 'code',
-      width: 150,
+      copyable: true,width: 150,
       fixed: 'left',
       ellipsis: true,
       copyable: true,

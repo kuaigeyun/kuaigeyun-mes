@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { App, Button, Card, Radio, Select, Space, Table, Steps, Empty, Modal, Input, Form } from 'antd';
+import { App, Button, Card, Radio, Select, Space, Table, Steps, Empty, Modal, Input, Form, Typography } from 'antd';
 import { ApartmentOutlined, FormOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { processRouteApi, operationApi, sopApi } from '../../../services/process';
@@ -16,6 +16,8 @@ import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsO
 import type { ProcessRoute, Operation } from '../../../types/process';
 import type { Material, MaterialGroup } from '../../../types/material';
 import type { SOP } from '../../../types/process';
+
+const { Text } = Typography;
 
 /** 工序项（用于序列编辑） */
 interface OperationItem {
@@ -388,7 +390,12 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
                 pagination={false}
                 columns={[
                   { title: '序号', width: 60, render: (_: any, __: any, i: number) => i + 1 },
-                  { title: '工序编号', dataIndex: 'code', width: 120 },
+                  {
+                    title: '工序编号',
+                    dataIndex: 'code',
+                    width: 120,
+                    render: (value: string) => <Text copyable>{value || '-'}</Text>,
+                  },
                   { title: '工序名称', dataIndex: 'name' },
                   {
                     title: '操作',
@@ -448,7 +455,12 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
               pagination={false}
               columns={[
                 { title: '序号', width: 60, render: (_: any, __: any, i: number) => i + 1 },
-                { title: '工序编号', dataIndex: 'code', width: 120 },
+                {
+                  title: '工序编号',
+                  dataIndex: 'code',
+                  width: 120,
+                  render: (value: string) => <Text copyable>{value || '-'}</Text>,
+                },
                 { title: '工序名称', dataIndex: 'name' },
               ]}
             />
@@ -471,7 +483,12 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
               rowKey="uuid"
               pagination={false}
               columns={[
-                { title: 'SOP编号', dataIndex: 'code', width: 160 },
+                {
+                  title: 'SOP编号',
+                  dataIndex: 'code',
+                  width: 160,
+                  render: (value: string) => <Text copyable>{value || '-'}</Text>,
+                },
                 { title: 'SOP名称', dataIndex: 'name' },
                 {
                   title: '操作',
@@ -546,7 +563,12 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
               pagination={false}
               columns={[
                 { title: '序号', width: 60, render: (_: any, __: any, i: number) => i + 1 },
-                { title: '工序编号', dataIndex: 'code', width: 120 },
+                {
+                  title: '工序编号',
+                  dataIndex: 'code',
+                  width: 120,
+                  render: (value: string) => <Text copyable>{value || '-'}</Text>,
+                },
                 { title: '工序名称', dataIndex: 'name' },
                 {
                   title: '操作',

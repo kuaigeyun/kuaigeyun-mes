@@ -115,7 +115,7 @@ const SerialRulesPage: React.FC = () => {
 
   const columns: ProColumns<SerialRule>[] = [
     { title: t('app.master-data.seqRules.ruleName'), dataIndex: 'name', width: 150, ellipsis: true, fixed: 'left' },
-    { title: t('app.master-data.seqRules.ruleCode'), dataIndex: 'code', width: 120 },
+    { title: t('app.master-data.seqRules.ruleCode'), dataIndex: 'code', copyable: true, width: 120 },
     { title: t('app.master-data.seqRules.description'), dataIndex: 'description', width: 200, ellipsis: true },
     {
       title: t('app.master-data.seqRules.seqReset'),

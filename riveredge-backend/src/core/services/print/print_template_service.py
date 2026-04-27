@@ -4,10 +4,12 @@
 提供打印模板的 CRUD 操作和模板渲染功能。
 """
 
+import re
 from typing import Optional, List, Any
 from datetime import datetime
 
 from tortoise.exceptions import IntegrityError
+from tortoise.transactions import in_transaction
 
 from core.models.print_template import PrintTemplate
 from core.services.print.print_device_service import PrintDeviceService
@@ -59,6 +61,99 @@ PRESET_PRINT_TEMPLATES = [
 
 
 class PrintTemplateService:
+    _CODE_SUFFIX_PATTERN = re.compile(r"^(?P<base>.+)_(?P<seq>\d+)$")
+
+    @staticmethod
+    def _normalize_base_code(raw_code: str) -> str:
+        base = (raw_code or "").strip().upper()
+        if not base:
+            raise ValidationError("模板代码不能为空")
+        matched = PrintTemplateService._CODE_SUFFIX_PATTERN.match(base)
+        if matched:
+            base = matched.group("base")
+        # 预留后缀空间，避免超长（_ + 至少 3 位）
+        return base[:46]
+
+    @staticmethod
+    async def _generate_template_code(tenant_id: int, raw_code: str, conn: Any) -> str:
+        """
+        生成模板代码：<base>_<seq>（如 QUOTATION_PRINT_001）。
+
+        - 若传入已带后缀（如 XXX_003），会先剥离后缀后再按当前最大序号续增。
+        - 软删除记录不参与占位。
+        - 在事务内通过 pg_advisory_xact_lock 保证同 tenant+base 串行分配。
+        """
+        base = PrintTemplateService._normalize_base_code(raw_code)
+
+        # 事务级别顾问锁：同 tenant + base 串行生成号段，根源避免并发重复。
+        lock_key = f"print_template:{tenant_id}:{base}"
+        await conn.execute_query("SELECT pg_advisory_xact_lock(hashtext($1))", [lock_key])
+
+        # 同时纳入历史无后缀代码（如 QUOTATION_PRINT），按 seq=0 参与基线。
+        rows = await conn.execute_query_dict(
+            """
+            SELECT code
+            FROM core_print_templates
+            WHERE tenant_id = $1
+              AND deleted_at IS NULL
+              AND (UPPER(code) = $2 OR UPPER(code) LIKE $3)
+            FOR UPDATE
+            """,
+            [tenant_id, base, f"{base}_%"],
+        )
+
+        max_seq = 0
+        for row in rows:
+            code = str(row.get("code", "")).upper()
+            if code == base:
+                max_seq = max(max_seq, 0)
+                continue
+            m = PrintTemplateService._CODE_SUFFIX_PATTERN.match(code)
+            if not m or m.group("base") != base:
+                continue
+            try:
+                max_seq = max(max_seq, int(m.group("seq")))
+            except ValueError:
+                continue
+
+        return f"{base}_{max_seq + 1:03d}"
+
+    @staticmethod
+    async def preview_next_template_code(tenant_id: int, raw_code: str) -> str:
+        """
+        预览下一个模板代码（用于前端显示）。
+
+        说明：
+        - 不占号、不加锁，仅用于 UI 预览；
+        - 真正创建时仍以 create_print_template 的事务分配结果为准。
+        """
+        base = PrintTemplateService._normalize_base_code(raw_code)
+        rows = await PrintTemplate.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).filter(
+            code=base,
+        ).values_list("code", flat=True)
+
+        suffix_rows = await PrintTemplate.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            code__startswith=f"{base}_",
+        ).values_list("code", flat=True)
+
+        max_seq = 0
+        if rows:
+            max_seq = max(max_seq, 0)
+        for code in suffix_rows:
+            m = PrintTemplateService._CODE_SUFFIX_PATTERN.match(str(code).upper())
+            if not m or m.group("base") != base:
+                continue
+            try:
+                max_seq = max(max_seq, int(m.group("seq")))
+            except ValueError:
+                continue
+        return f"{base}_{max_seq + 1:03d}"
+
     @staticmethod
     def _resolve_render_engine(print_template: PrintTemplate) -> str:
         config = print_template.config or {}
@@ -96,26 +191,36 @@ class PrintTemplateService:
         Raises:
             ValidationError: 当模板代码已存在时抛出
         """
+        # 如果 config 中包含 device_uuid，验证打印设备是否存在
+        if data.config and data.config.get("device_uuid"):
+            device_uuid = data.config.get("device_uuid")
+            try:
+                await PrintDeviceService.get_print_device_by_uuid(tenant_id, device_uuid)
+            except NotFoundError:
+                raise ValidationError(f"关联的打印设备不存在: {device_uuid}")
+
+        payload = data.model_dump()
+        base_code = payload.get("code") or (payload.get("config") or {}).get("document_type")
+        if not base_code:
+            raise ValidationError("模板代码不能为空")
+
         try:
-            # 如果 config 中包含 device_uuid，验证打印设备是否存在
-            if data.config and data.config.get("device_uuid"):
-                device_uuid = data.config.get("device_uuid")
-                try:
-                    await PrintDeviceService.get_print_device_by_uuid(tenant_id, device_uuid)
-                except NotFoundError:
-                    raise ValidationError(f"关联的打印设备不存在: {device_uuid}")
-            
-            print_template = PrintTemplate(
-                tenant_id=tenant_id,
-                **data.model_dump()
-            )
-            await print_template.save()
-            
+            async with in_transaction() as conn:
+                payload["code"] = await PrintTemplateService._generate_template_code(
+                    tenant_id=tenant_id,
+                    raw_code=base_code,
+                    conn=conn,
+                )
+                print_template = await PrintTemplate.create(
+                    tenant_id=tenant_id,
+                    **payload,
+                    using_db=conn,
+                )
             # TODO: 可选接入 Taskiq（如 print/render 事件 + dispatcher 注册处理器）
-            
             return print_template
-        except IntegrityError:
-            raise ValidationError(f"打印模板代码 {data.code} 已存在")
+        except IntegrityError as e:
+            logger.error("创建打印模板唯一约束冲突: tenant_id={} base_code={}", tenant_id, base_code)
+            raise ValidationError(f"打印模板代码冲突，请重试。base={base_code}") from e
 
     @staticmethod
     async def load_preset_sme(tenant_id: int) -> int:
@@ -125,10 +230,16 @@ class PrintTemplateService:
         """
         created = 0
         for item in PRESET_PRINT_TEMPLATES:
+            base_code = str(item["code"]).strip().upper()
             exists = await PrintTemplate.filter(
                 tenant_id=tenant_id,
-                code=item["code"],
                 deleted_at__isnull=True,
+            ).filter(
+                code=base_code,
+            ).exists() or await PrintTemplate.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+                code__startswith=f"{base_code}_",
             ).exists()
             if not exists:
                 try:

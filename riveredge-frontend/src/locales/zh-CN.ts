@@ -5919,7 +5919,7 @@ export default {
   'pages.system.printTemplates.documentTypeTooltip': '选择后，模板代码将自动生成，设计器将显示该单据的可用变量',
   'pages.system.printTemplates.labelCode': '模板代码',
   'pages.system.printTemplates.codeRequired': '请先选择关联业务单据',
-  'pages.system.printTemplates.codeTooltip': '根据关联业务单据自动生成，创建后不可修改',
+  'pages.system.printTemplates.codeTooltip': '根据关联业务单据自动生成，系统会自动追加 _流水号（如 QUOTATION_PRINT_001），创建后不可修改',
   'pages.system.printTemplates.labelOutputFormat': '输出格式',
   'pages.system.printTemplates.outputFormatRequired': '请选择输出格式',
   'pages.system.printTemplates.labelDescription': '备注',

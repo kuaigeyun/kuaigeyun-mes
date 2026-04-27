@@ -345,7 +345,7 @@ const DefectTypesPage: React.FC = () => {
     {
       title: '不良品编号',
       dataIndex: 'code',
-      width: 150,
+      copyable: true,width: 150,
       fixed: 'left',
     },
     {

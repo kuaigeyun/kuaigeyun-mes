@@ -9,7 +9,7 @@ import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, BuildOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, EyeOutlined, ApartmentOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { countWithPagedRequests } from '../../../../utils/pagedCount';
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
@@ -281,7 +281,7 @@ const ApprovalProcessListPage: React.FC = () => {
             type="link"
             size="small"
             className="ant-btn-row-action"
-            icon={<BuildOutlined />}
+            icon={<ApartmentOutlined />}
             onClick={() => handleDesign(record)}
           >
             {t('pages.system.approvalProcesses.design')}

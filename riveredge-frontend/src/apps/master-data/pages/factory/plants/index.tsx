@@ -466,7 +466,7 @@ const PlantsPage: React.FC = () => {
       {
         title: t('app.master-data.plants.code'),
         dataIndex: 'code',
-        width: 150,
+        copyable: true,width: 150,
         fixed: 'left' as const,
         ellipsis: true,
         copyable: true,

@@ -73,13 +73,14 @@ const DataBackupsPage: React.FC = () => {
     return scopeMap[scope] || scope;
   };
   const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [uploadModalVisible, setUploadModalVisible] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentBackup, setCurrentBackup] = useState<DataBackup | null>(null);
   const [restoreModalVisible, setRestoreModalVisible] = useState(false);
   const [restoreBackupRecord, setRestoreBackupRecord] = useState<DataBackup | null>(null);
-  const [formRef] = ProForm.useForm();
+  const [form] = ProForm.useForm();
   const [restoreForm] = Form.useForm();
   const [allBackups, setAllBackups] = useState<DataBackup[]>([]); // 用于统计
 
@@ -100,14 +101,17 @@ const DataBackupsPage: React.FC = () => {
    * 创建备份
    */
   const handleCreate = async (values: CreateDataBackupData) => {
+    setSubmitting(true);
     try {
       await createBackup(values);
       messageApi.success(t('pages.system.dataBackups.createSuccess'));
       setCreateModalVisible(false);
-      formRef.resetFields();
+      form.resetFields();
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.dataBackups.createFailed'));
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -647,11 +651,12 @@ const DataBackupsPage: React.FC = () => {
         open={createModalVisible}
         onClose={() => {
           setCreateModalVisible(false);
-          formRef.resetFields();
+          form.resetFields();
         }}
         onFinish={handleCreate}
         isEdit={false}
-        loading={false}
+        loading={submitting}
+        form={form}
         width={MODAL_CONFIG.SMALL_WIDTH}
       >
         <ProFormText

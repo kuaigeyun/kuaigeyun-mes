@@ -53,12 +53,21 @@ start_worker() {
     cd riveredge-backend
     # 启动 Worker
     [ -f "../.logs/worker.pid" ] && rm -f "../.logs/worker.pid"
-    PYTHONPATH="src" nohup uv run taskiq worker core.tasks.taskiq_app:broker --fs-discover --modules src.core.services > ../.logs/worker.log 2>&1 &
+    PYTHONPATH="src" nohup uv run taskiq worker core.tasks.taskiq_app:broker --fs-discover \
+        core.tasks.taskiq_app \
+        core.tasks.data_backup_handlers \
+        core.inngest.functions \
+        apps.master_data.inngest.functions \
+        apps.kuaizhizao.inngest.functions > ../.logs/worker.log 2>&1 &
     echo $! > ../.logs/worker.pid
     
     # 启动 Scheduler
     [ -f "../.logs/scheduler.pid" ] && rm -f "../.logs/scheduler.pid"
-    PYTHONPATH="src" nohup uv run taskiq scheduler core.tasks.taskiq_app:scheduler --fs-discover --modules src.core.services > ../.logs/scheduler.log 2>&1 &
+    PYTHONPATH="src" nohup uv run taskiq scheduler core.tasks.taskiq_app:scheduler --fs-discover \
+        core.tasks.taskiq_app \
+        core.inngest.functions \
+        apps.master_data.inngest.functions \
+        apps.kuaizhizao.inngest.functions > ../.logs/scheduler.log 2>&1 &
     echo $! > ../.logs/scheduler.pid
     cd ..
     log_success "Taskiq 异步引擎已就绪!"

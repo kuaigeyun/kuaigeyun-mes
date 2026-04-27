@@ -479,7 +479,7 @@ const SuppliersPage: React.FC = () => {
     {
       title: t('field.supplier.code'),
       dataIndex: 'code',
-      width: 150,
+      copyable: true,width: 150,
       fixed: 'left',
     },
     {
@@ -629,7 +629,7 @@ const SuppliersPage: React.FC = () => {
     {
       title: t('field.supplier.code'),
       dataIndex: 'code',
-    },
+    copyable: true,},
     {
       title: t('field.supplier.name'),
       dataIndex: 'name',

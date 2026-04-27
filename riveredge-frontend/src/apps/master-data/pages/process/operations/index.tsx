@@ -345,7 +345,7 @@ const OperationsPage: React.FC = () => {
     {
       title: '工序编号',
       dataIndex: 'code',
-      width: 150,
+      copyable: true,width: 150,
       fixed: 'left',
     },
     {

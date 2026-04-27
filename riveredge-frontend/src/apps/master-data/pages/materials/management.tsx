@@ -43,7 +43,6 @@ import {
   NumberOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
-  CopyOutlined,
 } from '@ant-design/icons'
 import {
   ActionType,
@@ -982,26 +981,8 @@ const MaterialsManagementPage: React.FC = () => {
         fixed: 'left',
         render: (_, record) => {
           const val = (record as any).mainCode || (record as any).code || '-'
-          return (
-            <Space size={4}>
-              <Typography.Text>{val}</Typography.Text>
-              {val !== '-' && (
-                <Tooltip title={t('common.copy')}>
-                  <Button
-                    type="link"
-                    size="small"
-                    icon={<CopyOutlined style={{ fontSize: 13, color: token.colorPrimary }} />}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      window.navigator.clipboard.writeText(val as string)
-                      messageApi.success(t('common.copySuccess'))
-                    }}
-                    style={{ padding: 0, height: 'auto' }}
-                  />
-                </Tooltip>
-              )}
-            </Space>
-          )
+          if (val === '-') return <Typography.Text>{val}</Typography.Text>
+          return <Typography.Text copyable={{ text: String(val) }}>{val}</Typography.Text>
         },
       },
       {
@@ -1796,7 +1777,7 @@ const MaterialsManagementPage: React.FC = () => {
                 {
                   title: t('app.master-data.materials.materialCode'),
                   dataIndex: 'code',
-                },
+                copyable: true,},
                 {
                   title: t('app.master-data.materials.materialName'),
                   dataIndex: 'name',

@@ -13,7 +13,7 @@ from uuid import UUID
 class PrintTemplateBase(BaseModel):
     """打印模板基础 Schema"""
     name: str = Field(..., max_length=200, description="模板名称")
-    code: str = Field(..., max_length=50, description="模板代码")
+    code: str = Field(..., max_length=50, description="模板代码基名（创建时自动追加 _流水号）")
     type: str = Field(..., max_length=50, description="模板类型")
     description: Optional[str] = Field(None, description="模板描述")
     content: str = Field(..., description="模板内容")

@@ -22,19 +22,20 @@ echo "📦 正在启动 Taskiq worker..."
 uv run taskiq worker core.tasks.taskiq_app:broker \
     --fs-discover \
     $RELOAD \
-    --modules core.tasks.taskiq_app \
-    --modules core.inngest.functions \
-    --modules apps.master_data.inngest.functions \
-    --modules apps.kuaizhizao.inngest.functions &
+    core.tasks.taskiq_app \
+    core.tasks.data_backup_handlers \
+    core.inngest.functions \
+    apps.master_data.inngest.functions \
+    apps.kuaizhizao.inngest.functions &
 
 # Scheduler：cron 任务（schedule 标签 + AsyncpgScheduleSource）
 echo "⏰ 正在启动 Taskiq scheduler..."
 uv run taskiq scheduler core.tasks.taskiq_app:scheduler \
     --fs-discover \
     $RELOAD \
-    --modules core.tasks.taskiq_app \
-    --modules core.inngest.functions \
-    --modules apps.master_data.inngest.functions \
-    --modules apps.kuaizhizao.inngest.functions &
+    core.tasks.taskiq_app \
+    core.inngest.functions \
+    apps.master_data.inngest.functions \
+    apps.kuaizhizao.inngest.functions &
 
 wait

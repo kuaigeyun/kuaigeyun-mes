@@ -11,13 +11,14 @@ import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProForm } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Modal, Form, Space, Typography, Tooltip, Card, theme } from 'antd';
-import { DeleteOutlined, EyeOutlined, PrinterOutlined, FileTextOutlined, EditOutlined, BuildOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EyeOutlined, PrinterOutlined, FileTextOutlined, EditOutlined, ApartmentOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
   getPrintTemplateList,
   getPrintTemplateByUuid,
   createPrintTemplate,
+  getNextPrintTemplateCode,
   updatePrintTemplate,
   deletePrintTemplate,
   renderPrintTemplate,
@@ -128,7 +129,8 @@ const PrintTemplateListPage: React.FC = () => {
     setCurrentEditDetail(null);
     setFormInitialValues({
       type: 'pdf',
-      document_type: undefined,
+        document_type: undefined,
+        code: '',
       is_active: true,
       is_default: false,
     });
@@ -611,7 +613,7 @@ const PrintTemplateListPage: React.FC = () => {
             type="link"
             size="small"
             className="ant-btn-row-action"
-            icon={<BuildOutlined />}
+            icon={<ApartmentOutlined />}
             onClick={() => handleOpenDesigner(record)}
           >
             {t('pages.system.printTemplates.design')}
@@ -786,9 +788,19 @@ const PrintTemplateListPage: React.FC = () => {
         width={MODAL_CONFIG.SMALL_WIDTH}
         formRef={formRef}
         onValuesChange={(changed, all) => {
-          if ('document_type' in changed && all.document_type) {
-            const code = DOCUMENT_TYPE_TO_CODE[all.document_type];
-            if (code) formRef.current?.setFieldValue('code', code);
+          if ('document_type' in changed) {
+            const baseCode = all.document_type ? DOCUMENT_TYPE_TO_CODE[all.document_type] : '';
+            if (!baseCode) {
+              formRef.current?.setFieldValue('code', '');
+              return;
+            }
+            getNextPrintTemplateCode(baseCode)
+              .then((resp) => {
+                formRef.current?.setFieldValue('code', resp.code || baseCode);
+              })
+              .catch(() => {
+                formRef.current?.setFieldValue('code', baseCode);
+              });
           }
         }}
       >
