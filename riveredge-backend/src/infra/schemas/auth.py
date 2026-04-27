@@ -334,7 +334,39 @@ def validate_email(cls, v):
     """验证邮箱字段，允许空值"""
     if v is None or v == "":
         return None
-    # 如果提供了值，则验证邮箱格式
-    if '@' not in v:
-        raise ValueError('邮箱格式不正确，必须包含@符号')
-    return v
+# WebAuthn 相关 Schema
+
+class WebAuthnRegisterOptionsRequest(BaseModel):
+    """获取注册挑战的请求体（预留扩展）。"""
+    device_name: Optional[str] = Field(None, description="设备名称（可选）")
+
+
+class WebAuthnRegistrationOptions(BaseModel):
+    options: dict = Field(..., description="WebAuthn 注册选项")
+    challenge: str = Field(..., description="注册挑战（Base64URL 编码）")
+
+
+class WebAuthnLoginOptions(BaseModel):
+    options: dict = Field(..., description="WebAuthn 认证选项")
+    challenge: str = Field(..., description="认证挑战（Base64URL 编码）")
+
+
+class WebAuthnLoginOptionsRequest(BaseModel):
+    """获取登录挑战的请求体。"""
+    username: str = Field(..., min_length=1, max_length=255, description="用户名")
+
+
+class WebAuthnVerifyRegistrationRequest(BaseModel):
+    response: dict = Field(..., description="WebAuthn 注册响应数据")
+    challenge: str = Field(..., description="对应的注册挑战")
+    device_name: Optional[str] = Field(None, description="设备名称")
+
+
+class WebAuthnVerifyLoginRequest(BaseModel):
+    response: dict = Field(..., description="WebAuthn 认证响应数据")
+    challenge: str = Field(..., description="对应的认证挑战")
+
+
+# 兼容旧命名（API 路由已引用）
+WebAuthnRegisterFinalizeRequest = WebAuthnVerifyRegistrationRequest
+WebAuthnLoginFinalizeRequest = WebAuthnVerifyLoginRequest

@@ -1,608 +1,759 @@
 {
-    "name": "主数据",
-    "code": "master-data",
-    "version": "1.0.0",
-    "description": "系统的唯一数据源",
+  "name": "主数据",
+  "code": "master-data",
+  "version": "1.0.0",
+  "description": "系统的唯一数据源",
+  "icon": "database",
+  "author": "RiverEdge Team",
+  "entry_point": "../apps/master-data/index.tsx",
+  "route_path": "/apps/master-data",
+  "sort_order": 70,
+  "menu_config": {
+    "title": "app.master-data.name",
     "icon": "database",
-    "author": "RiverEdge Team",
-    "entry_point": "../apps/master-data/index.tsx",
-    "route_path": "/apps/master-data",
-    "sort_order": 70,
-    "menu_config": {
-        "title": "app.master-data.name",
-        "icon": "database",
-        "path": "/apps/master-data",
-        "children": [{
-                "title": "app.master-data.menu.factory",
-                "icon": "factory",
-                "sort_order": 1,
-                "children": [{
-                        "title": "app.master-data.menu.factory.plants",
-                        "path": "/apps/master-data/factory/plants",
-                        "permission": "master-data:factory:plant:view",
-                        "sort_order": 0
-                    },
-                    {
-                        "title": "app.master-data.menu.factory.workshops",
-                        "path": "/apps/master-data/factory/workshops",
-                        "permission": "master-data:factory:workshop:view",
-                        "sort_order": 1
-                    },
-                    {
-                        "title": "app.master-data.menu.factory.production-lines",
-                        "path": "/apps/master-data/factory/production-lines",
-                        "permission": "master-data:factory:production-line:view",
-                        "sort_order": 2
-                    },
-                    {
-                        "title": "app.master-data.menu.factory.workstations",
-                        "path": "/apps/master-data/factory/workstations",
-                        "permission": "master-data:factory:workstation:view",
-                        "sort_order": 3
-                    },
-                    {
-                        "title": "app.master-data.menu.factory.work-centers",
-                        "path": "/apps/master-data/factory/work-centers",
-                        "permission": "master-data:factory:work-center:view",
-                        "sort_order": 4
-                    },
-                    {
-                        "title": "app.master-data.menu.factory.work-groups",
-                        "path": "/apps/master-data/factory/work-groups",
-                        "permission": "master-data:factory:work-group:view",
-                        "sort_order": 5
-                    }
-                ]
-            },
-            {
-                "title": "app.master-data.menu.warehouse",
-                "icon": "archive",
-                "sort_order": 2,
-                "children": [{
-                        "title": "app.master-data.menu.warehouse.warehouses",
-                        "path": "/apps/master-data/warehouse/warehouses",
-                        "permission": "master-data:warehouse:warehouse:view",
-                        "sort_order": 1
-                    },
-                    {
-                        "title": "app.master-data.menu.warehouse.storage-areas",
-                        "path": "/apps/master-data/warehouse/storage-areas",
-                        "permission": "master-data:warehouse:storage-area:view",
-                        "sort_order": 2
-                    },
-                    {
-                        "title": "app.master-data.menu.warehouse.storage-locations",
-                        "path": "/apps/master-data/warehouse/storage-locations",
-                        "permission": "master-data:warehouse:storage-location:view",
-                        "sort_order": 3
-                    }
-                ]
-            },
-            {
-                "title": "app.master-data.menu.materials",
-                "icon": "package",
-                "sort_order": 3,
-                "children": [{
-                        "title": "app.master-data.menu.materials.variant-attributes",
-                        "path": "/apps/master-data/materials/variant-attributes",
-                        "permission": "master-data:material:variant-attribute:view",
-                        "sort_order": 1
-                    },
-                    {
-                        "title": "app.master-data.menu.materials.management",
-                        "path": "/apps/master-data/materials",
-                        "permission": "master-data:material:view",
-                        "sort_order": 2
-                    },
-                    {
-                        "title": "app.master-data.menu.materials.batch-rules",
-                        "path": "/apps/master-data/materials/batch-rules",
-                        "permission": "master-data:material:batch:view",
-                        "sort_order": 3
-                    },
-                    {
-                        "title": "app.master-data.menu.materials.serial-rules",
-                        "path": "/apps/master-data/materials/serial-rules",
-                        "permission": "master-data:material:serial:view",
-                        "sort_order": 4
-                    }
-                ]
-            },
-            {
-                "title": "app.master-data.menu.process",
-                "icon": "workflow",
-                "sort_order": 4,
-                "children": [{
-                        "title": "app.master-data.menu.process.defect-types",
-                        "path": "/apps/master-data/process/defect-types",
-                        "permission": "master-data:process:defect-type:view",
-                        "sort_order": 1
-                    },
-                    {
-                        "title": "app.master-data.menu.process.operations",
-                        "path": "/apps/master-data/process/operations",
-                        "permission": "master-data:process:operation:view",
-                        "sort_order": 2
-                    },
-                    {
-                        "title": "app.master-data.menu.process.routes",
-                        "path": "/apps/master-data/process/routes",
-                        "permission": "master-data:process:route:view",
-                        "sort_order": 3
-                    },
-                    {
-                        "title": "app.master-data.menu.process.engineering-bom",
-                        "path": "/apps/master-data/process/engineering-bom",
-                        "permission": "master-data:process:engineering-bom:view",
-                        "sort_order": 4
-                    },
-                    {
-                        "title": "app.master-data.menu.process.sop",
-                        "path": "/apps/master-data/process/sop",
-                        "permission": "master-data:process:sop:view",
-                        "sort_order": 5
-                    }
-                ]
-            },
-            {
-                "title": "app.master-data.menu.supply-chain",
-                "icon": "truck",
-                "sort_order": 5,
-                "children": [{
-                        "title": "app.master-data.menu.supply-chain.customers",
-                        "path": "/apps/master-data/supply-chain/customers",
-                        "permission": "master-data:supply-chain:customer:view",
-                        "sort_order": 1
-                    },
-                    {
-                        "title": "app.master-data.menu.supply-chain.suppliers",
-                        "path": "/apps/master-data/supply-chain/suppliers",
-                        "permission": "master-data:supply-chain:supplier:view",
-                        "sort_order": 2
-                    }
-                ]
-            }
+    "path": "/apps/master-data",
+    "children": [
+      {
+        "title": "app.master-data.menu.factory",
+        "icon": "factory",
+        "sort_order": 1,
+        "children": [
+          {
+            "title": "app.master-data.menu.factory.plants",
+            "path": "/apps/master-data/factory/plants",
+            "permission": "master-data:factory:plant:read",
+            "sort_order": 0
+          },
+          {
+            "title": "app.master-data.menu.factory.workshops",
+            "path": "/apps/master-data/factory/workshops",
+            "permission": "master-data:factory:workshop:read",
+            "sort_order": 1
+          },
+          {
+            "title": "app.master-data.menu.factory.production-lines",
+            "path": "/apps/master-data/factory/production-lines",
+            "permission": "master-data:factory:production-line:read",
+            "sort_order": 2
+          },
+          {
+            "title": "app.master-data.menu.factory.workstations",
+            "path": "/apps/master-data/factory/workstations",
+            "permission": "master-data:factory:workstation:read",
+            "sort_order": 3
+          },
+          {
+            "title": "app.master-data.menu.factory.work-centers",
+            "path": "/apps/master-data/factory/work-centers",
+            "permission": "master-data:factory:work-center:read",
+            "sort_order": 4
+          },
+          {
+            "title": "app.master-data.menu.factory.work-groups",
+            "path": "/apps/master-data/factory/work-groups",
+            "permission": "master-data:factory:work-group:read",
+            "sort_order": 5
+          }
         ]
-    },
-    "permissions": [
-        "master-data:factory:plant:view",
-        "master-data:factory:plant:create",
-        "master-data:factory:plant:update",
-        "master-data:factory:plant:delete",
-        "master-data:factory:workshop:view",
-        "master-data:factory:workshop:create",
-        "master-data:factory:workshop:update",
-        "master-data:factory:workshop:delete",
-        "master-data:factory:production-line:view",
-        "master-data:factory:production-line:create",
-        "master-data:factory:production-line:update",
-        "master-data:factory:production-line:delete",
-        "master-data:factory:workstation:view",
-        "master-data:factory:workstation:create",
-        "master-data:factory:workstation:update",
-        "master-data:factory:workstation:delete",
-        "master-data:factory:work-center:view",
-        "master-data:factory:work-center:create",
-        "master-data:factory:work-center:update",
-        "master-data:factory:work-center:delete",
-        "master-data:factory:work-group:view",
-        "master-data:factory:work-group:create",
-        "master-data:factory:work-group:update",
-        "master-data:factory:work-group:delete",
-        "master-data:warehouse:warehouse:view",
-        "master-data:warehouse:warehouse:create",
-        "master-data:warehouse:warehouse:update",
-        "master-data:warehouse:warehouse:delete",
-        "master-data:warehouse:storage-area:view",
-        "master-data:warehouse:storage-area:create",
-        "master-data:warehouse:storage-area:update",
-        "master-data:warehouse:storage-area:delete",
-        "master-data:warehouse:storage-location:view",
-        "master-data:warehouse:storage-location:create",
-        "master-data:warehouse:storage-location:update",
-        "master-data:warehouse:storage-location:delete",
-        "master-data:material:group:view",
-        "master-data:material:group:create",
-        "master-data:material:group:update",
-        "master-data:material:group:delete",
-        "master-data:material:view",
-        "master-data:material:create",
-        "master-data:material:update",
-        "master-data:material:delete",
-        "master-data:process:engineering-bom:view",
-        "master-data:process:engineering-bom:create",
-        "master-data:process:engineering-bom:update",
-        "master-data:process:engineering-bom:delete",
-        "master-data:material:variant-attribute:view",
-        "master-data:material:variant-attribute:create",
-        "master-data:material:variant-attribute:update",
-        "master-data:material:variant-attribute:delete",
-        "master-data:process:defect-type:view",
-        "master-data:process:defect-type:create",
-        "master-data:process:defect-type:update",
-        "master-data:process:defect-type:delete",
-        "master-data:process:operation:view",
-        "master-data:process:operation:create",
-        "master-data:process:operation:update",
-        "master-data:process:operation:delete",
-        "master-data:process:route:view",
-        "master-data:process:route:create",
-        "master-data:process:route:update",
-        "master-data:process:route:delete",
-        "master-data:process:sop:view",
-        "master-data:process:sop:create",
-        "master-data:process:sop:update",
-        "master-data:process:sop:delete",
-        "master-data:supply-chain:customer:view",
-        "master-data:supply-chain:customer:create",
-        "master-data:supply-chain:customer:update",
-        "master-data:supply-chain:customer:delete",
-        "master-data:supply-chain:supplier:view",
-        "master-data:supply-chain:supplier:create",
-        "master-data:supply-chain:supplier:update",
-        "master-data:supply-chain:supplier:delete",
-        "master-data:performance:holiday:view",
-        "master-data:performance:holiday:create",
-        "master-data:performance:holiday:update",
-        "master-data:performance:holiday:delete",
-        "master-data:performance:skill:view",
-        "master-data:performance:skill:create",
-        "master-data:performance:skill:update",
-        "master-data:performance:skill:delete"
-    ],
-    "dependencies": {
-        "riveredge-backend": ">=1.0.0",
-        "riveredge-frontend": ">=1.0.0"
-    },
-    "code_rule_pages": [{
-            "page_code": "master-data-factory-plant",
-            "page_name": "厂区管理",
-            "page_path": "/apps/master-data/factory/plants",
-            "code_field": "code",
-            "code_field_label": "厂区编码",
-            "module": "主数据",
-            "module_icon": "database",
-            "auto_generate": false
-        },
-        {
-            "page_code": "master-data-factory-workshop",
-            "page_name": "车间管理",
-            "page_path": "/apps/master-data/factory/workshops",
-            "code_field": "code",
-            "code_field_label": "车间编码",
-            "module": "主数据",
-            "module_icon": "database",
-            "auto_generate": false
-        },
-        {
-            "page_code": "master-data-factory-production-line",
-            "page_name": "产线管理",
-            "page_path": "/apps/master-data/factory/production-lines",
-            "code_field": "code",
-            "code_field_label": "产线编码",
-            "module": "主数据",
-            "module_icon": "database",
-            "auto_generate": false
-        },
-        {
-            "page_code": "master-data-factory-workstation",
-            "page_name": "工位管理",
-            "page_path": "/apps/master-data/factory/workstations",
-            "code_field": "code",
-            "code_field_label": "工位编码",
-            "module": "主数据",
-            "module_icon": "database",
-            "auto_generate": false
-        },
-        {
-            "page_code": "master-data-factory-work-center",
-            "page_name": "工作中心",
-            "page_path": "/apps/master-data/factory/work-centers",
-            "code_field": "code",
-            "code_field_label": "工作中心编码",
-            "module": "主数据",
-            "module_icon": "database",
-            "auto_generate": true,
-            "rule_code": "WORK_CENTER_CODE",
-            "skip_date": true
-        },
-        {
-            "page_code": "master-data-factory-work-group",
-            "page_name": "工作小组",
-            "page_path": "/apps/master-data/factory/work-groups",
-            "code_field": "code",
-            "code_field_label": "工作小组编码",
-            "module": "主数据",
-            "module_icon": "database",
-            "auto_generate": true,
-            "rule_code": "WORK_GROUP_CODE",
-            "skip_date": true
-        },
-        {
-            "page_code": "master-data-warehouse-warehouse",
-            "page_name": "仓库管理",
-            "page_path": "/apps/master-data/warehouse/warehouses",
-            "code_field": "code",
-            "code_field_label": "仓库编码",
-            "module": "主数据",
-            "module_icon": "database",
-            "auto_generate": false
-        },
-        {
-            "page_code": "master-data-warehouse-storage-area",
-            "page_name": "库区管理",
-            "page_path": "/apps/master-data/warehouse/storage-areas",
-            "code_field": "code",
-            "code_field_label": "库区编码",
-            "module": "主数据",
-            "module_icon": "database",
-            "auto_generate": false
-        },
-        {
-            "page_code": "master-data-warehouse-storage-location",
-            "page_name": "库位管理",
-            "page_path": "/apps/master-data/warehouse/storage-locations",
-            "code_field": "code",
-            "code_field_label": "库位编码",
-            "module": "主数据",
-            "module_icon": "database",
-            "auto_generate": false
-        },
-        {
-            "page_code": "master-data-material-group",
-            "page_name": "物料分组",
-            "page_path": "/apps/master-data/materials",
-            "code_field": "code",
-            "code_field_label": "分组编码",
-            "module": "主数据",
-            "module_icon": "database",
-            "auto_generate": false
-        },
-        {
-            "page_code": "master-data-material",
-            "page_name": "物料管理",
-            "page_path": "/apps/master-data/materials",
-            "code_field": "main_code",
-            "code_field_label": "物料主编码",
-            "module": "主数据",
-            "module_icon": "database",
-            "auto_generate": true,
-            "rule_code": "MATERIAL_CODE",
-            "available_fields": [{
-                    "field_name": "group_code",
-                    "field_label": "物料分组编码",
-                    "field_type": "string",
-                    "description": "物料所属分组的编码"
-                },
-                {
-                    "field_name": "group_name",
-                    "field_label": "物料分组名称",
-                    "field_type": "string",
-                    "description": "物料所属分组的名称"
-                },
-                {
-                    "field_name": "source_type",
-                    "field_label": "物料来源类型",
-                    "field_type": "string",
-                    "description": "物料来源类型（Make/Buy/Outsource/Phantom）"
-                },
-                {
-                    "field_name": "name",
-                    "field_label": "物料名称",
-                    "field_type": "string",
-                    "description": "物料名称"
-                }
-            ]
-        },
-        {
-            "page_code": "master-data-process-operation",
-            "page_name": "工序管理",
-            "page_path": "/apps/master-data/process/operations",
-            "code_field": "code",
-            "code_field_label": "工序编码",
-            "module": "主数据",
-            "module_icon": "database",
-            "auto_generate": false,
-            "rule_code": "OPERATION_CODE"
-        },
-        {
-            "page_code": "master-data-process-route",
-            "page_name": "工艺路线",
-            "page_path": "/apps/master-data/process/routes",
-            "code_field": "code",
-            "code_field_label": "路线编码",
-            "module": "主数据",
-            "module_icon": "database",
-            "auto_generate": false
-        },
-        {
-            "page_code": "master-data-defect-type",
-            "page_name": "不良品项",
-            "page_path": "/apps/master-data/process/defect-types",
-            "code_field": "code",
-            "code_field_label": "不良品编码",
-            "module": "主数据",
-            "module_icon": "database",
-            "auto_generate": false,
-            "rule_code": "DEFECT_TYPE_CODE"
-        },
-        {
-            "page_code": "master-data-supply-chain-customer",
-            "page_name": "客户管理",
-            "page_path": "/apps/master-data/supply-chain/customers",
-            "code_field": "code",
-            "code_field_label": "客户编码",
-            "module": "主数据",
-            "module_icon": "database",
-            "auto_generate": true,
-            "rule_code": "customer",
-            "allow_manual_edit": true
-        },
-        {
-            "page_code": "master-data-supply-chain-supplier",
-            "page_name": "供应商管理",
-            "page_path": "/apps/master-data/supply-chain/suppliers",
-            "code_field": "code",
-            "code_field_label": "供应商编码",
-            "module": "主数据",
-            "module_icon": "database",
-            "auto_generate": true,
-            "rule_code": "supplier",
-            "allow_manual_edit": true
-        }
-    ],
-    "custom_field_pages": [{
-            "page_code": "master-data-factory-workshop",
-            "page_name": "车间管理",
-            "page_path": "/apps/master-data/factory/workshops",
-            "table_name": "master_data_factory_workshops",
-            "table_name_label": "车间表",
-            "module": "主数据",
-            "module_icon": "database"
-        },
-        {
-            "page_code": "master-data-factory-production-line",
-            "page_name": "产线管理",
-            "page_path": "/apps/master-data/factory/production-lines",
-            "table_name": "master_data_factory_production_lines",
-            "table_name_label": "产线表",
-            "module": "主数据",
-            "module_icon": "database"
-        },
-        {
-            "page_code": "master-data-factory-workstation",
-            "page_name": "工位管理",
-            "page_path": "/apps/master-data/factory/workstations",
-            "table_name": "master_data_factory_workstations",
-            "table_name_label": "工位表",
-            "module": "主数据",
-            "module_icon": "database"
-        },
-        {
-            "page_code": "master-data-warehouse-warehouse",
-            "page_name": "仓库管理",
-            "page_path": "/apps/master-data/warehouse/warehouses",
-            "table_name": "master_data_warehouse_warehouses",
-            "table_name_label": "仓库表",
-            "module": "主数据",
-            "module_icon": "database"
-        },
-        {
-            "page_code": "master-data-warehouse-storage-area",
-            "page_name": "库区管理",
-            "page_path": "/apps/master-data/warehouse/storage-areas",
-            "table_name": "master_data_warehouse_storage_areas",
-            "table_name_label": "库区表",
-            "module": "主数据",
-            "module_icon": "database"
-        },
-        {
-            "page_code": "master-data-warehouse-storage-location",
-            "page_name": "库位管理",
-            "page_path": "/apps/master-data/warehouse/storage-locations",
-            "table_name": "master_data_warehouse_storage_locations",
-            "table_name_label": "库位表",
-            "module": "主数据",
-            "module_icon": "database"
-        },
-        {
-            "page_code": "master-data-material-group",
-            "page_name": "物料分组",
-            "page_path": "/apps/master-data/materials",
-            "table_name": "master_data_material_groups",
-            "table_name_label": "物料分组表",
-            "module": "主数据",
-            "module_icon": "database"
-        },
-        {
-            "page_code": "master-data-material",
-            "page_name": "物料管理",
-            "page_path": "/apps/master-data/materials",
-            "table_name": "master_data_materials",
-            "table_name_label": "物料表",
-            "module": "主数据",
-            "module_icon": "database"
-        },
-        {
-            "page_code": "master-data-engineering-bom",
-            "page_name": "物料清单BOM",
-            "page_path": "/apps/master-data/process/engineering-bom",
-            "table_name": "master_data_boms",
-            "table_name_label": "物料清单BOM表",
-            "module": "主数据",
-            "module_icon": "database"
-        },
-        {
-            "page_code": "master-data-defect-type",
-            "page_name": "缺陷类型管理",
-            "page_path": "/apps/master-data/process/defect-types",
-            "table_name": "master_data_defect_types",
-            "table_name_label": "缺陷类型表",
-            "module": "主数据",
-            "module_icon": "database"
-        },
-        {
-            "page_code": "master-data-operation",
-            "page_name": "工序管理",
-            "page_path": "/apps/master-data/process/operations",
-            "table_name": "master_data_operations",
-            "table_name_label": "工序表",
-            "module": "主数据",
-            "module_icon": "database"
-        },
-        {
-            "page_code": "master-data-process-route",
-            "page_name": "工艺路线管理",
-            "page_path": "/apps/master-data/process/routes",
-            "table_name": "master_data_process_routes",
-            "table_name_label": "工艺路线表",
-            "module": "主数据",
-            "module_icon": "database"
-        },
-        {
-            "page_code": "master-data-manufacturing-bom",
-            "page_name": "标准操作SOP",
-            "page_path": "/apps/master-data/process/sop",
-            "table_name": "master_data_sops",
-            "table_name_label": "标准操作SOP表",
-            "module": "主数据",
-            "module_icon": "database"
-        },
-        {
-            "page_code": "master-data-customer",
-            "page_name": "客户管理",
-            "page_path": "/apps/master-data/supply-chain/customers",
-            "table_name": "master_data_customers",
-            "table_name_label": "客户表",
-            "module": "主数据",
-            "module_icon": "database"
-        },
-        {
-            "page_code": "master-data-supplier",
-            "page_name": "供应商管理",
-            "page_path": "/apps/master-data/supply-chain/suppliers",
-            "table_name": "master_data_suppliers",
-            "table_name_label": "供应商表",
-            "module": "主数据",
-            "module_icon": "database"
-        },
-        {
-            "page_code": "master-data-holiday",
-            "page_name": "节假日管理",
-            "page_path": "/apps/kuaizhizao/performance/holidays",
-            "table_name": "master_data_holidays",
-            "table_name_label": "节假日表",
-            "module": "快制造",
-            "module_icon": "production"
-        },
-        {
-            "page_code": "master-data-skill",
-            "page_name": "技能管理",
-            "page_path": "/apps/kuaizhizao/performance/skills",
-            "table_name": "master_data_skills",
-            "table_name_label": "技能表",
-            "module": "快制造",
-            "module_icon": "production"
-        }
+      },
+      {
+        "title": "app.master-data.menu.warehouse",
+        "icon": "archive",
+        "sort_order": 2,
+        "children": [
+          {
+            "title": "app.master-data.menu.warehouse.warehouses",
+            "path": "/apps/master-data/warehouse/warehouses",
+            "permission": "master-data:warehouse:warehouse:read",
+            "sort_order": 1
+          },
+          {
+            "title": "app.master-data.menu.warehouse.storage-areas",
+            "path": "/apps/master-data/warehouse/storage-areas",
+            "permission": "master-data:warehouse:storage-area:read",
+            "sort_order": 2
+          },
+          {
+            "title": "app.master-data.menu.warehouse.storage-locations",
+            "path": "/apps/master-data/warehouse/storage-locations",
+            "permission": "master-data:warehouse:storage-location:read",
+            "sort_order": 3
+          }
+        ]
+      },
+      {
+        "title": "app.master-data.menu.materials",
+        "icon": "package",
+        "sort_order": 3,
+        "children": [
+          {
+            "title": "app.master-data.menu.materials.variant-attributes",
+            "path": "/apps/master-data/materials/variant-attributes",
+            "permission": "master-data:material-variant-attribute:read",
+            "sort_order": 1
+          },
+          {
+            "title": "app.master-data.menu.materials.management",
+            "path": "/apps/master-data/materials",
+            "permission": "master-data:material:read",
+            "sort_order": 2
+          },
+          {
+            "title": "app.master-data.menu.materials.batch-rules",
+            "path": "/apps/master-data/materials/batch-rules",
+            "permission": "master-data:material-batch-rule:read",
+            "sort_order": 3
+          },
+          {
+            "title": "app.master-data.menu.materials.serial-rules",
+            "path": "/apps/master-data/materials/serial-rules",
+            "permission": "master-data:material-serial:read",
+            "sort_order": 4
+          }
+        ]
+      },
+      {
+        "title": "app.master-data.menu.process",
+        "icon": "workflow",
+        "sort_order": 4,
+        "children": [
+          {
+            "title": "app.master-data.menu.process.defect-types",
+            "path": "/apps/master-data/process/defect-types",
+            "permission": "master-data:process:defect-type:read",
+            "sort_order": 1
+          },
+          {
+            "title": "app.master-data.menu.process.operations",
+            "path": "/apps/master-data/process/operations",
+            "permission": "master-data:process:operation:read",
+            "sort_order": 2
+          },
+          {
+            "title": "app.master-data.menu.process.routes",
+            "path": "/apps/master-data/process/routes",
+            "permission": "master-data:process:route:read",
+            "sort_order": 3
+          },
+          {
+            "title": "app.master-data.menu.process.engineering-bom",
+            "path": "/apps/master-data/process/engineering-bom",
+            "permission": "master-data:process:engineering-bom:read",
+            "sort_order": 4
+          },
+          {
+            "title": "app.master-data.menu.process.sop",
+            "path": "/apps/master-data/process/sop",
+            "permission": "master-data:process:sop:read",
+            "sort_order": 5
+          }
+        ]
+      },
+      {
+        "title": "app.master-data.menu.supply-chain",
+        "icon": "truck",
+        "sort_order": 5,
+        "children": [
+          {
+            "title": "app.master-data.menu.supply-chain.customers",
+            "path": "/apps/master-data/supply-chain/customers",
+            "permission": "master-data:supply-chain:customer:read",
+            "sort_order": 1
+          },
+          {
+            "title": "app.master-data.menu.supply-chain.suppliers",
+            "path": "/apps/master-data/supply-chain/suppliers",
+            "permission": "master-data:supply-chain:supplier:read",
+            "sort_order": 2
+          }
+        ]
+      }
     ]
+  },
+  "permissions": [
+    "master-data:factory:plant:approve",
+    "master-data:factory:plant:audit",
+    "master-data:factory:plant:create",
+    "master-data:factory:plant:delete",
+    "master-data:factory:plant:export",
+    "master-data:factory:plant:import",
+    "master-data:factory:plant:read",
+    "master-data:factory:plant:reject",
+    "master-data:factory:plant:revoke",
+    "master-data:factory:plant:submit",
+    "master-data:factory:plant:update",
+    "master-data:factory:production-line:approve",
+    "master-data:factory:production-line:audit",
+    "master-data:factory:production-line:create",
+    "master-data:factory:production-line:delete",
+    "master-data:factory:production-line:export",
+    "master-data:factory:production-line:import",
+    "master-data:factory:production-line:read",
+    "master-data:factory:production-line:reject",
+    "master-data:factory:production-line:revoke",
+    "master-data:factory:production-line:submit",
+    "master-data:factory:production-line:update",
+    "master-data:factory:work-center:approve",
+    "master-data:factory:work-center:audit",
+    "master-data:factory:work-center:create",
+    "master-data:factory:work-center:delete",
+    "master-data:factory:work-center:export",
+    "master-data:factory:work-center:import",
+    "master-data:factory:work-center:read",
+    "master-data:factory:work-center:reject",
+    "master-data:factory:work-center:revoke",
+    "master-data:factory:work-center:submit",
+    "master-data:factory:work-center:update",
+    "master-data:factory:work-group:approve",
+    "master-data:factory:work-group:audit",
+    "master-data:factory:work-group:create",
+    "master-data:factory:work-group:delete",
+    "master-data:factory:work-group:export",
+    "master-data:factory:work-group:import",
+    "master-data:factory:work-group:read",
+    "master-data:factory:work-group:reject",
+    "master-data:factory:work-group:revoke",
+    "master-data:factory:work-group:submit",
+    "master-data:factory:work-group:update",
+    "master-data:factory:workshop:approve",
+    "master-data:factory:workshop:audit",
+    "master-data:factory:workshop:create",
+    "master-data:factory:workshop:delete",
+    "master-data:factory:workshop:export",
+    "master-data:factory:workshop:import",
+    "master-data:factory:workshop:read",
+    "master-data:factory:workshop:reject",
+    "master-data:factory:workshop:revoke",
+    "master-data:factory:workshop:submit",
+    "master-data:factory:workshop:update",
+    "master-data:factory:workstation:approve",
+    "master-data:factory:workstation:audit",
+    "master-data:factory:workstation:create",
+    "master-data:factory:workstation:delete",
+    "master-data:factory:workstation:export",
+    "master-data:factory:workstation:import",
+    "master-data:factory:workstation:read",
+    "master-data:factory:workstation:reject",
+    "master-data:factory:workstation:revoke",
+    "master-data:factory:workstation:submit",
+    "master-data:factory:workstation:update",
+    "master-data:material:audit",
+    "master-data:material-batch:audit",
+    "master-data:material-batch:create",
+    "master-data:material-batch:delete",
+    "master-data:material-batch:export",
+    "master-data:material-batch:import",
+    "master-data:material-batch:read",
+    "master-data:material-batch:revoke",
+    "master-data:material-batch:submit",
+    "master-data:material-batch:update",
+    "master-data:material-batch-rule:audit",
+    "master-data:material-batch-rule:create",
+    "master-data:material-batch-rule:delete",
+    "master-data:material-batch-rule:export",
+    "master-data:material-batch-rule:import",
+    "master-data:material-batch-rule:read",
+    "master-data:material-batch-rule:revoke",
+    "master-data:material-batch-rule:submit",
+    "master-data:material-batch-rule:update",
+    "master-data:material:create",
+    "master-data:material:delete",
+    "master-data:material:export",
+    "master-data:material-group:create",
+    "master-data:material-group:delete",
+    "master-data:material-group:read",
+    "master-data:material-group:update",
+    "master-data:material:import",
+    "master-data:material:read",
+    
+    "master-data:material:revoke",
+    "master-data:material-serial:audit",
+    "master-data:material-serial:create",
+    "master-data:material-serial:delete",
+    "master-data:material-serial:export",
+    "master-data:material-serial:import",
+    "master-data:material-serial:read",
+    "master-data:material-serial:revoke",
+    "master-data:material-serial:submit",
+    "master-data:material-serial:update",
+    "master-data:material:submit",
+    "master-data:material:update",
+    "master-data:material-variant-attribute:audit",
+    "master-data:material-variant-attribute:create",
+    "master-data:material-variant-attribute:delete",
+    "master-data:material-variant-attribute:export",
+    "master-data:material-variant-attribute:import",
+    "master-data:material-variant-attribute:read",
+    "master-data:material-variant-attribute:revoke",
+    "master-data:material-variant-attribute:submit",
+    "master-data:material-variant-attribute:update",
+    "master-data:process:defect-type:approve",
+    "master-data:process:defect-type:audit",
+    "master-data:process:defect-type:create",
+    "master-data:process:defect-type:delete",
+    "master-data:process:defect-type:export",
+    "master-data:process:defect-type:import",
+    "master-data:process:defect-type:read",
+    "master-data:process:defect-type:reject",
+    "master-data:process:defect-type:revoke",
+    "master-data:process:defect-type:submit",
+    "master-data:process:defect-type:update",
+    "master-data:process:engineering-bom:approve",
+    "master-data:process:engineering-bom:audit",
+    "master-data:process:engineering-bom:create",
+    "master-data:process:engineering-bom:delete",
+    "master-data:process:engineering-bom:export",
+    "master-data:process:engineering-bom:import",
+    "master-data:process:engineering-bom:read",
+    "master-data:process:engineering-bom:reject",
+    "master-data:process:engineering-bom:revoke",
+    "master-data:process:engineering-bom:submit",
+    "master-data:process:engineering-bom:update",
+    "master-data:process:operation:approve",
+    "master-data:process:operation:audit",
+    "master-data:process:operation:create",
+    "master-data:process:operation:delete",
+    "master-data:process:operation:export",
+    "master-data:process:operation:import",
+    "master-data:process:operation:read",
+    "master-data:process:operation:reject",
+    "master-data:process:operation:revoke",
+    "master-data:process:operation:submit",
+    "master-data:process:operation:update",
+    "master-data:process:route:approve",
+    "master-data:process:route:audit",
+    "master-data:process:route:create",
+    "master-data:process:route:delete",
+    "master-data:process:route:export",
+    "master-data:process:route:import",
+    "master-data:process:route:read",
+    "master-data:process:route:reject",
+    "master-data:process:route:revoke",
+    "master-data:process:route:submit",
+    "master-data:process:route:update",
+    "master-data:process:sop:approve",
+    "master-data:process:sop:audit",
+    "master-data:process:sop:create",
+    "master-data:process:sop:delete",
+    "master-data:process:sop:export",
+    "master-data:process:sop:import",
+    "master-data:process:sop:read",
+    "master-data:process:sop:reject",
+    "master-data:process:sop:revoke",
+    "master-data:process:sop:submit",
+    "master-data:process:sop:update",
+    "master-data:supply-chain:customer:approve",
+    "master-data:supply-chain:customer:audit",
+    "master-data:supply-chain:customer:create",
+    "master-data:supply-chain:customer:delete",
+    "master-data:supply-chain:customer:export",
+    "master-data:supply-chain:customer:import",
+    "master-data:supply-chain:customer:read",
+    "master-data:supply-chain:customer:reject",
+    "master-data:supply-chain:customer:revoke",
+    "master-data:supply-chain:customer:submit",
+    "master-data:supply-chain:customer:update",
+    "master-data:supply-chain:supplier:approve",
+    "master-data:supply-chain:supplier:audit",
+    "master-data:supply-chain:supplier:create",
+    "master-data:supply-chain:supplier:delete",
+    "master-data:supply-chain:supplier:export",
+    "master-data:supply-chain:supplier:import",
+    "master-data:supply-chain:supplier:read",
+    "master-data:supply-chain:supplier:reject",
+    "master-data:supply-chain:supplier:revoke",
+    "master-data:supply-chain:supplier:submit",
+    "master-data:supply-chain:supplier:update",
+    "master-data:warehouse:storage-area:approve",
+    "master-data:warehouse:storage-area:audit",
+    "master-data:warehouse:storage-area:create",
+    "master-data:warehouse:storage-area:delete",
+    "master-data:warehouse:storage-area:export",
+    "master-data:warehouse:storage-area:import",
+    "master-data:warehouse:storage-area:read",
+    "master-data:warehouse:storage-area:reject",
+    "master-data:warehouse:storage-area:revoke",
+    "master-data:warehouse:storage-area:submit",
+    "master-data:warehouse:storage-area:update",
+    "master-data:warehouse:storage-location:approve",
+    "master-data:warehouse:storage-location:audit",
+    "master-data:warehouse:storage-location:create",
+    "master-data:warehouse:storage-location:delete",
+    "master-data:warehouse:storage-location:export",
+    "master-data:warehouse:storage-location:import",
+    "master-data:warehouse:storage-location:read",
+    "master-data:warehouse:storage-location:reject",
+    "master-data:warehouse:storage-location:revoke",
+    "master-data:warehouse:storage-location:submit",
+    "master-data:warehouse:storage-location:update",
+    "master-data:warehouse:warehouse:approve",
+    "master-data:warehouse:warehouse:audit",
+    "master-data:warehouse:warehouse:create",
+    "master-data:warehouse:warehouse:delete",
+    "master-data:warehouse:warehouse:export",
+    "master-data:warehouse:warehouse:import",
+    "master-data:warehouse:warehouse:read",
+    "master-data:warehouse:warehouse:reject",
+    "master-data:warehouse:warehouse:revoke",
+    "master-data:warehouse:warehouse:submit",
+    "master-data:warehouse:warehouse:update"
+  ],
+  "dependencies": {
+    "riveredge-backend": ">=1.0.0",
+    "riveredge-frontend": ">=1.0.0"
+  },
+  "code_rule_pages": [
+    {
+      "page_code": "master-data-factory-plant",
+      "page_name": "厂区管理",
+      "page_path": "/apps/master-data/factory/plants",
+      "code_field": "code",
+      "code_field_label": "厂区编码",
+      "module": "主数据",
+      "module_icon": "database",
+      "auto_generate": false
+    },
+    {
+      "page_code": "master-data-factory-workshop",
+      "page_name": "车间管理",
+      "page_path": "/apps/master-data/factory/workshops",
+      "code_field": "code",
+      "code_field_label": "车间编码",
+      "module": "主数据",
+      "module_icon": "database",
+      "auto_generate": false
+    },
+    {
+      "page_code": "master-data-factory-production-line",
+      "page_name": "产线管理",
+      "page_path": "/apps/master-data/factory/production-lines",
+      "code_field": "code",
+      "code_field_label": "产线编码",
+      "module": "主数据",
+      "module_icon": "database",
+      "auto_generate": false
+    },
+    {
+      "page_code": "master-data-factory-workstation",
+      "page_name": "工位管理",
+      "page_path": "/apps/master-data/factory/workstations",
+      "code_field": "code",
+      "code_field_label": "工位编码",
+      "module": "主数据",
+      "module_icon": "database",
+      "auto_generate": false
+    },
+    {
+      "page_code": "master-data-factory-work-center",
+      "page_name": "工作中心",
+      "page_path": "/apps/master-data/factory/work-centers",
+      "code_field": "code",
+      "code_field_label": "工作中心编码",
+      "module": "主数据",
+      "module_icon": "database",
+      "auto_generate": true,
+      "rule_code": "WORK_CENTER_CODE",
+      "skip_date": true
+    },
+    {
+      "page_code": "master-data-factory-work-group",
+      "page_name": "工作小组",
+      "page_path": "/apps/master-data/factory/work-groups",
+      "code_field": "code",
+      "code_field_label": "工作小组编码",
+      "module": "主数据",
+      "module_icon": "database",
+      "auto_generate": true,
+      "rule_code": "WORK_GROUP_CODE",
+      "skip_date": true
+    },
+    {
+      "page_code": "master-data-warehouse-warehouse",
+      "page_name": "仓库管理",
+      "page_path": "/apps/master-data/warehouse/warehouses",
+      "code_field": "code",
+      "code_field_label": "仓库编码",
+      "module": "主数据",
+      "module_icon": "database",
+      "auto_generate": false
+    },
+    {
+      "page_code": "master-data-warehouse-storage-area",
+      "page_name": "库区管理",
+      "page_path": "/apps/master-data/warehouse/storage-areas",
+      "code_field": "code",
+      "code_field_label": "库区编码",
+      "module": "主数据",
+      "module_icon": "database",
+      "auto_generate": false
+    },
+    {
+      "page_code": "master-data-warehouse-storage-location",
+      "page_name": "库位管理",
+      "page_path": "/apps/master-data/warehouse/storage-locations",
+      "code_field": "code",
+      "code_field_label": "库位编码",
+      "module": "主数据",
+      "module_icon": "database",
+      "auto_generate": false
+    },
+    {
+      "page_code": "master-data-material-group",
+      "page_name": "物料分组",
+      "page_path": "/apps/master-data/materials",
+      "code_field": "code",
+      "code_field_label": "分组编码",
+      "module": "主数据",
+      "module_icon": "database",
+      "auto_generate": false
+    },
+    {
+      "page_code": "master-data-material",
+      "page_name": "物料管理",
+      "page_path": "/apps/master-data/materials",
+      "code_field": "main_code",
+      "code_field_label": "物料主编码",
+      "module": "主数据",
+      "module_icon": "database",
+      "auto_generate": true,
+      "rule_code": "MATERIAL_CODE",
+      "available_fields": [
+        {
+          "field_name": "group_code",
+          "field_label": "物料分组编码",
+          "field_type": "string",
+          "description": "物料所属分组的编码"
+        },
+        {
+          "field_name": "group_name",
+          "field_label": "物料分组名称",
+          "field_type": "string",
+          "description": "物料所属分组的名称"
+        },
+        {
+          "field_name": "source_type",
+          "field_label": "物料来源类型",
+          "field_type": "string",
+          "description": "物料来源类型（Make/Buy/Outsource/Phantom）"
+        },
+        {
+          "field_name": "name",
+          "field_label": "物料名称",
+          "field_type": "string",
+          "description": "物料名称"
+        }
+      ]
+    },
+    {
+      "page_code": "master-data-process-operation",
+      "page_name": "工序管理",
+      "page_path": "/apps/master-data/process/operations",
+      "code_field": "code",
+      "code_field_label": "工序编码",
+      "module": "主数据",
+      "module_icon": "database",
+      "auto_generate": false,
+      "rule_code": "OPERATION_CODE"
+    },
+    {
+      "page_code": "master-data-process-route",
+      "page_name": "工艺路线",
+      "page_path": "/apps/master-data/process/routes",
+      "code_field": "code",
+      "code_field_label": "路线编码",
+      "module": "主数据",
+      "module_icon": "database",
+      "auto_generate": false
+    },
+    {
+      "page_code": "master-data-defect-type",
+      "page_name": "不良品项",
+      "page_path": "/apps/master-data/process/defect-types",
+      "code_field": "code",
+      "code_field_label": "不良品编码",
+      "module": "主数据",
+      "module_icon": "database",
+      "auto_generate": false,
+      "rule_code": "DEFECT_TYPE_CODE"
+    },
+    {
+      "page_code": "master-data-supply-chain-customer",
+      "page_name": "客户管理",
+      "page_path": "/apps/master-data/supply-chain/customers",
+      "code_field": "code",
+      "code_field_label": "客户编码",
+      "module": "主数据",
+      "module_icon": "database",
+      "auto_generate": true,
+      "rule_code": "customer",
+      "allow_manual_edit": true
+    },
+    {
+      "page_code": "master-data-supply-chain-supplier",
+      "page_name": "供应商管理",
+      "page_path": "/apps/master-data/supply-chain/suppliers",
+      "code_field": "code",
+      "code_field_label": "供应商编码",
+      "module": "主数据",
+      "module_icon": "database",
+      "auto_generate": true,
+      "rule_code": "supplier",
+      "allow_manual_edit": true
+    }
+  ],
+  "custom_field_pages": [
+    {
+      "page_code": "master-data-factory-workshop",
+      "page_name": "车间管理",
+      "page_path": "/apps/master-data/factory/workshops",
+      "table_name": "master_data_factory_workshops",
+      "table_name_label": "车间表",
+      "module": "主数据",
+      "module_icon": "database"
+    },
+    {
+      "page_code": "master-data-factory-production-line",
+      "page_name": "产线管理",
+      "page_path": "/apps/master-data/factory/production-lines",
+      "table_name": "master_data_factory_production_lines",
+      "table_name_label": "产线表",
+      "module": "主数据",
+      "module_icon": "database"
+    },
+    {
+      "page_code": "master-data-factory-workstation",
+      "page_name": "工位管理",
+      "page_path": "/apps/master-data/factory/workstations",
+      "table_name": "master_data_factory_workstations",
+      "table_name_label": "工位表",
+      "module": "主数据",
+      "module_icon": "database"
+    },
+    {
+      "page_code": "master-data-warehouse-warehouse",
+      "page_name": "仓库管理",
+      "page_path": "/apps/master-data/warehouse/warehouses",
+      "table_name": "master_data_warehouse_warehouses",
+      "table_name_label": "仓库表",
+      "module": "主数据",
+      "module_icon": "database"
+    },
+    {
+      "page_code": "master-data-warehouse-storage-area",
+      "page_name": "库区管理",
+      "page_path": "/apps/master-data/warehouse/storage-areas",
+      "table_name": "master_data_warehouse_storage_areas",
+      "table_name_label": "库区表",
+      "module": "主数据",
+      "module_icon": "database"
+    },
+    {
+      "page_code": "master-data-warehouse-storage-location",
+      "page_name": "库位管理",
+      "page_path": "/apps/master-data/warehouse/storage-locations",
+      "table_name": "master_data_warehouse_storage_locations",
+      "table_name_label": "库位表",
+      "module": "主数据",
+      "module_icon": "database"
+    },
+    {
+      "page_code": "master-data-material-group",
+      "page_name": "物料分组",
+      "page_path": "/apps/master-data/materials",
+      "table_name": "master_data_material_groups",
+      "table_name_label": "物料分组表",
+      "module": "主数据",
+      "module_icon": "database"
+    },
+    {
+      "page_code": "master-data-material",
+      "page_name": "物料管理",
+      "page_path": "/apps/master-data/materials",
+      "table_name": "master_data_materials",
+      "table_name_label": "物料表",
+      "module": "主数据",
+      "module_icon": "database"
+    },
+    {
+      "page_code": "master-data-engineering-bom",
+      "page_name": "物料清单BOM",
+      "page_path": "/apps/master-data/process/engineering-bom",
+      "table_name": "master_data_boms",
+      "table_name_label": "物料清单BOM表",
+      "module": "主数据",
+      "module_icon": "database"
+    },
+    {
+      "page_code": "master-data-defect-type",
+      "page_name": "缺陷类型管理",
+      "page_path": "/apps/master-data/process/defect-types",
+      "table_name": "master_data_defect_types",
+      "table_name_label": "缺陷类型表",
+      "module": "主数据",
+      "module_icon": "database"
+    },
+    {
+      "page_code": "master-data-operation",
+      "page_name": "工序管理",
+      "page_path": "/apps/master-data/process/operations",
+      "table_name": "master_data_operations",
+      "table_name_label": "工序表",
+      "module": "主数据",
+      "module_icon": "database"
+    },
+    {
+      "page_code": "master-data-process-route",
+      "page_name": "工艺路线管理",
+      "page_path": "/apps/master-data/process/routes",
+      "table_name": "master_data_process_routes",
+      "table_name_label": "工艺路线表",
+      "module": "主数据",
+      "module_icon": "database"
+    },
+    {
+      "page_code": "master-data-manufacturing-bom",
+      "page_name": "标准操作SOP",
+      "page_path": "/apps/master-data/process/sop",
+      "table_name": "master_data_sops",
+      "table_name_label": "标准操作SOP表",
+      "module": "主数据",
+      "module_icon": "database"
+    },
+    {
+      "page_code": "master-data-customer",
+      "page_name": "客户管理",
+      "page_path": "/apps/master-data/supply-chain/customers",
+      "table_name": "master_data_customers",
+      "table_name_label": "客户表",
+      "module": "主数据",
+      "module_icon": "database"
+    },
+    {
+      "page_code": "master-data-supplier",
+      "page_name": "供应商管理",
+      "page_path": "/apps/master-data/supply-chain/suppliers",
+      "table_name": "master_data_suppliers",
+      "table_name_label": "供应商表",
+      "module": "主数据",
+      "module_icon": "database"
+    },
+    {
+      "page_code": "master-data-holiday",
+      "page_name": "节假日管理",
+      "page_path": "/apps/kuaizhizao/performance/holidays",
+      "table_name": "master_data_holidays",
+      "table_name_label": "节假日表",
+      "module": "快制造",
+      "module_icon": "production"
+    },
+    {
+      "page_code": "master-data-skill",
+      "page_name": "技能管理",
+      "page_path": "/apps/kuaizhizao/performance/skills",
+      "table_name": "master_data_skills",
+      "table_name_label": "技能表",
+      "module": "快制造",
+      "module_icon": "production"
+    }
+  ]
 }

@@ -1,25 +1,27 @@
 {
-    "code": "kuaiai",
-    "name": "KU-AI",
-    "version": "1.0.0",
-    "is_pro": true,
-    "description": "在相关业务单据提供智能建议，支持本地建议与大模型建议",
+  "code": "kuaiai",
+  "name": "KU-AI",
+  "version": "1.0.0",
+  "is_pro": true,
+  "description": "在相关业务单据提供智能建议，支持本地建议与大模型建议",
+  "icon": "sparkles",
+  "author": "RiverEdge Team",
+  "entry_point": "../apps/kuaiai/index.tsx",
+  "route_path": "/apps/kuaiai",
+  "is_placeholder": true,
+  "sort_order": 80,
+  "menu_config": {
+    "title": "app.kuaiai.name",
     "icon": "sparkles",
-    "author": "RiverEdge Team",
-    "entry_point": "../apps/kuaiai/index.tsx",
-    "route_path": "/apps/kuaiai",
-    "is_placeholder": true,
-    "sort_order": 80,
-    "menu_config": {
-        "title": "app.kuaiai.name",
-        "icon": "sparkles",
-        "path": "/apps/kuaiai",
-        "permission": "kuaiai:view",
-        "children": []
-    },
-    "permissions": ["kuaiai:view"],
-    "dependencies": {
-        "riveredge-backend": ">=1.0.0",
-        "riveredge-frontend": ">=1.0.0"
-    }
+    "path": "/apps/kuaiai",
+    "permission": "kuaiai:workspace:read",
+    "children": []
+  },
+  "permissions": [
+    "kuaiai:workspace:read"
+  ],
+  "dependencies": {
+    "riveredge-backend": ">=1.0.0",
+    "riveredge-frontend": ">=1.0.0"
+  }
 }

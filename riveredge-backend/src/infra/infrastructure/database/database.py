@@ -144,6 +144,9 @@ TORTOISE_ORM = {
                 # 系统级模型（core）
                 "core.models.role",
                 "core.models.permission",
+                "core.models.permission_alias",
+                "core.models.data_permission_policy",
+                "core.models.field_permission_policy",
                 "core.models.access_policy",
                 "core.models.policy_binding",
                 "core.models.permission_version",

@@ -134,6 +134,14 @@ async def maintenance_reminder_daily_tick() -> dict:
     return await run_maintenance_reminder_scheduler()
 
 
+@task(schedule=[{"cron": "15 2 * * *"}])
+async def permission_governance_daily_tick() -> dict:
+    """每天凌晨执行一次全租户权限治理兜底。"""
+    from core.services.authorization.permission_sync_service import PermissionSyncService
+
+    return await PermissionSyncService.sync_all_active_tenants(dry_run=False, prune=True)
+
+
 # 数据备份/恢复仍通过 register_event_handler 注册
 from core.tasks.data_backup_handlers import register_data_backup_handlers  # noqa: E402
 

@@ -185,16 +185,16 @@ const SystemRoutes: React.FC = () => (
     <Route path="/system/dashboard" element={<Navigate to="/system/dashboard/workplace" replace />} />
     <Route path="/system/dashboard/workplace" element={withDashboardSuspense(DashboardPage)} />
     <Route path="/system/dashboard/analysis" element={withDashboardSuspense(DashboardAnalysisPage)} />
-    <Route path="/system/roles" element={withPermission(withRolesPermissionsSuspense(RolesPermissionsPage), ['system.role:read', 'system.role:update'])} />
-    <Route path="/system/permissions" element={withPermission(withSuspense(PermissionsPage), ['system.permission:read', 'system.permission:update'])} />
-    <Route path="/system/departments" element={withPermission(withSuspense(DepartmentsPage), ['system.department:read', 'system.department:update'])} />
-    <Route path="/system/positions" element={withPermission(withSuspense(PositionsPage), ['system.position:read', 'system.position:update'])} />
+    <Route path="/system/roles" element={withPermission(withRolesPermissionsSuspense(RolesPermissionsPage), ['system:role:read', 'system:role:update'])} />
+    <Route path="/system/permissions" element={withPermission(withSuspense(PermissionsPage), ['system:permission:read', 'system:permission:update'])} />
+    <Route path="/system/departments" element={withPermission(withSuspense(DepartmentsPage), ['system:department:read', 'system:department:update'])} />
+    <Route path="/system/positions" element={withPermission(withSuspense(PositionsPage), ['system:position:read', 'system:position:update'])} />
     <Route path="/system/equipment" element={withSuspense(EquipmentPage)} />
     <Route path="/system/equipment/:uuid/trace" element={withSuspense(EquipmentTracePage)} />
     <Route path="/system/maintenance-plans" element={withSuspense(MaintenancePlansPage)} />
     <Route path="/system/equipment-faults" element={withSuspense(EquipmentFaultsPage)} />
     <Route path="/system/molds" element={withSuspense(MoldsPage)} />
-    <Route path="/system/users" element={withPermission(withSuspense(UsersPage), ['system.user:read', 'system.user:update'])} />
+    <Route path="/system/users" element={withPermission(withSuspense(UsersPage), ['system:user:read', 'system:user:update'])} />
     <Route path="/system/user-profile" element={withSuspense(UserProfilePage)} />
     <Route path="/system/languages" element={withSuspense(LanguagesPage)} />
     <Route path="/system/site-settings" element={withSuspense(SiteSettingsPage)} />

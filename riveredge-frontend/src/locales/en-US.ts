@@ -6583,6 +6583,8 @@ export default {
   'pages.system.roles.searchRole': 'Search roles',
   'pages.system.roles.createRole': 'Create role',
   'pages.system.roles.refresh': 'Refresh',
+  'pages.system.roles.expandAll': 'Expand All',
+  'pages.system.roles.collapseAll': 'Collapse All',
   'pages.system.roles.systemRole': 'System role',
   'pages.system.roles.disabledRole': 'Disabled',
   'pages.system.roles.selectRoleHint': 'Select a role from the left',

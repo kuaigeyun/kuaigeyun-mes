@@ -11,8 +11,31 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from pydantic import AliasChoices, BaseModel, Field
 from starlette.requests import Request
 from loguru import logger
+from typing import Any, Optional
 
-from infra.schemas.auth import LoginRequest, LoginResponse, UserRegisterRequest, PersonalRegisterRequest, OrganizationRegisterRequest, RegisterResponse, CurrentUserResponse, SendVerificationCodeRequest, SendVerificationCodeResponse, BatchAccessCheckRequest, AccessCheckResult
+from infra.schemas.auth import (
+    LoginRequest, 
+    LoginResponse, 
+    UserRegisterRequest, 
+    PersonalRegisterRequest, 
+    OrganizationRegisterRequest, 
+    RegisterResponse, 
+    CurrentUserResponse, 
+    SendVerificationCodeRequest, 
+    SendVerificationCodeResponse, 
+    BatchAccessCheckRequest, 
+    AccessCheckResult,
+    WebAuthnRegisterOptionsRequest,
+    WebAuthnRegisterFinalizeRequest,
+    WebAuthnLoginOptionsRequest,
+    WebAuthnLoginFinalizeRequest
+)
+from infra.services.auth_service import AuthService
+from infra.api.deps.deps import get_current_user
+from core.api.deps.deps import get_current_tenant
+from infra.api.deps.services import get_auth_service_with_fallback, get_biometric_service
+from infra.models.user import User
+from infra.exceptions.exceptions import NotFoundError, ValidationError, AuthenticationError
 
 
 class RefreshTokenBody(BaseModel):
@@ -23,13 +46,7 @@ class RefreshTokenBody(BaseModel):
         validation_alias=AliasChoices("token", "refresh_token"),
         description="当前 JWT，可通过 token 或 refresh_token 字段传入",
     )
-from infra.services.auth_service import AuthService
-from infra.api.deps.deps import get_current_user
-from core.api.deps.deps import get_current_tenant
-from infra.api.deps.services import get_auth_service_with_fallback
-from infra.models.user import User
-from infra.exceptions.exceptions import NotFoundError, ValidationError, AuthenticationError
-from typing import Any
+
 
 # 创建路由
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -45,28 +62,6 @@ async def login(
     用户登录接口
     
     验证用户凭据并返回 JWT Token（包含 tenant_id）。
-    
-    ⚠️ 第三阶段改进：使用依赖注入获取服务，支持向后兼容
-    
-    Args:
-        data: 登录请求数据（username, password, tenant_id 可选）
-        request: 请求对象（用于获取 IP、User-Agent 等信息）
-        auth_service: 认证服务（依赖注入，如果未注册则回退到直接导入）
-        
-    Returns:
-        LoginResponse: 登录成功的响应数据（包含 access_token 和用户信息）
-        
-    Raises:
-        HTTPException: 当用户名或密码错误时抛出
-        
-    Example:
-        ```json
-        {
-            "username": "testuser",
-            "password": "password123",
-            "tenant_id": 1
-        }
-        ```
     """
     # ⚠️ 第三阶段改进：使用依赖注入的服务
     result = await auth_service.login(data, request)
@@ -80,20 +75,6 @@ async def register(
 ):
     """
     用户注册接口
-    
-    在已有组织中创建新用户。
-    
-    ⚠️ 第三阶段改进：使用依赖注入获取服务，支持向后兼容
-    
-    Args:
-        data: 用户注册请求数据
-        auth_service: 认证服务（依赖注入，如果未注册则回退到直接导入）
-        
-    Returns:
-        dict: 注册成功的响应数据
-        
-    Raises:
-        HTTPException: 当组织不存在或用户名已存在时抛出
     """
     # ⚠️ 第三阶段改进：使用依赖注入的服务
     user = await auth_service.register(data)
@@ -111,9 +92,6 @@ async def refresh_token(
 ):
     """
     刷新 Token 接口。
-
-    验证当前 Token 并生成新的 Token。
-    支持：Query ?token=、JSON body {"token"} 或 {"refresh_token"}（与前端一致）。
     """
     raw = (token or (body.token if body else None) or "").strip()
     if not raw:
@@ -132,23 +110,7 @@ async def guest_login(
 ):
     """
     免注册体验登录接口
-
-    获取或创建默认组织和预设的体验账户，直接返回登录响应。
-    体验账户只有浏览权限（只读权限），无新建、编辑、删除权限。
-    
-    ⚠️ 第三阶段改进：使用依赖注入获取服务，支持向后兼容
-
-    Args:
-        auth_service: 认证服务（依赖注入，如果未注册则回退到直接导入）
-
-    Returns:
-        LoginResponse: 登录成功的响应数据
-
-    Raises:
-        HTTPException: 当创建体验账户失败时抛出
     """
-    # ⚠️ 第三阶段改进：使用依赖注入的服务
-    # 异常由全局异常处理中间件统一处理
     result = await auth_service.guest_login(request)
     return LoginResponse(**result)
 
@@ -159,25 +121,13 @@ async def get_current_user_info(
 ):
     """
     获取当前用户信息接口
-    
-    返回当前登录用户的详细信息，包括组织信息。
-    
-    ⚠️ 第三阶段改进：使用服务层方法获取用户信息，避免API层直接查询数据库
-    
-    Args:
-        current_user: 当前用户对象（通过依赖注入获取）
-        
-    Returns:
-        CurrentUserResponse: 当前用户信息响应数据
     """
     from infra.services.user_service import UserService
     
-    # ⚠️ 第三阶段改进：使用服务层方法获取用户信息
     service = UserService()
     user_info = await service.get_user_with_tenant_info(current_user.id, current_user.tenant_id)
     
     if not user_info:
-        # ⚠️ 第三阶段改进：使用统一的异常类
         raise NotFoundError("用户", str(current_user.id))
     
     return CurrentUserResponse(**user_info)
@@ -220,11 +170,6 @@ async def check_access(
 async def logout():
     """
     用户登出接口
-    
-    登出当前用户（客户端需要清除 Token）。
-    
-    Returns:
-        dict: 登出成功的响应数据
     """
     return {
         "message": "登出成功"
@@ -238,25 +183,8 @@ async def register_personal(
 ):
     """
     个人注册接口
-    
-    个人用户注册。如果提供了 tenant_id，则在指定组织中创建用户；
-    否则在默认组织中创建用户。如果提供了 invite_code，则验证邀请码并直接注册成功（免审核）。
-    
-    ⚠️ 第三阶段改进：使用依赖注入获取服务，支持向后兼容
-    
-    Args:
-        data: 个人注册请求数据
-        auth_service: 认证服务（依赖注入，如果未注册则回退到直接导入）
-        
-    Returns:
-        RegisterResponse: 注册成功的响应数据
-        
-    Raises:
-        HTTPException: 当组织不存在、用户名已存在或邀请码无效时抛出
     """
-    # ⚠️ 第三阶段改进：使用依赖注入的服务
     result = await auth_service.register_personal(data)
-    # 返回格式与前端期望一致：{ success, message, user_id }
     return {
         "success": result["success"],
         "message": result["message"],
@@ -271,24 +199,9 @@ async def register_organization(
 ):
     """
     组织注册接口
-    
-    创建新组织并注册管理员用户。
-    如果未提供 tenant_domain，则自动生成8位随机域名。
-    新注册的组织状态为 INACTIVE，需要平台管理员审核。
-    
-    Args:
-        data: 组织注册请求数据
-        
-    Returns:
-        RegisterResponse: 注册成功的响应数据（包含 tenant_domain）
-        
-    Raises:
-        HTTPException: 当域名已存在或用户名已存在时抛出
     """
-    # ⚠️ 第三阶段改进：使用依赖注入的服务
     result = await auth_service.register_organization(data)
     
-    # 返回格式与前端期望一致：{ success, message, tenant_id, user_id }
     return {
         "success": result["success"],
         "message": result["message"],
@@ -301,17 +214,6 @@ async def register_organization(
 async def send_verification_code(data: SendVerificationCodeRequest):
     """
     发送验证码接口
-
-    发送短信或邮箱验证码，用于注册验证。
-
-    Args:
-        data: 发送验证码请求数据（phone或email必填其一）
-
-    Returns:
-        SendVerificationCodeResponse: 发送结果响应
-
-    Raises:
-        HTTPException: 当参数无效或发送失败时抛出
     """
     if not data.phone and not data.email:
         raise HTTPException(
@@ -326,21 +228,15 @@ async def send_verification_code(data: SendVerificationCodeRequest):
         message = "验证码发送失败"
 
         if data.phone:
-            # 发送短信验证码
             code = service.generate_verification_code()
             success = await service.send_sms_verification_code(data.phone, code)
             if success:
-                # 这里应该将验证码存储到Redis或缓存中，设置过期时间
-                # 暂时使用logger记录，实际项目中需要实现缓存存储
                 logger.info(f"短信验证码已生成并发送: {data.phone} -> {code}")
                 message = "短信验证码发送成功"
         elif data.email:
-            # 发送邮箱验证码
             code = service.generate_verification_code()
             success = await service.send_email_verification_code(data.email, code)
             if success:
-                # 这里应该将验证码存储到Redis或缓存中，设置过期时间
-                # 暂时使用logger记录，实际项目中需要实现缓存存储
                 logger.info(f"邮箱验证码已生成并发送: {data.email} -> {code}")
                 message = "邮箱验证码发送成功"
 
@@ -355,3 +251,56 @@ async def send_verification_code(data: SendVerificationCodeRequest):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="验证码发送失败，请稍后重试"
         )
+
+
+# --- Biometric Authentication Endpoints ---
+
+@router.get("/biometric/register-options")
+async def get_registration_options(
+    current_user: User = Depends(get_current_user),
+    biometric_service: Any = Depends(get_biometric_service)
+):
+    """
+    获取生物识别注册选项（Challenge）
+    """
+    return await biometric_service.generate_registration_options(current_user)
+
+
+@router.post("/biometric/register-finalize")
+async def finalize_registration(
+    data: WebAuthnRegisterFinalizeRequest,
+    current_user: User = Depends(get_current_user),
+    biometric_service: Any = Depends(get_biometric_service)
+):
+    """
+    完成生物识别注册
+    """
+    return await biometric_service.verify_registration(current_user, data)
+
+
+@router.post("/biometric/login-options")
+async def get_login_options(
+    data: WebAuthnLoginOptionsRequest,
+    biometric_service: Any = Depends(get_biometric_service)
+):
+    """
+    获取生物识别登录选项（Challenge）
+    """
+    return await biometric_service.generate_authentication_options(data.username)
+
+
+@router.post("/biometric/login-finalize")
+async def finalize_login(
+    data: WebAuthnLoginFinalizeRequest,
+    request: Request,
+    biometric_service: Any = Depends(get_biometric_service),
+    auth_service: Any = Depends(get_auth_service_with_fallback)
+):
+    """
+    完成生物识别登录并返回 JWT
+    """
+    user = await biometric_service.verify_authentication(data)
+    
+    # 因为 WebAuthn 登录不需要密码验证，我们已经验证过了
+    result = await auth_service.generate_login_result(user, request)
+    return LoginResponse(**result)

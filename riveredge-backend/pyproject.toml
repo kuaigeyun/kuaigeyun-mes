@@ -37,6 +37,7 @@ dependencies = [
     "svglib>=1.5.1,<1.6",
     "taskiq>=0.12.0",
     "taskiq-postgres[asyncpg]>=0.7.0",
+    "webauthn>=2.7.1",
 ]
 
 [project.optional-dependencies]

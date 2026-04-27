@@ -12,20 +12,55 @@
     "title": "app.kuaicaiwu.name",
     "icon": "wallet",
     "path": "/apps/kuaicaiwu",
-    "permission": "kuaicaiwu:pricing:view",
+    "permission": "kuaicaiwu:app-root:read",
     "children": [
       {
         "title": "app.kuaicaiwu.menu.finance-management",
         "icon": "wallet",
         "sort_order": 1,
         "children": [
-          {"title": "app.kuaicaiwu.menu.finance-management.receivables", "path": "/apps/kuaicaiwu/finance-management/receivables", "permission": "kuaicaiwu:receivable:view", "sort_order": 1},
-          {"title": "app.kuaicaiwu.menu.finance-management.receipts", "path": "/apps/kuaicaiwu/finance-management/receipts", "permission": "kuaicaiwu:receivable:view", "sort_order": 2},
-          {"title": "app.kuaicaiwu.menu.finance-management.payables", "path": "/apps/kuaicaiwu/finance-management/payables", "permission": "kuaicaiwu:payable:view", "sort_order": 3},
-          {"title": "app.kuaicaiwu.menu.finance-management.payments", "path": "/apps/kuaicaiwu/finance-management/payments", "permission": "kuaicaiwu:payable:view", "sort_order": 4},
-          {"title": "app.kuaicaiwu.menu.finance-management.sales-invoices", "path": "/apps/kuaicaiwu/finance-management/sales-invoices", "permission": "kuaicaiwu:invoice:view", "sort_order": 5},
-          {"title": "app.kuaicaiwu.menu.finance-management.purchase-invoices", "path": "/apps/kuaicaiwu/finance-management/purchase-invoices", "permission": "kuaicaiwu:invoice:view", "sort_order": 6},
-          {"title": "app.kuaicaiwu.menu.finance-management.settlement", "path": "/apps/kuaicaiwu/finance-management/settlement", "permission": "kuaicaiwu:receivable:view", "sort_order": 7}
+          {
+            "title": "app.kuaicaiwu.menu.finance-management.receivables",
+            "path": "/apps/kuaicaiwu/finance-management/receivables",
+            "permission": "kuaicaiwu:receivable:read",
+            "sort_order": 1
+          },
+          {
+            "title": "app.kuaicaiwu.menu.finance-management.receipts",
+            "path": "/apps/kuaicaiwu/finance-management/receipts",
+            "permission": "kuaicaiwu:receipt:read",
+            "sort_order": 2
+          },
+          {
+            "title": "app.kuaicaiwu.menu.finance-management.payables",
+            "path": "/apps/kuaicaiwu/finance-management/payables",
+            "permission": "kuaicaiwu:payable:read",
+            "sort_order": 3
+          },
+          {
+            "title": "app.kuaicaiwu.menu.finance-management.payments",
+            "path": "/apps/kuaicaiwu/finance-management/payments",
+            "permission": "kuaicaiwu:payment:read",
+            "sort_order": 4
+          },
+          {
+            "title": "app.kuaicaiwu.menu.finance-management.sales-invoices",
+            "path": "/apps/kuaicaiwu/finance-management/sales-invoices",
+            "permission": "kuaicaiwu:sales-invoice:read",
+            "sort_order": 5
+          },
+          {
+            "title": "app.kuaicaiwu.menu.finance-management.purchase-invoices",
+            "path": "/apps/kuaicaiwu/finance-management/purchase-invoices",
+            "permission": "kuaicaiwu:purchase-invoice:read",
+            "sort_order": 6
+          },
+          {
+            "title": "app.kuaicaiwu.menu.finance-management.settlement",
+            "path": "/apps/kuaicaiwu/finance-management/settlement",
+            "permission": "kuaicaiwu:settlement:read",
+            "sort_order": 7
+          }
         ]
       },
       {
@@ -33,28 +68,73 @@
         "icon": "calculator",
         "sort_order": 2,
         "children": [
-          {"title": "app.kuaicaiwu.menu.cost-management.cost-calculations", "path": "/apps/kuaicaiwu/cost-management/cost-calculations", "permission": "kuaicaiwu:cost:view", "sort_order": 1},
-          {"title": "app.kuaicaiwu.menu.cost-management.cost-rules", "path": "/apps/kuaicaiwu/cost-management/cost-rules", "permission": "kuaicaiwu:cost:view", "sort_order": 2},
-          {"title": "app.kuaicaiwu.menu.cost-management.cost-report", "path": "/apps/kuaicaiwu/cost-management/cost-report", "permission": "kuaicaiwu:cost:view", "sort_order": 3}
+          {
+            "title": "app.kuaicaiwu.menu.cost-management.cost-calculations",
+            "path": "/apps/kuaicaiwu/cost-management/cost-calculations",
+            "permission": "kuaicaiwu:cost:read",
+            "sort_order": 1
+          },
+          {
+            "title": "app.kuaicaiwu.menu.cost-management.cost-rules",
+            "path": "/apps/kuaicaiwu/cost-management/cost-rules",
+            "permission": "kuaicaiwu:cost-rule:read",
+            "sort_order": 2
+          },
+          {
+            "title": "app.kuaicaiwu.menu.cost-management.cost-report",
+            "path": "/apps/kuaicaiwu/cost-management/cost-report",
+            "permission": "kuaicaiwu:cost-report:read",
+            "sort_order": 3
+          }
         ]
       }
     ]
   },
   "permissions": [
-    "kuaicaiwu:receivable:view",
-    "kuaicaiwu:receivable:create",
-    "kuaicaiwu:receivable:update",
-    "kuaicaiwu:receivable:delete",
-    "kuaicaiwu:payable:view",
-    "kuaicaiwu:payable:create",
-    "kuaicaiwu:payable:update",
-    "kuaicaiwu:payable:delete",
-    "kuaicaiwu:invoice:view",
-    "kuaicaiwu:invoice:create",
-    "kuaicaiwu:cost:view",
+    "kuaicaiwu:app-root:read",
+    "kuaicaiwu:cost:audit",
     "kuaicaiwu:cost:create",
+    "kuaicaiwu:cost:delete",
+    "kuaicaiwu:cost:export",
+    "kuaicaiwu:cost:import",
+    "kuaicaiwu:cost:read",
+    "kuaicaiwu:cost:revoke",
+    "kuaicaiwu:cost:submit",
     "kuaicaiwu:cost:update",
-    "kuaicaiwu:pricing:view"
+    "kuaicaiwu:invoice:audit",
+    "kuaicaiwu:invoice:create",
+    "kuaicaiwu:invoice:delete",
+    "kuaicaiwu:invoice:export",
+    "kuaicaiwu:invoice:import",
+    "kuaicaiwu:invoice:read",
+    "kuaicaiwu:invoice:revoke",
+    "kuaicaiwu:invoice:submit",
+    "kuaicaiwu:invoice:update",
+    "kuaicaiwu:payment:read",
+    "kuaicaiwu:payable:audit",
+    "kuaicaiwu:payable:create",
+    "kuaicaiwu:payable:delete",
+    "kuaicaiwu:payable:export",
+    "kuaicaiwu:payable:import",
+    "kuaicaiwu:payable:read",
+    "kuaicaiwu:payable:revoke",
+    "kuaicaiwu:payable:submit",
+    "kuaicaiwu:payable:update",
+    "kuaicaiwu:receivable:audit",
+    "kuaicaiwu:receivable:create",
+    "kuaicaiwu:receivable:delete",
+    "kuaicaiwu:receivable:export",
+    "kuaicaiwu:receivable:import",
+    "kuaicaiwu:receivable:read",
+    "kuaicaiwu:receivable:revoke",
+    "kuaicaiwu:receivable:submit",
+    "kuaicaiwu:receivable:update",
+    "kuaicaiwu:receipt:read",
+    "kuaicaiwu:sales-invoice:read",
+    "kuaicaiwu:purchase-invoice:read",
+    "kuaicaiwu:settlement:read",
+    "kuaicaiwu:cost-rule:read",
+    "kuaicaiwu:cost-report:read"
   ],
   "dependencies": {
     "riveredge-backend": ">=1.0.0",

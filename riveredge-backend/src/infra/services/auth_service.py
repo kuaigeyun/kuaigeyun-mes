@@ -126,7 +126,7 @@ class AuthService:
         生成指定长度的数字验证码。
 
         Returns:
-            str: 生成的验证码
+            str: 生成s的验证码
         """
         from infra.config.infra_config import infra_settings
         length = infra_settings.VERIFICATION_CODE_LENGTH
@@ -462,7 +462,7 @@ class AuthService:
             "tenant_id": tenant.id,
             "user_id": user.id
         }
-    
+
     async def login(
         self,
         data: LoginRequest,
@@ -482,27 +482,11 @@ class AuthService:
             
         Raises:
             HTTPException: 当用户名/密码错误或用户未激活时抛出
-            
-        Example:
-            >>> service = AuthService()
-            >>> result = await service.login(
-            ...     LoginRequest(
-            ...         username="testuser",
-            ...         password="password123",
-            ...         tenant_id=1
-            ...     )
-            ... )
-            >>> "access_token" in result
-            True
         """
 
         logger.info(f"开始登录: username_or_phone={data.username}, tenant_id={getattr(data, 'tenant_id', None)}")
-        # 查找用户（支持用户名或手机号登录，符合中国用户使用习惯）
-        # 优先查找平台管理（tenant_id=None 且 is_infra_admin=True）
-        # 如果提供了 tenant_id，同时过滤组织，避免多组织用户名冲突
-        # 注意：使用 register_tortoise 后，连接池会自动管理，直接使用 Tortoise ORM 原生查询
 
-        # 若指定了 tenant_id，先校验组织状态（已暂停/未激活/已过期的组织禁止登录）
+        # 若指定了 tenant_id，先校验组织状态
         if data.tenant_id is not None:
             from infra.models.tenant import Tenant, TenantStatus
             target_tenant = await Tenant.get_or_none(id=data.tenant_id)
@@ -517,9 +501,7 @@ class AuthService:
                     detail="组织已暂停或未激活，无法登录"
                 )
 
-        # 优先查找平台管理（tenant_id=None 且 is_infra_admin=True）
-        # 平台管理不需要 tenant_id，可以跨组织访问
-        # ⚠️ 关键：排除已软删除的用户，避免删除后重建同用户名用户时登录到旧账号
+        # 优先查找平台管理
         user = await User.get_or_none(
             username=data.username,
             tenant_id__isnull=True,
@@ -530,17 +512,12 @@ class AuthService:
         # 如果不是系统级超级管理员，根据是否提供 tenant_id 进行查找
         if not user:
             if data.tenant_id is not None:
-                # 提供了 tenant_id，查找该组织内的用户（支持用户名或手机号）
-                # ⚠️ 关键：排除已软删除的用户
                 user = await User.filter(
                     Q(username=data.username) | Q(phone=data.username),
                     tenant_id=data.tenant_id,
                     deleted_at__isnull=True
                 ).first()
             else:
-                # 没有提供 tenant_id：可能多个用户匹配（同手机号不同组织、同用户名不同组织等）
-                # 逐个验证密码，找到第一个密码匹配的用户（支持手机号登录时，同一手机号可能对应多个用户、多个密码）
-                # ⚠️ 关键：排除已软删除的用户
                 candidates = await User.filter(
                     Q(username=data.username) | Q(phone=data.username),
                     is_active=True,
@@ -552,7 +529,6 @@ class AuthService:
                         user = u
                         break
                 if not user and candidates:
-                    # 有匹配用户但密码都不对，统一返回密码错误（不泄露是哪个用户）
                     u = candidates[0]
                     if request:
                         asyncio.create_task(self._log_login_attempt(
@@ -569,7 +545,6 @@ class AuthService:
                     )
         
         if not user:
-            # 记录登录失败日志（用户不存在）
             if request:
                 asyncio.create_task(self._log_login_attempt(
                     tenant_id=None,
@@ -586,7 +561,6 @@ class AuthService:
         
         # 验证密码
         if not verify_password(data.password, user.password_hash):
-            # 记录登录失败日志（密码错误）
             if request:
                 asyncio.create_task(self._log_login_attempt(
                     tenant_id=user.tenant_id,
@@ -603,7 +577,6 @@ class AuthService:
         
         # 检查用户是否激活
         if not user.is_active:
-            # 记录登录失败日志（用户未激活）
             if request:
                 asyncio.create_task(self._log_login_attempt(
                     tenant_id=user.tenant_id,
@@ -618,14 +591,10 @@ class AuthService:
                 detail="用户未激活"
             )
         
-        # 判断是否为平台管理（系统级超级管理员）
         is_infra_admin = user.is_infra_admin
         
-        # 如果提供了 tenant_id，验证用户是否属于该组织（双重验证）
-        # 平台管理可以访问任何组织，不需要验证
         if data.tenant_id is not None and not is_infra_admin:
             if user.tenant_id != data.tenant_id:
-                # 记录登录失败日志（用户不属于指定组织）
                 if request:
                     asyncio.create_task(self._log_login_attempt(
                         tenant_id=user.tenant_id,
@@ -640,40 +609,61 @@ class AuthService:
                     detail="用户不属于指定的组织"
                 )
         
-        # 确定要使用的组织 ID（用于生成 Token）
-        # 平台管理：如果提供了 tenant_id，使用提供的；否则使用 None
-        # 组织管理员和普通用户：如果提供了 tenant_id，使用提供的；否则使用用户的组织
-        if is_infra_admin:
-            final_tenant_id = data.tenant_id if data.tenant_id is not None else None
-        else:
-            final_tenant_id = data.tenant_id if data.tenant_id is not None else user.tenant_id
+        final_tenant_id = data.tenant_id if data.tenant_id is not None else user.tenant_id
         
-        # 设置组织上下文（在查询组织列表之前设置，确保后续查询使用正确的组织上下文）
-        # 平台管理可以不设置组织上下文（允许跨组织访问）
+        # 6. 生成登录结果
+        result = await self.generate_login_result(user, request, final_tenant_id)
+        return result
+
+    async def generate_login_result(
+        self,
+        user: User,
+        request: Request = None,
+        tenant_id: Optional[int] = None
+    ) -> dict:
+        """
+        生成登录成功的响应数据（Token 和用户信息）
+
+        Args:
+            user: 用户对象
+            request: 请求对象
+            tenant_id: 选定的组织 ID（可选）
+
+        Returns:
+            dict: 登录成功的响应数据
+        """
+        # 判断是否为平台管理（系统级超级管理员）
+        is_infra_admin = user.is_infra_admin
+        final_tenant_id = tenant_id if tenant_id is not None else user.tenant_id
+        
+        # 针对平台超级管理员，如果未指定 tenant_id，则保持 None (代表全局视图)
+        if is_infra_admin and tenant_id is None:
+            final_tenant_id = None
+
+        # 1. 设置组织上下文
         if final_tenant_id is not None:
+            from infra.domain.tenant_context import set_current_tenant_id
             set_current_tenant_id(final_tenant_id)
         
-        # 生成 JWT Token（包含 tenant_id）⭐ 关键
-        # 注意：在生成 Token 之前不进行额外的数据库查询，避免连接问题
+        # 2. 生成 JWT Token
+        from infra.domain.security.security import create_token_for_user
         access_token = create_token_for_user(
             user_id=user.id,
             username=user.username,
-            tenant_id=final_tenant_id,  # ⭐ 关键：包含组织 ID
+            tenant_id=final_tenant_id,
             is_infra_admin=user.is_infra_admin,
             is_tenant_admin=user.is_tenant_admin,
         )
         
-        # 计算过期时间（秒）
+        # 计算过期时间
         from infra.config.infra_config import infra_settings as settings
         expires_in = settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60
         
-        # 查询用户所属的所有组织列表（用于多组织登录选择）
-        # 查询所有具有相同 username 或相同 phone 的用户（不同组织），用于多组织切换
-        # 注：手机号相同时可能对应不同用户名（不同组织独立注册），需同时按 username 和 phone 查
+        # 3. 构建用户组织列表
         user_tenants_list = []
         if not is_infra_admin:
-            # 组织管理员和普通用户：按 username 或 phone 查（同一手机号可归属多组织，各组织用户名可能不同）
             from infra.models.tenant import Tenant, TenantStatus
+            from tortoise.queryset import Q
             q = Q(username=user.username)
             if user.phone:
                 q = q | Q(phone=user.phone)
@@ -683,10 +673,7 @@ class AuthService:
                 deleted_at__isnull=True
             ).all()
             
-            # 获取所有有效的组织 ID（排除 None）
             tenant_ids = [u.tenant_id for u in users_with_same_username if u.tenant_id is not None]
-            
-            # 查询组织信息（仅返回激活状态的组织，已暂停/未激活的组织不可选）
             if tenant_ids:
                 tenants_queryset = await Tenant.filter(id__in=tenant_ids, status=TenantStatus.ACTIVE).all()
                 user_tenants_list = [
@@ -699,9 +686,7 @@ class AuthService:
                     }
                     for tenant in tenants_queryset
                 ]
-            # ⚠️ 关键修复：如果用户只有一个组织，确保也返回该组织信息（用于前端显示组织名称）
             elif final_tenant_id:
-                # 如果用户只有一个组织，直接查询该组织信息（仅当激活时返回）
                 tenant = await Tenant.get_or_none(id=final_tenant_id, status=TenantStatus.ACTIVE)
                 if tenant:
                     user_tenants_list = [
@@ -714,63 +699,16 @@ class AuthService:
                         }
                     ]
 
-            # 若用户所属组织均非激活状态，拒绝登录
-            if not user_tenants_list:
-                if request:
-                    asyncio.create_task(self._log_login_attempt(
-                        tenant_id=user.tenant_id,
-                        user_id=user.id,
-                        username=data.username,
-                        login_status="failed",
-                        failure_reason="用户所属组织均已暂停或未激活",
-                        request=request
-                    ))
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="您所属的组织均已暂停或未激活，无法登录"
-                )
-
-            # 若当前用户所属组织未激活，需在激活组织中查找密码匹配的用户（同一账号在不同组织有独立 User 记录）
-            if final_tenant_id and not any(t["id"] == final_tenant_id for t in user_tenants_list):
-                switched = False
-                switch_q = Q(username=user.username)
-                if user.phone:
-                    switch_q = switch_q | Q(phone=user.phone)
-                for t in user_tenants_list:
-                    switch_user = await User.filter(
-                        switch_q,
-                        tenant_id=t["id"],
-                        is_active=True,
-                        deleted_at__isnull=True
-                    ).first()
-                    if switch_user and verify_password(data.password, switch_user.password_hash):
-                        user = switch_user
-                        final_tenant_id = t["id"]
-                        switched = True
-                        break
-                if not switched:
-                    if request:
-                        asyncio.create_task(self._log_login_attempt(
-                            tenant_id=user.tenant_id,
-                            user_id=user.id,
-                            username=data.username,
-                            login_status="failed",
-                            failure_reason="用户所属组织均已暂停或未激活",
-                            request=request
-                        ))
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="您所属的组织均已暂停或未激活，无法登录"
-                    )
-        
-        # 判断是否需要组织选择
         requires_tenant_selection = len(user_tenants_list) > 1
         
-        # 如果没有组织列表，使用当前组织作为默认组织
-        default_tenant_id = final_tenant_id
+        # 4. 获取权限和扩展信息
+        from core.services.authorization.user_permission_service import UserPermissionService
+        from core.services.authorization.permission_version_service import PermissionVersionService
+        
         permissions: list[str] = []
         permission_version = 1
         await user.fetch_related("department", "position", "roles")
+        
         if final_tenant_id is not None:
             permission_set = await UserPermissionService.get_user_permissions(
                 user_id=user.id,
@@ -781,12 +719,9 @@ class AuthService:
                 tenant_id=final_tenant_id,
                 user_id=user.id,
             )
-        department = None
-        if user.department:
-            department = {"uuid": str(user.department.uuid), "name": user.department.name}
-        position = None
-        if user.position:
-            position = {"uuid": str(user.position.uuid), "name": user.position.name}
+            
+        department = {"uuid": str(user.department.uuid), "name": user.department.name} if user.department else None
+        position = {"uuid": str(user.position.uuid), "name": user.position.name} if user.position else None
         roles = [{"uuid": str(r.uuid), "name": r.name, "code": r.code} for r in await user.roles.all()]
         
         result = {
@@ -810,30 +745,26 @@ class AuthService:
                 "roles": roles,
             },
             "tenants": user_tenants_list if user_tenants_list else None,
-            "default_tenant_id": default_tenant_id,
+            "default_tenant_id": final_tenant_id,
             "requires_tenant_selection": requires_tenant_selection,
         }
-        
-        # 记录登录成功日志（异步执行，不阻塞响应）
+
+        # 5. 记录登录日志和活动
         if request:
             asyncio.create_task(self._log_login_attempt(
                 tenant_id=final_tenant_id,
                 user_id=user.id,
-                username=data.username,
+                username=user.username,
                 login_status="success",
                 failure_reason=None,
                 request=request
             ))
             
-            # 更新用户活动时间（记录登录时间和登录IP）
             try:
                 from core.services.interfaces.service_registry import ServiceLocator
                 from datetime import datetime
-
-                # 通过服务接口更新用户活动
                 user_activity_service = ServiceLocator.get_service("user_activity_service")
                 login_ip = request.client.host if request.client else None
-
                 asyncio.create_task(
                     user_activity_service.update_user_activity(
                         tenant_id=final_tenant_id,
@@ -843,11 +774,10 @@ class AuthService:
                     )
                 )
             except Exception as e:
-                # 更新活动时间失败不影响登录，静默处理
                 logger.warning(f"更新用户活动时间失败: {e}")
         
         return result
-    
+
     async def refresh_token(
         self,
         token: str

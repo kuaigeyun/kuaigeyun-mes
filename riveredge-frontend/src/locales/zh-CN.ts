@@ -6611,6 +6611,8 @@ export default {
   'pages.system.roles.searchRole': '搜索角色',
   'pages.system.roles.createRole': '新建角色',
   'pages.system.roles.refresh': '刷新',
+  'pages.system.roles.expandAll': '一键展开',
+  'pages.system.roles.collapseAll': '一键折叠',
   'pages.system.roles.systemRole': '系统角色',
   'pages.system.roles.disabledRole': '已禁用',
   'pages.system.roles.selectRoleHint': '请从左侧选择一个角色',

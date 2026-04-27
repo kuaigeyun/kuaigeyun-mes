@@ -267,5 +267,28 @@ def get_saved_search_service_with_fallback() -> Any:
         async def delete_saved_search(self, uuid: str, user_id: int) -> bool:
             return await self._saved_search_service.delete_saved_search(uuid, user_id)
     
-    return SavedSearchServiceAdapter()
+def get_biometric_service() -> Any:
+    """
+    获取生物识别服务（依赖注入）
+    
+    用于处理 WebAuthn 注册和认证逻辑。
+    """
+    from infra.config.infra_config import infra_settings
+    from infra.services.biometric_service import BiometricService
+    
+    # 构建 Origin 和 RP_ID
+    # 优先从跨域配置中获取第一个有效的 Origin，或者使用前端配置
+    origin = f"http://{infra_settings.FRONTEND_HOST}:{infra_settings.FRONTEND_PORT}"
+    rp_id = infra_settings.FRONTEND_HOST
+    
+    # 特殊处理 localhost
+    if rp_id == "127.0.0.1":
+        rp_id = "localhost"
+        origin = f"http://localhost:{infra_settings.FRONTEND_PORT}"
+    
+    return BiometricService(
+        rp_id=rp_id,
+        rp_name=infra_settings.APP_NAME,
+        origin=origin
+    )
 

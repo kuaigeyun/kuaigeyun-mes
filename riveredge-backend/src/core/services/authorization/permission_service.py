@@ -10,6 +10,7 @@ from tortoise.expressions import Q
 from core.models.permission import Permission, PermissionType
 from core.models.role import Role
 from core.models.role_permission import RolePermission
+from infra.infrastructure.database.database import get_db_connection
 from infra.exceptions.exceptions import NotFoundError
 
 
@@ -30,6 +31,7 @@ class PermissionService:
         code: Optional[str] = None,
         resource: Optional[str] = None,
         permission_type: Optional[str] = None,
+        exclude_derived_data: bool = False,
     ) -> dict:
         """
         获取权限列表
@@ -46,7 +48,17 @@ class PermissionService:
             dict: 包含权限列表和分页信息
         """
         # 构建查询
-        query = Permission.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        query = Permission.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            deprecated_at__isnull=True,
+        )
+        dormant_app_codes = await PermissionService._get_dormant_app_codes(tenant_id=tenant_id)
+        if dormant_app_codes:
+            dormant_q = Q()
+            for app_code in dormant_app_codes:
+                dormant_q |= Q(code=app_code) | Q(code__startswith=f"{app_code}:")
+            query = query.exclude(dormant_q)
         
         # 关键词搜索
         if keyword:
@@ -62,6 +74,13 @@ class PermissionService:
         
         if permission_type:
             query = query.filter(permission_type=permission_type)
+        else:
+            # 三层模型默认仅返回功能权限，数据/字段策略走独立策略 API。
+            query = query.filter(permission_type=PermissionType.FUNCTION)
+
+        # 过滤自动派生数据权限（来源：PermissionRegistryService._derive_data_scope_permissions）
+        if exclude_derived_data:
+            query = query.exclude(source_type="derived", source_path="data-scope")
 
         if name:
             query = query.filter(name__icontains=name)
@@ -71,7 +90,9 @@ class PermissionService:
         
         # 分页（不在 annotate 里跨 role_permissions→role 过滤：Tortoise 会生成缺失 JOIN 的 SQL）
         total = await query.count()
-        permissions = await query.offset((page - 1) * page_size).limit(page_size).all()
+        # 分页必须使用稳定排序，否则多页拉取会出现重复/漏项，导致权限树节点随机丢失
+        ordered_query = query.order_by("code", "id")
+        permissions = await ordered_query.offset((page - 1) * page_size).limit(page_size).all()
         perm_ids = [p.id for p in permissions]
         role_count_map: dict[int, int] = {pid: 0 for pid in perm_ids}
         if perm_ids:
@@ -129,11 +150,40 @@ class PermissionService:
         permission = await Permission.filter(
             uuid=permission_uuid,
             tenant_id=tenant_id,
-            deleted_at__isnull=True
+            deleted_at__isnull=True,
+            deprecated_at__isnull=True,
         ).prefetch_related('roles').first()
         
         if not permission:
             raise NotFoundError("权限", permission_uuid)
+
+        dormant_app_codes = await PermissionService._get_dormant_app_codes(tenant_id=tenant_id)
+        prefix = permission.code.split(":", 1)[0] if ":" in permission.code else permission.code
+        if prefix in dormant_app_codes:
+            raise NotFoundError("权限", permission_uuid)
         
         return permission
+
+    @staticmethod
+    async def _get_dormant_app_codes(tenant_id: int) -> set[str]:
+        conn = await get_db_connection()
+        try:
+            rows = await conn.fetch(
+                """
+                SELECT code, is_installed, is_active
+                FROM core_applications
+                WHERE tenant_id = $1
+                  AND deleted_at IS NULL
+                """,
+                tenant_id,
+            )
+            all_codes = {str(r["code"]).strip() for r in rows if str(r["code"]).strip()}
+            enabled_codes = {
+                str(r["code"]).strip()
+                for r in rows
+                if str(r["code"]).strip() and bool(r["is_installed"]) and bool(r["is_active"])
+            }
+            return all_codes - enabled_codes
+        finally:
+            await conn.close()
 

@@ -29,7 +29,7 @@
               "module": "sales",
               "node": "sales_order"
             },
-            "permission": "kuaizhizao:sales-order:view"
+            "permission": "kuaizhizao:sales-management-dashboard:read"
           },
           {
             "title": "app.kuaizhizao.menu.sales-management.quotations",
@@ -39,7 +39,7 @@
               "node": "quotation",
               "module": "sales"
             },
-            "permission": "kuaizhizao:quotation:view"
+            "permission": "kuaizhizao:quotation:read"
           },
           {
             "title": "app.kuaizhizao.menu.sales-management.customer-follow-ups",
@@ -49,7 +49,7 @@
               "node": "customer_follow_up",
               "module": "sales"
             },
-            "permission": "kuaizhizao:customer-follow-up:view"
+            "permission": "kuaizhizao:customer-follow-up:read"
           },
           {
             "title": "app.kuaizhizao.menu.sales-management.sales-forecasts",
@@ -59,7 +59,7 @@
               "node": "sales_forecast",
               "module": "sales"
             },
-            "permission": "kuaizhizao:sales-forecast:view"
+            "permission": "kuaizhizao:sales-forecast:read"
           },
           {
             "title": "app.kuaizhizao.menu.sales-management.sales-orders",
@@ -69,7 +69,7 @@
               "node": "sales_order",
               "module": "sales"
             },
-            "permission": "kuaizhizao:sales-order:view"
+            "permission": "kuaizhizao:sales-order:read"
           },
           {
             "title": "app.kuaizhizao.menu.sales-management.shipment-notices",
@@ -79,7 +79,7 @@
               "module": "sales",
               "node": "shipment_notice"
             },
-            "permission": "kuaizhizao:shipment-notice:view"
+            "permission": "kuaizhizao:shipment-notice:read"
           },
           {
             "title": "app.kuaizhizao.menu.sales-management.sales-returns",
@@ -89,7 +89,7 @@
               "module": "sales",
               "node": "sales_return"
             },
-            "permission": "kuaizhizao:sales-return:view"
+            "permission": "kuaizhizao:sales-return:read"
           },
           {
             "title": "app.kuaizhizao.menu.sales-management.reports",
@@ -100,61 +100,61 @@
                 "title": "app.kuaizhizao.menu.reports.sales-order-query",
                 "path": "/apps/kuaizhizao/sales-management/reports/sales-order-query",
                 "sort_order": 1,
-                "permission": "kuaizhizao:sales-management-reports-sales-order-query:view"
+                "permission": "kuaizhizao:sales-management-reports-sales-order-query:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.order-execution-tracking",
                 "path": "/apps/kuaizhizao/sales-management/reports/order-execution-tracking",
                 "sort_order": 2,
-                "permission": "kuaizhizao:sales-management-reports-order-execution-tracking:view"
+                "permission": "kuaizhizao:sales-management-reports-order-execution-tracking:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.customer-sales-summary",
                 "path": "/apps/kuaizhizao/sales-management/reports/customer-sales-summary",
                 "sort_order": 3,
-                "permission": "kuaizhizao:sales-management-reports-customer-sales-summary:view"
+                "permission": "kuaizhizao:sales-management-reports-customer-sales-summary:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.customer-sales-reconciliation",
                 "path": "/apps/kuaizhizao/sales-management/reports/customer-sales-reconciliation",
                 "sort_order": 4,
-                "permission": "kuaizhizao:sales-management-reports-customer-sales-reconciliation:view"
+                "permission": "kuaizhizao:sales-management-reports-customer-sales-reconciliation:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.product-sales-ranking",
                 "path": "/apps/kuaizhizao/sales-management/reports/product-sales-ranking",
                 "sort_order": 5,
-                "permission": "kuaizhizao:sales-management-reports-product-sales-ranking:view"
+                "permission": "kuaizhizao:sales-management-reports-product-sales-ranking:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.forecast-vs-actual",
                 "path": "/apps/kuaizhizao/sales-management/reports/forecast-vs-actual",
                 "sort_order": 6,
-                "permission": "kuaizhizao:sales-management-reports-forecast-vs-actual:view"
+                "permission": "kuaizhizao:sales-management-reports-forecast-vs-actual:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.quotation-query",
                 "path": "/apps/kuaizhizao/sales-management/reports/quotation-query",
                 "sort_order": 7,
-                "permission": "kuaizhizao:sales-management-reports-quotation-query:view"
+                "permission": "kuaizhizao:sales-management-reports-quotation-query:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.sales-trend-analysis",
                 "path": "/apps/kuaizhizao/sales-management/reports/sales-trend-analysis",
                 "sort_order": 9,
-                "permission": "kuaizhizao:sales-management-reports-sales-trend-analysis:view"
+                "permission": "kuaizhizao:sales-management-reports-sales-trend-analysis:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.sales-return-analysis",
                 "path": "/apps/kuaizhizao/sales-management/reports/sales-return-analysis",
                 "sort_order": 10,
-                "permission": "kuaizhizao:sales-management-reports-sales-return-analysis:view"
+                "permission": "kuaizhizao:sales-management-reports-sales-return-analysis:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.salesperson-performance",
                 "path": "/apps/kuaizhizao/sales-management/reports/salesperson-performance",
                 "sort_order": 11,
-                "permission": "kuaizhizao:sales-management-reports-salesperson-performance:view"
+                "permission": "kuaizhizao:sales-management-reports-salesperson-performance:read"
               }
             ]
           }
@@ -173,7 +173,7 @@
               "module": "demand",
               "node": "demand"
             },
-            "permission": "kuaizhizao:demand:view"
+            "permission": "kuaizhizao:demand:read"
           },
           {
             "title": "app.kuaizhizao.menu.plan-management.demand-management",
@@ -182,7 +182,7 @@
             "meta": {
               "module": "demand"
             },
-            "permission": "kuaizhizao:plan-management-demand-management:view"
+            "permission": "kuaizhizao:plan-management-demand-management:read"
           },
           {
             "title": "app.kuaizhizao.menu.plan-management.demand-computation",
@@ -191,7 +191,7 @@
             "meta": {
               "module": "demand"
             },
-            "permission": "kuaizhizao:plan-management-demand-computation:view"
+            "permission": "kuaizhizao:plan-management-demand-computation:read"
           },
           {
             "title": "app.kuaizhizao.menu.plan-management.scheduling",
@@ -200,7 +200,7 @@
             "meta": {
               "module": "demand"
             },
-            "permission": "kuaizhizao:plan-management-scheduling:view"
+            "permission": "kuaizhizao:plan-management-scheduling:read"
           },
           {
             "title": "app.kuaizhizao.menu.plan-management.reports",
@@ -211,43 +211,43 @@
                 "title": "app.kuaizhizao.menu.reports.demand-plan-detail",
                 "path": "/apps/kuaizhizao/plan-management/reports/demand-plan-detail",
                 "sort_order": 1,
-                "permission": "kuaizhizao:plan-management-reports-demand-plan-detail:view"
+                "permission": "kuaizhizao:plan-management-reports-demand-plan-detail:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.production-plan-comparison",
                 "path": "/apps/kuaizhizao/plan-management/reports/production-plan-comparison",
                 "sort_order": 2,
-                "permission": "kuaizhizao:plan-management-reports-production-plan-comparison:view"
+                "permission": "kuaizhizao:plan-management-reports-production-plan-comparison:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.purchase-plan-comparison",
                 "path": "/apps/kuaizhizao/plan-management/reports/purchase-plan-comparison",
                 "sort_order": 3,
-                "permission": "kuaizhizao:plan-management-reports-purchase-plan-comparison:view"
+                "permission": "kuaizhizao:plan-management-reports-purchase-plan-comparison:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.capacity-load-analysis",
                 "path": "/apps/kuaizhizao/plan-management/reports/capacity-load-analysis",
                 "sort_order": 4,
-                "permission": "kuaizhizao:plan-management-reports-capacity-load-analysis:view"
+                "permission": "kuaizhizao:plan-management-reports-capacity-load-analysis:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.material-shortage-alert",
                 "path": "/apps/kuaizhizao/plan-management/reports/material-shortage-alert",
                 "sort_order": 5,
-                "permission": "kuaizhizao:plan-management-reports-material-shortage-alert:view"
+                "permission": "kuaizhizao:plan-management-reports-material-shortage-alert:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.plan-fulfillment-rate",
                 "path": "/apps/kuaizhizao/plan-management/reports/plan-fulfillment-rate",
                 "sort_order": 6,
-                "permission": "kuaizhizao:plan-management-reports-plan-fulfillment-rate:view"
+                "permission": "kuaizhizao:plan-management-reports-plan-fulfillment-rate:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.production-delay-analysis",
                 "path": "/apps/kuaizhizao/plan-management/reports/production-delay-analysis",
                 "sort_order": 7,
-                "permission": "kuaizhizao:plan-management-reports-production-delay-analysis:view"
+                "permission": "kuaizhizao:plan-management-reports-production-delay-analysis:read"
               }
             ]
           }
@@ -269,7 +269,7 @@
               "module": "purchase",
               "node": "purchase_order"
             },
-            "permission": "kuaizhizao:purchase-order:view"
+            "permission": "kuaizhizao:purchase-management-dashboard:read"
           },
           {
             "title": "app.kuaizhizao.menu.purchase-management.purchase-requisitions",
@@ -279,7 +279,7 @@
               "node": "purchase_request",
               "module": "purchase"
             },
-            "permission": "kuaizhizao:purchase-request:view"
+            "permission": "kuaizhizao:purchase-requisition:read"
           },
           {
             "title": "app.kuaizhizao.menu.purchase-management.purchase-orders",
@@ -289,7 +289,7 @@
               "node": "purchase_order",
               "module": "purchase"
             },
-            "permission": "kuaizhizao:purchase-order:view"
+            "permission": "kuaizhizao:purchase-order:read"
           },
           {
             "title": "app.kuaizhizao.menu.purchase-management.receipt-notices",
@@ -299,7 +299,7 @@
               "module": "purchase",
               "node": "receipt_notice"
             },
-            "permission": "kuaizhizao:receipt-notice:view"
+            "permission": "kuaizhizao:receipt-notice:read"
           },
           {
             "title": "app.kuaizhizao.menu.purchase-management.purchase-returns",
@@ -309,7 +309,7 @@
               "module": "purchase",
               "node": "purchase_return"
             },
-            "permission": "kuaizhizao:purchase-return:view"
+            "permission": "kuaizhizao:purchase-return:read"
           },
           {
             "title": "app.kuaizhizao.menu.purchase-management.reports",
@@ -320,55 +320,55 @@
                 "title": "app.kuaizhizao.menu.reports.purchase-requisition-tracking",
                 "path": "/apps/kuaizhizao/purchase-management/reports/purchase-requisition-tracking",
                 "sort_order": 1,
-                "permission": "kuaizhizao:purchase-management-reports-purchase-requisition-tracking:view"
+                "permission": "kuaizhizao:purchase-management-reports-purchase-requisition-tracking:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.purchase-order-query",
                 "path": "/apps/kuaizhizao/purchase-management/reports/purchase-order-query",
                 "sort_order": 2,
-                "permission": "kuaizhizao:purchase-management-reports-purchase-order-query:view"
+                "permission": "kuaizhizao:purchase-management-reports-purchase-order-query:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.purchase-order-progress",
                 "path": "/apps/kuaizhizao/purchase-management/reports/purchase-order-progress",
                 "sort_order": 3,
-                "permission": "kuaizhizao:purchase-management-reports-purchase-order-progress:view"
+                "permission": "kuaizhizao:purchase-management-reports-purchase-order-progress:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.supplier-delivery-summary",
                 "path": "/apps/kuaizhizao/purchase-management/reports/supplier-delivery-summary",
                 "sort_order": 4,
-                "permission": "kuaizhizao:purchase-management-reports-supplier-delivery-summary:view"
+                "permission": "kuaizhizao:purchase-management-reports-supplier-delivery-summary:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.supplier-price-comparison",
                 "path": "/apps/kuaizhizao/purchase-management/reports/supplier-price-comparison",
                 "sort_order": 5,
-                "permission": "kuaizhizao:purchase-management-reports-supplier-price-comparison:view"
+                "permission": "kuaizhizao:purchase-management-reports-supplier-price-comparison:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.purchase-reconciliation",
                 "path": "/apps/kuaizhizao/purchase-management/reports/purchase-reconciliation",
                 "sort_order": 6,
-                "permission": "kuaizhizao:purchase-management-reports-purchase-reconciliation:view"
+                "permission": "kuaizhizao:purchase-management-reports-purchase-reconciliation:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.supplier-quality-rate",
                 "path": "/apps/kuaizhizao/purchase-management/reports/supplier-quality-rate",
                 "sort_order": 7,
-                "permission": "kuaizhizao:purchase-management-reports-supplier-quality-rate:view"
+                "permission": "kuaizhizao:purchase-management-reports-supplier-quality-rate:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.purchase-cost-trend",
                 "path": "/apps/kuaizhizao/purchase-management/reports/purchase-cost-trend",
                 "sort_order": 8,
-                "permission": "kuaizhizao:purchase-management-reports-purchase-cost-trend:view"
+                "permission": "kuaizhizao:purchase-management-reports-purchase-cost-trend:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.supplier-lead-time",
                 "path": "/apps/kuaizhizao/purchase-management/reports/supplier-lead-time",
                 "sort_order": 9,
-                "permission": "kuaizhizao:purchase-management-reports-supplier-lead-time:view"
+                "permission": "kuaizhizao:purchase-management-reports-supplier-lead-time:read"
               }
             ]
           }
@@ -390,7 +390,7 @@
               "module": "production",
               "node": "work_order"
             },
-            "permission": "kuaizhizao:work-order:view"
+            "permission": "kuaizhizao:production-execution-dashboard:read"
           },
           {
             "title": "app.kuaizhizao.menu.production-execution.work-orders",
@@ -400,7 +400,7 @@
               "node": "work_order",
               "module": "production"
             },
-            "permission": "kuaizhizao:work-order:view"
+            "permission": "kuaizhizao:work-order:read"
           },
           {
             "title": "app.kuaizhizao.menu.production-execution.terminal",
@@ -410,7 +410,7 @@
               "module": "production",
               "node": "work_order"
             },
-            "permission": "kuaizhizao:work-order:view"
+            "permission": "kuaizhizao:production-execution-terminal:read"
           },
           {
             "title": "app.kuaizhizao.menu.production-execution.reporting",
@@ -419,7 +419,7 @@
             "meta": {
               "module": "production"
             },
-            "permission": "kuaizhizao:production-execution-reporting:view"
+            "permission": "kuaizhizao:production-execution-reporting:read"
           },
           {
             "title": "app.kuaizhizao.menu.production-execution.rework-orders",
@@ -429,7 +429,7 @@
               "module": "production",
               "node": "rework_order"
             },
-            "permission": "kuaizhizao:rework-order:view"
+            "permission": "kuaizhizao:rework-order:read"
           },
           {
             "title": "app.kuaizhizao.menu.production-execution.outsource-management",
@@ -439,7 +439,7 @@
               "module": "production",
               "node": "outsource_order"
             },
-            "permission": "kuaizhizao:outsource-order:view"
+            "permission": "kuaizhizao:outsource-order:read"
           },
           {
             "title": "app.kuaizhizao.menu.production-execution.packing-binding",
@@ -449,7 +449,7 @@
               "module": "production",
               "node": "work_order"
             },
-            "permission": "kuaizhizao:work-order:view"
+            "permission": "kuaizhizao:production-execution-packing-binding:read"
           },
           {
             "title": "app.kuaizhizao.menu.production-execution.reporting.statistics",
@@ -458,7 +458,7 @@
             "meta": {
               "module": "production"
             },
-            "permission": "kuaizhizao:production-execution-reporting-statistics:view"
+            "permission": "kuaizhizao:production-execution-reporting-statistics:read"
           },
           {
             "title": "app.kuaizhizao.menu.production-execution.exception-management",
@@ -476,7 +476,7 @@
                   "module": "production",
                   "node": "work_order"
                 },
-                "permission": "kuaizhizao:work-order:view"
+                "permission": "kuaizhizao:production-execution-material-shortage-exceptions:read"
               },
               {
                 "title": "app.kuaizhizao.menu.production-execution.delivery-delay-exceptions",
@@ -486,7 +486,7 @@
                   "module": "production",
                   "node": "work_order"
                 },
-                "permission": "kuaizhizao:work-order:view"
+                "permission": "kuaizhizao:production-execution-delivery-delay-exceptions:read"
               },
               {
                 "title": "app.kuaizhizao.menu.production-execution.quality-exceptions",
@@ -496,7 +496,7 @@
                   "module": "production",
                   "node": "work_order"
                 },
-                "permission": "kuaizhizao:work-order:view"
+                "permission": "kuaizhizao:production-execution-quality-exceptions:read"
               },
               {
                 "title": "app.kuaizhizao.menu.production-execution.exception-process",
@@ -506,7 +506,7 @@
                   "module": "production",
                   "node": "work_order"
                 },
-                "permission": "kuaizhizao:work-order:view"
+                "permission": "kuaizhizao:production-execution-exception-process:read"
               },
               {
                 "title": "app.kuaizhizao.menu.production-execution.exception-statistics",
@@ -516,7 +516,7 @@
                   "module": "production",
                   "node": "work_order"
                 },
-                "permission": "kuaizhizao:work-order:view"
+                "permission": "kuaizhizao:production-execution-exception-statistics:read"
               }
             ]
           },
@@ -529,73 +529,73 @@
                 "title": "app.kuaizhizao.menu.reports.work-order-query",
                 "path": "/apps/kuaizhizao/production-execution/reports/work-order-query",
                 "sort_order": 1,
-                "permission": "kuaizhizao:production-execution-reports-work-order-query:view"
+                "permission": "kuaizhizao:production-execution-reports-work-order-query:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.work-order-tracking",
                 "path": "/apps/kuaizhizao/production-execution/reports/work-order-tracking",
                 "sort_order": 2,
-                "permission": "kuaizhizao:production-execution-reports-work-order-tracking:view"
+                "permission": "kuaizhizao:production-execution-reports-work-order-tracking:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.work-order-material-usage",
                 "path": "/apps/kuaizhizao/production-execution/reports/work-order-material-usage",
                 "sort_order": 3,
-                "permission": "kuaizhizao:production-execution-reports-work-order-material-usage:view"
+                "permission": "kuaizhizao:production-execution-reports-work-order-material-usage:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.work-order-labor-detail",
                 "path": "/apps/kuaizhizao/production-execution/reports/work-order-labor-detail",
                 "sort_order": 4,
-                "permission": "kuaizhizao:production-execution-reports-work-order-labor-detail:view"
+                "permission": "kuaizhizao:production-execution-reports-work-order-labor-detail:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.production-efficiency",
                 "path": "/apps/kuaizhizao/production-execution/reports/production-efficiency",
                 "sort_order": 5,
-                "permission": "kuaizhizao:production-execution-reports-production-efficiency:view"
+                "permission": "kuaizhizao:production-execution-reports-production-efficiency:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.process-progress-detail",
                 "path": "/apps/kuaizhizao/production-execution/reports/process-progress-detail",
                 "sort_order": 6,
-                "permission": "kuaizhizao:production-execution-reports-process-progress-detail:view"
+                "permission": "kuaizhizao:production-execution-reports-process-progress-detail:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.rework-order-analysis",
                 "path": "/apps/kuaizhizao/production-execution/reports/rework-order-analysis",
                 "sort_order": 7,
-                "permission": "kuaizhizao:production-execution-reports-rework-order-analysis:view"
+                "permission": "kuaizhizao:production-execution-reports-rework-order-analysis:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.outsource-order-query",
                 "path": "/apps/kuaizhizao/production-execution/reports/outsource-order-query",
                 "sort_order": 8,
-                "permission": "kuaizhizao:production-execution-reports-outsource-order-query:view"
+                "permission": "kuaizhizao:production-execution-reports-outsource-order-query:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.outsource-material-reconciliation",
                 "path": "/apps/kuaizhizao/production-execution/reports/outsource-material-reconciliation",
                 "sort_order": 9,
-                "permission": "kuaizhizao:production-execution-reports-outsource-material-reconciliation:view"
+                "permission": "kuaizhizao:production-execution-reports-outsource-material-reconciliation:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.wip-inventory",
                 "path": "/apps/kuaizhizao/production-execution/reports/wip-inventory",
                 "sort_order": 10,
-                "permission": "kuaizhizao:production-execution-reports-wip-inventory:view"
+                "permission": "kuaizhizao:production-execution-reports-wip-inventory:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.scrap-defect-analysis",
                 "path": "/apps/kuaizhizao/production-execution/reports/scrap-defect-analysis",
                 "sort_order": 11,
-                "permission": "kuaizhizao:production-execution-reports-scrap-defect-analysis:view"
+                "permission": "kuaizhizao:production-execution-reports-scrap-defect-analysis:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.production-lead-time",
                 "path": "/apps/kuaizhizao/production-execution/reports/production-lead-time",
                 "sort_order": 12,
-                "permission": "kuaizhizao:production-execution-reports-production-lead-time:view"
+                "permission": "kuaizhizao:production-execution-reports-production-lead-time:read"
               }
             ]
           }
@@ -616,7 +616,7 @@
             "meta": {
               "module": "quality"
             },
-            "permission": "kuaizhizao:quality-management-dashboard:view"
+            "permission": "kuaizhizao:quality-management-dashboard:read"
           },
           {
             "title": "app.kuaizhizao.menu.quality-management.incoming-inspection",
@@ -625,7 +625,7 @@
             "meta": {
               "module": "quality"
             },
-            "permission": "kuaizhizao:quality-management-incoming-inspection:view"
+            "permission": "kuaizhizao:quality-management-incoming-inspection:read"
           },
           {
             "title": "app.kuaizhizao.menu.quality-management.process-inspection",
@@ -634,7 +634,7 @@
             "meta": {
               "module": "quality"
             },
-            "permission": "kuaizhizao:quality-management-process-inspection:view"
+            "permission": "kuaizhizao:quality-management-process-inspection:read"
           },
           {
             "title": "app.kuaizhizao.menu.quality-management.finished-goods-inspection",
@@ -643,7 +643,7 @@
             "meta": {
               "module": "quality"
             },
-            "permission": "kuaizhizao:quality-management-finished-goods-inspection:view"
+            "permission": "kuaizhizao:quality-management-finished-goods-inspection:read"
           },
           {
             "title": "app.kuaizhizao.menu.quality-management.traceability",
@@ -652,7 +652,7 @@
             "meta": {
               "module": "quality"
             },
-            "permission": "kuaizhizao:quality-management-traceability:view"
+            "permission": "kuaizhizao:quality-management-traceability:read"
           },
           {
             "title": "app.kuaizhizao.menu.quality-management.inspection-plans",
@@ -661,7 +661,7 @@
             "meta": {
               "module": "quality"
             },
-            "permission": "kuaizhizao:quality-management-inspection-plans:view"
+            "permission": "kuaizhizao:quality-management-inspection-plans:read"
           },
           {
             "title": "app.kuaizhizao.menu.quality-management.reports",
@@ -672,43 +672,43 @@
                 "title": "app.kuaizhizao.menu.reports.incoming-inspection-report",
                 "path": "/apps/kuaizhizao/quality-management/reports/incoming-inspection-report",
                 "sort_order": 1,
-                "permission": "kuaizhizao:quality-management-reports-incoming-inspection-report:view"
+                "permission": "kuaizhizao:quality-management-reports-incoming-inspection-report:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.process-inspection-report",
                 "path": "/apps/kuaizhizao/quality-management/reports/process-inspection-report",
                 "sort_order": 2,
-                "permission": "kuaizhizao:quality-management-reports-process-inspection-report:view"
+                "permission": "kuaizhizao:quality-management-reports-process-inspection-report:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.finished-inspection-report",
                 "path": "/apps/kuaizhizao/quality-management/reports/finished-inspection-report",
                 "sort_order": 3,
-                "permission": "kuaizhizao:quality-management-reports-finished-inspection-report:view"
+                "permission": "kuaizhizao:quality-management-reports-finished-inspection-report:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.quality-exception-tracking",
                 "path": "/apps/kuaizhizao/quality-management/reports/quality-exception-tracking",
                 "sort_order": 4,
-                "permission": "kuaizhizao:quality-management-reports-quality-exception-tracking:view"
+                "permission": "kuaizhizao:quality-management-reports-quality-exception-tracking:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.nonconforming-summary",
                 "path": "/apps/kuaizhizao/quality-management/reports/nonconforming-summary",
                 "sort_order": 5,
-                "permission": "kuaizhizao:quality-management-reports-nonconforming-summary:view"
+                "permission": "kuaizhizao:quality-management-reports-nonconforming-summary:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.quality-rate-trend",
                 "path": "/apps/kuaizhizao/quality-management/reports/quality-rate-trend",
                 "sort_order": 6,
-                "permission": "kuaizhizao:quality-management-reports-quality-rate-trend:view"
+                "permission": "kuaizhizao:quality-management-reports-quality-rate-trend:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.defect-pareto-analysis",
                 "path": "/apps/kuaizhizao/quality-management/reports/defect-pareto-analysis",
                 "sort_order": 7,
-                "permission": "kuaizhizao:quality-management-reports-defect-pareto-analysis:view"
+                "permission": "kuaizhizao:quality-management-reports-defect-pareto-analysis:read"
               }
             ]
           }
@@ -727,7 +727,7 @@
               "module": "equipment",
               "node": "equipment"
             },
-            "permission": "kuaizhizao:equipment:view"
+            "permission": "kuaizhizao:equipment:read"
           },
           {
             "title": "app.kuaizhizao.menu.equipment-management.asset-ledger",
@@ -735,7 +735,7 @@
               {
                 "title": "app.kuaizhizao.menu.equipment-management.equipment",
                 "path": "/apps/kuaizhizao/equipment-management/equipment",
-                "permission": "kuaizhizao:equipment-management-equipment:view",
+                "permission": "kuaizhizao:equipment-management-equipment:read",
                 "sort_order": 1,
                 "meta": {
                   "module": "equipment"
@@ -744,7 +744,7 @@
               {
                 "title": "app.kuaizhizao.menu.equipment-management.molds",
                 "path": "/apps/kuaizhizao/equipment-management/molds",
-                "permission": "kuaizhizao:equipment-management-molds:view",
+                "permission": "kuaizhizao:equipment-management-molds:read",
                 "sort_order": 2,
                 "meta": {
                   "module": "equipment"
@@ -753,7 +753,7 @@
               {
                 "title": "app.kuaizhizao.menu.tooling-management.ledger",
                 "path": "/apps/kuaizhizao/equipment-management/tool-ledger",
-                "permission": "kuaizhizao:equipment-management-tool-ledger:view",
+                "permission": "kuaizhizao:equipment-management-tool-ledger:read",
                 "sort_order": 3,
                 "meta": {
                   "module": "equipment"
@@ -769,7 +769,7 @@
               {
                 "title": "app.kuaizhizao.menu.equipment-management.equipment-faults",
                 "path": "/apps/kuaizhizao/equipment-management/equipment-faults",
-                "permission": "kuaizhizao:equipment-fault:view",
+                "permission": "kuaizhizao:equipment-fault:read",
                 "sort_order": 1,
                 "meta": {
                   "node": "equipment_fault",
@@ -779,7 +779,7 @@
               {
                 "title": "app.kuaizhizao.menu.equipment-management.maintenance-plans",
                 "path": "/apps/kuaizhizao/equipment-management/maintenance-plans",
-                "permission": "kuaizhizao:maintenance-plan:view",
+                "permission": "kuaizhizao:maintenance-plan:read",
                 "sort_order": 2,
                 "meta": {
                   "node": "maintenance_plan",
@@ -789,7 +789,7 @@
               {
                 "title": "app.kuaizhizao.menu.equipment-management.maintenance-reminders",
                 "path": "/apps/kuaizhizao/equipment-management/maintenance-reminders",
-                "permission": "kuaizhizao:maintenance-reminder:view",
+                "permission": "kuaizhizao:maintenance-reminder:read",
                 "sort_order": 3,
                 "meta": {
                   "node": "maintenance_reminder",
@@ -799,7 +799,7 @@
               {
                 "title": "app.kuaizhizao.menu.equipment-management.equipment-status",
                 "path": "/apps/kuaizhizao/equipment-management/equipment-status",
-                "permission": "kuaizhizao:equipment-status:view",
+                "permission": "kuaizhizao:equipment-status:read",
                 "sort_order": 4,
                 "meta": {
                   "node": "equipment_status",
@@ -815,7 +815,7 @@
               {
                 "title": "app.kuaizhizao.menu.equipment-management.mold-usages",
                 "path": "/apps/kuaizhizao/equipment-management/mold-usages",
-                "permission": "kuaizhizao:mold-usage:view",
+                "permission": "kuaizhizao:mold-usage:read",
                 "sort_order": 1,
                 "meta": {
                   "node": "mold_usage",
@@ -825,7 +825,7 @@
               {
                 "title": "app.kuaizhizao.menu.equipment-management.mold-calibrations",
                 "path": "/apps/kuaizhizao/equipment-management/mold-calibrations",
-                "permission": "kuaizhizao:mold-calibration:view",
+                "permission": "kuaizhizao:mold-calibration:read",
                 "sort_order": 2,
                 "meta": {
                   "node": "mold_calibration",
@@ -835,7 +835,7 @@
               {
                 "title": "app.kuaizhizao.menu.equipment-management.mold-maintenance-reminders",
                 "path": "/apps/kuaizhizao/equipment-management/mold-maintenance-reminders",
-                "permission": "kuaizhizao:mold-maintenance-reminder:view",
+                "permission": "kuaizhizao:mold-maintenance-reminder:read",
                 "sort_order": 3,
                 "meta": {
                   "node": "mold_maintenance_reminder",
@@ -851,7 +851,7 @@
               {
                 "title": "app.kuaizhizao.menu.equipment-management.tool-usages",
                 "path": "/apps/kuaizhizao/equipment-management/tool-usages",
-                "permission": "kuaizhizao:tool-usage:view",
+                "permission": "kuaizhizao:tool-usage:read",
                 "sort_order": 1,
                 "meta": {
                   "node": "tool_usage",
@@ -861,7 +861,7 @@
               {
                 "title": "app.kuaizhizao.menu.equipment-management.tool-maintenances",
                 "path": "/apps/kuaizhizao/equipment-management/tool-maintenances",
-                "permission": "kuaizhizao:tool-maintenance:view",
+                "permission": "kuaizhizao:tool-maintenance:read",
                 "sort_order": 2,
                 "meta": {
                   "node": "tool_maintenance",
@@ -871,7 +871,7 @@
               {
                 "title": "app.kuaizhizao.menu.equipment-management.tool-calibrations",
                 "path": "/apps/kuaizhizao/equipment-management/tool-calibrations",
-                "permission": "kuaizhizao:tool-calibration:view",
+                "permission": "kuaizhizao:tool-calibration:read",
                 "sort_order": 3,
                 "meta": {
                   "node": "tool_calibration",
@@ -881,7 +881,7 @@
               {
                 "title": "app.kuaizhizao.menu.equipment-management.tool-maintenance-reminders",
                 "path": "/apps/kuaizhizao/equipment-management/tool-maintenance-reminders",
-                "permission": "kuaizhizao:tool-maintenance-reminder:view",
+                "permission": "kuaizhizao:tool-maintenance-reminder:read",
                 "sort_order": 4,
                 "meta": {
                   "node": "tool_maintenance_reminder",
@@ -899,31 +899,31 @@
                 "title": "app.kuaizhizao.menu.reports.equipment-maintenance-detail",
                 "path": "/apps/kuaizhizao/equipment-management/reports/equipment-maintenance-detail",
                 "sort_order": 1,
-                "permission": "kuaizhizao:equipment-management-reports-equipment-maintenance-detail:view"
+                "permission": "kuaizhizao:equipment-management-reports-equipment-maintenance-detail:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.equipment-maintenance-plan",
                 "path": "/apps/kuaizhizao/equipment-management/reports/equipment-maintenance-plan",
                 "sort_order": 2,
-                "permission": "kuaizhizao:equipment-management-reports-equipment-maintenance-plan:view"
+                "permission": "kuaizhizao:equipment-management-reports-equipment-maintenance-plan:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.equipment-fault-analysis",
                 "path": "/apps/kuaizhizao/equipment-management/reports/equipment-fault-analysis",
                 "sort_order": 3,
-                "permission": "kuaizhizao:equipment-management-reports-equipment-fault-analysis:view"
+                "permission": "kuaizhizao:equipment-management-reports-equipment-fault-analysis:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.equipment-status-log",
                 "path": "/apps/kuaizhizao/equipment-management/reports/equipment-status-log",
                 "sort_order": 4,
-                "permission": "kuaizhizao:equipment-management-reports-equipment-status-log:view"
+                "permission": "kuaizhizao:equipment-management-reports-equipment-status-log:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.equipment-oee-analysis",
                 "path": "/apps/kuaizhizao/equipment-management/reports/equipment-oee-analysis",
                 "sort_order": 5,
-                "permission": "kuaizhizao:equipment-management-reports-equipment-oee-analysis:view"
+                "permission": "kuaizhizao:equipment-management-reports-equipment-oee-analysis:read"
               }
             ]
           }
@@ -945,7 +945,7 @@
               "module": "warehouse",
               "node": "inventory"
             },
-            "permission": "kuaizhizao:inventory:view"
+            "permission": "kuaizhizao:inventory:read"
           },
           {
             "title": "app.kuaizhizao.menu.warehouse-management.inbound-group",
@@ -953,7 +953,7 @@
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.inbound",
                 "path": "/apps/kuaizhizao/warehouse-management/inbound",
-                "permission": "kuaizhizao:inbound:view",
+                "permission": "kuaizhizao:inbound:read",
                 "sort_order": 1,
                 "meta": {
                   "node": "inbound",
@@ -963,7 +963,7 @@
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.other-inbound",
                 "path": "/apps/kuaizhizao/warehouse-management/other-inbound",
-                "permission": "kuaizhizao:other-inbound:view",
+                "permission": "kuaizhizao:other-inbound:read",
                 "sort_order": 2,
                 "meta": {
                   "node": "other_inbound",
@@ -973,7 +973,7 @@
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.material-returns",
                 "path": "/apps/kuaizhizao/warehouse-management/material-returns",
-                "permission": "kuaizhizao:material-return:view",
+                "permission": "kuaizhizao:material-return:read",
                 "sort_order": 3,
                 "meta": {
                   "node": "material_return",
@@ -983,7 +983,7 @@
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.customer-material-registration",
                 "path": "/apps/kuaizhizao/warehouse-management/customer-material-registration",
-                "permission": "kuaizhizao:warehouse-management-customer-material-registration:view",
+                "permission": "kuaizhizao:warehouse-management-customer-material-registration:read",
                 "sort_order": 4
               }
             ],
@@ -995,7 +995,7 @@
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.outbound",
                 "path": "/apps/kuaizhizao/warehouse-management/outbound",
-                "permission": "kuaizhizao:outbound:view",
+                "permission": "kuaizhizao:outbound:read",
                 "sort_order": 1,
                 "meta": {
                   "node": "outbound",
@@ -1005,7 +1005,7 @@
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.other-outbound",
                 "path": "/apps/kuaizhizao/warehouse-management/other-outbound",
-                "permission": "kuaizhizao:other-outbound:view",
+                "permission": "kuaizhizao:other-outbound:read",
                 "sort_order": 2,
                 "meta": {
                   "node": "other_outbound",
@@ -1015,7 +1015,7 @@
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.material-borrows",
                 "path": "/apps/kuaizhizao/warehouse-management/material-borrows",
-                "permission": "kuaizhizao:material-borrow:view",
+                "permission": "kuaizhizao:material-borrow:read",
                 "sort_order": 3,
                 "meta": {
                   "node": "material_borrow",
@@ -1025,7 +1025,7 @@
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.delivery-notes",
                 "path": "/apps/kuaizhizao/warehouse-management/delivery-notes",
-                "permission": "kuaizhizao:delivery-notice:view",
+                "permission": "kuaizhizao:delivery-notice:read",
                 "sort_order": 4,
                 "meta": {
                   "node": "delivery_notice",
@@ -1041,37 +1041,37 @@
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.batching-center",
                 "path": "/apps/kuaizhizao/warehouse-management/batching-center",
-                "permission": "kuaizhizao:warehouse-management-batching-center:view",
+                "permission": "kuaizhizao:warehouse-management-batching-center:read",
                 "sort_order": 1
               },
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.material-calls",
                 "path": "/apps/kuaizhizao/warehouse-management/material-calls",
-                "permission": "kuaizhizao:warehouse-management-material-calls:view",
+                "permission": "kuaizhizao:warehouse-management-material-calls:read",
                 "sort_order": 2
               },
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.stocktaking",
                 "path": "/apps/kuaizhizao/warehouse-management/stocktaking",
-                "permission": "kuaizhizao:warehouse-management-stocktaking:view",
+                "permission": "kuaizhizao:warehouse-management-stocktaking:read",
                 "sort_order": 3
               },
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.inventory-transfer",
                 "path": "/apps/kuaizhizao/warehouse-management/inventory-transfer",
-                "permission": "kuaizhizao:warehouse-management-inventory-transfer:view",
+                "permission": "kuaizhizao:warehouse-management-inventory-transfer:read",
                 "sort_order": 4
               },
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.assembly-orders",
                 "path": "/apps/kuaizhizao/warehouse-management/assembly-orders",
-                "permission": "kuaizhizao:warehouse-management-assembly-orders:view",
+                "permission": "kuaizhizao:warehouse-management-assembly-orders:read",
                 "sort_order": 5
               },
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.disassembly-orders",
                 "path": "/apps/kuaizhizao/warehouse-management/disassembly-orders",
-                "permission": "kuaizhizao:warehouse-management-disassembly-orders:view",
+                "permission": "kuaizhizao:warehouse-management-disassembly-orders:read",
                 "sort_order": 6
               }
             ],
@@ -1084,49 +1084,49 @@
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.inventory",
                 "path": "/apps/kuaizhizao/warehouse-management/inventory",
-                "permission": "kuaizhizao:warehouse-management-inventory:view",
+                "permission": "kuaizhizao:warehouse-management-inventory:read",
                 "sort_order": 1
               },
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.batch-inventory-query",
                 "path": "/apps/kuaizhizao/warehouse-management/batch-inventory-query",
-                "permission": "kuaizhizao:warehouse-management-batch-inventory-query:view",
+                "permission": "kuaizhizao:warehouse-management-batch-inventory-query:read",
                 "sort_order": 2
               },
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.line-side-warehouse",
                 "path": "/apps/kuaizhizao/warehouse-management/line-side-warehouse",
-                "permission": "kuaizhizao:warehouse-management-line-side-warehouse:view",
+                "permission": "kuaizhizao:warehouse-management-line-side-warehouse:read",
                 "sort_order": 3
               },
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.backflush-records",
                 "path": "/apps/kuaizhizao/warehouse-management/backflush-records",
-                "permission": "kuaizhizao:warehouse-management-backflush-records:view",
+                "permission": "kuaizhizao:warehouse-management-backflush-records:read",
                 "sort_order": 4
               },
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.replenishment-suggestions",
                 "path": "/apps/kuaizhizao/warehouse-management/replenishment-suggestions",
-                "permission": "kuaizhizao:warehouse-management-replenishment-suggestions:view",
+                "permission": "kuaizhizao:warehouse-management-replenishment-suggestions:read",
                 "sort_order": 5
               },
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.inventory-alert",
                 "path": "/apps/kuaizhizao/warehouse-management/inventory-alert",
-                "permission": "kuaizhizao:warehouse-management-inventory-alert:view",
+                "permission": "kuaizhizao:warehouse-management-inventory-alert:read",
                 "sort_order": 6
               },
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.barcode-mapping-rules",
                 "path": "/apps/kuaizhizao/warehouse-management/barcode-mapping-rules",
-                "permission": "kuaizhizao:warehouse-management-barcode-mapping-rules:view",
+                "permission": "kuaizhizao:warehouse-management-barcode-mapping-rules:read",
                 "sort_order": 7
               },
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.initial-data",
                 "path": "/apps/kuaizhizao/warehouse-management/initial-data",
-                "permission": "kuaizhizao:warehouse-management-initial-data:view",
+                "permission": "kuaizhizao:warehouse-management-initial-data:read",
                 "sort_order": 8
               }
             ]
@@ -1140,55 +1140,55 @@
                 "title": "app.kuaizhizao.menu.reports.inventory-summary",
                 "path": "/apps/kuaizhizao/warehouse-management/reports/inventory-summary",
                 "sort_order": 1,
-                "permission": "kuaizhizao:warehouse-management-reports-inventory-summary:view"
+                "permission": "kuaizhizao:warehouse-management-reports-inventory-summary:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.inventory-ledger",
                 "path": "/apps/kuaizhizao/warehouse-management/reports/inventory-ledger",
                 "sort_order": 2,
-                "permission": "kuaizhizao:warehouse-management-reports-inventory-ledger:view"
+                "permission": "kuaizhizao:warehouse-management-reports-inventory-ledger:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.inventory-age-analysis",
                 "path": "/apps/kuaizhizao/warehouse-management/reports/inventory-age-analysis",
                 "sort_order": 3,
-                "permission": "kuaizhizao:warehouse-management-reports-inventory-age-analysis:view"
+                "permission": "kuaizhizao:warehouse-management-reports-inventory-age-analysis:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.slow-moving-inventory",
                 "path": "/apps/kuaizhizao/warehouse-management/reports/slow-moving-inventory",
                 "sort_order": 4,
-                "permission": "kuaizhizao:warehouse-management-reports-slow-moving-inventory:view"
+                "permission": "kuaizhizao:warehouse-management-reports-slow-moving-inventory:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.inbound-summary",
                 "path": "/apps/kuaizhizao/warehouse-management/reports/inbound-summary",
                 "sort_order": 5,
-                "permission": "kuaizhizao:warehouse-management-reports-inbound-summary:view"
+                "permission": "kuaizhizao:warehouse-management-reports-inbound-summary:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.outbound-summary",
                 "path": "/apps/kuaizhizao/warehouse-management/reports/outbound-summary",
                 "sort_order": 6,
-                "permission": "kuaizhizao:warehouse-management-reports-outbound-summary:view"
+                "permission": "kuaizhizao:warehouse-management-reports-outbound-summary:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.stocktaking-history",
                 "path": "/apps/kuaizhizao/warehouse-management/reports/stocktaking-history",
                 "sort_order": 7,
-                "permission": "kuaizhizao:warehouse-management-reports-stocktaking-history:view"
+                "permission": "kuaizhizao:warehouse-management-reports-stocktaking-history:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.transfer-tracking",
                 "path": "/apps/kuaizhizao/warehouse-management/reports/transfer-tracking",
                 "sort_order": 8,
-                "permission": "kuaizhizao:warehouse-management-reports-transfer-tracking:view"
+                "permission": "kuaizhizao:warehouse-management-reports-transfer-tracking:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.inventory-turnover-analysis",
                 "path": "/apps/kuaizhizao/warehouse-management/reports/inventory-turnover-analysis",
                 "sort_order": 9,
-                "permission": "kuaizhizao:warehouse-management-reports-inventory-turnover-analysis:view"
+                "permission": "kuaizhizao:warehouse-management-reports-inventory-turnover-analysis:read"
               }
             ]
           }
@@ -1205,43 +1205,43 @@
           {
             "title": "app.kuaizhizao.menu.performance-management.holidays",
             "path": "/apps/kuaizhizao/performance/holidays",
-            "permission": "kuaizhizao:performance-holidays:view",
+            "permission": "kuaizhizao:performance-holidays:read",
             "sort_order": 1
           },
           {
             "title": "app.kuaizhizao.menu.performance-management.skills",
             "path": "/apps/kuaizhizao/performance/skills",
-            "permission": "kuaizhizao:performance-skills:view",
+            "permission": "kuaizhizao:performance-skills:read",
             "sort_order": 2
           },
           {
             "title": "app.kuaizhizao.menu.performance-management.employee-configs",
             "path": "/apps/kuaizhizao/performance/employee-configs",
-            "permission": "kuaizhizao:performance-employee-configs:view",
+            "permission": "kuaizhizao:performance-employee-configs:read",
             "sort_order": 3
           },
           {
             "title": "app.kuaizhizao.menu.performance-management.piece-rates",
             "path": "/apps/kuaizhizao/performance/piece-rates",
-            "permission": "kuaizhizao:performance-piece-rates:view",
+            "permission": "kuaizhizao:performance-piece-rates:read",
             "sort_order": 4
           },
           {
             "title": "app.kuaizhizao.menu.performance-management.hourly-rates",
             "path": "/apps/kuaizhizao/performance/hourly-rates",
-            "permission": "kuaizhizao:performance-hourly-rates:view",
+            "permission": "kuaizhizao:performance-hourly-rates:read",
             "sort_order": 5
           },
           {
             "title": "app.kuaizhizao.menu.performance-management.kpi-definitions",
             "path": "/apps/kuaizhizao/performance/kpi-definitions",
-            "permission": "kuaizhizao:performance-kpi-definitions:view",
+            "permission": "kuaizhizao:performance-kpi-definitions:read",
             "sort_order": 6
           },
           {
             "title": "app.kuaizhizao.menu.performance-management.summaries",
             "path": "/apps/kuaizhizao/performance/summaries",
-            "permission": "kuaizhizao:performance-summaries:view",
+            "permission": "kuaizhizao:performance-summaries:read",
             "sort_order": 7
           },
           {
@@ -1253,303 +1253,896 @@
                 "title": "app.kuaizhizao.menu.reports.employee-efficiency-ranking",
                 "path": "/apps/kuaizhizao/performance/reports/employee-efficiency-ranking",
                 "sort_order": 1,
-                "permission": "kuaizhizao:performance-reports-employee-efficiency-ranking:view"
+                "permission": "kuaizhizao:performance-reports-employee-efficiency-ranking:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.piece-rate-salary-summary",
                 "path": "/apps/kuaizhizao/performance/reports/piece-rate-salary-summary",
                 "sort_order": 2,
-                "permission": "kuaizhizao:performance-reports-piece-rate-salary-summary:view"
+                "permission": "kuaizhizao:performance-reports-piece-rate-salary-summary:read"
               }
             ]
           }
         ]
       }
     ],
-    "permission": "kuaizhizao:pricing:view"
+    "permission": "kuaizhizao:app-root:read"
   },
   "permissions": [
-    "kuaizhizao:assembly-order:view",
-    "kuaizhizao:backflush-record:view",
-    "kuaizhizao:barcode-mapping-rule:view",
-    "kuaizhizao:batch-inventory-query:view",
+    "kuaizhizao:customer-follow-up:approve",
+    "kuaizhizao:customer-follow-up:audit",
     "kuaizhizao:customer-follow-up:create",
     "kuaizhizao:customer-follow-up:delete",
+    "kuaizhizao:customer-follow-up:export",
+    "kuaizhizao:customer-follow-up:import",
+    "kuaizhizao:customer-follow-up:read",
+    "kuaizhizao:customer-follow-up:reject",
+    "kuaizhizao:customer-follow-up:revoke",
+    "kuaizhizao:customer-follow-up:submit",
     "kuaizhizao:customer-follow-up:update",
-    "kuaizhizao:customer-follow-up:view",
-    "kuaizhizao:customer-material-registration:view",
+    "kuaizhizao:customer-follow-up:read",
+    "kuaizhizao:delivery-notice:approve",
+    "kuaizhizao:delivery-notice:audit",
     "kuaizhizao:delivery-notice:create",
+    "kuaizhizao:delivery-notice:delete",
+    "kuaizhizao:delivery-notice:export",
+    "kuaizhizao:delivery-notice:import",
+    "kuaizhizao:delivery-notice:read",
+    "kuaizhizao:delivery-notice:reject",
+    "kuaizhizao:delivery-notice:revoke",
     "kuaizhizao:delivery-notice:send",
+    "kuaizhizao:delivery-notice:submit",
     "kuaizhizao:delivery-notice:update",
-    "kuaizhizao:delivery-notice:view",
+    "kuaizhizao:delivery-notice:read",
+    "kuaizhizao:demand:approve",
+    "kuaizhizao:demand:audit",
     "kuaizhizao:demand:create",
     "kuaizhizao:demand:delete",
+    "kuaizhizao:demand:export",
+    "kuaizhizao:demand:import",
+    "kuaizhizao:demand:read",
+    "kuaizhizao:demand:reject",
+    "kuaizhizao:demand:revoke",
+    "kuaizhizao:demand:submit",
     "kuaizhizao:demand:update",
-    "kuaizhizao:demand:view",
-    "kuaizhizao:disassembly-order:view",
-    "kuaizhizao:equipment-fault:view",
-    "kuaizhizao:equipment-management-equipment:view",
-    "kuaizhizao:equipment-management-molds:view",
-    "kuaizhizao:equipment-management-reports-equipment-fault-analysis:view",
-    "kuaizhizao:equipment-management-reports-equipment-maintenance-detail:view",
-    "kuaizhizao:equipment-management-reports-equipment-maintenance-plan:view",
-    "kuaizhizao:equipment-management-reports-equipment-oee-analysis:view",
-    "kuaizhizao:equipment-management-reports-equipment-status-log:view",
-    "kuaizhizao:equipment-management-tool-ledger:view",
-    "kuaizhizao:equipment-status:view",
-    "kuaizhizao:equipment:view",
+    "kuaizhizao:demand:read",
+    "kuaizhizao:equipment-fault:approve",
+    "kuaizhizao:equipment-fault:audit",
+    "kuaizhizao:equipment-fault:create",
+    "kuaizhizao:equipment-fault:delete",
+    "kuaizhizao:equipment-fault:export",
+    "kuaizhizao:equipment-fault:import",
+    "kuaizhizao:equipment-fault:read",
+    "kuaizhizao:equipment-fault:reject",
+    "kuaizhizao:equipment-fault:revoke",
+    "kuaizhizao:equipment-fault:submit",
+    "kuaizhizao:equipment-fault:update",
+    "kuaizhizao:equipment-fault:read",
+    "kuaizhizao:equipment-management-equipment:approve",
+    "kuaizhizao:equipment-management-equipment:audit",
+    "kuaizhizao:equipment-management-equipment:create",
+    "kuaizhizao:equipment-management-equipment:delete",
+    "kuaizhizao:equipment-management-equipment:export",
+    "kuaizhizao:equipment-management-equipment:import",
+    "kuaizhizao:equipment-management-equipment:read",
+    "kuaizhizao:equipment-management-equipment:reject",
+    "kuaizhizao:equipment-management-equipment:revoke",
+    "kuaizhizao:equipment-management-equipment:submit",
+    "kuaizhizao:equipment-management-equipment:update",
+    "kuaizhizao:equipment-management-equipment:read",
+    "kuaizhizao:equipment-management-molds:approve",
+    "kuaizhizao:equipment-management-molds:audit",
+    "kuaizhizao:equipment-management-molds:create",
+    "kuaizhizao:equipment-management-molds:delete",
+    "kuaizhizao:equipment-management-molds:export",
+    "kuaizhizao:equipment-management-molds:import",
+    "kuaizhizao:equipment-management-molds:read",
+    "kuaizhizao:equipment-management-molds:reject",
+    "kuaizhizao:equipment-management-molds:revoke",
+    "kuaizhizao:equipment-management-molds:submit",
+    "kuaizhizao:equipment-management-molds:update",
+    "kuaizhizao:equipment-management-molds:read",
+    "kuaizhizao:equipment-management-reports-equipment-maintenance-detail:read",
+    "kuaizhizao:equipment-management-reports-equipment-maintenance-plan:read",
+    "kuaizhizao:equipment-management-reports-equipment-status-log:read",
+    "kuaizhizao:equipment-management-tool-ledger:approve",
+    "kuaizhizao:equipment-management-tool-ledger:audit",
+    "kuaizhizao:equipment-management-tool-ledger:create",
+    "kuaizhizao:equipment-management-tool-ledger:delete",
+    "kuaizhizao:equipment-management-tool-ledger:export",
+    "kuaizhizao:equipment-management-tool-ledger:import",
+    "kuaizhizao:equipment-management-tool-ledger:read",
+    "kuaizhizao:equipment-management-tool-ledger:reject",
+    "kuaizhizao:equipment-management-tool-ledger:revoke",
+    "kuaizhizao:equipment-management-tool-ledger:submit",
+    "kuaizhizao:equipment-management-tool-ledger:update",
+    "kuaizhizao:equipment-management-tool-ledger:read",
+    "kuaizhizao:equipment-status:approve",
+    "kuaizhizao:equipment-status:audit",
+    "kuaizhizao:equipment-status:create",
+    "kuaizhizao:equipment-status:delete",
+    "kuaizhizao:equipment-status:export",
+    "kuaizhizao:equipment-status:import",
+    "kuaizhizao:equipment-status:read",
+    "kuaizhizao:equipment-status:reject",
+    "kuaizhizao:equipment-status:revoke",
+    "kuaizhizao:equipment-status:submit",
+    "kuaizhizao:equipment-status:update",
+    "kuaizhizao:equipment-status:read",
+    "kuaizhizao:equipment:approve",
+    "kuaizhizao:equipment:audit",
+    "kuaizhizao:equipment:create",
+    "kuaizhizao:equipment:delete",
+    "kuaizhizao:equipment:export",
+    "kuaizhizao:equipment:import",
+    "kuaizhizao:equipment:read",
+    "kuaizhizao:equipment:reject",
+    "kuaizhizao:equipment:revoke",
+    "kuaizhizao:equipment:submit",
+    "kuaizhizao:equipment:update",
+    "kuaizhizao:equipment:read",
+    "kuaizhizao:finished-goods-inspection:approve",
+    "kuaizhizao:finished-goods-inspection:audit",
     "kuaizhizao:finished-goods-inspection:certificate",
     "kuaizhizao:finished-goods-inspection:conduct",
     "kuaizhizao:finished-goods-inspection:create",
     "kuaizhizao:finished-goods-inspection:delete",
+    "kuaizhizao:finished-goods-inspection:export",
+    "kuaizhizao:finished-goods-inspection:import",
+    "kuaizhizao:finished-goods-inspection:read",
+    "kuaizhizao:finished-goods-inspection:reject",
+    "kuaizhizao:finished-goods-inspection:revoke",
+    "kuaizhizao:finished-goods-inspection:submit",
     "kuaizhizao:finished-goods-inspection:update",
-    "kuaizhizao:finished-goods-inspection:view",
+    "kuaizhizao:finished-goods-inspection:read",
     "kuaizhizao:finished-goods-inventory:create",
     "kuaizhizao:finished-goods-inventory:update",
-    "kuaizhizao:finished-goods-inventory:view",
+    "kuaizhizao:finished-goods-inventory:read",
+    "kuaizhizao:inbound:approve",
+    "kuaizhizao:inbound:audit",
     "kuaizhizao:inbound:create",
+    "kuaizhizao:inbound:delete",
+    "kuaizhizao:inbound:export",
+    "kuaizhizao:inbound:import",
+    "kuaizhizao:inbound:read",
+    "kuaizhizao:inbound:reject",
+    "kuaizhizao:inbound:revoke",
+    "kuaizhizao:inbound:submit",
     "kuaizhizao:inbound:update",
-    "kuaizhizao:inbound:view",
+    "kuaizhizao:inbound:read",
     "kuaizhizao:incoming-inspection:approve",
+    "kuaizhizao:incoming-inspection:audit",
     "kuaizhizao:incoming-inspection:conduct",
     "kuaizhizao:incoming-inspection:create",
     "kuaizhizao:incoming-inspection:delete",
+    "kuaizhizao:incoming-inspection:export",
+    "kuaizhizao:incoming-inspection:import",
+    "kuaizhizao:incoming-inspection:read",
+    "kuaizhizao:incoming-inspection:reject",
+    "kuaizhizao:incoming-inspection:revoke",
+    "kuaizhizao:incoming-inspection:submit",
     "kuaizhizao:incoming-inspection:update",
-    "kuaizhizao:incoming-inspection:view",
-    "kuaizhizao:initial-data:view",
-    "kuaizhizao:inventory-report:create",
-    "kuaizhizao:inventory-report:delete",
-    "kuaizhizao:inventory-report:update",
-    "kuaizhizao:inventory-report:view",
-    "kuaizhizao:inventory-transfer:view",
-    "kuaizhizao:inventory:view",
-    "kuaizhizao:line-side-warehouse:view",
+    "kuaizhizao:incoming-inspection:read",
+    "kuaizhizao:inventory-report:read",
+    "kuaizhizao:inventory:approve",
+    "kuaizhizao:inventory:audit",
+    "kuaizhizao:inventory:create",
+    "kuaizhizao:inventory:delete",
+    "kuaizhizao:inventory:export",
+    "kuaizhizao:inventory:import",
+    "kuaizhizao:inventory:read",
+    "kuaizhizao:inventory:reject",
+    "kuaizhizao:inventory:revoke",
+    "kuaizhizao:inventory:submit",
+    "kuaizhizao:inventory:update",
+    "kuaizhizao:inventory:read",
     "kuaizhizao:lrp:compute",
-    "kuaizhizao:maintenance-plan:view",
-    "kuaizhizao:maintenance-reminder:view",
+    "kuaizhizao:maintenance-plan:approve",
+    "kuaizhizao:maintenance-plan:audit",
+    "kuaizhizao:maintenance-plan:create",
+    "kuaizhizao:maintenance-plan:delete",
+    "kuaizhizao:maintenance-plan:export",
+    "kuaizhizao:maintenance-plan:import",
+    "kuaizhizao:maintenance-plan:read",
+    "kuaizhizao:maintenance-plan:reject",
+    "kuaizhizao:maintenance-plan:revoke",
+    "kuaizhizao:maintenance-plan:submit",
+    "kuaizhizao:maintenance-plan:update",
+    "kuaizhizao:maintenance-plan:read",
+    "kuaizhizao:maintenance-reminder:approve",
+    "kuaizhizao:maintenance-reminder:audit",
+    "kuaizhizao:maintenance-reminder:create",
+    "kuaizhizao:maintenance-reminder:delete",
+    "kuaizhizao:maintenance-reminder:export",
+    "kuaizhizao:maintenance-reminder:import",
+    "kuaizhizao:maintenance-reminder:read",
+    "kuaizhizao:maintenance-reminder:reject",
+    "kuaizhizao:maintenance-reminder:revoke",
+    "kuaizhizao:maintenance-reminder:submit",
+    "kuaizhizao:maintenance-reminder:update",
+    "kuaizhizao:maintenance-reminder:read",
+    "kuaizhizao:material-borrow:approve",
+    "kuaizhizao:material-borrow:audit",
     "kuaizhizao:material-borrow:confirm",
     "kuaizhizao:material-borrow:create",
+    "kuaizhizao:material-borrow:delete",
+    "kuaizhizao:material-borrow:export",
+    "kuaizhizao:material-borrow:import",
+    "kuaizhizao:material-borrow:read",
+    "kuaizhizao:material-borrow:reject",
+    "kuaizhizao:material-borrow:revoke",
+    "kuaizhizao:material-borrow:submit",
     "kuaizhizao:material-borrow:update",
-    "kuaizhizao:material-borrow:view",
+    "kuaizhizao:material-borrow:read",
+    "kuaizhizao:material-return:approve",
+    "kuaizhizao:material-return:audit",
     "kuaizhizao:material-return:confirm",
     "kuaizhizao:material-return:create",
+    "kuaizhizao:material-return:delete",
+    "kuaizhizao:material-return:export",
+    "kuaizhizao:material-return:import",
+    "kuaizhizao:material-return:read",
+    "kuaizhizao:material-return:reject",
+    "kuaizhizao:material-return:revoke",
+    "kuaizhizao:material-return:submit",
     "kuaizhizao:material-return:update",
-    "kuaizhizao:material-return:view",
-    "kuaizhizao:mold-calibration:view",
-    "kuaizhizao:mold-maintenance-reminder:view",
-    "kuaizhizao:mold-usage:view",
-    "kuaizhizao:mold:view",
+    "kuaizhizao:material-return:read",
+    "kuaizhizao:mold-calibration:approve",
+    "kuaizhizao:mold-calibration:audit",
+    "kuaizhizao:mold-calibration:create",
+    "kuaizhizao:mold-calibration:delete",
+    "kuaizhizao:mold-calibration:export",
+    "kuaizhizao:mold-calibration:import",
+    "kuaizhizao:mold-calibration:read",
+    "kuaizhizao:mold-calibration:reject",
+    "kuaizhizao:mold-calibration:revoke",
+    "kuaizhizao:mold-calibration:submit",
+    "kuaizhizao:mold-calibration:update",
+    "kuaizhizao:mold-calibration:read",
+    "kuaizhizao:mold-maintenance-reminder:approve",
+    "kuaizhizao:mold-maintenance-reminder:audit",
+    "kuaizhizao:mold-maintenance-reminder:create",
+    "kuaizhizao:mold-maintenance-reminder:delete",
+    "kuaizhizao:mold-maintenance-reminder:export",
+    "kuaizhizao:mold-maintenance-reminder:import",
+    "kuaizhizao:mold-maintenance-reminder:read",
+    "kuaizhizao:mold-maintenance-reminder:reject",
+    "kuaizhizao:mold-maintenance-reminder:revoke",
+    "kuaizhizao:mold-maintenance-reminder:submit",
+    "kuaizhizao:mold-maintenance-reminder:update",
+    "kuaizhizao:mold-maintenance-reminder:read",
+    "kuaizhizao:mold-usage:approve",
+    "kuaizhizao:mold-usage:audit",
+    "kuaizhizao:mold-usage:create",
+    "kuaizhizao:mold-usage:delete",
+    "kuaizhizao:mold-usage:export",
+    "kuaizhizao:mold-usage:import",
+    "kuaizhizao:mold-usage:read",
+    "kuaizhizao:mold-usage:reject",
+    "kuaizhizao:mold-usage:revoke",
+    "kuaizhizao:mold-usage:submit",
+    "kuaizhizao:mold-usage:update",
+    "kuaizhizao:mold-usage:read",
+    "kuaizhizao:mold:read",
     "kuaizhizao:mrp:compute",
+    "kuaizhizao:other-inbound:approve",
+    "kuaizhizao:other-inbound:audit",
     "kuaizhizao:other-inbound:confirm",
     "kuaizhizao:other-inbound:create",
+    "kuaizhizao:other-inbound:delete",
+    "kuaizhizao:other-inbound:export",
+    "kuaizhizao:other-inbound:import",
+    "kuaizhizao:other-inbound:read",
+    "kuaizhizao:other-inbound:reject",
+    "kuaizhizao:other-inbound:revoke",
+    "kuaizhizao:other-inbound:submit",
     "kuaizhizao:other-inbound:update",
-    "kuaizhizao:other-inbound:view",
+    "kuaizhizao:other-inbound:read",
+    "kuaizhizao:other-outbound:approve",
+    "kuaizhizao:other-outbound:audit",
     "kuaizhizao:other-outbound:confirm",
     "kuaizhizao:other-outbound:create",
+    "kuaizhizao:other-outbound:delete",
+    "kuaizhizao:other-outbound:export",
+    "kuaizhizao:other-outbound:import",
+    "kuaizhizao:other-outbound:read",
+    "kuaizhizao:other-outbound:reject",
+    "kuaizhizao:other-outbound:revoke",
+    "kuaizhizao:other-outbound:submit",
     "kuaizhizao:other-outbound:update",
-    "kuaizhizao:other-outbound:view",
+    "kuaizhizao:other-outbound:read",
+    "kuaizhizao:outbound:approve",
+    "kuaizhizao:outbound:audit",
     "kuaizhizao:outbound:create",
+    "kuaizhizao:outbound:delete",
+    "kuaizhizao:outbound:export",
+    "kuaizhizao:outbound:import",
+    "kuaizhizao:outbound:read",
+    "kuaizhizao:outbound:reject",
+    "kuaizhizao:outbound:revoke",
+    "kuaizhizao:outbound:submit",
     "kuaizhizao:outbound:update",
-    "kuaizhizao:outbound:view",
-    "kuaizhizao:outsource-order:view",
-    "kuaizhizao:performance-employee-configs:view",
-    "kuaizhizao:performance-holidays:view",
-    "kuaizhizao:performance-hourly-rates:view",
-    "kuaizhizao:performance-kpi-definitions:view",
-    "kuaizhizao:performance-piece-rates:view",
-    "kuaizhizao:performance-reports-employee-efficiency-ranking:view",
-    "kuaizhizao:performance-reports-piece-rate-salary-summary:view",
-    "kuaizhizao:performance-skills:view",
-    "kuaizhizao:performance-summaries:view",
-    "kuaizhizao:performance:holiday:view",
-    "kuaizhizao:performance:skill:view",
-    "kuaizhizao:performance:view",
-    "kuaizhizao:plan-management-demand-computation:view",
-    "kuaizhizao:plan-management-demand-management:view",
-    "kuaizhizao:plan-management-reports-capacity-load-analysis:view",
-    "kuaizhizao:plan-management-reports-demand-plan-detail:view",
-    "kuaizhizao:plan-management-reports-material-shortage-alert:view",
-    "kuaizhizao:plan-management-reports-plan-fulfillment-rate:view",
-    "kuaizhizao:plan-management-reports-production-delay-analysis:view",
-    "kuaizhizao:plan-management-reports-production-plan-comparison:view",
-    "kuaizhizao:plan-management-reports-purchase-plan-comparison:view",
-    "kuaizhizao:plan-management-scheduling:view",
-    "kuaizhizao:pricing:view",
-    "kuaizhizao:process-inspection:conduct",
-    "kuaizhizao:process-inspection:create",
-    "kuaizhizao:process-inspection:delete",
-    "kuaizhizao:process-inspection:update",
-    "kuaizhizao:process-inspection:view",
-    "kuaizhizao:production-execution-reporting-statistics:view",
-    "kuaizhizao:production-execution-reporting:view",
-    "kuaizhizao:production-execution-reports-outsource-material-reconciliation:view",
-    "kuaizhizao:production-execution-reports-outsource-order-query:view",
-    "kuaizhizao:production-execution-reports-process-progress-detail:view",
-    "kuaizhizao:production-execution-reports-production-efficiency:view",
-    "kuaizhizao:production-execution-reports-production-lead-time:view",
-    "kuaizhizao:production-execution-reports-rework-order-analysis:view",
-    "kuaizhizao:production-execution-reports-scrap-defect-analysis:view",
-    "kuaizhizao:production-execution-reports-wip-inventory:view",
-    "kuaizhizao:production-execution-reports-work-order-labor-detail:view",
-    "kuaizhizao:production-execution-reports-work-order-material-usage:view",
-    "kuaizhizao:production-execution-reports-work-order-query:view",
-    "kuaizhizao:production-execution-reports-work-order-tracking:view",
-    "kuaizhizao:production-picking:confirm",
-    "kuaizhizao:production-picking:create",
-    "kuaizhizao:production-picking:update",
-    "kuaizhizao:production-picking:view",
-    "kuaizhizao:production-plan:create",
-    "kuaizhizao:production-plan:delete",
-    "kuaizhizao:production-plan:execute",
-    "kuaizhizao:production-plan:update",
-    "kuaizhizao:production-plan:view",
-    "kuaizhizao:production-report:create",
-    "kuaizhizao:production-report:delete",
-    "kuaizhizao:production-report:update",
-    "kuaizhizao:production-report:view",
-    "kuaizhizao:production-return:confirm",
-    "kuaizhizao:production-return:create",
-    "kuaizhizao:production-return:update",
-    "kuaizhizao:production-return:view",
-    "kuaizhizao:purchase-invoice:approve",
-    "kuaizhizao:purchase-invoice:create",
-    "kuaizhizao:purchase-invoice:delete",
-    "kuaizhizao:purchase-invoice:update",
-    "kuaizhizao:purchase-invoice:view",
-    "kuaizhizao:purchase-management-reports-purchase-cost-trend:view",
-    "kuaizhizao:purchase-management-reports-purchase-order-progress:view",
-    "kuaizhizao:purchase-management-reports-purchase-order-query:view",
-    "kuaizhizao:purchase-management-reports-purchase-reconciliation:view",
-    "kuaizhizao:purchase-management-reports-purchase-requisition-tracking:view",
-    "kuaizhizao:purchase-management-reports-supplier-delivery-summary:view",
-    "kuaizhizao:purchase-management-reports-supplier-lead-time:view",
-    "kuaizhizao:purchase-management-reports-supplier-price-comparison:view",
-    "kuaizhizao:purchase-management-reports-supplier-quality-rate:view",
-    "kuaizhizao:purchase-order:approve",
+    "kuaizhizao:outbound:read",
+    "kuaizhizao:outsource-order:approve",
+    "kuaizhizao:outsource-order:audit",
+    "kuaizhizao:outsource-order:create",
+    "kuaizhizao:outsource-order:delete",
+    "kuaizhizao:outsource-order:export",
+    "kuaizhizao:outsource-order:import",
+    "kuaizhizao:outsource-order:read",
+    "kuaizhizao:outsource-order:reject",
+    "kuaizhizao:outsource-order:revoke",
+    "kuaizhizao:outsource-order:submit",
+    "kuaizhizao:outsource-order:update",
+    "kuaizhizao:outsource-order:read",
+    "kuaizhizao:performance-employee-configs:approve",
+    "kuaizhizao:performance-employee-configs:audit",
+    "kuaizhizao:performance-employee-configs:create",
+    "kuaizhizao:performance-employee-configs:delete",
+    "kuaizhizao:performance-employee-configs:export",
+    "kuaizhizao:performance-employee-configs:import",
+    "kuaizhizao:performance-employee-configs:read",
+    "kuaizhizao:performance-employee-configs:reject",
+    "kuaizhizao:performance-employee-configs:revoke",
+    "kuaizhizao:performance-employee-configs:submit",
+    "kuaizhizao:performance-employee-configs:update",
+    "kuaizhizao:performance-employee-configs:read",
+    "kuaizhizao:performance-holidays:approve",
+    "kuaizhizao:performance-holidays:audit",
+    "kuaizhizao:performance-holidays:create",
+    "kuaizhizao:performance-holidays:delete",
+    "kuaizhizao:performance-holidays:export",
+    "kuaizhizao:performance-holidays:import",
+    "kuaizhizao:performance-holidays:read",
+    "kuaizhizao:performance-holidays:reject",
+    "kuaizhizao:performance-holidays:revoke",
+    "kuaizhizao:performance-holidays:submit",
+    "kuaizhizao:performance-holidays:update",
+    "kuaizhizao:performance-holidays:read",
+    "kuaizhizao:performance-hourly-rates:approve",
+    "kuaizhizao:performance-hourly-rates:audit",
+    "kuaizhizao:performance-hourly-rates:create",
+    "kuaizhizao:performance-hourly-rates:delete",
+    "kuaizhizao:performance-hourly-rates:export",
+    "kuaizhizao:performance-hourly-rates:import",
+    "kuaizhizao:performance-hourly-rates:read",
+    "kuaizhizao:performance-hourly-rates:reject",
+    "kuaizhizao:performance-hourly-rates:revoke",
+    "kuaizhizao:performance-hourly-rates:submit",
+    "kuaizhizao:performance-hourly-rates:update",
+    "kuaizhizao:performance-hourly-rates:read",
+    "kuaizhizao:performance-kpi-definitions:approve",
+    "kuaizhizao:performance-kpi-definitions:audit",
+    "kuaizhizao:performance-kpi-definitions:create",
+    "kuaizhizao:performance-kpi-definitions:delete",
+    "kuaizhizao:performance-kpi-definitions:export",
+    "kuaizhizao:performance-kpi-definitions:import",
+    "kuaizhizao:performance-kpi-definitions:read",
+    "kuaizhizao:performance-kpi-definitions:reject",
+    "kuaizhizao:performance-kpi-definitions:revoke",
+    "kuaizhizao:performance-kpi-definitions:submit",
+    "kuaizhizao:performance-kpi-definitions:update",
+    "kuaizhizao:performance-kpi-definitions:read",
+    "kuaizhizao:performance-piece-rates:approve",
+    "kuaizhizao:performance-piece-rates:audit",
+    "kuaizhizao:performance-piece-rates:create",
+    "kuaizhizao:performance-piece-rates:delete",
+    "kuaizhizao:performance-piece-rates:export",
+    "kuaizhizao:performance-piece-rates:import",
+    "kuaizhizao:performance-piece-rates:read",
+    "kuaizhizao:performance-piece-rates:reject",
+    "kuaizhizao:performance-piece-rates:revoke",
+    "kuaizhizao:performance-piece-rates:submit",
+    "kuaizhizao:performance-piece-rates:update",
+    "kuaizhizao:performance-piece-rates:read",
+    "kuaizhizao:performance-reports-employee-efficiency-ranking:read",
+    "kuaizhizao:performance-skills:approve",
+    "kuaizhizao:performance-skills:audit",
+    "kuaizhizao:performance-skills:create",
+    "kuaizhizao:performance-skills:delete",
+    "kuaizhizao:performance-skills:export",
+    "kuaizhizao:performance-skills:import",
+    "kuaizhizao:performance-skills:read",
+    "kuaizhizao:performance-skills:reject",
+    "kuaizhizao:performance-skills:revoke",
+    "kuaizhizao:performance-skills:submit",
+    "kuaizhizao:performance-skills:update",
+    "kuaizhizao:performance-skills:read",
+    "kuaizhizao:performance-summaries:approve",
+    "kuaizhizao:performance-summaries:audit",
+    "kuaizhizao:performance-summaries:create",
+    "kuaizhizao:performance-summaries:delete",
+    "kuaizhizao:performance-summaries:export",
+    "kuaizhizao:performance-summaries:import",
+    "kuaizhizao:performance-summaries:read",
+    "kuaizhizao:performance-summaries:reject",
+    "kuaizhizao:performance-summaries:revoke",
+    "kuaizhizao:performance-summaries:submit",
+    "kuaizhizao:performance-summaries:update",
+    "kuaizhizao:performance-summaries:read",
+    "kuaizhizao:performance:holiday:read",
+    "kuaizhizao:performance:skill:read",
+    "kuaizhizao:performance:read",
+    "kuaizhizao:plan-management-demand-computation:approve",
+    "kuaizhizao:plan-management-demand-computation:audit",
+    "kuaizhizao:plan-management-demand-computation:create",
+    "kuaizhizao:plan-management-demand-computation:delete",
+    "kuaizhizao:plan-management-demand-computation:export",
+    "kuaizhizao:plan-management-demand-computation:import",
+    "kuaizhizao:plan-management-demand-computation:read",
+    "kuaizhizao:plan-management-demand-computation:reject",
+    "kuaizhizao:plan-management-demand-computation:revoke",
+    "kuaizhizao:plan-management-demand-computation:submit",
+    "kuaizhizao:plan-management-demand-computation:update",
+    "kuaizhizao:plan-management-demand-computation:read",
+    "kuaizhizao:plan-management-demand-management:approve",
+    "kuaizhizao:plan-management-demand-management:audit",
+    "kuaizhizao:plan-management-demand-management:create",
+    "kuaizhizao:plan-management-demand-management:delete",
+    "kuaizhizao:plan-management-demand-management:export",
+    "kuaizhizao:plan-management-demand-management:import",
+    "kuaizhizao:plan-management-demand-management:read",
+    "kuaizhizao:plan-management-demand-management:reject",
+    "kuaizhizao:plan-management-demand-management:revoke",
+    "kuaizhizao:plan-management-demand-management:submit",
+    "kuaizhizao:plan-management-demand-management:update",
+    "kuaizhizao:plan-management-demand-management:read",
+    "kuaizhizao:plan-management-reports-demand-plan-detail:read",
+    "kuaizhizao:plan-management-reports-material-shortage-alert:read",
+    "kuaizhizao:plan-management-reports-plan-fulfillment-rate:read",
+    "kuaizhizao:plan-management-reports-production-plan-comparison:read",
+    "kuaizhizao:plan-management-reports-purchase-plan-comparison:read",
+    "kuaizhizao:plan-management-scheduling:approve",
+    "kuaizhizao:plan-management-scheduling:audit",
+    "kuaizhizao:plan-management-scheduling:create",
+    "kuaizhizao:plan-management-scheduling:delete",
+    "kuaizhizao:plan-management-scheduling:export",
+    "kuaizhizao:plan-management-scheduling:import",
+    "kuaizhizao:plan-management-scheduling:read",
+    "kuaizhizao:plan-management-scheduling:reject",
+    "kuaizhizao:plan-management-scheduling:revoke",
+    "kuaizhizao:plan-management-scheduling:submit",
+    "kuaizhizao:plan-management-scheduling:update",
+    "kuaizhizao:plan-management-scheduling:read",
+    "kuaizhizao:production-execution-dashboard:read",
+    "kuaizhizao:production-execution-reporting:read",
+    "kuaizhizao:production-execution-terminal:read",
+    "kuaizhizao:production-execution-packing-binding:read",
+    "kuaizhizao:production-execution-material-shortage-exceptions:read",
+    "kuaizhizao:production-execution-delivery-delay-exceptions:read",
+    "kuaizhizao:production-execution-quality-exceptions:read",
+    "kuaizhizao:production-execution-exception-process:read",
+    "kuaizhizao:production-execution-exception-statistics:read",
+    "kuaizhizao:production-execution-reports-outsource-material-reconciliation:read",
+    "kuaizhizao:production-execution-reports-process-progress-detail:read",
+    "kuaizhizao:production-execution-reports-production-efficiency:read",
+    "kuaizhizao:production-execution-reports-production-lead-time:read",
+    "kuaizhizao:production-execution-reports-wip-inventory:read",
+    "kuaizhizao:production-execution-reports-work-order-labor-detail:read",
+    "kuaizhizao:production-execution-reports-work-order-material-usage:read",
+    "kuaizhizao:purchase-management-reports-purchase-cost-trend:read",
+    "kuaizhizao:purchase-management-reports-purchase-order-progress:read",
+    "kuaizhizao:purchase-management-reports-purchase-reconciliation:read",
+    "kuaizhizao:purchase-management-reports-supplier-lead-time:read",
+    "kuaizhizao:purchase-management-reports-supplier-price-comparison:read",
+    "kuaizhizao:purchase-management-reports-supplier-quality-rate:read",
+    "kuaizhizao:purchase-order:audit",
     "kuaizhizao:purchase-order:confirm",
     "kuaizhizao:purchase-order:create",
     "kuaizhizao:purchase-order:delete",
+    "kuaizhizao:purchase-order:export",
+    "kuaizhizao:purchase-order:import",
+    "kuaizhizao:purchase-order:read",
+    "kuaizhizao:purchase-management-dashboard:read",
+    "kuaizhizao:purchase-order:revoke",
+    "kuaizhizao:purchase-order:submit",
     "kuaizhizao:purchase-order:update",
-    "kuaizhizao:purchase-order:view",
-    "kuaizhizao:purchase-receipt:confirm",
-    "kuaizhizao:purchase-receipt:create",
-    "kuaizhizao:purchase-receipt:update",
-    "kuaizhizao:purchase-receipt:view",
-    "kuaizhizao:purchase-request:view",
+    "kuaizhizao:purchase-order:read",
+    "kuaizhizao:purchase-requisition:approve",
+    "kuaizhizao:purchase-requisition:audit",
     "kuaizhizao:purchase-requisition:create",
     "kuaizhizao:purchase-requisition:delete",
+    "kuaizhizao:purchase-requisition:export",
+    "kuaizhizao:purchase-requisition:import",
+    "kuaizhizao:purchase-requisition:read",
+    "kuaizhizao:purchase-requisition:reject",
+    "kuaizhizao:purchase-requisition:revoke",
+    "kuaizhizao:purchase-requisition:submit",
     "kuaizhizao:purchase-requisition:update",
-    "kuaizhizao:purchase-requisition:view",
+    "kuaizhizao:purchase-requisition:read",
+    "kuaizhizao:purchase-return:approve",
+    "kuaizhizao:purchase-return:audit",
     "kuaizhizao:purchase-return:confirm",
     "kuaizhizao:purchase-return:create",
     "kuaizhizao:purchase-return:delete",
+    "kuaizhizao:purchase-return:export",
+    "kuaizhizao:purchase-return:import",
+    "kuaizhizao:purchase-return:read",
+    "kuaizhizao:purchase-return:reject",
+    "kuaizhizao:purchase-return:revoke",
+    "kuaizhizao:purchase-return:submit",
     "kuaizhizao:purchase-return:update",
-    "kuaizhizao:purchase-return:view",
-    "kuaizhizao:quality-management-dashboard:view",
-    "kuaizhizao:quality-management-finished-goods-inspection:view",
-    "kuaizhizao:quality-management-incoming-inspection:view",
-    "kuaizhizao:quality-management-inspection-plans:view",
-    "kuaizhizao:quality-management-process-inspection:view",
-    "kuaizhizao:quality-management-reports-defect-pareto-analysis:view",
-    "kuaizhizao:quality-management-reports-finished-inspection-report:view",
-    "kuaizhizao:quality-management-reports-incoming-inspection-report:view",
-    "kuaizhizao:quality-management-reports-nonconforming-summary:view",
-    "kuaizhizao:quality-management-reports-process-inspection-report:view",
-    "kuaizhizao:quality-management-reports-quality-exception-tracking:view",
-    "kuaizhizao:quality-management-reports-quality-rate-trend:view",
-    "kuaizhizao:quality-management-traceability:view",
-    "kuaizhizao:quality-report:create",
-    "kuaizhizao:quality-report:delete",
-    "kuaizhizao:quality-report:update",
-    "kuaizhizao:quality-report:view",
+    "kuaizhizao:purchase-return:read",
+    "kuaizhizao:quality-management-dashboard:read",
+    "kuaizhizao:quality-management-finished-goods-inspection:approve",
+    "kuaizhizao:quality-management-finished-goods-inspection:audit",
+    "kuaizhizao:quality-management-finished-goods-inspection:create",
+    "kuaizhizao:quality-management-finished-goods-inspection:delete",
+    "kuaizhizao:quality-management-finished-goods-inspection:export",
+    "kuaizhizao:quality-management-finished-goods-inspection:import",
+    "kuaizhizao:quality-management-finished-goods-inspection:read",
+    "kuaizhizao:quality-management-finished-goods-inspection:reject",
+    "kuaizhizao:quality-management-finished-goods-inspection:revoke",
+    "kuaizhizao:quality-management-finished-goods-inspection:submit",
+    "kuaizhizao:quality-management-finished-goods-inspection:update",
+    "kuaizhizao:quality-management-finished-goods-inspection:read",
+    "kuaizhizao:quality-management-incoming-inspection:approve",
+    "kuaizhizao:quality-management-incoming-inspection:audit",
+    "kuaizhizao:quality-management-incoming-inspection:create",
+    "kuaizhizao:quality-management-incoming-inspection:delete",
+    "kuaizhizao:quality-management-incoming-inspection:export",
+    "kuaizhizao:quality-management-incoming-inspection:import",
+    "kuaizhizao:quality-management-incoming-inspection:read",
+    "kuaizhizao:quality-management-incoming-inspection:reject",
+    "kuaizhizao:quality-management-incoming-inspection:revoke",
+    "kuaizhizao:quality-management-incoming-inspection:submit",
+    "kuaizhizao:quality-management-incoming-inspection:update",
+    "kuaizhizao:quality-management-incoming-inspection:read",
+    "kuaizhizao:quality-management-inspection-plans:approve",
+    "kuaizhizao:quality-management-inspection-plans:audit",
+    "kuaizhizao:quality-management-inspection-plans:create",
+    "kuaizhizao:quality-management-inspection-plans:delete",
+    "kuaizhizao:quality-management-inspection-plans:export",
+    "kuaizhizao:quality-management-inspection-plans:import",
+    "kuaizhizao:quality-management-inspection-plans:read",
+    "kuaizhizao:quality-management-inspection-plans:reject",
+    "kuaizhizao:quality-management-inspection-plans:revoke",
+    "kuaizhizao:quality-management-inspection-plans:submit",
+    "kuaizhizao:quality-management-inspection-plans:update",
+    "kuaizhizao:quality-management-inspection-plans:read",
+    "kuaizhizao:quality-management-process-inspection:approve",
+    "kuaizhizao:quality-management-process-inspection:audit",
+    "kuaizhizao:quality-management-process-inspection:create",
+    "kuaizhizao:quality-management-process-inspection:delete",
+    "kuaizhizao:quality-management-process-inspection:export",
+    "kuaizhizao:quality-management-process-inspection:import",
+    "kuaizhizao:quality-management-process-inspection:read",
+    "kuaizhizao:quality-management-process-inspection:reject",
+    "kuaizhizao:quality-management-process-inspection:revoke",
+    "kuaizhizao:quality-management-process-inspection:submit",
+    "kuaizhizao:quality-management-process-inspection:update",
+    "kuaizhizao:quality-management-process-inspection:read",
+    "kuaizhizao:quality-management-reports-finished-inspection-report:read",
+    "kuaizhizao:quality-management-reports-incoming-inspection-report:read",
+    "kuaizhizao:quality-management-reports-process-inspection-report:read",
+    "kuaizhizao:quality-management-reports-quality-rate-trend:read",
+    "kuaizhizao:quality-report:read",
+    "kuaizhizao:quotation:approve",
+    "kuaizhizao:quotation:audit",
     "kuaizhizao:quotation:create",
     "kuaizhizao:quotation:delete",
+    "kuaizhizao:quotation:export",
+    "kuaizhizao:quotation:import",
+    "kuaizhizao:quotation:read",
+    "kuaizhizao:quotation:reject",
+    "kuaizhizao:quotation:revoke",
+    "kuaizhizao:quotation:submit",
     "kuaizhizao:quotation:update",
-    "kuaizhizao:quotation:view",
+    "kuaizhizao:quotation:read",
+    "kuaizhizao:receipt-notice:approve",
+    "kuaizhizao:receipt-notice:audit",
     "kuaizhizao:receipt-notice:create",
     "kuaizhizao:receipt-notice:delete",
+    "kuaizhizao:receipt-notice:export",
+    "kuaizhizao:receipt-notice:import",
     "kuaizhizao:receipt-notice:notify",
+    "kuaizhizao:receipt-notice:read",
+    "kuaizhizao:receipt-notice:reject",
+    "kuaizhizao:receipt-notice:revoke",
+    "kuaizhizao:receipt-notice:submit",
     "kuaizhizao:receipt-notice:update",
-    "kuaizhizao:receipt-notice:view",
-    "kuaizhizao:replenishment-suggestion:view",
-    "kuaizhizao:reporting:create",
-    "kuaizhizao:reporting:proxy",
-    "kuaizhizao:reporting:delete",
-    "kuaizhizao:reporting:update",
-    "kuaizhizao:reporting:view",
-    "kuaizhizao:rework-order:view",
+    "kuaizhizao:receipt-notice:read",
+    "kuaizhizao:reporting:read",
+    "kuaizhizao:rework-order:approve",
+    "kuaizhizao:rework-order:audit",
+    "kuaizhizao:rework-order:create",
+    "kuaizhizao:rework-order:delete",
+    "kuaizhizao:rework-order:export",
+    "kuaizhizao:rework-order:import",
+    "kuaizhizao:rework-order:read",
+    "kuaizhizao:rework-order:reject",
+    "kuaizhizao:rework-order:revoke",
+    "kuaizhizao:rework-order:submit",
+    "kuaizhizao:rework-order:update",
+    "kuaizhizao:rework-order:read",
     "kuaizhizao:sales-forecast:approve",
+    "kuaizhizao:sales-forecast:audit",
     "kuaizhizao:sales-forecast:create",
     "kuaizhizao:sales-forecast:delete",
+    "kuaizhizao:sales-forecast:export",
+    "kuaizhizao:sales-forecast:import",
+    "kuaizhizao:sales-forecast:read",
+    "kuaizhizao:sales-forecast:reject",
+    "kuaizhizao:sales-forecast:revoke",
+    "kuaizhizao:sales-forecast:submit",
     "kuaizhizao:sales-forecast:update",
-    "kuaizhizao:sales-forecast:view",
-    "kuaizhizao:sales-management-reports-customer-sales-reconciliation:view",
-    "kuaizhizao:sales-management-reports-customer-sales-summary:view",
-    "kuaizhizao:sales-management-reports-forecast-vs-actual:view",
-    "kuaizhizao:sales-management-reports-order-execution-tracking:view",
-    "kuaizhizao:sales-management-reports-product-sales-ranking:view",
-    "kuaizhizao:sales-management-reports-quotation-query:view",
-    "kuaizhizao:sales-management-reports-sales-order-query:view",
-    "kuaizhizao:sales-management-reports-sales-return-analysis:view",
-    "kuaizhizao:sales-management-reports-sales-trend-analysis:view",
-    "kuaizhizao:sales-management-reports-salesperson-performance:view",
-    "kuaizhizao:sales-order:approve",
+    "kuaizhizao:sales-forecast:read",
+    "kuaizhizao:sales-management-reports-customer-sales-reconciliation:read",
+    "kuaizhizao:sales-management-reports-forecast-vs-actual:read",
+    "kuaizhizao:sales-management-reports-product-sales-ranking:read",
+    "kuaizhizao:sales-management-reports-salesperson-performance:read",
+    "kuaizhizao:sales-management-dashboard:read",
+    "kuaizhizao:app-root:read",
+    "kuaizhizao:sales-order:audit",
     "kuaizhizao:sales-order:confirm",
     "kuaizhizao:sales-order:create",
     "kuaizhizao:sales-order:delete",
+    "kuaizhizao:sales-order:export",
+    "kuaizhizao:sales-order:import",
+    "kuaizhizao:sales-order:read",
+    "kuaizhizao:sales-order:revoke",
+    "kuaizhizao:sales-order:submit",
     "kuaizhizao:sales-order:update",
-    "kuaizhizao:sales-order:view",
-    "kuaizhizao:sales-outbound:create",
-    "kuaizhizao:sales-outbound:update",
-    "kuaizhizao:sales-outbound:view",
+    "kuaizhizao:sales-order:read",
+    "kuaizhizao:sales-return:approve",
+    "kuaizhizao:sales-return:audit",
     "kuaizhizao:sales-return:confirm",
     "kuaizhizao:sales-return:create",
     "kuaizhizao:sales-return:delete",
-    "kuaizhizao:sales-return:view",
-    "kuaizhizao:scheduling:create",
-    "kuaizhizao:scheduling:delete",
-    "kuaizhizao:scheduling:update",
-    "kuaizhizao:scheduling:view",
+    "kuaizhizao:sales-return:export",
+    "kuaizhizao:sales-return:import",
+    "kuaizhizao:sales-return:read",
+    "kuaizhizao:sales-return:reject",
+    "kuaizhizao:sales-return:revoke",
+    "kuaizhizao:sales-return:submit",
+    "kuaizhizao:sales-return:update",
+    "kuaizhizao:sales-return:read",
+    "kuaizhizao:shipment-notice:approve",
+    "kuaizhizao:shipment-notice:audit",
     "kuaizhizao:shipment-notice:create",
     "kuaizhizao:shipment-notice:delete",
+    "kuaizhizao:shipment-notice:export",
+    "kuaizhizao:shipment-notice:import",
+    "kuaizhizao:shipment-notice:read",
+    "kuaizhizao:shipment-notice:reject",
+    "kuaizhizao:shipment-notice:revoke",
     "kuaizhizao:shipment-notice:send",
+    "kuaizhizao:shipment-notice:submit",
     "kuaizhizao:shipment-notice:update",
-    "kuaizhizao:shipment-notice:view",
-    "kuaizhizao:stocktaking:view",
-    "kuaizhizao:tool-calibration:view",
-    "kuaizhizao:tool-maintenance-reminder:view",
-    "kuaizhizao:tool-maintenance:view",
-    "kuaizhizao:tool-usage:view",
-    "kuaizhizao:tool:view",
-    "kuaizhizao:traceability:view",
-    "kuaizhizao:warehouse-management-assembly-orders:view",
-    "kuaizhizao:warehouse-management-backflush-records:view",
-    "kuaizhizao:warehouse-management-barcode-mapping-rules:view",
-    "kuaizhizao:warehouse-management-batch-inventory-query:view",
-    "kuaizhizao:warehouse-management-batching-center:view",
-    "kuaizhizao:warehouse-management-customer-material-registration:view",
-    "kuaizhizao:warehouse-management-disassembly-orders:view",
-    "kuaizhizao:warehouse-management-initial-data:view",
-    "kuaizhizao:warehouse-management-inventory-alert:view",
-    "kuaizhizao:warehouse-management-inventory-transfer:view",
-    "kuaizhizao:warehouse-management-inventory:view",
-    "kuaizhizao:warehouse-management-line-side-warehouse:view",
-    "kuaizhizao:warehouse-management-material-calls:view",
-    "kuaizhizao:warehouse-management-replenishment-suggestions:view",
-    "kuaizhizao:warehouse-management-reports-inbound-summary:view",
-    "kuaizhizao:warehouse-management-reports-inventory-age-analysis:view",
-    "kuaizhizao:warehouse-management-reports-inventory-ledger:view",
-    "kuaizhizao:warehouse-management-reports-inventory-summary:view",
-    "kuaizhizao:warehouse-management-reports-inventory-turnover-analysis:view",
-    "kuaizhizao:warehouse-management-reports-outbound-summary:view",
-    "kuaizhizao:warehouse-management-reports-slow-moving-inventory:view",
-    "kuaizhizao:warehouse-management-reports-stocktaking-history:view",
-    "kuaizhizao:warehouse-management-reports-transfer-tracking:view",
-    "kuaizhizao:warehouse-management-stocktaking:view",
+    "kuaizhizao:shipment-notice:read",
+    "kuaizhizao:tool-calibration:approve",
+    "kuaizhizao:tool-calibration:audit",
+    "kuaizhizao:tool-calibration:create",
+    "kuaizhizao:tool-calibration:delete",
+    "kuaizhizao:tool-calibration:export",
+    "kuaizhizao:tool-calibration:import",
+    "kuaizhizao:tool-calibration:read",
+    "kuaizhizao:tool-calibration:reject",
+    "kuaizhizao:tool-calibration:revoke",
+    "kuaizhizao:tool-calibration:submit",
+    "kuaizhizao:tool-calibration:update",
+    "kuaizhizao:tool-calibration:read",
+    "kuaizhizao:tool-maintenance-reminder:approve",
+    "kuaizhizao:tool-maintenance-reminder:audit",
+    "kuaizhizao:tool-maintenance-reminder:create",
+    "kuaizhizao:tool-maintenance-reminder:delete",
+    "kuaizhizao:tool-maintenance-reminder:export",
+    "kuaizhizao:tool-maintenance-reminder:import",
+    "kuaizhizao:tool-maintenance-reminder:read",
+    "kuaizhizao:tool-maintenance-reminder:reject",
+    "kuaizhizao:tool-maintenance-reminder:revoke",
+    "kuaizhizao:tool-maintenance-reminder:submit",
+    "kuaizhizao:tool-maintenance-reminder:update",
+    "kuaizhizao:tool-maintenance-reminder:read",
+    "kuaizhizao:tool-maintenance:approve",
+    "kuaizhizao:tool-maintenance:audit",
+    "kuaizhizao:tool-maintenance:create",
+    "kuaizhizao:tool-maintenance:delete",
+    "kuaizhizao:tool-maintenance:export",
+    "kuaizhizao:tool-maintenance:import",
+    "kuaizhizao:tool-maintenance:read",
+    "kuaizhizao:tool-maintenance:reject",
+    "kuaizhizao:tool-maintenance:revoke",
+    "kuaizhizao:tool-maintenance:submit",
+    "kuaizhizao:tool-maintenance:update",
+    "kuaizhizao:tool-maintenance:read",
+    "kuaizhizao:tool-usage:approve",
+    "kuaizhizao:tool-usage:audit",
+    "kuaizhizao:tool-usage:create",
+    "kuaizhizao:tool-usage:delete",
+    "kuaizhizao:tool-usage:export",
+    "kuaizhizao:tool-usage:import",
+    "kuaizhizao:tool-usage:read",
+    "kuaizhizao:tool-usage:reject",
+    "kuaizhizao:tool-usage:revoke",
+    "kuaizhizao:tool-usage:submit",
+    "kuaizhizao:tool-usage:update",
+    "kuaizhizao:tool-usage:read",
+    "kuaizhizao:tool:read",
+    "kuaizhizao:warehouse-management-assembly-orders:approve",
+    "kuaizhizao:warehouse-management-assembly-orders:audit",
+    "kuaizhizao:warehouse-management-assembly-orders:create",
+    "kuaizhizao:warehouse-management-assembly-orders:delete",
+    "kuaizhizao:warehouse-management-assembly-orders:export",
+    "kuaizhizao:warehouse-management-assembly-orders:import",
+    "kuaizhizao:warehouse-management-assembly-orders:read",
+    "kuaizhizao:warehouse-management-assembly-orders:reject",
+    "kuaizhizao:warehouse-management-assembly-orders:revoke",
+    "kuaizhizao:warehouse-management-assembly-orders:submit",
+    "kuaizhizao:warehouse-management-assembly-orders:update",
+    "kuaizhizao:warehouse-management-assembly-orders:read",
+    "kuaizhizao:warehouse-management-backflush-records:approve",
+    "kuaizhizao:warehouse-management-backflush-records:audit",
+    "kuaizhizao:warehouse-management-backflush-records:create",
+    "kuaizhizao:warehouse-management-backflush-records:delete",
+    "kuaizhizao:warehouse-management-backflush-records:export",
+    "kuaizhizao:warehouse-management-backflush-records:import",
+    "kuaizhizao:warehouse-management-backflush-records:read",
+    "kuaizhizao:warehouse-management-backflush-records:reject",
+    "kuaizhizao:warehouse-management-backflush-records:revoke",
+    "kuaizhizao:warehouse-management-backflush-records:submit",
+    "kuaizhizao:warehouse-management-backflush-records:update",
+    "kuaizhizao:warehouse-management-backflush-records:read",
+    "kuaizhizao:warehouse-management-barcode-mapping-rules:approve",
+    "kuaizhizao:warehouse-management-barcode-mapping-rules:audit",
+    "kuaizhizao:warehouse-management-barcode-mapping-rules:create",
+    "kuaizhizao:warehouse-management-barcode-mapping-rules:delete",
+    "kuaizhizao:warehouse-management-barcode-mapping-rules:export",
+    "kuaizhizao:warehouse-management-barcode-mapping-rules:import",
+    "kuaizhizao:warehouse-management-barcode-mapping-rules:read",
+    "kuaizhizao:warehouse-management-barcode-mapping-rules:reject",
+    "kuaizhizao:warehouse-management-barcode-mapping-rules:revoke",
+    "kuaizhizao:warehouse-management-barcode-mapping-rules:submit",
+    "kuaizhizao:warehouse-management-barcode-mapping-rules:update",
+    "kuaizhizao:warehouse-management-barcode-mapping-rules:read",
+    "kuaizhizao:warehouse-management-batching-center:approve",
+    "kuaizhizao:warehouse-management-batching-center:audit",
+    "kuaizhizao:warehouse-management-batching-center:create",
+    "kuaizhizao:warehouse-management-batching-center:delete",
+    "kuaizhizao:warehouse-management-batching-center:export",
+    "kuaizhizao:warehouse-management-batching-center:import",
+    "kuaizhizao:warehouse-management-batching-center:read",
+    "kuaizhizao:warehouse-management-batching-center:reject",
+    "kuaizhizao:warehouse-management-batching-center:revoke",
+    "kuaizhizao:warehouse-management-batching-center:submit",
+    "kuaizhizao:warehouse-management-batching-center:update",
+    "kuaizhizao:warehouse-management-batching-center:read",
+    "kuaizhizao:warehouse-management-customer-material-registration:approve",
+    "kuaizhizao:warehouse-management-customer-material-registration:audit",
+    "kuaizhizao:warehouse-management-customer-material-registration:create",
+    "kuaizhizao:warehouse-management-customer-material-registration:delete",
+    "kuaizhizao:warehouse-management-customer-material-registration:export",
+    "kuaizhizao:warehouse-management-customer-material-registration:import",
+    "kuaizhizao:warehouse-management-customer-material-registration:read",
+    "kuaizhizao:warehouse-management-customer-material-registration:reject",
+    "kuaizhizao:warehouse-management-customer-material-registration:revoke",
+    "kuaizhizao:warehouse-management-customer-material-registration:submit",
+    "kuaizhizao:warehouse-management-customer-material-registration:update",
+    "kuaizhizao:warehouse-management-customer-material-registration:read",
+    "kuaizhizao:warehouse-management-disassembly-orders:approve",
+    "kuaizhizao:warehouse-management-disassembly-orders:audit",
+    "kuaizhizao:warehouse-management-disassembly-orders:create",
+    "kuaizhizao:warehouse-management-disassembly-orders:delete",
+    "kuaizhizao:warehouse-management-disassembly-orders:export",
+    "kuaizhizao:warehouse-management-disassembly-orders:import",
+    "kuaizhizao:warehouse-management-disassembly-orders:read",
+    "kuaizhizao:warehouse-management-disassembly-orders:reject",
+    "kuaizhizao:warehouse-management-disassembly-orders:revoke",
+    "kuaizhizao:warehouse-management-disassembly-orders:submit",
+    "kuaizhizao:warehouse-management-disassembly-orders:update",
+    "kuaizhizao:warehouse-management-disassembly-orders:read",
+    "kuaizhizao:warehouse-management-initial-data:approve",
+    "kuaizhizao:warehouse-management-initial-data:audit",
+    "kuaizhizao:warehouse-management-initial-data:create",
+    "kuaizhizao:warehouse-management-initial-data:delete",
+    "kuaizhizao:warehouse-management-initial-data:export",
+    "kuaizhizao:warehouse-management-initial-data:import",
+    "kuaizhizao:warehouse-management-initial-data:read",
+    "kuaizhizao:warehouse-management-initial-data:reject",
+    "kuaizhizao:warehouse-management-initial-data:revoke",
+    "kuaizhizao:warehouse-management-initial-data:submit",
+    "kuaizhizao:warehouse-management-initial-data:update",
+    "kuaizhizao:warehouse-management-initial-data:read",
+    "kuaizhizao:warehouse-management-inventory-alert:approve",
+    "kuaizhizao:warehouse-management-inventory-alert:audit",
+    "kuaizhizao:warehouse-management-inventory-alert:create",
+    "kuaizhizao:warehouse-management-inventory-alert:delete",
+    "kuaizhizao:warehouse-management-inventory-alert:export",
+    "kuaizhizao:warehouse-management-inventory-alert:import",
+    "kuaizhizao:warehouse-management-inventory-alert:read",
+    "kuaizhizao:warehouse-management-inventory-alert:reject",
+    "kuaizhizao:warehouse-management-inventory-alert:revoke",
+    "kuaizhizao:warehouse-management-inventory-alert:submit",
+    "kuaizhizao:warehouse-management-inventory-alert:update",
+    "kuaizhizao:warehouse-management-inventory-alert:read",
+    "kuaizhizao:warehouse-management-inventory-transfer:approve",
+    "kuaizhizao:warehouse-management-inventory-transfer:audit",
+    "kuaizhizao:warehouse-management-inventory-transfer:create",
+    "kuaizhizao:warehouse-management-inventory-transfer:delete",
+    "kuaizhizao:warehouse-management-inventory-transfer:export",
+    "kuaizhizao:warehouse-management-inventory-transfer:import",
+    "kuaizhizao:warehouse-management-inventory-transfer:read",
+    "kuaizhizao:warehouse-management-inventory-transfer:reject",
+    "kuaizhizao:warehouse-management-inventory-transfer:revoke",
+    "kuaizhizao:warehouse-management-inventory-transfer:submit",
+    "kuaizhizao:warehouse-management-inventory-transfer:update",
+    "kuaizhizao:warehouse-management-inventory-transfer:read",
+    "kuaizhizao:warehouse-management-inventory:approve",
+    "kuaizhizao:warehouse-management-inventory:audit",
+    "kuaizhizao:warehouse-management-inventory:create",
+    "kuaizhizao:warehouse-management-inventory:delete",
+    "kuaizhizao:warehouse-management-inventory:export",
+    "kuaizhizao:warehouse-management-inventory:import",
+    "kuaizhizao:warehouse-management-inventory:read",
+    "kuaizhizao:warehouse-management-inventory:reject",
+    "kuaizhizao:warehouse-management-inventory:revoke",
+    "kuaizhizao:warehouse-management-inventory:submit",
+    "kuaizhizao:warehouse-management-inventory:update",
+    "kuaizhizao:warehouse-management-inventory:read",
+    "kuaizhizao:warehouse-management-line-side-warehouse:approve",
+    "kuaizhizao:warehouse-management-line-side-warehouse:audit",
+    "kuaizhizao:warehouse-management-line-side-warehouse:create",
+    "kuaizhizao:warehouse-management-line-side-warehouse:delete",
+    "kuaizhizao:warehouse-management-line-side-warehouse:export",
+    "kuaizhizao:warehouse-management-line-side-warehouse:import",
+    "kuaizhizao:warehouse-management-line-side-warehouse:read",
+    "kuaizhizao:warehouse-management-line-side-warehouse:reject",
+    "kuaizhizao:warehouse-management-line-side-warehouse:revoke",
+    "kuaizhizao:warehouse-management-line-side-warehouse:submit",
+    "kuaizhizao:warehouse-management-line-side-warehouse:update",
+    "kuaizhizao:warehouse-management-line-side-warehouse:read",
+    "kuaizhizao:warehouse-management-material-calls:approve",
+    "kuaizhizao:warehouse-management-material-calls:audit",
+    "kuaizhizao:warehouse-management-material-calls:create",
+    "kuaizhizao:warehouse-management-material-calls:delete",
+    "kuaizhizao:warehouse-management-material-calls:export",
+    "kuaizhizao:warehouse-management-material-calls:import",
+    "kuaizhizao:warehouse-management-material-calls:read",
+    "kuaizhizao:warehouse-management-material-calls:reject",
+    "kuaizhizao:warehouse-management-material-calls:revoke",
+    "kuaizhizao:warehouse-management-material-calls:submit",
+    "kuaizhizao:warehouse-management-material-calls:update",
+    "kuaizhizao:warehouse-management-material-calls:read",
+    "kuaizhizao:warehouse-management-replenishment-suggestions:approve",
+    "kuaizhizao:warehouse-management-replenishment-suggestions:audit",
+    "kuaizhizao:warehouse-management-replenishment-suggestions:create",
+    "kuaizhizao:warehouse-management-replenishment-suggestions:delete",
+    "kuaizhizao:warehouse-management-replenishment-suggestions:export",
+    "kuaizhizao:warehouse-management-replenishment-suggestions:import",
+    "kuaizhizao:warehouse-management-replenishment-suggestions:read",
+    "kuaizhizao:warehouse-management-replenishment-suggestions:reject",
+    "kuaizhizao:warehouse-management-replenishment-suggestions:revoke",
+    "kuaizhizao:warehouse-management-replenishment-suggestions:submit",
+    "kuaizhizao:warehouse-management-replenishment-suggestions:update",
+    "kuaizhizao:warehouse-management-replenishment-suggestions:read",
+    "kuaizhizao:warehouse-management-reports-inventory-ledger:read",
+    "kuaizhizao:warehouse-management-reports-slow-moving-inventory:read",
+    "kuaizhizao:warehouse-management-reports-stocktaking-history:read",
+    "kuaizhizao:warehouse-management-stocktaking:approve",
+    "kuaizhizao:warehouse-management-stocktaking:audit",
+    "kuaizhizao:warehouse-management-stocktaking:create",
+    "kuaizhizao:warehouse-management-stocktaking:delete",
+    "kuaizhizao:warehouse-management-stocktaking:export",
+    "kuaizhizao:warehouse-management-stocktaking:import",
+    "kuaizhizao:warehouse-management-stocktaking:read",
+    "kuaizhizao:warehouse-management-stocktaking:reject",
+    "kuaizhizao:warehouse-management-stocktaking:revoke",
+    "kuaizhizao:warehouse-management-stocktaking:submit",
+    "kuaizhizao:warehouse-management-stocktaking:update",
+    "kuaizhizao:warehouse-management-stocktaking:read",
+    "kuaizhizao:work-order:approve",
+    "kuaizhizao:work-order:assign",
+    "kuaizhizao:work-order:audit",
     "kuaizhizao:work-order:create",
     "kuaizhizao:work-order:delete",
+    "kuaizhizao:work-order:export",
+    "kuaizhizao:work-order:import",
+    "kuaizhizao:work-order:read",
+    "kuaizhizao:work-order:reject",
+    "kuaizhizao:work-order:revoke",
+    "kuaizhizao:work-order:submit",
     "kuaizhizao:work-order:update",
-    "kuaizhizao:work-order:view"
+    "kuaizhizao:work-order:read"
   ],
   "dependencies": {
     "riveredge-backend": ">=1.0.0",

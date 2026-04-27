@@ -623,7 +623,7 @@ class RoleService:
             "kuaizhizao:finished-goods-inspection",
             "kuaizhizao:traceability",
         ],
-        "ADMIN_OFFICE": ["system.user:read", "system.role:read", "system.menu:read"],
+        "ADMIN_OFFICE": ["system:user:read", "system:role:read", "system:menu:read"],
         "EMPLOYEE": [],
     }
     LEGACY_ROLE_CODE_MAPPINGS = {

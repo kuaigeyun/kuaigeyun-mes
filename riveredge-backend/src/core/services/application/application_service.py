@@ -23,6 +23,7 @@ from loguru import logger
 ApplicationDict = Dict[str, Any]
 
 _PLACEHOLDER_APP_CODES = {"kuaicrm", "kuaipdm", "kuaichain"}
+_PRO_ACTIVATION_REGISTRY_KEY = "pro_app_activation_registry"
 
 
 class ApplicationService:
@@ -420,6 +421,10 @@ class ApplicationService:
         
         if application.get('is_installed'):
             raise ValidationError("应用已安装")
+
+        app_code = str(application.get("code") or "")
+        if app_code and not await ApplicationService._can_enable_or_install_app(tenant_id=tenant_id, app_code=app_code):
+            raise ValidationError("PRO 应用未激活 License Key，不允许安装")
         
         # 更新数据库
         conn = await get_db_connection()
@@ -521,6 +526,9 @@ class ApplicationService:
             NotFoundError: 当应用不存在时抛出
         """
         application = await ApplicationService.get_application_by_uuid(tenant_id, uuid)
+        app_code = str(application.get("code") or "")
+        if app_code and not await ApplicationService._can_enable_or_install_app(tenant_id=tenant_id, app_code=app_code):
+            raise ValidationError("PRO 应用未激活 License Key，不允许启用")
         
         # 更新数据库
         conn = await get_db_connection()
@@ -878,10 +886,11 @@ class ApplicationService:
                 is_active = existing_app.get('is_active', True) if existing_app else True
                 is_installed = existing_app.get('is_installed', False) if existing_app else False
                 
-                # 系统内置应用应该自动安装
-                # 通过扫描 apps 目录自动识别系统内置应用，不再硬编码
-                # 如果应用在 src/apps 目录下存在 manifest.json，则认为是系统内置应用
-                should_auto_install = True  # 所有扫描到的应用都视为系统内置应用，自动安装
+                # 系统内置应用默认自动安装；但 PRO 应用必须已激活 License Key，避免后台误开。
+                should_auto_install = await ApplicationService._can_enable_or_install_app(
+                    tenant_id=tenant_id,
+                    app_code=code,
+                )
                 
                 app_data = ApplicationCreate(
                     name=manifest.get('name', code),
@@ -1022,4 +1031,46 @@ class ApplicationService:
             })
 
         return result
+
+    @staticmethod
+    async def _can_enable_or_install_app(tenant_id: int, app_code: str) -> bool:
+        """应用安装/启用门禁：PRO 应用必须已激活 License Key。"""
+        manifest = ApplicationService._get_manifest_by_code(app_code)
+        is_pro = bool(manifest.get("is_pro", False)) if manifest else False
+        if not is_pro:
+            return True
+
+        # 1) 平台许可证中心激活记录（标准路径）
+        conn = await get_db_connection()
+        try:
+            activated = await conn.fetchval(
+                """
+                SELECT 1
+                FROM infra_license_key_activations
+                WHERE tenant_id = $1 AND app_code = $2
+                LIMIT 1
+                """,
+                tenant_id,
+                app_code,
+            )
+            if activated:
+                return True
+        finally:
+            await conn.close()
+
+        # 2) 兼容历史/环境变量激活路径：检查租户激活注册表
+        from core.services.system.system_parameter_service import SystemParameterService
+
+        parameter = await SystemParameterService.get_parameter(
+            tenant_id=tenant_id,
+            key=_PRO_ACTIVATION_REGISTRY_KEY,
+            use_cache=True,
+        )
+        if not parameter:
+            return False
+        value = parameter.get_value()
+        if not isinstance(value, dict):
+            return False
+        apps = value.get("apps")
+        return isinstance(apps, dict) and bool(apps.get(app_code))
 

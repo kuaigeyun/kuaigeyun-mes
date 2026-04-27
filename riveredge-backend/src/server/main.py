@@ -53,6 +53,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from core.api.users.users import router as users_router
 from core.api.roles.roles import router as roles_router
 from core.api.permissions.permissions import router as permissions_router
+from core.api.permissions.permission_policies import router as permission_policies_router
 from core.api.access.policies import router as access_policies_router
 from core.api.departments.departments import router as departments_router
 from core.api.positions.positions import router as positions_router
@@ -695,6 +696,7 @@ app.include_router(business_config_router, prefix="/api/v1/infra")
 app.include_router(users_router, prefix="/api/v1/core")
 app.include_router(roles_router, prefix="/api/v1/core")
 app.include_router(permissions_router, prefix="/api/v1/core")
+app.include_router(permission_policies_router, prefix="/api/v1/core")
 app.include_router(access_policies_router, prefix="/api/v1/core")
 app.include_router(departments_router, prefix="/api/v1/core")
 app.include_router(positions_router, prefix="/api/v1/core")

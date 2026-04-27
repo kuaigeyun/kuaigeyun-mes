@@ -52,6 +52,18 @@ class Permission(BaseModel):
         default=PermissionType.FUNCTION,
         description="权限类型：function（功能权限）、data（数据权限）、field（字段权限）"
     )
+    is_managed = fields.BooleanField(
+        default=True,
+        description="是否由系统治理（false 表示人工保留，不参与自动下线）",
+    )
+    source_type = fields.CharField(
+        max_length=20,
+        null=True,
+        description="来源类型：core/manifest/derived/manual",
+    )
+    source_app = fields.CharField(max_length=50, null=True, description="来源应用 code")
+    source_path = fields.CharField(max_length=255, null=True, description="来源路径（manifest 或配置节点）")
+    deprecated_at = fields.DatetimeField(null=True, description="标记废弃时间")
 
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
@@ -67,6 +79,8 @@ class Permission(BaseModel):
             ("code",),
             ("resource",),
             ("permission_type",),
+            ("tenant_id", "deprecated_at"),
+            ("tenant_id", "source_type"),
         ]
     
     def __str__(self):

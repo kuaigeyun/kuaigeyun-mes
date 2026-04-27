@@ -200,7 +200,12 @@ export async function getRolePermissions(roleUuid: string): Promise<Permission[]
  * @param params - 查询参数
  * @returns 权限列表响应数据
  */
-export async function getAllPermissions(params?: { page?: number; page_size?: number; keyword?: string }): Promise<PermissionListResponse> {
+export async function getAllPermissions(params?: {
+  page?: number;
+  page_size?: number;
+  keyword?: string;
+  exclude_derived_data?: boolean;
+}): Promise<PermissionListResponse> {
   return apiRequest<PermissionListResponse>('/core/permissions', {
     params,
   });
@@ -214,6 +219,50 @@ export interface PermissionListResponse {
   total: number;
   page: number;
   page_size: number;
+}
+
+export interface DataPermissionPolicy {
+  uuid: string;
+  role_uuid: string;
+  resource: string;
+  scope_type: 'scope_all' | 'scope_department' | 'scope_self' | 'scope_custom';
+  scope_payload?: Record<string, any>;
+}
+
+export interface FieldPermissionPolicy {
+  uuid: string;
+  role_uuid: string;
+  resource: string;
+  field_name: string;
+  mask_level: 'full' | 'masked' | 'hidden';
+}
+
+export async function getRoleDataPolicies(roleUuid: string): Promise<DataPermissionPolicy[]> {
+  return apiRequest<DataPermissionPolicy[]>(`/core/permission-policies/roles/${roleUuid}/data`);
+}
+
+export async function saveRoleDataPolicies(
+  roleUuid: string,
+  items: Array<Pick<DataPermissionPolicy, 'resource' | 'scope_type' | 'scope_payload'>>
+): Promise<DataPermissionPolicy[]> {
+  return apiRequest<DataPermissionPolicy[]>(`/core/permission-policies/roles/${roleUuid}/data`, {
+    method: 'PUT',
+    data: items,
+  });
+}
+
+export async function getRoleFieldPolicies(roleUuid: string): Promise<FieldPermissionPolicy[]> {
+  return apiRequest<FieldPermissionPolicy[]>(`/core/permission-policies/roles/${roleUuid}/field`);
+}
+
+export async function saveRoleFieldPolicies(
+  roleUuid: string,
+  items: Array<Pick<FieldPermissionPolicy, 'resource' | 'field_name' | 'mask_level'>>
+): Promise<FieldPermissionPolicy[]> {
+  return apiRequest<FieldPermissionPolicy[]>(`/core/permission-policies/roles/${roleUuid}/field`, {
+    method: 'PUT',
+    data: items,
+  });
 }
 
 /**
