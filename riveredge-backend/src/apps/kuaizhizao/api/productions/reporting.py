@@ -4,7 +4,7 @@
 提供报工记录、物料绑定、报废、不良品管理的API接口。
 """
 
-from datetime import datetime
+from datetime import datetime, time
 from typing import List, Optional
 from decimal import Decimal
 import uuid
@@ -158,13 +158,14 @@ async def get_reporting_overview_statistics(
     from apps.kuaizhizao.models.reporting_record import ReportingRecord
 
     today = date.today()
-    base = ReportingRecord.filter(tenant_id=tenant_id)
+    base = ReportingRecord.filter(tenant_id=tenant_id, deleted_at__isnull=True)
     wage_rate = await _get_reporting_estimated_wage_rate(tenant_id)
 
     try:
         # 当月累计工时
         month_start = date(today.year, today.month, 1)
-        hours_vals = await base.filter(report_date__gte=month_start).values_list("actual_hours", flat=True)
+        month_start_dt = datetime.combine(month_start, time.min)
+        hours_vals = await base.filter(reported_at__gte=month_start_dt).values_list("work_hours", flat=True)
         cumulative_hours = round(float(sum(v or 0 for v in hours_vals)), 1)
 
         # 估算工资（工时 × 统一配置基数）
@@ -172,20 +173,20 @@ async def get_reporting_overview_statistics(
 
         # 停机记录数（当月）
         try:
-            downtime_records = await base.filter(report_date__gte=month_start, downtime_minutes__gt=0).count()
+            downtime_records = await base.filter(reported_at__gte=month_start_dt, downtime_minutes__gt=0).count()
         except Exception:
             downtime_records = 0
 
         # 异常报工数（当月 status=exception 或 is_exception=True）
         try:
-            exception_reports = await base.filter(report_date__gte=month_start, status="exception").count()
+            exception_reports = await base.filter(reported_at__gte=month_start_dt, status="exception").count()
         except Exception:
             exception_reports = 0
 
         # 效率：合格量 / 计划量，取当月
         try:
-            qualified_vals = await base.filter(report_date__gte=month_start).values_list("qualified_quantity", flat=True)
-            planned_vals = await base.filter(report_date__gte=month_start).values_list("planned_quantity", flat=True)
+            qualified_vals = await base.filter(reported_at__gte=month_start_dt).values_list("qualified_quantity", flat=True)
+            planned_vals = await base.filter(reported_at__gte=month_start_dt).values_list("reported_quantity", flat=True)
             total_q = sum(v or 0 for v in qualified_vals)
             total_p = sum(v or 0 for v in planned_vals) or 1
             efficiency = round(total_q / total_p * 100, 1)
@@ -196,7 +197,9 @@ async def get_reporting_overview_statistics(
         trend_hours = []
         for i in range(6, -1, -1):
             d = today - timedelta(days=i)
-            vals = await base.filter(report_date=d).values_list("actual_hours", flat=True)
+            day_start = datetime.combine(d, time.min)
+            day_end = datetime.combine(d, time.max)
+            vals = await base.filter(reported_at__gte=day_start, reported_at__lte=day_end).values_list("work_hours", flat=True)
             trend_hours.append(round(float(sum(v or 0 for v in vals)), 1))
 
     except Exception as e:
