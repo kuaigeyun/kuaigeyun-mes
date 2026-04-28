@@ -41,10 +41,14 @@ def _normalize_json_object(value: Any, field_name: str, process_uuid: Any) -> Di
 
 
 def _to_response_model(approval_process: Any) -> ApprovalProcessResponse:
+    canonical_name = ApprovalProcessService._resolve_canonical_name(
+        getattr(approval_process, "code", None),
+        getattr(approval_process, "name", None),
+    )
     payload = {
         "uuid": approval_process.uuid,
         "tenant_id": approval_process.tenant_id,
-        "name": approval_process.name,
+        "name": canonical_name or approval_process.name,
         "code": approval_process.code,
         "description": approval_process.description,
         "nodes": _normalize_json_object(getattr(approval_process, "nodes", None), "nodes", approval_process.uuid),

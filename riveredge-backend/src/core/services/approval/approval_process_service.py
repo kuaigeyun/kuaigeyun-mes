@@ -211,7 +211,6 @@ class ApprovalProcessService:
         if not approval_process:
             raise NotFoundError("审批流程不存在")
         
-        await ApprovalProcessService._normalize_process_name_if_needed(approval_process)
         return approval_process
     
     @staticmethod
@@ -241,10 +240,7 @@ class ApprovalProcessService:
         if is_active is not None:
             query = query.filter(is_active=is_active)
         
-        result = await query.order_by("-created_at").offset(skip).limit(limit).all()
-        for item in result:
-            await ApprovalProcessService._normalize_process_name_if_needed(item)
-        return result
+        return await query.order_by("-created_at").offset(skip).limit(limit).all()
     
     @staticmethod
     async def update_approval_process(

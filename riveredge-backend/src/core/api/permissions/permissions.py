@@ -58,14 +58,6 @@ async def get_permission_list(
     Returns:
         PermissionListResponse: 权限列表响应
     """
-    # 同步权限定义（非强制同步），利用缓存机制减少性能开销
-    await PermissionSyncService.ensure_permissions(
-        tenant_id=tenant_id,
-        force=False,
-        dry_run=dry_run,
-        prune=True,
-    )
-
     result = await PermissionService.get_permission_list(
         tenant_id=tenant_id,
         page=page,
