@@ -52,7 +52,11 @@ nul
 # ===== 本地/部署（不推送） =====
 # 移动端独立维护，不随主仓推送（本地保留 riveredge-mobile/）
 riveredge-mobile/
-build-web-H5.sh
+# 闭源客户端（移动 App / 工位机），独立仓库或本地维护，不纳入主仓
+riveredge-app-mobile/
+riveredge-app-station/
+# 本地构建发布脚本（各人自选保留，不提交）
+build-web.sh
 
 bin/
 deploy/
