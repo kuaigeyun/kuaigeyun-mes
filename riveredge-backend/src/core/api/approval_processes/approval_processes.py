@@ -116,18 +116,38 @@ async def list_approval_processes(
     Returns:
         List[ApprovalProcessResponse]: 审批流程列表
     """
-    approval_processes = await ApprovalProcessService.list_approval_processes(
-        tenant_id=tenant_id,
-        skip=skip,
-        limit=limit,
-        is_active=is_active
-    )
+    try:
+        approval_processes = await ApprovalProcessService.list_approval_processes(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            is_active=is_active
+        )
+    except Exception as e:
+        logger.exception(
+            "查询审批流程列表失败 tenant_id={} skip={} limit={} is_active={} error={}",
+            tenant_id,
+            skip,
+            limit,
+            is_active,
+            e,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="审批流程列表查询失败，请检查后端日志",
+        )
+
     result: List[ApprovalProcessResponse] = []
     for ap in approval_processes:
         try:
             result.append(_to_response_model(ap))
-        except PydanticValidationError as e:
-            logger.exception("审批流程序列化失败，uuid={}，已跳过。错误: {}", getattr(ap, "uuid", None), e)
+        except (PydanticValidationError, Exception) as e:
+            logger.exception(
+                "审批流程序列化失败，uuid={} tenant_id={}，已跳过。错误: {}",
+                getattr(ap, "uuid", None),
+                tenant_id,
+                e,
+            )
     return result
 
 
