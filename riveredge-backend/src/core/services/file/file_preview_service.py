@@ -6,6 +6,7 @@
 
 from jose import JWTError, jwt
 import random
+from urllib.parse import urlparse
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
 from loguru import logger
@@ -24,6 +25,24 @@ class FilePreviewService:
     
     提供文件预览功能，支持简单预览和 kkFileView 预览两种模式。
     """
+
+    @staticmethod
+    def _browser_safe_public_base_url() -> str:
+        """
+        供浏览器 img/src 使用的站点根 URL。
+        BASE_URL 若误配为 localhost（常见于生产 .env），浏览器会从用户本机拉资源导致预览失败；
+        此类情况降级为空，使用相对路径（随当前页面 origin）加载。
+        """
+        raw = (settings.BASE_URL or "").strip().rstrip("/")
+        if not raw:
+            return ""
+        try:
+            host = (urlparse(raw).hostname or "").lower()
+            if host in ("localhost", "127.0.0.1", "0.0.0.0", "::1"):
+                return ""
+        except Exception:
+            return ""
+        return raw
     
     # kkFileView 服务地址（从配置读取）
     KKFILEVIEW_URL = getattr(settings, "KKFILEVIEW_URL", "http://localhost:8400")
@@ -373,8 +392,8 @@ class FilePreviewService:
         Returns:
             str: 预览URL
         """
-        # BASE_URL 留空时使用相对路径，便于局域网/反向代理部署（客户端 img src 以当前页 origin 加载）
-        base_url = settings.BASE_URL
+        # BASE_URL 留空或误配 localhost 时使用相对路径（客户端 img 随当前页 origin）
+        base_url = FilePreviewService._browser_safe_public_base_url()
         token = FilePreviewService._generate_preview_token(file_uuid, tenant_id)
         path = f"/api/v1/core/files/{file_uuid}/download?token={token}"
         if size is not None:

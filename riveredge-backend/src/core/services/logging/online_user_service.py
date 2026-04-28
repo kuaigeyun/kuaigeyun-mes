@@ -132,7 +132,9 @@ class OnlineUserService:
                         username=user.username,
                         email=user.email,
                         full_name=user.full_name,
-                        tenant_id=activity.tenant_id,
+                        tenant_id=activity.tenant_id
+                        if activity.tenant_id is not None
+                        else tenant_id,
                         login_ip=activity.login_ip,
                         login_time=activity.login_time,
                         last_activity_time=last_activity_time,
@@ -182,7 +184,9 @@ class OnlineUserService:
                 username=user.username,
                 email=user.email,
                 full_name=user.full_name,
-                tenant_id=tenant_id,
+                tenant_id=activity.tenant_id
+                if activity.tenant_id is not None
+                else tenant_id,
                 login_ip=activity.login_ip,
                 login_time=activity.login_time,
                 last_activity_time=last_activity_time,
@@ -276,7 +280,8 @@ class OnlineUserService:
         # 按组织统计
         by_tenant: Dict[str, int] = {}
         for user in online_users:
-            tenant_id_key = str(user.tenant_id)
+            tid = user.tenant_id
+            tenant_id_key = str(tid) if tid is not None else "_"
             by_tenant[tenant_id_key] = by_tenant.get(tenant_id_key, 0) + 1
             
         return OnlineUserStatisticsResponse(

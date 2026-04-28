@@ -15,7 +15,7 @@ class OnlineUserResponse(BaseModel):
     username: str = Field(..., description="用户名")
     email: Optional[str] = Field(None, description="邮箱")
     full_name: Optional[str] = Field(None, description="用户全名")
-    tenant_id: int = Field(..., description="组织ID")
+    tenant_id: Optional[int] = Field(None, description="组织ID（活动记录未写入租户时为空）")
     login_ip: Optional[str] = Field(None, description="登录IP")
     login_time: Optional[datetime] = Field(None, description="登录时间")
     last_activity_time: Optional[datetime] = Field(None, description="最后活动时间")

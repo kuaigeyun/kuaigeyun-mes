@@ -11,7 +11,8 @@ export interface OnlineUser {
   username: string;
   email?: string;
   full_name?: string;
-  tenant_id: number;
+  /** 活动记录未带租户时可能为空 */
+  tenant_id?: number | null;
   login_ip?: string;
   login_time?: string;
   last_activity_time?: string;

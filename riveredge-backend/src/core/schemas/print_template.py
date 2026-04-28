@@ -9,6 +9,8 @@ from typing import Optional, Dict, Any
 from datetime import datetime
 from uuid import UUID
 
+from core.schemas.json_coercion import normalize_optional_json_object_field
+
 
 class PrintTemplateBase(BaseModel):
     """打印模板基础 Schema"""
@@ -18,6 +20,11 @@ class PrintTemplateBase(BaseModel):
     description: Optional[str] = Field(None, description="模板描述")
     content: str = Field(..., description="模板内容")
     config: Optional[Dict[str, Any]] = Field(None, description="模板配置")
+
+    @field_validator("config", mode="before")
+    @classmethod
+    def _coerce_config(cls, v: Any) -> Any:
+        return normalize_optional_json_object_field(v)
     
     @field_validator('type')
     @classmethod
@@ -42,6 +49,11 @@ class PrintTemplateUpdate(BaseModel):
     config: Optional[Dict[str, Any]] = Field(None, description="模板配置")
     is_active: Optional[bool] = Field(None, description="是否启用")
     is_default: Optional[bool] = Field(None, description="是否默认模板")
+
+    @field_validator("config", mode="before")
+    @classmethod
+    def _coerce_config_update(cls, v: Any) -> Any:
+        return normalize_optional_json_object_field(v)
 
 
 class PrintTemplateRenderRequest(BaseModel):
