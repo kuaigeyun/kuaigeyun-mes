@@ -95,7 +95,11 @@
     "kuaizhizao:document-efficiency:export",
     "kuaizhizao:document-efficiency:read",
     "kuaizhizao:document-timing:export",
-    "kuaizhizao:document-timing:read"
+    "kuaizhizao:document-timing:read",
+    "kuaireport:report:print",
+    "kuaireport:dashboard:print",
+    "kuaizhizao:document-timing:print",
+    "kuaizhizao:document-efficiency:print"
   ],
   "dependencies": {
     "riveredge-backend": ">=1.0.0",

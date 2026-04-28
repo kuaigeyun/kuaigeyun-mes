@@ -324,3 +324,20 @@ export async function generateUserQRCode(userUuid: string, username: string, ful
     employee_name: fullName || username,
   });
 }
+
+/**
+ * 获取指定用户的生物特征注册选项
+ */
+export async function getUserBiometricRegisterOptions(userUuid: string): Promise<any> {
+  return apiRequest(`/core/users/${userUuid}/biometric/register-options`);
+}
+
+/**
+ * 完成指定用户的生物特征注册
+ */
+export async function finalizeUserBiometricRegistration(userUuid: string, data: any): Promise<any> {
+  return apiRequest(`/core/users/${userUuid}/biometric/register-finalize`, {
+    method: 'POST',
+    data,
+  });
+}

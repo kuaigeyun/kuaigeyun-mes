@@ -14,7 +14,7 @@ from webauthn import (
     options_to_json,
 )
 from webauthn.helpers.structs import (
-    RegistrationSelection,
+    AttestationConveyancePreference,
     AuthenticatorSelectionCriteria,
     UserVerificationRequirement,
     AuthenticatorAttachment,
@@ -48,7 +48,7 @@ class BiometricService:
             user_id=str(user.id).encode("utf-8"),
             user_name=user.username,
             user_display_name=user.full_name or user.username,
-            attestation_conveyance_preference="none",
+            attestation=AttestationConveyancePreference.NONE,
             authenticator_selection=AuthenticatorSelectionCriteria(
                 authenticator_attachment=None,  # 允许平台和跨平台
                 user_verification=UserVerificationRequirement.PREFERRED,

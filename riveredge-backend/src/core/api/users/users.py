@@ -22,7 +22,9 @@ from core.api.deps.deps import get_current_user, get_current_tenant
 from core.api.deps.access import require_access
 from core.api.deps.service_helpers import get_user_service_with_fallback
 from core.services.interfaces.service_interface import UserServiceInterface
+from infra.schemas.auth import WebAuthnRegisterFinalizeRequest
 from infra.api.deps.deps import get_current_user as soil_get_current_user
+from infra.api.deps.services import get_biometric_service
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError, AuthorizationError
 
@@ -529,3 +531,39 @@ async def export_users(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"导出失败: {str(e)}"
         )
+
+
+@router.get("/{user_uuid}/biometric/register-options")
+async def get_user_biometric_registration_options(
+    user_uuid: str,
+    _auth: object = Depends(require_access("system.user", "update")),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    biometric_service: Any = Depends(get_biometric_service)
+):
+    """
+    获取指定用户的生物识别注册选项（由管理员发起）
+    """
+    target_user = await UserService.get_user_detail(tenant_id, user_uuid, current_user.id)
+    return await biometric_service.get_registration_options(target_user)
+
+
+@router.post("/{user_uuid}/biometric/register-finalize")
+async def finalize_user_biometric_registration(
+    user_uuid: str,
+    data: WebAuthnRegisterFinalizeRequest,
+    _auth: object = Depends(require_access("system.user", "update")),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    biometric_service: Any = Depends(get_biometric_service)
+):
+    """
+    完成指定用户的生物识别注册（由管理员发起）
+    """
+    target_user = await UserService.get_user_detail(tenant_id, user_uuid, current_user.id)
+    return await biometric_service.verify_registration(
+        user=target_user,
+        registration_response=data.response,
+        challenge=data.challenge,
+        device_name=data.device_name
+    )

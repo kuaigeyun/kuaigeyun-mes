@@ -10,6 +10,7 @@ from tortoise.expressions import Q
 from core.models.permission import Permission, PermissionType
 from core.models.role import Role
 from core.models.role_permission import RolePermission
+from core.services.authorization.permission_registry_service import PermissionRegistryService
 from infra.infrastructure.database.database import get_db_connection
 from infra.exceptions.exceptions import NotFoundError
 
@@ -53,6 +54,19 @@ class PermissionService:
             deleted_at__isnull=True,
             deprecated_at__isnull=True,
         )
+        # 仅展示“权限真源”（核心常量 + 启用应用 manifest）中的权限，屏蔽历史遗留脏数据。
+        # 这样可从后端源头消除“未挂载到菜单”的幽灵权限，无需前端补丁兜底。
+        desired_definitions = await PermissionRegistryService.collect_definitions(tenant_id=tenant_id)
+        desired_codes = sorted(desired_definitions.keys())
+        if desired_codes:
+            query = query.filter(code__in=desired_codes)
+        else:
+            return {
+                "items": [],
+                "total": 0,
+                "page": page,
+                "page_size": page_size,
+            }
         dormant_app_codes = await PermissionService._get_dormant_app_codes(tenant_id=tenant_id)
         if dormant_app_codes:
             dormant_q = Q()

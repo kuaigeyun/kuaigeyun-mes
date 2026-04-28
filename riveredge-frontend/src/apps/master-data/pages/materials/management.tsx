@@ -1200,6 +1200,15 @@ const MaterialsManagementPage: React.FC = () => {
 
   return (
     <>
+      <style>{`
+        .material-group-tree .rc-virtual-list-scrollbar {
+          display: none !important;
+        }
+        .material-group-tree::-webkit-scrollbar {
+          display: none !important;
+          width: 0 !important;
+        }
+      `}</style>
       <TwoColumnLayout
         leftPanel={{
           collapsed: leftPanelCollapsed,

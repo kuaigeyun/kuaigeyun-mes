@@ -9,7 +9,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProForm, ProFormSelect, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../components/safe-pro-form-select';
-import { App, Card, ColorPicker, Slider, Form, Row, Col, Typography } from 'antd';
+import { App, Card, ColorPicker, Slider, Form, Row, Col, Typography, Space } from 'antd';
 import { useUserPreferenceStore, readCachedPreferencesForCurrentUser } from '../../../stores/userPreferenceStore';
 import { getLanguageList, Language } from '../../../services/language';
 import { loadUserLanguage, refreshTranslations } from '../../../config/i18n';
@@ -217,7 +217,7 @@ const UserPreferencesPage: React.FC = () => {
           onFinish={handleSubmit}
           submitter={{
             searchConfig: { submitText: t('pages.personal.preferences.save') },
-            render: (_, dom) => <div style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--ant-color-border)' }}>{dom}</div>,
+            render: (_, dom) => <div style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--ant-color-border)' }}><Space>{dom}</Space></div>,
           }}
           layout="vertical"
         >

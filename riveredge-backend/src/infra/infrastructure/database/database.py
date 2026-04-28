@@ -136,6 +136,7 @@ TORTOISE_ORM = {
                 "infra.models.tenant_config",
                 "infra.models.tenant_activity_log",
                 "infra.models.user",
+                "infra.models.biometric",  # 生物识别信息模型
                 "infra.models.infra_superadmin",  # 平台超级管理员模型
                 "infra.models.package",
                 "infra.models.saved_search",  # 保存搜索条件模型
@@ -145,6 +146,7 @@ TORTOISE_ORM = {
                 "core.models.role",
                 "core.models.permission",
                 "core.models.permission_alias",
+                "core.models.field_name_alias",
                 "core.models.data_permission_policy",
                 "core.models.field_permission_policy",
                 "core.models.access_policy",

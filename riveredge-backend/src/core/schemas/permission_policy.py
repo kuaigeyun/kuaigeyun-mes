@@ -32,6 +32,7 @@ class FieldPermissionPolicyUpsert(BaseModel):
 class FieldPermissionPolicyResponse(FieldPermissionPolicyUpsert):
     uuid: str = Field(..., description="策略UUID")
     role_uuid: str = Field(..., description="角色UUID")
+    field_label: str | None = Field(None, description="字段中文标签（由后端真源下发）")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
 

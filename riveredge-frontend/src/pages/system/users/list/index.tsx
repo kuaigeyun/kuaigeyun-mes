@@ -10,7 +10,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormSwitch, ProDescriptionsItemProps, ProFormInstance } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, ReloadOutlined, QrcodeOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, EyeOutlined, ReloadOutlined, QrcodeOutlined, IdcardOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
@@ -26,7 +26,10 @@ import {
   User,
   CreateUserData,
   UpdateUserData,
+  getUserBiometricRegisterOptions,
+  finalizeUserBiometricRegistration,
 } from '../../../../services/user';
+import { startRegistration } from '@simplewebauthn/browser';
 import { QRCodeGenerator } from '../../../../components/qrcode';
 import { qrcodeApi } from '../../../../services/qrcode';
 import { getDepartmentTree, DepartmentTreeItem } from '../../../../services/department';
@@ -146,8 +149,13 @@ const UserListPage: React.FC = () => {
   useEffect(() => {
     const loadOptions = async () => {
       try {
-        // 加载部门选项
-        const deptResponse = await getDepartmentTree();
+        // 并发加载部门、职位、角色选项，减少加载瀑布流延迟
+        const [deptResponse, posResponse, roleResponse] = await Promise.all([
+          getDepartmentTree(),
+          getPositionList({ page_size: 100 }),
+          getRoleList({ page_size: 100 }),
+        ]);
+
         const buildDeptOptions = (items: DepartmentTreeItem[], level = 0): Array<{ label: string; value: string }> => {
           const options: Array<{ label: string; value: string }> = [];
           items.forEach(item => {
@@ -162,17 +170,12 @@ const UserListPage: React.FC = () => {
           });
           return options;
         };
+        
         setDepartmentOptions(buildDeptOptions(deptResponse.items));
-
-        // 加载职位选项
-        const posResponse = await getPositionList({ page_size: 100 });
         setPositionOptions(posResponse.items.map(pos => ({
           label: pos.name,
           value: pos.uuid,
         })));
-
-        // 加载角色选项
-        const roleResponse = await getRoleList({ page_size: 100 });
         setRoleOptions(roleResponse.items.map(role => ({
           label: role.name,
           value: role.uuid,
@@ -203,7 +206,7 @@ const UserListPage: React.FC = () => {
   /**
    * 处理编辑用户
    */
-  const handleEdit = async (record: User) => {
+  const handleEdit = useCallback(async (record: User) => {
     try {
       setIsEdit(true);
       setCurrentUserUuid(record.uuid);
@@ -226,13 +229,13 @@ const UserListPage: React.FC = () => {
     } catch (error: any) {
       messageApi.error(error.message || t('field.user.fetchDetailFailed'));
     }
-  };
+  }, [messageApi, t, currentUserUuid, roleUuidsDraft, formInitialValues]);
 
 
   /**
    * 处理删除用户
    */
-  const handleDelete = async (record: User) => {
+  const handleDelete = useCallback(async (record: User) => {
     try {
       await deleteUser(record.uuid);
       messageApi.success(t('pages.system.deleteSuccess'));
@@ -240,7 +243,7 @@ const UserListPage: React.FC = () => {
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.deleteFailed'));
     }
-  };
+  }, [messageApi, t]);
 
   /**
    * 处理批量删除用户
@@ -263,7 +266,7 @@ const UserListPage: React.FC = () => {
   /**
    * 处理重置密码
    */
-  const handleResetPassword = async (record: User) => {
+  const handleResetPassword = useCallback(async (record: User) => {
     Modal.confirm({
       title: t('field.user.resetPasswordTitle'),
       content: t('field.user.resetPasswordConfirm', { username: record.username }),
@@ -276,7 +279,60 @@ const UserListPage: React.FC = () => {
         }
       },
     });
-  };
+  }, [messageApi, t]);
+
+  /**
+   * 处理提交表单（创建/更新）
+   */
+  const handleBiometricRegistration = useCallback(async (record: User) => {
+    const hide = messageApi.loading(t('field.user.biometricRegisterLoading', { defaultValue: '正在获取系统安全策略，请稍候...' }), 0);
+    try {
+      // 1. 获取注册选项
+      const options = await getUserBiometricRegisterOptions(record.uuid);
+
+      // 如果选项为空，说明后端异常
+      if (!options || !options.challenge) {
+        hide();
+        messageApi.error('无法获取设备证书挑战标识（Challenge），请检查配置！');
+        return;
+      }
+      
+      hide(); // 隐藏加载中，展示系统原生弹窗
+      
+      const promptLoading = messageApi.loading('请在系统弹窗中完成指纹或设备认证...', 0);
+
+      try {
+        // 2. 调用本地浏览器设备凭据 API 发起指纹识别认证录入
+        // 适配 @simplewebauthn/browser v13: 必须包装为 { optionsJSON: ... }
+        const registrationResponse = await startRegistration({ optionsJSON: options });
+
+        promptLoading(); // 关闭提示
+
+        const finalizeLoading = messageApi.loading('正在保存您的生物识别通行证...', 0);
+
+        // 3. 将录取结果发回后台
+        await finalizeUserBiometricRegistration(record.uuid, {
+          response: registrationResponse,
+          challenge: options.challenge,
+          device_name: `Administrator Registration for ${record.username}`,
+        });
+        
+        finalizeLoading();
+        messageApi.success(t('field.user.biometricRegisterSuccess', { defaultValue: '生物特征通行证（WebAuthn）登记成功！此用户现可进行原生的系统无密登录。' }), 5);
+      } catch (browserError: any) {
+        promptLoading(); // 出现异常也要记得关掉弹窗提示
+        throw browserError;
+      }
+
+    } catch (error: any) {
+      hide(); // 安全保障
+      if (error.name === 'NotAllowedError' || error.message?.includes('NotAllowedError') || error.message?.includes('The operation either timed out or was not allowed')) {
+        messageApi.warning(t('field.user.biometricRegisterCanceled', { defaultValue: '您取消了生物特征登记或操作超时。' }), 3);
+      } else {
+        messageApi.error(t('field.user.biometricRegisterFailed', { defaultValue: '登记失败可能由于环境非 HTTPS，或设备不支持 WebAuthn：' }) + (error?.message || error), 5);
+      }
+    }
+  }, [messageApi, t]);
 
   /**
    * 处理提交表单（创建/更新）
@@ -439,7 +495,7 @@ const UserListPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<User>[] = [
+  const columns: ProColumns<User>[] = React.useMemo(() => [
     {
       title: t('field.user.username'),
       dataIndex: 'username',
@@ -560,7 +616,7 @@ const UserListPage: React.FC = () => {
     {
       title: t('common.actions'),
       valueType: 'option',
-      width: 250,
+      width: 320,
       fixed: 'right',
       render: (_, record) => (
         <Space size="small">
@@ -588,6 +644,9 @@ const UserListPage: React.FC = () => {
           >
             {t('field.user.reset')}
           </Button>
+          <a onClick={() => handleBiometricRegistration(record)}>
+            <IdcardOutlined /> {t('field.user.biometric', { defaultValue: '生物信息' })}
+          </a>
           <Popconfirm
             title={t('field.user.deleteConfirm')}
             onConfirm={() => handleDelete(record)}
@@ -604,12 +663,12 @@ const UserListPage: React.FC = () => {
         </Space>
       ),
     },
-  ];
+  ], [t, departmentOptions, positionOptions, handleView, handleEdit, handleResetPassword, handleBiometricRegistration, handleDelete]);
 
   /**
    * 详情列定义
    */
-  const detailColumns: ProDescriptionsItemProps<User>[] = [
+  const detailColumns: ProDescriptionsItemProps<User>[] = React.useMemo(() => [
     { title: t('field.user.username'), dataIndex: 'username' },
     { title: t('field.user.email'), dataIndex: 'email' },
     { title: t('field.user.fullName'), dataIndex: 'full_name' },
@@ -649,7 +708,7 @@ const UserListPage: React.FC = () => {
     { title: t('field.user.lastLogin'), dataIndex: 'last_login', valueType: 'dateTime' },
     { title: t('field.user.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
     { title: t('field.user.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
-  ];
+  ], [t]);
 
   return (
     <>

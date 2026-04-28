@@ -20,6 +20,7 @@ from apps.kuaicaiwu.models.invoice import Invoice
 from apps.kuaicaiwu.services.finance_service import ReceivableService
 from core.api.deps.access import require_access
 from core.api.deps.deps import get_current_tenant
+from core.services.authorization.permission_policy_service import PermissionPolicyService
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 from infra.services.business_config_service import BusinessConfigService
@@ -57,9 +58,9 @@ async def _get_or_404(tenant_id: int, invoice_id: int, route: str = "/sales-invo
     return obj
 
 
-def _serialize(obj: Invoice) -> SalesInvoiceResponse:
+async def _serialize(tenant_id: int, user_id: int, obj: Invoice) -> SalesInvoiceResponse:
     """将 Invoice 模型转换为 SalesInvoiceResponse"""
-    return SalesInvoiceResponse(
+    payload = SalesInvoiceResponse(
         id=obj.id,
         tenant_id=obj.tenant_id,
         invoice_code=obj.invoice_code,
@@ -86,7 +87,14 @@ def _serialize(obj: Invoice) -> SalesInvoiceResponse:
         review_remarks=None,
         created_at=obj.created_at,
         updated_at=obj.updated_at,
+    ).model_dump()
+    masked = await PermissionPolicyService.apply_field_masks_to_dict(
+        tenant_id=tenant_id,
+        user_id=user_id,
+        resource="kuaicaiwu:invoice",
+        payload=payload,
     )
+    return SalesInvoiceResponse.model_validate(masked)
 
 
 async def _maybe_auto_generate_receivable_for_sales_invoice(
@@ -164,7 +172,7 @@ async def create_sales_invoice(
         invoice=invoice,
         created_by=current_user.id,
     )
-    result = _serialize(invoice)
+    result = await _serialize(tenant_id, current_user.id, invoice)
     result.receivable_id = receivable_id
     result.receivable_code = receivable_code
     return result
@@ -185,7 +193,8 @@ async def list_sales_invoices(
             required_permissions=["kuaicaiwu:invoice:view"],
         )
     ),
-    tenant_id: int = Depends(get_current_tenant)
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
 ):
     """获取销售发票列表"""
     query = Invoice.filter(tenant_id=tenant_id, category="OUT")
@@ -200,8 +209,9 @@ async def list_sales_invoices(
 
     total = await query.count()
     items = await query.offset(skip).limit(limit).order_by("-invoice_date", "-id")
+    serialized = [await _serialize(tenant_id, current_user.id, inv) for inv in items]
     return SalesInvoiceListResponse(
-        items=[_serialize(inv) for inv in items],
+        items=serialized,
         total=total, skip=skip, limit=limit
     )
 
@@ -216,11 +226,12 @@ async def get_sales_invoice(
             required_permissions=["kuaicaiwu:invoice:view"],
         )
     ),
-    tenant_id: int = Depends(get_current_tenant)
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
 ):
     """获取销售发票详情"""
     invoice = await _get_or_404(tenant_id, id)
-    return _serialize(invoice)
+    return await _serialize(tenant_id, current_user.id, invoice)
 
 
 @router.put("/{id}", response_model=SalesInvoiceResponse)
@@ -260,7 +271,7 @@ async def update_sales_invoice(
         update_data["description"] = data.notes
     if update_data:
         await Invoice.filter(id=id).update(**update_data)
-    return _serialize(await _get_or_404(tenant_id, id))
+    return await _serialize(tenant_id, current_user.id, await _get_or_404(tenant_id, id))
 
 
 @router.post("/{id}/approve", response_model=SalesInvoiceResponse)
@@ -288,7 +299,7 @@ async def approve_sales_invoice(
         )
     new_status = "已驳回" if rejection_reason else "已审核"
     await Invoice.filter(id=id).update(status=new_status)
-    return _serialize(await _get_or_404(tenant_id, id))
+    return await _serialize(tenant_id, current_user.id, await _get_or_404(tenant_id, id))
 
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)

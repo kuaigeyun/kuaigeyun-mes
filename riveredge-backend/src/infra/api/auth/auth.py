@@ -263,7 +263,7 @@ async def get_registration_options(
     """
     获取生物识别注册选项（Challenge）
     """
-    return await biometric_service.generate_registration_options(current_user)
+    return await biometric_service.get_registration_options(current_user)
 
 
 @router.post("/biometric/register-finalize")
@@ -286,7 +286,7 @@ async def get_login_options(
     """
     获取生物识别登录选项（Challenge）
     """
-    return await biometric_service.generate_authentication_options(data.username)
+    return await biometric_service.get_authentication_options(data.username)
 
 
 @router.post("/biometric/login-finalize")

@@ -15,6 +15,7 @@ from apps.kuaicaiwu.schemas.finance import (
 from apps.kuaicaiwu.models.receipt import Receipt
 from core.api.deps.access import require_access
 from core.api.deps.deps import get_current_tenant
+from core.services.authorization.permission_policy_service import PermissionPolicyService
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 
@@ -49,8 +50,15 @@ async def _get_or_404(tenant_id: int, receipt_id: int, route: str = "/receipts/{
     return obj
 
 
-def _serialize(obj: Receipt) -> ReceiptVoucherResponse:
-    return ReceiptVoucherResponse.model_validate(obj)
+async def _serialize(tenant_id: int, user_id: int, obj: Receipt) -> ReceiptVoucherResponse:
+    payload = ReceiptVoucherResponse.model_validate(obj).model_dump()
+    masked = await PermissionPolicyService.apply_field_masks_to_dict(
+        tenant_id=tenant_id,
+        user_id=user_id,
+        resource="kuaicaiwu:receipt",
+        payload=payload,
+    )
+    return ReceiptVoucherResponse.model_validate(masked)
 
 
 @router.post("", response_model=ReceiptVoucherResponse, status_code=status.HTTP_201_CREATED)
@@ -85,7 +93,7 @@ async def create_receipt(
         notes=data.notes,
         created_by=current_user.id,
     )
-    return _serialize(receipt)
+    return await _serialize(tenant_id, current_user.id, receipt)
 
 
 @router.get("", response_model=ReceiptVoucherListResponse)
@@ -103,7 +111,8 @@ async def list_receipts(
             required_permissions=["kuaicaiwu:receivable:view"],
         )
     ),
-    tenant_id: int = Depends(get_current_tenant)
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
 ):
     """获取收款单列表"""
     query = Receipt.filter(tenant_id=tenant_id, deleted_at__isnull=True)
@@ -118,8 +127,9 @@ async def list_receipts(
 
     total = await query.count()
     items = await query.offset(skip).limit(limit).order_by("-receipt_date", "-id")
+    serialized = [await _serialize(tenant_id, current_user.id, r) for r in items]
     return ReceiptVoucherListResponse(
-        items=[_serialize(r) for r in items],
+        items=serialized,
         total=total, skip=skip, limit=limit
     )
 
@@ -134,11 +144,12 @@ async def get_receipt(
             required_permissions=["kuaicaiwu:receivable:view"],
         )
     ),
-    tenant_id: int = Depends(get_current_tenant)
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
 ):
     """获取收款单详情"""
     receipt = await _get_or_404(tenant_id, id)
-    return _serialize(receipt)
+    return await _serialize(tenant_id, current_user.id, receipt)
 
 
 @router.put("/{id}", response_model=ReceiptVoucherResponse)
@@ -153,7 +164,7 @@ async def update_receipt(
         )
     ),
     current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant)
+    tenant_id: int = Depends(get_current_tenant),
 ):
     """更新收款单"""
     receipt = await _get_or_404(tenant_id, id)
@@ -161,7 +172,7 @@ async def update_receipt(
         raise _http_exception_with_trace(400, "已确认的收款单不能修改", "/receipts/{id}", tenant_id)
     update_data = data.model_dump(exclude_unset=True)
     await Receipt.filter(id=id).update(**update_data)
-    return _serialize(await _get_or_404(tenant_id, id))
+    return await _serialize(tenant_id, current_user.id, await _get_or_404(tenant_id, id))
 
 
 @router.post("/{id}/confirm", response_model=ReceiptVoucherResponse)
@@ -182,7 +193,7 @@ async def confirm_receipt(
     if receipt.status != "Draft":
         raise _http_exception_with_trace(400, "只有草稿状态的收款单可以确认", "/receipts/{id}/confirm", tenant_id)
     await Receipt.filter(id=id).update(status="Confirmed")
-    return _serialize(await _get_or_404(tenant_id, id))
+    return await _serialize(tenant_id, current_user.id, await _get_or_404(tenant_id, id))
 
 
 @router.post("/{id}/cancel", response_model=ReceiptVoucherResponse)
@@ -203,7 +214,7 @@ async def cancel_receipt(
     if receipt.settled_amount > 0:
         raise _http_exception_with_trace(400, "已有核销记录的收款单不能作废", "/receipts/{id}/cancel", tenant_id)
     await Receipt.filter(id=id).update(status="Cancelled")
-    return _serialize(await _get_or_404(tenant_id, id))
+    return await _serialize(tenant_id, current_user.id, await _get_or_404(tenant_id, id))
 
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)

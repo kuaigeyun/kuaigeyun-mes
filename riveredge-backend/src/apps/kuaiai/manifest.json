@@ -18,7 +18,8 @@
     "children": []
   },
   "permissions": [
-    "kuaiai:workspace:read"
+    "kuaiai:workspace:read",
+    "kuaiai:workspace:print"
   ],
   "dependencies": {
     "riveredge-backend": ">=1.0.0",

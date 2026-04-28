@@ -107,7 +107,7 @@ export function renderRowActionsOverflow(
   const sorted = normalizeAndSortActions(nodes, ctx)
   if (sorted.length <= directMax) {
     return (
-      <Space size={10} wrap>
+      <Space size={10} wrap={false} style={{ whiteSpace: 'nowrap' }}>
         {sorted}
       </Space>
     )
@@ -116,7 +116,7 @@ export function renderRowActionsOverflow(
   const overflow = sorted.slice(Math.max(1, directMax - 1))
 
   return (
-    <Space size={10} wrap>
+    <Space size={10} wrap={false} style={{ whiteSpace: 'nowrap' }}>
       {inline}
       <Dropdown
         menu={{

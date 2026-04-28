@@ -43,9 +43,6 @@ import {
   FolderOutlined,
   AppstoreOutlined,
   CopyOutlined,
-  CheckSquareOutlined,
-  BorderOutlined,
-  SwapOutlined,
   NodeCollapseOutlined,
   NodeExpandOutlined,
 } from '@ant-design/icons';
@@ -128,12 +125,53 @@ function permissionLeafDisplayLabel(
   return actionFallback[String(actionSeg).toLowerCase()] || actionSeg;
 }
 
+function fieldNameDisplayLabel(item: FieldPermissionPolicy): string {
+  return (item.field_label || '').trim() || (item.field_name || '').trim();
+}
+
+const normCache = new Map<string, string>();
+/** 功能权限 code 比较用规范化（与后端 manifest / 同步一致） */
+function normalizeFunctionPermissionCode(code: string): string {
+  if (!code) return '';
+  let res = normCache.get(code);
+  if (res !== undefined) return res;
+  res = code.trim().toLowerCase().replace(/_/g, '-');
+  normCache.set(code, res);
+  return res;
+}
+
+const anchorCache = new Map<string, string | null>();
+/**
+ * 从 app:resource:action 解析 resource 锚点（resource 内可含冒号，如多段）。
+ * 用于避免父资源前缀 startsWith 误吞子资源码（例：...-reporting 不得匹配 ...-reporting-statistics）。
+ */
+function resourceAnchorFromPermissionCode(full: string): string | null {
+  if (!full) return null;
+  let res = anchorCache.get(full);
+  if (res !== undefined) return res;
+  const parts = normalizeFunctionPermissionCode(full).split(':').filter(Boolean);
+  if (parts.length < 3) {
+    anchorCache.set(full, null);
+    return null;
+  }
+  const computed = parts.slice(1, -1).join(':');
+  anchorCache.set(full, computed);
+  return computed;
+}
+
+const prefixCache = new Map<string, string[]>();
 /**
  * 菜单 permission_code 对应的资源前缀（含 app 段），兼容 meta.node 下划线与 manifest 连字符两种写法。
  */
 function resourcePrefixesForMenuCode(menuCode: string): string[] {
-  const parts = menuCode.split(':').filter(Boolean);
-  if (parts.length < 2) return [];
+  if (!menuCode) return [];
+  let res = prefixCache.get(menuCode);
+  if (res !== undefined) return res;
+  const parts = normalizeFunctionPermissionCode(menuCode).split(':').filter(Boolean);
+  if (parts.length < 2) {
+    prefixCache.set(menuCode, []);
+    return [];
+  }
   const app = parts[0];
   const appVariants = [...new Set([app, app.replace(/_/g, '-'), app.replace(/-/g, '_')])];
   const resourceParts = parts.length >= 3 ? parts.slice(1, -1) : parts.slice(1);
@@ -141,7 +179,9 @@ function resourcePrefixesForMenuCode(menuCode: string): string[] {
   const asHyphen = resourceJoined.replace(/_/g, '-');
   const asUnder = resourceJoined.replace(/-/g, '_');
   const uniq = [...new Set([resourceJoined, asHyphen, asUnder])];
-  return appVariants.flatMap((a) => uniq.map((r) => `${a}:${r}:`));
+  const computed = appVariants.flatMap((a) => uniq.map((r) => `${a}:${r}:`));
+  prefixCache.set(menuCode, computed);
+  return computed;
 }
 
 /** 路径型菜单资源（如 quality-management-incoming-inspection）对应到 manifest 短资源码（incoming-inspection） */
@@ -149,6 +189,13 @@ const GENERIC_RESOURCE_SUFFIX = new Set(['dashboard', 'reports', 'statistics', '
 const RESOURCE_ALIAS_MAP: Record<string, string[]> = {
   'purchase-request': ['purchase-requisition'],
   'purchase-requisition': ['purchase-request'],
+  // 快财务：菜单码为 sales-invoice / purchase-invoice，API 与权限真源为 kuaicaiwu:invoice:*
+  'sales-invoice': ['invoice'],
+  'purchase-invoice': ['invoice'],
+  // 主数据：「物料管理」菜单码为 material:read，物料分组权限码为 material-group:*，需归并展示
+  material: ['material-group'],
+  // 批号规则（material-batch-rule）与批号实例 API（material-batch:*）为两套码；合并到批号规则菜单匹配，避免 DB 未同步「批号记录」时出现孤儿
+  'material-batch-rule': ['material-batch'],
 };
 
 function resourceSuffixAliases(resource: string): string[] {
@@ -173,53 +220,71 @@ function resourceExactAliases(resource: string): string[] {
 
 /** 与菜单 permission_code 同资源前缀下的所有权限（菜单下列为可勾选操作） */
 function permissionsMatchingMenuCode(menuCode: string, pool: Permission[]): Permission[] {
-  const c = menuCode.trim();
+  const c = normalizeFunctionPermissionCode(menuCode);
   if (!c) return [];
-  const seen = new Set<string>();
-  const out: Permission[] = [];
-  const add = (p: Permission) => {
-    if (seen.has(p.uuid)) return;
-    seen.add(p.uuid);
-    out.push(p);
-  };
-
-  for (const p of pool) {
-    if (p.code === c) add(p);
-  }
-
-  for (const prefix of resourcePrefixesForMenuCode(c)) {
-    for (const p of pool) {
-      if (p.code.startsWith(prefix)) add(p);
-    }
-  }
-
+  
+  const prefixes: string[] = [];
+  prefixes.push(...resourcePrefixesForMenuCode(c));
   const parts = c.split(':').filter(Boolean);
   if (parts.length >= 3) {
     const app = parts[0];
+    const appVariants = [...new Set([app, app.replace(/_/g, '-'), app.replace(/-/g, '_')])];
     const resource = parts.slice(1, -1).join(':');
     for (const alias of resourceExactAliases(resource)) {
-      const prefix = `${app}:${alias}:`;
-      for (const p of pool) {
-        if (p.code.startsWith(prefix)) add(p);
+      for (const appv of appVariants) {
+        prefixes.push(`${appv}:${alias}:`);
       }
     }
     for (const alias of resourceSuffixAliases(resource)) {
-      const prefix = `${app}:${alias}:`;
-      for (const p of pool) {
-        if (p.code.startsWith(prefix)) add(p);
+      for (const appv of appVariants) {
+        prefixes.push(`${appv}:${alias}:`);
       }
     }
   }
-
   if (parts.length === 1) {
-    const rp = `${parts[0]}:`;
-    for (const p of pool) {
-      if (p.code.startsWith(rp)) add(p);
+    prefixes.push(`${parts[0]}:`);
+  }
+
+  const seen = new Set<string>();
+  const out: Permission[] = [];
+
+  for (let i = 0; i < pool.length; i++) {
+    const p = pool[i];
+    if (!p.code) continue;
+    const pNorm = normalizeFunctionPermissionCode(p.code);
+    let matched = false;
+    if (pNorm === c) {
+      matched = true;
+    } else {
+      for (let j = 0; j < prefixes.length; j++) {
+        if (pNorm.startsWith(prefixes[j])) {
+          matched = true;
+          break;
+        }
+      }
+    }
+    if (matched && !seen.has(p.uuid)) {
+      seen.add(p.uuid);
+      out.push(p);
     }
   }
 
-  out.sort((a, b) => a.code.localeCompare(b.code));
-  return out;
+  const menuAnchor = resourceAnchorFromPermissionCode(c);
+  const filtered =
+    menuAnchor == null
+      ? out
+      : out.filter((p) => {
+          const pNorm = normalizeFunctionPermissionCode(p.code || '');
+          if (pNorm === c) return true;
+          const pAnchor = resourceAnchorFromPermissionCode(pNorm);
+          if (!pAnchor) return true;
+          if (pAnchor === menuAnchor) return true;
+          if (pAnchor !== menuAnchor && pAnchor.startsWith(`${menuAnchor}-`)) return false;
+          return true;
+        });
+
+  filtered.sort((a, b) => a.code.localeCompare(b.code));
+  return filtered;
 }
 
 /** 仅保留「子树内仍有可展示权限」的菜单分支 */
@@ -257,13 +322,22 @@ function menuTreeNodeTitle(menu: MenuTree, t: (key: string, opts?: { defaultValu
 
 const REVIEW_ACTIONS = new Set(['approve', 'audit', 'reject']);
 
+const parseCache = new Map<string, { resource: string; action: string } | null>();
 function parseResourceAndAction(code: string): { resource: string; action: string } | null {
+  if (!code) return null;
+  let res = parseCache.get(code);
+  if (res !== undefined) return res;
   const parts = (code || '').split(':').filter(Boolean);
-  if (parts.length < 3) return null;
-  return {
+  if (parts.length < 3) {
+    parseCache.set(code, null);
+    return null;
+  }
+  const computed = {
     resource: parts.slice(0, -1).join(':'),
     action: parts[parts.length - 1].toLowerCase(),
   };
+  parseCache.set(code, computed);
+  return computed;
 }
 
 function buildMenuPermissionTreeData(
@@ -273,9 +347,7 @@ function buildMenuPermissionTreeData(
   expandKeys: React.Key[],
   t: (key: string, opts?: { defaultValue?: string }) => string,
   token: { colorPrimary: string },
-  mergedPermissionMap: Record<string, string[]>,
-  checkedPermissionSet: Set<string>,
-  onTogglePermission: (key: string, checked: boolean) => void
+  mergedPermissionMap: Record<string, string[]>
 ): DataNode[] {
   const sorted = [...menus].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
   const nodes: DataNode[] = [];
@@ -292,18 +364,39 @@ function buildMenuPermissionTreeData(
           expandKeys,
           t,
           token,
-          mergedPermissionMap,
-          checkedPermissionSet,
-          onTogglePermission
+          mergedPermissionMap
         )
       : [];
 
     const code = m.permission_code?.trim();
     let actionItems: Array<{ key: string; label: string }> = [];
     if (code) {
-      const matched = permissionsMatchingMenuCode(code, pool).filter((p) => !globallyUsed.has(p.uuid));
+      let matchPool = permissionsMatchingMenuCode(code, pool);
+      // 菜单展示不做全局占用去重，避免前序节点“吃掉”后序分组导致菜单被误判为空。
+      // globallyUsed 仅用于未挂载统计。
+      const matched = matchPool;
       matched.forEach((p) => globallyUsed.add(p.uuid));
-      const plainActionItems = matched.map((permission) => {
+      const parsedMenu = parseResourceAndAction(code);
+      const preferredByAction = new Map<string, Permission>();
+      matched.forEach((permission) => {
+        const parsed = parseResourceAndAction(permission.code || '');
+        const actionKey = (parsed?.action || permission.action || permission.code || '').toLowerCase();
+        const existing = preferredByAction.get(actionKey);
+        if (!existing) {
+          preferredByAction.set(actionKey, permission);
+          return;
+        }
+        const existingParsed = parseResourceAndAction(existing.code || '');
+        const isCurr = parsedMenu && parsed && parsed.resource === parsedMenu.resource;
+        const existingIsCurr =
+          parsedMenu && existingParsed && existingParsed.resource === parsedMenu.resource;
+        if (isCurr && !existingIsCurr) {
+          preferredByAction.set(actionKey, permission);
+        }
+      });
+      const matchedUnique = [...preferredByAction.values()];
+
+      const plainActionItems = matchedUnique.map((permission) => {
         const actionLabel = permissionLeafDisplayLabel(permission, t);
         return {
           key: permission.uuid,
@@ -312,7 +405,7 @@ function buildMenuPermissionTreeData(
       });
 
       const reviewGroup = new Map<string, string[]>();
-      matched.forEach((permission) => {
+      matchedUnique.forEach((permission) => {
         const parsed = parseResourceAndAction(permission.code || '');
         if (!parsed || !REVIEW_ACTIONS.has(parsed.action)) return;
         if (!reviewGroup.has(parsed.resource)) reviewGroup.set(parsed.resource, []);
@@ -339,29 +432,8 @@ function buildMenuPermissionTreeData(
     if (children.length === 0 && actionItems.length === 0) continue;
 
     nodes.push({
-      title: (
-        <span className="permission-menu-title-wrap">
-          <span style={{ fontWeight: childMenus.length ? 600 : undefined, color: token.colorPrimary }}>
-            {menuTreeNodeTitle(m, t)}
-          </span>
-          {actionItems.length > 0 && (
-            <div className="permission-action-row">
-              {actionItems.map((item) => {
-                const mergedChildren = mergedPermissionMap[item.key] || [];
-                const checked = mergedChildren.length
-                  ? checkedPermissionSet.has(item.key) || mergedChildren.some((u) => checkedPermissionSet.has(u))
-                  : checkedPermissionSet.has(item.key);
-                return (
-                  <label key={item.key} className="permission-action-chip">
-                    <Checkbox checked={checked} onChange={(e) => onTogglePermission(item.key, e.target.checked)} />
-                    <span style={{ whiteSpace: 'nowrap' }}>{item.label}</span>
-                  </label>
-                );
-              })}
-            </div>
-          )}
-        </span>
-      ),
+      title: menuTreeNodeTitle(m, t),
+      _actionItems: actionItems,
       key,
       disableCheckbox: true,
       icon: <AppstoreOutlined />,
@@ -399,6 +471,31 @@ function isMenuMountRequiredPermission(code: string): boolean {
   return true;
 }
 
+const FieldNameInput: React.FC<{
+  item: FieldPermissionPolicy;
+  onChange: (val: string) => void;
+}> = ({ item, onChange }) => {
+  const [focused, setFocused] = useState(false);
+  const showLabel = !focused && item.field_label;
+  
+  return (
+    <Tooltip title={`英文字段: ${item.field_name || '-'}`}>
+      <Input
+        style={{ width: 240 }}
+        placeholder="英文字段名"
+        value={showLabel ? item.field_label : item.field_name}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        onChange={(e) => {
+          // If the user changes it while focused, e.target.value is the english field name.
+          // If the user changes it somehow while not focused (unlikely), handle smoothly.
+          onChange(e.target.value);
+        }}
+      />
+    </Tooltip>
+  );
+};
+
 /**
  * 角色权限管理合并页面组件
  */
@@ -429,8 +526,15 @@ const RolesPermissionsPage: React.FC = () => {
   const [permissionLayer, setPermissionLayer] = useState<'function' | 'data' | 'field'>('function');
   const [permissionSearchKeyword, setPermissionSearchKeyword] = useState('');
   const [permissionTreeExpandedKeys, setPermissionTreeExpandedKeys] = useState<React.Key[]>([]);
+  const [functionBatchApp, setFunctionBatchApp] = useState<string>('');
   const [dataPolicies, setDataPolicies] = useState<DataPermissionPolicy[]>([]);
   const [fieldPolicies, setFieldPolicies] = useState<FieldPermissionPolicy[]>([]);
+  const [selectedDataResources, setSelectedDataResources] = useState<string[]>([]);
+  const [dataBatchScope, setDataBatchScope] = useState<DataPermissionPolicy['scope_type']>('scope_self');
+  const [dataBatchApp, setDataBatchApp] = useState<string>('');
+  const [selectedFieldIndexes, setSelectedFieldIndexes] = useState<number[]>([]);
+  const [fieldBatchMaskLevel, setFieldBatchMaskLevel] = useState<FieldPermissionPolicy['mask_level']>('masked');
+  const [fieldKeywordInput, setFieldKeywordInput] = useState('amount,price,customer_name');
   const [mergedPermissionKeyMap, setMergedPermissionKeyMap] = useState<Record<string, string[]>>({});
   const mergedPermissionKeyMapRef = useRef<Record<string, string[]>>({});
   const initializedExpandRef = useRef(false);
@@ -533,22 +637,24 @@ const RolesPermissionsPage: React.FC = () => {
   /**
    * 过滤角色列表
    */
-  const filteredRoles = roles
-    .filter(role => {
-      if (!roleSearchKeyword) return true;
-      const keyword = roleSearchKeyword.toLowerCase();
-      return (
-        role.name.toLowerCase().includes(keyword) ||
-        role.code.toLowerCase().includes(keyword) ||
-        (role.description && role.description.toLowerCase().includes(keyword))
-      );
-    })
-    .sort((a, b) => {
-      const aOrder = ROLE_ORDER_BY_CODE[a.code] ?? 9999;
-      const bOrder = ROLE_ORDER_BY_CODE[b.code] ?? 9999;
-      if (aOrder !== bOrder) return aOrder - bOrder;
-      return a.name.localeCompare(b.name, 'zh-CN');
-    });
+  const filteredRoles = useMemo(() => {
+    return roles
+      .filter(role => {
+        if (!roleSearchKeyword) return true;
+        const keyword = roleSearchKeyword.toLowerCase();
+        return (
+          role.name.toLowerCase().includes(keyword) ||
+          role.code.toLowerCase().includes(keyword) ||
+          (role.description && role.description.toLowerCase().includes(keyword))
+        );
+      })
+      .sort((a, b) => {
+        const aOrder = ROLE_ORDER_BY_CODE[a.code] ?? 9999;
+        const bOrder = ROLE_ORDER_BY_CODE[b.code] ?? 9999;
+        if (aOrder !== bOrder) return aOrder - bOrder;
+        return a.name.localeCompare(b.name, 'zh-CN');
+      });
+  }, [roles, roleSearchKeyword]);
 
   /**
    * 构建角色树形数据
@@ -662,7 +768,8 @@ const RolesPermissionsPage: React.FC = () => {
       let page = 1;
       let hasMore = true;
 
-      const pageSize = 500;
+      // 后端限制 page_size <= 1000；使用分页聚合拿全量，避免参数越界。
+      const pageSize = 1000;
       while (hasMore) {
         const response = await getAllPermissions({
           page,
@@ -781,7 +888,7 @@ const RolesPermissionsPage: React.FC = () => {
       return;
     }
 
-    const menusForPool = filterMenusForDisplay(menuTree, filteredItems);
+    const menusForPool = menuTree;
     const mergedMap: Record<string, string[]> = {};
     const treeData = buildMenuPermissionTreeData(
       menusForPool,
@@ -790,9 +897,7 @@ const RolesPermissionsPage: React.FC = () => {
       expandKeys,
       t,
       token,
-      mergedMap,
-      checkedPermissionSet,
-      togglePermissionKey
+      mergedMap
     );
 
       const orphans = filteredItems.filter(
@@ -814,7 +919,6 @@ const RolesPermissionsPage: React.FC = () => {
     menuTree,
     t,
     token,
-    checkedPermissionSet,
   ]);
 
   useEffect(() => {
@@ -855,6 +959,24 @@ const RolesPermissionsPage: React.FC = () => {
     return collect;
   }, [permissionTreeData]);
 
+  const permissionUuidSet = useMemo(() => new Set(allPermissions.map((p) => p.uuid)), [allPermissions]);
+  const visibleFunctionPermissionUuids = useMemo(() => {
+    const uniq = Array.from(new Set(displayedPermissionUuids));
+    return uniq.filter((k) => permissionUuidSet.has(k));
+  }, [displayedPermissionUuids, permissionUuidSet]);
+
+  const functionBatchAppOptions = useMemo(() => {
+    const byApp = new Set<string>();
+    allPermissions.forEach((p) => {
+      const code = (p.code || '').trim();
+      const i = code.indexOf(':');
+      if (i > 0) byApp.add(code.slice(0, i));
+    });
+    return Array.from(byApp)
+      .sort((a, b) => a.localeCompare(b))
+      .map((app) => ({ value: app, label: getAppDisplayName(app, t, app) }));
+  }, [allPermissions, t]);
+
   const resourceLabelMap = useMemo(() => {
     const map = new Map<string, string>();
     const walk = (nodes: MenuTree[]) => {
@@ -876,14 +998,8 @@ const RolesPermissionsPage: React.FC = () => {
   }, [menuTree, t]);
 
   const resourceOptions = useMemo(() => {
-    const set = new Set<string>();
-    allPermissions.forEach((p) => {
-      const parts = (p.code || '').split(':').filter(Boolean);
-      if (parts.length >= 2) {
-        set.add(`${parts[0]}:${parts.slice(1, -1).join(':') || parts[1]}`);
-      }
-    });
-    return Array.from(set)
+    // 数据权限资源以菜单真源为准，避免历史权限池中的脏资源进入第二页配置。
+    return Array.from(resourceLabelMap.keys())
       .sort()
       .map((value) => {
         const [app, ...rest] = value.split(':');
@@ -895,52 +1011,74 @@ const RolesPermissionsPage: React.FC = () => {
           label: resourceLabelMap.get(value) || fallback,
         };
       });
-  }, [allPermissions, resourceLabelMap, t]);
+  }, [resourceLabelMap, t]);
 
-  /**
-   * 批量操作：全选当前展示的权限
-   */
-  const handleSelectAll = useCallback(() => {
-    const currentChecked = new Set(
-      checkedKeys.filter((k) => typeof k === 'string' && isAssignablePermissionTreeKey(k))
-    );
-    displayedPermissionUuids.forEach((uuid) => currentChecked.add(uuid));
-    setCheckedKeys(Array.from(currentChecked));
-  }, [checkedKeys, displayedPermissionUuids]);
-
-  /**
-   * 批量操作：全不选当前展示的权限
-   */
-  const handleSelectNone = useCallback(() => {
-    const toRemove = new Set(displayedPermissionUuids);
-    const kept = checkedKeys.filter(
-      (k) =>
-        typeof k !== 'string' ||
-        !isAssignablePermissionTreeKey(k) ||
-        !toRemove.has(k)
-    );
-    setCheckedKeys(kept);
-  }, [checkedKeys, displayedPermissionUuids]);
-
-  /**
-   * 批量操作：反选当前展示的权限
-   */
-  const handleSelectInvert = useCallback(() => {
-    const displayedSet = new Set(displayedPermissionUuids);
-    const currentChecked = new Set(
-      checkedKeys.filter((k) => typeof k === 'string' && isAssignablePermissionTreeKey(k))
-    );
-    const result: string[] = [];
-    displayedSet.forEach((uuid) => {
-      if (!currentChecked.has(uuid)) result.push(uuid);
+  const dataBatchAppOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const opts: Array<{ value: string; label: string }> = [];
+    resourceOptions.forEach((item) => {
+      const app = item.value.split(':')[0] || '';
+      if (!app || seen.has(app)) return;
+      seen.add(app);
+      opts.push({ value: app, label: getAppDisplayName(app, t, app) });
     });
-    checkedKeys.forEach((k) => {
-      if (typeof k === 'string' && !displayedSet.has(k) && isAssignablePermissionTreeKey(k)) {
-        result.push(k);
-      }
-    });
-    setCheckedKeys(result);
-  }, [checkedKeys, displayedPermissionUuids]);
+    return opts.sort((a, b) => a.label.localeCompare(b.label, 'zh-CN'));
+  }, [resourceOptions, t]);
+
+  const applyScopeToResources = useCallback(
+    (resources: string[], scope: DataPermissionPolicy['scope_type']) => {
+      if (resources.length === 0) return 0;
+      setDataPolicies((prev) => {
+        const map = new Map(prev.map((x) => [x.resource, x]));
+        resources.forEach((r) => {
+          const row = map.get(r);
+          if (row) {
+            map.set(r, { ...row, scope_type: scope, scope_payload: scope === 'scope_custom' ? row.scope_payload : undefined });
+          } else {
+            map.set(r, {
+              uuid: `tmp-data-${Date.now()}-${r}`,
+              role_uuid: selectedRole?.uuid || '',
+              resource: r,
+              scope_type: scope,
+              scope_payload: undefined,
+            });
+          }
+        });
+        return Array.from(map.values()).sort((a, b) => a.resource.localeCompare(b.resource));
+      });
+      return resources.length;
+    },
+    [selectedRole?.uuid]
+  );
+
+  const applyFieldMaskToIndexes = useCallback((indexes: number[], level: FieldPermissionPolicy['mask_level']) => {
+    if (indexes.length === 0) return 0;
+    const indexSet = new Set(indexes);
+    setFieldPolicies((prev) =>
+      prev.map((item, idx) => (indexSet.has(idx) ? { ...item, mask_level: level } : item))
+    );
+    return indexes.length;
+  }, []);
+
+  const applyFieldMaskByKeywords = useCallback(
+    (keywords: string[], level: FieldPermissionPolicy['mask_level']) => {
+      const norms = keywords.map((k) => k.trim().toLowerCase()).filter(Boolean);
+      if (norms.length === 0) return 0;
+      let affected = 0;
+      setFieldPolicies((prev) =>
+        prev.map((item) => {
+          const fieldLower = (item.field_name || '').toLowerCase();
+          const labelLower = (item.field_label || '').toLowerCase();
+          const hit = norms.some((k) => fieldLower.includes(k) || labelLower.includes(k));
+          if (!hit) return item;
+          affected += 1;
+          return { ...item, mask_level: level };
+        })
+      );
+      return affected;
+    },
+    []
+  );
 
   /**
    * 应用权限模板
@@ -1017,26 +1155,40 @@ const RolesPermissionsPage: React.FC = () => {
         });
         const permissionUuids = Array.from(expanded);
         await assignPermissions(selectedRole.uuid, permissionUuids);
+        messageApi.success(`功能权限保存成功：${permissionUuids.length} 项`);
       } else if (permissionLayer === 'data') {
-        await saveRoleDataPolicies(
-          selectedRole.uuid,
-          dataPolicies.map((x) => ({
+        const payload = dataPolicies
+          .filter((x) => x.resource)
+          .map((x) => ({
             resource: x.resource,
             scope_type: x.scope_type,
             scope_payload: x.scope_payload,
-          }))
+          }));
+        await saveRoleDataPolicies(
+          selectedRole.uuid,
+          payload
         );
+        messageApi.success(`数据权限保存成功：${payload.length} 条`);
       } else {
+        const dedupMap = new Map<string, Pick<FieldPermissionPolicy, 'resource' | 'field_name' | 'mask_level'>>();
+        fieldPolicies.forEach((x) => {
+          const resource = (x.resource || '').trim();
+          const fieldName = (x.field_name || '').trim();
+          if (!resource || !fieldName) return;
+          const key = `${resource}::${fieldName}`;
+          dedupMap.set(key, {
+            resource,
+            field_name: fieldName,
+            mask_level: x.mask_level,
+          });
+        });
+        const payload = Array.from(dedupMap.values());
         await saveRoleFieldPolicies(
           selectedRole.uuid,
-          fieldPolicies.map((x) => ({
-            resource: x.resource,
-            field_name: x.field_name,
-            mask_level: x.mask_level,
-          }))
+          payload
         );
+        messageApi.success(`字段权限保存成功：${payload.length} 条（已自动去重）`);
       }
-      messageApi.success(t('pages.system.roles.assignSuccess'));
 
       // 重新加载角色列表（更新权限数）
       await loadRoles();
@@ -1106,14 +1258,54 @@ const RolesPermissionsPage: React.FC = () => {
     }
   }, [permissionTreeExpandedKeys, permissionTreeData]);
 
+  const selectAllVisibleFunctionPermissions = useCallback(() => {
+    if (!visibleFunctionPermissionUuids.length) return;
+    setCheckedKeys((prev) => Array.from(new Set([...prev.map(String), ...visibleFunctionPermissionUuids])));
+  }, [visibleFunctionPermissionUuids]);
+
+  const clearVisibleFunctionPermissions = useCallback(() => {
+    if (!visibleFunctionPermissionUuids.length) return;
+    const target = new Set(visibleFunctionPermissionUuids);
+    setCheckedKeys((prev) => prev.map(String).filter((k) => !target.has(k)));
+  }, [visibleFunctionPermissionUuids]);
+
+  const invertVisibleFunctionPermissions = useCallback(() => {
+    if (!visibleFunctionPermissionUuids.length) return;
+    const visible = new Set(visibleFunctionPermissionUuids);
+    setCheckedKeys((prev) => {
+      const curr = new Set(prev.map(String));
+      visible.forEach((u) => {
+        if (curr.has(u)) curr.delete(u);
+        else curr.add(u);
+      });
+      return Array.from(curr);
+    });
+  }, [visibleFunctionPermissionUuids]);
+
+  const selectByFunctionModule = useCallback(() => {
+    if (!functionBatchApp) return;
+    const uuids = allPermissions
+      .filter((p) => (p.code || '').startsWith(`${functionBatchApp}:`))
+      .map((p) => p.uuid);
+    setCheckedKeys((prev) => Array.from(new Set([...prev.map(String), ...uuids])));
+  }, [functionBatchApp, allPermissions]);
+
+  const clearByFunctionModule = useCallback(() => {
+    if (!functionBatchApp) return;
+    const target = new Set(
+      allPermissions.filter((p) => (p.code || '').startsWith(`${functionBatchApp}:`)).map((p) => p.uuid)
+    );
+    setCheckedKeys((prev) => prev.map(String).filter((k) => !target.has(k)));
+  }, [functionBatchApp, allPermissions]);
+
   return (
     <div
       className="roles-permissions-page"
       style={{
         display: 'flex',
         height: '100%',
-        padding: `0 ${PAGE_SPACING?.PADDING ?? 16}px ${PAGE_SPACING?.PADDING ?? 16}px ${PAGE_SPACING?.PADDING ?? 16}px`,
         margin: 0,
+        padding: '0 16px',
         boxSizing: 'border-box',
         borderRadius: token.borderRadiusLG || token.borderRadius,
         overflow: 'hidden',
@@ -1258,6 +1450,7 @@ const RolesPermissionsPage: React.FC = () => {
           style={{
             backgroundColor: token.colorBgContainer,
             zIndex: 1,
+            borderTopRightRadius: token.borderRadiusLG || token.borderRadius,
           }}
         >
           {/* 第一层：状态、角色身份与全局操作 */}
@@ -1265,10 +1458,25 @@ const RolesPermissionsPage: React.FC = () => {
             display: 'flex', 
             alignItems: 'center', 
             justifyContent: 'space-between', 
-            padding: '12px 16px',
-            borderBottom: selectedRole ? `1px solid ${token.colorBorderSecondary || 'rgba(0,0,0,0.06)'}` : 'none'
+            padding: '8px 16px',
+            borderBottom: `1px solid ${token.colorBorderSecondary || 'rgba(0,0,0,0.06)'}`
           }}>
             <Space size="middle" style={{ flex: 1, minWidth: 0 }}>
+              {selectedRole ? (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
+                    <Space size="small">
+                      <span style={{ fontSize: '16px', fontWeight: 600 }}>{selectedRole.name}</span>
+                      <Tag color="blue" variant="filled" style={{ margin: 0 }}>{selectedRole.code}</Tag>
+                      {selectedRole.is_system && <Tag color="default" variant="filled">{t('pages.system.roles.systemRole')}</Tag>}
+                    </Space>
+                  </div>
+                  <Divider orientation="vertical" style={{ height: 24 }} />
+                </>
+              ) : (
+                <span style={{ color: token.colorTextSecondary, marginRight: 8 }}>{t('pages.system.roles.selectRoleHint')}</span>
+              )}
+
               <Space>
                 <Button
                   icon={<ReloadOutlined />}
@@ -1291,35 +1499,22 @@ const RolesPermissionsPage: React.FC = () => {
                     : t('pages.system.roles.expandAll')}
                 </Button>
               </Space>
-
-              {selectedRole ? (
-                <>
-                  <Divider type="vertical" style={{ height: 24 }} />
-                  <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                    <Space size="small">
-                      <span style={{ fontSize: '16px', fontWeight: 600 }}>{selectedRole.name}</span>
-                      <Tag color="blue" bordered={false} style={{ margin: 0 }}>{selectedRole.code}</Tag>
-                      {selectedRole.is_system && <Tag color="default" bordered={false}>{t('pages.system.roles.systemRole')}</Tag>}
-                    </Space>
-                    <div style={{ 
-                      fontSize: '12px', 
-                      color: token.colorTextSecondary, 
-                      overflow: 'hidden', 
-                      textOverflow: 'ellipsis', 
-                      whiteSpace: 'nowrap',
-                      marginTop: '2px'
-                    }}>
-                      {t('pages.system.roles.roleDescription')}{selectedRole.description || t('pages.system.roles.noDescription')}
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <span style={{ color: token.colorTextSecondary, marginLeft: 8 }}>{t('pages.system.roles.selectRoleHint')}</span>
-              )}
             </Space>
 
             {selectedRole && (
               <Space>
+                {permissionLayer === 'function' && (
+                  <Select
+                    placeholder={t('pages.system.roles.applyTemplate')}
+                    style={{ width: 180 }}
+                    allowClear
+                    onChange={(key) => key && handleApplyTemplate(key)}
+                    options={PERMISSION_TEMPLATES.map((tmpl) => ({
+                      value: tmpl.key,
+                      label: tmpl.name + (tmpl.description ? ` (${tmpl.description})` : ''),
+                    }))}
+                  />
+                )}
                 <Button
                   icon={<CopyOutlined />}
                   onClick={() => setCopyModalVisible(true)}
@@ -1341,58 +1536,6 @@ const RolesPermissionsPage: React.FC = () => {
           {/* 第二层：树操作工具（搜索、批处理、模板、统计与页签） */}
           {selectedRole && (
             <div style={{ padding: '16px 16px 0 16px' }}>
-              <Flex justify="space-between" align="center" style={{ marginBottom: 8 }}>
-                <Space size="middle">
-                  {permissionLayer === 'function' && (
-                    <>
-                      <Input
-                        placeholder={t('pages.system.roles.searchPermission')}
-                        prefix={<SearchOutlined />}
-                        value={permissionSearchKeyword}
-                        onChange={(e) => setPermissionSearchKeyword(e.target.value)}
-                        allowClear
-                        style={{ width: 280 }}
-                      />
-                      <Space split={<Divider type="vertical" style={{ height: 14 }} />} size={0}>
-                        <Tooltip title={t('pages.system.roles.selectAllTooltip')}>
-                          <Button type="text" size="small" icon={<CheckSquareOutlined />} onClick={handleSelectAll}>
-                            {t('pages.system.roles.selectAll')}
-                          </Button>
-                        </Tooltip>
-                        <Tooltip title={t('pages.system.roles.selectNoneTooltip')}>
-                          <Button type="text" size="small" icon={<BorderOutlined />} onClick={handleSelectNone}>
-                            {t('pages.system.roles.selectNone')}
-                          </Button>
-                        </Tooltip>
-                        <Tooltip title={t('pages.system.roles.selectInvertTooltip')}>
-                          <Button type="text" size="small" icon={<SwapOutlined />} onClick={handleSelectInvert}>
-                            {t('pages.system.roles.selectInvert')}
-                          </Button>
-                        </Tooltip>
-                      </Space>
-                    </>
-                  )}
-                </Space>
-                
-                <Space size="middle">
-                  <div style={{ fontSize: '13px', color: token.colorTextSecondary }}>
-                    <span>{t('pages.system.roles.permissionCount')} <Tag color="blue" bordered={false}>{selectedRole.permission_count || 0}</Tag></span>
-                    <span style={{ marginLeft: 12 }}>{t('pages.system.roles.userCount')} <Tag color="green" bordered={false}>{selectedRole.user_count || 0}</Tag></span>
-                  </div>
-                  {permissionLayer === 'function' && (
-                    <Select
-                      placeholder={t('pages.system.roles.applyTemplate')}
-                      style={{ width: 180 }}
-                      allowClear
-                      onChange={(key) => key && handleApplyTemplate(key)}
-                      options={PERMISSION_TEMPLATES.map((tmpl) => ({
-                        value: tmpl.key,
-                        label: tmpl.name + (tmpl.description ? ` (${tmpl.description})` : ''),
-                      }))}
-                    />
-                  )}
-                </Space>
-              </Flex>
               <Tabs
                 activeKey={permissionLayer}
                 onChange={(key) => setPermissionLayer(key as 'function' | 'data' | 'field')}
@@ -1413,18 +1556,156 @@ const RolesPermissionsPage: React.FC = () => {
           {selectedRole ? (
             <Spin spinning={selectedRoleLoading || permissionsLoading}>
               {permissionLayer === 'function' && (
-                <Tree
-                  className="permission-tree-horizontal"
-                  treeData={permissionTreeData}
-                  expandedKeys={permissionTreeExpandedKeys}
-                  onExpand={(keys) => setPermissionTreeExpandedKeys(keys as React.Key[])}
-                  showIcon
-                />
+                <Space orientation="vertical" style={{ width: '100%' }} size={12}>
+                  <div style={{ color: token.colorTextSecondary, fontSize: 12 }}>
+                    功能权限用于控制“能看/能操作哪些功能”。支持搜索、全选、全不选、反选及按模块批量授权。
+                  </div>
+                  <Flex gap={8} wrap="wrap" align="center">
+                    <Input
+                      size="small"
+                      placeholder={t('pages.system.roles.searchPermission')}
+                      prefix={<SearchOutlined />}
+                      value={permissionSearchKeyword}
+                      onChange={(e) => setPermissionSearchKeyword(e.target.value)}
+                      allowClear
+                      style={{ width: 220 }}
+                    />
+                    <Button size="small" onClick={selectAllVisibleFunctionPermissions}>
+                      全选
+                    </Button>
+                    <Button size="small" onClick={clearVisibleFunctionPermissions}>
+                      全不选
+                    </Button>
+                    <Button size="small" onClick={invertVisibleFunctionPermissions}>
+                      反选
+                    </Button>
+                    <Select
+                      size="small"
+                      style={{ width: 180 }}
+                      value={functionBatchApp || undefined}
+                      allowClear
+                      placeholder="按模块权限"
+                      options={functionBatchAppOptions}
+                      onChange={(val) => setFunctionBatchApp(val || '')}
+                    />
+                    <Button size="small" onClick={selectByFunctionModule}>
+                      模块全选
+                    </Button>
+                    <Button size="small" onClick={clearByFunctionModule}>
+                      模块清空
+                    </Button>
+                  </Flex>
+                  <Tree
+                    className="permission-tree-horizontal"
+                    treeData={permissionTreeData}
+                    expandedKeys={permissionTreeExpandedKeys}
+                    onExpand={(keys) => setPermissionTreeExpandedKeys(keys as React.Key[])}
+                    showIcon
+                    titleRender={(node: any) => {
+                      if (node._actionItems && node._actionItems.length > 0) {
+                        return (
+                          <span className="permission-menu-title-wrap">
+                            <span style={{ fontWeight: node.children?.length ? 600 : undefined, color: token.colorPrimary }}>
+                              {node.title}
+                            </span>
+                            <div className="permission-action-row">
+                              {node._actionItems.map((item: any) => {
+                                const mergedChildren = mergedPermissionKeyMapRef.current[item.key] || [];
+                                const checked = mergedChildren.length
+                                  ? checkedPermissionSet.has(item.key) || mergedChildren.some((u) => checkedPermissionSet.has(u))
+                                  : checkedPermissionSet.has(item.key);
+                                return (
+                                  <label key={item.key} className="permission-action-chip">
+                                    <Checkbox checked={checked} onChange={(e) => togglePermissionKey(item.key, e.target.checked)} />
+                                    <span style={{ whiteSpace: 'nowrap' }}>{item.label}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </span>
+                        );
+                      }
+                      if (node._actionItems && node._actionItems.length === 0) {
+                        return (
+                          <span className="permission-menu-title-wrap">
+                            <span style={{ fontWeight: node.children?.length ? 600 : undefined, color: token.colorPrimary }}>
+                              {node.title}
+                            </span>
+                          </span>
+                        );
+                      }
+                      return node.title;
+                    }}
+                  />
+                </Space>
               )}
               {permissionLayer === 'data' && (
-                <Space direction="vertical" style={{ width: '100%' }} size={12}>
+                <Space orientation="vertical" style={{ width: '100%' }} size={12}>
+                  <div style={{ color: token.colorTextSecondary, fontSize: 12 }}>
+                    数据权限用于控制“看哪些数据”。支持按资源/应用批量设置范围，减少逐条维护。
+                  </div>
+                  <Flex gap={8} wrap="wrap" align="center">
+                    <Button size="small" onClick={() => setSelectedDataResources(dataPolicies.map((x) => x.resource))}>
+                      全选当前
+                    </Button>
+                    <Button size="small" onClick={() => setSelectedDataResources([])}>
+                      清空选择
+                    </Button>
+                    <Select
+                      size="small"
+                      style={{ width: 160 }}
+                      value={dataBatchScope}
+                      options={[
+                        { value: 'scope_all', label: '全部' },
+                        { value: 'scope_department', label: '本部门' },
+                        { value: 'scope_self', label: '本人' },
+                        { value: 'scope_custom', label: '自定义' },
+                      ]}
+                      onChange={(val) => setDataBatchScope(val as DataPermissionPolicy['scope_type'])}
+                    />
+                    <Button
+                      size="small"
+                      type="primary"
+                      onClick={() => {
+                        const n = applyScopeToResources(selectedDataResources, dataBatchScope);
+                        messageApi.info(`已批量更新 ${n} 条数据权限`);
+                      }}
+                    >
+                      批量应用到已选
+                    </Button>
+                    <Select
+                      size="small"
+                      style={{ width: 180 }}
+                      value={dataBatchApp || undefined}
+                      allowClear
+                      placeholder="按应用批量"
+                      options={dataBatchAppOptions}
+                      onChange={(val) => setDataBatchApp(val || '')}
+                    />
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        if (!dataBatchApp) return;
+                        const targets = resourceOptions
+                          .map((x) => x.value)
+                          .filter((x) => x.startsWith(`${dataBatchApp}:`));
+                        const n = applyScopeToResources(targets, dataBatchScope);
+                        messageApi.info(`已按应用批量更新 ${n} 条数据权限`);
+                      }}
+                    >
+                      应用到应用全部资源
+                    </Button>
+                  </Flex>
                   {dataPolicies.map((item, idx) => (
                     <Flex key={`data-${idx}`} gap={8}>
+                      <Checkbox
+                        checked={selectedDataResources.includes(item.resource)}
+                        onChange={(e) =>
+                          setSelectedDataResources((prev) =>
+                            e.target.checked ? Array.from(new Set([...prev, item.resource])) : prev.filter((x) => x !== item.resource)
+                          )
+                        }
+                      />
                       <Select
                         style={{ width: 360 }}
                         value={item.resource}
@@ -1472,9 +1753,87 @@ const RolesPermissionsPage: React.FC = () => {
                 </Space>
               )}
               {permissionLayer === 'field' && (
-                <Space direction="vertical" style={{ width: '100%' }} size={12}>
+                <Space orientation="vertical" style={{ width: '100%' }} size={12}>
+                  <div style={{ color: token.colorTextSecondary, fontSize: 12 }}>
+                    字段权限用于控制“看见什么样子”（明文/脱敏/隐藏）。支持金额与客户名关键词批量处理。
+                  </div>
+                  <Flex gap={8} wrap="wrap" align="center">
+                    <Button size="small" onClick={() => setSelectedFieldIndexes(fieldPolicies.map((_, i) => i))}>
+                      全选当前
+                    </Button>
+                    <Button size="small" onClick={() => setSelectedFieldIndexes([])}>
+                      清空选择
+                    </Button>
+                    <Select
+                      size="small"
+                      style={{ width: 140 }}
+                      value={fieldBatchMaskLevel}
+                      options={[
+                        { value: 'full', label: '明文' },
+                        { value: 'masked', label: '脱敏' },
+                        { value: 'hidden', label: '隐藏' },
+                      ]}
+                      onChange={(val) => setFieldBatchMaskLevel(val as FieldPermissionPolicy['mask_level'])}
+                    />
+                    <Button
+                      size="small"
+                      type="primary"
+                      onClick={() => {
+                        const n = applyFieldMaskToIndexes(selectedFieldIndexes, fieldBatchMaskLevel);
+                        messageApi.info(`已批量更新 ${n} 条字段权限`);
+                      }}
+                    >
+                      批量应用到已选
+                    </Button>
+                    <Input
+                      size="small"
+                      style={{ width: 280 }}
+                      value={fieldKeywordInput}
+                      onChange={(e) => setFieldKeywordInput(e.target.value)}
+                      placeholder="关键词，逗号分隔：amount,price,customer_name"
+                    />
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        const ks = fieldKeywordInput.split(',');
+                        const n = applyFieldMaskByKeywords(ks, fieldBatchMaskLevel);
+                        messageApi.info(`关键词匹配并更新 ${n} 条字段权限`);
+                      }}
+                    >
+                      关键词批量应用
+                    </Button>
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        const n = applyFieldMaskByKeywords(
+                          ['amount', 'price', 'unit_price', 'total_amount', 'tax_amount'],
+                          'masked'
+                        );
+                        messageApi.info(`金额模板已应用 ${n} 条`);
+                      }}
+                    >
+                      金额字段模板
+                    </Button>
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        const n = applyFieldMaskByKeywords(['customer_name', 'customername', 'client_name', 'clientname'], 'masked');
+                        messageApi.info(`客户名称模板已应用 ${n} 条`);
+                      }}
+                    >
+                      客户名称模板
+                    </Button>
+                  </Flex>
                   {fieldPolicies.map((item, idx) => (
                     <Flex key={`field-${idx}`} gap={8}>
+                      <Checkbox
+                        checked={selectedFieldIndexes.includes(idx)}
+                        onChange={(e) =>
+                          setSelectedFieldIndexes((prev) =>
+                            e.target.checked ? Array.from(new Set([...prev, idx])) : prev.filter((x) => x !== idx)
+                          )
+                        }
+                      />
                       <Select
                         style={{ width: 320 }}
                         value={item.resource}
@@ -1484,13 +1843,11 @@ const RolesPermissionsPage: React.FC = () => {
                           setFieldPolicies((prev) => prev.map((x, i) => (i === idx ? { ...x, resource: val } : x)))
                         }
                       />
-                      <Input
-                        style={{ width: 220 }}
-                        placeholder="字段名"
-                        value={item.field_name}
-                        onChange={(e) =>
+                      <FieldNameInput
+                        item={item}
+                        onChange={(val) =>
                           setFieldPolicies((prev) =>
-                            prev.map((x, i) => (i === idx ? { ...x, field_name: e.target.value } : x))
+                            prev.map((x, i) => (i === idx ? { ...x, field_name: val } : x))
                           )
                         }
                       />
@@ -1547,22 +1904,17 @@ const RolesPermissionsPage: React.FC = () => {
               borderTop: `1px solid ${token.colorBorder}`,
               padding: '8px 16px',
               display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
               fontSize: '12px',
               color: token.colorTextSecondary,
             }}
           >
-            <span>
-              {t('pages.system.roles.selectedCount', {
-                count: checkedKeys.filter(
-                  (key) => typeof key === 'string' && isAssignablePermissionTreeKey(key)
-                ).length,
-              })}
-            </span>
-            <span>
-              {t('pages.system.roles.totalPermissions', { count: allPermissions.length })}
-            </span>
+            <Space separator={<Divider orientation="vertical" />}>
+              <span>系统总权限：{allPermissions.length} 项</span>
+              <span>当前已授权：<span style={{ color: token.colorPrimary, fontWeight: 500 }}>{checkedKeys.filter(
+                (key) => typeof key === 'string' && isAssignablePermissionTreeKey(key)
+              ).length}</span> 项</span>
+              <span>角色关联用户：<span style={{ color: token.colorSuccess, fontWeight: 500 }}>{selectedRole.user_count || 0}</span> 人</span>
+            </Space>
           </div>
         )}
       </div>

@@ -36,7 +36,9 @@
     "kuaireport:dashboard:export",
     "kuaireport:dashboard:read",
     "kuaireport:report:export",
-    "kuaireport:report:read"
+    "kuaireport:report:read",
+    "kuaireport:report:print",
+    "kuaireport:dashboard:print"
   ],
   "dependencies": {
     "riveredge-backend": ">=1.0.0",

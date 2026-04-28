@@ -62,19 +62,9 @@ async def get_control_tower_summary(
         deleted_at__isnull=True
     ).count()
 
-    try:
-        readiness, load, risks, total_wip = await asyncio.gather(
-            readiness_task, load_task, risks_task, wip_count_task
-        )
-    except Exception as e:
-        logger.error(f"Error fetching control tower summary: {e}")
-        # 返回降级数据
-        return {
-            "material_readiness": [],
-            "resource_load": [],
-            "delivery_risks": [],
-            "total_wip_orders": 0
-        }
+    readiness, load, risks, total_wip = await asyncio.gather(
+        readiness_task, load_task, risks_task, wip_count_task
+    )
     
     return ControlTowerSummary(
         material_readiness=readiness,

@@ -42,7 +42,7 @@
  * ```
  */
 
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useRef, useState, useEffect } from 'react';
 import { Input, Space, Spin, Tree, theme } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -201,6 +201,31 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
   const { t } = useTranslation();
   const { token } = useToken();
 
+  const treeContainerRef = useRef<HTMLDivElement>(null);
+  const [treeHeight, setTreeHeight] = useState<number>(800);
+
+  useEffect(() => {
+    if (!treeContainerRef.current) return;
+    
+    // 使用 requestAnimationFrame 对 ResizeObserver 节流，避免过多渲染
+    let rafId: number;
+    const observer = new ResizeObserver((entries) => {
+      rafId = window.requestAnimationFrame(() => {
+        for (const entry of entries) {
+          if (entry.contentRect && entry.contentRect.height > 0) {
+            setTreeHeight(Math.max(200, entry.contentRect.height));
+          }
+        }
+      });
+    });
+    observer.observe(treeContainerRef.current);
+    
+    return () => {
+      observer.disconnect();
+      window.cancelAnimationFrame(rafId);
+    };
+  }, []);
+
   const {
     search,
     actions = [],
@@ -306,13 +331,17 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
           </div>
         )}
 
-        {/* 树形结构：与编号规则左栏一致的滚动条样式（scrollbar-like-modal） */}
+        {/* 树形结构：动态获取高度以启用虚拟滚动 */}
         <div
+          ref={treeContainerRef}
           className="left-panel-scroll-container scrollbar-like-modal"
-          style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '8px' }}
+          style={{ flex: 1, minHeight: 0, overflow: 'hidden', padding: '8px' }}
         >
-          <Spin spinning={loading}>
+          <Spin spinning={loading} style={{ height: '100%' }}>
             <Tree
+              height={treeHeight}
+              virtual={true}
+              motion={null}
               className={treeClassName}
               treeData={treeData}
               selectedKeys={selectedKeys}

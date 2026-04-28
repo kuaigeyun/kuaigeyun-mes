@@ -70,3 +70,16 @@ async def replace_role_field_policies(
         )
     except ValidationError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+
+
+@router.post("/governance/field-canonicalize")
+async def canonicalize_field_policies(
+    role_uuid: str | None = None,
+    _auth: object = Depends(require_access("system.permission", "update")),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """字段权限命名治理：归一化同义字段并合并重复记录（保留最新 updated_at）。"""
+    return await PermissionPolicyService.canonicalize_field_policies(
+        tenant_id=tenant_id,
+        role_uuid=role_uuid,
+    )

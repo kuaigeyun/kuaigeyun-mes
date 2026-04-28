@@ -274,12 +274,10 @@ class UserService:
                     user_dict["position_uuid"] = user.position.uuid
                 user_dict["position"] = position_data
 
-                # 角色信息（已通过 prefetch_related 加载，.all() 使用缓存不重复查库）
-                roles_list = await user.roles.all()
-                roles_data = [
-                    {"uuid": r.uuid, "name": r.name, "code": r.code}
-                    for r in roles_list
-                ]
+                # 角色信息（已通过 prefetch_related 加载，直接迭代可避免 N+1 查询）
+                roles_data = []
+                for r in user.roles:
+                    roles_data.append({"uuid": str(r.uuid), "name": r.name, "code": r.code})
                 user_dict["roles"] = roles_data
 
                 items.append(user_dict)

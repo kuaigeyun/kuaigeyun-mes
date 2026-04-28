@@ -162,8 +162,13 @@ class PermissionSyncService:
                 ):
                     # 未启用应用的权限属于休眠数据，不视为脏数据，不进入废弃/清理。
                     continue
+                # 历史遗留的非托管权限（is_managed=false）若属于已安装应用且不在真源定义中，
+                # 同样纳入治理，避免长期残留为“未挂载权限”。
                 if row.get("is_managed") is False:
-                    continue
+                    prefix = code.split(":", 1)[0] if ":" in code else ""
+                    if prefix not in all_app_codes:
+                        # 非应用前缀的人工权限暂不自动处置，避免误伤系统外接场景。
+                        continue
                 orphaned_codes.add(code)
                 if row.get("deprecated_at") is None:
                     deprecated_rows.append((now_dt, now_dt, int(row["id"]), tenant_id))

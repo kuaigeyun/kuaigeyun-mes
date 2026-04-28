@@ -79,6 +79,7 @@ class DynamicDatabaseConfigService:
             "core.models.role",
             "core.models.permission",
             "core.models.permission_alias",
+            "core.models.field_name_alias",
             "core.models.data_permission_policy",
             "core.models.field_permission_policy",
             "core.models.access_policy",
@@ -139,6 +140,7 @@ class DynamicDatabaseConfigService:
             "infra.models.industry_template",  # 行业模板模型（平台级）
             "infra.models.platform_settings",
             "infra.models.invitation_code",
+            "infra.models.biometric",
 
             # Aerich 模型（数据库迁移）
             "aerich.models",

@@ -663,7 +663,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
   const screens = Grid.useBreakpoint?.() ?? {};
   const isMobileOrTablet = screens.lg === false;
+  // 工作区最大化模式 (由 UniTab 控制)
   const [isFullscreen, setIsFullscreen] = useState(false);
+  // 浏览器全屏模式 (由顶栏控制)
+  const [isBrowserFullscreen, setIsBrowserFullscreen] = useState(false);
   /**
    * 侧栏收起时，antd 会把 `display: inline-flex` 等写进 `span.ant-menu-title-content` 的 **style**（与 Pro 的 CSS 叠加），
    * 在 DevTools 里「圈掉」的就是这一段。仅选子 `span` 无法命中，因为 Pro 的标题包装是 `div...-item-title`。
@@ -2026,19 +2029,23 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
 
   /**
-   * 处理全屏切换
+   * 处理全屏切换 (浏览器级别，顶栏触发)
    */
   const handleFullscreen = () => {
     if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().then(() => {
-        setIsFullscreen(true);
-      });
+      document.documentElement.requestFullscreen().catch(() => {});
     } else {
-      document.exitFullscreen().then(() => {
-        setIsFullscreen(false);
-      });
+      document.exitFullscreen().catch(() => {});
     }
   };
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      setIsBrowserFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }, []);
 
 
   /**
@@ -4717,8 +4724,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           );
 
           if (!isMobileOrTablet) {
-          // 手机端扫码按钮
-          actions.push(<MobileQRCode key="mobile-qr" />);
+          // 手机端扫码按钮 (临时不展示)
+          // actions.push(<MobileQRCode key="mobile-qr" />);
 
           // 语言切换下拉菜单
           actions.push(

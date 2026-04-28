@@ -234,6 +234,7 @@ export interface FieldPermissionPolicy {
   role_uuid: string;
   resource: string;
   field_name: string;
+  field_label?: string;
   mask_level: 'full' | 'masked' | 'hidden';
 }
 

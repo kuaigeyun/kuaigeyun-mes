@@ -10,9 +10,13 @@ from tortoise.expressions import Q
 from core.models.role import Role
 from core.timezone_utils import now_utc
 from core.models.permission import Permission
+from core.models.data_permission_policy import DataPermissionPolicy, DataScopeType
+from core.models.field_permission_policy import FieldPermissionPolicy, FieldMaskLevel
 from core.models.user_role import UserRole
 from core.schemas.role import RoleCreate, RoleUpdate
 from core.services.authorization.permission_version_service import PermissionVersionService
+from core.services.authorization.permission_registry_service import PermissionRegistryService
+from core.services.authorization.permission_policy_service import PermissionPolicyService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, AuthorizationError
 
 # 向后兼容别名
@@ -683,30 +687,68 @@ class RoleService:
         {"name": "普通员工", "code": "EMPLOYEE", "description": "职能通用权限，仅包含基础查询"},
     ]
 
+    PRESET_ROLE_DEFAULT_DATA_SCOPE: dict[str, str] = {
+        "SALES_MANAGER": DataScopeType.DEPARTMENT,
+        "SALES_PERSON": DataScopeType.SELF,
+        "SALES_OPERATOR": DataScopeType.SELF,
+        "PURCHASE_MANAGER": DataScopeType.DEPARTMENT,
+        "PURCHASE_PERSON": DataScopeType.SELF,
+        "PURCHASE_OPERATOR": DataScopeType.SELF,
+        "PRODUCTION_MANAGER": DataScopeType.DEPARTMENT,
+        "PRODUCTION_TEAM_LEADER": DataScopeType.DEPARTMENT,
+        "PRODUCTION_CLERK": DataScopeType.SELF,
+        "PRODUCTION_STAFF": DataScopeType.SELF,
+        "WAREHOUSE_MANAGER": DataScopeType.DEPARTMENT,
+        "WAREHOUSE_OPERATOR": DataScopeType.SELF,
+        "FINANCE_MANAGER": DataScopeType.DEPARTMENT,
+        "FINANCE_OPERATOR": DataScopeType.SELF,
+        "QUALITY_MANAGER": DataScopeType.DEPARTMENT,
+        "QUALITY_OPERATOR": DataScopeType.SELF,
+        "ADMIN_OFFICE": DataScopeType.DEPARTMENT,
+        "EMPLOYEE": DataScopeType.SELF,
+    }
+
+    @staticmethod
+    def _resource_from_permission_code(code: str) -> str | None:
+        parts = [x for x in (code or "").strip().lower().split(":") if x]
+        if len(parts) < 3:
+            return None
+        return f"{parts[0]}:{':'.join(parts[1:-1])}"
+
     @staticmethod
     async def _assign_preset_permissions(tenant_id: int, role: Role) -> None:
         """为预设角色分配默认权限（按 code 前缀匹配，幂等）。"""
         from core.models.role_permission import RolePermission
 
+        desired_codes = set((await PermissionRegistryService.collect_definitions(tenant_id=tenant_id)).keys())
+        if not desired_codes:
+            return
+
         prefixes = RoleService.PRESET_ROLE_PERMISSION_PREFIXES.get(role.code, [])
+        selected_permissions: list[Permission] = []
         if prefixes:
             permissions = await Permission.filter(
                 tenant_id=tenant_id,
                 deleted_at__isnull=True,
+                code__in=desired_codes,
             ).all()
+            selected_permissions = [
+                p for p in permissions if any(p.code == prefix or p.code.startswith(prefix) for prefix in prefixes)
+            ]
             selected_ids = {
                 p.id
-                for p in permissions
-                if any(p.code == prefix or p.code.startswith(prefix) for prefix in prefixes)
+                for p in selected_permissions
             }
         else:
             # 无前缀配置时至少授予只读权限，避免空角色不可用
             read_perms = await Permission.filter(
                 tenant_id=tenant_id,
                 deleted_at__isnull=True,
+                code__in=desired_codes,
             ).filter(
                 Q(code__endswith=":read") | Q(code__endswith=":view")
             ).all()
+            selected_permissions = read_perms
             selected_ids = {p.id for p in read_perms}
 
         if not selected_ids:
@@ -722,6 +764,59 @@ class RoleService:
             [RolePermission(role_id=role.id, permission_id=pid, created_at=now_utc()) for pid in to_add],
             ignore_conflicts=True,
         )
+
+        # 三层权限最佳实践：预设角色初始化时自动补齐默认数据/字段策略（仅初始化，不覆盖手工配置）。
+        resources = sorted(
+            {
+                r
+                for r in (RoleService._resource_from_permission_code(p.code) for p in selected_permissions)
+                if r
+            }
+        )
+        if not resources:
+            return
+
+        existing_data = await DataPermissionPolicy.filter(
+            tenant_id=tenant_id,
+            role_uuid=role.uuid,
+            deleted_at__isnull=True,
+        ).count()
+        if existing_data == 0:
+            scope = RoleService.PRESET_ROLE_DEFAULT_DATA_SCOPE.get(role.code, DataScopeType.SELF)
+            await DataPermissionPolicy.bulk_create(
+                [
+                    DataPermissionPolicy(
+                        tenant_id=tenant_id,
+                        role_uuid=role.uuid,
+                        resource=res,
+                        scope_type=scope,
+                        scope_payload=None,
+                    )
+                    for res in resources
+                ],
+                ignore_conflicts=True,
+            )
+
+        existing_field = await FieldPermissionPolicy.filter(
+            tenant_id=tenant_id,
+            role_uuid=role.uuid,
+            deleted_at__isnull=True,
+        ).count()
+        if existing_field == 0:
+            field_items = []
+            for res in resources:
+                for field_name in sorted(PermissionPolicyService.BUILTIN_MASKED_FIELD_NAMES):
+                    field_items.append(
+                        FieldPermissionPolicy(
+                            tenant_id=tenant_id,
+                            role_uuid=role.uuid,
+                            resource=res,
+                            field_name=field_name,
+                            mask_level=FieldMaskLevel.MASKED,
+                        )
+                    )
+            if field_items:
+                await FieldPermissionPolicy.bulk_create(field_items, ignore_conflicts=True)
 
     @staticmethod
     async def _merge_role_relations(source_role_id: int, target_role_id: int) -> None:

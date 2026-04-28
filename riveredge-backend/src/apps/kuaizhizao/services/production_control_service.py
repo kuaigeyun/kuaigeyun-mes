@@ -200,12 +200,12 @@ class ProductionControlService:
                 so_items = await SalesOrderItem.filter(
                     tenant_id=tenant_id,
                     sales_order_id=wo.sales_order_id,
-                    product_id=wo.product_id
+                    material_id=wo.product_id
                 ).all()
                 
                 for soi in so_items:
-                    if soi.required_date and wo.planned_end_date.date() > soi.required_date:
-                        diff = (wo.planned_end_date.date() - soi.required_date).days
+                    if soi.delivery_date and wo.planned_end_date.date() > soi.delivery_date:
+                        diff = (wo.planned_end_date.date() - soi.delivery_date).days
                         # 避免重复加入
                         if not any(r["work_order_id"] == wo.id for r in results):
                             results.append({
@@ -214,7 +214,7 @@ class ProductionControlService:
                                 "product_name": wo.product_name,
                                 "status": wo.status,
                                 "planned_end_date": wo.planned_end_date.isoformat(),
-                                "so_required_date": soi.required_date.isoformat(),
+                                "so_required_date": soi.delivery_date.isoformat(),
                                 "risk_type": "delivery_clash",
                                 "risk_desc": f"晚于订单交付 {diff} 天",
                                 "delay_days": diff

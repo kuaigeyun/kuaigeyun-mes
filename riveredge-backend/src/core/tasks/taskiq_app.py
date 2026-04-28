@@ -138,8 +138,14 @@ async def maintenance_reminder_daily_tick() -> dict:
 async def permission_governance_daily_tick() -> dict:
     """每天凌晨执行一次全租户权限治理兜底。"""
     from core.services.authorization.permission_sync_service import PermissionSyncService
+    from core.services.authorization.permission_policy_service import PermissionPolicyService
 
-    return await PermissionSyncService.sync_all_active_tenants(dry_run=False, prune=True)
+    permission_result = await PermissionSyncService.sync_all_active_tenants(dry_run=False, prune=True)
+    field_result = await PermissionPolicyService.canonicalize_field_policies_all_tenants()
+    return {
+        "permission_governance": permission_result,
+        "field_governance": field_result,
+    }
 
 
 # 数据备份/恢复仍通过 register_event_handler 注册
