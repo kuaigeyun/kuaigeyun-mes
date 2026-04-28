@@ -50,10 +50,15 @@ nul
 .DS_Store
 
 # ===== 本地/部署（不推送） =====
+# 移动端独立维护，不随主仓推送（本地保留 riveredge-mobile/）
+riveredge-mobile/
+
 bin/
 deploy/
 scripts/
-build-web-h5.sh
+# 根目录 scripts/ 会忽略各子项目下的 scripts/；必须保留以下两条，否则 riveredge-panel/scripts/ 无法提交
+!riveredge-panel/scripts/
+!riveredge-panel/scripts/**
 !riveredge-frontend/scripts/
 # 前端业务页：infra 脚本管理（勿被根目录 scripts/ 规则误伤）
 !riveredge-frontend/src/pages/infra/scripts/
