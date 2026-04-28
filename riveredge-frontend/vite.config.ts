@@ -152,11 +152,8 @@ export default defineConfig({
     minify: process.env.NODE_ENV === 'production' ? 'esbuild' : false, // 生产环境使用esbuild压缩，速度更快
     // 代码分割配置（按依赖类型分割，不按路由分割，避免菜单加载慢）
     rollupOptions: {
-      // 多入口：确保生产构建同时输出 index.html 与 login.html
-      input: {
-        index: resolve(srcPath, 'index.html'),
-        login: resolve(srcPath, 'login.html'),
-      },
+      // 多入口：登录页独立 bundle（login.html + login.tsx 已创建，需 build:login 单独构建后合并）
+      // 注：vite build src 时 root 覆盖可能导致多入口仅生成 index，故保留单入口
       output: {
         // 手动代码分割策略（顺序重要：优先匹配最具体的路径）
         manualChunks: (id) => {

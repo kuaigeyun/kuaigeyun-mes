@@ -52,6 +52,7 @@ nul
 # ===== 本地/部署（不推送） =====
 # 移动端独立维护，不随主仓推送（本地保留 riveredge-mobile/）
 riveredge-mobile/
+build-web-H5.sh
 
 bin/
 deploy/
