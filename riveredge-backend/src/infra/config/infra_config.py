@@ -231,8 +231,6 @@ class InfraSettings(BaseSettings):
     MAX_FILE_SIZE: int = Field(default=100 * 1024 * 1024, description="最大文件大小（字节）")
     # 基础URL配置：显式设置 BASE_URL 时使用该值；不设置则使用相对路径，便于局域网/反向代理部署
     base_url_override: str = Field(default="", alias="BASE_URL", description="文件/图片链接基础URL，不设置则使用相对路径")
-    KKFILEVIEW_URL: str = Field(default="http://localhost:8400", description="kkFileView 服务地址")
-
     @property
     def BASE_URL(self) -> str:
         """

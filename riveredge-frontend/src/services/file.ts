@@ -51,7 +51,8 @@ export interface FileUpdate {
 }
 
 export interface FilePreviewResponse {
-  preview_mode: 'simple' | 'kkfileview';
+  /** 固定为浏览器直连带 token 的下载预览 */
+  preview_mode: 'simple';
   preview_url: string;
   file_type?: string;
   supported: boolean;
@@ -233,8 +234,8 @@ const previewUrlCache = new Map<string, FilePreviewResponse>();
 
 /**
  * 获取文件预览信息
- * 
- * 根据配置返回简单预览或 kkFileView 预览URL。
+ *
+ * 返回带 token 的下载 URL，供 img/iframe 等直接使用。
  * forAvatar=true 时返回缩略图 URL（128x128），加快头像加载。
  * 
  * @param fileUuid - 文件 UUID
@@ -296,18 +297,5 @@ export async function getFileDownloadUrlWithToken(
 ): Promise<string> {
   const preview = await getFilePreview(fileUuid, options);
   return preview.preview_url;
-}
-
-/**
- * 检查 kkFileView 服务健康状态
- * 
- * @returns 健康状态信息
- */
-export async function checkKKFileViewHealth(): Promise<{
-  healthy: boolean;
-  service: string;
-  url: string;
-}> {
-  return apiRequest('/core/files/kkfileview/health');
 }
 

@@ -506,8 +506,8 @@ async def get_file_preview(
     """
     获取文件预览信息
     
-    根据配置返回简单预览或 kkFileView 预览URL。
-    for_avatar=True 时强制使用简单预览，返回直接下载URL（移动端头像等场景需要）。
+    返回带 token 的下载 URL，由浏览器直接预览（图片/PDF/音视频等）。
+    for_avatar=True 时为头像场景附加缩略图参数。
     
     Args:
         uuid: 文件UUID
@@ -621,26 +621,4 @@ async def batch_delete_files(
         uuids=uuids
     )
     return {"deleted_count": count}
-
-
-@router.get("/kkfileview/health")
-async def check_kkfileview_health(
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    检查 kkFileView 服务健康状态（支持多实例）
-    
-    检查 kkFileView 预览服务是否正常运行，支持多个服务实例的健康检查。
-    
-    Returns:
-        Dict[str, Any]: 健康检查结果
-        {
-            "overall_healthy": bool,  # 整体是否健康
-            "services": [...],  # 各个服务的健康状态
-            "healthy_count": int,  # 健康服务数量
-            "total_count": int  # 总服务数量
-        }
-    """
-    health_status = await FilePreviewService.check_kkfileview_health(tenant_id=tenant_id)
-    return health_status
 

@@ -159,7 +159,7 @@ class ErrorLogger:
         
         Args:
             error: 异常对象
-            service_name: 服务名称（如 kkFileView、Inngest 等）
+            service_name: 服务名称（如外部同步服务、Inngest 等）
             service_url: 服务URL（可选）
             tenant_id: 组织ID（可选）
         """

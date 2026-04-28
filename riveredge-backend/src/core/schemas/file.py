@@ -22,7 +22,7 @@ class FileBase(BaseModel):
     file_size: int = Field(..., ge=0, description="文件大小（字节）")
     file_type: Optional[str] = Field(None, max_length=100, description="文件类型（MIME类型）")
     file_extension: Optional[str] = Field(None, max_length=20, description="文件扩展名")
-    preview_url: Optional[str] = Field(None, max_length=500, description="预览URL（kkFileView 或简单预览）")
+    preview_url: Optional[str] = Field(None, max_length=500, description="预览用下载 URL（含 token）")
     category: Optional[str] = Field(None, max_length=50, description="文件分类（可选）")
     tags: Optional[List[str]] = Field(None, description="文件标签（JSON数组，可选）")
     description: Optional[str] = Field(None, description="文件描述（可选）")
@@ -85,7 +85,7 @@ class FilePreviewResponse(BaseModel):
     
     用于返回文件预览信息。
     """
-    preview_mode: str = Field(..., description="预览模式（simple 或 kkfileview）")
+    preview_mode: str = Field(default="simple", description="预览模式（固定为浏览器直连下载预览）")
     preview_url: str = Field(..., description="预览URL")
     file_type: Optional[str] = Field(None, description="文件类型")
     supported: bool = Field(..., description="是否支持预览")

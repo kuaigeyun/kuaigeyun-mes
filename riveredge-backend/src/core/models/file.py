@@ -28,7 +28,7 @@ class File(BaseModel):
         file_size: 文件大小（字节）
         file_type: 文件类型（MIME类型）
         file_extension: 文件扩展名
-        preview_url: 预览URL（kkFileView 或简单预览）
+        preview_url: 预览用下载 URL（列表接口可选填充）
         category: 文件分类（可选）
         tags: 文件标签（JSON数组，可选）
         description: 文件描述（可选）
@@ -48,7 +48,7 @@ class File(BaseModel):
     file_size = fields.BigIntField(description="文件大小（字节）")
     file_type = fields.CharField(max_length=100, null=True, description="文件类型（MIME类型）")
     file_extension = fields.CharField(max_length=20, null=True, description="文件扩展名")
-    preview_url = fields.CharField(max_length=500, null=True, description="预览URL（kkFileView 或简单预览）")
+    preview_url = fields.CharField(max_length=500, null=True, description="预览用下载 URL（可选）")
     
     category = fields.CharField(max_length=50, null=True, description="文件分类（可选）")
     tags = fields.JSONField(null=True, description="文件标签（JSON数组，可选）")
