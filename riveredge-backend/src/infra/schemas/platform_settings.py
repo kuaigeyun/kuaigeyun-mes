@@ -16,6 +16,7 @@ from core.schemas.base import BaseSchema
 class PlatformSettingsBase(BaseSchema):
     """平台设置基础schema"""
     platform_name: str = Field(..., max_length=200, description="平台名称")
+    platform_name_en: Optional[str] = Field(None, max_length=200, description="平台名称（英文）")
     platform_logo: Optional[str] = Field(None, max_length=500, description="平台Logo URL")
     favicon: Optional[str] = Field(None, max_length=500, description="网站 Favicon URL（浏览器标签页图标）")
     platform_description: Optional[str] = Field(None, description="平台描述")
@@ -23,8 +24,11 @@ class PlatformSettingsBase(BaseSchema):
     platform_contact_phone: Optional[str] = Field(None, max_length=50, description="平台联系电话")
     platform_website: Optional[str] = Field(None, max_length=500, description="平台网站")
     login_title: Optional[str] = Field(None, max_length=200, description="登录页标题")
+    login_title_en: Optional[str] = Field(None, max_length=200, description="登录页标题（英文）")
     login_content: Optional[str] = Field(None, description="登录页内容描述")
+    login_content_en: Optional[str] = Field(None, description="登录页内容描述（英文）")
     icp_license: Optional[str] = Field(None, max_length=100, description="ICP备案信息")
+    icp_license_en: Optional[str] = Field(None, max_length=100, description="ICP备案信息（英文）")
     theme_color: Optional[str] = Field("#1890ff", max_length=20, description="主题颜色")
     tenant_auto_approve: Optional[bool] = Field(False, description="是否自动审核：开启后，新注册的租户组织自动通过审核")
     float_button_enabled: Optional[bool] = Field(True, description="是否显示右下角悬浮按钮")
@@ -38,6 +42,7 @@ class PlatformSettingsCreate(PlatformSettingsBase):
 class PlatformSettingsUpdate(BaseSchema):
     """平台设置更新schema"""
     platform_name: Optional[str] = Field(None, max_length=200, description="平台名称")
+    platform_name_en: Optional[str] = Field(None, max_length=200, description="平台名称（英文）")
     platform_logo: Optional[str] = Field(None, max_length=500, description="平台Logo URL")
     favicon: Optional[str] = Field(None, max_length=500, description="网站 Favicon URL（浏览器标签页图标）")
     platform_description: Optional[str] = Field(None, description="平台描述")
@@ -45,8 +50,11 @@ class PlatformSettingsUpdate(BaseSchema):
     platform_contact_phone: Optional[str] = Field(None, max_length=50, description="平台联系电话")
     platform_website: Optional[str] = Field(None, max_length=500, description="平台网站")
     login_title: Optional[str] = Field(None, max_length=200, description="登录页标题")
+    login_title_en: Optional[str] = Field(None, max_length=200, description="登录页标题（英文）")
     login_content: Optional[str] = Field(None, description="登录页内容描述")
+    login_content_en: Optional[str] = Field(None, description="登录页内容描述（英文）")
     icp_license: Optional[str] = Field(None, max_length=100, description="ICP备案信息")
+    icp_license_en: Optional[str] = Field(None, max_length=100, description="ICP备案信息（英文）")
     theme_color: Optional[str] = Field(None, max_length=20, description="主题颜色")
     tenant_auto_approve: Optional[bool] = Field(None, description="是否自动审核：开启后，新注册的租户组织自动通过审核")
     float_button_enabled: Optional[bool] = Field(None, description="是否显示右下角悬浮按钮")

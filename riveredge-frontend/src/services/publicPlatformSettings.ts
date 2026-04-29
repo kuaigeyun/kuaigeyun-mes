@@ -5,6 +5,7 @@
 export interface PlatformSettings {
   id?: number;
   platform_name: string;
+  platform_name_en?: string;
   platform_logo?: string;
   favicon?: string;
   platform_description?: string;

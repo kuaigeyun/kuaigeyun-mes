@@ -113,10 +113,19 @@
           font-size: 16px !important;
           line-height: 1.6 !important;
           display: block; /* 确保是块级元素 */
-          text-align: justify; /* 两端对齐 */
+          text-align: justify; /* 默认两端对齐 */
           word-spacing: 0.1em; /* 增加单词间距，改善对齐效果 */
         }
       }
+    }
+  }
+
+  // 针对英文环境的特殊处理：左对齐，字号减小
+  &.lang-en-US {
+    .description-text {
+      text-align: left !important;
+      font-size: 14px !important; // 英文通常更长，减小一号更美观
+      word-spacing: normal !important; // 恢复正常单词间距
     }
   }
 

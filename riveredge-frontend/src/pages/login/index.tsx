@@ -82,7 +82,7 @@ function readPlatformSettingsPublicCache(): PlatformSettings | null {
  */
 export default function LoginPage() {
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { message } = App.useApp();
   const { token } = theme.useToken(); // 获取主题 token
 
@@ -131,6 +131,9 @@ export default function LoginPage() {
       const cachedSettings = localStorage.getItem('platformSettingsPublic');
       if (cachedSettings) {
         const parsed = JSON.parse(cachedSettings);
+        if (i18n.language === 'en-US') {
+          return parsed?.platform_name_en || parsed?.login_title_en || parsed?.platform_name || null;
+        }
         return parsed?.platform_name || null;
       }
     } catch (error) {
@@ -138,6 +141,10 @@ export default function LoginPage() {
     }
     return null;
   });
+
+  const localizedPlatformName = i18n.language === 'en-US' 
+    ? (platformSettings?.platform_name_en || platformSettings?.login_title_en || platformSettings?.platform_name || cachedPlatformName || 'RiverEdge SaaS')
+    : (platformSettings?.platform_name || cachedPlatformName || 'RiverEdge SaaS');
 
   // LOGO URL状态（支持UUID和URL两种格式）
   // 初始值：尝试从 localStorage 读取缓存的设置，避免闪烁
@@ -322,8 +329,11 @@ export default function LoginPage() {
         }
         localStorage.setItem('platformSettingsPublic', JSON.stringify(cachedData));
         // 更新缓存的平台名称，用于显示
-        if (platformSettings.platform_name) {
-          setCachedPlatformName(platformSettings.platform_name);
+        const name = i18n.language === 'en-US' 
+          ? (platformSettings.platform_name_en || platformSettings.login_title_en || platformSettings.platform_name) 
+          : platformSettings.platform_name;
+        if (name) {
+          setCachedPlatformName(name);
         }
       } catch (error) {
         // 忽略存储错误
@@ -339,17 +349,19 @@ export default function LoginPage() {
         const cachedSettings = localStorage.getItem('platformSettingsPublic');
         if (cachedSettings) {
           const parsed = JSON.parse(cachedSettings);
-          if (parsed?.platform_name) {
-            document.title = `${parsed.platform_name} - ${t('pages.login.pageTitleSuffix')}`;
+          const name = i18n.language === 'en-US' 
+            ? (parsed?.platform_name_en || parsed?.login_title_en || parsed?.platform_name) 
+            : parsed?.platform_name;
+          if (name) {
+            document.title = `${name} - ${t('pages.login.pageTitleSuffix')}`;
             return;
           }
         }
       } catch (error) {
         // 忽略解析错误
       }
-      document.title = `${t('pages.login.defaultPlatformName')} - ${t('pages.login.pageTitleSuffix')}`;
     } else {
-      const platformName = platformSettings?.platform_name || t('pages.login.defaultPlatformName');
+      const platformName = localizedPlatformName || t('pages.login.defaultPlatformName');
       document.title = `${platformName} - ${t('pages.login.pageTitleSuffix')}`;
     }
     
@@ -1399,7 +1411,7 @@ export default function LoginPage() {
       }}
     >
       <div 
-        className="login-container"
+        className={`login-container lang-${i18n.language}`}
         style={{
           background: themeColor, // 固定背景色，不受全局主题影响
         }}
@@ -1425,22 +1437,32 @@ export default function LoginPage() {
         >
           <Button
             type="default"
-            icon={<GlobalOutlined />}
             onClick={() => {
-              // 语言切换功能
+              const currentLang = i18n.language;
+              const nextLang = currentLang === 'zh-CN' ? 'en-US' : 'zh-CN';
+              i18n.changeLanguage(nextLang);
             }}
             style={{
               backgroundColor: '#fff',
               color: themeColor,
               borderColor: themeColor,
               boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
-              minWidth: '40px',
+              minWidth: '72px',
               height: '40px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              padding: '0 12px',
+              fontWeight: 600,
             }}
-          />
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <GlobalOutlined style={{ fontSize: '16px' }} />
+              <span style={{ fontSize: '14px', lineHeight: 1 }}>
+                {i18n.language === 'zh-CN' ? '中' : 'EN'}
+              </span>
+            </div>
+          </Button>
         </Tooltip>
       </div>
 
@@ -1456,7 +1478,7 @@ export default function LoginPage() {
         <img 
           key={logoRetryKey}
           src={logoUrl} 
-          alt={platformSettings?.platform_name || cachedPlatformName || "RiverEdge Logo"} 
+          alt={localizedPlatformName} 
           className="logo-img"
           width={48}
           height={48}
@@ -1493,7 +1515,7 @@ export default function LoginPage() {
                     fontWeight: 'bold',
                     color: themeColor,
                   },
-                  textContent: (platformSettings?.platform_name || cachedPlatformName || 'RiverEdge SaaS')?.substring(0, 2).toUpperCase() || 'RE',
+                  textContent: localizedPlatformName?.substring(0, 2).toUpperCase() || 'RE',
                 })
               );
             }
@@ -1503,7 +1525,7 @@ export default function LoginPage() {
           opacity: 1, // 不再因平台设置加载中隐藏，避免 API 不可达时长期空白
           transition: 'opacity 0.3s ease-in-out',
         }}>
-          {platformSettings?.platform_name || cachedPlatformName || 'RiverEdge SaaS'}
+          {localizedPlatformName}
         </Title>
       </div>
 
@@ -1522,7 +1544,7 @@ export default function LoginPage() {
           <img 
             key={logoRetryKey}
             src={logoUrl} 
-            alt={platformSettings?.platform_name || cachedPlatformName || "RiverEdge Logo"} 
+            alt={localizedPlatformName} 
             className="logo-img"
             width={48}
             height={48}
@@ -1560,7 +1582,7 @@ export default function LoginPage() {
                       color: themeColor,
                       marginRight: '16px',
                     },
-                    textContent: (platformSettings?.platform_name || cachedPlatformName || 'RiverEdge SaaS')?.substring(0, 2).toUpperCase() || 'RE',
+                    textContent: localizedPlatformName?.substring(0, 2).toUpperCase() || 'RE',
                   })
                 );
               }
@@ -1570,7 +1592,7 @@ export default function LoginPage() {
             opacity: 1, // 不再因平台设置加载中隐藏，避免 API 不可达时长期空白
             transition: 'opacity 0.3s ease-in-out',
           }}>
-            {platformSettings?.platform_name || cachedPlatformName || 'RiverEdge SaaS'}
+            {localizedPlatformName}
           </Title>
         </div>
 
@@ -1595,11 +1617,15 @@ export default function LoginPage() {
             {platformSettings?.login_title || platformSettings?.login_content ? (
               <>
                 <Title level={3} className="description-title">
-                  {platformSettings.login_title || platformSettings.platform_name}
+                  {i18n.language === 'en-US' 
+                    ? (platformSettings.login_title_en || platformSettings.login_title || platformSettings.platform_name) 
+                    : (platformSettings.login_title || platformSettings.platform_name)}
                 </Title>
-                {platformSettings.login_content && (
+                {(platformSettings.login_content || platformSettings.login_content_en) && (
                   <Text className="description-text">
-                    {platformSettings.login_content}
+                    {i18n.language === 'en-US' 
+                      ? (platformSettings.login_content_en || platformSettings.login_content) 
+                      : platformSettings.login_content}
                   </Text>
                 )}
               </>
@@ -1625,7 +1651,7 @@ export default function LoginPage() {
               opacity: 1,
               transition: 'opacity 0.3s ease-in-out',
             }}>
-              {(platformSettings?.platform_name || cachedPlatformName) ? t('pages.login.welcomeWithName', { name: platformSettings?.platform_name || cachedPlatformName || '' }) : t('pages.login.welcome')}
+              {localizedPlatformName ? t('pages.login.welcomeWithName', { name: localizedPlatformName }) : t('pages.login.welcome')}
             </Title>
             <Text className="form-subtitle">{t('pages.login.formSubtitle')}</Text>
           </div>
@@ -1999,9 +2025,12 @@ export default function LoginPage() {
           </p>
           <div className="login-footer-links">
             <Space separator={<span style={{ color: '#d9d9d9' }}>|</span>} size="small">
-              {platformSettings?.icp_license && (
+              {(platformSettings?.icp_license || platformSettings?.icp_license_en) && (
                 <Text type="secondary" style={{ fontSize: '11px' }}>
-                  {t('pages.login.icpLicense')}{platformSettings.icp_license}
+                  {t('pages.login.icpLicense')}
+                  {i18n.language === 'en-US' 
+                    ? (platformSettings.icp_license_en || platformSettings.icp_license) 
+                    : platformSettings.icp_license}
                 </Text>
               )}
               <Button

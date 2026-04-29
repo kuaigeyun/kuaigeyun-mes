@@ -62,11 +62,15 @@ export default function PlatformSettingsPage() {
       // 立即同步本地表单与缓存，避免 UI 仍短暂显示旧值造成“没保存”的错觉
       form.setFieldsValue({
         platform_name: data.platform_name,
+        platform_name_en: data.platform_name_en,
         platform_logo: data.platform_logo,
         favicon: data.favicon,
         login_title: data.login_title,
+        login_title_en: data.login_title_en,
         login_content: data.login_content,
+        login_content_en: data.login_content_en,
         icp_license: data.icp_license,
+        icp_license_en: data.icp_license_en,
         theme_color: data.theme_color || '#1890ff',
         tenant_auto_approve: data.tenant_auto_approve ?? false,
         float_button_enabled: data.float_button_enabled ?? true,
@@ -167,11 +171,15 @@ export default function PlatformSettingsPage() {
     if (settings) {
       form.setFieldsValue({
         platform_name: settings.platform_name,
+        platform_name_en: settings.platform_name_en,
         platform_logo: settings.platform_logo,
         favicon: settings.favicon,
         login_title: settings.login_title,
+        login_title_en: settings.login_title_en,
         login_content: settings.login_content,
+        login_content_en: settings.login_content_en,
         icp_license: settings.icp_license,
+        icp_license_en: settings.icp_license_en,
         theme_color: settings.theme_color || '#1890ff',
         tenant_auto_approve: settings.tenant_auto_approve ?? false,
         float_button_enabled: settings.float_button_enabled ?? true,
@@ -403,6 +411,18 @@ export default function PlatformSettingsPage() {
             }}
           />
 
+          <ProFormText
+            name="platform_name_en"
+            label={t('pages.infra.platform.platformNameEn')}
+            placeholder={t('pages.infra.platform.platformNameEnPlaceholder')}
+            rules={[
+              { max: 200, message: t('pages.infra.platform.platformNameMax') },
+            ]}
+            fieldProps={{
+              maxLength: 200,
+            }}
+          />
+
           <ProForm.Item
             name="platform_logo"
             label={t('pages.infra.platform.platformLogo')}
@@ -535,10 +555,32 @@ export default function PlatformSettingsPage() {
               }}
             />
 
+            <ProFormText
+              name="login_title_en"
+              label={t('pages.infra.platform.loginTitleEn')}
+              placeholder={t('pages.infra.platform.loginTitleEnPlaceholder')}
+              rules={[
+                { max: 200, message: t('pages.infra.platform.loginTitleMax') },
+              ]}
+              fieldProps={{
+                maxLength: 200,
+              }}
+            />
+
             <ProFormTextArea
               name="login_content"
               label={t('pages.infra.platform.loginContent')}
               placeholder={t('pages.infra.platform.loginContentPlaceholder')}
+              fieldProps={{
+                rows: 4,
+                maxLength: 1000,
+              }}
+            />
+
+            <ProFormTextArea
+              name="login_content_en"
+              label={t('pages.infra.platform.loginContentEn')}
+              placeholder={t('pages.infra.platform.loginContentEnPlaceholder')}
               fieldProps={{
                 rows: 4,
                 maxLength: 1000,
@@ -580,6 +622,18 @@ export default function PlatformSettingsPage() {
             name="icp_license"
             label={t('pages.infra.platform.icpLicense')}
             placeholder={t('pages.infra.platform.icpLicensePlaceholder')}
+            rules={[
+              { max: 100, message: t('pages.infra.platform.icpLicenseMax') },
+            ]}
+            fieldProps={{
+              maxLength: 100,
+            }}
+          />
+
+          <ProFormText
+            name="icp_license_en"
+            label={t('pages.infra.platform.icpLicenseEn')}
+            placeholder={t('pages.infra.platform.icpLicenseEnPlaceholder')}
             rules={[
               { max: 100, message: t('pages.infra.platform.icpLicenseMax') },
             ]}

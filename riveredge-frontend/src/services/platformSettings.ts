@@ -15,6 +15,7 @@ import { api } from './api';
 export interface PlatformSettings {
   id?: number;
   platform_name: string;
+  platform_name_en?: string;
   platform_logo?: string;
   favicon?: string;
   platform_description?: string;
@@ -22,8 +23,11 @@ export interface PlatformSettings {
   platform_contact_phone?: string;
   platform_website?: string;
   login_title?: string;
+  login_title_en?: string;
   login_content?: string;
+  login_content_en?: string;
   icp_license?: string;
+  icp_license_en?: string;
   theme_color?: string;
   tenant_auto_approve?: boolean;
   float_button_enabled?: boolean;
@@ -33,6 +37,7 @@ export interface PlatformSettings {
 
 export interface PlatformSettingsUpdateRequest {
   platform_name?: string;
+  platform_name_en?: string;
   platform_logo?: string;
   favicon?: string;
   platform_description?: string;
@@ -40,8 +45,11 @@ export interface PlatformSettingsUpdateRequest {
   platform_contact_phone?: string;
   platform_website?: string;
   login_title?: string;
+  login_title_en?: string;
   login_content?: string;
+  login_content_en?: string;
   icp_license?: string;
+  icp_license_en?: string;
   theme_color?: string;
   tenant_auto_approve?: boolean;
   float_button_enabled?: boolean;

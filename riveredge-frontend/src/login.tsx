@@ -6,26 +6,43 @@
  */
 
 import './pages/login/index.less';
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
+import enUS from 'antd/locale/en_US';
 import { App } from 'antd';
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import zhCNLocale from './locales/zh-CN.login';
+import enUSLocale from './locales/en-US.login';
 import LoginPage from './pages/login';
 
-// 登录页最小 i18n：仅加载 zh-CN，不请求后端
+// 语言检测逻辑
+const getInitialLang = () => {
+  const saved = localStorage.getItem('i18nextLng');
+  if (saved && (saved === 'zh-CN' || saved === 'en-US')) return saved;
+  
+  const navLang = navigator.language;
+  if (navLang.startsWith('zh')) return 'zh-CN';
+  return 'en-US';
+};
+
+const initialLang = getInitialLang();
+
+// 登录页最小 i18n：加载 zh-CN 和 en-US
 i18n.use(initReactI18next).init({
-  lng: 'zh-CN',
+  lng: initialLang,
   fallbackLng: 'zh-CN',
   debug: false,
   interpolation: { escapeValue: false },
   keySeparator: false,
   nsSeparator: false,
-  resources: { 'zh-CN': { translation: zhCNLocale } },
+  resources: { 
+    'zh-CN': { translation: zhCNLocale },
+    'en-US': { translation: enUSLocale }
+  },
 });
 
 /**
@@ -45,11 +62,24 @@ function RedirectToApp() {
   );
 }
 
-const root = document.getElementById('root');
-if (root) {
+function LoginRoot() {
+  const [locale, setLocale] = useState(initialLang === 'zh-CN' ? zhCN : enUS);
+
+  useEffect(() => {
+    const handleLanguageChange = (lng: string) => {
+      setLocale(lng === 'zh-CN' ? zhCN : enUS);
+      localStorage.setItem('i18nextLng', lng);
+    };
+    i18n.on('languageChanged', handleLanguageChange);
+    return () => {
+      i18n.off('languageChanged', handleLanguageChange);
+    };
+  }, []);
+
   const initialPath = window.location.pathname === '/login' ? '/login' : '/login';
-  ReactDOM.createRoot(root).render(
-    <ConfigProvider locale={zhCN}>
+
+  return (
+    <ConfigProvider locale={locale}>
       <App>
         <MemoryRouter initialEntries={[initialPath]} initialIndex={0}>
           <Routes>
@@ -61,3 +91,9 @@ if (root) {
     </ConfigProvider>
   );
 }
+
+const rootElement = document.getElementById('root');
+if (rootElement) {
+  ReactDOM.createRoot(rootElement).render(<LoginRoot />);
+}
+

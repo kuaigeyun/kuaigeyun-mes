@@ -27,6 +27,13 @@ class PlatformSettings(Model):
         platform_contact_email: 平台联系邮箱（可选）
         platform_contact_phone: 平台联系电话（可选）
         platform_website: 平台网站（可选）
+        login_title: 登录页标题（中文）
+        login_title_en: 登录页标题（英文）
+        login_content: 登录页内容描述（中文）
+        login_content_en: 登录页内容描述（英文）
+        icp_license: ICP备案信息（中文）
+        icp_license_en: ICP备案信息（英文）
+        theme_color: 主题颜色
         created_at: 创建时间
         updated_at: 更新时间
     """
@@ -48,6 +55,11 @@ class PlatformSettings(Model):
         max_length=200,
         default="RiverEdge SaaS Framework",
         description="平台名称"
+    )
+    platform_name_en = fields.CharField(
+        max_length=200,
+        null=True,
+        description="平台名称（英文）"
     )
     platform_logo = fields.CharField(
         max_length=500,
@@ -85,16 +97,30 @@ class PlatformSettings(Model):
     login_title = fields.CharField(
         max_length=200,
         null=True,
-        description="登录页标题"
+        description="登录页标题（中文）"
+    )
+    login_title_en = fields.CharField(
+        max_length=200,
+        null=True,
+        description="登录页标题（英文）"
     )
     login_content = fields.TextField(
         null=True,
-        description="登录页内容描述"
+        description="登录页内容描述（中文）"
+    )
+    login_content_en = fields.TextField(
+        null=True,
+        description="登录页内容描述（英文）"
     )
     icp_license = fields.CharField(
         max_length=100,
         null=True,
-        description="ICP备案信息"
+        description="ICP备案信息（中文）"
+    )
+    icp_license_en = fields.CharField(
+        max_length=100,
+        null=True,
+        description="ICP备案信息（英文）"
     )
     theme_color = fields.CharField(
         max_length=20,
