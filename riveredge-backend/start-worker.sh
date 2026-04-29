@@ -19,23 +19,18 @@ fi
 
 # Worker：消费 PG 队列中的任务（与 API 共用 core.tasks.taskiq_app:broker）
 echo "📦 正在启动 Taskiq worker..."
-uv run taskiq worker core.tasks.taskiq_app:broker \
+uv run taskiq worker \
+    --app-dir src \
     --fs-discover \
     $RELOAD \
-    core.tasks.taskiq_app \
-    core.tasks.data_backup_handlers \
-    core.inngest.functions \
-    apps.master_data.inngest.functions \
-    apps.kuaizhizao.inngest.functions &
+    core.tasks.taskiq_app:broker &
 
 # Scheduler：cron 任务（schedule 标签 + AsyncpgScheduleSource）
 echo "⏰ 正在启动 Taskiq scheduler..."
-uv run taskiq scheduler core.tasks.taskiq_app:scheduler \
+uv run taskiq scheduler \
+    --app-dir src \
     --fs-discover \
     $RELOAD \
-    core.tasks.taskiq_app \
-    core.inngest.functions \
-    apps.master_data.inngest.functions \
-    apps.kuaizhizao.inngest.functions &
+    core.tasks.taskiq_app:scheduler &
 
 wait
