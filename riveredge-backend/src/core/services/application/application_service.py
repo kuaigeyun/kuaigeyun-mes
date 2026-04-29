@@ -421,10 +421,6 @@ class ApplicationService:
         
         if application.get('is_installed'):
             raise ValidationError("应用已安装")
-
-        app_code = str(application.get("code") or "")
-        if app_code and not await ApplicationService._can_enable_or_install_app(tenant_id=tenant_id, app_code=app_code):
-            raise ValidationError("PRO 应用未激活 License Key，不允许安装")
         
         # 更新数据库
         conn = await get_db_connection()

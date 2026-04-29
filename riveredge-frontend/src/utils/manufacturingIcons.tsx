@@ -91,7 +91,6 @@ export const ManufacturingIcons = {
   inventory: getLucideIcon('Box'),
   package: getLucideIcon('Package'),
   box: getLucideIcon('Box'),
-  boxes: getLucideIcon('Box'),
   pallet: getLucideIcon('Box'),
   storagePallet: getLucideIcon('Box'),
   
@@ -118,6 +117,7 @@ export const ManufacturingIcons = {
   // 电子和芯片
   electronics: getLucideIcon('Cpu'),
   microchip: getLucideIcon('Cpu'),
+  cpu: getLucideIcon('Cpu'),
   
   // 安全和质量
   safety: getLucideIcon('HardHat'),

@@ -430,6 +430,100 @@ async def delete_application(
         )
 
 
+@router.post("/{uuid}/install", response_model=ApplicationResponse)
+async def install_application(
+    uuid: str,
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    安装应用
+
+    安装指定的应用，并同步应用菜单配置。
+
+    Args:
+        uuid: 应用UUID
+        tenant_id: 当前组织ID（依赖注入）
+
+    Returns:
+        ApplicationResponse: 安装后的应用对象
+
+    Raises:
+        HTTPException: 当应用不存在时抛出
+    """
+    try:
+        application = await ApplicationService.install_application(
+            tenant_id=tenant_id,
+            uuid=uuid
+        )
+        # 获取最新的 PRO 信息
+        activated_codes = await _get_activated_pro_codes(tenant_id)
+        pro_info = _enrich_app_with_pro_info(application, activated_codes)
+        
+        return ApplicationResponse.model_validate({**application, **pro_info})
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"安装应用失败: {str(e)}"
+        )
+
+
+@router.post("/{uuid}/uninstall", response_model=ApplicationResponse)
+async def uninstall_application(
+    uuid: str,
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    卸载应用
+
+    卸载指定的应用，并删除关联菜单。
+
+    Args:
+        uuid: 应用UUID
+        tenant_id: 当前组织ID（依赖注入）
+
+    Returns:
+        ApplicationResponse: 卸载后的应用对象
+
+    Raises:
+        HTTPException: 当应用不存在时抛出
+    """
+    try:
+        application = await ApplicationService.uninstall_application(
+            tenant_id=tenant_id,
+            uuid=uuid
+        )
+        # 获取最新的 PRO 信息
+        activated_codes = await _get_activated_pro_codes(tenant_id)
+        pro_info = _enrich_app_with_pro_info(application, activated_codes)
+        
+        return ApplicationResponse.model_validate({**application, **pro_info})
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"卸载应用失败: {str(e)}"
+        )
+
+
 @router.post("/{uuid}/enable", response_model=ApplicationResponse)
 async def enable_application(
     uuid: str,

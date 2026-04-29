@@ -31,7 +31,7 @@ class ApplicationRegistryService:
     _registered_apps: Dict[str, Dict[str, Any]] = {}
     _registered_models: Set[str] = set()
     _registered_routes: Dict[str, List[Any]] = {}
-    _placeholder_app_codes: Set[str] = {"kuaicrm", "kuaipdm", "kuaichain"}
+    _placeholder_app_codes: Set[str] = {"kuaicrm", "kuaipdm", "kuaichain", "kuaiiot"}
 
     @classmethod
     async def initialize(cls) -> None:

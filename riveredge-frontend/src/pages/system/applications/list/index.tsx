@@ -74,6 +74,7 @@ const getApplicationIcon = (code: string, icon?: string | null, size: number = 7
     kuaireport: React.createElement(ManufacturingIcons.fileBarChart, { size }),
     'master-data': React.createElement(ManufacturingIcons.database, { size }),
     kuaiai: React.createElement(ManufacturingIcons.sparkles, { size }),
+    kuaiiot: React.createElement(ManufacturingIcons.cpu, { size }),
     crm: <UserOutlined />,
     erp: <ShopOutlined />,
     mes: <DatabaseOutlined />,
@@ -96,6 +97,7 @@ const getCardGradient = (code: string, isActive: boolean): string => {
     kuaireport: 'linear-gradient(135deg, #f0fdf4 0%, #bbf7d0 100%)',  // 翡翠绿
     'master-data': 'linear-gradient(135deg, #f5f3ff 0%, #ddd6fe 100%)', // 丁香紫
     kuaiai: 'linear-gradient(135deg, #fff1f2 0%, #fecdd3 100%)',      // 玫瑰粉
+    kuaiiot: 'linear-gradient(135deg, #e6fffb 0%, #b5f5ec 100%)',     // 青绿色
     kuaimes: 'linear-gradient(135deg, #f0f9ff 0%, #bae6fd 100%)',     // 天蓝色
     bi: 'linear-gradient(135deg, #f0fdf4 0%, #bbf7d0 100%)',          // 翡翠绿
   };
@@ -274,7 +276,7 @@ const ApplicationListPage: React.FC = () => {
   const handleToggleActive = async (record: Application, checked: boolean) => {
     try {
       if (checked) {
-        const isProApp = record.is_pro || record.code === 'kuaireport' || record.code === 'bi';
+        const isProApp = record.is_pro || record.code === 'kuaireport' || record.code === 'bi' || record.code === 'kuaiiot';
         if (isProApp && !record.can_access) {
           setProKeyTargetApp(record);
           setPendingEnableAfterActivation(true);
@@ -805,9 +807,15 @@ const ApplicationListPage: React.FC = () => {
                               {renderBadge('PRO', '#fffbe6', '#faad14')}
                             </>
                           )}
+                          {application.code === 'kuaiiot' && (
+                            <>
+                              {renderBadge('IOT', '#e6fffb', '#13c2c2')}
+                              {renderBadge('PRO', '#fffbe6', '#faad14')}
+                            </>
+                          )}
 
                           {/* 锁定提示 */}
-                          {(application.is_pro || application.code === 'kuaireport' || application.code === 'bi') && !application.can_access && (
+                          {(application.is_pro || ['kuaireport', 'bi', 'kuaiiot'].includes(application.code)) && !application.can_access && (
                              renderBadge(t('pages.system.applications.proLockedTag'), '#f5f5f5', '#595959', <LockOutlined style={{ fontSize: 11 }} />)
                           )}
                         </div>
@@ -939,7 +947,7 @@ const ApplicationListPage: React.FC = () => {
               const allData = await getApplicationList(apiParams);
               let filteredData = (allData || []).map(app => {
                 // 强制将快报表和 BI 识别为非授权 PRO 模式，与 AI 保持一致
-                if (app.code === 'kuaireport' || app.code === 'bi') {
+                if (['kuaireport', 'bi'].includes(app.code)) {
                   return { ...app, is_pro: true, can_access: false };
                 }
                 return app;

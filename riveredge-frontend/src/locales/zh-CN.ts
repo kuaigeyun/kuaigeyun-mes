@@ -1726,6 +1726,9 @@ export default {
 
   // 应用名称翻译（统一规范）
   'app.kuaizhizao.name': '快制造',
+  'app.kuaiiot.name': '快数采',
+  'app.kuaiiot.menu.dashboard': '仪表盘',
+  'app.kuaiiot.menu.devices': '设备连接',
   /** 含物料明细的单据：与销售订单一致的多选物料面板 */
   'app.kuaizhizao.common.materialBatchSelect': '多选物料',
   'app.kuaizhizao.common.materialBatchAdded': '已添加 {{count}} 条明细',
