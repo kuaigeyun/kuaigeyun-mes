@@ -105,11 +105,23 @@ export interface PlatformVersion {
   iteration_notice?: string;
 }
 
+function resolveBuildTime(): string {
+  // 仅用于前端兜底（后端不可用时），避免生产每次刷新都动态变化
+  const globalBuildTime =
+    typeof __BUILD_TIME__ !== 'undefined' && typeof __BUILD_TIME__ === 'string'
+      ? __BUILD_TIME__
+      : '';
+  const envBuildTime = typeof import.meta.env.VITE_BUILD_TIME === 'string' ? import.meta.env.VITE_BUILD_TIME : '';
+  const value = (globalBuildTime || envBuildTime || '').trim();
+  return value || '-';
+}
+
 /**
  * 获取平台版本与迭代信息（公开接口）
  * 用于右下角悬浮按钮展示
  */
 export async function getPlatformVersion(): Promise<PlatformVersion> {
+  const fallbackBuildTime = resolveBuildTime();
   try {
     const response = await fetch('/api/v1/infra/platform/version');
     let data: PlatformVersion;
@@ -118,25 +130,25 @@ export async function getPlatformVersion(): Promise<PlatformVersion> {
     } else {
       data = await response.json();
     }
-    // 强制使用前端构建时注入的时间作为“构建/发布时间”
-    // 这样能确保时间是固定的，且以实际前端部署（构建）时间为准
+    // 优先使用后端返回的发布时刻；仅后端缺失时才使用前端兜底
     return {
       ...data,
-      build_time: __BUILD_TIME__,
+      build_time: (data.build_time || '').trim() || fallbackBuildTime,
     };
   } catch {
     const data = getDefaultVersion();
     return {
       ...data,
-      build_time: __BUILD_TIME__,
+      build_time: (data.build_time || '').trim() || fallbackBuildTime,
     };
   }
 }
 
 function getDefaultVersion(): PlatformVersion {
   const sha = import.meta.env.VITE_GIT_SHA;
+  const buildTime = resolveBuildTime();
   return {
-    build_time: __BUILD_TIME__,
+    build_time: buildTime,
     git_commit: typeof sha === 'string' && sha ? sha : '',
     git_latest_commit_time: '-',
     git_repo_url: 'https://gitee.com/kuaigeyun/kuaigeyun',
