@@ -24,6 +24,9 @@ class PermissionSyncService:
     _last_run_stats: dict[int, dict[str, int]] = {}
     _sync_interval_seconds = 300
 
+    # PostgreSQL advisory lock key prefix（避免与其他模块的 advisory lock 冲突）
+    _ADVISORY_LOCK_PREFIX = 0x7065726D  # "perm" in hex
+
     _UPSERT_PERMISSION_SQL = """
                         INSERT INTO core_permissions
                         (uuid, tenant_id, name, code, resource, action, description, permission_type,
@@ -95,12 +98,13 @@ class PermissionSyncService:
                                 continue
                             except asyncpg.exceptions.UniqueViolationError:
                                 pass
-                    logger.exception(
-                        "core_permissions 单条 upsert 最终失败 code={} detail={}",
+                    # 最终仍冲突：记录警告并跳过（权限行已存在，下一次 update_rows 路径会修复属性）
+                    # 不再 raise，避免因并发竞态导致整个 sync 失败进而影响 HTTP 响应
+                    logger.warning(
+                        "core_permissions 单条 upsert 最终失败，跳过 code={} detail={}",
                         code_hint,
                         row_exc,
                     )
-                    raise row_exc
 
     @classmethod
     async def ensure_permissions(
@@ -113,12 +117,7 @@ class PermissionSyncService:
         now = time.time()
         dry_run = dry_run or cls._is_dry_run_forced()
 
-        conn_repair = await get_db_connection()
-        try:
-            type_repaired = await cls._repair_permission_types(conn_repair, tenant_id=tenant_id)
-        finally:
-            await conn_repair.close()
-
+        # 节流检查放在 advisory lock 之前（快速路径，无需加锁）
         if not force and not dry_run:
             last_ts = cls._last_sync_ts.get(tenant_id, 0)
             if now - last_ts < cls._sync_interval_seconds:
@@ -130,14 +129,24 @@ class PermissionSyncService:
                     "merged": 0,
                     "orphaned": 0,
                     "scanned": 0,
-                    "type_repaired": type_repaired,
+                    "type_repaired": 0,
                     "dry_run": 1 if dry_run else 0,
                 }
+
+        # 提前占位，防止同进程内其他协程在本次 sync 未完成时再次进入
+        # （advisory lock 仅防跨进程，同进程内靠此标志节流）
+        if not dry_run:
+            cls._last_sync_ts[tenant_id] = now
+
+        conn_repair = await get_db_connection()
+        try:
+            type_repaired = await cls._repair_permission_types(conn_repair, tenant_id=tenant_id)
+        finally:
+            await conn_repair.close()
 
         desired_definitions = await PermissionRegistryService.collect_definitions(tenant_id=tenant_id)
         desired_codes = set(desired_definitions.keys())
         if not desired_codes:
-            cls._last_sync_ts[tenant_id] = now
             return {
                 "created": 0,
                 "updated": 0,
@@ -152,6 +161,12 @@ class PermissionSyncService:
 
         conn = await get_db_connection()
         try:
+            # PostgreSQL advisory lock：同一 tenant 的 sync 序列化执行，彻底消除并发竞态
+            # lock_key = prefix(32bit) XOR tenant_id(32bit)，拼成 int8
+            if not dry_run:
+                lock_key = (cls._ADVISORY_LOCK_PREFIX << 32) | (tenant_id & 0xFFFFFFFF)
+                await conn.execute("SELECT pg_advisory_lock($1)", lock_key)
+
             app_rows = await conn.fetch(
                 """
                 SELECT code, is_installed, is_active
@@ -340,7 +355,6 @@ class PermissionSyncService:
                         purge_before,
                     )
 
-            cls._last_sync_ts[tenant_id] = now
             result = {
                 "created": len(create_rows),
                 "updated": len(update_rows),
@@ -360,6 +374,13 @@ class PermissionSyncService:
             )
             return result
         finally:
+            # 释放 advisory lock（连接关闭时 PG 也会自动释放，此处显式释放更规范）
+            if not dry_run:
+                try:
+                    lock_key = (cls._ADVISORY_LOCK_PREFIX << 32) | (tenant_id & 0xFFFFFFFF)
+                    await conn.execute("SELECT pg_advisory_unlock($1)", lock_key)
+                except Exception:
+                    pass
             await conn.close()
 
     @classmethod

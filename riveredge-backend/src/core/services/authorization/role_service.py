@@ -6,6 +6,7 @@
 
 from typing import Optional, List
 from tortoise.expressions import Q
+from loguru import logger
 
 from core.models.role import Role
 from core.timezone_utils import now_utc
@@ -423,9 +424,14 @@ class RoleService:
                         permission_code=permission_code
                     )
                 )
-        # 权限变更后 bump 租户级版本，驱动缓存失效
+        # 权限变更后 bump：
+        #   1) 租户级版本（user_id=None）：供全局聚合场景使用
+        #   2) 持有该角色的每个用户的用户级版本：驱动 UserPermissionService 缓存失效
         await PermissionVersionService.bump(tenant_id=tenant_id, user_id=None)
-        
+        await RoleService._bump_role_users_permission_version(
+            role_id=role.id, tenant_id=tenant_id
+        )
+
         return {
             "success": True,
             "message": "权限分配成功",
@@ -994,3 +1000,21 @@ class RoleService:
                 await RoleService._assign_preset_permissions(tenant_id=tenant_id, role=role)
                 created += 1
         return created
+
+    @staticmethod
+    async def _bump_role_users_permission_version(role_id: int, tenant_id: int) -> None:
+        """为持有指定角色的所有用户 bump 用户级权限版本，驱动 UserPermissionService 缓存失效。"""
+        try:
+            from core.models.user_role import UserRole
+            user_roles = await UserRole.filter(role_id=role_id).all()
+            for ur in user_roles:
+                await PermissionVersionService.bump(
+                    tenant_id=tenant_id, user_id=ur.user_id
+                )
+        except Exception as exc:
+            logger.warning(
+                "bump_role_users_permission_version 失败 role_id={} tenant_id={} err={}",
+                role_id,
+                tenant_id,
+                exc,
+            )
