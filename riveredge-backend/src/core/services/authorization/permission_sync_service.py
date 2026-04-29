@@ -5,6 +5,8 @@ from __future__ import annotations
 import time
 from datetime import timedelta
 
+import asyncpg
+
 from core.timezone_utils import now_utc
 from typing import Any
 from uuid import uuid4
@@ -21,6 +23,56 @@ class PermissionSyncService:
     _last_sync_ts: dict[int, float] = {}
     _last_run_stats: dict[int, dict[str, int]] = {}
     _sync_interval_seconds = 300
+
+    _UPSERT_PERMISSION_SQL = """
+                        INSERT INTO core_permissions
+                        (uuid, tenant_id, name, code, resource, action, description, permission_type,
+                         is_managed, source_type, source_app, source_path, created_at, updated_at)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                        ON CONFLICT (tenant_id, code)
+                        DO UPDATE SET
+                            name = EXCLUDED.name,
+                            resource = EXCLUDED.resource,
+                            action = EXCLUDED.action,
+                            description = EXCLUDED.description,
+                            permission_type = EXCLUDED.permission_type,
+                            is_managed = TRUE,
+                            source_type = EXCLUDED.source_type,
+                            source_app = EXCLUDED.source_app,
+                            source_path = EXCLUDED.source_path,
+                            deleted_at = NULL,
+                            deprecated_at = NULL,
+                            updated_at = EXCLUDED.updated_at
+                        """
+
+    @staticmethod
+    def _dedupe_create_rows_by_code(create_rows: list[tuple[Any, ...]]) -> list[tuple[Any, ...]]:
+        """同一批 upsert 中若出现重复 code，PostgreSQL 会报 unique violation，按 code 保留最后一行。"""
+        by_code: dict[str, tuple[Any, ...]] = {}
+        for row in create_rows:
+            if len(row) < 4:
+                continue
+            by_code[str(row[3])] = row
+        return [by_code[k] for k in sorted(by_code.keys())]
+
+    @classmethod
+    async def _upsert_create_rows(
+        cls,
+        conn: Any,
+        create_rows: list[tuple[Any, ...]],
+    ) -> None:
+        if not create_rows:
+            return
+        rows = cls._dedupe_create_rows_by_code(create_rows)
+        try:
+            await conn.executemany(cls._UPSERT_PERMISSION_SQL, rows)
+        except asyncpg.exceptions.UniqueViolationError as e:
+            logger.warning(
+                "core_permissions 批量 upsert 触发唯一冲突，将逐行重试: {}",
+                e,
+            )
+            for row in rows:
+                await conn.execute(cls._UPSERT_PERMISSION_SQL, *row)
 
     @classmethod
     async def ensure_permissions(
@@ -87,6 +139,15 @@ class PermissionSyncService:
                 for r in app_rows
                 if str(r["code"]).strip() and bool(r["is_installed"]) and bool(r["is_active"])
             }
+
+            # 先合并同租户下「规范化后相同」的重复权限行，再拉取 existing；避免后续 INSERT 与脏数据竞态
+            merged_count = 0
+            if not dry_run:
+                merged_count = await cls._merge_duplicate_permissions(
+                    conn=conn,
+                    tenant_id=tenant_id,
+                    desired_codes=desired_codes,
+                )
 
             existing_rows = await conn.fetch(
                 """
@@ -173,32 +234,9 @@ class PermissionSyncService:
                 if row.get("deprecated_at") is None:
                     deprecated_rows.append((now_dt, now_dt, int(row["id"]), tenant_id))
 
-            merged = 0
             if not dry_run:
                 if create_rows:
-                    await conn.executemany(
-                        """
-                        INSERT INTO core_permissions
-                        (uuid, tenant_id, name, code, resource, action, description, permission_type,
-                         is_managed, source_type, source_app, source_path, created_at, updated_at)
-                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-                        ON CONFLICT (tenant_id, code)
-                        DO UPDATE SET
-                            name = EXCLUDED.name,
-                            resource = EXCLUDED.resource,
-                            action = EXCLUDED.action,
-                            description = EXCLUDED.description,
-                            permission_type = EXCLUDED.permission_type,
-                            is_managed = TRUE,
-                            source_type = EXCLUDED.source_type,
-                            source_app = EXCLUDED.source_app,
-                            source_path = EXCLUDED.source_path,
-                            deleted_at = NULL,
-                            deprecated_at = NULL,
-                            updated_at = EXCLUDED.updated_at
-                        """,
-                        create_rows,
-                    )
+                    await cls._upsert_create_rows(conn, create_rows)
                 if update_rows:
                     await conn.executemany(
                         """
@@ -226,11 +264,6 @@ class PermissionSyncService:
                         """,
                         deprecated_rows,
                     )
-                merged = await cls._merge_duplicate_permissions(
-                    conn=conn,
-                    tenant_id=tenant_id,
-                    desired_codes=desired_codes,
-                )
 
             purged = 0
             if prune:
@@ -280,7 +313,7 @@ class PermissionSyncService:
                 "updated": len(update_rows),
                 "deprecated": len(deprecated_rows),
                 "purged": purged,
-                "merged": merged,
+                "merged": merged_count,
                 "orphaned": len(orphaned_codes),
                 "scanned": len(desired_codes),
                 "type_repaired": type_repaired,
