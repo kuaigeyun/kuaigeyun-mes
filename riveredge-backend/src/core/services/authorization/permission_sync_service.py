@@ -60,6 +60,9 @@ class PermissionSyncService:
         cls,
         conn: Any,
         create_rows: list[tuple[Any, ...]],
+        *,
+        tenant_id: int | None = None,
+        desired_codes: set[str] | None = None,
     ) -> None:
         if not create_rows:
             return
@@ -72,7 +75,32 @@ class PermissionSyncService:
                 e,
             )
             for row in rows:
-                await conn.execute(cls._UPSERT_PERMISSION_SQL, *row)
+                try:
+                    await conn.execute(cls._UPSERT_PERMISSION_SQL, *row)
+                except asyncpg.exceptions.UniqueViolationError as row_exc:
+                    code_hint = row[3] if len(row) > 3 else "?"
+                    logger.warning(
+                        "单条 upsert 仍冲突 code={}，尝试合并同租户重复权限行后再写入一次",
+                        code_hint,
+                    )
+                    if tenant_id is not None and desired_codes is not None:
+                        merged = await cls._merge_duplicate_permissions(
+                            conn=conn,
+                            tenant_id=tenant_id,
+                            desired_codes=desired_codes,
+                        )
+                        if merged > 0:
+                            try:
+                                await conn.execute(cls._UPSERT_PERMISSION_SQL, *row)
+                                continue
+                            except asyncpg.exceptions.UniqueViolationError:
+                                pass
+                    logger.exception(
+                        "core_permissions 单条 upsert 最终失败 code={} detail={}",
+                        code_hint,
+                        row_exc,
+                    )
+                    raise row_exc
 
     @classmethod
     async def ensure_permissions(
@@ -236,7 +264,12 @@ class PermissionSyncService:
 
             if not dry_run:
                 if create_rows:
-                    await cls._upsert_create_rows(conn, create_rows)
+                    await cls._upsert_create_rows(
+                        conn,
+                        create_rows,
+                        tenant_id=tenant_id,
+                        desired_codes=desired_codes,
+                    )
                 if update_rows:
                     await conn.executemany(
                         """

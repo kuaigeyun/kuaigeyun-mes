@@ -7,6 +7,8 @@
 """
 
 import os
+import subprocess
+from pathlib import Path
 from datetime import datetime, timezone
 from core.timezone_utils import now_utc
 from fastapi import APIRouter
@@ -35,6 +37,31 @@ class PlatformVersionResponse(BaseModel):
         default="本系统持续迭代优化中，如有意见或需求反馈，欢迎通过下方入口联系。",
         description="迭代提示文案"
     )
+
+
+def _try_git_short_sha_from_worktree() -> str:
+    """
+    未设置 GIT_SHA 时，从本机检出目录解析短 SHA（IDE/uv 直接起后端时常见）。
+    无 .git、无 git 命令或仅有产物目录时返回空字符串。
+    """
+    here = Path(__file__).resolve()
+    for base in [here, *here.parents]:
+        if not (base / ".git").exists():
+            continue
+        try:
+            out = subprocess.run(
+                ["git", "-C", str(base), "rev-parse", "--short", "HEAD"],
+                capture_output=True,
+                text=True,
+                timeout=3,
+                check=False,
+            )
+            if out.returncode == 0 and out.stdout:
+                return out.stdout.strip()[:7]
+        except (FileNotFoundError, OSError):
+            break
+        return ""
+    return ""
 
 
 def _normalize_to_iso_utc(raw: str) -> str:
@@ -101,6 +128,8 @@ async def get_platform_version():
 
     def _display_git_commit() -> str:
         raw = (os.environ.get("GIT_SHA") or os.environ.get("PLATFORM_GIT_SHA") or "").strip()
+        if not raw:
+            raw = _try_git_short_sha_from_worktree()
         if not raw or raw.lower().startswith("http"):
             return ""
         token = raw.split()[0]

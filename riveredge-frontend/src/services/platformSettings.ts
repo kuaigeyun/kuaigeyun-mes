@@ -112,17 +112,31 @@ export interface PlatformVersion {
 export async function getPlatformVersion(): Promise<PlatformVersion> {
   try {
     const response = await fetch('/api/v1/infra/platform/version');
-    if (!response.ok) return getDefaultVersion();
-    return response.json();
+    let data: PlatformVersion;
+    if (!response.ok) {
+      data = getDefaultVersion();
+    } else {
+      data = await response.json();
+    }
+    // 强制使用前端构建时注入的时间作为“构建/发布时间”
+    // 这样能确保时间是固定的，且以实际前端部署（构建）时间为准
+    return {
+      ...data,
+      build_time: __BUILD_TIME__,
+    };
   } catch {
-    return getDefaultVersion();
+    const data = getDefaultVersion();
+    return {
+      ...data,
+      build_time: __BUILD_TIME__,
+    };
   }
 }
 
 function getDefaultVersion(): PlatformVersion {
   const sha = import.meta.env.VITE_GIT_SHA;
   return {
-    build_time: '-',
+    build_time: __BUILD_TIME__,
     git_commit: typeof sha === 'string' && sha ? sha : '',
     git_latest_commit_time: '-',
     git_repo_url: 'https://gitee.com/kuaigeyun/kuaigeyun',

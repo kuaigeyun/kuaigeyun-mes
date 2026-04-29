@@ -961,10 +961,17 @@ export default function DashboardPage() {
   const dashboardCardShadow = token.boxShadowTertiary;
   // 首行四卡统一固定高度
   const dashboardTopCardHeight = 126;
+  /** 指标卡统一固定高度 */
+  const dashboardKpiCardHeight = 126;
   /** 底部待办 / 最新操作两卡统一固定高度（整张 Card，含标题栏），列表在卡片内滚动 */
   const dashboardBottomThreeCardsFixedHeight = 500;
   /** 工作台：主 Row gutter、纵向 flex gap、相邻区块 margin 与 antd 默认 gutter 对齐，统一 16px */
   const DASHBOARD_LAYOUT_GUTTER = 16;
+  
+  /** 计算右侧栏（快捷入口 + 版本号）需要对齐左侧（指标卡 * 2 + 待办）的总高度 */
+  const dashboardKpiRowHeight = (dashboardKpiCardHeight * 2) + DASHBOARD_LAYOUT_GUTTER;
+  const dashboardRightSectionHeight = dashboardKpiRowHeight + DASHBOARD_LAYOUT_GUTTER + dashboardBottomThreeCardsFixedHeight;
+
   /** 卡片内列表区：占满 body 剩余空间并滚动 */
   const bottomCardListScrollBoxStyle: React.CSSProperties = {
     flex: '1 1 0%',
@@ -1661,7 +1668,7 @@ export default function DashboardPage() {
               </Col>
               <Col xs={24} sm={12} md={12} lg={8} xl={7} xxl={7} style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: DASHBOARD_LAYOUT_GUTTER }}>
                 {/* 工单总数 */}
-                <div style={{ display: 'flex', minWidth: 0, minHeight: 0 }}>
+                <div style={{ display: 'flex', minWidth: 0, minHeight: 0, height: dashboardKpiCardHeight }}>
                   <DashboardKpiRichCard
                     gradient={isDark ? 'var(--ant-colorBgContainer)' : '#ffffff'}
                     title={t('pages.dashboard.statWorkOrderTotal')}
@@ -1682,8 +1689,9 @@ export default function DashboardPage() {
                     onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders')}
                   />
                 </div>
+
                 {/* 完工数量 */}
-                <div style={{ display: 'flex', minWidth: 0, minHeight: 0 }}>
+                <div style={{ display: 'flex', minWidth: 0, minHeight: 0, height: dashboardKpiCardHeight }}>
                   <DashboardKpiRichCard
                     gradient={isDark ? 'var(--ant-colorBgContainer)' : '#ffffff'}
                     title={t('pages.dashboard.statCompletedQuantity')}
@@ -1704,10 +1712,11 @@ export default function DashboardPage() {
                     onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders')}
                   />
                 </div>
+
               </Col>
               <Col xs={24} sm={12} md={12} lg={8} xl={7} xxl={7} style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: DASHBOARD_LAYOUT_GUTTER }}>
                 {/* 进行中工单 */}
-                <div style={{ display: 'flex', minWidth: 0, minHeight: 0 }}>
+                <div style={{ display: 'flex', minWidth: 0, minHeight: 0, height: dashboardKpiCardHeight }}>
                   <DashboardKpiRichCard
                     gradient={isDark ? 'var(--ant-colorBgContainer)' : '#ffffff'}
                     title={t('pages.dashboard.statWorkOrderInProgress')}
@@ -1728,8 +1737,9 @@ export default function DashboardPage() {
                     onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders?status=in_progress')}
                   />
                 </div>
+
                 {/* 库存预警 */}
-                <div style={{ display: 'flex', minWidth: 0, minHeight: 0 }}>
+                <div style={{ display: 'flex', minWidth: 0, minHeight: 0, height: dashboardKpiCardHeight }}>
                   <DashboardKpiRichCard
                     gradient={isDark ? 'var(--ant-colorBgContainer)' : '#ffffff'}
                     title={t('pages.dashboard.statInventoryAlert')}
@@ -1750,10 +1760,11 @@ export default function DashboardPage() {
                     onClick={() => navigate('/apps/kuaizhizao/warehouse-management/inventory')}
                   />
                 </div>
+
               </Col>
               <Col xs={24} sm={12} md={12} lg={8} xl={7} xxl={7} style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: DASHBOARD_LAYOUT_GUTTER }}>
                 {/* 工单完成率 */}
-                <div style={{ display: 'flex', minWidth: 0, minHeight: 0 }}>
+                <div style={{ display: 'flex', minWidth: 0, minHeight: 0, height: dashboardKpiCardHeight }}>
                   <DashboardKpiRichCard
                     gradient={isDark ? 'var(--ant-colorBgContainer)' : '#ffffff'}
                     title={t('pages.dashboard.statWorkOrderCompletion')}
@@ -1772,8 +1783,9 @@ export default function DashboardPage() {
                     onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders?status=completed')}
                   />
                 </div>
+
                 {/* 质量概览 */}
-                <div style={{ display: 'flex', minWidth: 0, minHeight: 0 }}>
+                <div style={{ display: 'flex', minWidth: 0, minHeight: 0, height: dashboardKpiCardHeight }}>
                   <DashboardKpiRichCard
                     gradient={isDark ? 'var(--ant-colorBgContainer)' : '#ffffff'}
                     title={t('pages.dashboard.statQualitySummary')}
@@ -1794,6 +1806,7 @@ export default function DashboardPage() {
                     onClick={() => navigate('/apps/kuaizhizao/quality-management')}
                   />
                 </div>
+
               </Col>
             </Row>
             <Row
@@ -2412,96 +2425,116 @@ export default function DashboardPage() {
               </div>
             ) : null}
           </Card>
+          {/* 右侧下区：快捷入口 + 版本号，固定高度对齐左侧 */}
           <div
-            className="dashboard-bento-left-quick"
-            style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+            className="dashboard-right-bottom-section"
+            style={{
+              flex: 1,
+              minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              height: screens.lg ? dashboardRightSectionHeight : 'auto',
+              maxHeight: screens.lg ? dashboardRightSectionHeight : 'none',
+              overflow: 'hidden',
+            }}
           >
-            <QuickEntryGrid
-              title={
-                <Space>
-                  <AppstoreOutlined />
-                  <span>{t('pages.dashboard.quickEntry')}</span>
+            <div
+              className="dashboard-bento-left-quick"
+              style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+            >
+              <QuickEntryGrid
+                title={
+                  <Space>
+                    <AppstoreOutlined />
+                    <span>{t('pages.dashboard.quickEntry')}</span>
+                  </Space>
+                }
+                items={useMemo(() => {
+                  if (quickEntryLoading) {
+                    return [];
+                  }
+                  const quickEntries = userPreference?.preferences?.dashboard_quick_entries as QuickEntryItem[] | undefined;
+
+                  // 用户偏好优先：只要有保存项，始终优先展示用户自己的快捷入口
+                  if (Array.isArray(quickEntries) && quickEntries.length > 0) {
+                    return quickEntries
+                      .sort((a, b) => a.sort_order - b.sort_order)
+                      .map((entry) => {
+                        const menu = quickEntryMenuTree.length ? findMenuInTree(quickEntryMenuTree, entry.menu_uuid) : null;
+                        const resolvedPath = entry.menu_path || menu?.path || '';
+                        if (!resolvedPath) return null;
+
+                        return {
+                          ...entry,
+                          menu_name: entry.menu_name || (menu ? getTranslatedMenuTitle(menu, t) : ''),
+                          menu_path: resolvedPath,
+                          menu_icon: menu ? renderMenuIcon(menu) : getMenuIconByPath(resolvedPath, entry.menu_name),
+                        };
+                      })
+                      .filter((item): item is any => item !== null);
+                  }
+
+                  if (!quickEntryMenuTree.length) {
+                    return [];
+                  }
+
+                  // 无用户配置时：直接使用真实业务菜单生成快捷入口
+                  return buildQuickEntriesFromMenuTree(quickEntryMenuTree, renderMenuIcon, t, 10);
+                }, [quickEntryLoading, userPreference, quickEntryMenuTree, t])}
+                loading={quickEntryLoading}
+                menuTree={useMemo(() => {
+                  if (!quickEntryMenuTree.length) return [];
+                  return convertMenuTreeToTreeData(quickEntryMenuTree, t);
+                }, [quickEntryMenuTree, t])}
+                showConfig={true}
+                onSave={async (items: QuickEntryItem[]) => {
+                  // 偏好设置需要可 JSON 序列化，不能保存 ReactNode（menu_icon）
+                  const serializableItems = items.map(({ menu_icon, ...rest }) => rest);
+                  // updatePreferences 直接写入 useUserPreferenceStore，组件会因 store 变更自动重渲染，无需再 invalidate queries
+                  await updatePreferences({ dashboard_quick_entries: serializableItems });
+                }}
+                isDark={isDark}
+                renderMenuIcon={(menuUuid: string) => {
+                  if (!quickEntryMenuTree.length) return <ShopOutlined />;
+                  const menu = findMenuInTree(quickEntryMenuTree, menuUuid);
+                  return menu ? renderMenuIcon(menu) : <ShopOutlined />;
+                }}
+              />
+            </div>
+            <Card
+              size="small"
+              style={{
+                borderRadius: dashboardCardRadius,
+                boxShadow: dashboardCardShadow,
+                flexShrink: 0,
+                marginTop: DASHBOARD_LAYOUT_GUTTER,
+              }}
+              styles={{ body: { padding: '10px 14px', borderRadius: dashboardCardRadius } }}
+            >
+              <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                <Space size={4} align="center" wrap>
+                  <Text type="secondary" style={{ fontSize: 14 }}>
+                    {t('pages.dashboard.versionLabel')}
+                  </Text>
+                  <Text code style={{ fontSize: 13 }}>
+                    {(platformVersion?.git_commit || '').trim() || '—'}
+                  </Text>
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<CopyOutlined />}
+                    disabled={!(platformVersion?.git_commit || '').trim()}
+                    onClick={copyPlatformCommit}
+                    aria-label={t('pages.dashboard.copyCommitAria')}
+                  />
                 </Space>
-              }
-              items={useMemo(() => {
-                if (quickEntryLoading) {
-                  return [];
-                }
-                const quickEntries = userPreference?.preferences?.dashboard_quick_entries as QuickEntryItem[] | undefined;
-
-                // 用户偏好优先：只要有保存项，始终优先展示用户自己的快捷入口
-                if (Array.isArray(quickEntries) && quickEntries.length > 0) {
-                  return quickEntries
-                    .sort((a, b) => a.sort_order - b.sort_order)
-                    .map((entry) => {
-                      const menu = quickEntryMenuTree.length ? findMenuInTree(quickEntryMenuTree, entry.menu_uuid) : null;
-                      const resolvedPath = entry.menu_path || menu?.path || '';
-                      if (!resolvedPath) return null;
-
-                      return {
-                        ...entry,
-                        menu_name: entry.menu_name || (menu ? getTranslatedMenuTitle(menu, t) : ''),
-                        menu_path: resolvedPath,
-                        menu_icon: menu ? renderMenuIcon(menu) : getMenuIconByPath(resolvedPath, entry.menu_name),
-                      };
-                    })
-                    .filter((item): item is any => item !== null);
-                }
-
-                if (!quickEntryMenuTree.length) {
-                  return [];
-                }
-
-                // 无用户配置时：直接使用真实业务菜单生成快捷入口
-                return buildQuickEntriesFromMenuTree(quickEntryMenuTree, renderMenuIcon, t, 10);
-              }, [quickEntryLoading, userPreference, quickEntryMenuTree, t])}
-              loading={quickEntryLoading}
-              menuTree={useMemo(() => {
-                if (!quickEntryMenuTree.length) return [];
-                return convertMenuTreeToTreeData(quickEntryMenuTree, t);
-              }, [quickEntryMenuTree, t])}
-              showConfig={true}
-              onSave={async (items: QuickEntryItem[]) => {
-                // 偏好设置需要可 JSON 序列化，不能保存 ReactNode（menu_icon）
-                const serializableItems = items.map(({ menu_icon, ...rest }) => rest);
-                // updatePreferences 直接写入 useUserPreferenceStore，组件会因 store 变更自动重渲染，无需再 invalidate queries
-                await updatePreferences({ dashboard_quick_entries: serializableItems });
-              }}
-              isDark={isDark}
-              renderMenuIcon={(menuUuid: string) => {
-                if (!quickEntryMenuTree.length) return <ShopOutlined />;
-                const menu = findMenuInTree(quickEntryMenuTree, menuUuid);
-                return menu ? renderMenuIcon(menu) : <ShopOutlined />;
-              }}
-            />
-          </div>
-          <Card
-            size="small"
-            style={{ borderRadius: dashboardCardRadius, boxShadow: dashboardCardShadow, flexShrink: 0 }}
-            styles={{ body: { padding: '10px 14px', borderRadius: dashboardCardRadius } }}
-          >
-            <Space direction="vertical" size={2} style={{ width: '100%' }}>
-              <Space size={4} align="center" wrap>
-                <Text type="secondary" style={{ fontSize: 14 }}>
-                  {t('pages.dashboard.versionLabel')}
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {t('pages.dashboard.buildTimeLabel')}: {buildTimeDisplay}
                 </Text>
-                <Text code style={{ fontSize: 13 }}>
-                  {(platformVersion?.git_commit || '').trim() || '—'}
-                </Text>
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<CopyOutlined />}
-                  disabled={!(platformVersion?.git_commit || '').trim()}
-                  onClick={copyPlatformCommit}
-                  aria-label={t('pages.dashboard.copyCommitAria')}
-                />
               </Space>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                {t('pages.dashboard.buildTimeLabel')}: {buildTimeDisplay}
-              </Text>
-            </Space>
-          </Card>
+            </Card>
+          </div>
+
         </Col>
       </Row>
       </div>

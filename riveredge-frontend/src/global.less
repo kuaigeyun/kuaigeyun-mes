@@ -689,6 +689,18 @@ code {
 .hide-scrollbar,
 .left-panel-scroll-container {
   overflow: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+
+  /* 针对 Ant Design 虚拟滚动列表的滚动条隐藏（两栏布局左侧树） */
+  .rc-virtual-list-scrollbar {
+    display: none !important;
+  }
 }
 
 /* 两栏布局右侧内容区：可滚动但不显示滚动条 */

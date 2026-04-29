@@ -263,6 +263,7 @@ export default defineConfig({
     __MODE__: JSON.stringify('saas'),
     __IS_MONOLITHIC__: JSON.stringify(false),
     __IS_SAAS__: JSON.stringify(true),
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
   },
   // 优化依赖预构建：只列出"首屏 & 高频"包；Univer 全家桶等超重库仅在打开表格类页面时
   // 触发按需预构建，避免冷启动被迫扫描整套 CAD/sheet/docs 资源。

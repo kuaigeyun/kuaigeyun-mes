@@ -334,8 +334,8 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
         {/* 树形结构：动态获取高度以启用虚拟滚动 */}
         <div
           ref={treeContainerRef}
-          className="left-panel-scroll-container scrollbar-like-modal"
-          style={{ flex: 1, minHeight: 0, overflow: 'hidden', padding: '8px' }}
+          className="left-panel-scroll-container"
+          style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '8px' }}
         >
           <Spin spinning={loading} style={{ height: '100%' }}>
             <Tree
