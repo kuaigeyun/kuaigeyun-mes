@@ -25,6 +25,10 @@ GIT_REPO_URL = "https://gitee.com/kuaigeyun/kuaigeyun"
 class PlatformVersionResponse(BaseModel):
     """平台版本信息响应"""
     build_time: str = Field(description="当前部署版本构建时间（ISO 8601 UTC）")
+    git_commit: str = Field(
+        default="",
+        description="当前运行代码的 Git 短 commit（由部署环境 GIT_SHA 等注入，未设置则为空）",
+    )
     git_latest_commit_time: str = Field(description="代码仓库最新提交时间（ISO 8601 UTC，或 暂无）")
     git_repo_url: str = Field(default=GIT_REPO_URL, description="代码仓库地址")
     iteration_notice: str = Field(
@@ -95,8 +99,18 @@ async def get_platform_version():
     except Exception as e:
         logger.warning(f"获取 Gitee 最新提交时间失败: {e}")
 
+    def _display_git_commit() -> str:
+        raw = (os.environ.get("GIT_SHA") or os.environ.get("PLATFORM_GIT_SHA") or "").strip()
+        if not raw or raw.lower().startswith("http"):
+            return ""
+        token = raw.split()[0]
+        if len(token) > 7 and all(c in "0123456789abcdefABCDEF" for c in token):
+            return token[:7].lower()
+        return token[:7] if len(token) > 7 else token
+
     return PlatformVersionResponse(
         build_time=build_time,
+        git_commit=_display_git_commit(),
         git_latest_commit_time=git_latest,
         git_repo_url=GIT_REPO_URL,
     )

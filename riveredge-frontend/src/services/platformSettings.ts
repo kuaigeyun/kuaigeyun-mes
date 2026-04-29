@@ -98,6 +98,8 @@ export async function getPlatformSettingsPublic(): Promise<PlatformSettings> {
 /** 平台版本信息（用于悬浮按钮） */
 export interface PlatformVersion {
   build_time: string;
+  /** 当前运行代码的短 commit，未注入或旧版后端时可能缺省 */
+  git_commit?: string;
   git_latest_commit_time: string;
   git_repo_url: string;
   iteration_notice?: string;
@@ -118,8 +120,10 @@ export async function getPlatformVersion(): Promise<PlatformVersion> {
 }
 
 function getDefaultVersion(): PlatformVersion {
+  const sha = import.meta.env.VITE_GIT_SHA;
   return {
     build_time: '-',
+    git_commit: typeof sha === 'string' && sha ? sha : '',
     git_latest_commit_time: '-',
     git_repo_url: 'https://gitee.com/kuaigeyun/kuaigeyun',
   };

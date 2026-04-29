@@ -35,6 +35,7 @@ import {
   ShopOutlined,
   PlayCircleOutlined,
   AppstoreOutlined,
+  CopyOutlined,
 } from '@ant-design/icons';
 import type { DataNode } from 'antd/es/tree';
 import { useQuery, useMutation } from '@tanstack/react-query';
@@ -71,7 +72,9 @@ import WeatherWidget from '../../../components/weather/WeatherWidget';
 import { getWeatherCardGradient, getWeatherAdaptiveTint } from '../../../components/weather/weatherBackground';
 import type { WeatherData } from '../../../services/weather';
 import { formatLunarDate } from '../../../utils/lunarDate';
-import { APP_VERSION } from '../../../constants/version';
+import { formatTimeInTimezone } from '../../../utils/formatTimeInTimezone';
+import { getPlatformVersion } from '../../../services/platformSettings';
+import { useConfigStore } from '../../../stores/configStore';
 import * as LucideIcons from 'lucide-react';
 import { getUserTaskStats, getUserTasks, type UserTask } from '../../../services/userTask';
 import WorkplaceToolkit from './WorkplaceToolkit';
@@ -1038,6 +1041,30 @@ export default function DashboardPage() {
     positionName ? { key: 'position', text: positionName } : null,
     roleNames.length ? { key: 'roles', text: roleNames.join('、') } : null,
   ].filter(Boolean) as Array<{ key: string; text: string }>;
+
+  const displayTimezone =
+    useConfigStore((s) => s.configs?.timezone) ||
+    Intl.DateTimeFormat().resolvedOptions().timeZone ||
+    'Asia/Shanghai';
+
+  const { data: platformVersion } = useQuery({
+    queryKey: ['platformVersion'],
+    queryFn: getPlatformVersion,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const buildTimeDisplay = useMemo(
+    () => formatTimeInTimezone(platformVersion?.build_time, displayTimezone),
+    [platformVersion?.build_time, displayTimezone],
+  );
+
+  const copyPlatformCommit = useCallback(() => {
+    const raw = (platformVersion?.git_commit || '').trim();
+    if (!raw) return;
+    void navigator.clipboard.writeText(raw).then(() => {
+      message.success(t('pages.dashboard.copyCommitSuccess'));
+    });
+  }, [platformVersion?.git_commit, message, t]);
 
   // 加载用户头像 - 使用与 BasicLayout 和 LockScreen 相同的逻辑
   useEffect(() => {
@@ -2453,9 +2480,27 @@ export default function DashboardPage() {
             style={{ borderRadius: dashboardCardRadius, boxShadow: dashboardCardShadow, flexShrink: 0 }}
             styles={{ body: { padding: '10px 14px', borderRadius: dashboardCardRadius } }}
           >
-            <Text type="secondary" style={{ fontSize: 14 }}>
-              {t('pages.dashboard.versionLabel')} v{APP_VERSION}
-            </Text>
+            <Space direction="vertical" size={2} style={{ width: '100%' }}>
+              <Space size={4} align="center" wrap>
+                <Text type="secondary" style={{ fontSize: 14 }}>
+                  {t('pages.dashboard.versionLabel')}
+                </Text>
+                <Text code style={{ fontSize: 13 }}>
+                  {(platformVersion?.git_commit || '').trim() || '—'}
+                </Text>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<CopyOutlined />}
+                  disabled={!(platformVersion?.git_commit || '').trim()}
+                  onClick={copyPlatformCommit}
+                  aria-label={t('pages.dashboard.copyCommitAria')}
+                />
+              </Space>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {t('pages.dashboard.buildTimeLabel')}: {buildTimeDisplay}
+              </Text>
+            </Space>
           </Card>
         </Col>
       </Row>
