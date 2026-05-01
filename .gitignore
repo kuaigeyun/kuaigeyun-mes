@@ -20,7 +20,9 @@ node_modules/
 *.tsbuildinfo
 
 # ===== 构建产物 =====
-# riveredge-frontend/dist/ 允许提交，本地构建后推送，云服务器拉取后跳过构建
+# 前端/移动端构建产物勿入库（体积大、导致远端超限）；部署时在目标环境执行构建。
+riveredge-frontend/dist/
+riveredge-mobile/dist/
 # riveredge-frontend/static/ 允许提交，含 social 图标等静态资源，生产环境需拉取
 riveredge-frontend/.vite/
 *.log
