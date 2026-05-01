@@ -22,11 +22,24 @@ node_modules/
 # ===== 构建产物 =====
 # 前端/移动端构建产物勿入库（体积大、导致远端超限）；部署时在目标环境执行构建。
 riveredge-frontend/dist/
+riveredge-frontend/src/dist/
 riveredge-mobile/dist/
 # riveredge-frontend/static/ 允许提交，含 social 图标等静态资源，生产环境需拉取
 riveredge-frontend/.vite/
 *.log
 .logs/
+
+# ===== Panel 编译产物（绝不入库，每个 ~10MB，曾撑爆远端配额） =====
+# 仅 panel-source/ 源码与 scripts/ 入库；编译产物在目标环境自行 build
+riveredge-panel/riveredge-panel
+riveredge-panel/riveredge-panel.exe
+riveredge-panel/riveredge-panel-linux-amd64
+riveredge-panel/riveredge-panel-linux-arm64
+riveredge-panel/riveredge-panel-windows-amd64.exe
+riveredge-panel/riveredge-panel-windows-amd64.exe~
+riveredge-panel/riveredge-panel-darwin-amd64
+riveredge-panel/riveredge-panel-darwin-arm64
+riveredge-panel/panel/
 
 # ===== 环境与密钥 =====
 .env
