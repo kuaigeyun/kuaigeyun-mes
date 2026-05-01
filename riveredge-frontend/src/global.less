@@ -220,216 +220,170 @@ code {
   font-size: 0.9em;
 }
 
-/* 触屏模式全局样式 */
+/* 触屏模式优化（平板/手机/工位机） - 统一入口 */
 .touchscreen-mode {
-  /* 触屏模式下的字体大小调整 */
-  font-size: 24px;
+  // 0. 滚动与触控优化：确保移动端根容器可滚动，防止布局锁定
+  &, body {
+    overflow-y: auto !important;
+    height: auto !important;
+    min-height: 100vh;
+    touch-action: pan-y !important;
+    -webkit-overflow-scrolling: touch;
+  }
 
-  /* 触屏模式下的按钮样式 */
+  // 1. 基础排版优化：适度增大字体和行高，提升触屏阅读体验
+  font-size: 16px !important;
+  line-height: 1.6;
+
+  // 2. 按钮触控区域优化：最小高度 48px 符合人机交互规范
   .ant-btn {
-    min-height: 60px;
-    font-size: 24px;
-    padding: 12px 24px;
+    height: 48px !important;
+    padding-inline: 20px !important;
+    font-size: 16px !important;
+    border-radius: 8px !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 
-    /* 按钮间距 */
+    // 按钮间距
     & + .ant-btn {
-      margin-left: 20px;
+      margin-left: 12px;
+    }
+    
+    // 按钮内部图标大小调整
+    .anticon {
+      font-size: 18px;
     }
   }
 
-  /* 触屏模式下的输入框样式 */
+  // 3. 输入组件优化：包括 Select, Input, DatePicker 等
   .ant-input,
-  .ant-input-number-input,
-  .ant-select-selector {
-    min-height: 60px;
-    font-size: 24px;
-    padding: 12px 16px;
+  .ant-input-number,
+  .ant-select-selector,
+  .ant-picker,
+  .ant-input-affix-wrapper {
+    min-height: 48px !important;
+    font-size: 16px !important;
+    padding-inline: 16px !important;
+    border-radius: 8px !important;
+    display: flex;
+    align-items: center;
+  }
+  
+  .ant-select-selection-item,
+  .ant-select-selection-placeholder {
+    line-height: 46px !important;
   }
 
-  /* 触屏模式下的表单标签样式 */
-  .ant-form-item-label > label {
-    font-size: 24px;
-    height: 60px;
-    line-height: 60px;
+  // 4. 表单布局优化
+  .ant-form-item {
+    margin-bottom: 24px !important;
+    
+    .ant-form-item-label > label {
+      font-size: 16px !important;
+      height: auto !important;
+      line-height: 1.5 !important;
+      padding-bottom: 8px;
+    }
   }
 
-  /* 触屏模式下的表格样式 */
+  // 5. 表格与列表优化：增加行高，避免误触
   .ant-table {
-    font-size: 24px;
+    font-size: 15px !important;
 
     .ant-table-thead > tr > th {
-      font-size: 24px;
-      padding: 16px;
-      min-height: 60px;
+      padding: 16px 12px !important;
+      font-size: 15px !important;
+      background-color: var(--ant-colorFillQuaternary) !important;
     }
 
     .ant-table-tbody > tr > td {
-      font-size: 24px;
-      padding: 16px;
-      min-height: 60px;
+      padding: 16px 12px !important;
+      font-size: 15px !important;
     }
   }
 
-  /* 触屏模式下的卡片样式 */
-  .ant-card {
-    .ant-card-head-title {
-      font-size: 32px;
-      font-weight: 600;
-    }
-
-    .ant-card-body {
-      font-size: 24px;
-    }
-  }
-
-  /* 触屏模式下的间距调整 */
-  .ant-space-item {
-    margin-right: 20px !important;
-    margin-bottom: 20px !important;
-  }
-
-  /* 触屏模式下的Modal样式 */
+  // 6. 弹窗与抽屉优化
   .ant-modal {
+    width: 90vw !important;
+    max-width: 600px;
+    
     .ant-modal-header {
+      padding: 20px 24px !important;
       .ant-modal-title {
-        font-size: 32px;
-        font-weight: 600;
+        font-size: 20px !important;
       }
     }
-
+    
     .ant-modal-body {
-      font-size: 24px;
+      padding: 24px !important;
+      font-size: 16px !important;
     }
-
+    
     .ant-modal-footer {
+      padding: 16px 24px !important;
       .ant-btn {
-        min-height: 60px;
-        font-size: 24px;
+        height: 48px !important;
+        font-size: 16px !important;
       }
     }
   }
 
-  /* 触屏模式下的Drawer样式 */
   .ant-drawer {
     .ant-drawer-header {
       .ant-drawer-title {
-        font-size: 32px;
-        font-weight: 600;
+        font-size: 20px !important;
+      }
+    }
+    .ant-drawer-body {
+      font-size: 16px !important;
+    }
+  }
+
+  // 7. 手机端（小屏）特殊微调
+  @media (max-width: 768px) {
+    font-size: 14px !important;
+    
+    .ant-btn {
+      height: 44px !important;
+      padding-inline: 16px !important;
+      font-size: 14px !important;
+    }
+    
+    .ant-input,
+    .ant-select-selector,
+    .ant-picker {
+      min-height: 44px !important;
+      font-size: 14px !important;
+    }
+    
+    .ant-table {
+      .ant-table-thead > tr > th,
+      .ant-table-tbody > tr > td {
+        padding: 12px 8px !important;
+        font-size: 13px !important;
       }
     }
 
-    .ant-drawer-body {
-      font-size: 24px;
+    .ant-modal {
+      width: 95vw !important;
+      margin: 10px auto !important;
+    }
+    
+    .ant-space {
+      gap: 8px !important;
     }
   }
 }
 
-/* 移动端响应式样式 */
+/* 即使没有 .touchscreen-mode 类，基础的响应式布局也应该保留，但仅限结构调整，不涉及触控大小优化 */
 @media (max-width: 768px) {
-  /* 移动端字体大小调整 */
-  body {
-    font-size: 14px;
-  }
-
-  /* 移动端按钮样式 */
-  .ant-btn {
-    min-height: 44px;
-    font-size: 14px;
-    padding: 8px 16px;
-  }
-
-  /* 移动端输入框样式 */
-  .ant-input,
-  .ant-input-number-input,
-  .ant-select-selector {
-    min-height: 44px;
-    font-size: 14px;
-    padding: 8px 12px;
-  }
-
-  /* 移动端表格样式 */
-  .ant-table {
-    font-size: 12px;
-
-    .ant-table-thead > tr > th {
-      font-size: 12px;
-      padding: 8px;
-    }
-
-    .ant-table-tbody > tr > td {
-      font-size: 12px;
-      padding: 8px;
-    }
-  }
-
-  /* 移动端卡片样式 */
-  .ant-card {
-    .ant-card-head-title {
-      font-size: 16px;
-      font-weight: 600;
-    }
-
-    .ant-card-body {
-      font-size: 14px;
-      padding: 12px;
-    }
-  }
-
-  /* 移动端Modal样式 */
-  .ant-modal {
-    max-width: 95vw;
-    margin: 10px auto;
-
-    .ant-modal-header {
-      .ant-modal-title {
-        font-size: 18px;
-        font-weight: 600;
-      }
-    }
-
-    .ant-modal-body {
-      font-size: 14px;
-      padding: 16px;
-    }
-
-    .ant-modal-footer {
-      .ant-btn {
-        min-height: 44px;
-        font-size: 14px;
-      }
-    }
-  }
-
-  /* 移动端Drawer样式（排除需求计算详情抽屉，该抽屉在桌面端需更宽） */
-  .ant-drawer:not(.demand-computation-drawer) {
-    width: 90vw !important;
-
-    .ant-drawer-header {
-      .ant-drawer-title {
-        font-size: 18px;
-        font-weight: 600;
-      }
-    }
-
-    .ant-drawer-body {
-      font-size: 14px;
-      padding: 16px;
-    }
-  }
-
-  /* 移动端表单样式 */
-  .ant-form-item-label > label {
-    font-size: 14px;
-    height: 44px;
-    line-height: 44px;
-  }
-
-  /* 移动端间距调整 */
-  .ant-space-item {
-    margin-right: 8px !important;
-    margin-bottom: 8px !important;
-  }
+  // 这里只放结构性、布局性的调整，不影响组件内部大小（由上面的 .touchscreen-mode 负责）
+  // .ant-pro-sider {
+  //   display: none !important; // 手机端默认隐藏侧边栏
+  // }
 }
+
 
 /* 两栏布局中的 uni-table 高度限制 */
 .two-column-layout-content {

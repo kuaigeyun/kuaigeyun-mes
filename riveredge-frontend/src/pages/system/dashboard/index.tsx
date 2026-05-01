@@ -84,6 +84,8 @@ import {
   getDashboardTopBarCardShadow,
   getDashboardTopBarTheme,
 } from './dashboardTopBarTheme';
+import { MobileWorkplace } from './MobileWorkplace';
+import { useTouchScreen } from '../../../hooks/useTouchScreen';
 
 
 
@@ -951,6 +953,7 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const { token } = useToken();
   const screens = useBreakpoint();
+  const touchScreen = useTouchScreen();
   const isDark = useThemeStore((s) => s.resolved.isDark);
   // 欢迎条右侧仅保留「实时消息」；待办在下方专用卡片展示，xxl 以下隐藏整块避免顶栏拥挤
   const showUserStatTiles = !!screens.xxl;
@@ -988,7 +991,7 @@ export default function DashboardPage() {
   // 时间范围筛选器状态
   const [timeRange, setTimeRange] = useState<
     'today' | 'yesterday' | 'thisWeek' | 'thisMonth' | 'last7days' | 'last30days'
-  >('thisMonth');
+  >('last30days');
 
   const calendarDayKey = currentTime.format('YYYY-MM-DD');
   const lunarDateStr = useMemo(
@@ -1339,13 +1342,37 @@ export default function DashboardPage() {
   // 未读通知数量（复用顶栏 userMessageStats 接口，无需再拉消息列表）
   const unreadCount = messageStats?.unread ?? 0;
 
-  // 优先级颜色映射
-  const priorityColorMap: Record<string, string> = {
-    high: 'error',
-    critical: 'error',
-    medium: 'warning',
-    low: 'default',
-  };
+  // 快捷入口数据准备
+  const quickEntryItems = useMemo(() => {
+    if (quickEntryLoading) {
+      return [];
+    }
+    const quickEntriesFromPref = userPreference?.preferences?.dashboard_quick_entries as QuickEntryItem[] | undefined;
+
+    if (Array.isArray(quickEntriesFromPref) && quickEntriesFromPref.length > 0) {
+      return quickEntriesFromPref
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map((entry) => {
+          const menu = quickEntryMenuTree.length ? findMenuInTree(quickEntryMenuTree, entry.menu_uuid) : null;
+          const resolvedPath = entry.menu_path || menu?.path || '';
+          if (!resolvedPath) return null;
+
+          return {
+            ...entry,
+            menu_name: entry.menu_name || (menu ? getTranslatedMenuTitle(menu, t) : ''),
+            menu_path: resolvedPath,
+            menu_icon: menu ? renderMenuIcon(menu) : getMenuIconByPath(resolvedPath, entry.menu_name),
+          };
+        })
+        .filter((item): item is any => item !== null);
+    }
+
+    if (!quickEntryMenuTree.length) {
+      return [];
+    }
+
+    return buildQuickEntriesFromMenuTree(quickEntryMenuTree, renderMenuIcon, t, 10);
+  }, [quickEntryLoading, userPreference, quickEntryMenuTree, t]);
 
   // 优先级文本映射（i18n）
   const priorityTextMap: Record<string, string> = useMemo(() => ({
@@ -1354,6 +1381,41 @@ export default function DashboardPage() {
     medium: t('pages.dashboard.priorityMedium'),
     low: t('pages.dashboard.priorityLow'),
   }), [t]);
+
+  // 快捷入口菜单树数据
+  const quickEntryMenuTreeData = useMemo(() => {
+    if (!quickEntryMenuTree.length) return [];
+    return convertMenuTreeToTreeData(quickEntryMenuTree, t);
+  }, [quickEntryMenuTree, t]);
+
+  // 手机端工作台切换逻辑
+  // 当触屏模式激活，且处于竖屏模式 (Portrait) 时，强制使用移动端布局
+  // 如果是横屏 (Landscape)，则显示 PC 端布局，充分利用平板宽度
+  if (touchScreen.isTouchScreenMode && touchScreen.isPortrait) {
+    return (
+      <MobileWorkplace
+        userInfo={{ ...userInfo, ...resolvedUserDetail }}
+        avatarUrl={avatarUrl}
+        greeting={t(getGreetingKey())}
+        currentTime={currentTime}
+        lunarDateStr={lunarDateStr}
+        statistics={statistics}
+        todos={todos}
+        quickEntries={quickEntryItems}
+        isDark={isDark}
+        onTodoHandle={(id) => handleTodoMutation.mutate({ todoId: id, action: 'handle' })}
+        onWeatherChange={setWeatherForDashboard}
+        weatherData={weatherForDashboard}
+      />
+    );
+  }
+
+  const priorityColorMap: Record<string, string> = {
+    high: 'error',
+    critical: 'error',
+    medium: 'warning',
+    low: 'default',
+  };
 
   const messageStatTile = (
     <div
@@ -1843,26 +1905,31 @@ export default function DashboardPage() {
             height: 100%;
             overflow: hidden;
           }
+          /* 待办 Tabs 与 内容区：可滚动但不显示滚动条 */
           .dashboard-four-cards-row .dashboard-bottom-card-tabs .ant-tabs-tabpane {
             height: 100%;
             overflow: auto;
-            scrollbar-width: none;
-            -ms-overflow-style: none;
+            scrollbar-width: none; /* Firefox */
+            -ms-overflow-style: none; /* IE/Edge */
           }
           .dashboard-four-cards-row .dashboard-bottom-card-tabs .ant-tabs-tabpane::-webkit-scrollbar {
-            display: none;
+            display: none; /* Chrome/Safari */
             width: 0;
             height: 0;
           }
-          /* 最新操作列表：可滚动但不显示滚动条 */
-          .dashboard-four-cards-row .dashboard-bottom-card-scroll {
-            scrollbar-width: none;
-            -ms-overflow-style: none;
+          /* 核心列表容器：统一隐藏滚动条 */
+          .dashboard-bottom-card-scroll,
+          .dashboard-bottom-card-tabs .ant-tabs-tabpane,
+          .dashboard-kpi-strip-row * {
+            scrollbar-width: none !important;
+            -ms-overflow-style: none !important;
           }
-          .dashboard-four-cards-row .dashboard-bottom-card-scroll::-webkit-scrollbar {
-            display: none;
-            width: 0;
-            height: 0;
+          .dashboard-bottom-card-scroll::-webkit-scrollbar,
+          .dashboard-bottom-card-tabs .ant-tabs-tabpane::-webkit-scrollbar,
+          .dashboard-kpi-strip-row *::-webkit-scrollbar {
+            display: none !important;
+            width: 0 !important;
+            height: 0 !important;
           }
         `}</style>
 
@@ -2061,12 +2128,12 @@ export default function DashboardPage() {
                     <div>
                       {todos.length > 0 ? (
                         <div>
-                          {todos.slice(0, 5).map((item, index) => (
+                          {todos.map((item, index) => (
                             <div
                               key={item.id}
                               style={{
                                 padding: '12px 0',
-                                borderBottom: index < Math.min(todos.length, 5) - 1 ? `1px solid ${token.colorBorder}` : 'none',
+                                borderBottom: index < todos.length - 1 ? `1px solid ${token.colorBorder}` : 'none',
                                 cursor: 'pointer',
                                 display: 'flex',
                                 alignItems: 'center',
@@ -2143,12 +2210,12 @@ export default function DashboardPage() {
                     <div>
                       {todosSales.length > 0 ? (
                         <div>
-                          {todosSales.slice(0, 5).map((item, index) => (
+                          {todosSales.map((item, index) => (
                             <div
                               key={item.id}
                               style={{
                                 padding: '12px 0',
-                                borderBottom: index < Math.min(todosSales.length, 5) - 1 ? `1px solid ${token.colorBorder}` : 'none',
+                                borderBottom: index < todosSales.length - 1 ? `1px solid ${token.colorBorder}` : 'none',
                                 cursor: 'pointer',
                               }}
                               onClick={() => item.link && navigate(item.link)}
@@ -2170,12 +2237,12 @@ export default function DashboardPage() {
                     <div>
                       {todosPurchase.length > 0 ? (
                         <div>
-                          {todosPurchase.slice(0, 5).map((item, index) => (
+                          {todosPurchase.map((item, index) => (
                             <div
                               key={item.id}
                               style={{
                                 padding: '12px 0',
-                                borderBottom: index < Math.min(todosPurchase.length, 5) - 1 ? `1px solid ${token.colorBorder}` : 'none',
+                                borderBottom: index < todosPurchase.length - 1 ? `1px solid ${token.colorBorder}` : 'none',
                                 cursor: 'pointer',
                               }}
                               onClick={() => item.link && navigate(item.link)}
@@ -2197,12 +2264,12 @@ export default function DashboardPage() {
                     <div>
                       {todosWorkOrder.length > 0 ? (
                         <div>
-                          {todosWorkOrder.slice(0, 5).map((item, index) => (
+                          {todosWorkOrder.map((item, index) => (
                             <div
                               key={item.id}
                               style={{
                                 padding: '12px 0',
-                                borderBottom: index < Math.min(todosWorkOrder.length, 5) - 1 ? `1px solid ${token.colorBorder}` : 'none',
+                                borderBottom: index < todosWorkOrder.length - 1 ? `1px solid ${token.colorBorder}` : 'none',
                                 cursor: 'pointer',
                               }}
                               onClick={() => item.link && navigate(item.link)}
@@ -2224,12 +2291,12 @@ export default function DashboardPage() {
                     <div>
                       {todosException.length > 0 ? (
                         <div>
-                          {todosException.slice(0, 5).map((item, index) => (
+                          {todosException.map((item, index) => (
                             <div
                               key={item.id}
                               style={{
                                 padding: '12px 0',
-                                borderBottom: index < Math.min(todosException.length, 5) - 1 ? `1px solid ${token.colorBorder}` : 'none',
+                                borderBottom: index < todosException.length - 1 ? `1px solid ${token.colorBorder}` : 'none',
                                 cursor: 'pointer',
                               }}
                               onClick={() => item.link && navigate(item.link)}
@@ -2251,12 +2318,12 @@ export default function DashboardPage() {
                     <div>
                       {todosQualityInspection.length > 0 ? (
                         <div>
-                          {todosQualityInspection.slice(0, 5).map((item, index) => (
+                          {todosQualityInspection.map((item, index) => (
                             <div
                               key={item.id}
                               style={{
                                 padding: '12px 0',
-                                borderBottom: index < Math.min(todosQualityInspection.length, 5) - 1 ? `1px solid ${token.colorBorder}` : 'none',
+                                borderBottom: index < todosQualityInspection.length - 1 ? `1px solid ${token.colorBorder}` : 'none',
                                 cursor: 'pointer',
                               }}
                               onClick={() => item.link && navigate(item.link)}
@@ -2278,12 +2345,12 @@ export default function DashboardPage() {
                     <div>
                       {todosEquipment.length > 0 ? (
                         <div>
-                          {todosEquipment.slice(0, 5).map((item, index) => (
+                          {todosEquipment.map((item, index) => (
                             <div
                               key={item.id}
                               style={{
                                 padding: '12px 0',
-                                borderBottom: index < Math.min(todosEquipment.length, 5) - 1 ? `1px solid ${token.colorBorder}` : 'none',
+                                borderBottom: index < todosEquipment.length - 1 ? `1px solid ${token.colorBorder}` : 'none',
                                 cursor: 'pointer',
                               }}
                               onClick={() => item.link && navigate(item.link)}
@@ -2305,12 +2372,12 @@ export default function DashboardPage() {
                     <div>
                       {todosWarehouse.length > 0 ? (
                         <div>
-                          {todosWarehouse.slice(0, 5).map((item, index) => (
+                          {todosWarehouse.map((item, index) => (
                             <div
                               key={item.id}
                               style={{
                                 padding: '12px 0',
-                                borderBottom: index < Math.min(todosWarehouse.length, 5) - 1 ? `1px solid ${token.colorBorder}` : 'none',
+                                borderBottom: index < todosWarehouse.length - 1 ? `1px solid ${token.colorBorder}` : 'none',
                                 cursor: 'pointer',
                               }}
                               onClick={() => item.link && navigate(item.link)}
@@ -2332,12 +2399,12 @@ export default function DashboardPage() {
                     <div>
                       {todosOutbound.length > 0 ? (
                         <div>
-                          {todosOutbound.slice(0, 5).map((item, index) => (
+                          {todosOutbound.map((item, index) => (
                             <div
                               key={item.id}
                               style={{
                                 padding: '12px 0',
-                                borderBottom: index < Math.min(todosOutbound.length, 5) - 1 ? `1px solid ${token.colorBorder}` : 'none',
+                                borderBottom: index < todosOutbound.length - 1 ? `1px solid ${token.colorBorder}` : 'none',
                                 cursor: 'pointer',
                               }}
                               onClick={() => item.link && navigate(item.link)}
@@ -2449,43 +2516,9 @@ export default function DashboardPage() {
                     <span>{t('pages.dashboard.quickEntry')}</span>
                   </Space>
                 }
-                items={useMemo(() => {
-                  if (quickEntryLoading) {
-                    return [];
-                  }
-                  const quickEntries = userPreference?.preferences?.dashboard_quick_entries as QuickEntryItem[] | undefined;
-
-                  // 用户偏好优先：只要有保存项，始终优先展示用户自己的快捷入口
-                  if (Array.isArray(quickEntries) && quickEntries.length > 0) {
-                    return quickEntries
-                      .sort((a, b) => a.sort_order - b.sort_order)
-                      .map((entry) => {
-                        const menu = quickEntryMenuTree.length ? findMenuInTree(quickEntryMenuTree, entry.menu_uuid) : null;
-                        const resolvedPath = entry.menu_path || menu?.path || '';
-                        if (!resolvedPath) return null;
-
-                        return {
-                          ...entry,
-                          menu_name: entry.menu_name || (menu ? getTranslatedMenuTitle(menu, t) : ''),
-                          menu_path: resolvedPath,
-                          menu_icon: menu ? renderMenuIcon(menu) : getMenuIconByPath(resolvedPath, entry.menu_name),
-                        };
-                      })
-                      .filter((item): item is any => item !== null);
-                  }
-
-                  if (!quickEntryMenuTree.length) {
-                    return [];
-                  }
-
-                  // 无用户配置时：直接使用真实业务菜单生成快捷入口
-                  return buildQuickEntriesFromMenuTree(quickEntryMenuTree, renderMenuIcon, t, 10);
-                }, [quickEntryLoading, userPreference, quickEntryMenuTree, t])}
+                items={quickEntryItems}
                 loading={quickEntryLoading}
-                menuTree={useMemo(() => {
-                  if (!quickEntryMenuTree.length) return [];
-                  return convertMenuTreeToTreeData(quickEntryMenuTree, t);
-                }, [quickEntryMenuTree, t])}
+                menuTree={quickEntryMenuTreeData}
                 showConfig={true}
                 onSave={async (items: QuickEntryItem[]) => {
                   // 偏好设置需要可 JSON 序列化，不能保存 ReactNode（menu_icon）

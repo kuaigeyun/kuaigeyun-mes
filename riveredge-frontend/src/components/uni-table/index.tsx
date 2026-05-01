@@ -2256,13 +2256,13 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               )
           )}
 
-          {/* 触屏视图 */}
+          {/* 触屏视图 (移动端/平板优化) */}
           {currentViewType === 'touch' && viewTypes.includes('touch') && (
             <div
               style={{
-                padding: '20px',
+                padding: '16px',
                 minHeight: '400px',
-                fontSize: '24px', // 触屏模式大字体
+                fontSize: '16px',
               }}
             >
               {touchViewConfig?.renderCard ? (
@@ -2271,7 +2271,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                     style={{
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: '20px', // 触屏模式大间距
+                      gap: '12px',
                     }}
                   >
                     {tableData.map((item, index) => (
@@ -2292,15 +2292,15 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                     padding: '60px 20px',
                     color: '#999',
                     background: '#fafafa',
-                    borderRadius: '4px',
-                    border: '1px dashed #d9d9d9',
+                    borderRadius: '8px',
+                    border: '1px dashed var(--river-border-color)',
                   }}
                 >
                   <TabletOutlined
-                    style={{ fontSize: '48px', marginBottom: '16px', color: '#d9d9d9' }}
+                    style={{ fontSize: '48px', marginBottom: '16px', color: 'var(--ant-colorTextQuaternary)' }}
                   />
-                  <div style={{ fontSize: '24px', marginBottom: '8px' }}>{t('components.uniTable.touchViewTitle')}</div>
-                  <div style={{ fontSize: '20px', color: '#999' }}>
+                  <div style={{ fontSize: '18px', marginBottom: '8px', fontWeight: 500 }}>{t('components.uniTable.touchViewTitle')}</div>
+                  <div style={{ fontSize: '14px', color: '#999' }}>
                     {t('components.uniTable.touchViewHint')}
                   </div>
                 </div>

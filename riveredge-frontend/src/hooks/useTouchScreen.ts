@@ -18,6 +18,7 @@ import {
   exitFullscreen,
   isFullscreen,
   onFullscreenChange,
+  isPortrait,
   type TouchScreenMode,
 } from '../utils/touchscreen';
 
@@ -35,6 +36,8 @@ export interface UseTouchScreenReturn {
   mode: TouchScreenMode;
   /** 是否处于全屏模式 */
   isFullscreen: boolean;
+  /** 是否处于竖屏模式 */
+  isPortrait: boolean;
   /** 切换触屏模式 */
   toggleMode: (mode?: TouchScreenMode) => void;
   /** 进入全屏 */
@@ -52,6 +55,7 @@ export function useTouchScreen(): UseTouchScreenReturn {
   const [isTouchScreenModeState, setIsTouchScreenModeState] = useState(false);
   const [mode, setModeState] = useState<TouchScreenMode>('auto');
   const [isFullscreenState, setIsFullscreenState] = useState(false);
+  const [isPortraitState, setIsPortraitState] = useState(false);
 
   /**
    * 更新触屏设备状态
@@ -59,6 +63,7 @@ export function useTouchScreen(): UseTouchScreenReturn {
   const updateTouchDeviceState = useCallback(() => {
     setIsTouchDeviceState(isTouchDevice());
     setIsTouchScreenSizeState(isTouchScreenSize());
+    setIsPortraitState(isPortrait());
   }, []);
 
   /**
@@ -84,6 +89,7 @@ export function useTouchScreen(): UseTouchScreenReturn {
     };
 
     window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
 
     // 监听全屏状态变化
     const unsubscribe = onFullscreenChange((isFullscreen) => {
@@ -92,6 +98,7 @@ export function useTouchScreen(): UseTouchScreenReturn {
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
       unsubscribe();
     };
   }, [updateTouchDeviceState, updateTouchScreenModeState]);
@@ -151,6 +158,7 @@ export function useTouchScreen(): UseTouchScreenReturn {
     isTouchScreenMode: isTouchScreenModeState,
     mode,
     isFullscreen: isFullscreenState,
+    isPortrait: isPortraitState,
     toggleMode,
     enterFullscreen: handleEnterFullscreen,
     exitFullscreen: handleExitFullscreen,

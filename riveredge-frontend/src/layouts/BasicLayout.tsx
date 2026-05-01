@@ -15,6 +15,7 @@ import {
   FileTextOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  MenuOutlined,
   AppstoreOutlined,
   TranslationOutlined,
   BgColorsOutlined,
@@ -128,6 +129,7 @@ import { useConfigStore } from '../stores/configStore';
 import { useThemeStore } from '../stores/themeStore';
 import { getMenuBadgeCounts } from '../services/dashboard';
 import { verifyCopyright } from '../utils/copyrightIntegrity';
+import { useTouchScreen } from '../hooks/useTouchScreen';
 
 /**
  * 左侧菜单 path → menu-badge-counts 的 key（与后端 get_menu_badge_counts 一致）
@@ -218,16 +220,9 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const userInfo = getUserInfo();
   const isInfraSuperAdmin = userInfo?.user_type === 'infra_superadmin';
 
-  // 检查是否访问系统级页面
-  const isSystemPage = location.pathname.startsWith('/system/');
+  // 获取组织 ID
   const currentTenantId = getTenantId();
 
-  // 如果是平台超级管理员访问系统级页面，但没有选择组织，则重定向到平台首页
-  if (isInfraSuperAdmin && isSystemPage && !currentTenantId) {
-    message.warning(t('common.selectOrganizationFirst', { defaultValue: '请先选择要管理的组织' }));
-    // 重定向到infra登录页
-    return <Navigate to="/infra/login" replace />;
-  }
 
   // 如果 currentUser 已存在且信息完整，不需要重新获取
   // 只有在以下情况才需要获取用户信息：
@@ -332,6 +327,14 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // 报表/大屏分享页（通过 token 公开访问，无需登录）
   const isSharedReportOrDashboard = location.pathname === '/apps/kuaireport/dashboards/shared' || location.pathname === '/apps/kuaireport/reports/shared';
   const isPublicPath = publicPaths.some(path => location.pathname.startsWith(path)) || isInfraLoginPage || isSharedReportOrDashboard;
+
+  // ⚠️ 关键修复：如果是平台超级管理员访问系统级页面，但没有选择组织，则重定向到平台首页
+  // 必须放在所有 Hook 之后，避免 Hook 顺序问题
+  const isSystemPage = location.pathname.startsWith('/system/');
+  if (isInfraSuperAdmin && isSystemPage && !currentTenantId) {
+    message.warning(t('common.selectOrganizationFirst', { defaultValue: '请先选择要管理的组织' }));
+    return <Navigate to="/infra/login" replace />;
+  }
 
   // ⚠️ 关键修复：如果是调试页面，直接渲染内容，不受加载状态影响
   if (location.pathname.startsWith('/debug/')) {
@@ -662,7 +665,15 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   };
 
   const screens = Grid.useBreakpoint?.() ?? {};
-  const isMobileOrTablet = screens.lg === false;
+  const touchScreen = useTouchScreen();
+  
+  // 决定是否使用移动端/平板布局
+  // 如果开启了触屏模式且是竖屏，强制使用移动端布局
+  // 否则，根据分辨率判断（lg = 992px）
+  const isMobileOrTablet = touchScreen.isTouchScreenMode 
+    ? touchScreen.isPortrait 
+    : (screens.lg === false);
+
   // 工作区最大化模式 (由 UniTab 控制)
   const [isFullscreen, setIsFullscreen] = useState(false);
   // 浏览器全屏模式 (由顶栏控制)
@@ -4315,6 +4326,15 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       <ProLayout
         title={siteName}
         logo={siteLogo}
+        headerTitleRender={isMobileOrTablet ? (logo) => (
+          <div 
+            style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+            onClick={() => navigate('/system/dashboard/workplace')}
+          >
+            {logo}
+          </div>
+        ) : undefined}
+        menuHeaderRender={isMobileOrTablet ? undefined : undefined} // 保持 PC 端默认，手机端由 headerTitleRender 处理
         layout="mix" // 固定使用 MIX 布局模式
         navTheme={isDarkMode ? "realDark" : "light"}
         collapsedButtonRender={(collapsed) => {
@@ -4396,6 +4416,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         contentWidth="Fluid"
         fixedHeader
         fixSiderbar
+        breadcrumbRender={isMobileOrTablet ? () => [] : undefined}
+        breadcrumbProps={isMobileOrTablet ? { style: { display: 'none' } } : undefined}
         // 验证方案3：同时使用 collapsed + siderWidth + menuRender
         // 全屏时：collapsed={true} + siderWidth={0} + menuRender={() => null} 完全隐藏侧边栏
         // 退出全屏时：恢复所有 props，确保 ProLayout 重新计算布局
@@ -4460,7 +4482,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           }),
         }}
         headerContentRender={() => {
-          if (isMobileOrTablet) return null;
           return (
           <div style={{ display: 'flex', alignItems: 'center', height: '100%', gap: 12 }}>
             {/* 分割线 */}

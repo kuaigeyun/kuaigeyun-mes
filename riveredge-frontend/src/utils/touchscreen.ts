@@ -31,13 +31,24 @@ export function isTouchDevice(): boolean {
  * 检测屏幕尺寸是否适合触屏模式
  */
 export function isTouchScreenSize(): boolean {
-  // 触屏模式通常需要较大的屏幕（≥768px宽度）
-  // 但也要考虑平板等设备
-  const width = window.innerWidth;
-  const height = window.innerHeight;
-  
-  // 平板或更大的设备
-  return width >= 768 && height >= 600;
+  // 触屏模式包含平板和手机，通常定义为宽度 ≤ 1024px
+  return window.innerWidth <= 1024;
+}
+
+/**
+ * 检测当前是否为竖屏模式
+ */
+export function isPortrait(): boolean {
+  try {
+    // 优先使用 window.screen.orientation (现代浏览器)
+    if (window.screen && window.screen.orientation) {
+      return window.screen.orientation.type.startsWith('portrait');
+    }
+    // 后备方案：比较宽高 (iOS Safari 等)
+    return window.innerHeight > window.innerWidth;
+  } catch {
+    return window.innerHeight > window.innerWidth;
+  }
 }
 
 /**
@@ -90,8 +101,15 @@ export function shouldEnableTouchScreenMode(): boolean {
     return false;
   }
   
-  // auto 模式：自动检测
-  return isTouchDevice() && isTouchScreenSize();
+  // auto 模式：
+  // 1. 明确的移动端 User Agent (含手机和平板)
+  const isMobileOrTablet = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+    navigator.userAgent
+  );
+  
+  // 2. 具有触摸支持 且 屏幕尺寸属于移动端/平板范围
+  // 这样可以避免在大屏触控笔记本上误开启触屏模式（除非用户手动开启）
+  return isMobileOrTablet || (isTouchDevice() && isTouchScreenSize());
 }
 
 /**

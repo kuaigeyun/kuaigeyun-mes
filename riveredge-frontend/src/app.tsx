@@ -471,9 +471,8 @@ const DelayedFallback: React.FC<{
  * 若定义在 App 内部，每次 App 重渲染时 React 会认为这是一个全新的组件类型，
  * 导致整个子树卸载并重挂载，引发无限循环。
  */
-const AppContent: React.FC = () => {
+const AppContent: React.FC<{ touchScreen: any }> = ({ touchScreen }) => {
   const { message } = AntdApp.useApp();
-  const touchScreen = useTouchScreen();
   const navigate = useNavigate();
 
   // 将 message 实例设置到全局，供工具函数使用
@@ -526,6 +525,7 @@ const ANT_LOCALE_MAP: Record<string, typeof zhCN> = {
 // 主应用组件
 export default function App() {
   const { i18n } = useTranslation();
+  const touchScreen = useTouchScreen();
 
   // 移除 index.html 静态首屏占位（旧 #app-loading / data-app-first-paint），避免与内层 Spin 叠显或长期不卸
   useEffect(() => {
@@ -644,7 +644,9 @@ export default function App() {
     [i18n.language]
   );
 
-  const componentSize = screenSize.isMobile ? 'small' : 'middle';
+  // 触屏模式下，即使是手机也建议使用 middle 尺寸，配合 CSS 优化确保触控精准
+  // 仅在非触屏模式的小屏（如 PC 缩放窗口）才使用 small 以获得最大内容密度
+  const componentSize = touchScreen.isTouchScreenMode ? 'middle' : (screenSize.isMobile ? 'small' : 'middle');
 
   return (
     <ConfigProvider 
@@ -653,7 +655,7 @@ export default function App() {
       componentSize={componentSize}
     >
       <AntdApp>
-        <AppContent />
+        <AppContent touchScreen={touchScreen} />
       </AntdApp>
     </ConfigProvider>
   );
