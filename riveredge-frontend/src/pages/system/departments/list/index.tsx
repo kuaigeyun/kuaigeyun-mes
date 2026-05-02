@@ -9,7 +9,7 @@
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProColumns } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, List, Popconfirm, Tooltip } from 'antd';
+import { App, Button, Tag, Space, List, Popconfirm, Tooltip, Modal, Table } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, EyeOutlined } from '@ant-design/icons';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import { UniTable } from '../../../../components/uni-table';
@@ -20,6 +20,8 @@ import {
   deleteDepartment,
   importDepartments,
   loadPresetDepartments,
+  getDepartmentPresetPreview,
+  type PresetDepartmentItem,
   Department,
   DepartmentTreeItem,
 } from '../../../../services/department';
@@ -45,6 +47,10 @@ const DepartmentListPage: React.FC = () => {
   const [detailData, setDetailData] = useState<Department | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [loadPresetLoading, setLoadPresetLoading] = useState(false);
+  const [presetModalVisible, setPresetModalVisible] = useState(false);
+  const [presetList, setPresetList] = useState<PresetDepartmentItem[]>([]);
+  const [selectedPresetCodes, setSelectedPresetCodes] = useState<string[]>([]);
+  const [presetConfirmLoading, setPresetConfirmLoading] = useState(false);
 
   const getAllKeys = (data: DepartmentTreeItem[]): string[] => {
     let keys: string[] = [];
@@ -448,9 +454,10 @@ const DepartmentListPage: React.FC = () => {
             onClick={async () => {
               try {
                 setLoadPresetLoading(true);
-                const res = await loadPresetDepartments();
-                messageApi.success(res.message);
-                actionRef.current?.reload();
+                const list = await getDepartmentPresetPreview();
+                setPresetList(list);
+                setSelectedPresetCodes(list.map((x) => x.code));
+                setPresetModalVisible(true);
               } catch (e: any) {
                 messageApi.error(e?.message || t('common.operationFailed'));
               } finally {
@@ -491,6 +498,60 @@ const DepartmentListPage: React.FC = () => {
         search={{ labelWidth: 'auto' }}
         showQuickJumper={false}
       />
+
+      <Modal
+        title={t('field.department.loadPreset')}
+        open={presetModalVisible}
+        onCancel={() => setPresetModalVisible(false)}
+        width={560}
+        destroyOnHidden
+        footer={[
+          <Button key="cancel" onClick={() => setPresetModalVisible(false)}>
+            {t('common.cancel')}
+          </Button>,
+          <Button
+            key="confirm"
+            type="primary"
+            loading={presetConfirmLoading}
+            disabled={selectedPresetCodes.length === 0}
+            onClick={async () => {
+              try {
+                setPresetConfirmLoading(true);
+                const res = await loadPresetDepartments(selectedPresetCodes);
+                messageApi.success(res.message);
+                setPresetModalVisible(false);
+                actionRef.current?.reload();
+              } catch (e: any) {
+                messageApi.error(e?.message || t('common.operationFailed'));
+              } finally {
+                setPresetConfirmLoading(false);
+              }
+            }}
+          >
+            {t('common.confirm')}
+          </Button>,
+        ]}
+      >
+        <p style={{ marginBottom: 12, color: 'var(--ant-color-text-secondary)' }}>
+          {t('app.master-data.presetModalDesc')}
+        </p>
+        <Table<PresetDepartmentItem>
+          size="small"
+          rowKey="code"
+          dataSource={presetList}
+          pagination={false}
+          scroll={{ y: 280 }}
+          rowSelection={{
+            selectedRowKeys: selectedPresetCodes,
+            onChange: (keys) => setSelectedPresetCodes(keys as string[]),
+          }}
+          columns={[
+            { title: t('field.department.name'), dataIndex: 'name', width: 140 },
+            { title: t('field.department.code'), dataIndex: 'code', width: 100 },
+            { title: t('field.department.sortOrder'), dataIndex: 'sort_order', width: 88 },
+          ]}
+        />
+      </Modal>
 
       <DepartmentFormModal
         open={modalVisible}

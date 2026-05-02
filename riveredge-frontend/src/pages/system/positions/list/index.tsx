@@ -9,7 +9,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, message } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, message, Modal, Table } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../components/layout-templates';
@@ -19,6 +19,8 @@ import {
   getPositionByUuid,
   deletePosition,
   loadPresetPositions,
+  getPositionPresetPreview,
+  type PresetPositionItem,
   Position,
 } from '../../../../services/position';
 import { getDepartmentTree, DepartmentTreeItem } from '../../../../services/department';
@@ -46,6 +48,10 @@ const PositionListPage: React.FC = () => {
   const [detailData, setDetailData] = useState<Position | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [loadPresetLoading, setLoadPresetLoading] = useState(false);
+  const [presetModalVisible, setPresetModalVisible] = useState(false);
+  const [presetList, setPresetList] = useState<PresetPositionItem[]>([]);
+  const [selectedPresetCodes, setSelectedPresetCodes] = useState<string[]>([]);
+  const [presetConfirmLoading, setPresetConfirmLoading] = useState(false);
 
   useEffect(() => {
     getDepartmentTree()
@@ -272,9 +278,10 @@ const PositionListPage: React.FC = () => {
               onClick={async () => {
                 try {
                   setLoadPresetLoading(true);
-                  const res = await loadPresetPositions();
-                  messageApi.success(res.message);
-                  actionRef.current?.reload();
+                  const list = await getPositionPresetPreview();
+                  setPresetList(list);
+                  setSelectedPresetCodes(list.map((x) => x.code));
+                  setPresetModalVisible(true);
                 } catch (e: any) {
                   messageApi.error(e?.message || t('common.operationFailed'));
                 } finally {
@@ -297,6 +304,60 @@ const PositionListPage: React.FC = () => {
           onExport={handleExport}
         />
       </ListPageTemplate>
+
+      <Modal
+        title={t('field.position.loadPreset')}
+        open={presetModalVisible}
+        onCancel={() => setPresetModalVisible(false)}
+        width={560}
+        destroyOnHidden
+        footer={[
+          <Button key="cancel" onClick={() => setPresetModalVisible(false)}>
+            {t('common.cancel')}
+          </Button>,
+          <Button
+            key="confirm"
+            type="primary"
+            loading={presetConfirmLoading}
+            disabled={selectedPresetCodes.length === 0}
+            onClick={async () => {
+              try {
+                setPresetConfirmLoading(true);
+                const res = await loadPresetPositions(selectedPresetCodes);
+                messageApi.success(res.message);
+                setPresetModalVisible(false);
+                actionRef.current?.reload();
+              } catch (e: any) {
+                messageApi.error(e?.message || t('common.operationFailed'));
+              } finally {
+                setPresetConfirmLoading(false);
+              }
+            }}
+          >
+            {t('common.confirm')}
+          </Button>,
+        ]}
+      >
+        <p style={{ marginBottom: 12, color: 'var(--ant-color-text-secondary)' }}>
+          {t('app.master-data.presetModalDesc')}
+        </p>
+        <Table<PresetPositionItem>
+          size="small"
+          rowKey="code"
+          dataSource={presetList}
+          pagination={false}
+          scroll={{ y: 280 }}
+          rowSelection={{
+            selectedRowKeys: selectedPresetCodes,
+            onChange: (keys) => setSelectedPresetCodes(keys as string[]),
+          }}
+          columns={[
+            { title: t('field.position.name'), dataIndex: 'name', width: 140 },
+            { title: t('field.position.code'), dataIndex: 'code', width: 100 },
+            { title: t('field.position.sortOrder'), dataIndex: 'sort_order', width: 88 },
+          ]}
+        />
+      </Modal>
 
       <PositionFormModal
         open={modalVisible}

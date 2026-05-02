@@ -23,6 +23,13 @@ from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError, AuthorizationError
 
+
+class LoadDepartmentPresetRequest(BaseModel):
+    """加载部门预设：可指定仅创建勾选的部门编码"""
+
+    codes: Optional[List[str]] = Field(None, description="部门编码列表；不传则加载全部预设")
+
+
 router = APIRouter(prefix="/departments", tags=["Core Departments"])
 
 
@@ -143,6 +150,15 @@ async def get_department_tree(
     items = [convert_to_tree_item(item) for item in tree_data]
     
     return DepartmentTreeResponse(items=items)
+
+
+@router.get("/preset-preview")
+async def get_department_preset_preview(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """返回预设部门清单（静态），供前端勾选后再创建。"""
+    return list(DepartmentService.PRESET_DEPARTMENTS)
 
 
 @router.get("/{department_uuid}", response_model=DepartmentResponse)
@@ -411,14 +427,18 @@ async def import_departments(
 async def load_preset_departments(
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
+    body: Optional[LoadDepartmentPresetRequest] = Body(None),
 ):
     """
     加载中国中小制造业极简部门预设数据。
     仅创建不存在的部门（按 code 去重）。
+    请求体可传 codes，仅创建选中项；不传则创建全部预设。
     """
+    codes = body.codes if body else None
     count = await DepartmentService.load_preset_sme(
         tenant_id=tenant_id,
         current_user_id=current_user.id,
+        codes=codes,
     )
     return {"created": count, "message": f"已加载 {count} 个部门"}
 

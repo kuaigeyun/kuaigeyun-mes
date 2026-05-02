@@ -4,8 +4,9 @@
 提供职位的 CRUD 操作。
 """
 
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from typing import Optional, List
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
+from pydantic import BaseModel, Field
 
 from core.models.position import Position
 from core.schemas.position import (
@@ -24,18 +25,35 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError, Authoriz
 router = APIRouter(prefix="/positions", tags=["Core Positions"])
 
 
+class LoadPositionPresetRequest(BaseModel):
+    codes: Optional[List[str]] = Field(None, description="职位编码列表；不传则加载全部预设")
+
+
+@router.get("/preset-preview")
+async def get_position_preset_preview(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """返回预设职位清单（静态），供前端勾选后再创建。"""
+    return list(PositionService.PRESET_POSITIONS)
+
+
 @router.post("/load-preset")
 async def load_preset_positions(
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
+    body: Optional[LoadPositionPresetRequest] = Body(None),
 ):
     """
     加载中国中小制造业极简职位预设数据。
     仅创建不存在的职位（按 code 去重）。
+    请求体可传 codes，仅创建选中项；不传则创建全部预设。
     """
+    codes = body.codes if body else None
     count = await PositionService.load_preset_sme(
         tenant_id=tenant_id,
         current_user_id=current_user.id,
+        codes=codes,
     )
     return {"created": count, "message": f"已加载 {count} 个职位"}
 

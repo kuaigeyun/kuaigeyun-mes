@@ -180,11 +180,31 @@ export async function importDepartments(data: any[][]): Promise<{
 }
 
 /**
- * 加载中国中小制造业极简部门预设数据
+ * 预设部门项（与后端 PRESET_DEPARTMENTS 一致）
  */
-export async function loadPresetDepartments(): Promise<{ created: number; message: string }> {
+export interface PresetDepartmentItem {
+  name: string;
+  code: string;
+  sort_order: number;
+}
+
+/**
+ * 获取部门预设预览列表（静态）
+ */
+export async function getDepartmentPresetPreview(): Promise<PresetDepartmentItem[]> {
+  return apiRequest<PresetDepartmentItem[]>('/core/departments/preset-preview');
+}
+
+/**
+ * 加载中国中小制造业极简部门预设数据
+ * @param codes 仅创建指定编码；不传则创建全部预设
+ */
+export async function loadPresetDepartments(
+  codes?: string[],
+): Promise<{ created: number; message: string }> {
   return apiRequest<{ created: number; message: string }>('/core/departments/load-preset', {
     method: 'POST',
+    data: codes?.length ? { codes } : undefined,
   });
 }
 

@@ -27,6 +27,7 @@ import {
   Select,
   Tabs,
   Flex,
+  Table,
 } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useNewShortcut } from '../../../hooks/useNewShortcut';
@@ -55,6 +56,8 @@ import {
   assignPermissions,
   getAllPermissions,
   loadPresetRoles,
+  getRolePresetPreview,
+  type PresetRoleItem,
   cleanupLegacyRoles,
   getRoleDataPolicies,
   saveRoleDataPolicies,
@@ -551,6 +554,10 @@ const RolesPermissionsPage: React.FC = () => {
   // 加载初始相关状态
   const [loadPresetLoading, setLoadPresetLoading] = useState(false);
   const [cleanupLegacyLoading, setCleanupLegacyLoading] = useState(false);
+  const [presetModalVisible, setPresetModalVisible] = useState(false);
+  const [presetRoleList, setPresetRoleList] = useState<PresetRoleItem[]>([]);
+  const [selectedPresetRoleCodes, setSelectedPresetRoleCodes] = useState<string[]>([]);
+  const [presetConfirmLoading, setPresetConfirmLoading] = useState(false);
 
   /** 与侧栏一致的菜单树（名称/顺序来自后端 + 菜单翻译） */
   const [menuTree, setMenuTree] = useState<MenuTree[]>([]);
@@ -1382,9 +1389,10 @@ const RolesPermissionsPage: React.FC = () => {
                 onClick={async () => {
                   try {
                     setLoadPresetLoading(true);
-                    const res = await loadPresetRoles();
-                    messageApi.success(res.message);
-                    await loadRoles();
+                    const list = await getRolePresetPreview();
+                    setPresetRoleList(list);
+                    setSelectedPresetRoleCodes(list.map((x) => x.code));
+                    setPresetModalVisible(true);
                   } catch (e: any) {
                     messageApi.error(e?.message || t('common.operationFailed'));
                   } finally {
@@ -1938,6 +1946,70 @@ const RolesPermissionsPage: React.FC = () => {
           }
         }}
       />
+
+      {/* 加载角色预设预览：可勾选后确认 */}
+      <Modal
+        title={t('field.role.loadPreset')}
+        open={presetModalVisible}
+        onCancel={() => setPresetModalVisible(false)}
+        width={1000}
+        destroyOnHidden
+        footer={[
+          <Button key="cancel" onClick={() => setPresetModalVisible(false)}>
+            {t('common.cancel')}
+          </Button>,
+          <Button
+            key="confirm"
+            type="primary"
+            loading={presetConfirmLoading}
+            disabled={selectedPresetRoleCodes.length === 0}
+            onClick={async () => {
+              try {
+                setPresetConfirmLoading(true);
+                const res = await loadPresetRoles(selectedPresetRoleCodes);
+                messageApi.success(res.message);
+                setPresetModalVisible(false);
+                await loadRoles();
+              } catch (e: any) {
+                messageApi.error(e?.message || t('common.operationFailed'));
+              } finally {
+                setPresetConfirmLoading(false);
+              }
+            }}
+          >
+            {t('common.confirm')}
+          </Button>,
+        ]}
+      >
+        <p style={{ marginBottom: 12, color: token.colorTextSecondary }}>
+          {t('app.master-data.presetModalDesc')}
+        </p>
+        <Table<PresetRoleItem>
+          size="small"
+          rowKey="code"
+          dataSource={presetRoleList}
+          pagination={false}
+          scroll={{ x: 920, y: 280 }}
+          rowSelection={{
+            selectedRowKeys: selectedPresetRoleCodes,
+            onChange: (keys) => setSelectedPresetRoleCodes(keys as string[]),
+          }}
+          columns={[
+            { title: t('field.role.name'), dataIndex: 'name', width: 140, ellipsis: true },
+            {
+              title: t('field.role.code'),
+              dataIndex: 'code',
+              width: 220,
+              ellipsis: { showTitle: true },
+            },
+            {
+              title: t('field.role.description'),
+              dataIndex: 'description',
+              ellipsis: true,
+            },
+          ]}
+        />
+      </Modal>
 
       {/* 复制权限 Modal */}
       <Modal

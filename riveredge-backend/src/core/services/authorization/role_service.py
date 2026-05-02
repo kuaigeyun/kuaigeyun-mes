@@ -973,13 +973,22 @@ class RoleService:
         }
 
     @staticmethod
-    async def load_preset_sme(tenant_id: int, current_user_id: int) -> int:
+    async def load_preset_sme(
+        tenant_id: int,
+        current_user_id: int,
+        codes: Optional[List[str]] = None,
+    ) -> int:
         """
         加载中国中小制造业极简角色预设数据。
         仅创建不存在的角色（按 code 去重）。
+        codes 非空时仅创建指定编码（预览勾选）。
         """
+        items = RoleService.PRESET_ROLES
+        if codes:
+            allow = {str(c).strip() for c in codes if str(c).strip()}
+            items = [x for x in items if x.get("code") in allow]
         created = 0
-        for item in RoleService.PRESET_ROLES:
+        for item in items:
             exists = await Role.filter(
                 tenant_id=tenant_id,
                 code=item["code"],

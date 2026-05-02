@@ -266,12 +266,25 @@ export async function saveRoleFieldPolicies(
   });
 }
 
+/** 预设角色项（与后端 PRESET_ROLES 一致） */
+export interface PresetRoleItem {
+  name: string;
+  code: string;
+  description?: string;
+}
+
+export async function getRolePresetPreview(): Promise<PresetRoleItem[]> {
+  return apiRequest<PresetRoleItem[]>('/core/roles/preset-preview');
+}
+
 /**
  * 加载中国中小制造业极简角色预设数据
+ * @param codes 仅创建指定编码；不传则创建全部预设
  */
-export async function loadPresetRoles(): Promise<{ created: number; message: string }> {
+export async function loadPresetRoles(codes?: string[]): Promise<{ created: number; message: string }> {
   return apiRequest<{ created: number; message: string }>('/core/roles/load-preset', {
     method: 'POST',
+    data: codes?.length ? { codes } : undefined,
   });
 }
 

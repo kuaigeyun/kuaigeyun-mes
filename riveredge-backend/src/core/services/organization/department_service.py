@@ -663,13 +663,22 @@ class DepartmentService:
     ]
 
     @staticmethod
-    async def load_preset_sme(tenant_id: int, current_user_id: int) -> int:
+    async def load_preset_sme(
+        tenant_id: int,
+        current_user_id: int,
+        codes: Optional[List[str]] = None,
+    ) -> int:
         """
         加载中国中小制造业极简部门预设数据。
         仅创建不存在的部门（按 code 去重）。
+        codes 非空时仅处理指定编码（用于预览勾选后按需加载）。
         """
+        items = DepartmentService.PRESET_DEPARTMENTS
+        if codes:
+            allow = {str(c).strip() for c in codes if str(c).strip()}
+            items = [x for x in items if x.get("code") in allow]
         created = 0
-        for item in DepartmentService.PRESET_DEPARTMENTS:
+        for item in items:
             exists = await Department.filter(
                 tenant_id=tenant_id,
                 code=item["code"],

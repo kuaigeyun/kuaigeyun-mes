@@ -147,12 +147,24 @@ export async function deletePosition(positionUuid: string): Promise<void> {
   });
 }
 
+export interface PresetPositionItem {
+  name: string;
+  code: string;
+  sort_order: number;
+}
+
+export async function getPositionPresetPreview(): Promise<PresetPositionItem[]> {
+  return apiRequest<PresetPositionItem[]>('/core/positions/preset-preview');
+}
+
 /**
  * 加载中国中小制造业极简职位预设数据
+ * @param codes 仅创建指定编码；不传则创建全部预设
  */
-export async function loadPresetPositions(): Promise<{ created: number; message: string }> {
+export async function loadPresetPositions(codes?: string[]): Promise<{ created: number; message: string }> {
   return apiRequest<{ created: number; message: string }>('/core/positions/load-preset', {
     method: 'POST',
+    data: codes?.length ? { codes } : undefined,
   });
 }
 

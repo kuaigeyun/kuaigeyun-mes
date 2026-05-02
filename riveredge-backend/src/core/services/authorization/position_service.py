@@ -4,7 +4,7 @@
 提供职位的 CRUD 操作。
 """
 
-from typing import Optional
+from typing import List, Optional
 from tortoise.expressions import Q
 
 from core.models.position import Position
@@ -350,13 +350,22 @@ class PositionService:
     ]
 
     @staticmethod
-    async def load_preset_sme(tenant_id: int, current_user_id: int) -> int:
+    async def load_preset_sme(
+        tenant_id: int,
+        current_user_id: int,
+        codes: Optional[List[str]] = None,
+    ) -> int:
         """
         加载中国中小制造业极简职位预设数据。
         仅创建不存在的职位（按 code 去重）。
+        codes 非空时仅创建指定编码（预览勾选）。
         """
+        items = PositionService.PRESET_POSITIONS
+        if codes:
+            allow = {str(c).strip() for c in codes if str(c).strip()}
+            items = [x for x in items if x.get("code") in allow]
         created = 0
-        for item in PositionService.PRESET_POSITIONS:
+        for item in items:
             exists = await Position.filter(
                 tenant_id=tenant_id,
                 code=item["code"],

@@ -4,8 +4,9 @@
 提供角色的 CRUD 操作和权限分配功能。
 """
 
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from typing import Optional, List
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
+from pydantic import BaseModel, Field
 
 from core.models.role import Role
 from core.schemas.role import (
@@ -57,19 +58,37 @@ def model_to_response(model_obj, response_class, **extra_fields):
 router = APIRouter(prefix="/roles", tags=["Core Roles"])
 
 
+class LoadRolePresetRequest(BaseModel):
+    codes: Optional[List[str]] = Field(None, description="角色编码列表；不传则加载全部预设")
+
+
+@router.get("/preset-preview")
+async def get_role_preset_preview(
+    _auth: object = Depends(require_access("system.role", "create")),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """返回预设角色清单（静态），供前端勾选后再创建。"""
+    return [{**item} for item in RoleService.PRESET_ROLES]
+
+
 @router.post("/load-preset")
 async def load_preset_roles(
     _auth: object = Depends(require_access("system.role", "create")),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
+    body: Optional[LoadRolePresetRequest] = Body(None),
 ):
     """
     加载中国中小制造业极简角色预设数据。
     仅创建不存在的角色（按 code 去重）。
+    请求体可传 codes，仅创建选中项；不传则创建全部预设。
     """
+    codes = body.codes if body else None
     count = await RoleService.load_preset_sme(
         tenant_id=tenant_id,
         current_user_id=current_user.id,
+        codes=codes,
     )
     return {"created": count, "message": f"已加载 {count} 个角色"}
 
