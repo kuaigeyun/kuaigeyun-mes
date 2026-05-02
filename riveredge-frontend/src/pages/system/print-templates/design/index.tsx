@@ -2,11 +2,16 @@ import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { App, Button, Input, Space, Typography, Card, Select, InputNumber, Divider, ColorPicker, Radio, Checkbox, theme } from 'antd';
-import { ArrowLeftOutlined, SaveOutlined, EyeOutlined, QrcodeOutlined, DashOutlined, FontSizeOutlined, BoldOutlined, AlignCenterOutlined, AlignLeftOutlined, AlignRightOutlined, AppstoreOutlined, FunctionOutlined, OrderedListOutlined, SettingOutlined, ZoomInOutlined, ZoomOutOutlined, DeleteOutlined, VerticalAlignTopOutlined, VerticalAlignBottomOutlined, AppstoreAddOutlined, PlusOutlined, TableOutlined, BarcodeOutlined, PictureOutlined, HolderOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, SaveOutlined, EyeOutlined, QrcodeOutlined, DashOutlined, FontSizeOutlined, BoldOutlined, AlignCenterOutlined, AlignLeftOutlined, AlignRightOutlined, AppstoreOutlined, FunctionOutlined, OrderedListOutlined, SettingOutlined, ZoomInOutlined, ZoomOutOutlined, DeleteOutlined, VerticalAlignTopOutlined, VerticalAlignBottomOutlined, AppstoreAddOutlined, PlusOutlined, TableOutlined, BarcodeOutlined, PictureOutlined, HolderOutlined, UploadOutlined, DownloadOutlined } from '@ant-design/icons';
 import { compilePrintTemplate, compilePreviewPrintTemplate, getPrintTemplateByUuid, updatePrintTemplate } from '../../../../services/printTemplate';
 import { getArrayTableTemplates, getTemplateVariableItems } from '../../../../config/printTemplateSchemas';
 import { useSiteLogoUrl } from '../../../../hooks/useSiteLogoUrl';
 import { QRCodeSVG } from 'qrcode.react';
+import {
+  buildPrintTemplateDesignExport,
+  parsePrintTemplateDesignImport,
+  type PrintTemplateDesignPortableV1,
+} from '../../../../utils/printTemplateDesignPortable';
 
 import {
   DndContext, 
@@ -1487,7 +1492,7 @@ const VariableLibrary: React.FC<{
 const PrintTemplateDesignPage: React.FC = () => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
-  const { message: messageApi } = App.useApp();
+  const { message: messageApi, modal: modalApi } = App.useApp();
   const siteLogoUrl = useSiteLogoUrl();
   const { uuid } = useParams<{ uuid: string }>();
   const navigate = useNavigate();
@@ -1495,6 +1500,8 @@ const PrintTemplateDesignPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [templateType, setTemplateType] = useState<string>('');
   const [templateName, setTemplateName] = useState<string>('');
+  const [templateCode, setTemplateCode] = useState<string>('');
+  const [templateDescription, setTemplateDescription] = useState<string>('');
   const [schemaBlocks, setSchemaBlocks] = useState<DesignerNodeSchema[]>([]);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -1536,6 +1543,7 @@ const PrintTemplateDesignPage: React.FC = () => {
 
   const samplePresets = useMemo(() => getSamplePresetsByDocType(templateType), [templateType]);
   const hasLoaded = React.useRef(false);
+  const designImportInputRef = React.useRef<HTMLInputElement>(null);
 
   const getPaperStyles = useCallback(() => {
     const preset = PAPER_SIZES[pageSize] || PAPER_SIZES.A4;
@@ -1557,6 +1565,8 @@ const PrintTemplateDesignPage: React.FC = () => {
       const docType = data.config?.document_type || data.type || '';
       setTemplateType(docType);
       setTemplateName(data.name);
+      setTemplateCode(data.code || '');
+      setTemplateDescription(data.description || '');
       const existingSchema = (data.config?.designer_schema as DesignerSchema | undefined) || null;
       if (existingSchema) {
         setPageSize(existingSchema.pageSize || 'A4');
@@ -1670,6 +1680,79 @@ const PrintTemplateDesignPage: React.FC = () => {
       blocks: normalizeBlocks(schemaBlocks)
     };
   }, [pageSize, orientation, margins, itemSpacing, tableRowLimit, schemaBlocks]);
+
+  const applyPortableDesign = useCallback((data: PrintTemplateDesignPortableV1) => {
+    const schema = data.template.designer_schema as DesignerSchema;
+    setTemplateName(data.template.name);
+    setTemplateCode(data.template.code ?? '');
+    setTemplateDescription(data.template.description ?? '');
+    setTemplateType(data.template.document_type || '');
+    setPageSize(schema.pageSize || 'A4');
+    setOrientation(schema.orientation === 'landscape' ? 'landscape' : 'portrait');
+    if (schema.margins) {
+      setMargins(schema.margins);
+    }
+    setItemSpacing(schema.itemSpacing ?? 0);
+    setTableRowLimit(schema.tableRowLimit ?? 0);
+    const blocks = Array.isArray(schema.blocks) ? schema.blocks : [];
+    setSchemaBlocks(blocks as DesignerNodeSchema[]);
+    setSelectedBlockId(blocks.length ? (blocks[0] as DesignerNodeSchema).id : null);
+  }, []);
+
+  const handleExportPortableDesign = useCallback(() => {
+    try {
+      const schema = getNormalizedSchema();
+      const payload = buildPrintTemplateDesignExport({
+        name: templateName.trim() || t('pages.system.printTemplates.columnName'),
+        code: templateCode.trim() || undefined,
+        description: templateDescription.trim() || undefined,
+        document_type: templateType.trim() || undefined,
+        designer_schema: schema as unknown as Record<string, unknown>,
+      });
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const base = (templateName.trim() || 'print-template-design').replace(/[/\\?%*:|"<>]/g, '-').slice(0, 80);
+      a.href = url;
+      a.download = `${base}-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+      messageApi.success(t('pages.system.printTemplatesDesign.exportPortableSuccess'));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      messageApi.error(msg || t('pages.system.printTemplatesDesign.exportPortableFailed'));
+    }
+  }, [getNormalizedSchema, templateName, templateCode, templateDescription, templateType, messageApi, t]);
+
+  const handleDesignImportFileChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = '';
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const raw = JSON.parse(text);
+        const parsed = parsePrintTemplateDesignImport(raw);
+        if (!parsed.ok) {
+          messageApi.error(parsed.error);
+          return;
+        }
+        modalApi.confirm({
+          title: t('pages.system.printTemplatesDesign.importConfirmTitle'),
+          content: t('pages.system.printTemplatesDesign.importConfirmDesc'),
+          okText: t('pages.system.printTemplatesDesign.apply'),
+          cancelText: t('pages.system.printTemplatesDesign.cancel'),
+          onOk: () => {
+            applyPortableDesign(parsed.data);
+            messageApi.success(t('pages.system.printTemplatesDesign.importPortableSuccess'));
+          },
+        });
+      } catch {
+        messageApi.error(t('pages.system.printTemplatesDesign.importPortableParseFailed'));
+      }
+    },
+    [applyPortableDesign, messageApi, modalApi, t]
+  );
 
   const handleSave = async () => {
     if (!uuid) return;
@@ -2651,6 +2734,27 @@ const PrintTemplateDesignPage: React.FC = () => {
                     </div>
                   </div>
                 </div>
+
+                <Divider style={{ margin: '16px 0' }} />
+                <div style={{ marginBottom: 8, fontWeight: 600, fontSize: 13 }}>{t('pages.system.printTemplatesDesign.exportPortable')} / {t('pages.system.printTemplatesDesign.importPortable')}</div>
+                <Space direction="vertical" style={{ width: '100%' }} size={8}>
+                  <Button block icon={<DownloadOutlined />} onClick={handleExportPortableDesign}>
+                    {t('pages.system.printTemplatesDesign.exportPortable')}
+                  </Button>
+                  <Button block icon={<UploadOutlined />} onClick={() => designImportInputRef.current?.click()}>
+                    {t('pages.system.printTemplatesDesign.importPortable')}
+                  </Button>
+                  <Typography.Paragraph type="secondary" style={{ marginBottom: 0, fontSize: 11 }}>
+                    {t('pages.system.printTemplatesDesign.importPortableTooltip')}
+                  </Typography.Paragraph>
+                </Space>
+                <input
+                  ref={designImportInputRef}
+                  type="file"
+                  accept=".json,application/json"
+                  style={{ display: 'none' }}
+                  onChange={handleDesignImportFileChange}
+                />
               </Space>
             )}
           </div>

@@ -7,9 +7,9 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormDateTimePicker } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Badge, Tag, Button, Space, Typography } from 'antd';
-import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, DeleteOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
 import { theme } from 'antd';
@@ -17,7 +17,6 @@ import {
   getUserTasks,
   getUserTaskStats,
   processUserTask,
-  createUserTask,
   deleteUserTask,
   UserTask,
   UserTaskStats,
@@ -40,8 +39,6 @@ const UserTasksPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<UserTask | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [createModalVisible, setCreateModalVisible] = useState(false);
-  const [createLoading, setCreateLoading] = useState(false);
 
   const loadStats = useCallback(async () => {
     try {
@@ -197,30 +194,6 @@ const UserTasksPage: React.FC = () => {
       </div>
     );
   }, [taskType, themeToken, getStatusTag, handleView]);
-
-  /**
-   * 处理创建任务
-   */
-  const handleCreateTask = async (values: any) => {
-    try {
-      setCreateLoading(true);
-      await createUserTask({
-        title: values.title,
-        content: values.content,
-        remind_at: values.remind_at,
-      });
-      messageApi.success(t('pages.personal.tasks.createSuccess'));
-      setCreateModalVisible(false);
-      // 重新加载数据
-      loadStats();
-      actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(error.message || t('pages.personal.tasks.createFailed'));
-      throw error;
-    } finally {
-      setCreateLoading(false);
-    }
-  };
 
   /**
    * 处理删除任务
@@ -559,16 +532,6 @@ const UserTasksPage: React.FC = () => {
               ],
               onChange: (key) => setTaskType(key as 'pending' | 'processed' | 'submitted'),
             },
-            actions: [
-              <Button
-                key="create"
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={() => setCreateModalVisible(true)}
-              >
-                {t('pages.personal.tasks.createButton')}
-              </Button>,
-            ],
           }}
           viewTypes={['table', 'help']}
           defaultViewType="table"
@@ -640,37 +603,6 @@ const UserTasksPage: React.FC = () => {
         columns={detailColumns as any}
         column={1}
       />
-      {/* 创建任务 Modal */}
-      <FormModalTemplate
-        title={t('pages.personal.tasks.createModalTitle')}
-        open={createModalVisible}
-        onClose={() => setCreateModalVisible(false)}
-        onFinish={handleCreateTask}
-        loading={createLoading}
-        width={MODAL_CONFIG.SMALL_WIDTH}
-      >
-        <ProFormText
-          name="title"
-          label={t('pages.personal.tasks.title')}
-          placeholder={t('pages.personal.tasks.titlePlaceholder')}
-          rules={[{ required: true, message: t('pages.personal.tasks.titlePlaceholder') }]}
-        />
-        <ProFormTextArea
-          name="content"
-          label={t('pages.personal.tasks.content')}
-          placeholder={t('pages.personal.tasks.contentPlaceholder')}
-          fieldProps={{ rows: 4 }}
-        />
-        <ProFormDateTimePicker
-          name="remind_at"
-          label={t('pages.personal.tasks.remindAt')}
-          placeholder={t('pages.personal.tasks.remindAtPlaceholder')}
-          fieldProps={{
-            allowClear: true,
-            style: { width: '100%' },
-          }}
-        />
-      </FormModalTemplate>
     </>
   );
 };

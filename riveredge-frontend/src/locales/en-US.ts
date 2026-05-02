@@ -5839,6 +5839,17 @@ export default {
   'pages.system.printTemplatesDesign.cleanupLegacyDetailTextsConfirmDesc':
     'This removes all items.0.* / operations.0.* text schemas ({{count}}). Full tables are kept. Re-insert the detail table from the right panel if needed.',
   'pages.system.printTemplatesDesign.cleanupLegacyDetailTextsDone': 'Scattered line fields removed',
+  'pages.system.printTemplatesDesign.exportPortable': 'Export design',
+  'pages.system.printTemplatesDesign.importPortable': 'Import design',
+  'pages.system.printTemplatesDesign.exportPortableSuccess': 'Design file exported (no tenant or UUID)',
+  'pages.system.printTemplatesDesign.exportPortableFailed': 'Export failed',
+  'pages.system.printTemplatesDesign.importPortableSuccess': 'Design loaded; click Save to persist',
+  'pages.system.printTemplatesDesign.importPortableParseFailed': 'Invalid JSON',
+  'pages.system.printTemplatesDesign.importConfirmTitle': 'Import design file',
+  'pages.system.printTemplatesDesign.importConfirmDesc':
+    'This will replace the current canvas and page settings from the file (no UUID). Click Save template to persist.',
+  'pages.system.printTemplatesDesign.importPortableTooltip':
+    'Use JSON exported from this designer (riveredge-print-template-design); not the list full DB export',
 
   // Print templates
   'pages.system.printTemplates.getDetailFailed': 'Failed to load print template detail',

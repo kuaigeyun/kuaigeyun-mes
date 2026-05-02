@@ -5853,6 +5853,17 @@ export default {
   'pages.system.printTemplatesDesign.cleanupLegacyDetailTextsConfirmDesc':
     '将删除画板上所有「第1项」形式的 items.0.xxx / operations.0.xxx 文本框（共 {{count}} 个），不影响整块明细表。删除后请从右侧重新点击「明细列表」插入表格。',
   'pages.system.printTemplatesDesign.cleanupLegacyDetailTextsDone': '已移除零散明细占位',
+  'pages.system.printTemplatesDesign.exportPortable': '导出设计',
+  'pages.system.printTemplatesDesign.importPortable': '导入设计',
+  'pages.system.printTemplatesDesign.exportPortableSuccess': '已导出设计文件（不含租户与 UUID）',
+  'pages.system.printTemplatesDesign.exportPortableFailed': '导出失败',
+  'pages.system.printTemplatesDesign.importPortableSuccess': '设计已载入画布，保存模板后将写入服务端',
+  'pages.system.printTemplatesDesign.importPortableParseFailed': 'JSON 解析失败',
+  'pages.system.printTemplatesDesign.importConfirmTitle': '导入设计文件',
+  'pages.system.printTemplatesDesign.importConfirmDesc':
+    '将用文件中的版面与页面设置覆盖当前画布与单据类型关联（不包含 UUID）。导入后请点击「保存模板」写入数据库。',
+  'pages.system.printTemplatesDesign.importPortableTooltip':
+    '仅支持在设计器导出的 riveredge-print-template-design JSON；不要用列表页的完整导出替换',
 
   // 打印模板
   'pages.system.printTemplates.getDetailFailed': '获取打印模板详情失败',
