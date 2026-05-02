@@ -25,6 +25,8 @@ import {
   LockOutlined,
   BellOutlined,
   DeleteOutlined,
+  PlayCircleOutlined,
+  SendOutlined,
 } from '@ant-design/icons';
 import { message, Button, Tooltip, Badge, Avatar, Dropdown, Space, Breadcrumb, List, Typography, Empty, Divider, Modal, Grid } from 'antd';
 import type { MenuProps } from 'antd';
@@ -91,6 +93,8 @@ import { clearSessionScopedQueries } from '../utils/clearSessionQueries';
 import { getFilePreview } from '../services/file';
 import Lottie from 'lottie-react';
 import assistAnimation from '../../static/lottie/assist.json';
+import compassAnimation from '../../static/lottie/compass.json';
+import OnboardingGuide from '../components/onboarding-guide';
 
 /** LOGO 缓存 TTL：25 分钟（token 1 小时过期，提前刷新避免 403） */
 const SITE_LOGO_CACHE_TTL_MS = 25 * 60 * 1000;
@@ -438,6 +442,7 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/system/data-sources': ManufacturingIcons.database, // 数据源 - 使用数据库图标
       '/system/application-connections': ManufacturingIcons.gitBranch, // 应用连接器 - 使用分支连接图标
       '/system/datasets': ManufacturingIcons.inventory, // 数据集 - 使用库存图标
+      '/system/onboarding-wizard': ManufacturingIcons.compass, // 上线向导 - 指引/向导
       '/system/messages/config': ManufacturingIcons.bell, // 消息配置 - 使用铃铛图标
       '/system/messages/template': ManufacturingIcons.fileText, // 消息模板 - 使用文件文本图标
       '/system/approval-processes': ManufacturingIcons.workflow, // 审批流程 - 使用工作流图标
@@ -579,6 +584,7 @@ const getMenuConfig = (t: (key: string) => string): PermissionMenuDataItem[] => 
         { path: '/system/languages', name: t('menu.system.languages'), icon: getMenuIcon(t('menu.system.languages'), '/system/languages') },
         { path: '/system/code-rules', name: t('menu.system.code-rules'), icon: getMenuIcon(t('menu.system.code-rules'), '/system/code-rules') },
         { path: '/system/custom-fields', name: t('menu.system.custom-fields'), icon: getMenuIcon(t('menu.system.custom-fields'), '/system/custom-fields') },
+        { path: '/system/onboarding-wizard', name: t('menu.system.onboarding-wizard'), icon: getMenuIcon(t('menu.system.onboarding-wizard'), '/system/onboarding-wizard') },
       ]},
       { key: 'user-management-group', type: 'group', name: t('menu.group.user-management'), label: t('menu.group.user-management'), className: 'riveredge-menu-group-title', children: [
         { path: '/system/departments', name: t('menu.system.departments'), icon: getMenuIcon(t('menu.system.departments'), '/system/departments'), permissionCodes: ['system:department:read', 'system:department:update'] },
@@ -1140,6 +1146,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
   const getSystemPanelIcon = useCallback((path?: string): React.ReactNode => {
     if (!path) return <IconifyIcon icon="fluent-color:apps-24" />;
+    if (path === '/system/onboarding-wizard' || path.startsWith('/system/onboarding-wizard/')) {
+      return React.createElement(ManufacturingIcons.compass, { size: 24 });
+    }
     const iconMap: Record<string, string> = {
       '/system/applications': 'fluent-color:apps-24',
       '/system/menus': 'fluent-color:apps-list-detail-24',
@@ -3648,7 +3657,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           border-radius: 16px !important;
           background-color: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'} !important;
           color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
-          font-size: 1em !important;
+          font-size: ${token.fontSize}px !important;
           font-weight: 500 !important;
           height: 32px !important;
           line-height: 24px !important;
@@ -3696,8 +3705,16 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-item,
         .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-placeholder,
         .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-search-input {
-          font-size: 1em !important;
+          font-size: ${token.fontSize}px !important;
+          font-weight: 500 !important;
           color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
+        }
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-content-value,
+        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select .ant-select-content-value,
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-content,
+        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select .ant-select-content {
+          font-size: ${token.fontSize}px !important;
+          font-weight: 500 !important;
         }
         /* 深色顶栏下组织选择器强制浅色文字（通过 data-header-light-text 标记，覆盖 Ant Design 默认） */
         /* Ant Design 6 使用 --select-color 控制文字颜色，需覆盖该变量 */
@@ -4568,6 +4585,77 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             </span>
           );
           }
+          
+          // 上线向导 - 与用户头像胶囊同一内边距；图标位 32×32（Lottie）
+          actions.push(
+            <Tooltip key="onboarding" title={t('menu.system.onboarding-wizard')}>
+              <Space
+                size={8}
+                onClick={() => navigate('/system/onboarding-wizard')}
+                style={{
+                  cursor: 'pointer',
+                  padding: '0 16px 0 2px',
+                  height: 32,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: '16px',
+                  background: isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)',
+                  transition: 'all 0.2s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = isLightModeLightBg ? token.colorFillSecondary : 'rgba(255, 255, 255, 0.15)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)';
+                }}
+              >
+                <span
+                  style={{
+                    width: 32,
+                    height: 32,
+                    flexShrink: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    lineHeight: 0,
+                  }}
+                >
+                  <Lottie
+                    animationData={compassAnimation}
+                    loop
+                    autoplay
+                    style={{
+                      width: 32,
+                      height: 32,
+                      display: 'block',
+                      ...(!isLightModeLightBg
+                        ? {
+                            filter: 'brightness(1.2) contrast(1.08)',
+                          }
+                        : {}),
+                    }}
+                  />
+                </span>
+                {!isMobileOrTablet && (
+                  <span
+                    style={{
+                      fontSize: token.fontSize,
+                      fontWeight: 500,
+                      color: isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)',
+                      lineHeight: '32px',
+                      height: '32px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {t('menu.system.onboarding-wizard')}
+                  </span>
+                )}
+              </Space>
+            </Tooltip>
+          );
 
           // 消息提醒（带数量徽标）- 平板/手机也显示
           actions.push(
@@ -4749,6 +4837,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               </Badge>
             </Dropdown>
           );
+          
+
 
           if (!isMobileOrTablet) {
           // 手机端扫码按钮 (临时不展示)
@@ -4886,7 +4976,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                   )}
                   <span
                     style={{
-                      fontSize: '1em',
+                      fontSize: token.fontSize,
+                      fontWeight: 500,
                       color: isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)',
                       lineHeight: '32px',
                       height: '32px',
@@ -5266,6 +5357,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         open={aiAssistantOpen}
         onClose={() => setAiAssistantOpen(false)}
       />
+
+      {/* 新手引导 */}
+      <OnboardingGuide />
 
       {/* 键盘快捷键帮助 */}
       <Modal

@@ -86,6 +86,7 @@ import {
 } from './dashboardTopBarTheme';
 import { MobileWorkplace } from './MobileWorkplace';
 import { useTouchScreen } from '../../../hooks/useTouchScreen';
+import { useAutoGuide } from '../../../components/onboarding-guide/useAutoGuide';
 
 
 
@@ -998,6 +999,9 @@ export default function DashboardPage() {
     () => formatLunarDate(dayjs(calendarDayKey, 'YYYY-MM-DD')),
     [calendarDayKey],
   );
+
+  // 触发新手引导：工作台
+  useAutoGuide('dashboard');
   
   // 实时更新时间
   useEffect(() => {
