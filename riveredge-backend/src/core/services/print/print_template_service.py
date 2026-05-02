@@ -501,6 +501,33 @@ class PrintTemplateService:
         margins = schema.get("margins", {"top": 10, "right": 10, "bottom": 10, "left": 10})
         margin_str = f"{margins.get('top', 10)}mm {margins.get('right', 10)}mm {margins.get('bottom', 10)}mm {margins.get('left', 10)}mm"
 
+        # 收集页码页脚（首个含 {{ page_num }} 或 {{ total_pages }} 的 text 块），
+        # 用于生成 @page 边距盒里的 CSS counter 内容（PDF 真实页码）。
+        _PAGE_TOKEN_RE = re.compile(r"\{\{\s*(page_num|total_pages)\s*\}\}")
+        collected_page_footers: list[dict] = []
+
+        def _block_has_page_token(text: str) -> bool:
+            return bool(_PAGE_TOKEN_RE.search(text or ""))
+
+        def _build_page_counter_content(text: str) -> str:
+            """把 '页码：{{ page_num }} / {{ total_pages }}' 转换为
+            CSS content 形式：'页码：' counter(page) ' / ' counter(pages)。"""
+            parts_inner: list[str] = []
+            pos = 0
+            for m in _PAGE_TOKEN_RE.finditer(text):
+                if m.start() > pos:
+                    literal = text[pos:m.start()]
+                    esc = literal.replace("\\", "\\\\").replace("'", "\\'")
+                    parts_inner.append(f"'{esc}'")
+                token = m.group(1)
+                parts_inner.append("counter(page)" if token == "page_num" else "counter(pages)")
+                pos = m.end()
+            if pos < len(text):
+                literal = text[pos:]
+                esc = literal.replace("\\", "\\\\").replace("'", "\\'")
+                parts_inner.append(f"'{esc}'")
+            return " ".join(parts_inner) if parts_inner else "''"
+
 
 
         item_spacing = schema.get("itemSpacing", 0)
@@ -541,14 +568,40 @@ class PrintTemplateService:
                     
                     tag = str(blk.get("tag") or "div").strip().lower()
                     style_str = _get_style_str(blk, is_root)
-                    wrapper_start = f'<div class="print-block" style="{style_str}">' if is_root else ""
-                    wrapper_end = "</div>" if is_root else ""
-                    
-                    if tag != "div":
-                        s = f'margin:0;' # Inner tag doesn't need style_str again if it's in wrapper
-                        lines.append(f'{wrapper_start}<{tag} style="{s}">{content}</{tag}>{wrapper_end}')
+
+                    is_page_counter = _block_has_page_token(content)
+                    if is_page_counter:
+                        # 仅采集首个，避免重复定义 @page 边距内容
+                        if not collected_page_footers:
+                            collected_page_footers.append(
+                                {"text": content, "style": blk.get("style") or {}}
+                            )
+                    counter_class = " print-page-counter" if is_page_counter else ""
+
+                    if is_root:
+                        # 根级 text 由 .print-block 容器承载样式与间距
+                        if tag != "div":
+                            inner = f'<{tag} style="margin:0;">{content}</{tag}>'
+                        else:
+                            inner = content
+                        lines.append(
+                            f'<div class="print-block{counter_class}" style="{style_str}">{inner}</div>'
+                        )
                     else:
-                        lines.append(f'{wrapper_start}{content}{wrapper_end}')
+                        # 嵌套 text（例如位于 columns 内）必须始终是一个块级元素：
+                        # columns 的内栏使用 `display:flex;flex-direction:column;`，
+                        # 如果不包一层，富文本里的内联元素会各自变成独立的 flex item，被强制换行。
+                        cls_attr = (
+                            f' class="print-page-counter"' if is_page_counter else ""
+                        )
+                        if tag != "div":
+                            lines.append(
+                                f'<{tag}{cls_attr} style="margin:0;{style_str}">{content}</{tag}>'
+                            )
+                        else:
+                            lines.append(
+                                f'<div{cls_attr} style="{style_str}">{content}</div>'
+                            )
                 elif blk_type == "field":
                     field_key = str(blk.get("key") or "").strip()
                     label = str(blk.get("label") or field_key).strip()
@@ -865,21 +918,56 @@ class PrintTemplateService:
             return "\n".join(lines).strip()
 
         compiled_body = _render_blocks(blocks, warnings, is_root=True)
+
+        # 生成 @page 边距盒里的页码样式（PDF 真实页码由 Chromium 计数）。
+        # body 里的页码块会被同时打上 .print-page-counter 类，print 媒体下隐藏，
+        # 避免 PDF 同时出现页脚原文 + 边距盒页码导致重复。
+        page_margin_css = ""
+        if collected_page_footers:
+            pf = collected_page_footers[0]
+            pf_text = str(pf.get("text") or "")
+            pf_style = pf.get("style") or {}
+            counter_content = _build_page_counter_content(pf_text)
+            decls: list[str] = []
+            fs = pf_style.get("fontSize")
+            if fs is not None and str(fs).strip():
+                fs_str = str(fs).strip()
+                if fs_str.isdigit():
+                    fs_str = f"{fs_str}px"
+                decls.append(f"font-size:{fs_str};")
+            if pf_style.get("color"):
+                decls.append(f"color:{pf_style['color']};")
+            if pf_style.get("fontWeight"):
+                decls.append(f"font-weight:{pf_style['fontWeight']};")
+            decls.append("text-align:center;")
+            decl_str = "".join(decls)
+            page_margin_css = (
+                f"  @page {{ @bottom-center {{ content: {counter_content}; {decl_str} }} }}"
+            )
+
         parts = []
-        # Inject robust styles for printing
+        # 与设计器预览保持一致的关键打印样式
         parts.append("<style>")
         parts.append(f"  @page {{ size: {page_size_val} {orientation}; margin: {margin_str}; }}")
+        if page_margin_css:
+            parts.append(page_margin_css)
+        parts.append("  html, body { width: 100%; }")
         parts.append("  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }")
-        parts.append("  body { margin: 0; padding: 0; font-family: -apple-system, system-ui, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.5; color: #334155; }")
+        parts.append(
+            "  body { margin: 0 !important; padding: 0 !important; "
+            "font-family: -apple-system, system-ui, BlinkMacSystemFont, 'Segoe UI', Roboto, "
+            "'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, "
+            "Arial, sans-serif; line-height: 1.5; color: #334155; }")
         parts.append("  table { width: 100%; border-collapse: collapse; margin-bottom: 8px; table-layout: auto; border: 1px solid #e2e8f0; }")
-        parts.append("  th, td { border: 1px solid #e2e8f0; padding: 8px 12px; word-break: break-all; text-align: left; vertical-align: top; font-size: 13px; }")
+        parts.append("  th, td { border: 1px solid #e2e8f0; padding: 8px 12px; word-break: break-word; text-align: left; vertical-align: top; font-size: 13px; }")
         parts.append("  th { background-color: #f8fafc; font-weight: 600; color: #475569; }")
-        parts.append("  .page-current, .page-total { display: inline-block !important; min-width: 1ch; text-align: center; }")
-        parts.append("  .page-current::after { content: counter(page); }")
-        parts.append("  .page-total::after { content: counter(pages); }")
+        parts.append("  thead { display: table-header-group; }")
+        parts.append("  tr, td, th { page-break-inside: avoid; }")
         parts.append("  img { max-width: 100%; height: auto; display: block; }")
         # Ensure blocks respect item_spacing strictly
         parts.append("  .print-block { width: 100%; position: relative; }")
+        # 打印时隐藏 body 中的页脚原文（页码已在 @page 边距盒里渲染）
+        parts.append("  @media print { .print-page-counter { display: none !important; } }")
         parts.append("</style>")
         if compiled_body:
             parts.append(compiled_body)
@@ -902,7 +990,13 @@ class PrintTemplateService:
         编译 schema 并使用预览数据执行一次 Jinja 渲染，返回 HTML 预览内容。
         """
         compiled = PrintTemplateService.compile_designer_schema(data)
-        preview_data = data.preview_data or {}
+        # 设计预览默认把页码注入为 1 / 1，使页脚原文里出现 {{ page_num }} / {{ total_pages }} 的
+        # text 块在预览中能看到「页码：1 / 1」。打印 PDF 时该元素会通过
+        # @media print { .print-page-counter { display:none } } 隐藏，
+        # 实际页码改由 @page @bottom-center 的 CSS counter 渲染。
+        preview_data = dict(data.preview_data or {})
+        preview_data.setdefault("page_num", 1)
+        preview_data.setdefault("total_pages", 1)
         rendered_html = render_template(
             compiled["compiled_template"],
             preview_data,

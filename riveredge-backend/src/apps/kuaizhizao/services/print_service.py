@@ -272,43 +272,40 @@ async def _html_to_pdf_bytes_playwright_async(html_string: str) -> bytes:
         browser = await p.chromium.launch(headless=True, args=launch_args)
         try:
             page = await browser.new_page()
-            # --- CRITICAL DEBUG: CAPTURE THE FINAL HTML SOURCE ---
-            try:
-                debug_path = os.path.join(os.getcwd(), "debug_last_print.html")
-                with open(debug_path, "w", encoding="utf-8") as f:
-                    f.write(html_for_playwright)
-                logger.info(f"DEBUG: Final HTML captured to {debug_path}")
-            except Exception as e:
-                logger.warning(f"DEBUG: Failed to capture HTML: {e}")
-            # ----------------------------------------------------
+
+            # 仅在调试模式下落盘最终 HTML，避免常态污染后端工作目录。
+            if os.environ.get("RIVEREDGE_PRINT_DEBUG", "").strip().lower() in ("1", "true", "yes"):
+                try:
+                    debug_path = os.path.join(os.getcwd(), "debug_last_print.html")
+                    with open(debug_path, "w", encoding="utf-8") as f:
+                        f.write(html_for_playwright)
+                    logger.info(f"DEBUG: Final HTML captured to {debug_path}")
+                except Exception as e:
+                    logger.warning(f"DEBUG: Failed to capture HTML: {e}")
 
             await page.set_content(html_for_playwright, wait_until="networkidle")
 
-            # 根本解决：在生成 PDF 前，利用浏览器注入真实的页码，避免 HTML 标签干扰设计器布局
-            await page.evaluate("""() => {
-                const replaceRecursive = (node) => {
-                    if (node.nodeType === 3) { // Text node
-                        let text = node.nodeValue;
-                        if (text.includes('{{ page_num }}') || text.includes('{{ total_pages }}')) {
-                            const span = document.createElement('span');
-                            span.innerHTML = text
-                                .replace(/\\{\\{\\s*page_num\\s*\\}\\}/g, '<span class="page-current"></span>')
-                                .replace(/\\{\\{\\s*total_pages\\s*\\}\\}/g, '<span class="page-total"></span>');
-                            node.parentNode.replaceChild(span, node);
-                        }
-                    } else {
-                        for (let i = 0; i < node.childNodes.length; i++) {
-                            replaceRecursive(node.childNodes[i]);
-                        }
-                    }
-                };
-                replaceRecursive(document.body);
-            }""")
+            # 强制使用 print 媒体仿真，确保 @page、@media print、page-break-* 等生效，
+            # 避免 Chromium 默认按 screen 媒体渲染导致 PDF 与设计器/预览不一致。
+            try:
+                await page.emulate_media(media="print")
+            except Exception:
+                # 部分老版本 Playwright 没有 emulate_media，忽略即可
+                pass
+
+            # 等待自定义字体就绪（如 PingFang/微软雅黑等），避免 PDF 出现回退字体差异
+            try:
+                await page.evaluate(
+                    "() => (document.fonts && document.fonts.ready) ? document.fonts.ready : null"
+                )
+            except Exception:
+                pass
 
             return await page.pdf(
                 print_background=True,
                 prefer_css_page_size=True,
                 display_header_footer=False,
+                margin={"top": "0", "right": "0", "bottom": "0", "left": "0"},
             )
         finally:
             await browser.close()

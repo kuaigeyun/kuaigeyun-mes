@@ -2779,6 +2779,9 @@ const PrintTemplateDesignPage: React.FC = () => {
                       dangerouslySetInnerHTML={{ 
                         __html: `
                         <style>
+                          /* 让设计器的预览框和 PDF 出图视觉一致：
+                             仅在编译产物未提供 cell border 时给出兜底，避免覆盖列样式 */
+                          .print-preview-inner { color: #334155; line-height: 1.5; }
                           .print-preview-inner > div, 
                           .print-preview-inner > table, 
                           .print-preview-inner > p, 
@@ -2789,17 +2792,12 @@ const PrintTemplateDesignPage: React.FC = () => {
                             width: 100%; 
                             margin-top: 0 !important; 
                             margin-bottom: ${itemSpacing}mm !important; 
-                            word-break: break-all; 
+                            word-break: break-word; 
                             min-height: 0 !important; 
                           }
                           .print-preview-inner table { 
                             border-collapse: collapse; 
                             margin-bottom: ${itemSpacing}mm !important; 
-                          }
-                          .print-preview-inner th, .print-preview-inner td { 
-                            border: 1px solid #d9d9d9; 
-                            padding: 6px 8px; 
-                            text-align: left;
                           }
                           .print-preview-inner .columns-layout { 
                             margin-bottom: ${itemSpacing}mm !important; 

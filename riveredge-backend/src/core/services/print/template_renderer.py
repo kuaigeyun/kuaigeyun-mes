@@ -64,6 +64,8 @@ def _format_value(val: Any) -> str:
     """将值格式化为字符串"""
     if val is None:
         return ""
+    if isinstance(val, str) and val == "None":
+        return ""
     if isinstance(val, (dict, list)):
         return json.dumps(val, ensure_ascii=False)
     return str(val)
@@ -205,6 +207,15 @@ def _jinja_filter_barcode(value: Any, fmt: str = "CODE128", height: int = 40) ->
         return ""
 
 
+def _jinja_finalize(value: Any) -> Any:
+    """Jinja 输出阶段统一收口：None / 字面量 'None' 都渲染为空串，避免业务字段缺失时出现「None」。"""
+    if value is None:
+        return ""
+    if isinstance(value, str) and value == "None":
+        return ""
+    return value
+
+
 def _build_jinja_environment(
     *,
     strict_variables: bool = False,
@@ -216,6 +227,7 @@ def _build_jinja_environment(
         "autoescape": False,
         "trim_blocks": True,
         "lstrip_blocks": True,
+        "finalize": _jinja_finalize,
     }
     if strict_variables:
         env_kwargs["undefined"] = StrictUndefined
@@ -272,6 +284,19 @@ def render_template(
     raise ValidationError(f"不支持的模板渲染引擎: {render_engine}")
 
 
+_HTML_TAG_RE = re.compile(r"<\s*[a-zA-Z!][^>]*>")
+
+
+def _looks_like_html(content: str) -> bool:
+    """粗略判断模板是否已经是 HTML（含标签或 DOCTYPE）。"""
+    if not content:
+        return False
+    s = content.lstrip()
+    if s.lower().startswith("<!doctype") or s.startswith("<html"):
+        return True
+    return bool(_HTML_TAG_RE.search(content))
+
+
 def render_template_to_html(
     template_content: str,
     data: Dict[str, Any],
@@ -280,23 +305,38 @@ def render_template_to_html(
     strict_variables: bool = False,
 ) -> str:
     """
-    渲染模板并输出为 HTML，用于服务端打印接口
+    渲染模板并输出为 HTML，用于服务端打印接口。
 
-    Args:
-        template_content: 模板内容
-        data: 模板变量数据
-
-    Returns:
-        HTML 字符串
+    - 当模板内容本身已是 HTML（设计器编译产物 / 含标签的自定义模板）时，
+      仅做最小包装（`<!DOCTYPE html><html><head><meta charset>...</head><body>{...}</body></html>`），
+      不再做 `\n -> <br>` 替换，也不再注入会与编译模板 `body{margin:0}` / `@page` 边距冲突的样式。
+    - 当模板是纯文本时，沿用旧逻辑：换行转 `<br>`、双空格转 `&nbsp;` 并加上一份默认的可读字号。
     """
     if is_pdfme_template(template_content):
         raise ValidationError("pdfme 模板不在该渲染器处理范围内")
+
     text = render_template(
         template_content,
         data,
         engine=engine,
         strict_variables=strict_variables,
     )
+
+    if _looks_like_html(template_content):
+        # HTML 模板：保留所有空白与换行，不再注入会破坏样式的全局 body 规则。
+        # 让设计器编译模板里的 <style>@page{...}; body{margin:0;...} 完整生效。
+        return f"""<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>打印</title>
+</head>
+<body>
+{text}
+</body>
+</html>"""
+
     html_body = text.replace("\n", "<br>").replace("  ", "&nbsp;&nbsp;")
     return f"""<!DOCTYPE html>
 <html>
