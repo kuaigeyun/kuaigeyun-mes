@@ -36,9 +36,8 @@ dependencies = [
     "webauthn>=2.7.1",
 ]
 
-# Playwright：仅 HTML→PDF。列入主依赖会导致每次「uv run aerich」都解析/下载大包、拖死迁移。
-# 运行后端 / Taskiq / 需要 PDF 时：uv sync --extra pdf，且 uv run --extra pdf …
-# 限制 <1.58：1.58+ 使用 Chrome-for-Testing 的 builds/cft 路径，国内 npmmirror 等常 404，PLAYWRIGHT_*_HOST 失效。
+# Playwright：仅 HTML→PDF。生产默认可不装（见 Launch.prod.sh 使用默认 uv sync / 不加 --extra pdf）；需要时再：
+#   uv sync --no-install-project --extra pdf && uv run --extra pdf playwright install chromium
 [project.optional-dependencies]
 pdf = [
     "playwright>=1.57.0,<1.58",
