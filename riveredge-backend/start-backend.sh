@@ -58,12 +58,7 @@ fi
 # 使用 --no-install-project 避免安装项目本身，防止生成 egg-info 目录
 if [ ! -d ".venv" ] || [ "pyproject.toml" -nt ".venv" ] || [ "uv.lock" -nt ".venv" ]; then
     echo "同步 UV 依赖..."
-    PDF_EXTRA=()
-    if [ "${RIVEREDGE_UV_EXTRA_PDF:-0}" = "1" ]; then
-        PDF_EXTRA=(--extra pdf)
-        echo "  （含 pdf extra：Playwright，用于 HTML 转 PDF）"
-    fi
-    uv sync --no-install-project "${PDF_EXTRA[@]}"
+    uv sync --no-install-project
     echo ""
 fi
 

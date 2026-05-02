@@ -1085,6 +1085,7 @@ dependencies = [
     { name = "loguru" },
     { name = "openpyxl" },
     { name = "passlib", extra = ["bcrypt"] },
+    { name = "playwright" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pypinyin" },
@@ -1110,9 +1111,6 @@ dev = [
     { name = "pytest-cov" },
     { name = "ruff" },
 ]
-pdf = [
-    { name = "playwright" },
-]
 
 [package.metadata]
 requires-dist = [
@@ -1129,7 +1127,7 @@ requires-dist = [
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
     { name = "openpyxl", specifier = ">=3.1.0" },
     { name = "passlib", extras = ["bcrypt"], specifier = ">=1.7.4" },
-    { name = "playwright", marker = "extra == 'pdf'", specifier = ">=1.59.0" },
+    { name = "playwright", specifier = ">=1.59.0" },
     { name = "pydantic", specifier = ">=2.9.0,<2.10.0" },
     { name = "pydantic-settings", specifier = ">=2.6.0,<2.7.0" },
     { name = "pypinyin", specifier = ">=0.51.0" },
@@ -1149,7 +1147,7 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30.0,<0.31.0" },
     { name = "webauthn", specifier = ">=2.7.1" },
 ]
-provides-extras = ["pdf", "dev"]
+provides-extras = ["dev"]
 
 [[package]]
 name = "rsa"

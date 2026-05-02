@@ -34,14 +34,11 @@ dependencies = [
     "taskiq>=0.12.0",
     "taskiq-postgres[asyncpg]>=0.7.0",
     "webauthn>=2.7.1",
-]
-
-# Playwright 体量大、下载易拖慢/卡死 uv sync 与 aerich；仅 HTML 转 PDF 需要。
-# 需要时：uv sync --extra pdf（或 start-backend.sh 设置 RIVEREDGE_UV_EXTRA_PDF=1）
-[project.optional-dependencies]
-pdf = [
+    # HTML→PDF 唯一实现，生产必需（勿改为 optional，否则部署漏装会导致 PDF 功能不可用）
     "playwright>=1.59.0",
 ]
+
+[project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",  # 测试框架,主流稳定版
     "pytest-asyncio>=0.23.0",  # 异步测试支持,主流稳定版
