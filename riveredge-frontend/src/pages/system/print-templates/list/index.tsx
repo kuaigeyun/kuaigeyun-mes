@@ -42,14 +42,13 @@ dayjs.extend(relativeTime);
 const { Text, Paragraph } = Typography;
 const { useToken } = theme;
 
-/** 获取模板类型图标和颜色，text 需在组件内用 t 传入 other 的翻译 */
-const getTypeInfo = (type: string, otherText: string = '其他'): { color: string; text: string; icon: React.ReactNode } => {
+const getTypeInfo = (t: any, type: string): { color: string; text: string; icon: React.ReactNode } => {
   const typeMap: Record<string, { color: string; text: string; icon: React.ReactNode }> = {
-    pdf: { color: 'red', text: 'PDF', icon: <FileTextOutlined /> },
-    html: { color: 'blue', text: 'HTML', icon: <FileTextOutlined /> },
-    word: { color: 'green', text: 'Word', icon: <FileTextOutlined /> },
-    excel: { color: 'purple', text: 'Excel', icon: <FileTextOutlined /> },
-    other: { color: 'default', text: otherText, icon: <FileTextOutlined /> },
+    pdf: { color: 'red', text: t('pages.system.printTemplates.typePdf'), icon: <FileTextOutlined /> },
+    html: { color: 'blue', text: t('pages.system.printTemplates.typeHtml'), icon: <FileTextOutlined /> },
+    word: { color: 'green', text: t('pages.system.printTemplates.typeWord'), icon: <FileTextOutlined /> },
+    excel: { color: 'purple', text: t('pages.system.printTemplates.typeExcel'), icon: <FileTextOutlined /> },
+    other: { color: 'default', text: t('pages.system.printTemplates.typeOther'), icon: <FileTextOutlined /> },
   };
   return typeMap[type] || { color: 'default', text: type, icon: <FileTextOutlined /> };
 };
@@ -119,6 +118,16 @@ const PrintTemplateListPage: React.FC = () => {
 
   // 加载预设（点击后全部加载）
   const [presetLoading, setPresetLoading] = useState(false);
+
+  /**
+   * 翻译关联业务单据选项
+   */
+  const translatedDocumentTypeOptions = useMemo(() => {
+    return DOCUMENT_TYPE_OPTIONS.map(opt => ({
+      ...opt,
+      label: t(`pages.system.printTemplates.schema.${opt.value}`, { defaultValue: opt.label })
+    }));
+  }, [t]);
 
   /**
    * 处理新建打印模板
@@ -385,7 +394,7 @@ const PrintTemplateListPage: React.FC = () => {
    * 卡片渲染函数
    */
   const renderCard = (template: PrintTemplate) => {
-    const typeInfo = getTypeInfo(template.type, t('pages.system.printTemplates.typeOther'));
+    const typeInfo = getTypeInfo(t, template.type);
     const variables = extractVariables(template.content);
     
     return (
@@ -511,14 +520,14 @@ const PrintTemplateListPage: React.FC = () => {
       width: 120,
       valueType: 'select',
       valueEnum: {
-        pdf: { text: 'PDF' },
-        html: { text: 'HTML' },
-        word: { text: 'Word' },
-        excel: { text: 'Excel' },
+        pdf: { text: t('pages.system.printTemplates.typePdf') },
+        html: { text: t('pages.system.printTemplates.typeHtml') },
+        word: { text: t('pages.system.printTemplates.typeWord') },
+        excel: { text: t('pages.system.printTemplates.typeExcel') },
         other: { text: t('pages.system.printTemplates.typeOther') },
       },
       render: (_, record) => {
-        const typeInfo = getTypeInfo(record.type, t('pages.system.printTemplates.typeOther'));
+        const typeInfo = getTypeInfo(t, record.type);
         return <Tag color={typeInfo.color}>{typeInfo.text}</Tag>;
       },
     },
@@ -714,7 +723,7 @@ const PrintTemplateListPage: React.FC = () => {
                 total,
               };
             } catch (error: any) {
-              window.console.error('获取打印模板列表失败:', error);
+              window.console.error(t('pages.system.printTemplates.loadListFailed'), error);
               messageApi.error(error?.message || t('pages.system.printTemplates.loadListFailed'));
               return {
                 data: [],
@@ -813,7 +822,7 @@ const PrintTemplateListPage: React.FC = () => {
           name="document_type"
           label={t('pages.system.printTemplates.labelDocumentType')}
           rules={[{ required: true, message: t('pages.system.printTemplates.documentTypeRequired') }]}
-          options={DOCUMENT_TYPE_OPTIONS}
+          options={translatedDocumentTypeOptions}
           tooltip={t('pages.system.printTemplates.documentTypeTooltip')}
         />
         <ProFormText
@@ -828,10 +837,10 @@ const PrintTemplateListPage: React.FC = () => {
           label={t('pages.system.printTemplates.labelOutputFormat')}
           rules={[{ required: true, message: t('pages.system.printTemplates.outputFormatRequired') }]}
           options={[
-            { label: 'PDF', value: 'pdf' },
-            { label: 'HTML', value: 'html' },
-            { label: 'Word', value: 'word' },
-            { label: 'Excel', value: 'excel' },
+            { label: t('pages.system.printTemplates.typePdf'), value: 'pdf' },
+            { label: t('pages.system.printTemplates.typeHtml'), value: 'html' },
+            { label: t('pages.system.printTemplates.typeWord'), value: 'word' },
+            { label: t('pages.system.printTemplates.typeExcel'), value: 'excel' },
             { label: t('pages.system.printTemplates.typeOther'), value: 'other' },
           ]}
           disabled={isEdit}

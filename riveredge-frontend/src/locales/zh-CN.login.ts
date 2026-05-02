@@ -23,7 +23,7 @@ export default {
   'pages.login.passwordPlaceholder': '请输入密码',
   'pages.login.passwordRequired': '请输入密码',
   'pages.login.descriptionTitle': '多组织管理框架',
-  'pages.login.descriptionText': '为企业提供安全、高效、可扩展的 SaaS 解决方案',
+  'pages.login.descriptionText': '专注多组织多租户架构的企业级数字化底座，内置高性能应用治理引擎。支持插件化生态热插拔、全维度权限精细化隔离与跨系统数据集成，为大规模业务运行提供安全、敏捷、可无限扩展的底层支撑。',
   'pages.login.guestLogin': '免注册体验登录',
   'pages.login.noAccount': '还没有账号？',
   'pages.login.registerNow': '立即注册',

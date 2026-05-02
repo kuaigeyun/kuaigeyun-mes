@@ -47,7 +47,7 @@ type BlockStyle = {
   letterSpacing?: string;
 };
 
-/** 明细表块表格样式（编译进 HTML） */
+/** {t('pages.system.printTemplatesDesign.compDetailTable')} table styles (compiled into HTML) */
 type DetailTableStyle = {
   borderWidth?: number;
   borderColor?: string;
@@ -71,12 +71,12 @@ type DetailTableColumn = {
   key: string;
   label: string;
   type?: 'text' | 'image' | 'qrcode' | 'number';
-  /** 类型为 number 时小数位数，默认 2 */
+  /** Decimal places when type is number, default 2 */
   precision?: number;
   width?: string;
-  /** 未设置时沿用表格样式「表体对齐」 */
+  /** Use table style "Body Align" if not set */
   bodyTextAlign?: 'left' | 'center' | 'right';
-  /** 未设置时沿用表格样式「垂直对齐」 */
+  /** Use table style "Vertical Align" if not set */
   verticalAlign?: 'top' | 'middle' | 'bottom';
 };
 
@@ -115,35 +115,36 @@ interface DesignerSchema {
   blocks: DesignerNodeSchema[];
 }
 
-const PAPER_SIZES: Record<string, { width: number; height: number; label: string }> = {
-  A4: { width: 210, height: 297, label: 'A4 (210x297mm)' },
-  A3: { width: 297, height: 420, label: 'A3 (297x420mm)' },
-  A5: { width: 148, height: 210, label: 'A5 (148x210mm)' },
-  'A4-2': { width: 210, height: 148.5, label: 'A4 二分单 (210x148.5mm)' },
-  'A4-3': { width: 210, height: 99, label: 'A4 三分单 (210x99mm)' },
-  '241-1': { width: 241, height: 280, label: '针式 241 全叠 (241x280mm)' },
-  '241-2': { width: 241, height: 140, label: '针式 241 二分 (241x140mm)' },
-  '241-3': { width: 241, height: 93, label: '针式 241 三分 (241x93mm)' },
+const PAPER_SIZES: Record<string, { width: number; height: number; labelKey: string }> = {
+  A4: { width: 210, height: 297, labelKey: 'pages.system.printTemplatesDesign.paperSizeA4' },
+  A3: { width: 297, height: 420, labelKey: 'pages.system.printTemplatesDesign.paperSizeA3' },
+  A5: { width: 148, height: 210, labelKey: 'pages.system.printTemplatesDesign.paperSizeA5' },
+  'A4-2': { width: 210, height: 148.5, labelKey: 'pages.system.printTemplatesDesign.paperSizeA4_2' },
+  'A4-3': { width: 210, height: 99, labelKey: 'pages.system.printTemplatesDesign.paperSizeA4_3' },
+  '241-1': { width: 241, height: 280, labelKey: 'pages.system.printTemplatesDesign.paperSize241_1' },
+  '241-2': { width: 241, height: 140, labelKey: 'pages.system.printTemplatesDesign.paperSize241_2' },
+  '241-3': { width: 241, height: 93, labelKey: 'pages.system.printTemplatesDesign.paperSize241_3' },
 };
 
 type SamplePreset = { key: string; label: string; data: Record<string, any> };
 
-const QUOTATION_SAMPLE_PRESETS: SamplePreset[] = [
-  {
-    key: 'quotation-short',
-    label: '报价单-短单',
-    data: {
+const getSamplePresetsByDocType = (t: any, docType: string): SamplePreset[] => {
+  const QUOTATION_SAMPLE_PRESETS: SamplePreset[] = [
+    {
+      key: 'quotation-short',
+      label: 'pages.system.printTemplatesDesign.sampleQuotationShort',
+      data: {
       quotation_code: 'BJ-2026-0001',
-      customer_name: '深圳某制造客户',
+      customer_name: t('pages.system.printTemplatesDesign.sampleCustomer1'),
       quotation_date: '2026-04-25',
       total_amount: 12345.67,
-      notes: '交期 7 天，含税含运费。',
+      notes: t('pages.system.printTemplatesDesign.sampleNotes1'),
       items: [
         {
           material_code: 'MAT-001',
-          material_name: '铝合金壳体',
+          material_name: t('pages.system.printTemplatesDesign.sampleMaterial1'),
           material_spec: 'A356-T6',
-          material_unit: '件',
+          material_unit: t('pages.system.printTemplatesDesign.sampleUnit1'),
           quote_quantity: 100,
           unit_price: 12.34,
           total_amount: 1234,
@@ -153,18 +154,18 @@ const QUOTATION_SAMPLE_PRESETS: SamplePreset[] = [
   },
   {
     key: 'quotation-long',
-    label: '报价单-长单(分页压测)',
+    label: 'pages.system.printTemplatesDesign.sampleQuotationLong',
     data: {
       quotation_code: 'BJ-2026-0099',
-      customer_name: '华南电子装备集团有限公司',
+      customer_name: t('pages.system.printTemplatesDesign.sampleCustomer2'),
       quotation_date: '2026-04-25',
       total_amount: 286420.5,
-      notes: '用于测试长明细分页、表头重复、尾部金额对齐。',
+      notes: t('pages.system.printTemplatesDesign.sampleNotes2'),
       items: Array.from({ length: 35 }).map((_, i) => ({
         material_code: `MAT-${String(i + 1).padStart(3, '0')}`,
-        material_name: `高精密结构件-${i + 1}`,
-        material_spec: `规格-${(i % 7) + 1}`,
-        material_unit: '件',
+        material_name: `${t('pages.system.printTemplatesDesign.sampleMaterial4')}-${i + 1}`,
+        material_spec: `${t('pages.system.printTemplatesDesign.sampleSpec')}-${(i % 7) + 1}`,
+        material_unit: t('pages.system.printTemplatesDesign.sampleUnit1'),
         quote_quantity: (i + 1) * 3,
         unit_price: Number((8.6 + i * 0.37).toFixed(2)),
         total_amount: Number((((i + 1) * 3) * (8.6 + i * 0.37)).toFixed(2)),
@@ -173,28 +174,28 @@ const QUOTATION_SAMPLE_PRESETS: SamplePreset[] = [
   },
   {
     key: 'quotation-notes',
-    label: '报价单-多行备注',
+    label: 'pages.system.printTemplatesDesign.sampleQuotationNotes',
     data: {
       quotation_code: 'BJ-2026-0108',
-      customer_name: '华东自动化设备有限公司',
+      customer_name: t('pages.system.printTemplatesDesign.sampleCustomer3'),
       quotation_date: '2026-04-25',
       total_amount: 56432,
-      notes: '备注第一行：本报价含13%增值税。\n备注第二行：付款方式月结30天。\n备注第三行：如需开模费用请另行确认。\n备注第四行：报价有效期15天。',
+      notes: t('pages.system.printTemplatesDesign.sampleNotes3'),
       items: [
         {
           material_code: 'MAT-110',
-          material_name: '控制面板总成',
+          material_name: t('pages.system.printTemplatesDesign.sampleMaterial2'),
           material_spec: 'CP-20',
-          material_unit: '套',
+          material_unit: t('pages.system.printTemplatesDesign.sampleUnit2'),
           quote_quantity: 20,
           unit_price: 688.5,
           total_amount: 13770,
         },
         {
           material_code: 'MAT-111',
-          material_name: '支架组件',
+          material_name: t('pages.system.printTemplatesDesign.sampleMaterial3'),
           material_spec: 'BR-07',
-          material_unit: '套',
+          material_unit: t('pages.system.printTemplatesDesign.sampleUnit2'),
           quote_quantity: 50,
           unit_price: 293.24,
           total_amount: 14662,
@@ -210,17 +211,17 @@ const QUOTATION_SAMPLE_PRESETS: SamplePreset[] = [
 const SALES_ORDER_SAMPLE_PRESETS: SamplePreset[] = [
   {
     key: 'sales-order-default',
-    label: '销售订单-标准样本',
+    label: 'pages.system.printTemplatesDesign.sampleSalesOrder',
     data: {
       order_code: 'SO-2026-0012',
-      customer_name: '华北装备制造有限公司',
+      customer_name: t('pages.system.printTemplatesDesign.sampleCustomer4'),
       order_date: '2026-04-25',
       delivery_date: '2026-05-03',
       total_amount: 98650.2,
-      notes: '请按生产排期分批交付。',
+      notes: t('pages.system.printTemplatesDesign.sampleNotes4'),
       items: [
-        { material_code: 'SOM-001', material_name: '装配底座', material_spec: 'DZ-01', material_unit: '件', order_quantity: 50, unit_price: 320, total_amount: 16000 },
-        { material_code: 'SOM-002', material_name: '定位板', material_spec: 'DW-09', material_unit: '件', order_quantity: 80, unit_price: 180.5, total_amount: 14440 },
+        { material_code: 'SOM-001', material_name: t('pages.system.printTemplatesDesign.sampleMaterial5'), material_spec: 'DZ-01', material_unit: t('pages.system.printTemplatesDesign.sampleUnit1'), order_quantity: 50, unit_price: 320, total_amount: 16000 },
+        { material_code: 'SOM-002', material_name: t('pages.system.printTemplatesDesign.sampleMaterial6'), material_spec: 'DW-09', material_unit: t('pages.system.printTemplatesDesign.sampleUnit1'), order_quantity: 80, unit_price: 180.5, total_amount: 14440 },
       ],
     },
   },
@@ -229,17 +230,17 @@ const SALES_ORDER_SAMPLE_PRESETS: SamplePreset[] = [
 const PURCHASE_ORDER_SAMPLE_PRESETS: SamplePreset[] = [
   {
     key: 'purchase-order-default',
-    label: '采购订单-标准样本',
+    label: 'pages.system.printTemplatesDesign.samplePurchaseOrder',
     data: {
       order_code: 'PO-2026-0038',
-      supplier_name: '苏州金属材料有限公司',
+      supplier_name: t('pages.system.printTemplatesDesign.sampleSupplier1'),
       order_date: '2026-04-25',
       required_date: '2026-05-08',
       total_amount: 46320,
-      notes: '来料请附材质证明与质检报告。',
+      notes: t('pages.system.printTemplatesDesign.sampleNotes5'),
       items: [
-        { material_code: 'POM-001', material_name: '不锈钢板', material_spec: '304-2mm', material_unit: '张', ordered_quantity: 120, unit_price: 132, total_amount: 15840 },
-        { material_code: 'POM-002', material_name: '六角螺栓', material_spec: 'M8*20', material_unit: '个', ordered_quantity: 5000, unit_price: 2.1, total_amount: 10500 },
+        { material_code: 'POM-001', material_name: t('pages.system.printTemplatesDesign.sampleMaterial7'), material_spec: '304-2mm', material_unit: t('pages.system.printTemplatesDesign.sampleUnit3'), ordered_quantity: 120, unit_price: 132, total_amount: 15840 },
+        { material_code: 'POM-002', material_name: t('pages.system.printTemplatesDesign.sampleMaterial8'), material_spec: 'M8*20', material_unit: t('pages.system.printTemplatesDesign.sampleUnit4'), ordered_quantity: 5000, unit_price: 2.1, total_amount: 10500 },
       ],
     },
   },
@@ -248,14 +249,14 @@ const PURCHASE_ORDER_SAMPLE_PRESETS: SamplePreset[] = [
 const COMMON_SAMPLE_PRESETS: SamplePreset[] = [
   {
     key: 'common-default',
-    label: '通用样本',
+    label: 'pages.system.printTemplatesDesign.sampleCommon',
     data: {
       code: 'DOC-2026-0001',
-      name: '示例单据',
+      name: t('pages.system.printTemplatesDesign.sampleName1'),
       date: '2026-04-25',
       total_amount: 0,
-      notes: '请按实际单据字段调整样本 JSON。',
-      items: [{ item_code: 'ITEM-001', item_name: '示例项', quantity: 1, unit_price: 0, total_amount: 0 }],
+      notes: t('pages.system.printTemplatesDesign.sampleNotes6'),
+      items: [{ item_code: 'ITEM-001', item_name: t('pages.system.printTemplatesDesign.sampleItemName1'), quantity: 1, unit_price: 0, total_amount: 0 }],
       page_num: 1,
       total_pages: 1,
       logo: 'https://img.alicdn.com/tfs/TB1.77Ag8r0gK0jSZFnXXbRRXXa-200-200.png'
@@ -268,12 +269,12 @@ type VariableCategory = {
   items: TemplateVariableItem[];
 };
 
-const groupVariables = (items: TemplateVariableItem[]): VariableCategory[] => {
+const groupVariables = (t: any, items: TemplateVariableItem[]): VariableCategory[] => {
   const groups: Record<string, VariableCategory> = {
-    header: { title: '基础信息', items: [] },
-    financial: { title: '财务金额', items: [] },
-    items: { title: '明细数据', items: [] },
-    other: { title: '其他', items: [] },
+    header: { title: t('pages.system.printTemplatesDesign.groupHeader'), items: [] },
+    financial: { title: t('pages.system.printTemplatesDesign.groupFinancial'), items: [] },
+    items: { title: t('pages.system.printTemplatesDesign.groupItems'), items: [] },
+    other: { title: t('pages.system.printTemplatesDesign.groupOther'), items: [] },
   };
 
   items.forEach((item) => {
@@ -292,7 +293,6 @@ const groupVariables = (items: TemplateVariableItem[]): VariableCategory[] => {
   return Object.values(groups).filter((g) => g.items.length > 0);
 };
 
-const getSamplePresetsByDocType = (docType: string): SamplePreset[] => {
   if (docType === 'quotation') return QUOTATION_SAMPLE_PRESETS;
   if (docType === 'sales_order') return SALES_ORDER_SAMPLE_PRESETS;
   if (docType === 'purchase_order') return PURCHASE_ORDER_SAMPLE_PRESETS;
@@ -329,6 +329,7 @@ function resolveDetailTableStyle(ts?: DetailTableStyle): Required<DetailTableSty
 }
 
 const TextBlock: React.FC<{ block: DesignerNodeSchema & { type: 'text' }; selected?: boolean; onSelect?: () => void }> = ({ block, selected, onSelect }) => {
+  const { t } = useTranslation();
   const { content, style, tag = 'div' } = block;
   const Tag = tag as any;
   return (
@@ -356,13 +357,14 @@ const TextBlock: React.FC<{ block: DesignerNodeSchema & { type: 'text' }; select
         width: '100%',
         wordBreak: 'break-all'
       }}>
-        {content || '文本块'}
+        {content || t('pages.system.printTemplatesDesign.blockText')}
       </Tag>
     </div>
   );
 };
 
 const FieldBlock: React.FC<{ block: DesignerNodeSchema & { type: 'field' }; selected?: boolean; onSelect?: () => void }> = ({ block, selected, onSelect }) => {
+  const { t } = useTranslation();
   const { key: fieldKey, label, style, showLabel = true } = block;
   return (
     <div
@@ -385,7 +387,7 @@ const FieldBlock: React.FC<{ block: DesignerNodeSchema & { type: 'field' }; sele
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ fontWeight: 600 }}>{label || fieldKey}</div>
           {!showLabel && (
-            <div style={{ fontSize: 9, background: '#bae7ff', color: '#0050b3', padding: '1px 4px', borderRadius: 4 }}>仅数值</div>
+            <div style={{ fontSize: 9, background: '#bae7ff', color: '#0050b3', padding: '1px 4px', borderRadius: 4 }}>{t('pages.system.printTemplatesDesign.valueOnly')}</div>
           )}
         </div>
         <div style={{ fontFamily: 'monospace', opacity: 0.8 }}>
@@ -440,8 +442,8 @@ const BarcodeBlock: React.FC<{ block: DesignerNodeSchema & { type: 'barcode' }; 
 };
 
 const ImageBlock: React.FC<{ block: DesignerNodeSchema & { type: 'image' }; selected?: boolean; onSelect?: () => void }> = ({ block, selected, onSelect }) => {
-  // 模板里的 {{ logo }} / {{ company_logo }} 等占位符会在后端打印时替换为站点 Logo；
-  // 设计器内为了所见即所得，直接用当前站点 Logo URL 进行可视化。
+  // Placeholders like {{ logo }} / {{ company_logo }} will be replaced by the backend with the site logo;
+  // In the designer, we use the current site logo URL for a WYSIWYG experience.
   const siteLogoUrl = useSiteLogoUrl();
   const rawUrl = block.url || '';
   const previewUrl = /\{\{\s*(logo|company_logo)\s*\}\}/i.test(rawUrl) ? siteLogoUrl : rawUrl;
@@ -480,6 +482,7 @@ const ImageBlock: React.FC<{ block: DesignerNodeSchema & { type: 'image' }; sele
 };
 
 const SpacerBlock: React.FC<{ block: DesignerNodeSchema & { type: 'spacer' }; selected?: boolean; onSelect?: () => void }> = ({ block, selected, onSelect }) => {
+  const { t } = useTranslation();
   return (
     <div
       style={{
@@ -499,7 +502,7 @@ const SpacerBlock: React.FC<{ block: DesignerNodeSchema & { type: 'spacer' }; se
       onClick={(e) => { e.stopPropagation(); onSelect?.(); }}
     >
       <VerticalAlignTopOutlined style={{ marginRight: 4 }} />
-      <span>垂直间距 {block.height}px</span>
+      <span>{t('pages.system.printTemplatesDesign.verticalSpacing', { height: block.height })}</span>
       <VerticalAlignBottomOutlined style={{ marginLeft: 4 }} />
     </div>
   );
@@ -550,6 +553,7 @@ const SortableBlockWrapper: React.FC<{
   marginBottom?: number;
   children: React.ReactNode;
 }> = ({ id, type, marginBottom = 8, children }) => {
+  const { t } = useTranslation();
   const {
     attributes,
     listeners,
@@ -606,7 +610,7 @@ const SortableBlockWrapper: React.FC<{
           userSelect: 'none',
           boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
         }}
-        title="拖拽调整顺序"
+        title={t('pages.system.printTemplatesDesign.dragToReorder')}
       >
         <span style={{ letterSpacing: 1, lineHeight: 1, display: 'block' }}>⠿</span>
       </div>
@@ -727,7 +731,7 @@ const DetailTableMiniPreview: React.FC<{ tableStyle?: DetailTableStyle; columns:
   const labels =
     keyed.length > 0
       ? keyed.map((c) => (c.label || c.key).trim() || '—')
-      : ['（请配置列）'];
+      : [t('pages.system.printTemplatesDesign.noCols')];
   const borderCss =
     s.borderStyle === 'none' ? undefined : `${s.borderWidth}px ${s.borderStyle} ${s.borderColor}`;
   const thBase: React.CSSProperties = {
@@ -758,7 +762,7 @@ const DetailTableMiniPreview: React.FC<{ tableStyle?: DetailTableStyle; columns:
 
   return (
     <div style={{ marginTop: 10 }} onClick={(e) => e.stopPropagation()}>
-      <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 6 }}>样式预览</div>
+      <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 6 }}>{t('pages.system.printTemplatesDesign.stylePreview')}</div>
       <div style={{ overflow: 'auto', maxHeight: 220, background: '#fff' }}>
         <table
           style={{
@@ -832,10 +836,11 @@ const OrientationSelector: React.FC<{
   value: 'portrait' | 'landscape';
   onChange: (val: 'portrait' | 'landscape') => void;
 }> = ({ value, onChange }) => {
+  const { t } = useTranslation();
   const { token } = theme.useToken();
   const options = [
-    { key: 'portrait', label: '纵向', icon: <div style={{ width: 14, height: 20, border: `2px solid currentColor`, borderRadius: 2 }} /> },
-    { key: 'landscape', label: '横向', icon: <div style={{ width: 20, height: 14, border: `2px solid currentColor`, borderRadius: 2 }} /> }
+    { key: 'portrait', label: t('pages.system.printTemplatesDesign.orientationPortrait'), icon: <div style={{ width: 14, height: 20, border: `2px solid currentColor`, borderRadius: 2 }} /> },
+    { key: 'landscape', label: t('pages.system.printTemplatesDesign.orientationLandscape'), icon: <div style={{ width: 20, height: 14, border: `2px solid currentColor`, borderRadius: 2 }} /> }
   ];
 
   return (
@@ -924,6 +929,7 @@ const SortableTableColumnItem: React.FC<{
   onUpdate: (index: number, partial: Partial<DetailTableColumn>) => void;
   onRemove: (index: number) => void;
 }> = ({ id, index, col, onUpdate, onRemove }) => {
+  const { t } = useTranslation();
   const {
     attributes,
     listeners,
@@ -961,27 +967,27 @@ const SortableTableColumnItem: React.FC<{
       </div>
       <Space direction="vertical" size={8} style={{ width: '100%' }}>
         <div style={{ width: '100%' }}>
-          <div style={miniLabel}>列名</div>
+          <div style={miniLabel}>{t('pages.system.printTemplatesDesign.colName')}</div>
           <Input
             size="small"
-            placeholder="表头显示名称"
+            placeholder={t('pages.system.printTemplatesDesign.colPlaceholder')}
             value={col.label}
             onChange={(e) => onUpdate(index, { label: e.target.value })}
             style={{ width: '100%' }}
           />
         </div>
         <div style={{ width: '100%' }}>
-          <div style={miniLabel}>字段 key</div>
+          <div style={miniLabel}>{t('pages.system.printTemplatesDesign.colKey')}</div>
           <Input
             size="small"
-            placeholder="如 material_name"
+            placeholder={t('pages.system.printTemplatesDesign.keyPlaceholder')}
             value={col.key}
             onChange={(e) => onUpdate(index, { key: e.target.value })}
             style={{ width: '100%', fontFamily: 'monospace' }}
           />
         </div>
         <div style={{ width: '100%' }}>
-          <div style={miniLabel}>类型</div>
+          <div style={miniLabel}>{t('pages.system.printTemplatesDesign.colType')}</div>
           <Select
             size="small"
             value={col.type || 'text'}
@@ -994,16 +1000,16 @@ const SortableTableColumnItem: React.FC<{
             }}
             style={{ width: '100%' }}
             options={[
-              { label: '文本', value: 'text' },
-              { label: '数字', value: 'number' },
-              { label: '图片', value: 'image' },
-              { label: '二维码', value: 'qrcode' },
+              { label: t('pages.system.printTemplatesDesign.typeText'), value: 'text' },
+              { label: t('pages.system.printTemplatesDesign.typeNumber'), value: 'number' },
+              { label: t('pages.system.printTemplatesDesign.typeImage'), value: 'image' },
+              { label: t('pages.system.printTemplatesDesign.typeQRCode'), value: 'qrcode' },
             ]}
           />
         </div>
         {col.type === 'number' ? (
           <div style={{ width: '100%' }}>
-            <div style={miniLabel}>小数位数（精度）</div>
+            <div style={miniLabel}>{t('pages.system.printTemplatesDesign.decimalPlaces')}</div>
             <InputNumber
               size="small"
               min={0}
@@ -1015,7 +1021,7 @@ const SortableTableColumnItem: React.FC<{
           </div>
         ) : null}
         <div style={{ width: '100%' }}>
-          <div style={miniLabel}>单元格对齐</div>
+          <div style={miniLabel}>{t('pages.system.printTemplatesDesign.colAlign')}</div>
           <Radio.Group
             size="small"
             buttonStyle="solid"
@@ -1026,20 +1032,20 @@ const SortableTableColumnItem: React.FC<{
               onUpdate(index, { bodyTextAlign: v === 'inherit' ? undefined : (v as 'left' | 'center' | 'right') });
             }}
           >
-            <Radio.Button value="inherit">默认</Radio.Button>
-            <Radio.Button value="left" title="左对齐">
+            <Radio.Button value="inherit">{t('pages.system.printTemplatesDesign.default')}</Radio.Button>
+            <Radio.Button value="left" title={t('pages.system.printTemplatesDesign.alignLeft')}>
               <AlignLeftOutlined />
             </Radio.Button>
-            <Radio.Button value="center" title="居中">
+            <Radio.Button value="center" title={t('pages.system.printTemplatesDesign.alignCenter')}>
               <AlignCenterOutlined />
             </Radio.Button>
-            <Radio.Button value="right" title="右对齐">
+            <Radio.Button value="right" title={t('pages.system.printTemplatesDesign.alignRight')}>
               <AlignRightOutlined />
             </Radio.Button>
           </Radio.Group>
         </div>
         <div style={{ width: '100%' }}>
-          <div style={miniLabel}>垂直对齐</div>
+          <div style={miniLabel}>{t('pages.system.printTemplatesDesign.colVerticalAlign')}</div>
           <Radio.Group
             size="small"
             buttonStyle="solid"
@@ -1052,23 +1058,23 @@ const SortableTableColumnItem: React.FC<{
               });
             }}
           >
-            <Radio.Button value="inherit">默认</Radio.Button>
-            <Radio.Button value="top" title="顶部">
+            <Radio.Button value="inherit">{t('pages.system.printTemplatesDesign.default')}</Radio.Button>
+            <Radio.Button value="top" title={t('pages.system.printTemplatesDesign.alignTop')}>
               <VerticalAlignTopOutlined />
             </Radio.Button>
-            <Radio.Button value="middle" title="居中">
+            <Radio.Button value="middle" title={t('pages.system.printTemplatesDesign.alignMiddle')}>
               <AlignCenterOutlined />
             </Radio.Button>
-            <Radio.Button value="bottom" title="底部">
+            <Radio.Button value="bottom" title={t('pages.system.printTemplatesDesign.alignBottom')}>
               <VerticalAlignBottomOutlined />
             </Radio.Button>
           </Radio.Group>
         </div>
         <div style={{ width: '100%' }}>
-          <div style={miniLabel}>列宽（可选）</div>
+          <div style={miniLabel}>{t('pages.system.printTemplatesDesign.colWidth')}</div>
           <Input
             size="small"
-            placeholder="如 18%、120px"
+            placeholder={t('pages.system.printTemplatesDesign.widthPlaceholder')}
             value={col.width || ''}
             onChange={(e) => onUpdate(index, { width: e.target.value.trim() ? e.target.value.trim() : undefined })}
             style={{ width: '100%' }}
@@ -1083,7 +1089,8 @@ const TableColumnDesigner: React.FC<{
   columns: DetailTableColumn[];
   onChange: (cols: DetailTableColumn[]) => void;
 }> = ({ columns, onChange }) => {
-  const handleAdd = () => onChange([...columns, { key: '', label: '新列', type: 'text' }]);
+  const { t } = useTranslation();
+  const handleAdd = () => onChange([...columns, { key: '', label: t('pages.system.printTemplatesDesign.newColumn'), type: 'text' }]);
   const handleRemove = (index: number) => {
     const next = [...columns];
     next.splice(index, 1);
@@ -1112,8 +1119,8 @@ const TableColumnDesigner: React.FC<{
   return (
     <div style={{ background: '#fafafa', padding: 12, borderRadius: 8, border: '1px solid #f0f0f0' }}>
       <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: '#595959' }}>列字段配置</span>
-        <Button type="primary" ghost size="small" icon={<PlusOutlined />} onClick={handleAdd}>添加列</Button>
+        <span style={{ fontSize: 13, fontWeight: 600, color: '#595959' }}>{t('pages.system.printTemplatesDesign.colConfig')}</span>
+        <Button type="primary" ghost size="small" icon={<PlusOutlined />} onClick={handleAdd}>{t('pages.system.printTemplatesDesign.addCol')}</Button>
       </div>
       
       <DndContext 
@@ -1135,7 +1142,7 @@ const TableColumnDesigner: React.FC<{
         </SortableContext>
       </DndContext>
       
-      {columns.length === 0 && <div style={{ textAlign: 'center', color: '#bfbfbf', padding: '10px 0', fontSize: 12 }}>暂无列配置</div>}
+      {columns.length === 0 && <div style={{ textAlign: 'center', color: '#bfbfbf', padding: '10px 0', fontSize: 12 }}>{t('pages.system.printTemplatesDesign.noCols')}</div>}
     </div>
   );
 };
@@ -1177,6 +1184,7 @@ const DroppableColumn: React.FC<{
   isSelected?: boolean;
   isDragging?: boolean;
 }> = ({ id, children, style, isSelected, isDragging }) => {
+  const { t } = useTranslation();
   const { setNodeRef, isOver } = useDroppable({
     id,
     data: { type: 'column', colId: id }
@@ -1203,7 +1211,7 @@ const DroppableColumn: React.FC<{
       }}
     >
       <div style={{ fontSize: 10, color: isOver ? '#1677ff' : '#bfbfbf', marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: isOver ? 600 : 400 }}>
-        <span>{isOver ? '↓ 放置到此列' : '分栏'}</span>
+        <span>{isOver ? t('pages.system.printTemplatesDesign.dropToColumn') : t('pages.system.printTemplatesDesign.colLayout')}</span>
       </div>
       {children}
     </div>
@@ -1217,6 +1225,7 @@ const ColumnsBlock: React.FC<{
   renderBlocks: (blocks: DesignerNodeSchema[]) => React.ReactNode;
   isDragging?: boolean;
 }> = ({ block, selectedId, onSelect, renderBlocks, isDragging }) => {
+  const { t } = useTranslation();
   const isSelected = selectedId === block.id;
   const justifyContentMap: Record<string, React.CSSProperties['justifyContent']> = {
     start: 'flex-start',
@@ -1248,7 +1257,7 @@ const ColumnsBlock: React.FC<{
         display: 'flex', 
         gap: 16, 
         justifyContent: justifyContentMap[block.horizontalAlign || 'start'] || 'flex-start',
-        // 列先统一拉伸到同高，保证每栏垂直对齐可见
+        // Stretch columns to the same height first to ensure vertical alignment visibility
         alignItems: 'stretch',
         padding: 8, 
         border: isDragging
@@ -1304,7 +1313,7 @@ const ColumnsBlock: React.FC<{
                 transition: 'all 0.2s',
                 width: '100%',
               }}>
-                {isDragging ? '⬇ 拖拽到此处' : '点击或拖拽插入组件'}
+                {isDragging ? t('pages.system.printTemplatesDesign.dropToColumn') : t('pages.system.printTemplatesDesign.clickOrDragToInsert')}
               </div>
             )}
           </div>
@@ -1340,6 +1349,7 @@ const CanvasArea: React.FC<{ children?: React.ReactNode; style?: React.CSSProper
 };
 
 const RootEndDropZone: React.FC<{ activeDragId: string }> = ({ activeDragId }) => {
+  const { t } = useTranslation();
   const { setNodeRef, isOver } = useDroppable({
     id: 'root-end-drop',
     data: { type: 'root-end' }
@@ -1360,7 +1370,7 @@ const RootEndDropZone: React.FC<{ activeDragId: string }> = ({ activeDragId }) =
         transition: 'all 0.2s'
       }}
     >
-      {isOver ? '松开移动到文档末尾' : '⬇ 拖拽到此处移动到文档末尾'}
+      {isOver ? t('pages.system.printTemplatesDesign.dropToBottom') : t('pages.system.printTemplatesDesign.dropToBottom')}
     </div>
   );
 };
@@ -1385,34 +1395,35 @@ const ComponentLibrary: React.FC<{
   onSpacer, onLogo, onHeader, onFooter,
   templateType 
 }) => {
+  const { t } = useTranslation();
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ fontWeight: 600, fontSize: 13, color: '#8c8c8c', marginBottom: 4 }}>基础组件</div>
+      <div style={{ fontWeight: 600, fontSize: 13, color: '#8c8c8c', marginBottom: 4 }}>{t('pages.system.printTemplatesDesign.compBase')}</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-        <DraggableSidebarItem type="text" label="文本内容" icon={<FontSizeOutlined />} onClick={onInsertText} />
-        <DraggableSidebarItem type="columns" label="分栏容器" icon={<AppstoreOutlined />} onClick={onColumns} />
-        <DraggableSidebarItem type="spacer" label="纵向间距" icon={<VerticalAlignBottomOutlined />} onClick={() => onSpacer(20)} />
-        <DraggableSidebarItem type="divider" label="横向分割线" icon={<DashOutlined />} onClick={onDivider} />
+        <DraggableSidebarItem type="text" label={t('pages.system.printTemplatesDesign.compText')} icon={<FontSizeOutlined />} onClick={onInsertText} />
+        <DraggableSidebarItem type="columns" label={t('pages.system.printTemplatesDesign.compColumns')} icon={<AppstoreOutlined />} onClick={onColumns} />
+        <DraggableSidebarItem type="spacer" label={t('pages.system.printTemplatesDesign.compSpacer')} icon={<VerticalAlignBottomOutlined />} onClick={() => onSpacer(20)} />
+        <DraggableSidebarItem type="divider" label={t('pages.system.printTemplatesDesign.compDivider')} icon={<DashOutlined />} onClick={onDivider} />
       </div>
       
-      <div style={{ fontWeight: 600, fontSize: 13, color: '#8c8c8c', marginTop: 12, marginBottom: 4 }}>工业标识</div>
+      <div style={{ fontWeight: 600, fontSize: 13, color: '#8c8c8c', marginTop: 12, marginBottom: 4 }}>{t('pages.system.printTemplatesDesign.compIndustrialId')}</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-        <DraggableSidebarItem type="qrcode" label="二维码" icon={<QrcodeOutlined />} onClick={onQRCode} />
-        <DraggableSidebarItem type="barcode" label="条形码" icon={<BarcodeOutlined />} onClick={onBarcode} />
-        <DraggableSidebarItem type="image" label="图片内容" icon={<PictureOutlined />} onClick={onImage} />
-        <DraggableSidebarItem type="image" label="公司 LOGO" icon={<PictureOutlined />} onClick={onLogo} />
+        <DraggableSidebarItem type="qrcode" label={t('pages.system.printTemplatesDesign.typeQRCode')} icon={<QrcodeOutlined />} onClick={onQRCode} />
+        <DraggableSidebarItem type="barcode" label={t('pages.system.printTemplatesDesign.typeBarcode')} icon={<BarcodeOutlined />} onClick={onBarcode} />
+        <DraggableSidebarItem type="image" label={t('pages.system.printTemplatesDesign.compImage')} icon={<PictureOutlined />} onClick={onImage} />
+        <DraggableSidebarItem type="image" label={t('pages.system.printTemplatesDesign.compLogo')} icon={<PictureOutlined />} onClick={onLogo} />
       </div>
 
-      <div style={{ fontWeight: 600, fontSize: 13, color: '#8c8c8c', marginTop: 12, marginBottom: 4 }}>页面预设</div>
+      <div style={{ fontWeight: 600, fontSize: 13, color: '#8c8c8c', marginTop: 12, marginBottom: 4 }}>{t('pages.system.printTemplatesDesign.compPreset')}</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-        <DraggableSidebarItem type="columns" label="标准页眉" icon={<VerticalAlignTopOutlined />} onClick={() => onHeader(1)} />
-        <DraggableSidebarItem type="columns" label="标准页脚" icon={<VerticalAlignBottomOutlined />} onClick={onFooter} />
+        <DraggableSidebarItem type="columns" label={t('pages.system.printTemplatesDesign.compHeader')} icon={<VerticalAlignTopOutlined />} onClick={() => onHeader(1)} />
+        <DraggableSidebarItem type="columns" label={t('pages.system.printTemplatesDesign.compFooter')} icon={<VerticalAlignBottomOutlined />} onClick={onFooter} />
       </div>
       
-      <div style={{ fontWeight: 600, fontSize: 13, color: '#8c8c8c', marginTop: 12, marginBottom: 4 }}>逻辑控制</div>
+      <div style={{ fontWeight: 600, fontSize: 13, color: '#8c8c8c', marginTop: 12, marginBottom: 4 }}>{t('pages.system.printTemplatesDesign.compLogic')}</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-        <DraggableSidebarItem type="if" label="条件判断" icon={<FunctionOutlined />} onClick={onIf} />
-        <DraggableSidebarItem type="for" label="循环遍历" icon={<FunctionOutlined />} onClick={onFor} />
+        <DraggableSidebarItem type="if" label={t('pages.system.printTemplatesDesign.compIf')} icon={<FunctionOutlined />} onClick={onIf} />
+        <DraggableSidebarItem type="for" label={t('pages.system.printTemplatesDesign.compFor')} icon={<FunctionOutlined />} onClick={onFor} />
       </div>
     </div>
   );
@@ -1424,6 +1435,7 @@ const VariableLibrary: React.FC<{
   onInsertTable: (key: string, label: string) => void;
   templateType: string;
 }> = ({ onInsert, onInsertQR, onInsertTable, templateType }) => {
+  const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const allVars = useMemo(() => getTemplateVariableItems(templateType), [templateType]);
   const filteredVars = useMemo(() => {
@@ -1432,12 +1444,12 @@ const VariableLibrary: React.FC<{
     return allVars.filter(v => v.label.toLowerCase().includes(q) || v.key.toLowerCase().includes(q));
   }, [allVars, query]);
 
-  const groups = useMemo(() => groupVariables(filteredVars), [filteredVars]);
+  const groups = useMemo(() => groupVariables(t, filteredVars), [t, filteredVars]);
 
   return (
     <div>
       <Input.Search
-        placeholder="搜索变量..."
+        placeholder={t('pages.system.printTemplatesDesign.searchVariables')}
         allowClear
         style={{ marginBottom: 16 }}
         onChange={e => setQuery(e.target.value)}
@@ -1457,7 +1469,7 @@ const VariableLibrary: React.FC<{
                     icon={<FunctionOutlined />}
                     onClick={() => onInsert(v.key, v.label)}
                     style={{ textAlign: 'left', height: 36, flex: 1, fontSize: 13 }}
-                    title={`插入字段: ${v.key}`}
+                    title={t('pages.system.printTemplatesDesign.insertFieldTitle', { key: v.key })}
                   >
                     {v.label}
                   </Button>
@@ -1467,7 +1479,7 @@ const VariableLibrary: React.FC<{
                       size="small"
                       icon={<AppstoreOutlined />}
                       onClick={() => onInsertTable(v.key, v.label)}
-                      title={`作为表格插入: ${v.key}`}
+                      title={t('pages.system.printTemplatesDesign.insertAsTableTitle', { key: v.key })}
                       style={{ flexShrink: 0, height: 36, width: 36 }}
                     />
                   ) : (
@@ -1475,7 +1487,7 @@ const VariableLibrary: React.FC<{
                       size="small"
                       icon={<QrcodeOutlined />}
                       onClick={() => onInsertQR(v.key)}
-                      title={`以二维码插入: ${v.key}`}
+                      title={t('pages.system.printTemplatesDesign.insertAsQRTitle', { key: v.key })}
                       style={{ flexShrink: 0, height: 36, width: 36 }}
                     />
                   )}
@@ -1541,7 +1553,7 @@ const PrintTemplateDesignPage: React.FC = () => {
     setZoom(Math.max(30, Math.min(100, targetZoom)));
   }, [pageSize, orientation]);
 
-  const samplePresets = useMemo(() => getSamplePresetsByDocType(templateType), [templateType]);
+  const samplePresets = useMemo(() => getSamplePresetsByDocType(t, templateType), [t, templateType]);
   const hasLoaded = React.useRef(false);
   const designImportInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -1588,7 +1600,7 @@ const PrintTemplateDesignPage: React.FC = () => {
         const first: DesignerNodeSchema = {
           id: `text-${Date.now()}`,
           type: 'text',
-          content: data.content || '请输入文本内容',
+          content: data.content || t('pages.system.printTemplatesDesign.textContentPlaceholder'),
         };
         setSchemaBlocks([first]);
         setSelectedBlockId(first.id);
@@ -1655,8 +1667,8 @@ const PrintTemplateDesignPage: React.FC = () => {
           const k = (newBlk.key || '').toLowerCase();
           const isFin = (k.includes('amount') || k.includes('price') || k.includes('tax') || k.includes('total')) && !k.includes('quantity') && !k.includes('count');
           if (isFin) {
-            if (newBlk.label && !newBlk.label.includes('元')) {
-              newBlk.label = `${newBlk.label} (元)`;
+            if (newBlk.label && !newBlk.label.includes(t('pages.system.printTemplatesDesign.yuan'))) {
+              newBlk.label = `${newBlk.label} (${t('pages.system.printTemplatesDesign.yuan')})`;
             }
           }
         }
@@ -1778,7 +1790,7 @@ const PrintTemplateDesignPage: React.FC = () => {
       });
       messageApi.success(t('pages.system.printTemplatesDesign.saveSuccess'));
       if (compiled.warnings?.length) {
-        messageApi.warning(`模板已保存，编译告警 ${compiled.warnings.length} 条`);
+        messageApi.warning(t('pages.system.printTemplatesDesign.saveSuccessWithWarnings', { count: compiled.warnings.length }));
       }
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : String(error);
@@ -1798,9 +1810,9 @@ const PrintTemplateDesignPage: React.FC = () => {
       });
       setCompiledPreview(compiled.compiled_template || '');
       setCompileWarnings(compiled.warnings || []);
-      messageApi.success('Uni-Print 编译预览已更新');
+      messageApi.success(t('pages.system.printTemplatesDesign.compilePreviewUpdated'));
     } catch (error: any) {
-      messageApi.error(error?.message || '编译预览失败');
+      messageApi.error(error?.message || t('pages.system.printTemplatesDesign.compilePreviewFailed'));
     } finally {
       setPreviewLoading(false);
     }
@@ -1816,7 +1828,7 @@ const PrintTemplateDesignPage: React.FC = () => {
         if (previewData.page_num === undefined) previewData.page_num = 1;
         if (previewData.total_pages === undefined) previewData.total_pages = 1;
       } catch {
-        if (!silent) messageApi.error('样本数据 JSON 格式错误');
+        if (!silent) messageApi.error(t('pages.system.printTemplatesDesign.sampleDataError'));
         return;
       }
       const schema = getNormalizedSchema();
@@ -1830,9 +1842,9 @@ const PrintTemplateDesignPage: React.FC = () => {
       setCompiledPreview(result.compiled_template || '');
       setCompileWarnings(result.warnings || []);
       setRenderedHtmlPreview(result.rendered_html || '');
-      if (!silent) messageApi.success('预览结果已生成');
+      if (!silent) messageApi.success(t('pages.system.printTemplatesDesign.previewGenerated'));
     } catch (error: any) {
-      if (!silent) messageApi.error(error?.message || '数据预览失败');
+      if (!silent) messageApi.error(error?.message || t('pages.system.printTemplatesDesign.previewFailed'));
     } finally {
       setPreviewLoading(false);
     }
@@ -1851,11 +1863,11 @@ const PrintTemplateDesignPage: React.FC = () => {
     const preset = samplePresets.find((x) => x.key === presetKey);
     if (!preset) return;
     setPreviewDataText(JSON.stringify(preset.data, null, 2));
-    messageApi.success(`已填充样本：${preset.label}`);
+    messageApi.success(t('pages.system.printTemplatesDesign.sampleFilled', { label: t(preset.label) }));
   };
 
   const handleInsertText = () => {
-    const item: DesignerNodeSchema = { id: `text-${Date.now()}`, type: 'text', content: '请输入文本内容' };
+    const item: DesignerNodeSchema = { id: `text-${Date.now()}`, type: 'text', content: t('pages.system.printTemplatesDesign.textContentPlaceholder') };
     setSchemaBlocks((prev) => [...prev, item]);
     setSelectedBlockId(item.id);
   };
@@ -1881,10 +1893,10 @@ const PrintTemplateDesignPage: React.FC = () => {
   const handleInsertFieldToken = (key: string, label: string) => {
     const k = key.toLowerCase();
     const isFinancial = k.match(/amount|price|tax|total/) && !k.includes('quantity') && !k.includes('count');
-    const token = isFinancial ? `{{ "%.2f"|format(${key}) }} 元` : `{{ ${key} }}`;
+    const token = isFinancial ? `{{ "%.2f"|format(${key}) }} ${t('pages.system.printTemplatesDesign.yuan')}` : `{{ ${key} }}`;
     if (!selectedBlockId) {
       const fieldKey = isFinancial ? `${key}|format("%.2f")` : key;
-      const fieldLabel = isFinancial ? `${label} (元)` : label;
+      const fieldLabel = isFinancial ? `${label} (${t('pages.system.printTemplatesDesign.yuan')})` : label;
       handleInsertField(fieldKey, fieldLabel);
       return;
     }
@@ -1908,10 +1920,10 @@ const PrintTemplateDesignPage: React.FC = () => {
       }),
     );
     if (consumed) {
-      messageApi.success(`已插入变量：${label}`);
+      messageApi.success(t('pages.system.printTemplatesDesign.insertedField', { label }));
     } else {
       handleInsertField(key, label);
-      messageApi.info('当前块不支持内嵌变量，已新增字段块');
+      messageApi.info(t('pages.system.printTemplatesDesign.compNotSupported'));
     }
   };
 
@@ -1920,17 +1932,17 @@ const PrintTemplateDesignPage: React.FC = () => {
     const tpl = tableTemplates.find(t => t.arrayKey === key);
     if (tpl) {
       handleInsertDetailTable(tpl.arrayKey, tpl.columns);
-      messageApi.success(`已插入明细表：${label}`);
+      messageApi.success(t('pages.system.printTemplatesDesign.insertedDetailTable', { label }));
     } else {
-      // Fallback: 默认显示常用列
+      // Fallback: Default columns
       handleInsertDetailTable(key, [
-        { key: 'material_code', label: '物料编号' },
-        { key: 'material_name', label: '名称' },
-        { key: 'quote_quantity', label: '数量' },
-        { key: 'unit_price', label: '单价' },
-        { key: 'total_amount', label: '金额' },
+        { key: 'material_code', label: t('pages.system.printTemplatesDesign.colMaterialCode') },
+        { key: 'material_name', label: t('pages.system.printTemplatesDesign.colMaterialName') },
+        { key: 'quote_quantity', label: t('pages.system.printTemplatesDesign.colQuantity') },
+        { key: 'unit_price', label: t('pages.system.printTemplatesDesign.colUnitPrice') },
+        { key: 'total_amount', label: t('pages.system.printTemplatesDesign.colAmount') },
       ]);
-      messageApi.info(`已插入基础表格结构：${label}`);
+      messageApi.info(t('pages.system.printTemplatesDesign.insertedTableStructure', { label }));
     }
   };
 
@@ -1938,8 +1950,8 @@ const PrintTemplateDesignPage: React.FC = () => {
     const item: DesignerNodeSchema = {
       id: `if-${Date.now()}`,
       type: 'if',
-      condition: 'status == "已通过"',
-      content: '条件满足后显示',
+      condition: `status == "${t('pages.system.printTemplatesDesign.passed')}"`,
+      content: t('pages.system.printTemplatesDesign.conditionalContent'),
     };
     setSchemaBlocks((prev) => [...prev, item]);
     setSelectedBlockId(item.id);
@@ -1998,7 +2010,7 @@ const PrintTemplateDesignPage: React.FC = () => {
         horizontalAlign: 'start',
         verticalAlign: 'top',
         cols: [
-          { id: `c1-${Date.now()}`, width: '1', blocks: [{ id: `txt-${Date.now()}-1`, type: 'text', content: '某某制造有限公司', tag: 'h3' }] },
+          { id: `c1-${Date.now()}`, width: '1', blocks: [{ id: `txt-${Date.now()}-1`, type: 'text', content: t('pages.system.printTemplatesDesign.companyNamePlaceholder'), tag: 'h3' }] },
           { id: `c2-${Date.now()}`, width: '1', horizontalAlign: 'end', blocks: [{ id: `img-${Date.now()}-2`, type: 'image', url: siteLogoUrl || '{{ logo }}', width: 80, height: 40, style: { textAlign: 'right' } }] }
         ]
       };
@@ -2011,7 +2023,7 @@ const PrintTemplateDesignPage: React.FC = () => {
         verticalAlign: 'top',
         cols: [
           { id: `c1-${Date.now()}`, width: '1', horizontalAlign: 'center', blocks: [
-            { id: `txt-${Date.now()}-1`, type: 'text', content: '报价单', tag: 'h2', style: { textAlign: 'center' } },
+            { id: `txt-${Date.now()}-1`, type: 'text', content: t('pages.system.printTemplatesDesign.quotationTitlePlaceholder'), tag: 'h2', style: { textAlign: 'center' } },
             { id: `div-${Date.now()}-2`, type: 'divider' }
           ] }
         ]
@@ -2028,7 +2040,7 @@ const PrintTemplateDesignPage: React.FC = () => {
       horizontalAlign: 'center',
       verticalAlign: 'top',
       cols: [
-        { id: `c1-${Date.now()}`, width: '1', horizontalAlign: 'center', blocks: [{ id: `txt-${Date.now()}-1`, type: 'text', content: '页码：{{ page_num }} / {{ total_pages }}', style: { textAlign: 'center', fontSize: '12px' } }] }
+        { id: `c1-${Date.now()}`, width: '1', horizontalAlign: 'center', blocks: [{ id: `txt-${Date.now()}-1`, type: 'text', content: t('pages.system.printTemplatesDesign.pageNumberPlaceholder', { current: '{{ page_num }}', total: '{{ total_pages }}' }), style: { textAlign: 'center', fontSize: '12px' } }] }
       ]
     };
     setSchemaBlocks((prev) => [...prev, item]);
@@ -2197,11 +2209,11 @@ const PrintTemplateDesignPage: React.FC = () => {
           };
           
           const result = insert(afterRemove);
-          messageApi.success('组件移动成功');
+          messageApi.success(t('pages.system.printTemplatesDesign.compMoveSuccess'));
           return result;
         } else {
           // Fallback: Drop on root canvas background or unknown target -> move to end of root
-          messageApi.info('已移动至文档末尾');
+          messageApi.info(t('pages.system.printTemplatesDesign.movedToEnd'));
           return [...afterRemove, draggedBlock];
         }
       });
@@ -2221,7 +2233,7 @@ const PrintTemplateDesignPage: React.FC = () => {
       let newBlock: DesignerNodeSchema;
       switch (blockType) {
         case 'text':
-          newBlock = { id, type: 'text', content: '新文本内容' };
+          newBlock = { id, type: 'text', content: t('pages.system.printTemplatesDesign.textContent') };
           break;
         case 'field':
           newBlock = { id, type: 'field', key: payload.key, label: payload.label, showLabel: true };
@@ -2242,10 +2254,10 @@ const PrintTemplateDesignPage: React.FC = () => {
           };
           break;
         case 'if':
-          newBlock = { id, type: 'if', condition: 'true', content: '条件内容' };
+          newBlock = { id, type: 'if', condition: 'true', content: t('pages.system.printTemplatesDesign.conditionalContent') };
           break;
         case 'for':
-          newBlock = { id, type: 'for', item: 'item', collection: 'items', template: '内容' };
+          newBlock = { id, type: 'for', item: 'item', collection: 'items', template: t('pages.system.printTemplatesDesign.content') };
           break;
         case 'detail_table':
           newBlock = { id, type: 'detail_table', collection: payload.collection, row_alias: 'item', columns: payload.columns };
@@ -2353,7 +2365,7 @@ const PrintTemplateDesignPage: React.FC = () => {
             )}
             {(blk.type === 'if' || blk.type === 'for' || blk.type === 'detail_table') && (
               <LogicBlock
-                title={blk.type === 'if' ? '条件块' : blk.type === 'for' ? '循环块' : '明细表块'}
+                title={blk.type === 'if' ? t('pages.system.printTemplatesDesign.compIf') : blk.type === 'for' ? t('pages.system.printTemplatesDesign.compFor') : t('pages.system.printTemplatesDesign.compDetailTable')}
                 body={
                   blk.type === 'if'
                     ? `{% if ${blk.condition} %}${blk.content}{% endif %}`
@@ -2514,11 +2526,11 @@ const PrintTemplateDesignPage: React.FC = () => {
           flex: '0 0 72px'
         }}>
           {[
-            { key: 'components', icon: <AppstoreOutlined />, label: '组件' },
-            { key: 'variables', icon: <FunctionOutlined />, label: '变量' },
-            { key: 'outline', icon: <OrderedListOutlined />, label: '大纲' },
-            { key: 'preview', icon: <EyeOutlined />, label: '调试' },
-            { key: 'settings', icon: <SettingOutlined />, label: '设置' },
+            { key: 'components', icon: <AppstoreOutlined />, label: t('pages.system.printTemplatesDesign.sidebarComponents') },
+            { key: 'variables', icon: <FunctionOutlined />, label: t('pages.system.printTemplatesDesign.sidebarVariables') },
+            { key: 'outline', icon: <OrderedListOutlined />, label: t('pages.system.printTemplatesDesign.sidebarOutline') },
+            { key: 'preview', icon: <EyeOutlined />, label: t('pages.system.printTemplatesDesign.sidebarDebug') },
+            { key: 'settings', icon: <SettingOutlined />, label: t('pages.system.printTemplatesDesign.sidebarSettings') },
           ].map(item => (
             <div
               key={item.key}
@@ -2573,11 +2585,11 @@ const PrintTemplateDesignPage: React.FC = () => {
         }}>
           <div style={{ height: 64, display: 'flex', alignItems: 'center', padding: '0 24px', borderBottom: '1px solid #f0f0f0' }}>
             <Title level={5} style={{ margin: 0 }}>
-              {activeSidebarKey === 'components' && '组件库'}
-              {activeSidebarKey === 'variables' && '业务变量'}
-              {activeSidebarKey === 'outline' && '图层大纲'}
-              {activeSidebarKey === 'preview' && '逻辑调试'}
-              {activeSidebarKey === 'settings' && '页面设置'}
+              {activeSidebarKey === 'components' && t('pages.system.printTemplatesDesign.navComponents')}
+              {activeSidebarKey === 'variables' && t('pages.system.printTemplatesDesign.navVariables')}
+              {activeSidebarKey === 'outline' && t('pages.system.printTemplatesDesign.navOutline')}
+              {activeSidebarKey === 'preview' && t('pages.system.printTemplatesDesign.navDebug')}
+              {activeSidebarKey === 'settings' && t('pages.system.printTemplatesDesign.navSettings')}
             </Title>
           </div>
           <div style={{ flex: 1, padding: 20, overflowY: 'auto' }}>
@@ -2635,18 +2647,18 @@ const PrintTemplateDesignPage: React.FC = () => {
             )}
             {activeSidebarKey === 'preview' && (
               <Space direction="vertical" style={{ width: '100%' }} size={16}>
-                 <div style={{ fontWeight: 600, fontSize: 13, color: '#8c8c8c' }}>编译控制</div>
-                 <Button block type="primary" onClick={handleCompilePreview}>刷新编译源码</Button>
+                 <div style={{ fontWeight: 600, fontSize: 13, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.compileControl')}</div>
+                 <Button block type="primary" onClick={handleCompilePreview}>{t('pages.system.printTemplatesDesign.refreshSource')}</Button>
                  {compileWarnings.length > 0 && (
                    <div style={{ background: '#fffbe6', border: '1px solid #ffe58f', padding: 10, borderRadius: 6, fontSize: 12 }}>
-                     <div style={{ color: '#d46b08', fontWeight: 600 }}>编译告警:</div>
+                     <div style={{ color: '#d46b08', fontWeight: 600 }}>{t('pages.system.printTemplatesDesign.compileWarning')}</div>
                      {compileWarnings.map((w, i) => <div key={i}>• {w}</div>)}
                    </div>
                  )}
                  <Input.TextArea rows={8} value={compiledPreview} readOnly placeholder="Jinja2 Source..." style={{ fontFamily: 'monospace', fontSize: 12 }} />
                  
                  <Divider style={{ margin: '8px 0' }} />
-                 <div style={{ fontWeight: 600, fontSize: 13, color: '#8c8c8c' }}>数据模拟</div>
+                 <div style={{ fontWeight: 600, fontSize: 13, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.dataSimulation')}</div>
                  <div style={{ display: 'flex', gap: 8 }}>
                    <Select
                       style={{ flex: 1 }}
@@ -2654,7 +2666,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                       options={samplePresets.map((x) => ({ label: x.label, value: x.key }))}
                       onChange={setSelectedSamplePreset}
                     />
-                    <Button onClick={() => handleApplySamplePreset(selectedSamplePreset)}>应用</Button>
+                    <Button onClick={() => handleApplySamplePreset(selectedSamplePreset)}>{t('pages.system.printTemplatesDesign.apply')}</Button>
                  </div>
                  <Input.TextArea
                     rows={8}
@@ -2662,22 +2674,22 @@ const PrintTemplateDesignPage: React.FC = () => {
                     onChange={(e) => setPreviewDataText(e.target.value)}
                     style={{ fontFamily: 'monospace', fontSize: 12 }}
                   />
-                 <Button block icon={<EyeOutlined />} loading={previewLoading} onClick={() => handleDataPreview()}>执行数据预览</Button>
+                 <Button block icon={<EyeOutlined />} loading={previewLoading} onClick={() => handleDataPreview()}>{t('pages.system.printTemplatesDesign.executePreview')}</Button>
               </Space>
             )}
             {activeSidebarKey === 'settings' && (
               <Space direction="vertical" style={{ width: '100%' }} size={16}>
                 <div>
-                  <div style={{ marginBottom: 8, color: '#8c8c8c' }}>纸张尺寸</div>
+                  <div style={{ marginBottom: 8, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.paperSize')}</div>
                   <Select
                     style={{ width: '100%' }}
                     value={pageSize}
-                    options={Object.keys(PAPER_SIZES).map(k => ({ label: PAPER_SIZES[k].label, value: k }))}
+                    options={Object.keys(PAPER_SIZES).map(k => ({ label: t(PAPER_SIZES[k].labelKey), value: k }))}
                     onChange={setPageSize}
                   />
                 </div>
                 <div>
-                  <div style={{ marginBottom: 8, color: '#8c8c8c' }}>纸张方向</div>
+                  <div style={{ marginBottom: 8, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.paperOrientation')}</div>
                   <OrientationSelector 
                     value={orientation}
                     onChange={setOrientation}
@@ -2685,51 +2697,51 @@ const PrintTemplateDesignPage: React.FC = () => {
                 </div>
                 <Divider style={{ margin: '8px 0' }} />
                 <div>
-                  <div style={{ marginBottom: 8, color: '#8c8c8c' }}>组件间距 (mm)</div>
+                  <div style={{ marginBottom: 8, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.itemSpacingLabel')}</div>
                   <InputNumber 
                     size="small" 
                     style={{ width: '100%' }} 
                     value={itemSpacing} 
                     onChange={v => setItemSpacing(v || 0)} 
-                    placeholder="例如: 2"
+                    placeholder={t('pages.system.printTemplatesDesign.itemSpacingPlaceholder')}
                   />
                   <div style={{ fontSize: 11, color: '#bfbfbf', marginTop: 4 }}>
-                    设计和打印时自动为每个组件添加底部间距 (mm)
+                    {t('pages.system.printTemplatesDesign.itemSpacingHint')}
                   </div>
                 </div>
                 <Divider style={{ margin: '8px 0' }} />
                 <div>
-                  <div style={{ marginBottom: 8, color: '#8c8c8c' }}>明细行数</div>
+                  <div style={{ marginBottom: 8, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.tableRowLimitLabel')}</div>
                   <InputNumber 
                     size="small" 
                     style={{ width: '100%' }} 
                     value={tableRowLimit} 
                     onChange={v => setTableRowLimit(v || 0)} 
-                    placeholder="例如: 10"
+                    placeholder={t('pages.system.printTemplatesDesign.tableRowLimitPlaceholder')}
                     min={0}
                   />
                   <div style={{ fontSize: 11, color: '#bfbfbf', marginTop: 4 }}>
-                    固定明细行数。不足时显示空行，为 0 时自动伸缩。
+                    {t('pages.system.printTemplatesDesign.tableRowLimitHint')}
                   </div>
                 </div>
                 <Divider style={{ margin: '8px 0' }} />
                 <div>
-                  <div style={{ marginBottom: 12, fontWeight: 600, fontSize: 13 }}>纸张边距 (mm)</div>
+                  <div style={{ marginBottom: 12, fontWeight: 600, fontSize: 13 }}>{t('pages.system.printTemplatesDesign.paperMargins')}</div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                     <div>
-                      <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 4 }}>上边距</div>
+                      <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 4 }}>{t('pages.system.printTemplatesDesign.marginTop')}</div>
                       <InputNumber size="small" style={{ width: '100%' }} value={margins.top} onChange={v => setMargins(m => ({ ...m, top: v || 0 }))} />
                     </div>
                     <div>
-                      <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 4 }}>下边距</div>
+                      <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 4 }}>{t('pages.system.printTemplatesDesign.marginBottom')}</div>
                       <InputNumber size="small" style={{ width: '100%' }} value={margins.bottom} onChange={v => setMargins(m => ({ ...m, bottom: v || 0 }))} />
                     </div>
                     <div>
-                      <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 4 }}>左边距</div>
+                      <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 4 }}>{t('pages.system.printTemplatesDesign.marginLeft')}</div>
                       <InputNumber size="small" style={{ width: '100%' }} value={margins.left} onChange={v => setMargins(m => ({ ...m, left: v || 0 }))} />
                     </div>
                     <div>
-                      <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 4 }}>右边距</div>
+                      <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 4 }}>{t('pages.system.printTemplatesDesign.marginRight')}</div>
                       <InputNumber size="small" style={{ width: '100%' }} value={margins.right} onChange={v => setMargins(m => ({ ...m, right: v || 0 }))} />
                     </div>
                   </div>
@@ -2780,14 +2792,14 @@ const PrintTemplateDesignPage: React.FC = () => {
                 textOverflow: 'ellipsis',
                 maxWidth: 400
               }}>
-                {templateName || '报价单打印模板(新版)'}
+                {templateName || t('pages.system.printTemplatesDesign.templateNameFallback')}
               </Title>
               <Divider type="vertical" />
               <Space>
                 <Button icon={<ZoomOutOutlined />} onClick={() => setZoom(Math.max(50, zoom - 10))} />
                 <span style={{ minWidth: 40, textAlign: 'center' }}>{zoom}%</span>
                 <Button icon={<ZoomInOutlined />} onClick={() => setZoom(Math.min(200, zoom + 10))} />
-                <Button size="small" onClick={handleFitToWidth}>自适应宽度</Button>
+                <Button size="small" onClick={handleFitToWidth}>{t('pages.system.printTemplatesDesign.fitWidth')}</Button>
               </Space>
             </Space>
             <Space style={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
@@ -2804,11 +2816,11 @@ const PrintTemplateDesignPage: React.FC = () => {
                 size="middle"
                 style={{ whiteSpace: 'nowrap', display: 'inline-flex' }}
               >
-                <Radio.Button value="design" style={{ whiteSpace: 'nowrap' }}>设计模式</Radio.Button>
-                <Radio.Button value="preview" style={{ whiteSpace: 'nowrap' }}>预览模式</Radio.Button>
+                <Radio.Button value="design" style={{ whiteSpace: 'nowrap' }}>{t('pages.system.printTemplatesDesign.modeDesign')}</Radio.Button>
+                <Radio.Button value="preview" style={{ whiteSpace: 'nowrap' }}>{t('pages.system.printTemplatesDesign.modePreview')}</Radio.Button>
               </Radio.Group>
               <Divider type="vertical" />
-              <Button type="primary" icon={<SaveOutlined />} onClick={handleSave}>保存模板</Button>
+              <Button type="primary" icon={<SaveOutlined />} onClick={handleSave}>{t('pages.system.printTemplatesDesign.saveTemplate')}</Button>
             </Space>
           </div>
 
@@ -2855,7 +2867,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                       {schemaBlocks.length === 0 && (
                         <div style={{ color: '#8c8c8c', padding: 40, textAlign: 'center', border: '2px dashed #d9d9d9', borderRadius: 8 }}>
                           <AppstoreOutlined style={{ fontSize: 32, marginBottom: 12, opacity: 0.5 }} />
-                          <div>从左侧点击或拖拽组件开始设计</div>
+                          <div>{t('pages.system.printTemplatesDesign.dragToStart')}</div>
                         </div>
                       )}
                         <SortableContext 
@@ -2883,8 +2895,8 @@ const PrintTemplateDesignPage: React.FC = () => {
                       dangerouslySetInnerHTML={{ 
                         __html: `
                         <style>
-                          /* 让设计器的预览框和 PDF 出图视觉一致：
-                             仅在编译产物未提供 cell border 时给出兜底，避免覆盖列样式 */
+                          /* Keep designer preview consistent with PDF output:
+                             Only provide a fallback if cell border is not provided by compilation product */
                           .print-preview-inner { color: #334155; line-height: 1.5; }
                           .print-preview-inner > div, 
                           .print-preview-inner > table, 
@@ -2945,23 +2957,23 @@ const PrintTemplateDesignPage: React.FC = () => {
           flex: '0 0 320px'
         }}>
           <div style={{ height: 64, display: 'flex', alignItems: 'center', padding: '0 24px', borderBottom: '1px solid #f0f0f0' }}>
-            <Title level={5} style={{ margin: 0 }}>属性面板</Title>
+            <Title level={5} style={{ margin: 0 }}>{t('pages.system.printTemplatesDesign.propertyPanel')}</Title>
           </div>
           <div style={{ flex: 1, padding: 20, overflowY: 'auto' }}>
             {selectedBlock ? (
               <Space direction="vertical" style={{ width: '100%' }} size={16}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                   <span style={{ fontWeight: 600, color: '#333' }}>
-                    {selectedBlock.type === 'text' && '文本组件'}
-                    {selectedBlock.type === 'field' && '字段变量'}
-                    {selectedBlock.type === 'divider' && '分割线'}
-                    {selectedBlock.type === 'spacer' && '间距组件'}
-                    {selectedBlock.type === 'qrcode' && '二维码'}
-                    {selectedBlock.type === 'barcode' && '条形码'}
-                    {selectedBlock.type === 'image' && '图片组件'}
-                    {selectedBlock.type === 'if' && '条件块'}
-                    {selectedBlock.type === 'for' && '循环块'}
-                    {selectedBlock.type === 'detail_table' && '明细表'}
+                    {selectedBlock.type === 'text' && t('pages.system.printTemplatesDesign.compText')}
+                    {selectedBlock.type === 'field' && t('pages.system.printTemplatesDesign.compVariables')}
+                    {selectedBlock.type === 'divider' && t('pages.system.printTemplatesDesign.compDivider')}
+                    {selectedBlock.type === 'spacer' && t('pages.system.printTemplatesDesign.compSpacer')}
+                    {selectedBlock.type === 'qrcode' && t('pages.system.printTemplatesDesign.typeQRCode')}
+                    {selectedBlock.type === 'barcode' && t('pages.system.printTemplatesDesign.typeBarcode')}
+                    {selectedBlock.type === 'image' && t('pages.system.printTemplatesDesign.compImage')}
+                    {selectedBlock.type === 'if' && t('pages.system.printTemplatesDesign.compIf')}
+                    {selectedBlock.type === 'for' && t('pages.system.printTemplatesDesign.compFor')}
+                    {selectedBlock.type === 'detail_table' && t('pages.system.printTemplatesDesign.compDetailTable')}
                   </span>
                   <Space>
                     <Button size="small" icon={<VerticalAlignTopOutlined />} onClick={() => moveSelected(-1)} />
@@ -2971,11 +2983,11 @@ const PrintTemplateDesignPage: React.FC = () => {
                 </div>
 
                 {(selectedBlock.type === 'text' || selectedBlock.type === 'field' || selectedBlock.type === 'qrcode' || selectedBlock.type === 'barcode' || selectedBlock.type === 'image') && (
-                  <Card size="small" title="样式设置" headStyle={{ border: 0, fontSize: 13, color: '#8c8c8c' }}>
+                  <Card size="small" title={t('pages.system.printTemplatesDesign.styleSettings')} headStyle={{ border: 0, fontSize: 13, color: '#8c8c8c' }}>
                     <Space direction="vertical" style={{ width: '100%' }} size={12}>
                       <div style={{ display: 'flex', gap: 8 }}>
                         <Input
-                          placeholder="字号"
+                          placeholder={t('pages.system.printTemplatesDesign.fontSize')}
                           value={selectedBlock.style?.fontSize}
                           onChange={e => updateSelectedBlock({ style: { ...selectedBlock.style, fontSize: e.target.value } })}
                           suffix="px"
@@ -3000,38 +3012,38 @@ const PrintTemplateDesignPage: React.FC = () => {
                         type={selectedBlock.style?.fontWeight === 'bold' ? 'primary' : 'default'}
                         onClick={() => updateSelectedBlock({ style: { ...selectedBlock.style, fontWeight: selectedBlock.style?.fontWeight === 'bold' ? 'normal' : 'bold' } })}
                       >
-                        加粗
+                        {t('pages.system.printTemplatesDesign.bold')}
                       </Button>
                     </Space>
                   </Card>
                 )}
 
-                <Card size="small" title="内容配置" headStyle={{ border: 0, fontSize: 13, color: '#8c8c8c' }}>
+                <Card size="small" title={t('pages.system.printTemplatesDesign.contentSettings')} headStyle={{ border: 0, fontSize: 13, color: '#8c8c8c' }}>
                   {selectedBlock.type === 'text' && (
                     <Space direction="vertical" style={{ width: '100%' }} size={12}>
                       <div>
-                        <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>文本类型</div>
+                        <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.textType')}</div>
                         <Select
                           style={{ width: '100%' }}
                           value={selectedBlock.tag || 'div'}
                           onChange={val => updateSelectedBlock({ tag: val })}
                           options={[
-                            { label: '普通文本', value: 'div' },
-                            { label: '段落 (P)', value: 'p' },
-                            { label: '标题 1 (H1)', value: 'h1' },
-                            { label: '标题 2 (H2)', value: 'h2' },
-                            { label: '标题 3 (H3)', value: 'h3' },
-                            { label: '标题 4 (H4)', value: 'h4' },
+                            { label: t('pages.system.printTemplatesDesign.typeNormal'), value: 'div' },
+                            { label: t('pages.system.printTemplatesDesign.typeParagraph'), value: 'p' },
+                            { label: t('pages.system.printTemplatesDesign.typeH1'), value: 'h1' },
+                            { label: t('pages.system.printTemplatesDesign.typeH2'), value: 'h2' },
+                            { label: t('pages.system.printTemplatesDesign.typeH3'), value: 'h3' },
+                            { label: t('pages.system.printTemplatesDesign.typeH4'), value: 'h4' },
                           ]}
                         />
                       </div>
                       <div>
-                        <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>文本内容</div>
+                        <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.textContent')}</div>
                         <Input.TextArea
                           rows={6}
                           value={selectedBlock.content}
                           onChange={e => updateSelectedBlock({ content: e.target.value })}
-                          placeholder="请输入内容 (支持换行，无需 HTML)"
+                          placeholder={t('pages.system.printTemplatesDesign.textContentPlaceholder')}
                         />
                       </div>
                     </Space>
@@ -3039,34 +3051,34 @@ const PrintTemplateDesignPage: React.FC = () => {
                   {selectedBlock.type === 'field' && (
                     <Space direction="vertical" style={{ width: '100%' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, background: '#f5f5f5', padding: '8px 12px', borderRadius: 6 }}>
-                        <span style={{ fontSize: 13 }}>显示文本标签</span>
+                        <span style={{ fontSize: 13 }}>{t('pages.system.printTemplatesDesign.showLabel')}</span>
                         <Radio.Group 
                           size="small" 
                           value={selectedBlock.showLabel !== false} 
                           onChange={e => updateSelectedBlock({ showLabel: e.target.value })}
                         >
-                          <Radio.Button value={true}>开启</Radio.Button>
-                          <Radio.Button value={false}>关闭</Radio.Button>
+                          <Radio.Button value={true}>{t('pages.system.printTemplatesDesign.on')}</Radio.Button>
+                          <Radio.Button value={false}>{t('pages.system.printTemplatesDesign.off')}</Radio.Button>
                         </Radio.Group>
                       </div>
                       <div>
-                        <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>显示名称</div>
-                        <Input value={selectedBlock.label} placeholder="显示名称" onChange={e => updateSelectedBlock({ label: e.target.value })} />
+                        <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.displayName')}</div>
+                        <Input value={selectedBlock.label} placeholder={t('pages.system.printTemplatesDesign.displayName')} onChange={e => updateSelectedBlock({ label: e.target.value })} />
                       </div>
                       <div>
-                        <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>变量字段</div>
-                        <Input value={selectedBlock.key} placeholder="变量字段" readOnly disabled />
+                        <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.variableField')}</div>
+                        <Input value={selectedBlock.key} placeholder={t('pages.system.printTemplatesDesign.variableField')} readOnly disabled />
                       </div>
                     </Space>
                   )}
                   {selectedBlock.type === 'qrcode' && (
                     <Space direction="vertical" style={{ width: '100%' }}>
                       <div>
-                        <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>变量字段</div>
+                        <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.variableField')}</div>
                         <Input value={selectedBlock.key} onChange={e => updateSelectedBlock({ key: e.target.value })} placeholder="e.g. order_no" />
                       </div>
                       <div>
-                        <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>尺寸 (px)</div>
+                        <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.sizePx')}</div>
                         <InputNumber min={40} max={300} style={{ width: '100%' }} value={selectedBlock.size} onChange={v => updateSelectedBlock({ size: v || 100 })} />
                       </div>
                     </Space>
@@ -3074,11 +3086,11 @@ const PrintTemplateDesignPage: React.FC = () => {
                   {selectedBlock.type === 'barcode' && (
                     <Space direction="vertical" style={{ width: '100%' }}>
                       <div>
-                        <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>条码字段</div>
+                        <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.barcodeField')}</div>
                         <Input value={selectedBlock.key} onChange={e => updateSelectedBlock({ key: e.target.value })} placeholder="e.g. barcode_val" />
                       </div>
                       <div>
-                        <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>条码格式</div>
+                        <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.barcodeFormat')}</div>
                         <Select
                           style={{ width: '100%' }}
                           value={selectedBlock.format}
@@ -3091,7 +3103,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>高度 (px)</div>
+                        <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.heightPx')}</div>
                         <InputNumber min={20} max={100} style={{ width: '100%' }} value={selectedBlock.height} onChange={v => updateSelectedBlock({ height: v || 40 })} />
                       </div>
                     </Space>
@@ -3099,27 +3111,27 @@ const PrintTemplateDesignPage: React.FC = () => {
                   {selectedBlock.type === 'image' && (
                     <Space direction="vertical" style={{ width: '100%' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, background: '#f5f5f5', padding: '8px 12px', borderRadius: 6 }}>
-                        <span style={{ fontSize: 13 }}>保持原始比例</span>
+                        <span style={{ fontSize: 13 }}>{t('pages.system.printTemplatesDesign.keepRatio')}</span>
                         <Radio.Group 
                           size="small" 
                           value={selectedBlock.keepRatio !== false} 
                           onChange={e => updateSelectedBlock({ keepRatio: e.target.value })}
                         >
-                          <Radio.Button value={true}>开启</Radio.Button>
-                          <Radio.Button value={false}>关闭</Radio.Button>
+                          <Radio.Button value={true}>{t('pages.system.printTemplatesDesign.on')}</Radio.Button>
+                          <Radio.Button value={false}>{t('pages.system.printTemplatesDesign.off')}</Radio.Button>
                         </Radio.Group>
                       </div>
                       <div>
-                        <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>图片 URL (Jinja2)</div>
-                        <Input.TextArea rows={3} value={selectedBlock.url} onChange={e => updateSelectedBlock({ url: e.target.value })} placeholder="e.g. {{ logo_url }} 或静态地址" />
+                        <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.imageUrl')}</div>
+                        <Input.TextArea rows={3} value={selectedBlock.url} onChange={e => updateSelectedBlock({ url: e.target.value })} placeholder={t('pages.system.printTemplatesDesign.imageUrlPlaceholder')} />
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                         <div>
-                          <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>宽度 (px)</div>
+                          <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.widthPx')}</div>
                           <InputNumber style={{ width: '100%' }} value={selectedBlock.width} onChange={v => updateSelectedBlock({ width: v || 100 })} />
                         </div>
                         <div>
-                          <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>高度 (px) {selectedBlock.keepRatio && <span style={{ color: '#bfbfbf' }}>(自动)</span>}</div>
+                          <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.heightPx')} {selectedBlock.keepRatio && <span style={{ color: '#bfbfbf' }}>{t('pages.system.printTemplatesDesign.auto')}</span>}</div>
                           <InputNumber disabled={selectedBlock.keepRatio} style={{ width: '100%' }} value={selectedBlock.height} onChange={v => updateSelectedBlock({ height: v || 60 })} />
                         </div>
                       </div>
@@ -3128,35 +3140,35 @@ const PrintTemplateDesignPage: React.FC = () => {
                   {selectedBlock.type === 'spacer' && (
                     <Space direction="vertical" style={{ width: '100%' }}>
                       <div>
-                        <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>间距高度 (px)</div>
+                        <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.spacing')}{t('pages.system.printTemplatesDesign.heightPx')}</div>
                         <InputNumber min={1} max={500} style={{ width: '100%' }} value={selectedBlock.height} onChange={v => updateSelectedBlock({ height: v || 20 })} />
                       </div>
                     </Space>
                   )}
                   {selectedBlock.type === 'if' && (
                     <Space direction="vertical" style={{ width: '100%' }}>
-                      <Input value={selectedBlock.condition} placeholder="条件表达式 (Jinja2)" onChange={e => updateSelectedBlock({ condition: e.target.value })} />
-                      <Input.TextArea value={selectedBlock.content} placeholder="内容" onChange={e => updateSelectedBlock({ content: e.target.value })} />
+                      <Input value={selectedBlock.condition} placeholder={t('pages.system.printTemplatesDesign.conditionExpr')} onChange={e => updateSelectedBlock({ condition: e.target.value })} />
+                      <Input.TextArea value={selectedBlock.content} placeholder={t('pages.system.printTemplatesDesign.content')} onChange={e => updateSelectedBlock({ content: e.target.value })} />
                     </Space>
                   )}
                   {selectedBlock.type === 'for' && (
                     <Space direction="vertical" style={{ width: '100%' }}>
-                      <Input value={selectedBlock.item} placeholder="单项变量名" onChange={e => updateSelectedBlock({ item: e.target.value })} />
-                      <Input value={selectedBlock.collection} placeholder="集合变量名" onChange={e => updateSelectedBlock({ collection: e.target.value })} />
-                      <Input.TextArea value={selectedBlock.template} placeholder="每一项的模板" onChange={e => updateSelectedBlock({ template: e.target.value })} />
+                      <Input value={selectedBlock.item} placeholder={t('pages.system.printTemplatesDesign.itemVar')} onChange={e => updateSelectedBlock({ item: e.target.value })} />
+                      <Input value={selectedBlock.collection} placeholder={t('pages.system.printTemplatesDesign.collectionVar')} onChange={e => updateSelectedBlock({ collection: e.target.value })} />
+                      <Input.TextArea value={selectedBlock.template} placeholder={t('pages.system.printTemplatesDesign.itemTemplate')} onChange={e => updateSelectedBlock({ template: e.target.value })} />
                     </Space>
                   )}
                   {selectedBlock.type === 'detail_table' && (
                     <Space direction="vertical" style={{ width: '100%' }} size={16}>
                       <div style={{ background: '#fffbe6', padding: '8px 12px', border: '1px solid #ffe58f', borderRadius: 6, fontSize: 12, color: '#856404' }}>
                         <TableOutlined style={{ marginRight: 8 }} />
-                        明细表组件：用于渲染动态列表数据。
+                        {t('pages.system.printTemplatesDesign.compDetailTableHint')}
                       </div>
-                      <Card size="small" title="表格样式" headStyle={{ border: 0, fontSize: 13, color: '#8c8c8c' }}>
+                      <Card size="small" title={t('pages.system.printTemplatesDesign.tableStyle')} headStyle={{ border: 0, fontSize: 13, color: '#8c8c8c' }}>
                         <Space direction="vertical" style={{ width: '100%' }} size={12}>
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                             <div>
-                              <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>边框样式</div>
+                              <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.borderStyle')}</div>
                               <Select
                                 style={{ width: '100%' }}
                                 value={selectedBlock.tableStyle?.borderStyle ?? 'solid'}
@@ -3166,14 +3178,14 @@ const PrintTemplateDesignPage: React.FC = () => {
                                   })
                                 }
                                 options={[
-                                  { label: '实线', value: 'solid' },
-                                  { label: '虚线', value: 'dashed' },
-                                  { label: '无边框', value: 'none' },
+                                  { label: t('pages.system.printTemplatesDesign.solid'), value: 'solid' },
+                                  { label: t('pages.system.printTemplatesDesign.dashed'), value: 'dashed' },
+                                  { label: t('pages.system.printTemplatesDesign.none'), value: 'none' },
                                 ]}
                               />
                             </div>
                             <div>
-                              <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>边框宽度 (px)</div>
+                              <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.border')}{t('pages.system.printTemplatesDesign.widthPx')}</div>
                               <InputNumber
                                 min={0}
                                 max={8}
@@ -3189,7 +3201,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                             </div>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{ fontSize: 12, color: '#8c8c8c', flexShrink: 0 }}>边框颜色</span>
+                            <span style={{ fontSize: 12, color: '#8c8c8c', flexShrink: 0 }}>{t('pages.system.printTemplatesDesign.borderColor')}</span>
                             <ColorPicker
                               value={selectedBlock.tableStyle?.borderColor ?? '#e2e8f0'}
                               disabled={selectedBlock.tableStyle?.borderStyle === 'none'}
@@ -3201,7 +3213,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                             />
                           </div>
                           <div>
-                            <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>单元格内边距 (px)</div>
+                            <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.cellPadding')}</div>
                             <InputNumber
                               min={0}
                               max={32}
@@ -3216,9 +3228,9 @@ const PrintTemplateDesignPage: React.FC = () => {
                           </div>
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                             <div>
-                              <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>表体字号</div>
+                              <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.bodyFontSize')}</div>
                               <Input
-                                placeholder="默认 13px"
+                                placeholder={t('pages.system.printTemplatesDesign.defaultFontSize')}
                                 value={selectedBlock.tableStyle?.fontSize ?? ''}
                                 onChange={(e) =>
                                   updateSelectedBlock({
@@ -3231,9 +3243,9 @@ const PrintTemplateDesignPage: React.FC = () => {
                               />
                             </div>
                             <div>
-                              <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>表头字号</div>
+                              <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.headerFontSize')}</div>
                               <Input
-                                placeholder="默认与表体相同"
+                                placeholder={t('pages.system.printTemplatesDesign.sameAsBody')}
                                 value={selectedBlock.tableStyle?.headerFontSize ?? ''}
                                 onChange={(e) =>
                                   updateSelectedBlock({
@@ -3247,7 +3259,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                             </div>
                           </div>
                           <div>
-                            <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>表头字重</div>
+                            <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.headerFontWeight')}</div>
                             <Select
                               style={{ width: '100%' }}
                               value={selectedBlock.tableStyle?.headerFontWeight ?? '600'}
@@ -3257,16 +3269,16 @@ const PrintTemplateDesignPage: React.FC = () => {
                                 })
                               }
                               options={[
-                                { label: '常规', value: '400' },
-                                { label: '中等', value: '500' },
-                                { label: '半粗', value: '600' },
-                                { label: '粗体', value: 'bold' },
+                                { label: t('pages.system.printTemplatesDesign.weightNormal'), value: '400' },
+                                { label: t('pages.system.printTemplatesDesign.weightMedium'), value: '500' },
+                                { label: t('pages.system.printTemplatesDesign.weightSemiBold'), value: '600' },
+                                { label: t('pages.system.printTemplatesDesign.weightBold'), value: 'bold' },
                               ]}
                             />
                           </div>
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                             <div>
-                              <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>表头背景</div>
+                              <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.headerBackground')}</div>
                               <ColorPicker
                                 value={selectedBlock.tableStyle?.headerBgColor ?? '#f8fafc'}
                                 onChange={(_, hex) =>
@@ -3277,7 +3289,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                               />
                             </div>
                             <div>
-                              <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>表头文字</div>
+                              <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.headerTextColor')}</div>
                               <ColorPicker
                                 value={selectedBlock.tableStyle?.headerTextColor ?? '#475569'}
                                 onChange={(_, hex) =>
@@ -3289,7 +3301,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                             </div>
                           </div>
                           <div>
-                            <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>表体文字</div>
+                            <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.bodyTextColor')}</div>
                             <ColorPicker
                               value={selectedBlock.tableStyle?.bodyTextColor ?? '#334155'}
                               onChange={(_, hex) =>
@@ -3301,7 +3313,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                           </div>
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                             <div>
-                              <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>表头对齐</div>
+                              <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.headerAlign')}</div>
                               <Radio.Group
                                 size="small"
                                 value={selectedBlock.tableStyle?.headerTextAlign ?? 'left'}
@@ -3317,7 +3329,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                               </Radio.Group>
                             </div>
                             <div>
-                              <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>表体对齐</div>
+                              <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.bodyAlign')}</div>
                               <Radio.Group
                                 size="small"
                                 value={selectedBlock.tableStyle?.bodyTextAlign ?? 'left'}
@@ -3334,7 +3346,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                             </div>
                           </div>
                           <div>
-                            <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>垂直对齐</div>
+                            <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.verticalAlign')}</div>
                             <Radio.Group
                               size="small"
                               value={selectedBlock.tableStyle?.verticalAlign ?? 'top'}
@@ -3344,21 +3356,21 @@ const PrintTemplateDesignPage: React.FC = () => {
                                 })
                               }
                             >
-                              <Radio.Button value="top" title="顶部">
+                              <Radio.Button value="top" title={t('pages.system.printTemplatesDesign.alignTopAlt')}>
                                 <VerticalAlignTopOutlined />
                               </Radio.Button>
-                              <Radio.Button value="middle" title="居中">
+                              <Radio.Button value="middle" title={t('pages.system.printTemplatesDesign.alignMiddleAlt')}>
                                 <AlignCenterOutlined />
                               </Radio.Button>
-                              <Radio.Button value="bottom" title="底部">
+                              <Radio.Button value="bottom" title={t('pages.system.printTemplatesDesign.alignBottomAlt')}>
                                 <VerticalAlignBottomOutlined />
                               </Radio.Button>
                             </Radio.Group>
                           </div>
                           <div>
-                            <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>表格宽度</div>
+                            <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.tableWidth')}</div>
                             <Input
-                              placeholder="默认 100%"
+                              placeholder={t('pages.system.printTemplatesDesign.defaultTableWidth')}
                               value={selectedBlock.tableStyle?.width ?? ''}
                               onChange={(e) =>
                                 updateSelectedBlock({
@@ -3378,11 +3390,11 @@ const PrintTemplateDesignPage: React.FC = () => {
                               })
                             }
                           >
-                            斑马纹隔行底色
+                            {t('pages.system.printTemplatesDesign.zebraStripe')}
                           </Checkbox>
                           {selectedBlock.tableStyle?.zebraStripe ? (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <span style={{ fontSize: 12, color: '#8c8c8c' }}>隔行颜色</span>
+                              <span style={{ fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.alternateColor')}</span>
                               <ColorPicker
                                 value={selectedBlock.tableStyle?.zebraBgColor ?? '#fafafa'}
                                 onChange={(_, hex) =>
@@ -3396,11 +3408,11 @@ const PrintTemplateDesignPage: React.FC = () => {
                         </Space>
                       </Card>
                       <div>
-                        <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>明细集合变量 (e.g. items)</div>
+                        <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.collectionVarHint')}</div>
                         <Input value={selectedBlock.collection} onChange={e => updateSelectedBlock({ collection: e.target.value })} />
                       </div>
                       <div>
-                        <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>单行记录别名 (e.g. row)</div>
+                        <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.itemAliasHint')}</div>
                         <Input value={selectedBlock.row_alias} onChange={e => updateSelectedBlock({ row_alias: e.target.value })} />
                       </div>
                       <TableColumnDesigner 
@@ -3411,10 +3423,10 @@ const PrintTemplateDesignPage: React.FC = () => {
                   )}
                   {selectedBlock.type === 'columns' && (
                     <Space direction="vertical" style={{ width: '100%' }}>
-                      <div style={{ marginBottom: 8, fontWeight: 600 }}>分栏配置</div>
+                      <div style={{ marginBottom: 8, fontWeight: 600 }}>{t('pages.system.printTemplatesDesign.columnConfig')}</div>
                       <Space direction="vertical" style={{ width: '100%' }} size={12}>
                         <div>
-                          <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>水平对齐</div>
+                          <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.horizontalAlign')}</div>
                           <Radio.Group
                             size="small"
                             buttonStyle="solid"
@@ -3422,16 +3434,16 @@ const PrintTemplateDesignPage: React.FC = () => {
                             value={selectedBlock.horizontalAlign || 'start'}
                             onChange={(e) => updateSelectedBlock({ horizontalAlign: e.target.value })}
                           >
-                            <Radio.Button value="start" title="左对齐"><AlignLeftOutlined /></Radio.Button>
-                            <Radio.Button value="center" title="居中"><AlignCenterOutlined /></Radio.Button>
-                            <Radio.Button value="end" title="右对齐"><AlignRightOutlined /></Radio.Button>
-                            <Radio.Button value="space-between" title="两端对齐"><OrderedListOutlined /></Radio.Button>
-                            <Radio.Button value="space-around" title="环绕分布"><AppstoreOutlined /></Radio.Button>
-                            <Radio.Button value="space-evenly" title="均匀分布"><AppstoreAddOutlined /></Radio.Button>
+                            <Radio.Button value="start" title={t('pages.system.printTemplatesDesign.alignLeft')}><AlignLeftOutlined /></Radio.Button>
+                            <Radio.Button value="center" title={t('pages.system.printTemplatesDesign.alignMiddleAlt')}><AlignCenterOutlined /></Radio.Button>
+                            <Radio.Button value="end" title={t('pages.system.printTemplatesDesign.alignRight')}><AlignRightOutlined /></Radio.Button>
+                            <Radio.Button value="space-between" title={t('pages.system.printTemplatesDesign.spaceBetween')}><OrderedListOutlined /></Radio.Button>
+                            <Radio.Button value="space-around" title={t('pages.system.printTemplatesDesign.spaceAround')}><AppstoreOutlined /></Radio.Button>
+                            <Radio.Button value="space-evenly" title={t('pages.system.printTemplatesDesign.spaceEvenly')}><AppstoreAddOutlined /></Radio.Button>
                           </Radio.Group>
                         </div>
                         <div>
-                          <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>垂直对齐</div>
+                          <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.verticalAlign')}</div>
                           <Radio.Group
                             size="small"
                             buttonStyle="solid"
@@ -3439,16 +3451,16 @@ const PrintTemplateDesignPage: React.FC = () => {
                             value={selectedBlock.verticalAlign || 'top'}
                             onChange={(e) => updateSelectedBlock({ verticalAlign: e.target.value })}
                           >
-                            <Radio.Button value="top" title="顶部"><VerticalAlignTopOutlined /></Radio.Button>
-                            <Radio.Button value="middle" title="居中"><AlignCenterOutlined /></Radio.Button>
-                            <Radio.Button value="bottom" title="底部"><VerticalAlignBottomOutlined /></Radio.Button>
+                            <Radio.Button value="top" title={t('pages.system.printTemplatesDesign.alignTopAlt')}><VerticalAlignTopOutlined /></Radio.Button>
+                            <Radio.Button value="middle" title={t('pages.system.printTemplatesDesign.alignMiddleAlt')}><AlignCenterOutlined /></Radio.Button>
+                            <Radio.Button value="bottom" title={t('pages.system.printTemplatesDesign.alignBottomAlt')}><VerticalAlignBottomOutlined /></Radio.Button>
                           </Radio.Group>
                         </div>
                       </Space>
                       {selectedBlock.cols.map((col, idx) => (
                         <div key={col.id} style={{ marginBottom: 12, padding: 8, border: '1px solid #f0f0f0', borderRadius: 4 }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                            <span style={{ fontSize: 12 }}>第 {idx + 1} 栏</span>
+                            <span style={{ fontSize: 12 }}>{t('pages.system.printTemplatesDesign.colNumber', { n: idx + 1 })}</span>
                             <Button 
                               size="small" 
                               type="text"
@@ -3462,9 +3474,9 @@ const PrintTemplateDesignPage: React.FC = () => {
                           </div>
                           <Input 
                             size="small"
-                            addonBefore="宽度占比" 
+                            addonBefore={t('pages.system.printTemplatesDesign.widthRatio')} 
                             value={col.width} 
-                            placeholder="e.g. 1 或固定宽度 300" 
+                            placeholder={t('pages.system.printTemplatesDesign.widthRatioPlaceholder')} 
                             onChange={e => {
                               const newCols = selectedBlock.cols.map(c => c.id === col.id ? { ...c, width: e.target.value } : c);
                               updateSelectedBlock({ cols: newCols });
@@ -3481,9 +3493,9 @@ const PrintTemplateDesignPage: React.FC = () => {
                                 updateSelectedBlock({ cols: newCols });
                               }}
                             >
-                              <Radio.Button value="start" title="左对齐"><AlignLeftOutlined /></Radio.Button>
-                              <Radio.Button value="center" title="居中"><AlignCenterOutlined /></Radio.Button>
-                              <Radio.Button value="end" title="右对齐"><AlignRightOutlined /></Radio.Button>
+                              <Radio.Button value="start" title={t('pages.system.printTemplatesDesign.alignLeft')}><AlignLeftOutlined /></Radio.Button>
+                              <Radio.Button value="center" title={t('pages.system.printTemplatesDesign.alignMiddleAlt')}><AlignCenterOutlined /></Radio.Button>
+                              <Radio.Button value="end" title={t('pages.system.printTemplatesDesign.alignRight')}><AlignRightOutlined /></Radio.Button>
                             </Radio.Group>
                             <Radio.Group
                               size="small"
@@ -3495,9 +3507,9 @@ const PrintTemplateDesignPage: React.FC = () => {
                                 updateSelectedBlock({ cols: newCols });
                               }}
                             >
-                              <Radio.Button value="top" title="顶对齐"><VerticalAlignTopOutlined /></Radio.Button>
-                              <Radio.Button value="middle" title="垂直居中"><AlignCenterOutlined /></Radio.Button>
-                              <Radio.Button value="bottom" title="底对齐"><VerticalAlignBottomOutlined /></Radio.Button>
+                              <Radio.Button value="top" title={t('pages.system.printTemplatesDesign.alignTopAlt')}><VerticalAlignTopOutlined /></Radio.Button>
+                              <Radio.Button value="middle" title={t('pages.system.printTemplatesDesign.alignMiddleAlt')}><AlignCenterOutlined /></Radio.Button>
+                              <Radio.Button value="bottom" title={t('pages.system.printTemplatesDesign.alignBottomAlt')}><VerticalAlignBottomOutlined /></Radio.Button>
                             </Radio.Group>
                           </div>
                         </div>
@@ -3505,7 +3517,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                       <Button block type="dashed" icon={<AppstoreAddOutlined />} onClick={() => {
                         const newCol = { id: `col-${Date.now()}`, width: '1', horizontalAlign: 'start', verticalAlign: 'top', blocks: [] };
                         updateSelectedBlock({ cols: [...selectedBlock.cols, newCol] });
-                      }}>添加一栏</Button>
+                      }}>{t('pages.system.printTemplatesDesign.addColumn')}</Button>
                     </Space>
                   )}
                 </Card>
@@ -3514,7 +3526,7 @@ const PrintTemplateDesignPage: React.FC = () => {
             ) : (
               <div style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', color: '#bfbfbf' }}>
                 <AppstoreOutlined style={{ fontSize: 48, marginBottom: 16, opacity: 0.2 }} />
-                <div>选择画布中的组件进行编辑</div>
+                <div>{t('pages.system.printTemplatesDesign.selectToEdit')}</div>
               </div>
             )}
           </div>
@@ -3529,26 +3541,26 @@ const PrintTemplateDesignPage: React.FC = () => {
               if (activeDragId.startsWith('sidebar-')) {
                 const parts = activeDragId.split('-');
                 const type = parts[1];
-                return <DragOverlayBlock type={type} label="添加新组件" />;
+                return <DragOverlayBlock type={type} label={t('pages.system.printTemplatesDesign.addNewComponent')} />;
               }
               
               // 2. Canvas Item Check
               const block = findBlockById(schemaBlocks, activeDragId);
               if (block) {
                 const typeLabels: Record<string, string> = {
-                  text: '文本内容',
-                  field: '字段变量',
-                  qrcode: '二维码',
-                  barcode: '条形码',
-                  image: '图片/Logo',
-                  divider: '分割线',
-                  spacer: '间距组件',
-                  columns: '分栏容器',
-                  detail_table: '明细表块',
-                  if: '条件判断',
-                  for: '循环遍历'
+                  text: t('pages.system.printTemplatesDesign.textContent'),
+                  field: t('pages.system.printTemplatesDesign.compVariables'),
+                  qrcode: t('pages.system.printTemplatesDesign.typeQRCode'),
+                  barcode: t('pages.system.printTemplatesDesign.typeBarcode'),
+                  image: t('pages.system.printTemplatesDesign.compImage'),
+                  divider: t('pages.system.printTemplatesDesign.compDivider'),
+                  spacer: t('pages.system.printTemplatesDesign.compSpacer'),
+                  columns: t('pages.system.printTemplatesDesign.compColumns'),
+                  detail_table: t('pages.system.printTemplatesDesign.compDetailTable'),
+                  if: t('pages.system.printTemplatesDesign.compIf'),
+                  for: t('pages.system.printTemplatesDesign.compFor')
                 };
-                return <DragOverlayBlock type={block.type} label={typeLabels[block.type] || '移动组件'} />;
+                return <DragOverlayBlock type={block.type} label={t('pages.system.printTemplatesDesign.moveComponent')} />;
               }
               
               return null;

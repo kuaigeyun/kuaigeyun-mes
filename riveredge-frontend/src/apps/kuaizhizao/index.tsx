@@ -242,7 +242,7 @@ const KuaizhizaoApp: React.FC = () => {
       {/* 生产执行路由 */}
       <Route path="production-execution/dashboard" element={withPageSuspense(ManufacturingDashboardPage)} />
       <Route path="production-execution/work-orders" element={withPageSuspense(WorkOrdersPage)} />
-      <Route path="production-execution/terminal" element={withPageSuspense(WorkOrdersTerminalPage)} />
+      {/* <Route path="production-execution/terminal" element={withPageSuspense(WorkOrdersTerminalPage)} /> */}
       <Route path="production-execution/reporting" element={withPageSuspense(ReportingPage)} />
       <Route path="production-execution/reporting/kiosk" element={withPageSuspense(ReportingKioskPage)} />
       <Route path="production-execution/reporting/statistics" element={withPageSuspense(ReportingStatisticsPage)} />

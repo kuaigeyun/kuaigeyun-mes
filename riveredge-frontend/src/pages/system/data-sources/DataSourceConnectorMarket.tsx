@@ -104,11 +104,11 @@ const DataSourceConnectorMarket: React.FC<DataSourceConnectorMarketProps> = ({
                 <Space direction="vertical" size="small" style={{ width: '100%' }}>
                   <Space>
                     <span style={{ fontSize: 24, color: token.colorPrimary }}>{connector.icon}</span>
-                    <Text strong>{connector.name}</Text>
+                    <Text strong>{t(`pages.system.dataSources.connectors.${connector.id}.name`, { defaultValue: connector.name })}</Text>
                   </Space>
                   {connector.description && (
                     <Text type="secondary" style={{ fontSize: 12 }}>
-                      {connector.description}
+                      {t(`pages.system.dataSources.connectors.${connector.id}.desc`, { defaultValue: connector.description })}
                     </Text>
                   )}
                 </Space>

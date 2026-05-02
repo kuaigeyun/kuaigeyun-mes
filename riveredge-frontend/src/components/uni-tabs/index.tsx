@@ -644,7 +644,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     if (favoriteSavingRef.current) return;
     const menuPath = (tabKey || '').split('?')[0];
     if (!menuPath || menuPath === '/system/dashboard/workplace') {
-      message.warning('该页面不支持收藏到快捷入口');
+      message.warning(t('ui.message.notSupportFavorite'));
       return;
     }
 
@@ -655,7 +655,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       (item) => item?.menu_path === menuPath || String(item?.menu_uuid) === menuUuid,
     );
     if (exists) {
-      message.info('已在快捷入口中');
+      message.info(t('ui.message.alreadyInFavorite'));
       return;
     }
 
@@ -674,7 +674,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     } finally {
       favoriteSavingRef.current = false;
     }
-    message.success('已收藏到快捷入口');
+    message.success(t('ui.message.favoriteSuccess'));
   }, [dashboardQuickEntries, findMenuItemByPath, getTabTitle, updatePreferences]);
 
   /**

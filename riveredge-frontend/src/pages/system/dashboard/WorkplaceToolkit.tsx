@@ -8,6 +8,7 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { Card, Popover, theme } from 'antd';
 import * as LucideIcons from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import {
   TaxCalculator,
   WeightCalculator,
@@ -130,6 +131,7 @@ export const WorkplaceToolkit: React.FC<WorkplaceToolkitProps> = ({
   backgroundTint,
   isDark = false,
 }) => {
+  const { t } = useTranslation();
   const [showTray, setShowTray] = useState(false);
   const currentTheme = getDashboardTopBarTheme(isDark);
   /** 本卡片内同时只保留一个工具 Popover（主区 + 托盘共用） */
@@ -154,24 +156,24 @@ export const WorkplaceToolkit: React.FC<WorkplaceToolkitProps> = ({
     {
       key: 'tax',
       icon: <LucideIcons.Calculator size={20} strokeWidth={2.2} />,
-      label: '价税换算',
-      desc: '13% 增值税',
+      label: t('pages.dashboard.toolkit.taxConversion'),
+      desc: t('pages.dashboard.toolkit.taxConversionDesc'),
       color: '#64748b',
       render: <TaxCalculator />
     },
     {
       key: 'weight',
       icon: <LucideIcons.Scale size={20} strokeWidth={2.2} />,
-      label: '重量计算',
-      desc: '板材 / 管材',
+      label: t('pages.dashboard.toolkit.weightCalc'),
+      desc: t('pages.dashboard.toolkit.weightCalcDesc'),
       color: '#5f8570',
       render: <WeightCalculator />
     },
     {
       key: 'exchange',
       icon: <LucideIcons.Globe size={20} strokeWidth={2.2} />,
-      label: '汇率换算',
-      desc: 'USD/EUR 参考',
+      label: t('pages.dashboard.toolkit.exchangeRate'),
+      desc: t('pages.dashboard.toolkit.exchangeRateDesc'),
       color: '#a67c52',
       render: <ExchangeCalculator />
     }
@@ -181,6 +183,7 @@ export const WorkplaceToolkit: React.FC<WorkplaceToolkitProps> = ({
     <div style={{ position: 'relative', flex: 1, width: '100%', height: cardHeight }}>
       <Card
         variant="borderless"
+        aria-label={t('pages.dashboard.toolkit.title')}
         style={{
           width: '100%',
           minHeight: cardHeight,
@@ -258,7 +261,7 @@ export const WorkplaceToolkit: React.FC<WorkplaceToolkitProps> = ({
               >
                 {tool.icon}
               </div>
-              <div style={{ minWidth: 0 }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: currentTheme.textColor, lineHeight: 1.2 }}>{tool.label}</div>
                 <div
                   style={{
@@ -327,7 +330,7 @@ export const WorkplaceToolkit: React.FC<WorkplaceToolkitProps> = ({
             {showTray ? <CloseOutlined style={{ fontSize: 16 }} /> : <AppstoreOutlined style={{ fontSize: 17 }} />}
           </div>
           <div style={{ fontSize: 12, fontWeight: 600, color: currentTheme.textColor, opacity: 0.85 }}>
-            {showTray ? '收起托盘' : '扩展托盘'}
+            {showTray ? t('pages.dashboard.toolkit.collapseTray') : t('pages.dashboard.toolkit.expandTray')}
           </div>
         </div>
       </Card>
@@ -384,7 +387,7 @@ export const WorkplaceToolkit: React.FC<WorkplaceToolkitProps> = ({
             popoverOpen={activeToolPopoverKey === 'tray:rmb'}
             onPopoverOpenChange={(open) => handleToolPopoverOpenChange('tray:rmb', open)}
             icon={<LucideIcons.Coins size={18} />}
-            label="金额大写"
+            label={t('pages.dashboard.toolkit.amountToUppercase')}
             color="#f59e0b"
             render={<RmbCapitalizer />}
             theme={currentTheme}
@@ -395,7 +398,7 @@ export const WorkplaceToolkit: React.FC<WorkplaceToolkitProps> = ({
             popoverOpen={activeToolPopoverKey === 'tray:text'}
             onPopoverOpenChange={(open) => handleToolPopoverOpenChange('tray:text', open)}
             icon={<LucideIcons.CaseUpper size={18} />}
-            label="文本整理"
+            label={t('pages.dashboard.toolkit.textCleanup')}
             color="#10b981"
             render={<TextTransformer />}
             theme={currentTheme}
@@ -406,7 +409,7 @@ export const WorkplaceToolkit: React.FC<WorkplaceToolkitProps> = ({
             popoverOpen={activeToolPopoverKey === 'tray:unit'}
             onPopoverOpenChange={(open) => handleToolPopoverOpenChange('tray:unit', open)}
             icon={<LucideIcons.RefreshCw size={18} />}
-            label="单位换算"
+            label={t('pages.dashboard.toolkit.unitConversion')}
             color="#8b5cf6"
             render={<UnitConverter />}
             theme={currentTheme}
@@ -417,7 +420,7 @@ export const WorkplaceToolkit: React.FC<WorkplaceToolkitProps> = ({
             popoverOpen={activeToolPopoverKey === 'tray:pwd'}
             onPopoverOpenChange={(open) => handleToolPopoverOpenChange('tray:pwd', open)}
             icon={<LucideIcons.Key size={18} />}
-            label="密码生成"
+            label={t('pages.dashboard.toolkit.passwordGen')}
             color="#ec4899"
             render={<PasswordGen />}
             theme={currentTheme}
@@ -428,7 +431,7 @@ export const WorkplaceToolkit: React.FC<WorkplaceToolkitProps> = ({
             popoverOpen={activeToolPopoverKey === 'tray:memo'}
             onPopoverOpenChange={(open) => handleToolPopoverOpenChange('tray:memo', open)}
             icon={<LucideIcons.PenTool size={18} />}
-            label="随手便签"
+            label={t('pages.dashboard.toolkit.notes')}
             color="#f97316"
             render={<MemoTool />}
             theme={currentTheme}
@@ -439,7 +442,7 @@ export const WorkplaceToolkit: React.FC<WorkplaceToolkitProps> = ({
             popoverOpen={activeToolPopoverKey === 'tray:qr'}
             onPopoverOpenChange={(open) => handleToolPopoverOpenChange('tray:qr', open)}
             icon={<LucideIcons.QrCode size={18} />}
-            label="二维码"
+            label={t('pages.dashboard.toolkit.qrcode')}
             color="#22d3ee"
             render={<QrGenerator />}
             theme={currentTheme}

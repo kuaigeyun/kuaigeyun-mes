@@ -9,6 +9,7 @@ import React, { useState, useEffect } from 'react';
 import { Select, Spin, message, theme } from 'antd';
 import { SwapOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { getTenantList } from '../../services/tenant';
 import { getUserInfo, setTenantId, getTenantId } from '../../utils/auth';
 
@@ -23,6 +24,7 @@ interface TenantSelectorProps {
  * 组织选择器组件
  */
 const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
+  const { t } = useTranslation();
   const { token } = theme.useToken();
   const userInfo = getUserInfo();
   const isInfraSuperAdmin = userInfo?.user_type === 'infra_superadmin';
@@ -38,7 +40,7 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
   // 处理组织选择
   const handleTenantChange = (tenantId: string) => {
     setTenantId(tenantId);
-    message.success('已切换组织上下文');
+    message.success(t('ui.message.switchedTenant'));
     // 刷新页面以应用新的组织上下文
     window.location.reload();
   };
@@ -48,7 +50,7 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
     if (isInfraSuperAdmin && !currentTenantId && tenantData?.items?.length > 0) {
       const firstTenant = tenantData.items[0];
       setTenantId(firstTenant.id);
-      message.info(`已自动选择组织: ${firstTenant.name}`);
+      message.info(t('ui.message.autoSelectedTenant', { name: firstTenant.name }));
     }
   }, [isInfraSuperAdmin, currentTenantId, tenantData]);
 
@@ -64,7 +66,7 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
         ) : (
           <Select
             value={currentTenantId || undefined}
-            placeholder={tenantData?.items?.length ? "请选择组织" : "加载中..."}
+            placeholder={tenantData?.items?.length ? t('ui.placeholder.selectTenant') : t('ui.placeholder.loading')}
             style={{
               minWidth: 120,
               maxWidth: 240,
@@ -88,7 +90,7 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
   }
 
   // 如果是系统级用户，显示当前组织名称（带胶囊型背景）
-  const tenantName = userInfo?.tenant_name || '未知组织';
+  const tenantName = userInfo?.tenant_name || t('ui.common.unknownTenant');
   const spanColor = headerLightText ? 'rgba(255, 255, 255, 0.85)' : token.colorText;
   return (
     <span

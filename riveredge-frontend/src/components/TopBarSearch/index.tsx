@@ -5,6 +5,8 @@ import { useNavigate } from 'react-router-dom';
 import type { MenuDataItem } from '@ant-design/pro-components';
 import type { MenuProps } from 'antd';
 
+import { useTranslation } from 'react-i18next';
+
 export interface TopBarSearchProps {
     menuData: MenuDataItem[];
     /** 聚焦未输入时展示的固定常用菜单路径（按顺序）；不传则取菜单前 8 项 */
@@ -36,6 +38,7 @@ const TopBarSearch: React.FC<TopBarSearchProps> = ({
     shortcutKey,
     transparentBg,
 }) => {
+    const { t } = useTranslation();
     const navigate = useNavigate();
     const [searchValue, setSearchValue] = useState('');
     const [open, setOpen] = useState(false);
@@ -133,7 +136,7 @@ const TopBarSearch: React.FC<TopBarSearchProps> = ({
             setSearchValue('');
         };
         return [
-            { key: '__hot_title__', label: <span style={{ fontSize: 12, color: '#888' }}>常用</span>, disabled: true },
+            { key: '__hot_title__', label: <span style={{ fontSize: 12, color: '#888' }}>{t('ui.common.frequentlyUsed')}</span>, disabled: true },
             ...list.map(item => ({
                 key: item.path,
                 label: renderLabel(item),
@@ -241,7 +244,7 @@ const TopBarSearch: React.FC<TopBarSearchProps> = ({
                             }}
                         />
                     }
-                    placeholder={placeholder ?? "搜索菜单、功能..."}
+                    placeholder={placeholder ?? t('ui.placeholder.searchMenu')}
                     suffix={shortcutKeySuffix}
                     allowClear={!shortcutKey}
                     style={inputStyle}

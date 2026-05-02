@@ -4,7 +4,7 @@
  * 提供卡片布局的打印模板展示界面，支持模板预览、设计器和变量管理
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { App, Card, Tag, Space, Button, Modal, Descriptions, Popconfirm, Statistic, Row, Col, Badge, Typography, Empty, Tooltip, Alert, Input, List, Divider, Select, theme } from 'antd';
@@ -90,6 +90,16 @@ const CardView: React.FC = () => {
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const createFormRef = useRef<ProFormInstance>(null);
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  /**
+   * 翻译关联业务单据选项
+   */
+  const translatedDocumentTypeOptions = useMemo(() => {
+    return DOCUMENT_TYPE_OPTIONS.map(opt => ({
+      ...opt,
+      label: t(`pages.system.printTemplates.schema.${opt.value}`, { defaultValue: opt.label })
+    }));
+  }, [t]);
 
   /**
    * 加载打印模板列表
@@ -240,7 +250,7 @@ const CardView: React.FC = () => {
       try {
         data = JSON.parse(renderFormData);
       } catch (e) {
-        handleError(new Error('JSON 格式错误'), t('pages.system.printTemplates.templateDataFormatError'));
+        handleError(new Error(t('pages.system.printTemplates.jsonFormatError')), t('pages.system.printTemplates.templateDataFormatError'));
         return;
       }
       
@@ -284,10 +294,10 @@ const CardView: React.FC = () => {
    */
   const getTypeInfo = (type: string): { color: string; text: string; icon: React.ReactNode } => {
     const typeMap: Record<string, { color: string; text: string; icon: React.ReactNode }> = {
-      pdf: { color: 'red', text: 'PDF', icon: <FileOutlined /> },
-      html: { color: 'blue', text: 'HTML', icon: <FileTextOutlined /> },
-      word: { color: 'green', text: 'Word', icon: <FileTextOutlined /> },
-      excel: { color: 'purple', text: 'Excel', icon: <FileTextOutlined /> },
+      pdf: { color: 'red', text: t('pages.system.printTemplates.typePdf'), icon: <FileOutlined /> },
+      html: { color: 'blue', text: t('pages.system.printTemplates.typeHtml'), icon: <FileTextOutlined /> },
+      word: { color: 'green', text: t('pages.system.printTemplates.typeWord'), icon: <FileTextOutlined /> },
+      excel: { color: 'purple', text: t('pages.system.printTemplates.typeExcel'), icon: <FileTextOutlined /> },
       other: { color: 'default', text: t('pages.system.printTemplates.typeOther'), icon: <FileTextOutlined /> },
     };
     return typeMap[type] || { color: 'default', text: type, icon: <FileTextOutlined /> };
@@ -833,7 +843,7 @@ const CardView: React.FC = () => {
           label={t('pages.system.printTemplates.labelDocumentType')}
           rules={[{ required: true, message: t('pages.system.printTemplates.documentTypeRequired') }]}
           placeholder={t('pages.system.printTemplates.documentTypeRequired')}
-          options={DOCUMENT_TYPE_OPTIONS}
+          options={translatedDocumentTypeOptions}
         />
         <ProFormText
           name="code"

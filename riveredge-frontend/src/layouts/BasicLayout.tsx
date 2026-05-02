@@ -763,7 +763,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             setAvatarUrl(undefined);
           }
         } catch (error) {
-          console.error('加载头像 URL 失败:', error);
+          console.error(t('ui.error.loadAvatar'), error);
           setAvatarUrl(undefined);
         }
       } else {
@@ -885,7 +885,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           setSiteLogoUrl(newUrl);
           setCachedSiteLogoUrl(siteLogoValue, newUrl);
         } catch (error) {
-          console.error('获取站点LOGO预览URL失败:', error);
+          console.error(t('ui.error.loadLogo'), error);
           clearCachedSiteLogoUrl(siteLogoValue);
           setSiteLogoUrl('/img/logo.png');
         }

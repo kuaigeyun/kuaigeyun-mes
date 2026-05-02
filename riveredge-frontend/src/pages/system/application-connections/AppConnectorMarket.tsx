@@ -163,7 +163,7 @@ const AppConnectorMarket: React.FC<AppConnectorMarketProps> = ({
                 <Space direction="vertical" size="small" style={{ width: '100%' }}>
                   <Space>
                     <span style={{ fontSize: 24, color: token.colorPrimary }}>{connector.icon}</span>
-                    <Text strong>{connector.name}</Text>
+                    <Text strong>{t(`pages.system.applicationConnections.type${connector.id.charAt(0).toUpperCase() + connector.id.slice(1)}`, { defaultValue: connector.name })}</Text>
                     {connector.category && (
                       <Tag color="blue">
                         {CATEGORY_KEYS[connector.category]
@@ -174,7 +174,7 @@ const AppConnectorMarket: React.FC<AppConnectorMarketProps> = ({
                   </Space>
                   {connector.description && (
                     <Text type="secondary" style={{ fontSize: 12 }}>
-                      {connector.description}
+                      {t(`pages.system.applicationConnections.desc${connector.id.charAt(0).toUpperCase() + connector.id.slice(1)}`, { defaultValue: connector.description })}
                     </Text>
                   )}
                 </Space>

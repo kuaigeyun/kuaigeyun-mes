@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Typography, Space, InputNumber, Select, Row, Col, Divider, Input, Button, message, Image, Segmented, Checkbox } from 'antd';
 import * as LucideIcons from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -9,6 +10,7 @@ const { TextArea } = Input;
  * 价税换算：正算（不含税→税/含税）、反算（含税→不含税/税额）
  */
 export const TaxCalculator = () => {
+  const { t } = useTranslation();
   const [mode, setMode] = useState<'forward' | 'reverse'>('forward');
   const [amountExcl, setAmountExcl] = useState<number>(100);
   const [amountIncl, setAmountIncl] = useState<number>(113);
@@ -31,49 +33,49 @@ export const TaxCalculator = () => {
 
   return (
     <div style={{ padding: '8px 4px', width: 268 }}>
-      <Text strong style={{ display: 'block', marginBottom: 8, fontSize: 13 }}>增值税价税计算器</Text>
+      <Text strong style={{ display: 'block', marginBottom: 8, fontSize: 13 }}>{t('pages.dashboard.toolkit.vatCalculatorTitle')}</Text>
       <Segmented
         size="small"
         block
         value={mode}
         onChange={(v) => syncMode(v as 'forward' | 'reverse')}
         options={[
-          { label: '正算', value: 'forward' },
-          { label: '反算', value: 'reverse' },
+          { label: t('pages.dashboard.toolkit.forwardCalc'), value: 'forward' },
+          { label: t('pages.dashboard.toolkit.reverseCalc'), value: 'reverse' },
         ]}
         style={{ marginBottom: 10 }}
       />
       <Space direction="vertical" style={{ width: '100%' }} size={10}>
         {mode === 'forward' ? (
           <div>
-            <Text type="secondary" style={{ fontSize: 12 }}>不含税金额 (元)</Text>
+            <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.dashboard.toolkit.amountExclTax')}</Text>
             <InputNumber style={{ width: '100%', marginTop: 4 }} value={amountExcl} onChange={(v) => setAmountExcl(v ?? 0)} size="small" min={0} precision={2} />
           </div>
         ) : (
           <div>
-            <Text type="secondary" style={{ fontSize: 12 }}>含税总金额 (元)</Text>
+            <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.dashboard.toolkit.amountInclTax')}</Text>
             <InputNumber style={{ width: '100%', marginTop: 4 }} value={amountIncl} onChange={(v) => setAmountIncl(v ?? 0)} size="small" min={0} precision={2} />
           </div>
         )}
         <Row gutter={8}>
           <Col span={12}>
-            <Text type="secondary" style={{ fontSize: 12 }}>税率 (%)</Text>
+            <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.dashboard.toolkit.taxRate')}</Text>
             <Select
               style={{ width: '100%', marginTop: 4 }}
               value={taxRate}
               onChange={setTaxRate}
               size="small"
               options={[
-                { label: '13% 制造', value: 13 },
-                { label: '9% 运输', value: 9 },
-                { label: '6% 服务', value: 6 },
-                { label: '3% 小规模', value: 3 },
+                { label: '13%', value: 13 },
+                { label: '9%', value: 9 },
+                { label: '6%', value: 6 },
+                { label: '3%', value: 3 },
                 { label: '1%', value: 1 },
               ]}
             />
           </Col>
           <Col span={12}>
-            <Text type="secondary" style={{ fontSize: 12 }}>{mode === 'forward' ? '税额 (￥)' : '税额 (￥)'}</Text>
+            <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.dashboard.toolkit.taxAmount')}</Text>
             <div style={{ height: 24, lineHeight: '30px', fontWeight: 'bold', color: '#ff4d4f', fontSize: 14 }}>
               {(mode === 'forward' ? forwardTax : reverseTax).toFixed(2)}
             </div>
@@ -82,16 +84,16 @@ export const TaxCalculator = () => {
         <Divider style={{ margin: '6px 0' }} />
         {mode === 'forward' ? (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text strong>含税总计</Text>
+            <Text strong>{t('pages.dashboard.toolkit.totalInclTax')}</Text>
             <Text strong style={{ color: '#52c41a', fontSize: 17 }}>￥{forwardTotal.toFixed(2)}</Text>
           </div>
         ) : (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text strong>倒推不含税</Text>
+            <Text strong>{t('pages.dashboard.toolkit.reverseExclTax')}</Text>
             <Text strong style={{ color: '#1890ff', fontSize: 17 }}>￥{reverseExcl.toFixed(2)}</Text>
           </div>
         )}
-        <Text type="secondary" style={{ fontSize: 10, display: 'block' }}>一般计税：税额 = 不含税×税率；反算：不含税 = 含税÷(1+税率)</Text>
+        <Text type="secondary" style={{ fontSize: 10, display: 'block' }}>{t('pages.dashboard.toolkit.vatCalcHint')}</Text>
       </Space>
     </div>
   );
@@ -101,6 +103,7 @@ export const TaxCalculator = () => {
  * 金属重量：板材（长宽高）或管材（外径/内径/长度，空心圆截面）
  */
 export const WeightCalculator = () => {
+  const { t } = useTranslation();
   const [shape, setShape] = useState<'plate' | 'pipe'>('plate');
   const [type, setType] = useState('steel');
   const [len, setLen] = useState<number>(1000);
@@ -129,32 +132,37 @@ export const WeightCalculator = () => {
 
   return (
     <div style={{ padding: '8px 4px', width: 280 }}>
-      <Text strong style={{ display: 'block', marginBottom: 8, fontSize: 13 }}>金属重量计算</Text>
+      <Text strong style={{ display: 'block', marginBottom: 8, fontSize: 13 }}>{t('pages.dashboard.toolkit.metalWeightTitle')}</Text>
       <Segmented
         size="small"
         block
         value={shape}
         onChange={(v) => setShape(v as 'plate' | 'pipe')}
         options={[
-          { label: '板材', value: 'plate' },
-          { label: '管材', value: 'pipe' },
+          { label: t('pages.dashboard.toolkit.plate'), value: 'plate' },
+          { label: t('pages.dashboard.toolkit.pipe'), value: 'pipe' },
         ]}
         style={{ marginBottom: 10 }}
       />
       <Space direction="vertical" style={{ width: '100%' }} size={10}>
-        <Select style={{ width: '100%' }} value={type} onChange={setType} size="small" options={[{ label: '碳钢/普通钢 (7.85)', value: 'steel' }, { label: '不锈钢 (7.93)', value: 'stainless' }, { label: '铝合金/铝板 (2.70)', value: 'aluminum' }, { label: '紫铜/黄铜 (8.96)', value: 'copper' }]} />
+        <Select style={{ width: '100%' }} value={type} onChange={setType} size="small" options={[
+          { label: t('pages.dashboard.toolkit.materialSteel'), value: 'steel' }, 
+          { label: t('pages.dashboard.toolkit.materialStainless'), value: 'stainless' }, 
+          { label: t('pages.dashboard.toolkit.materialAluminum'), value: 'aluminum' }, 
+          { label: t('pages.dashboard.toolkit.materialCopper'), value: 'copper' }
+        ]} />
         {shape === 'plate' ? (
           <Row gutter={8}>
             <Col span={8}>
-              <Text type="secondary" style={{ fontSize: 11 }}>长 L (mm)</Text>
+              <Text type="secondary" style={{ fontSize: 11 }}>{t('pages.dashboard.toolkit.length')}</Text>
               <InputNumber value={len} onChange={(v) => setLen(v ?? 0)} size="small" style={{ width: '100%', marginTop: 2 }} min={0} />
             </Col>
             <Col span={8}>
-              <Text type="secondary" style={{ fontSize: 11 }}>宽 W (mm)</Text>
+              <Text type="secondary" style={{ fontSize: 11 }}>{t('pages.dashboard.toolkit.width')}</Text>
               <InputNumber value={width} onChange={(v) => setWidth(v ?? 0)} size="small" style={{ width: '100%', marginTop: 2 }} min={0} />
             </Col>
             <Col span={8}>
-              <Text type="secondary" style={{ fontSize: 11 }}>厚 T (mm)</Text>
+              <Text type="secondary" style={{ fontSize: 11 }}>{t('pages.dashboard.toolkit.thickness')}</Text>
               <InputNumber value={thick} onChange={(v) => setThick(v ?? 0)} size="small" style={{ width: '100%', marginTop: 2 }} min={0} />
             </Col>
           </Row>
@@ -162,41 +170,41 @@ export const WeightCalculator = () => {
           <>
             <Row gutter={8}>
               <Col span={8}>
-                <Text type="secondary" style={{ fontSize: 11 }}>外径 Do (mm)</Text>
+                <Text type="secondary" style={{ fontSize: 11 }}>{t('pages.dashboard.toolkit.outerDiameter')}</Text>
                 <InputNumber value={pipeOuter} onChange={(v) => setPipeOuter(v ?? 0)} size="small" style={{ width: '100%', marginTop: 2 }} min={0} />
               </Col>
               <Col span={8}>
-                <Text type="secondary" style={{ fontSize: 11 }}>内径 Di (mm)</Text>
+                <Text type="secondary" style={{ fontSize: 11 }}>{t('pages.dashboard.toolkit.innerDiameter')}</Text>
                 <InputNumber value={pipeInner} onChange={(v) => setPipeInner(v ?? 0)} size="small" style={{ width: '100%', marginTop: 2 }} min={0} />
               </Col>
               <Col span={8}>
-                <Text type="secondary" style={{ fontSize: 11 }}>管长 L (mm)</Text>
+                <Text type="secondary" style={{ fontSize: 11 }}>{t('pages.dashboard.toolkit.pipeLength')}</Text>
                 <InputNumber value={pipeLen} onChange={(v) => setPipeLen(v ?? 0)} size="small" style={{ width: '100%', marginTop: 2 }} min={0} />
               </Col>
             </Row>
             {!pipeValid && (pipeOuter > 0 || pipeInner > 0 || pipeLen > 0) ? (
               <Text type="danger" style={{ fontSize: 11 }}>
-                需满足：外径大于内径，且外径、内径、管长均大于 0
+                {t('pages.dashboard.toolkit.pipeRequirement')}
               </Text>
             ) : null}
             <Text type="secondary" style={{ fontSize: 10, display: 'block' }}>
-              空心圆管：体积 = π/4×(Do²−Di²)×L，密度同板材公式 (g/cm³)
+              {t('pages.dashboard.toolkit.pipeFormula')}
             </Text>
           </>
         )}
         <Row gutter={8} align="bottom">
           <Col span={12}>
-            <Text type="secondary" style={{ fontSize: 11 }}>件数 (同规格)</Text>
+            <Text type="secondary" style={{ fontSize: 11 }}>{t('pages.dashboard.toolkit.quantity')}</Text>
             <InputNumber value={qty} onChange={(v) => setQty(Math.max(1, Math.floor(v ?? 1)))} size="small" style={{ width: '100%', marginTop: 2 }} min={1} precision={0} />
           </Col>
           <Col span={12}>
-            <Text type="secondary" style={{ fontSize: 11 }}>体积 (m³)</Text>
+            <Text type="secondary" style={{ fontSize: 11 }}>{t('pages.dashboard.toolkit.volume')}</Text>
             <div style={{ marginTop: 6, fontWeight: 600, color: 'rgba(0,0,0,0.65)' }}>{pipeValid || shape === 'plate' ? volumeM3.toFixed(6) : '—'}</div>
           </Col>
         </Row>
         <Divider style={{ margin: '4px 0' }} />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-          <Text type="secondary" style={{ fontSize: 11 }}>单重 / 合计</Text>
+          <Text type="secondary" style={{ fontSize: 11 }}>{t('pages.dashboard.toolkit.singleTotalWeight')}</Text>
           <div>
             <Text style={{ fontSize: 12, marginRight: 8 }}>{(shape === 'pipe' && !pipeValid ? 0 : singleKg).toFixed(3)} kg</Text>
             <Text strong style={{ color: '#1890ff', fontSize: 16 }}>{(shape === 'pipe' && !pipeValid ? 0 : totalKg).toFixed(3)} kg</Text>
@@ -211,6 +219,7 @@ export const WeightCalculator = () => {
  * 汇率参考：外币↔人民币双向（牌价为内置示例，仅作粗算）
  */
 export const ExchangeCalculator = () => {
+  const { t } = useTranslation();
   const [direction, setDirection] = useState<'toCny' | 'fromCny'>('toCny');
   const [amount, setAmount] = useState<number>(100);
   const [currency, setCurrency] = useState('USD');
@@ -232,30 +241,30 @@ export const ExchangeCalculator = () => {
 
   return (
     <div style={{ padding: '8px 4px', width: 248 }}>
-      <Text strong style={{ display: 'block', marginBottom: 8, fontSize: 13 }}>汇率换算参考</Text>
+      <Text strong style={{ display: 'block', marginBottom: 8, fontSize: 13 }}>{t('pages.dashboard.toolkit.exchangeRateTitle')}</Text>
       <Segmented
         size="small"
         block
         value={direction}
         onChange={(v) => flipDirection(v as 'toCny' | 'fromCny')}
         options={[
-          { label: '外币→人民币', value: 'toCny' },
-          { label: '人民币→外币', value: 'fromCny' },
+          { label: t('pages.dashboard.toolkit.foreignToCny'), value: 'toCny' },
+          { label: t('pages.dashboard.toolkit.cnyToForeign'), value: 'fromCny' },
         ]}
         style={{ marginBottom: 10 }}
       />
       <Space direction="vertical" style={{ width: '100%' }} size={10}>
         <Select style={{ width: '100%' }} value={currency} onChange={setCurrency} size="small" options={[
-          { label: '美元 USD', value: 'USD' },
-          { label: '欧元 EUR', value: 'EUR' },
-          { label: '日元 JPY', value: 'JPY' },
-          { label: '港币 HKD', value: 'HKD' },
-          { label: '英镑 GBP', value: 'GBP' },
+          { label: t('pages.dashboard.toolkit.usd'), value: 'USD' },
+          { label: t('pages.dashboard.toolkit.eur'), value: 'EUR' },
+          { label: t('pages.dashboard.toolkit.jpy'), value: 'JPY' },
+          { label: t('pages.dashboard.toolkit.hkd'), value: 'HKD' },
+          { label: t('pages.dashboard.toolkit.gbp'), value: 'GBP' },
         ]} />
         {direction === 'toCny' ? (
           <Row gutter={8} align="middle">
             <Col span={14}>
-              <Text type="secondary" style={{ fontSize: 11, display: 'block' }}>外币金额</Text>
+              <Text type="secondary" style={{ fontSize: 11, display: 'block' }}>{t('pages.dashboard.toolkit.foreignAmount')}</Text>
               <InputNumber style={{ width: '100%', marginTop: 4 }} value={amount} onChange={(v) => setAmount(v ?? 0)} size="small" min={0} precision={4} />
             </Col>
             <Col span={10} style={{ textAlign: 'center', paddingTop: 18 }}>
@@ -265,7 +274,7 @@ export const ExchangeCalculator = () => {
         ) : (
           <Row gutter={8} align="middle">
             <Col span={14}>
-              <Text type="secondary" style={{ fontSize: 11, display: 'block' }}>人民币 ￥</Text>
+              <Text type="secondary" style={{ fontSize: 11, display: 'block' }}>{t('pages.dashboard.toolkit.cnyAmount')}</Text>
               <InputNumber style={{ width: '100%', marginTop: 4 }} prefix="￥" value={amount} onChange={(v) => setAmount(v ?? 0)} size="small" min={0} precision={2} />
             </Col>
             <Col span={10} style={{ textAlign: 'center', paddingTop: 18 }}>
@@ -274,12 +283,12 @@ export const ExchangeCalculator = () => {
           </Row>
         )}
         <div style={{ background: '#f5f5f5', padding: '8px', borderRadius: 4, textAlign: 'center' }}>
-          <Text type="secondary" style={{ fontSize: 12 }}>{direction === 'toCny' ? '折合人民币 (估计)' : `折合 ${currency} (估计)`}</Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>{direction === 'toCny' ? t('pages.dashboard.toolkit.estimatedCny') : t('pages.dashboard.toolkit.estimatedForeign', { currency })}</Text>
           <div style={{ fontSize: 18, fontWeight: 'bold', color: '#108ee9' }}>
             {direction === 'toCny' ? `￥${resultCny.toFixed(2)}` : resultForeign.toFixed(4)}
           </div>
         </div>
-        <Text type="secondary" style={{ fontSize: 10 }}>内置为示例汇率，签约与结算请以银行/合同为准</Text>
+        <Text type="secondary" style={{ fontSize: 10 }}>{t('pages.dashboard.toolkit.exchangeRateHint')}</Text>
       </Space>
     </div>
   );
@@ -291,33 +300,34 @@ type UnitRow = { label: string; value: string; factor: number };
  * 工业单位换算（含温度非线性）
  */
 export const UnitConverter = () => {
+  const { t } = useTranslation();
   const [val, setVal] = useState<number>(1);
   const [type, setType] = useState('length');
   const [unitId, setUnitId] = useState('m_mm');
   const unitOptions: Record<string, UnitRow[]> = {
     length: [
-      { label: '米(m) ➜ 毫米(mm)', value: 'm_mm', factor: 1000 },
-      { label: '毫米(mm) ➜ 米(m)', value: 'mm_m', factor: 0.001 },
-      { label: '英寸(in) ➜ 毫米(mm)', value: 'in_mm', factor: 25.4 },
-      { label: '英尺(ft) ➜ 米(m)', value: 'ft_m', factor: 0.3048 },
+      { label: t('pages.dashboard.toolkit.unitLength') + ': m ➜ mm', value: 'm_mm', factor: 1000 },
+      { label: t('pages.dashboard.toolkit.unitLength') + ': mm ➜ m', value: 'mm_m', factor: 0.001 },
+      { label: t('pages.dashboard.toolkit.unitLength') + ': in ➜ mm', value: 'in_mm', factor: 25.4 },
+      { label: t('pages.dashboard.toolkit.unitLength') + ': ft ➜ m', value: 'ft_m', factor: 0.3048 },
     ],
     weight: [
-      { label: '吨(t) ➜ 公斤(kg)', value: 't_kg', factor: 1000 },
-      { label: '公斤(kg) ➜ 吨(t)', value: 'kg_t', factor: 0.001 },
-      { label: '磅(lb) ➜ 公斤(kg)', value: 'lb_kg', factor: 0.45359237 },
-      { label: '盎司(oz) ➜ 克(g)', value: 'oz_g', factor: 28.349523125 },
+      { label: t('pages.dashboard.toolkit.unitWeight') + ': t ➜ kg', value: 't_kg', factor: 1000 },
+      { label: t('pages.dashboard.toolkit.unitWeight') + ': kg ➜ t', value: 'kg_t', factor: 0.001 },
+      { label: t('pages.dashboard.toolkit.unitWeight') + ': lb ➜ kg', value: 'lb_kg', factor: 0.45359237 },
+      { label: t('pages.dashboard.toolkit.unitWeight') + ': oz ➜ g', value: 'oz_g', factor: 28.349523125 },
     ],
     area: [
-      { label: '㎡ ➜ 平方毫米', value: 'm2_mm2', factor: 1e6 },
-      { label: '平方毫米 ➜ ㎡', value: 'mm2_m2', factor: 1e-6 },
+      { label: t('pages.dashboard.toolkit.unitArea') + ': ㎡ ➜ mm²', value: 'm2_mm2', factor: 1e6 },
+      { label: t('pages.dashboard.toolkit.unitArea') + ': mm² ➜ ㎡', value: 'mm2_m2', factor: 1e-6 },
     ],
     pressure: [
-      { label: 'MPa ➜ bar', value: 'mpa_bar', factor: 10 },
-      { label: 'bar ➜ MPa', value: 'bar_mpa', factor: 0.1 },
+      { label: t('pages.dashboard.toolkit.unitPressure') + ': MPa ➜ bar', value: 'mpa_bar', factor: 10 },
+      { label: t('pages.dashboard.toolkit.unitPressure') + ': bar ➜ MPa', value: 'bar_mpa', factor: 0.1 },
     ],
     temp: [
-      { label: '摄氏℃ ➜ 华氏℉', value: 'c_f', factor: 1 },
-      { label: '华氏℉ ➜ 摄氏℃', value: 'f_c', factor: 1 },
+      { label: t('pages.dashboard.toolkit.unitTemp') + ': ℃ ➜ ℉', value: 'c_f', factor: 1 },
+      { label: t('pages.dashboard.toolkit.unitTemp') + ': ℉ ➜ ℃', value: 'f_c', factor: 1 },
     ],
   };
 
@@ -348,7 +358,7 @@ export const UnitConverter = () => {
   const applyInversePair = () => {
     const nextId = inverseUnitId[unitId];
     if (!nextId || type === 'temp') {
-      message.info('请从下拉中另选换算关系，或切换有「↔」成对的项');
+      message.info(t('pages.dashboard.toolkit.selectConversionHint'));
       return;
     }
     setVal(Number(result.toFixed(8)));
@@ -357,7 +367,7 @@ export const UnitConverter = () => {
 
   return (
     <div style={{ padding: '8px 4px', width: 268 }}>
-      <Text strong style={{ display: 'block', marginBottom: 10, fontSize: 13 }}>单位换算工具</Text>
+      <Text strong style={{ display: 'block', marginBottom: 10, fontSize: 13 }}>{t('pages.dashboard.toolkit.unitConversionTitle')}</Text>
       <Space direction="vertical" style={{ width: '100%' }} size={8}>
         <Select
           style={{ width: '100%' }}
@@ -368,11 +378,11 @@ export const UnitConverter = () => {
           }}
           size="small"
         >
-          <Select.Option value="length">长度</Select.Option>
-          <Select.Option value="weight">重量</Select.Option>
-          <Select.Option value="area">面积</Select.Option>
-          <Select.Option value="pressure">压力</Select.Option>
-          <Select.Option value="temp">温度</Select.Option>
+          <Select.Option value="length">{t('pages.dashboard.toolkit.unitLength')}</Select.Option>
+          <Select.Option value="weight">{t('pages.dashboard.toolkit.unitWeight')}</Select.Option>
+          <Select.Option value="area">{t('pages.dashboard.toolkit.unitArea')}</Select.Option>
+          <Select.Option value="pressure">{t('pages.dashboard.toolkit.unitPressure')}</Select.Option>
+          <Select.Option value="temp">{t('pages.dashboard.toolkit.unitTemp')}</Select.Option>
         </Select>
         <Select style={{ width: '100%' }} value={unitId} onChange={setUnitId} size="small" options={unitOptions[type]} />
         <Row gutter={8} align="middle">
@@ -390,10 +400,10 @@ export const UnitConverter = () => {
         </Row>
         {type !== 'temp' ? (
           <Button size="small" type="link" block style={{ padding: 0, height: 'auto' }} disabled={!inverseUnitId[unitId]} onClick={applyInversePair}>
-            一键反向（结果→左侧并切换方向）
+            {t('pages.dashboard.toolkit.oneKeyReverse')}
           </Button>
         ) : (
-          <Text type="secondary" style={{ fontSize: 10 }}>温度按线性公式换算，工艺控温请以规程为准</Text>
+          <Text type="secondary" style={{ fontSize: 10 }}>{t('pages.dashboard.toolkit.tempConversionHint')}</Text>
         )}
       </Space>
     </div>
@@ -404,9 +414,13 @@ export const UnitConverter = () => {
  * 1. 人民币金额转大写
  */
 export const RmbCapitalizer = () => {
+  const { t, i18n } = useTranslation();
   const [num, setNum] = useState<number>(0);
+  const isChinese = i18n.language.startsWith('zh');
+
   const formatNum = (n: number) =>
-    Number.isFinite(n) ? n.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+    Number.isFinite(n) ? n.toLocaleString(isChinese ? 'zh-CN' : 'en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+    
   const convertToChinese = (n: number) => {
     const fraction = ['角', '分'];
     const digit = ['零', '壹', '贰', '叁', '肆', '伍', '陆', '柒', '捌', '玖'];
@@ -422,22 +436,28 @@ export const RmbCapitalizer = () => {
     }
     return s.replace(/(零.)*零元/, '元').replace(/(零.)+/g, '零').replace(/^整$/, '零元整');
   };
+
   const result = convertToChinese(num);
   const copyAll = () => {
-    const line = `${formatNum(num)} 元\n${result}`;
+    const line = `${formatNum(num)} ${isChinese ? '元' : 'CNY'}\n${isChinese ? result : ''}`;
     void navigator.clipboard.writeText(line);
-    message.success('已复制「金额 + 大写」');
+    message.success(t('pages.dashboard.toolkit.copyAllSuccess'));
   };
+
   return (
     <div style={{ padding: '8px 4px', width: 280 }}>
-      <Text strong style={{ display: 'block', marginBottom: 10, fontSize: 13 }}>人民币大写转换</Text>
-      <InputNumber style={{ width: '100%' }} placeholder="输入金额..." value={num} onChange={(v) => setNum(v ?? 0)} precision={2} size="small" min={0} />
-      <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 6 }}>千分位：{formatNum(num)}</Text>
-      <div style={{ marginTop: 10, padding: '10px', background: '#fff7e6', borderRadius: 4, border: '1px solid #ffe7ba', wordBreak: 'break-all', minHeight: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#d46b08', fontWeight: 'bold', fontSize: 14 }}>{result}</div>
+      <Text strong style={{ display: 'block', marginBottom: 10, fontSize: 13 }}>{t('pages.dashboard.toolkit.uppercaseTitle')}</Text>
+      <InputNumber style={{ width: '100%' }} placeholder={t('pages.dashboard.toolkit.inputAmountPlaceholder')} value={num} onChange={(v) => setNum(v ?? 0)} precision={2} size="small" min={0} />
+      <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 6 }}>{t('pages.dashboard.toolkit.thousandsSeparator')}{formatNum(num)}</Text>
+      {isChinese && (
+        <div style={{ marginTop: 10, padding: '10px', background: '#fff7e6', borderRadius: 4, border: '1px solid #ffe7ba', wordBreak: 'break-all', minHeight: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#d46b08', fontWeight: 'bold', fontSize: 14 }}>{result}</div>
+      )}
       <Space style={{ marginTop: 8 }} wrap>
-        <Button size="small" onClick={() => { void navigator.clipboard.writeText(result); message.success('已复制大写'); }}>仅大写</Button>
+        {isChinese && (
+          <Button size="small" onClick={() => { void navigator.clipboard.writeText(result); message.success(t('pages.dashboard.toolkit.copyUppercaseSuccess')); }}>{t('pages.dashboard.toolkit.onlyUppercase')}</Button>
+        )}
         <Button size="small" type="primary" onClick={copyAll}>
-          复制金额+大写
+          {t('pages.dashboard.toolkit.copyAmountAndUppercase')}
         </Button>
       </Space>
     </div>
@@ -448,6 +468,7 @@ export const RmbCapitalizer = () => {
  * 2. 文本转换工具
  */
 export const TextTransformer = () => {
+  const { t } = useTranslation();
   const [text, setText] = useState('');
 
   const toHalfWidth = (s: string) =>
@@ -474,29 +495,29 @@ export const TextTransformer = () => {
 
   return (
     <div style={{ padding: '8px 4px', width: 280 }}>
-      <Text strong style={{ display: 'block', marginBottom: 8, fontSize: 13 }}>文本整理</Text>
-      <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 6 }}>合同、报价从 PDF/Word 粘贴后常用</Text>
-      <TextArea rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder="粘贴或输入文本..." style={{ fontSize: 12 }} />
+      <Text strong style={{ display: 'block', marginBottom: 8, fontSize: 13 }}>{t('pages.dashboard.toolkit.textCleanupTitle')}</Text>
+      <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 6 }}>{t('pages.dashboard.toolkit.textCleanupDesc')}</Text>
+      <TextArea rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder={t('pages.dashboard.toolkit.inputPlaceholder')} style={{ fontSize: 12 }} />
       <Text type="secondary" style={{ fontSize: 11, marginTop: 6, display: 'block' }}>
-        字符 {chars} · 行 {lines}
+        {t('pages.dashboard.toolkit.charCount', { chars, lines })}
       </Text>
       <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         <Button size="small" onClick={() => handleCase('up')}>
-          大写
+          {t('pages.dashboard.toolkit.toUpper')}
         </Button>
         <Button size="small" onClick={() => handleCase('low')}>
-          小写
+          {t('pages.dashboard.toolkit.toLower')}
         </Button>
         <Button size="small" onClick={() => handleCase('trim')}>
-          逐行去首尾空格
+          {t('pages.dashboard.toolkit.trimLines')}
         </Button>
         <Button size="small" onClick={() => handleCase('oneLine')}>
-          去换行
+          {t('pages.dashboard.toolkit.removeNewlines')}
         </Button>
         <Button size="small" onClick={() => handleCase('half')}>
-          全角转半角
+          {t('pages.dashboard.toolkit.fullToHalf')}
         </Button>
-        <Button size="small" icon={<LucideIcons.Copy size={12} />} onClick={() => { void navigator.clipboard.writeText(text); message.success('已复制'); }} />
+        <Button size="small" icon={<LucideIcons.Copy size={12} />} onClick={() => { void navigator.clipboard.writeText(text); message.success(t('pages.dashboard.toolkit.copySuccess')); }} />
       </div>
     </div>
   );
@@ -506,24 +527,29 @@ export const TextTransformer = () => {
  * 5. 二维码生成器
  */
 export const QrGenerator = () => {
+  const { t } = useTranslation();
   const [text, setText] = useState('https://kuaigeyun.com');
   const [px, setPx] = useState<160 | 200 | 280>(200);
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${px}x${px}&data=${encodeURIComponent(text)}`;
   const previewW = Math.min(140, px);
   return (
     <div style={{ padding: '8px 4px', width: 240, textAlign: 'center' }}>
-      <Text strong style={{ display: 'block', marginBottom: 10, fontSize: 13 }}>二维码快速生成</Text>
-      <Input value={text} onChange={(e) => setText(e.target.value)} placeholder="网址、工号、WiFi 口令等" size="small" style={{ marginBottom: 8 }} />
+      <Text strong style={{ display: 'block', marginBottom: 10, fontSize: 13 }}>{t('pages.dashboard.toolkit.qrcodeTitle')}</Text>
+      <Input value={text} onChange={(e) => setText(e.target.value)} placeholder={t('pages.dashboard.toolkit.qrcodePlaceholder')} size="small" style={{ marginBottom: 8 }} />
       <div style={{ marginBottom: 10, textAlign: 'left' }}>
-        <Text type="secondary" style={{ fontSize: 11, marginRight: 8 }}>边长</Text>
-        <Select size="small" style={{ width: 120 }} value={px} onChange={(v) => setPx(v as 160 | 200 | 280)} options={[{ label: '160（省墨）', value: 160 }, { label: '200（默认）', value: 200 }, { label: '280（海报）', value: 280 }]} />
+        <Text type="secondary" style={{ fontSize: 11, marginRight: 8 }}>{t('pages.dashboard.toolkit.sideLength')}</Text>
+        <Select size="small" style={{ width: 120 }} value={px} onChange={(v) => setPx(v as 160 | 200 | 280)} options={[
+          { label: t('pages.dashboard.toolkit.side160'), value: 160 }, 
+          { label: t('pages.dashboard.toolkit.side200'), value: 200 }, 
+          { label: t('pages.dashboard.toolkit.side280'), value: 280 }
+        ]} />
       </div>
       {text ? (
         <div style={{ background: '#fff', padding: 8, borderRadius: 8, border: '1px solid #eee', display: 'inline-block' }}>
           <Image src={qrUrl} width={previewW} preview />
         </div>
       ) : null}
-      <Text type="secondary" style={{ fontSize: 10, display: 'block', marginTop: 8 }}>预览点击可放大；打印请选更大边长</Text>
+      <Text type="secondary" style={{ fontSize: 10, display: 'block', marginTop: 8 }}>{t('pages.dashboard.toolkit.qrcodeHint')}</Text>
     </div>
   );
 };
@@ -532,6 +558,7 @@ export const QrGenerator = () => {
  * 6. 随机密码生成器
  */
 export const PasswordGen = () => {
+  const { t } = useTranslation();
   const [pwd, setPwd] = useState('');
   const [len, setLen] = useState<number>(14);
   const [useLower, setUseLower] = useState(true);
@@ -546,7 +573,7 @@ export const PasswordGen = () => {
     if (useDigit) pool += '0123456789';
     if (useSymbol) pool += '!@#$%^&*-_+=';
     if (!pool) {
-      message.warning('至少选一类字符');
+      message.warning(t('pages.dashboard.toolkit.selectCharTypeWarning'));
       return;
     }
     const n = Math.min(32, Math.max(6, Math.floor(len)));
@@ -563,36 +590,36 @@ export const PasswordGen = () => {
 
   return (
     <div style={{ padding: '8px 4px', width: 260 }}>
-      <Text strong style={{ display: 'block', marginBottom: 10, fontSize: 13 }}>随机密码</Text>
+      <Text strong style={{ display: 'block', marginBottom: 10, fontSize: 13 }}>{t('pages.dashboard.toolkit.randomPasswordTitle')}</Text>
       <Row gutter={8} align="middle">
         <Col span={10}>
-          <Text type="secondary" style={{ fontSize: 11 }}>长度</Text>
+          <Text type="secondary" style={{ fontSize: 11 }}>{t('pages.dashboard.toolkit.passwordLength')}</Text>
           <InputNumber value={len} onChange={(v) => setLen(v ?? 14)} min={6} max={32} size="small" style={{ width: '100%', marginTop: 4 }} />
         </Col>
         <Col span={14} style={{ paddingTop: 16 }}>
           <Button type="primary" size="small" block onClick={gen}>
-            生成
+            {t('pages.dashboard.toolkit.generate')}
           </Button>
         </Col>
       </Row>
       <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
         <Checkbox checked={useLower} onChange={(e) => setUseLower(e.target.checked)}>
-          小写 a-z
+          {t('pages.dashboard.toolkit.lowercase')}
         </Checkbox>
         <Checkbox checked={useUpper} onChange={(e) => setUseUpper(e.target.checked)}>
-          大写 A-Z
+          {t('pages.dashboard.toolkit.uppercase')}
         </Checkbox>
         <Checkbox checked={useDigit} onChange={(e) => setUseDigit(e.target.checked)}>
-          数字 0-9
+          {t('pages.dashboard.toolkit.digits')}
         </Checkbox>
         <Checkbox checked={useSymbol} onChange={(e) => setUseSymbol(e.target.checked)}>
-          符号 !@#…
+          {t('pages.dashboard.toolkit.symbols')}
         </Checkbox>
       </div>
-      <Input.Password value={pwd} readOnly size="small" style={{ marginTop: 10 }} placeholder="点击生成" />
+      <Input.Password value={pwd} readOnly size="small" style={{ marginTop: 10 }} placeholder={t('pages.dashboard.toolkit.clickToGenerate')} />
       {pwd ? (
-        <Button block size="small" style={{ marginTop: 8 }} onClick={() => { void navigator.clipboard.writeText(pwd); message.success('已复制'); }}>
-          复制
+        <Button block size="small" style={{ marginTop: 8 }} onClick={() => { void navigator.clipboard.writeText(pwd); message.success(t('pages.dashboard.toolkit.copySuccess')); }}>
+          {t('pages.dashboard.toolkit.copy')}
         </Button>
       ) : null}
     </div>
@@ -603,6 +630,7 @@ export const PasswordGen = () => {
  * 个人备忘录工具
  */
 export const MemoTool = () => {
+  const { t } = useTranslation();
   const [content, setContent] = useState('');
   useEffect(() => {
     const saved = localStorage.getItem('dashboard_quick_memo');
@@ -617,15 +645,15 @@ export const MemoTool = () => {
   return (
     <div style={{ padding: '8px 4px', width: 260 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-        <Text strong style={{ fontSize: 13 }}>个人备忘录</Text>
+        <Text strong style={{ fontSize: 13 }}>{t('pages.dashboard.toolkit.memoTitle')}</Text>
         <Text type="secondary" style={{ fontSize: 11 }}>
-          {wc} 字 · {lines} 行
+          {wc} {t('pages.dashboard.toolkit.wordCount')} · {lines} {t('pages.dashboard.toolkit.lineCount')}
         </Text>
       </div>
-      <Text type="secondary" style={{ fontSize: 10, display: 'block', marginBottom: 6 }}>仅保存在本浏览器</Text>
-      <TextArea rows={5} value={content} onChange={(e) => saveMemo(e.target.value)} placeholder="待办、分机、临时单号…" style={{ fontSize: 12 }} />
+      <Text type="secondary" style={{ fontSize: 10, display: 'block', marginBottom: 6 }}>{t('pages.dashboard.toolkit.browserOnlyHint')}</Text>
+      <TextArea rows={5} value={content} onChange={(e) => saveMemo(e.target.value)} placeholder={t('pages.dashboard.toolkit.memoPlaceholder')} style={{ fontSize: 12 }} />
       <Button size="small" type="link" onClick={() => saveMemo('')} danger style={{ marginTop: 4 }}>
-        清空
+        {t('pages.dashboard.toolkit.clear')}
       </Button>
     </div>
   );
