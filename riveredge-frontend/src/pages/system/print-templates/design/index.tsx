@@ -726,6 +726,7 @@ const DetailTableMiniPreview: React.FC<{ tableStyle?: DetailTableStyle; columns:
   tableStyle,
   columns,
 }) => {
+  const { t } = useTranslation();
   const s = resolveDetailTableStyle(tableStyle);
   const keyed = columns.filter((c) => (c.key || '').trim());
   const labels =
@@ -965,7 +966,7 @@ const SortableTableColumnItem: React.FC<{
         </div>
         <Button type="text" danger size="small" icon={<DeleteOutlined />} onClick={() => onRemove(index)} />
       </div>
-      <Space direction="vertical" size={8} style={{ width: '100%' }}>
+      <Space orientation="vertical" size={8} style={{ width: '100%' }}>
         <div style={{ width: '100%' }}>
           <div style={miniLabel}>{t('pages.system.printTemplatesDesign.colName')}</div>
           <Input
@@ -2646,7 +2647,7 @@ const PrintTemplateDesignPage: React.FC = () => {
               </div>
             )}
             {activeSidebarKey === 'preview' && (
-              <Space direction="vertical" style={{ width: '100%' }} size={16}>
+              <Space orientation="vertical" style={{ width: '100%' }} size={16}>
                  <div style={{ fontWeight: 600, fontSize: 13, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.compileControl')}</div>
                  <Button block type="primary" onClick={handleCompilePreview}>{t('pages.system.printTemplatesDesign.refreshSource')}</Button>
                  {compileWarnings.length > 0 && (
@@ -2678,7 +2679,7 @@ const PrintTemplateDesignPage: React.FC = () => {
               </Space>
             )}
             {activeSidebarKey === 'settings' && (
-              <Space direction="vertical" style={{ width: '100%' }} size={16}>
+              <Space orientation="vertical" style={{ width: '100%' }} size={16}>
                 <div>
                   <div style={{ marginBottom: 8, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.paperSize')}</div>
                   <Select
@@ -2749,7 +2750,7 @@ const PrintTemplateDesignPage: React.FC = () => {
 
                 <Divider style={{ margin: '16px 0' }} />
                 <div style={{ marginBottom: 8, fontWeight: 600, fontSize: 13 }}>{t('pages.system.printTemplatesDesign.exportPortable')} / {t('pages.system.printTemplatesDesign.importPortable')}</div>
-                <Space direction="vertical" style={{ width: '100%' }} size={8}>
+                <Space orientation="vertical" style={{ width: '100%' }} size={8}>
                   <Button block icon={<DownloadOutlined />} onClick={handleExportPortableDesign}>
                     {t('pages.system.printTemplatesDesign.exportPortable')}
                   </Button>
@@ -2794,7 +2795,7 @@ const PrintTemplateDesignPage: React.FC = () => {
               }}>
                 {templateName || t('pages.system.printTemplatesDesign.templateNameFallback')}
               </Title>
-              <Divider type="vertical" />
+              <Divider orientation="vertical" />
               <Space>
                 <Button icon={<ZoomOutOutlined />} onClick={() => setZoom(Math.max(50, zoom - 10))} />
                 <span style={{ minWidth: 40, textAlign: 'center' }}>{zoom}%</span>
@@ -2819,7 +2820,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                 <Radio.Button value="design" style={{ whiteSpace: 'nowrap' }}>{t('pages.system.printTemplatesDesign.modeDesign')}</Radio.Button>
                 <Radio.Button value="preview" style={{ whiteSpace: 'nowrap' }}>{t('pages.system.printTemplatesDesign.modePreview')}</Radio.Button>
               </Radio.Group>
-              <Divider type="vertical" />
+              <Divider orientation="vertical" />
               <Button type="primary" icon={<SaveOutlined />} onClick={handleSave}>{t('pages.system.printTemplatesDesign.saveTemplate')}</Button>
             </Space>
           </div>
@@ -2961,7 +2962,7 @@ const PrintTemplateDesignPage: React.FC = () => {
           </div>
           <div style={{ flex: 1, padding: 20, overflowY: 'auto' }}>
             {selectedBlock ? (
-              <Space direction="vertical" style={{ width: '100%' }} size={16}>
+              <Space orientation="vertical" style={{ width: '100%' }} size={16}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                   <span style={{ fontWeight: 600, color: '#333' }}>
                     {selectedBlock.type === 'text' && t('pages.system.printTemplatesDesign.compText')}
@@ -2983,8 +2984,8 @@ const PrintTemplateDesignPage: React.FC = () => {
                 </div>
 
                 {(selectedBlock.type === 'text' || selectedBlock.type === 'field' || selectedBlock.type === 'qrcode' || selectedBlock.type === 'barcode' || selectedBlock.type === 'image') && (
-                  <Card size="small" title={t('pages.system.printTemplatesDesign.styleSettings')} headStyle={{ border: 0, fontSize: 13, color: '#8c8c8c' }}>
-                    <Space direction="vertical" style={{ width: '100%' }} size={12}>
+                  <Card size="small" title={t('pages.system.printTemplatesDesign.styleSettings')} styles={{ header: { border: 0, fontSize: 13, color: '#8c8c8c' } }}>
+                    <Space orientation="vertical" style={{ width: '100%' }} size={12}>
                       <div style={{ display: 'flex', gap: 8 }}>
                         <Input
                           placeholder={t('pages.system.printTemplatesDesign.fontSize')}
@@ -3018,9 +3019,9 @@ const PrintTemplateDesignPage: React.FC = () => {
                   </Card>
                 )}
 
-                <Card size="small" title={t('pages.system.printTemplatesDesign.contentSettings')} headStyle={{ border: 0, fontSize: 13, color: '#8c8c8c' }}>
+                <Card size="small" title={t('pages.system.printTemplatesDesign.contentSettings')} styles={{ header: { border: 0, fontSize: 13, color: '#8c8c8c' } }}>
                   {selectedBlock.type === 'text' && (
-                    <Space direction="vertical" style={{ width: '100%' }} size={12}>
+                    <Space orientation="vertical" style={{ width: '100%' }} size={12}>
                       <div>
                         <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.textType')}</div>
                         <Select
@@ -3049,7 +3050,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                     </Space>
                   )}
                   {selectedBlock.type === 'field' && (
-                    <Space direction="vertical" style={{ width: '100%' }}>
+                    <Space orientation="vertical" style={{ width: '100%' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, background: '#f5f5f5', padding: '8px 12px', borderRadius: 6 }}>
                         <span style={{ fontSize: 13 }}>{t('pages.system.printTemplatesDesign.showLabel')}</span>
                         <Radio.Group 
@@ -3072,7 +3073,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                     </Space>
                   )}
                   {selectedBlock.type === 'qrcode' && (
-                    <Space direction="vertical" style={{ width: '100%' }}>
+                    <Space orientation="vertical" style={{ width: '100%' }}>
                       <div>
                         <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.variableField')}</div>
                         <Input value={selectedBlock.key} onChange={e => updateSelectedBlock({ key: e.target.value })} placeholder="e.g. order_no" />
@@ -3084,7 +3085,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                     </Space>
                   )}
                   {selectedBlock.type === 'barcode' && (
-                    <Space direction="vertical" style={{ width: '100%' }}>
+                    <Space orientation="vertical" style={{ width: '100%' }}>
                       <div>
                         <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.barcodeField')}</div>
                         <Input value={selectedBlock.key} onChange={e => updateSelectedBlock({ key: e.target.value })} placeholder="e.g. barcode_val" />
@@ -3109,7 +3110,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                     </Space>
                   )}
                   {selectedBlock.type === 'image' && (
-                    <Space direction="vertical" style={{ width: '100%' }}>
+                    <Space orientation="vertical" style={{ width: '100%' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, background: '#f5f5f5', padding: '8px 12px', borderRadius: 6 }}>
                         <span style={{ fontSize: 13 }}>{t('pages.system.printTemplatesDesign.keepRatio')}</span>
                         <Radio.Group 
@@ -3138,7 +3139,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                     </Space>
                   )}
                   {selectedBlock.type === 'spacer' && (
-                    <Space direction="vertical" style={{ width: '100%' }}>
+                    <Space orientation="vertical" style={{ width: '100%' }}>
                       <div>
                         <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.spacing')}{t('pages.system.printTemplatesDesign.heightPx')}</div>
                         <InputNumber min={1} max={500} style={{ width: '100%' }} value={selectedBlock.height} onChange={v => updateSelectedBlock({ height: v || 20 })} />
@@ -3146,26 +3147,26 @@ const PrintTemplateDesignPage: React.FC = () => {
                     </Space>
                   )}
                   {selectedBlock.type === 'if' && (
-                    <Space direction="vertical" style={{ width: '100%' }}>
+                    <Space orientation="vertical" style={{ width: '100%' }}>
                       <Input value={selectedBlock.condition} placeholder={t('pages.system.printTemplatesDesign.conditionExpr')} onChange={e => updateSelectedBlock({ condition: e.target.value })} />
                       <Input.TextArea value={selectedBlock.content} placeholder={t('pages.system.printTemplatesDesign.content')} onChange={e => updateSelectedBlock({ content: e.target.value })} />
                     </Space>
                   )}
                   {selectedBlock.type === 'for' && (
-                    <Space direction="vertical" style={{ width: '100%' }}>
+                    <Space orientation="vertical" style={{ width: '100%' }}>
                       <Input value={selectedBlock.item} placeholder={t('pages.system.printTemplatesDesign.itemVar')} onChange={e => updateSelectedBlock({ item: e.target.value })} />
                       <Input value={selectedBlock.collection} placeholder={t('pages.system.printTemplatesDesign.collectionVar')} onChange={e => updateSelectedBlock({ collection: e.target.value })} />
                       <Input.TextArea value={selectedBlock.template} placeholder={t('pages.system.printTemplatesDesign.itemTemplate')} onChange={e => updateSelectedBlock({ template: e.target.value })} />
                     </Space>
                   )}
                   {selectedBlock.type === 'detail_table' && (
-                    <Space direction="vertical" style={{ width: '100%' }} size={16}>
+                    <Space orientation="vertical" style={{ width: '100%' }} size={16}>
                       <div style={{ background: '#fffbe6', padding: '8px 12px', border: '1px solid #ffe58f', borderRadius: 6, fontSize: 12, color: '#856404' }}>
                         <TableOutlined style={{ marginRight: 8 }} />
                         {t('pages.system.printTemplatesDesign.compDetailTableHint')}
                       </div>
-                      <Card size="small" title={t('pages.system.printTemplatesDesign.tableStyle')} headStyle={{ border: 0, fontSize: 13, color: '#8c8c8c' }}>
-                        <Space direction="vertical" style={{ width: '100%' }} size={12}>
+                      <Card size="small" title={t('pages.system.printTemplatesDesign.tableStyle')} styles={{ header: { border: 0, fontSize: 13, color: '#8c8c8c' } }}>
+                        <Space orientation="vertical" style={{ width: '100%' }} size={12}>
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                             <div>
                               <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.borderStyle')}</div>
@@ -3422,9 +3423,9 @@ const PrintTemplateDesignPage: React.FC = () => {
                     </Space>
                   )}
                   {selectedBlock.type === 'columns' && (
-                    <Space direction="vertical" style={{ width: '100%' }}>
+                    <Space orientation="vertical" style={{ width: '100%' }}>
                       <div style={{ marginBottom: 8, fontWeight: 600 }}>{t('pages.system.printTemplatesDesign.columnConfig')}</div>
-                      <Space direction="vertical" style={{ width: '100%' }} size={12}>
+                      <Space orientation="vertical" style={{ width: '100%' }} size={12}>
                         <div>
                           <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.horizontalAlign')}</div>
                           <Radio.Group
@@ -3472,16 +3473,26 @@ const PrintTemplateDesignPage: React.FC = () => {
                               }} 
                             />
                           </div>
-                          <Input 
-                            size="small"
-                            addonBefore={t('pages.system.printTemplatesDesign.widthRatio')} 
-                            value={col.width} 
-                            placeholder={t('pages.system.printTemplatesDesign.widthRatioPlaceholder')} 
-                            onChange={e => {
-                              const newCols = selectedBlock.cols.map(c => c.id === col.id ? { ...c, width: e.target.value } : c);
-                              updateSelectedBlock({ cols: newCols });
-                            }} 
-                          />
+                          <Space.Compact style={{ width: '100%' }}>
+                            <Input
+                              size="small"
+                              readOnly
+                              value={t('pages.system.printTemplatesDesign.widthRatio')}
+                              style={{ width: '32%' }}
+                            />
+                            <Input
+                              size="small"
+                              value={col.width}
+                              placeholder={t('pages.system.printTemplatesDesign.widthRatioPlaceholder')}
+                              style={{ width: '68%' }}
+                              onChange={(e) => {
+                                const newCols = selectedBlock.cols.map((c) =>
+                                  c.id === col.id ? { ...c, width: e.target.value } : c,
+                                );
+                                updateSelectedBlock({ cols: newCols });
+                              }}
+                            />
+                          </Space.Compact>
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
                             <Radio.Group
                               size="small"
