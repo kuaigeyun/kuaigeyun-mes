@@ -126,6 +126,14 @@ const PAPER_SIZES: Record<string, { width: number; height: number; labelKey: str
   '241-3': { width: 241, height: 93, labelKey: 'pages.system.printTemplatesDesign.paperSize241_3' },
 };
 
+/** Keep in sync with `_PRINT_TEMPLATE_BODY_FONT_STACK` in print_template_service.py */
+const PRINT_TEMPLATE_BODY_FONT_STACK =
+  "'Noto Sans CJK SC', 'Noto Sans SC', 'Source Han Sans SC', " +
+  "'WenQuanYi Micro Hei', 'WenQuanYi Zen Hei', 'Microsoft YaHei', " +
+  "'PingFang SC', 'Hiragino Sans GB', " +
+  "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, Roboto, " +
+  "'Helvetica Neue', Helvetica, Arial, sans-serif";
+
 type SamplePreset = { key: string; label: string; data: Record<string, any> };
 
 const getSamplePresetsByDocType = (t: any, docType: string): SamplePreset[] => {
@@ -2897,8 +2905,9 @@ const PrintTemplateDesignPage: React.FC = () => {
                         __html: `
                         <style>
                           /* Keep designer preview consistent with PDF output:
-                             Only provide a fallback if cell border is not provided by compilation product */
-                          .print-preview-inner { color: #334155; line-height: 1.5; }
+                             Same font stack as compiled template body (see print_template_service.py). */
+                          .print-preview-inner { color: #334155; line-height: 1.5; font-family: ${PRINT_TEMPLATE_BODY_FONT_STACK}; }
+                          .print-preview-inner * { font-family: inherit; }
                           .print-preview-inner > div, 
                           .print-preview-inner > table, 
                           .print-preview-inner > p, 

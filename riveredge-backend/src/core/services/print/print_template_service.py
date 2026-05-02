@@ -28,6 +28,16 @@ from core.schemas.print_template import (
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from loguru import logger
 
+# 设计器 / HTML 预览 / Playwright PDF 共用的正文字体栈：Linux 上 Chromium 往往没有「微软雅黑」，
+# 若把 system-ui 放在最前会优先匹配拉丁无衬线 + 系统回退，易与 Windows 设计机不一致。
+# 前置常见开源 CJK 字体（安装 fonts-noto-cjk 或 fonts-wqy-zenhei 等后 PDF 与预览更一致）。
+_PRINT_TEMPLATE_BODY_FONT_STACK = (
+    "'Noto Sans CJK SC', 'Noto Sans SC', 'Source Han Sans SC', "
+    "'WenQuanYi Micro Hei', 'WenQuanYi Zen Hei', 'Microsoft YaHei', "
+    "'PingFang SC', 'Hiragino Sans GB', "
+    "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, Roboto, "
+    "'Helvetica Neue', Helvetica, Arial, sans-serif"
+)
 
 # 预设打印模板（新建租户时可选加载）
 PRESET_PRINT_TEMPLATES = [
@@ -955,9 +965,8 @@ class PrintTemplateService:
         parts.append("  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }")
         parts.append(
             "  body { margin: 0 !important; padding: 0 !important; "
-            "font-family: -apple-system, system-ui, BlinkMacSystemFont, 'Segoe UI', Roboto, "
-            "'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, "
-            "Arial, sans-serif; line-height: 1.5; color: #334155; }")
+            f"font-family: {_PRINT_TEMPLATE_BODY_FONT_STACK}; "
+            "line-height: 1.5; color: #334155; }")
         parts.append("  table { width: 100%; border-collapse: collapse; margin-bottom: 8px; table-layout: auto; border: 1px solid #e2e8f0; }")
         parts.append("  th, td { border: 1px solid #e2e8f0; padding: 8px 12px; word-break: break-word; text-align: left; vertical-align: top; font-size: 13px; }")
         parts.append("  th { background-color: #f8fafc; font-weight: 600; color: #475569; }")
