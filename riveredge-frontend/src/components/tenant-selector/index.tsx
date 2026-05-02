@@ -96,7 +96,7 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
     <span
       style={{
         display: 'inline-block',
-        maxWidth: 200, // ⚠️ 防止组织名过长挤压顶栏
+        maxWidth: 240, // ⚠️ 防止组织名过长挤压顶栏
         whiteSpace: 'nowrap',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
@@ -105,7 +105,7 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
         backgroundColor: token.colorFillTertiary,
         color: spanColor,
         fontSize: token.fontSize,
-        fontWeight: 600,
+        fontWeight: 500,
         height: 32,
         lineHeight: '24px',
         verticalAlign: 'middle',

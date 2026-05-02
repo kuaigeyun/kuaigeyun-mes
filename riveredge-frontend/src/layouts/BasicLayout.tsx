@@ -1106,7 +1106,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     const visibleGroups = groups
       .filter((group) => !group?.hideInMenu)
       .map((group, index) => {
-        const items = (group.children ?? []).filter((child) => !child?.hideInMenu && !!child?.path);
+        const items = (group.children ?? []).filter(
+          (child) =>
+            !child?.hideInMenu &&
+            !!child?.path &&
+            // 顶栏已有入口，不在系统配置浮层里重复展示
+            child.path !== '/system/onboarding-wizard'
+        );
         const itemCount = items.length;
         // 每个分组固定显示为两行：列数按数量自动计算
         const itemCols = Math.max(2, Math.ceil(itemCount / 2));
@@ -1146,9 +1152,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
   const getSystemPanelIcon = useCallback((path?: string): React.ReactNode => {
     if (!path) return <IconifyIcon icon="fluent-color:apps-24" />;
-    if (path === '/system/onboarding-wizard' || path.startsWith('/system/onboarding-wizard/')) {
-      return React.createElement(ManufacturingIcons.compass, { size: 24 });
-    }
     const iconMap: Record<string, string> = {
       '/system/applications': 'fluent-color:apps-24',
       '/system/menus': 'fluent-color:apps-list-detail-24',
@@ -3682,6 +3685,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-layout-header .ai-assistant-lottie-btn:hover {
           background: none !important;
         }
+        /* 上线向导：图标与文案间距 4px，!important 避免被 Space/主题覆盖 */
+        .ant-pro-layout .ant-pro-layout-header .riveredge-header-onboarding-space.ant-space,
+        .ant-pro-layout .ant-layout-header .riveredge-header-onboarding-space.ant-space {
+          gap: 4px !important;
+          column-gap: 4px !important;
+        }
         /* 租户选择器内的选择框样式 - 根据显示模式统一 */
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select,
         .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select,
@@ -4590,11 +4599,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           actions.push(
             <Tooltip key="onboarding" title={t('menu.system.onboarding-wizard')}>
               <Space
-                size={8}
+                className="riveredge-header-onboarding-space"
+                size={4}
                 onClick={() => navigate('/system/onboarding-wizard')}
                 style={{
                   cursor: 'pointer',
-                  padding: '0 16px 0 2px',
+                  padding: '0 12px 0 0',
                   height: 32,
                   display: 'flex',
                   alignItems: 'center',
@@ -4938,7 +4948,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                   size={8}
                   style={{
                     cursor: 'pointer',
-                    padding: '0 8px 0 4px',
+                    padding: '0 12px 0 4px',
                     height: 32,
                     display: 'flex',
                     alignItems: 'center',
@@ -4983,7 +4993,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                       height: '32px',
                       display: 'flex',
                       alignItems: 'center',
-                      maxWidth: 100, // ⚠️ 防止姓名过长挤压顶栏
+                      maxWidth: 120, // ⚠️ 防止姓名过长挤压顶栏
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
