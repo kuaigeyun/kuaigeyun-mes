@@ -356,12 +356,7 @@ async def restore_preset_rules(
     
     restored = []
     if scope == "all":
-        for p in CODE_RULE_PAGES:
-            pc = p.get("page_code")
-            if pc:
-                ok = await DefaultValuesService.restore_preset_for_page(tenant_id, pc)
-                if ok:
-                    restored.append(pc)
+        restored = await DefaultValuesService.restore_all_preset_pages(tenant_id)
     elif scope == "page" and page_code:
         ok = await DefaultValuesService.restore_preset_for_page(tenant_id, page_code)
         if ok:

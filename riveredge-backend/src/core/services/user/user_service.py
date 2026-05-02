@@ -581,6 +581,56 @@ class UserService:
                 user_id=user.id
             )
         )
+
+    @staticmethod
+    async def reset_password(
+        tenant_id: int,
+        user_uuid: str,
+        new_password: Optional[str] = None,
+        current_user_id: int = None
+    ) -> User:
+        """
+        重置用户密码
+        
+        Args:
+            tenant_id: 组织ID
+            user_uuid: 用户UUID
+            new_password: 新密码（可选，不提供则使用默认密码 '123456'）
+            current_user_id: 当前用户ID
+            
+        Returns:
+            User: 更新后的用户对象
+            
+        Raises:
+            NotFoundError: 当用户不存在时抛出
+        """
+        # 获取用户
+        user = await User.filter(
+            uuid=user_uuid,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        ).first()
+        
+        if not user:
+            raise NotFoundError(f"用户不存在: {user_uuid}")
+        
+        # 设置新密码
+        password = new_password if new_password else "123456"
+        user.password_hash = User.hash_password(password)
+        
+        # 保存用户
+        await user.save()
+        
+        # 清除在线用户信息（强制重新登录）
+        import asyncio
+        asyncio.create_task(
+            UserService._clear_online_user(
+                tenant_id=tenant_id,
+                user_id=user.id
+            )
+        )
+        
+        return user
     
     @staticmethod
     async def import_users_from_data(

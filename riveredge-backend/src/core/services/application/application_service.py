@@ -263,7 +263,9 @@ class ApplicationService:
     async def update_application(
         tenant_id: int,
         uuid: str,
-        data: ApplicationUpdate
+        data: ApplicationUpdate,
+        *,
+        sync_derived_resources: bool = True,
     ) -> ApplicationDict:
         """
         更新应用
@@ -321,12 +323,12 @@ class ApplicationService:
                 if result != "UPDATE 1":
                     raise NotFoundError(f"应用 {uuid} 更新失败")
 
-            # 如果名称变更、菜单配置变更或应用状态变更，自动同步菜单
+            # 如果名称变更、菜单配置变更或应用状态变更，自动同步菜单（批量扫描路径应关闭以避免长时间阻塞）
             name_changed = 'name' in update_data
             menu_config_changed = 'menu_config' in update_data
             is_active_changed = 'is_active' in update_data
 
-            if name_changed or menu_config_changed or is_active_changed:
+            if sync_derived_resources and (name_changed or menu_config_changed or is_active_changed):
                 from core.services.system.menu_service import MenuService
                 from core.models.menu import Menu
 
@@ -401,11 +403,16 @@ class ApplicationService:
     @staticmethod
     async def install_application(
         tenant_id: int,
-        uuid: str
+        uuid: str,
+        *,
+        sync_menus_after_install: bool = True,
     ) -> ApplicationDict:
         """
         安装应用
-        
+
+        安装后默认标记为未启用（is_active=FALSE），须调用启用接口才会变为启用状态，
+        以便 PRO 应用必须走 enable_application 中的 License 校验。
+
         Args:
             tenant_id: 组织ID
             uuid: 应用UUID
@@ -422,12 +429,12 @@ class ApplicationService:
         if application.get('is_installed'):
             raise ValidationError("应用已安装")
         
-        # 更新数据库
+        # 更新数据库（安装后不自动启用，防止绕过 PRO 等启用门禁）
         conn = await get_db_connection()
         try:
             update_query = """
                 UPDATE core_applications
-                SET is_installed = TRUE, updated_at = NOW()
+                SET is_installed = TRUE, is_active = FALSE, updated_at = NOW()
                 WHERE tenant_id = $1 AND uuid = $2 AND deleted_at IS NULL
             """
             await conn.execute(update_query, tenant_id, uuid)
@@ -436,17 +443,18 @@ class ApplicationService:
         
         # 更新本地字典
         application['is_installed'] = True
+        application['is_active'] = False
         
-        # 自动同步应用菜单配置到菜单管理（同步执行，确保菜单立即可用）
-        if application.get('menu_config'):
+        # 自动同步应用菜单配置到菜单管理（批量扫描时可关闭，改由「一键同步菜单」或清单同步接口写入）
+        if sync_menus_after_install and application.get('menu_config'):
             from core.services.system.menu_service import MenuService
             await MenuService.sync_menus_from_application_config(
                 tenant_id=tenant_id,
                 application_uuid=str(application['uuid']),
                 menu_config=application['menu_config'],
-                is_active=application.get('is_active', True)
+                is_active=application.get('is_active', False),
             )
-        
+
         return application
     
     @staticmethod
@@ -479,7 +487,7 @@ class ApplicationService:
             await conn.execute(
                 """
                 UPDATE core_applications
-                SET is_installed = FALSE, updated_at = NOW()
+                SET is_installed = FALSE, is_active = FALSE, updated_at = NOW()
                 WHERE tenant_id = $1 AND uuid = $2 AND deleted_at IS NULL
                 """,
                 tenant_id,
@@ -488,6 +496,7 @@ class ApplicationService:
         finally:
             await conn.close()
         application['is_installed'] = False
+        application['is_active'] = False
 
         # 自动删除关联菜单（软删除）
         from core.models.menu import Menu
@@ -819,6 +828,9 @@ class ApplicationService:
         自动在数据库中创建或更新应用记录。
         PRO 应用也会注册，无权限时仅在前端显示锁定、引导升级套餐。
 
+        本方法仅收敛数据库中的应用元数据与安装标记；不写菜单表、不跑权限全量同步，
+        避免 HTTP 长时间阻塞。侧边栏与权限请使用「一键同步菜单」或单应用清单同步接口。
+
         Args:
             tenant_id: 组织ID
 
@@ -878,9 +890,9 @@ class ApplicationService:
                     )
                 
                 # 构建应用数据
-                # 如果应用已存在，保持现有的 is_active 状态；否则默认启用
-                is_active = existing_app.get('is_active', True) if existing_app else True
+                # 已存在的应用保持 is_active；新发现的清单默认停用，启用须走 enable_application（含 PRO License 校验）
                 is_installed = existing_app.get('is_installed', False) if existing_app else False
+                is_active = (existing_app.get('is_active', True) if existing_app else False) if is_installed else False
                 
                 # 系统内置应用默认自动安装；但 PRO 应用必须已激活 License Key，避免后台误开。
                 should_auto_install = await ApplicationService._can_enable_or_install_app(
@@ -899,7 +911,7 @@ class ApplicationService:
                     menu_config=manifest.get('menu_config'),
                     permission_code=manifest.get('permission_code') or f"app:{code}",
                     is_system=False,  # 插件应用不是系统应用
-                    is_active=is_active,  # 保持现有状态或默认启用
+                    is_active=is_active,  # 保持现有状态；新注册默认为停用
                     sort_order=manifest.get('sort_order', 0),
                 )
                 
@@ -933,27 +945,18 @@ class ApplicationService:
                     application = await ApplicationService.update_application(
                         tenant_id=tenant_id,
                         uuid=existing_app.get('uuid'),
-                        data=update_data
+                        data=update_data,
+                        sync_derived_resources=False,
                     )
                     
                     # 如果是系统内置应用且未安装，更新安装状态
                     if should_auto_install and not is_installed:
                         await ApplicationService.install_application(
                             tenant_id=tenant_id,
-                            uuid=existing_app.get('uuid')
+                            uuid=existing_app.get('uuid'),
+                            sync_menus_after_install=False,
                         )
                         application['is_installed'] = True
-                    
-                    # 如果应用已安装且有菜单配置，确保菜单已同步
-                    # 注意：即使菜单配置没有变化，也要同步，因为可能之前同步失败或菜单被删除
-                    if application.get('menu_config') and application.get('is_installed'):
-                        from core.services.system.menu_service import MenuService
-                        await MenuService.sync_menus_from_application_config(
-                            tenant_id=tenant_id,
-                            application_uuid=application.get('uuid'),
-                            menu_config=application.get('menu_config'),
-                            is_active=application.get('is_active', True)
-                        )
                 else:
                     # 创建新应用
                     application = await ApplicationService.create_application(
@@ -965,19 +968,10 @@ class ApplicationService:
                     if should_auto_install:
                         await ApplicationService.install_application(
                             tenant_id=tenant_id,
-                            uuid=application.get('uuid')
+                            uuid=application.get('uuid'),
+                            sync_menus_after_install=False,
                         )
                         application['is_installed'] = True
-                        
-                        # 自动同步菜单配置
-                        if application.get('menu_config'):
-                            from core.services.system.menu_service import MenuService
-                            await MenuService.sync_menus_from_application_config(
-                                tenant_id=tenant_id,
-                                application_uuid=application.get('uuid'),
-                                menu_config=application.get('menu_config'),
-                                is_active=application.get('is_active', True)
-                            )
                 
                 registered_apps.append(application)
                 
@@ -995,7 +989,7 @@ class ApplicationService:
                 await MenuService._clear_menu_cache(tenant_id)
             except Exception as e:
                 logger.warning(f"⚠️ 清除菜单缓存失败（不影响应用注册）: {e}")
-        
+
         # 转换为字典列表，与其他方法保持一致
         result = []
         for app in registered_apps:

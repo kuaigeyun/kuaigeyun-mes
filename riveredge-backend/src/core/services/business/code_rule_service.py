@@ -99,7 +99,9 @@ class CodeRuleService:
     @staticmethod
     async def get_rule_by_code(
         tenant_id: int,
-        code: str
+        code: str,
+        *,
+        active_only: bool = True,
     ) -> Optional[CodeRule]:
         """
         根据代码获取规则
@@ -107,16 +109,32 @@ class CodeRuleService:
         Args:
             tenant_id: 组织ID
             code: 规则代码
+            active_only: 为 True 时仅返回启用中的规则（生成编码等默认场景）；恢复预设等场景传 False
             
         Returns:
             CodeRule: 规则对象，如果不存在返回 None
         """
-        return await CodeRule.filter(
+        q = CodeRule.filter(
             tenant_id=tenant_id,
             code=code,
             deleted_at__isnull=True,
-            is_active=True
-        ).first()
+        )
+        if active_only:
+            q = q.filter(is_active=True)
+        return await q.first()
+
+    @staticmethod
+    async def map_rules_by_codes(tenant_id: int, codes: List[str]) -> Dict[str, CodeRule]:
+        """按规则代码批量加载（含未启用），用于批量恢复预设等。"""
+        uniq = list(dict.fromkeys(c for c in codes if c))
+        if not uniq:
+            return {}
+        rows = await CodeRule.filter(
+            tenant_id=tenant_id,
+            code__in=uniq,
+            deleted_at__isnull=True,
+        ).all()
+        return {r.code: r for r in rows}
     
     @staticmethod
     async def list_rules(
@@ -277,17 +295,11 @@ class CodeRuleService:
         Returns:
             int: 被启用的规则数量
         """
-        rules = await CodeRule.filter(
+        return await CodeRule.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
             is_active=False,
-        ).all()
-        count = 0
-        for rule in rules:
-            rule.is_active = True
-            await rule.save()
-            count += 1
-        return count
+        ).update(is_active=True, updated_at=now_utc())
 
     @staticmethod
     async def _notify_business_modules(

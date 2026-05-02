@@ -9,7 +9,7 @@ import React, { useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { ActionType, ProColumns, ProFormInstance, ProFormText, ProFormTextArea, ProFormDigit, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Switch, Card, Dropdown, Modal } from 'antd';
+import { App, Button, Tag, Space, Switch, Card, Dropdown, Modal, Popconfirm } from 'antd';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../components/layout-templates';
 import { UniTable } from '../../../../components/uni-table';
 import { theme } from 'antd';
@@ -144,6 +144,12 @@ const ApplicationListPage: React.FC = () => {
       setScanning(true);
       const apps = await scanApplications();
       messageApi.success(t('pages.system.applications.scanSuccess', { count: apps?.length ?? 0, defaultValue: `已扫描并注册 ${apps?.length ?? 0} 个应用` }));
+      messageApi.info({
+        content: t('pages.system.applications.scanMenuHint', {
+          defaultValue: '扫描只更新应用清单。若菜单或权限未刷新，请点击「一键同步菜单」。',
+        }),
+        duration: 6,
+      });
       actionRef.current?.reload();
       queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
       useGlobalStore.getState().incrementApplicationMenuVersion();
@@ -471,35 +477,34 @@ const ApplicationListPage: React.FC = () => {
 
         if (canSync) {
           actions.push(
-            <Button
+            <Popconfirm
               key="sync"
-              type="link"
-              size="small"
-              icon={<SyncOutlined />}
-              onClick={async () => {
-                modalApi.confirm({
-                  title: t('pages.system.applications.syncMenu'),
-                  content: t('pages.system.applications.syncMenuConfirm'),
-                  onOk: async () => {
-                    messageApi.loading({ content: t('pages.system.applications.syncMenuLoading'), key: 'sync-manifest' });
-                    try {
-                      const result = await syncApplicationManifest(record.code);
-                      if (result.success) {
-                        messageApi.success({ content: result.message || t('pages.system.applications.syncMenuSuccess'), key: 'sync-manifest' });
-                        actionRef.current?.reload();
-                        useGlobalStore.getState().incrementApplicationMenuVersion();
-                      } else {
-                        throw new Error(result.message || t('pages.system.applications.syncFailed'));
-                      }
-                    } catch (error: any) {
-                      messageApi.error({ content: error.message || t('pages.system.applications.syncFailed'), key: 'sync-manifest' });
-                    }
-                  },
-                });
+              title={t('pages.system.applications.syncMenu')}
+              description={t('pages.system.applications.syncMenuConfirm')}
+              onConfirm={async () => {
+                messageApi.loading({ content: t('pages.system.applications.syncMenuLoading'), key: 'sync-manifest' });
+                try {
+                  const result = await syncApplicationManifest(record.code);
+                  if (result.success) {
+                    messageApi.success({ content: result.message || t('pages.system.applications.syncMenuSuccess'), key: 'sync-manifest' });
+                    actionRef.current?.reload();
+                    useGlobalStore.getState().incrementApplicationMenuVersion();
+                  } else {
+                    throw new Error(result.message || t('pages.system.applications.syncFailed'));
+                  }
+                } catch (error: any) {
+                  messageApi.error({ content: error.message || t('pages.system.applications.syncFailed'), key: 'sync-manifest' });
+                }
               }}
             >
-              {t('pages.system.applications.syncMenu')}
-            </Button>
+              <Button
+                type="link"
+                size="small"
+                icon={<SyncOutlined />}
+              >
+                {t('pages.system.applications.syncMenu')}
+              </Button>
+            </Popconfirm>
           );
         }
 
@@ -525,40 +530,38 @@ const ApplicationListPage: React.FC = () => {
           }
 
           actions.push(
-            <Button
+            <Popconfirm
               key="uninstall"
-              type="link"
-              danger
-              size="small"
+              title={t('pages.system.applications.uninstallConfirm')}
+              onConfirm={() => handleUninstall(record)}
               disabled={record.is_system}
-              icon={<StopOutlined />}
-              onClick={() => {
-                if (record.is_system) return;
-                modalApi.confirm({
-                  title: t('pages.system.applications.uninstallConfirm'),
-                  onOk: () => handleUninstall(record),
-                });
-              }}
             >
-              {t('pages.system.applications.uninstall')}
-            </Button>
+              <Button
+                type="link"
+                danger
+                size="small"
+                disabled={record.is_system}
+                icon={<StopOutlined />}
+              >
+                {t('pages.system.applications.uninstall')}
+              </Button>
+            </Popconfirm>
           );
         } else {
           actions.push(
-            <Button
+            <Popconfirm
               key="install"
-              type="link"
-              size="small"
-              icon={<DownloadOutlined />}
-              onClick={() => {
-                modalApi.confirm({
-                  title: t('pages.system.applications.installConfirm'),
-                  onOk: () => handleInstall(record),
-                });
-              }}
+              title={t('pages.system.applications.installConfirm')}
+              onConfirm={() => handleInstall(record)}
             >
-              {t('pages.system.applications.install')}
-            </Button>
+              <Button
+                type="link"
+                size="small"
+                icon={<DownloadOutlined />}
+              >
+                {t('pages.system.applications.install')}
+              </Button>
+            </Popconfirm>
           );
         }
 
@@ -590,43 +593,45 @@ const ApplicationListPage: React.FC = () => {
       },
       {
         key: 'sync-manifest',
-        label: t('pages.system.applications.syncMenu'),
-        icon: <AppstoreOutlined />,
-        onClick: async () => {
-          try {
-            modalApi.confirm({
-              title: t('pages.system.applications.syncMenu'),
-              content: t('pages.system.applications.syncMenuConfirm'),
-              onOk: async () => {
-                messageApi.loading({ content: t('pages.system.applications.syncMenuLoading'), key: 'sync-manifest' });
-                try {
-                  const result = await syncApplicationManifest(application.code);
+        label: (
+          <Popconfirm
+            title={t('pages.system.applications.syncMenu')}
+            description={t('pages.system.applications.syncMenuConfirm')}
+            onConfirm={async () => {
+              messageApi.loading({ content: t('pages.system.applications.syncMenuLoading'), key: 'sync-manifest' });
+              try {
+                const result = await syncApplicationManifest(application.code);
 
-                  if (result.success) {
-                    messageApi.success({
-                      content: result.message || t('pages.system.applications.syncMenuSuccess'),
-                      key: 'sync-manifest'
-                    });
-
-                    actionRef.current?.reload();
-
-                    useGlobalStore.getState().incrementApplicationMenuVersion();
-                  } else {
-                    throw new Error(result.message || t('pages.system.applications.syncFailed'));
-                  }
-
-                } catch (error: any) {
-                  messageApi.error({
-                    content: error.message || t('pages.system.applications.syncFailed'),
+                if (result.success) {
+                  messageApi.success({
+                    content: result.message || t('pages.system.applications.syncMenuSuccess'),
                     key: 'sync-manifest'
                   });
+
+                  actionRef.current?.reload();
+
+                  useGlobalStore.getState().incrementApplicationMenuVersion();
+                } else {
+                  throw new Error(result.message || t('pages.system.applications.syncFailed'));
                 }
-              },
-            });
-          } catch (error: any) {
-            messageApi.error(error.message || t('pages.system.applications.operationFailed'));
-          }
-        },
+
+              } catch (error: any) {
+                messageApi.error({
+                  content: error.message || t('pages.system.applications.syncFailed'),
+                  key: 'sync-manifest'
+                });
+              }
+            }}
+          >
+            <div 
+              style={{ margin: '-5px -12px', padding: '5px 12px' }} 
+              onClick={(e) => e.stopPropagation()}
+            >
+              {t('pages.system.applications.syncMenu')}
+            </div>
+          </Popconfirm>
+        ),
+        icon: <AppstoreOutlined />,
       },
 
       application.code === "kuaizhizao" ? {
@@ -647,28 +652,40 @@ const ApplicationListPage: React.FC = () => {
       !application.is_installed
         ? {
           key: 'install',
-          label: t('pages.system.applications.install'),
+          label: (
+            <Popconfirm
+              title={t('pages.system.applications.installConfirm')}
+              onConfirm={() => handleInstall(application)}
+            >
+              <div 
+                style={{ margin: '-5px -12px', padding: '5px 12px' }} 
+                onClick={(e) => e.stopPropagation()}
+              >
+                {t('pages.system.applications.install')}
+              </div>
+            </Popconfirm>
+          ),
           icon: <DownloadOutlined />,
-          onClick: () => {
-            modalApi.confirm({
-              title: t('pages.system.applications.installConfirm'),
-              onOk: () => handleInstall(application),
-            });
-          },
         }
         : {
           key: 'uninstall',
-          label: t('pages.system.applications.uninstall'),
+          label: (
+            <Popconfirm
+              title={t('pages.system.applications.uninstallConfirm')}
+              onConfirm={() => handleUninstall(application)}
+              disabled={application.is_system}
+            >
+              <div 
+                style={{ margin: '-5px -12px', padding: '5px 12px' }} 
+                onClick={(e) => e.stopPropagation()}
+              >
+                {t('pages.system.applications.uninstall')}
+              </div>
+            </Popconfirm>
+          ),
           icon: <StopOutlined />,
           danger: true,
           disabled: application.is_system,
-          onClick: () => {
-            if (application.is_system) return;
-            modalApi.confirm({
-              title: t('pages.system.applications.uninstallConfirm'),
-              onOk: () => handleUninstall(application),
-            });
-          },
         },
     ];
 

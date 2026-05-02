@@ -7,9 +7,12 @@ Author: Luigi Lu
 Date: 2025-01-15
 """
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from loguru import logger
 
+import asyncio
+
+from core.models.code_rule import CodeRule
 from core.services.business.code_rule_service import CodeRuleService
 from core.services.system.system_parameter_service import SystemParameterService
 from core.schemas.code_rule import CodeRuleCreate
@@ -376,7 +379,7 @@ class DefaultValuesService:
         if not page_config:
             return False
         rule_code = page_config.get("rule_code") or page_code.upper().replace("-", "_")
-        existing = await CodeRuleService.get_rule_by_code(tenant_id, rule_code)
+        existing = await CodeRuleService.get_rule_by_code(tenant_id, rule_code, active_only=False)
         if existing:
             return False
         page_name = page_config.get("page_name", page_code)
@@ -414,10 +417,20 @@ class DefaultValuesService:
             return False
 
     @staticmethod
-    async def restore_preset_for_page(tenant_id: int, page_code: str) -> bool:
+    async def restore_preset_for_page(
+        tenant_id: int,
+        page_code: str,
+        *,
+        cached_rule: Optional[CodeRule] = None,
+    ) -> bool:
         """
         恢复指定页面的预设编码规则（创建或更新为预设格式）。
         主数据：拼音缩写+4位流水；快格轻制造：拼音缩写+YYYYMMDD+4位流水。
+        
+        Args:
+            tenant_id: 租户 ID
+            page_code: 页面代码
+            cached_rule: 若已从批量查询带入则跳过按 code 查询（加速「加载预设」全量）
         
         Returns:
             True 表示创建或更新成功，False 表示页面不存在或失败。
@@ -447,7 +460,10 @@ class DefaultValuesService:
                 if is_business
                 else f"{page_name}编码规则，格式：{abbreviation} + 4位序号"
             )
-        existing = await CodeRuleService.get_rule_by_code(tenant_id, rule_code)
+        if cached_rule is not None:
+            existing = cached_rule
+        else:
+            existing = await CodeRuleService.get_rule_by_code(tenant_id, rule_code, active_only=False)
         if existing:
             update_data = CodeRuleUpdate(
                 name=rule_name,
@@ -469,6 +485,37 @@ class DefaultValuesService:
             await CodeRuleService.create_rule(tenant_id, rule_data)
             logger.info(f"为组织 {tenant_id} 创建预设编码规则: {rule_code} ({page_name})")
         return True
+
+    @staticmethod
+    async def restore_all_preset_pages(tenant_id: int) -> List[str]:
+        """
+        为 CODE_RULE_PAGES 中全部页面批量恢复预设规则。
+        一次查询现有规则 + 受控并发写入，缩短「加载预设」耗时。
+        """
+        entries: List[tuple[str, str]] = []
+        for p in CODE_RULE_PAGES:
+            pc = p.get("page_code")
+            if not pc:
+                continue
+            rc = p.get("rule_code") or pc.upper().replace("-", "_")
+            entries.append((pc, rc))
+        if not entries:
+            return []
+        codes = [rc for _, rc in entries]
+        existing_map = await CodeRuleService.map_rules_by_codes(tenant_id, codes)
+        sem = asyncio.Semaphore(16)
+
+        async def run(pc: str, rc: str) -> Optional[str]:
+            async with sem:
+                ok = await DefaultValuesService.restore_preset_for_page(
+                    tenant_id,
+                    pc,
+                    cached_rule=existing_map.get(rc),
+                )
+                return pc if ok else None
+
+        results = await asyncio.gather(*[run(pc, rc) for pc, rc in entries])
+        return [pc for pc in results if pc]
 
     @staticmethod
     async def create_default_system_parameters(tenant_id: int) -> List[Dict[str, Any]]:

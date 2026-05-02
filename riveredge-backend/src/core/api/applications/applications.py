@@ -438,7 +438,8 @@ async def install_application(
     """
     安装应用
 
-    安装指定的应用，并同步应用菜单配置。
+    安装指定的应用并可选同步菜单配置；安装后应用默认为未启用状态，
+    须调用启用接口才会启用（PRO 应用在启用时会校验 License）。
 
     Args:
         uuid: 应用UUID

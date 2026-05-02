@@ -111,6 +111,13 @@ class UserImportRequest(BaseModel):
     data: List[List[Any]] = Field(..., description="二维数组数据（第一行为表头，第二行为示例数据，从第三行开始为实际数据）")
 
 
+class UserResetPasswordRequest(BaseModel):
+    """
+    重置用户密码请求 Schema
+    """
+    password: Optional[str] = Field(None, description="新密码，如果不提供则使用默认密码")
+
+
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(
     data: UserCreateRequest,
@@ -422,6 +429,52 @@ async def delete_user(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(e)
+        )
+
+
+@router.post("/{user_uuid}/reset-password", response_model=UserResponse)
+async def reset_user_password(
+    user_uuid: str,
+    data: Optional[UserResetPasswordRequest] = None,
+    _auth: object = Depends(require_access("system.user", "update")),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    重置用户密码
+    
+    将指定用户的密码重置为新密码或默认密码。
+    
+    Args:
+        user_uuid: 用户UUID
+        data: 重置密码请求数据
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        UserResponse: 更新后的用户对象
+        
+    Raises:
+        HTTPException: 当用户不存在时抛出
+    """
+    try:
+        new_password = data.password if data else None
+        user = await UserService.reset_password(
+            tenant_id=tenant_id,
+            user_uuid=user_uuid,
+            new_password=new_password,
+            current_user_id=current_user.id
+        )
+        return await _user_to_response(user)
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"重置密码失败: {str(e)}"
         )
 
 

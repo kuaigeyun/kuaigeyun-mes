@@ -21,7 +21,6 @@ import {
   UpdateCodeRuleData,
   CodeRulePageConfig,
 } from '../../../../services/codeRule';
-import { runInitItems } from '../../../../services/tenantInit';
 import { apiRequest } from '../../../../services/api';
 import { getApplicationList } from '../../../../services/application';
 import CodeRuleComponentBuilder from '../../../../components/code-rule-component-builder';
@@ -614,11 +613,16 @@ const CodeRuleListPage: React.FC = () => {
               onClick={async () => {
                 try {
                   setRestoreLoading(true);
-                  const res = await runInitItems(['code_rule']);
-                  const created = ((res.results?.code_rule as any) || {}).created ?? 0;
-                  messageApi.success(res.message || t('pages.system.codeRules.restoreAllSuccess', { count: created }));
+                  // 须走编码规则专用接口：会为各页创建或覆盖为预设 rule_components（租户初始化里的 code_rule 项对已存在规则往往不更新）
+                  const res = await restorePresetRules('all');
+                  const count = res.restored?.length ?? 0;
+                  const msg = res.message || t('pages.system.codeRules.restoreAllSuccess', { count });
+                  if (count === 0) {
+                    messageApi.warning(msg);
+                  } else {
+                    messageApi.success(msg);
+                  }
                   await loadCodeRules(true);
-                  if (selectedPageCode) handleSelectPage(selectedPageCode);
                 } catch (e: any) {
                   messageApi.error(e?.message || t('pages.system.codeRules.restoreAllFailed'));
                 } finally {
@@ -637,9 +641,8 @@ const CodeRuleListPage: React.FC = () => {
                   setEnableAllLoading(true);
                   const res = await enableAllRules();
                   messageApi.success(t('pages.system.codeRules.enableAllSuccess', { count: res?.enabled ?? 0 }));
-                  await loadCodeRules(true);
-                  const allRules = await getAllCodeRules();
-                  const activeRuleCodes = new Set(allRules.filter(r => r.is_active).map(r => r.code));
+                  const rules = await loadCodeRules(true);
+                  const activeRuleCodes = new Set((rules ?? []).filter(r => r.is_active).map(r => r.code));
                   setPageConfigs(prev => {
                     const updated = prev.map(page => {
                       const ruleCode = page.ruleCode ?? page.pageCode.toUpperCase().replace(/-/g, '_');
@@ -657,7 +660,6 @@ const CodeRuleListPage: React.FC = () => {
                     window.localStorage.setItem(getCodeRulePageConfigsKey(), JSON.stringify(configsToSave));
                     return updated;
                   });
-                  if (selectedPageCode) handleSelectPage(selectedPageCode);
                 } catch (e: any) {
                   messageApi.error(e?.message || t('pages.system.codeRules.enableAllFailed'));
                 } finally {
@@ -798,7 +800,6 @@ const CodeRuleListPage: React.FC = () => {
                       await restorePresetRules('page', selectedPageCode);
                       messageApi.success(t('pages.system.codeRules.restorePresetSuccess'));
                       await loadCodeRules(true);
-                      handleSelectPage(selectedPageCode);
                     } catch (e: any) {
                       messageApi.error(e?.message || t('pages.system.codeRules.restorePresetFailed'));
                     } finally {

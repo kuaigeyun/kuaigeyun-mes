@@ -646,6 +646,7 @@ class MenuService:
         is_active: bool = True,
         *,
         preserve_existing_is_active: bool = True,
+        skip_permission_sync: bool = False,
     ) -> int:
         """
         从应用菜单配置同步菜单到菜单管理
@@ -661,6 +662,7 @@ class MenuService:
             preserve_existing_is_active: 对已存在行的写入规则见
                 ``core.menu_sync_is_active_policy.resolve_sync_is_active_for_existing_row``
                 （单测：tests/test_menu_sync_is_active_policy.py）
+            skip_permission_sync: 为 True 时不同步 core_permissions（例如「扫描应用」批量路径由调用方在最后统一同步）
             
         Returns:
             int: 同步的菜单数量
@@ -842,11 +844,12 @@ class MenuService:
             logger.warning(f"清除菜单缓存失败: {e}")
 
         # 菜单同步后强制同步权限到 core_permissions，保证角色权限页「全部权限」含应用级菜单权限
-        try:
-            from core.services.authorization.permission_sync_service import PermissionSyncService
-            await PermissionSyncService.ensure_permissions(tenant_id=tenant_id, force=True)
-        except Exception as e:
-            logger.warning(f"菜单同步后权限同步失败: {e}")
+        if not skip_permission_sync:
+            try:
+                from core.services.authorization.permission_sync_service import PermissionSyncService
+                await PermissionSyncService.ensure_permissions(tenant_id=tenant_id, force=True)
+            except Exception as e:
+                logger.warning(f"菜单同步后权限同步失败: {e}")
 
         return created_count
 

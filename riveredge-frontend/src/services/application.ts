@@ -67,6 +67,33 @@ export interface ApplicationUpdate {
   sort_order?: number;
 }
 
+/** 扫描接口应快速返回；超时中止以免按钮长时间 loading */
+const SCAN_APPLICATIONS_TIMEOUT_MS = 90_000;
+
+async function postApplicationsScan(): Promise<Application[]> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), SCAN_APPLICATIONS_TIMEOUT_MS);
+  try {
+    return await apiRequest<Application[]>('/core/applications/scan', {
+      method: 'POST',
+      signal: controller.signal,
+    });
+  } catch (e: any) {
+    const aborted =
+      e?.name === 'AbortError' ||
+      e?.originalError?.name === 'AbortError' ||
+      /aborted/i.test(String(e?.message || ''));
+    if (aborted) {
+      throw new Error(
+        `扫描应用超时（超过 ${SCAN_APPLICATIONS_TIMEOUT_MS / 1000} 秒），请查看后端日志或稍后重试`,
+      );
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
  * 扫描并注册应用
  *
@@ -76,9 +103,7 @@ export interface ApplicationUpdate {
  * @returns 已注册的应用列表
  */
 export async function scanApplications(): Promise<Application[]> {
-  return apiRequest<Application[]>('/core/applications/scan', {
-    method: 'POST',
-  });
+  return postApplicationsScan();
 }
 
 /**
@@ -250,9 +275,7 @@ export async function activateProApplication(
  * @returns 已注册的应用列表
  */
 export async function scanPlugins(): Promise<Application[]> {
-  return apiRequest<Application[]>('/core/applications/scan', {
-    method: 'POST',
-  });
+  return postApplicationsScan();
 }
 
 /**
