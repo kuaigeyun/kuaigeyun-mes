@@ -264,6 +264,12 @@ const COMMON_SAMPLE_PRESETS: SamplePreset[] = [
   },
 ];
 
+  if (docType === 'quotation') return QUOTATION_SAMPLE_PRESETS;
+  if (docType === 'sales_order') return SALES_ORDER_SAMPLE_PRESETS;
+  if (docType === 'purchase_order') return PURCHASE_ORDER_SAMPLE_PRESETS;
+  return COMMON_SAMPLE_PRESETS;
+};
+
 type VariableCategory = {
   title: string;
   items: TemplateVariableItem[];
@@ -291,12 +297,6 @@ const groupVariables = (t: any, items: TemplateVariableItem[]): VariableCategory
   });
 
   return Object.values(groups).filter((g) => g.items.length > 0);
-};
-
-  if (docType === 'quotation') return QUOTATION_SAMPLE_PRESETS;
-  if (docType === 'sales_order') return SALES_ORDER_SAMPLE_PRESETS;
-  if (docType === 'purchase_order') return PURCHASE_ORDER_SAMPLE_PRESETS;
-  return COMMON_SAMPLE_PRESETS;
 };
 
 const normalizeFontSize = (size?: string) => {
