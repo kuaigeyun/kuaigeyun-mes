@@ -6,7 +6,7 @@
  */
 
 import React, { ReactNode, useRef } from 'react';
-import { Modal, Button, App, Space } from 'antd';
+import { Modal, Button, App, Space, Grid } from 'antd';
 import { ProForm, ProFormInstance } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import { MODAL_CONFIG, FORM_LAYOUT } from './constants';
@@ -57,6 +57,8 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md && screens.xs;
   const internalFormRef = useRef<ProFormInstance>();
   const formRef = externalFormRef || internalFormRef;
 
@@ -99,7 +101,8 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
           onValuesChange={onValuesChange}
           initialValues={initialValues}
           layout={layout}
-          grid={grid}
+          grid={isMobile ? true : grid}
+          colProps={isMobile ? { span: 24 } : undefined}
           rowProps={{ gutter: FORM_LAYOUT.GRID_GUTTER }}
           submitter={false}
         >

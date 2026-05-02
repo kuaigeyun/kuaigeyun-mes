@@ -3909,6 +3909,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           display: flex !important;
           align-items: center !important;
           height: 100% !important;
+          /* 手机端移除 min-width 限制 */
+          @media (max-width: 1024px) {
+            min-width: 0 !important;
+          }
         }
         /* LOGO 图片垂直对齐 */
         .ant-pro-global-header-logo img {
@@ -4484,17 +4488,19 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         headerContentRender={() => {
           return (
           <div style={{ display: 'flex', alignItems: 'center', height: '100%', gap: 12 }}>
-            {/* 分割线 */}
-            <Divider
-              orientation="vertical"
-              style={{
-                height: '20px',
-                margin: '4px 0 0 2px',
-                borderColor: isLightModeLightBg ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.25)',
-                alignSelf: 'center',
-                verticalAlign: 'middle',
-              }}
-            />
+            {/* 分割线 - 仅在 PC 端显示 */}
+            {!isMobileOrTablet && (
+              <Divider
+                orientation="vertical"
+                style={{
+                  height: '20px',
+                  margin: '4px 0 0 2px',
+                  borderColor: isLightModeLightBg ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.25)',
+                  alignSelf: 'center',
+                  verticalAlign: 'middle',
+                }}
+              />
+            )}
             {/* 面包屑 */}
             <div ref={breadcrumbRef} style={{ flex: 1, overflow: 'visible', paddingLeft: 10 }}>
               <Breadcrumb

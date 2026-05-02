@@ -326,16 +326,22 @@ async def download_file(
                 logger.error(f"❌ Access Token 验证失败: {e}")
 
         # 2. 如果没有获取到 tenant_id，尝试验证预览 token
-        if tenant_id is None and token:
+        # 根本解决 403：增强 Token 解析的容错性，处理可能存在的引号或编码问题
+        if token:
+            token = token.strip().strip('"').strip("'")
             try:
                 payload = FilePreviewService.verify_preview_token(token)
                 logger.debug(f"✅ Token 验证成功: payload={payload}")
-                # 从token中提取tenant_id
+                
+                # 1. 提取租户 ID
                 tenant_id = payload.get("tenant_id")
-                logger.debug(f"📋 从token提取 tenant_id: {tenant_id}")
-                # 验证文件UUID是否匹配
-                if payload.get("file_uuid") != uuid:
-                    logger.error(f"❌ 文件UUID不匹配: token_uuid={payload.get('file_uuid')}, request_uuid={uuid}")
+                
+                # 2. 根本解决：UUID 校验增加大小写容错
+                token_uuid = str(payload.get("file_uuid") or "").lower()
+                request_uuid = str(uuid).lower()
+                
+                if token_uuid != request_uuid:
+                    logger.error(f"❌ 文件UUID不匹配: token_uuid={token_uuid}, request_uuid={request_uuid}")
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail="无权限访问该文件"

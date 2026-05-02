@@ -272,15 +272,43 @@ async def _html_to_pdf_bytes_playwright_async(html_string: str) -> bytes:
         browser = await p.chromium.launch(headless=True, args=launch_args)
         try:
             page = await browser.new_page()
-            # 打印模板中常含受鉴权图片/外链资源，networkidle 在部分场景会无意义超时；
-            # 关键的本地后端图片已在外层被预先内联为 data URL，
-            # 这里使用 domcontentloaded 更稳，后续由 print_background + CSS 控制输出一致性。
-            await page.set_content(html_for_playwright, wait_until="domcontentloaded")
+            # --- CRITICAL DEBUG: CAPTURE THE FINAL HTML SOURCE ---
+            try:
+                debug_path = os.path.join(os.getcwd(), "debug_last_print.html")
+                with open(debug_path, "w", encoding="utf-8") as f:
+                    f.write(html_for_playwright)
+                logger.info(f"DEBUG: Final HTML captured to {debug_path}")
+            except Exception as e:
+                logger.warning(f"DEBUG: Failed to capture HTML: {e}")
+            # ----------------------------------------------------
+
+            await page.set_content(html_for_playwright, wait_until="networkidle")
+
+            # 根本解决：在生成 PDF 前，利用浏览器注入真实的页码，避免 HTML 标签干扰设计器布局
+            await page.evaluate("""() => {
+                const replaceRecursive = (node) => {
+                    if (node.nodeType === 3) { // Text node
+                        let text = node.nodeValue;
+                        if (text.includes('{{ page_num }}') || text.includes('{{ total_pages }}')) {
+                            const span = document.createElement('span');
+                            span.innerHTML = text
+                                .replace(/\\{\\{\\s*page_num\\s*\\}\\}/g, '<span class="page-current"></span>')
+                                .replace(/\\{\\{\\s*total_pages\\s*\\}\\}/g, '<span class="page-total"></span>');
+                            node.parentNode.replaceChild(span, node);
+                        }
+                    } else {
+                        for (let i = 0; i < node.childNodes.length; i++) {
+                            replaceRecursive(node.childNodes[i]);
+                        }
+                    }
+                };
+                replaceRecursive(document.body);
+            }""")
+
             return await page.pdf(
-                format="A4",
                 print_background=True,
                 prefer_css_page_size=True,
-                margin={"top": "0mm", "right": "0mm", "bottom": "0mm", "left": "0mm"},
+                display_header_footer=False,
             )
         finally:
             await browser.close()

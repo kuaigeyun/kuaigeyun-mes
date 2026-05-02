@@ -9,7 +9,7 @@
  */
 
 import React, { ReactNode } from 'react';
-import { Row, Col, Card, Statistic, theme as AntdTheme } from 'antd';
+import { Row, Col, Card, Statistic, theme as AntdTheme, Grid } from 'antd';
 import { STAT_CARD_CONFIG } from './constants';
 
 
@@ -90,9 +90,11 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
   prioritizeMainContentPaint = true,
 }) => {
   const { token } = AntdTheme.useToken();
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md && screens.xs;
 
   const statCardsRow =
-    statCards && statCards.length > 0 ? (
+    statCards && statCards.length > 0 && !isMobile ? (
       <div style={{ marginBottom: 16 }}>
         <Row gutter={STAT_CARD_CONFIG.GUTTER} wrap={true}>
           {statCards.map((card, index) => (

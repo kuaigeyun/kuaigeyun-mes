@@ -503,10 +503,10 @@ class PrintTemplateService:
 
 
 
-        def _get_style_str(blk: dict) -> str:
+        item_spacing = schema.get("itemSpacing", 0)
+        
+        def _get_style_str(blk: dict, is_root: bool = False) -> str:
             style = blk.get("style", {})
-            if not style:
-                return ""
             css_parts = []
             if style.get("fontSize"):
                 css_parts.append(f"font-size:{style['fontSize']};")
@@ -518,10 +518,15 @@ class PrintTemplateService:
                 css_parts.append(f"color:{style['color']};")
             if style.get("letterSpacing"):
                 css_parts.append(f"letter-spacing:{style['letterSpacing']};")
+            
+            # Apply global item spacing to root-level blocks
+            if is_root and item_spacing > 0:
+                css_parts.append(f"margin-bottom:{item_spacing}mm;")
+                
             return "".join(css_parts)
 
         lines: list[str] = []
-        def _render_blocks(blocks_list: list, warnings_list: list) -> str:
+        def _render_blocks(blocks_list: list, warnings_list: list, is_root: bool = False) -> str:
             lines: list[str] = []
             for index, blk in enumerate(blocks_list):
                 if not isinstance(blk, dict):
@@ -531,18 +536,19 @@ class PrintTemplateService:
                 
                 if blk_type == "text":
                     content = str(blk.get("content") or "")
+                    # Keep as plain text placeholders for designer stability. 
+                    # We will replace them during PDF generation via Playwright.
+                    
                     tag = str(blk.get("tag") or "div").strip().lower()
-                    style_str = _get_style_str(blk)
-                    # For semantic tags like h1-h4, p, etc., we always wrap. 
-                    # Default div also wraps if there is style.
+                    style_str = _get_style_str(blk, is_root)
+                    wrapper_start = f'<div class="print-block" style="{style_str}">' if is_root else ""
+                    wrapper_end = "</div>" if is_root else ""
+                    
                     if tag != "div":
-                        # Add margin:0 to match designer behavior
-                        s = f'margin:0;{style_str}'
-                        lines.append(f'<{tag} style="{s}">{content}</{tag}>')
-                    elif style_str:
-                        lines.append(f'<div style="{style_str}">{content}</div>')
+                        s = f'margin:0;' # Inner tag doesn't need style_str again if it's in wrapper
+                        lines.append(f'{wrapper_start}<{tag} style="{s}">{content}</{tag}>{wrapper_end}')
                     else:
-                        lines.append(content)
+                        lines.append(f'{wrapper_start}{content}{wrapper_end}')
                 elif blk_type == "field":
                     field_key = str(blk.get("key") or "").strip()
                     label = str(blk.get("label") or field_key).strip()
@@ -556,10 +562,12 @@ class PrintTemplateService:
                     if show_label:
                         content = f"{label}：{content}"
                         
-                    style_str = _get_style_str(blk)
-                    # 保留多行字段（如备注）里的换行符，避免在 HTML 中被折叠为空格。
+                    style_str = _get_style_str(blk, is_root)
                     field_style = f"{style_str}white-space:pre-wrap;"
-                    lines.append(f'<div style="{field_style}">{content}</div>')
+                    if is_root:
+                        lines.append(f'<div class="print-block" style="{field_style}">{content}</div>')
+                    else:
+                        lines.append(f'<div style="{field_style}">{content}</div>')
                 elif blk_type == "if":
                     condition = str(blk.get("condition") or "").strip()
                     content = str(blk.get("content") or "")
@@ -583,8 +591,10 @@ class PrintTemplateService:
                     if not field_key:
                         warnings_list.append(f"block[{index}] qrcode 缺少 key，已跳过")
                         continue
-                    style_str = _get_style_str(blk)
+                    style_str = _get_style_str(blk, is_root)
                     css = f' style="{style_str}"' if style_str else ""
+                    if is_root:
+                        css = f' class="print-block"{css}'
                     # 预览样本缺少字段时，回退为字段名，避免空 src 导致破图。
                     qr_expr = f"{field_key} | default('{field_key}', true) | qrcode(size={size})"
                     lines.append(f'<div{css}><img src="{{{{ {qr_expr} }}}}" width="{size}" height="{size}" /></div>')
@@ -595,8 +605,10 @@ class PrintTemplateService:
                     if not field_key:
                         warnings_list.append(f"block[{index}] barcode 缺少 key，已跳过")
                         continue
-                    style_str = _get_style_str(blk)
+                    style_str = _get_style_str(blk, is_root)
                     css = f' style="{style_str}"' if style_str else ""
+                    if is_root:
+                        css = f' class="print-block"{css}'
                     # 与二维码一致：字段缺失时回退为字段名，保证预览可见。
                     barcode_expr = f"{field_key} | default('{field_key}', true) | barcode(fmt='{fmt}', height={height})"
                     lines.append(f'<div{css}><img src="{{{{ {barcode_expr} }}}}" height="{height}" /></div>')
@@ -608,8 +620,10 @@ class PrintTemplateService:
                     if not url:
                         warnings_list.append(f"block[{index}] image 缺少 url，已跳过")
                         continue
-                    style_str = _get_style_str(blk)
+                    style_str = _get_style_str(blk, is_root)
                     wrapper_css = f' style="{style_str}"' if style_str else ""
+                    if is_root:
+                        wrapper_css = f' class="print-block"{wrapper_css}'
                     
                     img_attrs = [f'src="{url}"', f'width="{width}"']
                     img_styles = ["display:block;"]
@@ -667,7 +681,7 @@ class PrintTemplateService:
                         col_align_items = cross_align_map.get(col_horizontal_align, "flex-start")
                         col_text_align = text_align_map.get(col_horizontal_align, "left")
                         inner_blocks = col.get("blocks", [])
-                        inner_html = _render_blocks(inner_blocks, warnings_list)
+                        inner_html = _render_blocks(inner_blocks, warnings_list, is_root=False)
                         col_html.append(
                             f'<div style="flex: {width}; display: flex;">'
                             f'<div style="display: flex; flex-direction: column; justify-content: {col_justify_content}; '
@@ -676,9 +690,11 @@ class PrintTemplateService:
                             f'</div>'
                             f'</div>'
                         )
+                    style_str = _get_style_str(blk, is_root)
+                    container_style = f'display: flex; gap: 16px; width: 100%; justify-content: {justify_content}; align-items: stretch; {style_str}'
+                    wrapper_class = ' class="print-block"' if is_root else ""
                     lines.append(
-                        f'<div style="display: flex; gap: 16px; width: 100%; '
-                        f'justify-content: {justify_content}; align-items: stretch;">{ "".join(col_html) }</div>'
+                        f'<div{wrapper_class} style="{container_style}">{ "".join(col_html) }</div>'
                     )
                 elif blk_type == "detail_table":
                     collection = str(blk.get("collection") or "").strip()
@@ -690,24 +706,155 @@ class PrintTemplateService:
                     if not isinstance(columns, list) or len(columns) == 0:
                         warnings_list.append(f"block[{index}] detail_table 缺少 columns，已跳过")
                         continue
+
+                    ts_raw = blk.get("tableStyle")
+                    ts = ts_raw if isinstance(ts_raw, dict) else {}
+
+                    border_style = str(ts.get("borderStyle") or "solid").strip().lower()
+                    if border_style not in ("solid", "dashed", "none"):
+                        border_style = "solid"
+                    try:
+                        border_width = int(ts.get("borderWidth")) if ts.get("borderWidth") is not None else 1
+                    except (TypeError, ValueError):
+                        border_width = 1
+                    border_color = str(ts.get("borderColor") or "#e2e8f0").strip()
+
+                    try:
+                        cell_padding = int(ts.get("cellPadding")) if ts.get("cellPadding") is not None else 8
+                    except (TypeError, ValueError):
+                        cell_padding = 8
+
+                    font_size = str(ts.get("fontSize") or "13px").strip()
+                    header_font_size = str(ts.get("headerFontSize") or font_size).strip()
+                    header_font_weight = str(ts.get("headerFontWeight") or "600").strip()
+                    header_bg = str(ts.get("headerBgColor") or "#f8fafc").strip()
+                    header_tc = str(ts.get("headerTextColor") or "#475569").strip()
+                    body_tc = str(ts.get("bodyTextColor") or "#334155").strip()
+                    header_ta = str(ts.get("headerTextAlign") or "left").strip().lower()
+                    body_ta = str(ts.get("bodyTextAlign") or "left").strip().lower()
+                    if header_ta not in ("left", "center", "right"):
+                        header_ta = "left"
+                    if body_ta not in ("left", "center", "right"):
+                        body_ta = "left"
+
+                    v_raw = str(ts.get("verticalAlign") or "top").strip().lower()
+                    vertical_align = {"top": "top", "middle": "middle", "bottom": "bottom"}.get(v_raw, "top")
+
+                    table_width = str(ts.get("width") or "100%").strip()
+                    zebra = ts.get("zebraStripe") is True
+                    zebra_bg = str(ts.get("zebraBgColor") or "#fafafa").strip()
+
+                    cell_border = ""
+                    if border_style != "none":
+                        cell_border = f"{border_width}px {border_style} {border_color}"
+
+                    table_styles = ["border-collapse:collapse", "table-layout:auto", f"width:{table_width}"]
+                    if cell_border:
+                        table_styles.append(f"border:{cell_border}")
+
+                    def _col_text_align(raw: str, fallback: str) -> str:
+                        v = raw.strip().lower()
+                        return v if v in ("left", "center", "right") else fallback
+
+                    def _col_vertical_align(raw: str, fallback: str) -> str:
+                        v = raw.strip().lower()
+                        return v if v in ("top", "middle", "bottom") else fallback
+
                     header_cells: list[str] = []
                     body_cells: list[str] = []
+                    colgroup_parts: list[str] = []
                     for col in columns:
                         if not isinstance(col, dict):
                             continue
                         label = str(col.get("label") or "").strip()
                         key = str(col.get("key") or "").strip()
+                        col_type = str(col.get("type") or "text").strip().lower()
                         if not key:
                             continue
-                        header_cells.append(f"<th>{label or key}</th>")
-                        body_cells.append(f"<td>{{{{ {row_alias}.{key} }}}}</td>")
+                        cw = str(col.get("width") or "").strip()
+                        if cw:
+                            colgroup_parts.append(f'<col style="width:{cw}" />')
+                        else:
+                            colgroup_parts.append("<col />")
+
+                        col_body_ta = _col_text_align(str(col.get("bodyTextAlign") or ""), body_ta)
+                        col_va = _col_vertical_align(str(col.get("verticalAlign") or ""), vertical_align)
+
+                        th_parts = []
+                        if cell_border:
+                            th_parts.append(f"border:{cell_border}")
+                        th_parts.extend(
+                            [
+                                f"padding:{cell_padding}px",
+                                f"font-size:{header_font_size}",
+                                f"font-weight:{header_font_weight}",
+                                f"background-color:{header_bg}",
+                                f"color:{header_tc}",
+                                f"text-align:{header_ta}",
+                                f"vertical-align:{col_va}",
+                                "word-break:break-word",
+                            ]
+                        )
+                        th_style_attr = ";".join(th_parts)
+
+                        td_parts = []
+                        if cell_border:
+                            td_parts.append(f"border:{cell_border}")
+                        td_parts.extend(
+                            [
+                                f"padding:{cell_padding}px",
+                                f"font-size:{font_size}",
+                                f"color:{body_tc}",
+                                f"text-align:{col_body_ta}",
+                                f"vertical-align:{col_va}",
+                                "word-break:break-word",
+                            ]
+                        )
+                        td_style_attr = ";".join(td_parts)
+
+                        header_cells.append(f'<th style="{th_style_attr}">{label or key}</th>')
+
+                        if col_type == "image":
+                            body_cells.append(
+                                f'<td style="{td_style_attr}"><img src="{{{{ {row_alias}.{key} }}}}" '
+                                'style="display:block;max-width:100px;max-height:60px;object-fit:contain;" /></td>'
+                            )
+                        elif col_type == "qrcode":
+                            qr_expr = f"{row_alias}.{key} | qrcode(size=60)"
+                            body_cells.append(
+                                f'<td style="{td_style_attr}"><img src="{{{{ {qr_expr} }}}}" width="60" height="60" /></td>'
+                            )
+                        elif col_type == "number":
+                            raw_prec = col.get("precision")
+                            try:
+                                prec = int(raw_prec)
+                                prec = max(0, min(prec, 12))
+                            except (TypeError, ValueError):
+                                prec = 2
+                            body_cells.append(
+                                f'<td style="{td_style_attr}">{{{{ {row_alias}.{key} | number({prec}) }}}}</td>'
+                            )
+                        else:
+                            body_cells.append(f'<td style="{td_style_attr}">{{{{ {row_alias}.{key} }}}}</td>')
                     if len(body_cells) == 0:
                         warnings_list.append(f"block[{index}] detail_table columns 无有效 key，已跳过")
                         continue
+
+                    colgroup_html = f"<colgroup>{''.join(colgroup_parts)}</colgroup>" if colgroup_parts else ""
+
+                    zebra_tr_attr = ""
+                    if zebra:
+                        zebra_tr_attr = (
+                            ' style="background-color: {% if loop.index0 % 2 == 1 %}'
+                            + zebra_bg.replace('"', "")
+                            + '{% else %}transparent{% endif %}"'
+                        )
+
+                    table_style_attr = ";".join(table_styles)
                     table_html = (
-                        "<table border=\"1\" cellpadding=\"4\" style=\"width:100%;border-collapse:collapse;\">"
+                        f'<table style="{table_style_attr}">{colgroup_html}'
                         f"<thead><tr>{''.join(header_cells)}</tr></thead>"
-                        f"<tbody>{{% for {row_alias} in {collection} %}}<tr>{''.join(body_cells)}</tr>{{% endfor %}}</tbody>"
+                        f"<tbody>{{% for {row_alias} in {collection} %}}<tr{zebra_tr_attr}>{''.join(body_cells)}</tr>{{% endfor %}}</tbody>"
                         "</table>"
                     )
                     lines.append(table_html)
@@ -717,12 +864,22 @@ class PrintTemplateService:
                     warnings_list.append(f"block[{index}] 类型 {blk_type or 'unknown'} 暂不支持，已跳过")
             return "\n".join(lines).strip()
 
-        compiled_body = _render_blocks(blocks, warnings)
+        compiled_body = _render_blocks(blocks, warnings, is_root=True)
         parts = []
-        # Inject @page styles for printing
+        # Inject robust styles for printing
         parts.append("<style>")
         parts.append(f"  @page {{ size: {page_size_val} {orientation}; margin: {margin_str}; }}")
-        parts.append("  body { margin: 0; padding: 0; }")
+        parts.append("  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }")
+        parts.append("  body { margin: 0; padding: 0; font-family: -apple-system, system-ui, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.5; color: #334155; }")
+        parts.append("  table { width: 100%; border-collapse: collapse; margin-bottom: 8px; table-layout: auto; border: 1px solid #e2e8f0; }")
+        parts.append("  th, td { border: 1px solid #e2e8f0; padding: 8px 12px; word-break: break-all; text-align: left; vertical-align: top; font-size: 13px; }")
+        parts.append("  th { background-color: #f8fafc; font-weight: 600; color: #475569; }")
+        parts.append("  .page-current, .page-total { display: inline-block !important; min-width: 1ch; text-align: center; }")
+        parts.append("  .page-current::after { content: counter(page); }")
+        parts.append("  .page-total::after { content: counter(pages); }")
+        parts.append("  img { max-width: 100%; height: auto; display: block; }")
+        # Ensure blocks respect item_spacing strictly
+        parts.append("  .print-block { width: 100%; position: relative; }")
         parts.append("</style>")
         if compiled_body:
             parts.append(compiled_body)

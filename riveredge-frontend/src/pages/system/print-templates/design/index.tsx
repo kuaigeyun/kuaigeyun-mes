@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { App, Button, Input, Space, Typography, Card, Select, InputNumber, Divider, ColorPicker, Radio, theme } from 'antd';
-import { ArrowLeftOutlined, SaveOutlined, EyeOutlined, QrcodeOutlined, DashOutlined, FontSizeOutlined, BoldOutlined, AlignCenterOutlined, AlignLeftOutlined, AlignRightOutlined, AppstoreOutlined, FunctionOutlined, OrderedListOutlined, SettingOutlined, ZoomInOutlined, ZoomOutOutlined, DeleteOutlined, VerticalAlignTopOutlined, VerticalAlignBottomOutlined, AppstoreAddOutlined, PlusOutlined, TableOutlined, BarcodeOutlined, PictureOutlined } from '@ant-design/icons';
+import { App, Button, Input, Space, Typography, Card, Select, InputNumber, Divider, ColorPicker, Radio, Checkbox, theme } from 'antd';
+import { ArrowLeftOutlined, SaveOutlined, EyeOutlined, QrcodeOutlined, DashOutlined, FontSizeOutlined, BoldOutlined, AlignCenterOutlined, AlignLeftOutlined, AlignRightOutlined, AppstoreOutlined, FunctionOutlined, OrderedListOutlined, SettingOutlined, ZoomInOutlined, ZoomOutOutlined, DeleteOutlined, VerticalAlignTopOutlined, VerticalAlignBottomOutlined, AppstoreAddOutlined, PlusOutlined, TableOutlined, BarcodeOutlined, PictureOutlined, HolderOutlined } from '@ant-design/icons';
 import { compilePrintTemplate, compilePreviewPrintTemplate, getPrintTemplateByUuid, updatePrintTemplate } from '../../../../services/printTemplate';
 import { getArrayTableTemplates, getTemplateVariableItems } from '../../../../config/printTemplateSchemas';
 import { useSiteLogoUrl } from '../../../../hooks/useSiteLogoUrl';
@@ -10,7 +10,9 @@ import { QRCodeSVG } from 'qrcode.react';
 
 import {
   DndContext, 
+  closestCenter,
   closestCorners,
+  rectIntersection,
   KeyboardSensor,
   PointerSensor,
   useSensor,
@@ -19,6 +21,7 @@ import {
   DragStartEvent,
   useDroppable,
   useDraggable,
+  DragOverlay,
 } from '@dnd-kit/core';
 import {
   arrayMove,
@@ -39,6 +42,39 @@ type BlockStyle = {
   letterSpacing?: string;
 };
 
+/** 明细表块表格样式（编译进 HTML） */
+type DetailTableStyle = {
+  borderWidth?: number;
+  borderColor?: string;
+  borderStyle?: 'solid' | 'dashed' | 'none';
+  cellPadding?: number;
+  fontSize?: string;
+  headerFontSize?: string;
+  headerFontWeight?: string;
+  headerBgColor?: string;
+  headerTextColor?: string;
+  bodyTextColor?: string;
+  headerTextAlign?: 'left' | 'center' | 'right';
+  bodyTextAlign?: 'left' | 'center' | 'right';
+  verticalAlign?: 'top' | 'middle' | 'bottom';
+  zebraStripe?: boolean;
+  zebraBgColor?: string;
+  width?: string;
+};
+
+type DetailTableColumn = {
+  key: string;
+  label: string;
+  type?: 'text' | 'image' | 'qrcode' | 'number';
+  /** 类型为 number 时小数位数，默认 2 */
+  precision?: number;
+  width?: string;
+  /** 未设置时沿用表格样式「表体对齐」 */
+  bodyTextAlign?: 'left' | 'center' | 'right';
+  /** 未设置时沿用表格样式「垂直对齐」 */
+  verticalAlign?: 'top' | 'middle' | 'bottom';
+};
+
 type DesignerNodeSchema =
   | { id: string; type: 'text'; content: string; tag?: 'h1' | 'h2' | 'h3' | 'h4' | 'p' | 'div'; style?: BlockStyle }
   | { id: string; type: 'field'; key: string; label: string; showLabel?: boolean; style?: BlockStyle }
@@ -49,7 +85,7 @@ type DesignerNodeSchema =
   | { id: string; type: 'image'; url: string; width: number; height: number; keepRatio?: boolean; style?: BlockStyle }
   | { id: string; type: 'spacer'; height: number }
   | { id: string; type: 'divider' }
-  | { id: string; type: 'detail_table'; collection: string; row_alias: string; columns: Array<{ key: string; label: string }> }
+  | { id: string; type: 'detail_table'; collection: string; row_alias: string; columns: DetailTableColumn[]; tableStyle?: DetailTableStyle }
   | {
       id: string;
       type: 'columns';
@@ -69,6 +105,8 @@ interface DesignerSchema {
   pageSize?: string;
   orientation?: 'portrait' | 'landscape';
   margins?: { top: number; right: number; bottom: number; left: number };
+  itemSpacing?: number;
+  tableRowLimit?: number;
   blocks: DesignerNodeSchema[];
 }
 
@@ -157,6 +195,9 @@ const QUOTATION_SAMPLE_PRESETS: SamplePreset[] = [
           total_amount: 14662,
         },
       ],
+      page_num: 1,
+      total_pages: 1,
+      logo: 'https://img.alicdn.com/tfs/TB1.77Ag8r0gK0jSZFnXXbRRXXa-200-200.png'
     },
   },
 ];
@@ -210,16 +251,19 @@ const COMMON_SAMPLE_PRESETS: SamplePreset[] = [
       total_amount: 0,
       notes: '请按实际单据字段调整样本 JSON。',
       items: [{ item_code: 'ITEM-001', item_name: '示例项', quantity: 1, unit_price: 0, total_amount: 0 }],
+      page_num: 1,
+      total_pages: 1,
+      logo: 'https://img.alicdn.com/tfs/TB1.77Ag8r0gK0jSZFnXXbRRXXa-200-200.png'
     },
   },
 ];
 
 type VariableCategory = {
   title: string;
-  items: Array<{ key: string; label: string }>;
+  items: TemplateVariableItem[];
 };
 
-const groupVariables = (items: Array<{ key: string; label: string }>): VariableCategory[] => {
+const groupVariables = (items: TemplateVariableItem[]): VariableCategory[] => {
   const groups: Record<string, VariableCategory> = {
     header: { title: '基础信息', items: [] },
     financial: { title: '财务金额', items: [] },
@@ -250,6 +294,35 @@ const getSamplePresetsByDocType = (docType: string): SamplePreset[] => {
   return COMMON_SAMPLE_PRESETS;
 };
 
+const normalizeFontSize = (size?: string) => {
+  if (!size) return undefined;
+  if (/^\d+$/.test(size)) return `${size}px`;
+  return size;
+};
+
+const DETAIL_TABLE_STYLE_DEFAULTS: Required<DetailTableStyle> = {
+  borderWidth: 1,
+  borderColor: '#e2e8f0',
+  borderStyle: 'solid',
+  cellPadding: 8,
+  fontSize: '13px',
+  headerFontSize: '13px',
+  headerFontWeight: '600',
+  headerBgColor: '#f8fafc',
+  headerTextColor: '#475569',
+  bodyTextColor: '#334155',
+  headerTextAlign: 'left',
+  bodyTextAlign: 'left',
+  verticalAlign: 'top',
+  zebraStripe: false,
+  zebraBgColor: '#fafafa',
+  width: '100%',
+};
+
+function resolveDetailTableStyle(ts?: DetailTableStyle): Required<DetailTableStyle> {
+  return { ...DETAIL_TABLE_STYLE_DEFAULTS, ...ts };
+}
+
 const TextBlock: React.FC<{ block: DesignerNodeSchema & { type: 'text' }; selected?: boolean; onSelect?: () => void }> = ({ block, selected, onSelect }) => {
   const { content, style, tag = 'div' } = block;
   const Tag = tag as any;
@@ -261,15 +334,23 @@ const TextBlock: React.FC<{ block: DesignerNodeSchema & { type: 'text' }; select
         borderRadius: 6,
         marginBottom: 0,
         background: '#fff',
-        fontSize: style?.fontSize || 'inherit',
-        fontWeight: style?.fontWeight || 'normal',
         textAlign: (style?.textAlign as React.CSSProperties['textAlign']) || 'left',
         color: style?.color || 'inherit',
         letterSpacing: style?.letterSpacing || 'normal',
       }}
       onClick={(e) => { e.stopPropagation(); onSelect?.(); }}
     >
-      <Tag style={{ margin: 0, fontSize: 'inherit', fontWeight: 'inherit', textAlign: 'inherit', color: 'inherit', whiteSpace: 'pre-wrap' }}>
+      <Tag style={{ 
+        margin: 0, 
+        fontSize: normalizeFontSize(style?.fontSize) || (tag === 'div' ? 'inherit' : undefined), 
+        fontWeight: style?.fontWeight || (tag === 'div' ? 'normal' : undefined), 
+        textAlign: 'inherit', 
+        color: style?.color || 'inherit', 
+        whiteSpace: 'pre-wrap',
+        display: 'block',
+        width: '100%',
+        wordBreak: 'break-all'
+      }}>
         {content || '文本块'}
       </Tag>
     </div>
@@ -286,23 +367,25 @@ const FieldBlock: React.FC<{ block: DesignerNodeSchema & { type: 'field' }; sele
         borderRadius: 6,
         marginBottom: 0,
         background: '#e6f4ff',
-        fontSize: style?.fontSize || 'inherit',
+        fontSize: normalizeFontSize(style?.fontSize) || 'inherit',
         fontWeight: style?.fontWeight || 'bold',
         textAlign: (style?.textAlign as React.CSSProperties['textAlign']) || 'left',
         color: style?.color || '#1677ff',
         letterSpacing: style?.letterSpacing || 'normal',
         position: 'relative'
       }}
-      onClick={onSelect}
+      onClick={(e) => { e.stopPropagation(); onSelect?.(); }}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ fontWeight: 600 }}>{label || fieldKey}</div>
-        {!showLabel && (
-          <div style={{ fontSize: 9, background: '#bae7ff', color: '#0050b3', padding: '1px 4px', borderRadius: 4 }}>仅数值</div>
-        )}
-      </div>
-      <div style={{ fontFamily: 'monospace', opacity: 0.8 }}>
-        {showLabel ? `${label || fieldKey}：{{ ${fieldKey} }}` : `{{ ${fieldKey} }}`}
+      <div style={{ display: 'block', width: '100%', whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontSize: 'inherit', fontWeight: 'inherit' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ fontWeight: 600 }}>{label || fieldKey}</div>
+          {!showLabel && (
+            <div style={{ fontSize: 9, background: '#bae7ff', color: '#0050b3', padding: '1px 4px', borderRadius: 4 }}>仅数值</div>
+          )}
+        </div>
+        <div style={{ fontFamily: 'monospace', opacity: 0.8 }}>
+          {showLabel ? `${label || fieldKey}：{{ ${fieldKey} }}` : `{{ ${fieldKey} }}`}
+        </div>
       </div>
     </div>
   );
@@ -317,7 +400,7 @@ const DividerBlock: React.FC<{ selected?: boolean; onSelect?: () => void }> = ({
         borderRadius: 6,
         cursor: 'pointer',
       }}
-      onClick={onSelect}
+      onClick={(e) => { e.stopPropagation(); onSelect?.(); }}
     >
       <Divider style={{ margin: 0 }} />
     </div>
@@ -338,7 +421,7 @@ const BarcodeBlock: React.FC<{ block: DesignerNodeSchema & { type: 'barcode' }; 
         background: '#fff',
         textAlign: (block.style?.textAlign as React.CSSProperties['textAlign']) || 'center',
       }}
-      onClick={onSelect}
+      onClick={(e) => { e.stopPropagation(); onSelect?.(); }}
     >
       <div style={{ display: 'inline-block', padding: 8, border: '1px solid #f0f0f0' }}>
         <div style={{ height: block.height || 40, width: 150, background: '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #ccc' }}>
@@ -367,7 +450,7 @@ const ImageBlock: React.FC<{ block: DesignerNodeSchema & { type: 'image' }; sele
         background: '#fff',
         textAlign: (block.style?.textAlign as React.CSSProperties['textAlign']) || 'left',
       }}
-      onClick={onSelect}
+      onClick={(e) => { e.stopPropagation(); onSelect?.(); }}
     >
       <div style={{ display: 'inline-block', maxWidth: '100%' }}>
         {previewUrl ? (
@@ -408,7 +491,7 @@ const SpacerBlock: React.FC<{ block: DesignerNodeSchema & { type: 'spacer' }; se
         marginBottom: 0,
         transition: 'all 0.2s'
       }}
-      onClick={onSelect}
+      onClick={(e) => { e.stopPropagation(); onSelect?.(); }}
     >
       <VerticalAlignTopOutlined style={{ marginRight: 4 }} />
       <span>垂直间距 {block.height}px</span>
@@ -417,28 +500,77 @@ const SpacerBlock: React.FC<{ block: DesignerNodeSchema & { type: 'spacer' }; se
   );
 };
 
+const DragOverlayBlock: React.FC<{ type: string; label?: string }> = ({ type, label }) => {
+  const iconMap: Record<string, React.ReactNode> = {
+    text: <FontSizeOutlined />,
+    field: <FunctionOutlined />,
+    divider: <DashOutlined />,
+    qrcode: <QrcodeOutlined />,
+    barcode: <BarcodeOutlined />,
+    image: <PictureOutlined />,
+    spacer: <VerticalAlignBottomOutlined />,
+    columns: <AppstoreOutlined />,
+    detail_table: <TableOutlined />,
+    if: <FunctionOutlined />,
+    for: <FunctionOutlined />,
+  };
+
+  return (
+    <div style={{
+      width: 42,
+      height: 42,
+      background: '#1677ff',
+      color: '#fff',
+      borderRadius: '50%',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      boxShadow: '0 6px 16px rgba(22, 119, 255, 0.4)',
+      fontSize: 20,
+      opacity: 0.95,
+      cursor: 'grabbing',
+      transform: 'translate(-50%, -50%)', // Centered on the pointer/handle
+      pointerEvents: 'none',
+      border: '2px solid #fff',
+      zIndex: 1000
+    }}>
+      {iconMap[type] || <AppstoreAddOutlined />}
+    </div>
+  );
+};
+
 const SortableBlockWrapper: React.FC<{ 
   id: string; 
+  type?: string;
+  marginBottom?: number;
   children: React.ReactNode;
-}> = ({ id, children }) => {
+}> = ({ id, type, marginBottom = 8, children }) => {
   const {
     attributes,
     listeners,
     setNodeRef,
     transform,
     transition,
-    isDragging
-  } = useSortable({ id });
+    isDragging,
+    isOver
+  } = useSortable({ 
+    id,
+    data: { type: 'block' }
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
     zIndex: isDragging ? 20 : 1,
-    opacity: isDragging ? 0.4 : 1,
+    opacity: isDragging ? 0.4 : 1, // Ghost state
     position: 'relative' as const,
-    marginBottom: 8,
+    marginBottom: marginBottom,
     display: 'flex',
     alignItems: 'center',
+    // Professional Insertion Line Indicator
+    borderTop: (isOver && !isDragging) ? '3px solid #1677ff' : '3px solid transparent',
+    paddingTop: (isOver && !isDragging) ? 4 : 0,
+    transitionProperty: 'transform, opacity, border, padding',
   };
 
   return (
@@ -449,24 +581,25 @@ const SortableBlockWrapper: React.FC<{
         {...listeners} 
         className="drag-handle"
         style={{
-          position: 'static',
           cursor: isDragging ? 'grabbing' : 'grab',
           opacity: 0,
-          transition: 'opacity 0.2s',
-          padding: '6px 5px',
-          marginLeft: -28,
-          marginRight: 8,
+          transition: 'all 0.2s',
+          padding: '4px 6px',
+          position: 'absolute',
+          left: -32,
+          top: type === 'columns' ? 8 : '50%', // Special top-left position for column containers
+          transform: type === 'columns' ? 'none' : 'translateY(-50%)',
           color: '#8c8c8c',
-          background: 'rgba(255,255,255,0.95)',
+          background: '#f0f0f0',
           borderRadius: 4,
-          boxShadow: '0 1px 4px rgba(0,0,0,0.12)',
-          border: '1px solid #f0f0f0',
+          border: '1px solid #d9d9d9',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           zIndex: 10,
-          fontSize: 14,
+          fontSize: 12,
           userSelect: 'none',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
         }}
         title="拖拽调整顺序"
       >
@@ -507,11 +640,23 @@ const DraggableSidebarItem: React.FC<{
     <div ref={setNodeRef} style={style} {...listeners} {...attributes}>
       <Button 
         block 
-        icon={icon} 
         onClick={onClick} 
-        style={{ textAlign: 'left', height: 40 }}
+        style={{ 
+          height: 64, 
+          display: 'flex', 
+          flexDirection: 'column', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          gap: 4,
+          padding: '8px 4px',
+          fontSize: 12,
+          borderRadius: 8
+        }}
       >
-        {label}
+        <div style={{ fontSize: 20, color: '#1677ff' }}>{icon}</div>
+        <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%', textAlign: 'center', color: '#595959' }}>
+          {label}
+        </div>
       </Button>
     </div>
   );
@@ -519,7 +664,13 @@ const DraggableSidebarItem: React.FC<{
 
 
 
-const LogicBlock: React.FC<{ title: string; body: string; selected?: boolean; onSelect?: () => void }> = ({ title, body, selected, onSelect }) => {
+const LogicBlock: React.FC<{
+  title: string;
+  body: string;
+  selected?: boolean;
+  onSelect?: () => void;
+  extra?: React.ReactNode;
+}> = ({ title, body, selected, onSelect, extra }) => {
   return (
     <div
       style={{
@@ -529,10 +680,145 @@ const LogicBlock: React.FC<{ title: string; body: string; selected?: boolean; on
         marginBottom: 0,
         background: '#fff7e6',
       }}
-      onClick={(e) => { e.stopPropagation(); onSelect?.(); }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onSelect?.();
+      }}
     >
       <div style={{ fontWeight: 600 }}>{title}</div>
       <div style={{ fontFamily: 'monospace', color: '#595959', whiteSpace: 'pre-wrap' }}>{body}</div>
+      {extra}
+    </div>
+  );
+};
+
+function columnAlignResolved(
+  col: DetailTableColumn,
+  defaults: Required<DetailTableStyle>,
+): { headerTextAlign: 'left' | 'center' | 'right'; bodyTextAlign: 'left' | 'center' | 'right'; verticalAlign: 'top' | 'middle' | 'bottom' } {
+  const bt = col.bodyTextAlign;
+  const va = col.verticalAlign;
+  return {
+    headerTextAlign: defaults.headerTextAlign,
+    bodyTextAlign: bt === 'left' || bt === 'center' || bt === 'right' ? bt : defaults.bodyTextAlign,
+    verticalAlign: va === 'top' || va === 'middle' || va === 'bottom' ? va : defaults.verticalAlign,
+  };
+}
+
+function formatDetailTableNumberPreview(precision?: number): string {
+  const d =
+    precision !== undefined && Number.isFinite(precision) && precision >= 0 && precision <= 12
+      ? Math.floor(precision)
+      : 2;
+  return (12345.678).toFixed(d);
+}
+
+const DetailTableMiniPreview: React.FC<{ tableStyle?: DetailTableStyle; columns: DetailTableColumn[] }> = ({
+  tableStyle,
+  columns,
+}) => {
+  const s = resolveDetailTableStyle(tableStyle);
+  const keyed = columns.filter((c) => (c.key || '').trim());
+  const labels =
+    keyed.length > 0
+      ? keyed.map((c) => (c.label || c.key).trim() || '—')
+      : ['（请配置列）'];
+  const borderCss =
+    s.borderStyle === 'none' ? undefined : `${s.borderWidth}px ${s.borderStyle} ${s.borderColor}`;
+  const thBase: React.CSSProperties = {
+    border: borderCss,
+    padding: s.cellPadding,
+    fontSize: normalizeFontSize(s.headerFontSize) || s.headerFontSize,
+    fontWeight: s.headerFontWeight as React.CSSProperties['fontWeight'],
+    backgroundColor: s.headerBgColor,
+    color: s.headerTextColor,
+    wordBreak: 'break-word',
+  };
+  const tdBase: React.CSSProperties = {
+    border: borderCss,
+    padding: s.cellPadding,
+    fontSize: normalizeFontSize(s.fontSize) || s.fontSize,
+    color: s.bodyTextColor,
+    wordBreak: 'break-word',
+  };
+
+  const alignAt = (idx: number) =>
+    keyed[idx]
+      ? columnAlignResolved(keyed[idx], s)
+      : {
+          headerTextAlign: s.headerTextAlign,
+          bodyTextAlign: s.bodyTextAlign,
+          verticalAlign: s.verticalAlign,
+        };
+
+  return (
+    <div style={{ marginTop: 10 }} onClick={(e) => e.stopPropagation()}>
+      <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 6 }}>样式预览</div>
+      <div style={{ overflow: 'auto', maxHeight: 220, background: '#fff' }}>
+        <table
+          style={{
+            width: '100%',
+            borderCollapse: 'collapse',
+            border: borderCss,
+            tableLayout: 'auto',
+            borderRadius: 0,
+          }}
+        >
+          {keyed.length > 0 && (
+            <colgroup>
+              {keyed.map((col, i) => (
+                <col key={col.key || i} style={col.width ? { width: col.width } : undefined} />
+              ))}
+            </colgroup>
+          )}
+          <thead>
+            <tr>
+              {labels.map((lb, i) => {
+                const al = alignAt(i);
+                return (
+                  <th key={i} style={{ ...thBase, textAlign: al.headerTextAlign, verticalAlign: al.verticalAlign }}>
+                    {lb}
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            <tr style={{ backgroundColor: 'transparent' }}>
+              {labels.map((_, i) => {
+                const al = alignAt(i);
+                const col = keyed[i];
+                const sample =
+                  col?.type === 'number'
+                    ? formatDetailTableNumberPreview(col.precision)
+                    : '…';
+                return (
+                  <td key={i} style={{ ...tdBase, textAlign: al.bodyTextAlign, verticalAlign: al.verticalAlign }}>
+                    {sample}
+                  </td>
+                );
+              })}
+            </tr>
+            {s.zebraStripe && (
+              <tr style={{ backgroundColor: s.zebraBgColor }}>
+                {labels.map((_, i) => {
+                  const al = alignAt(i);
+                  const col = keyed[i];
+                  const sample =
+                    col?.type === 'number'
+                      ? formatDetailTableNumberPreview(col.precision)
+                      : '…';
+                  return (
+                    <td key={i} style={{ ...tdBase, textAlign: al.bodyTextAlign, verticalAlign: al.verticalAlign }}>
+                      {sample}
+                    </td>
+                  );
+                })}
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };
@@ -626,21 +912,197 @@ const PaperRuler: React.FC<{ orientation: 'horizontal' | 'vertical'; size: numbe
   );
 };
 
+const SortableTableColumnItem: React.FC<{
+  id: string;
+  index: number;
+  col: DetailTableColumn;
+  onUpdate: (index: number, partial: Partial<DetailTableColumn>) => void;
+  onRemove: (index: number) => void;
+}> = ({ id, index, col, onUpdate, onRemove }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id });
+
+  const outerStyle: React.CSSProperties = {
+    transform: CSS.Translate.toString(transform),
+    transition,
+    marginBottom: 10,
+    background: isDragging ? '#e6f4ff' : '#fff',
+    zIndex: isDragging ? 10 : 1,
+    position: 'relative',
+    borderRadius: 4,
+    border: '1px solid #f0f0f0',
+    padding: '8px 10px',
+  };
+
+  const miniLabel = { marginBottom: 2, fontSize: 11, color: '#8c8c8c' } as const;
+
+  return (
+    <div ref={setNodeRef} style={outerStyle}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <div
+          {...attributes}
+          {...listeners}
+          style={{ cursor: 'grab', display: 'flex', alignItems: 'center', color: '#bfbfbf', padding: '2px 4px' }}
+        >
+          <HolderOutlined />
+        </div>
+        <Button type="text" danger size="small" icon={<DeleteOutlined />} onClick={() => onRemove(index)} />
+      </div>
+      <Space direction="vertical" size={8} style={{ width: '100%' }}>
+        <div style={{ width: '100%' }}>
+          <div style={miniLabel}>列名</div>
+          <Input
+            size="small"
+            placeholder="表头显示名称"
+            value={col.label}
+            onChange={(e) => onUpdate(index, { label: e.target.value })}
+            style={{ width: '100%' }}
+          />
+        </div>
+        <div style={{ width: '100%' }}>
+          <div style={miniLabel}>字段 key</div>
+          <Input
+            size="small"
+            placeholder="如 material_name"
+            value={col.key}
+            onChange={(e) => onUpdate(index, { key: e.target.value })}
+            style={{ width: '100%', fontFamily: 'monospace' }}
+          />
+        </div>
+        <div style={{ width: '100%' }}>
+          <div style={miniLabel}>类型</div>
+          <Select
+            size="small"
+            value={col.type || 'text'}
+            onChange={(val) => {
+              if (val === 'number') {
+                onUpdate(index, { type: val, precision: col.precision ?? 2 });
+              } else {
+                onUpdate(index, { type: val, precision: undefined });
+              }
+            }}
+            style={{ width: '100%' }}
+            options={[
+              { label: '文本', value: 'text' },
+              { label: '数字', value: 'number' },
+              { label: '图片', value: 'image' },
+              { label: '二维码', value: 'qrcode' },
+            ]}
+          />
+        </div>
+        {col.type === 'number' ? (
+          <div style={{ width: '100%' }}>
+            <div style={miniLabel}>小数位数（精度）</div>
+            <InputNumber
+              size="small"
+              min={0}
+              max={12}
+              style={{ width: '100%' }}
+              value={col.precision ?? 2}
+              onChange={(v) => onUpdate(index, { precision: v ?? 2 })}
+            />
+          </div>
+        ) : null}
+        <div style={{ width: '100%' }}>
+          <div style={miniLabel}>单元格对齐</div>
+          <Radio.Group
+            size="small"
+            buttonStyle="solid"
+            style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}
+            value={(col.bodyTextAlign ?? 'inherit') as string}
+            onChange={(e) => {
+              const v = e.target.value as string;
+              onUpdate(index, { bodyTextAlign: v === 'inherit' ? undefined : (v as 'left' | 'center' | 'right') });
+            }}
+          >
+            <Radio.Button value="inherit">默认</Radio.Button>
+            <Radio.Button value="left" title="左对齐">
+              <AlignLeftOutlined />
+            </Radio.Button>
+            <Radio.Button value="center" title="居中">
+              <AlignCenterOutlined />
+            </Radio.Button>
+            <Radio.Button value="right" title="右对齐">
+              <AlignRightOutlined />
+            </Radio.Button>
+          </Radio.Group>
+        </div>
+        <div style={{ width: '100%' }}>
+          <div style={miniLabel}>垂直对齐</div>
+          <Radio.Group
+            size="small"
+            buttonStyle="solid"
+            style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}
+            value={(col.verticalAlign ?? 'inherit') as string}
+            onChange={(e) => {
+              const v = e.target.value as string;
+              onUpdate(index, {
+                verticalAlign: v === 'inherit' ? undefined : (v as 'top' | 'middle' | 'bottom'),
+              });
+            }}
+          >
+            <Radio.Button value="inherit">默认</Radio.Button>
+            <Radio.Button value="top" title="顶部">
+              <VerticalAlignTopOutlined />
+            </Radio.Button>
+            <Radio.Button value="middle" title="居中">
+              <AlignCenterOutlined />
+            </Radio.Button>
+            <Radio.Button value="bottom" title="底部">
+              <VerticalAlignBottomOutlined />
+            </Radio.Button>
+          </Radio.Group>
+        </div>
+        <div style={{ width: '100%' }}>
+          <div style={miniLabel}>列宽（可选）</div>
+          <Input
+            size="small"
+            placeholder="如 18%、120px"
+            value={col.width || ''}
+            onChange={(e) => onUpdate(index, { width: e.target.value.trim() ? e.target.value.trim() : undefined })}
+            style={{ width: '100%' }}
+          />
+        </div>
+      </Space>
+    </div>
+  );
+};
+
 const TableColumnDesigner: React.FC<{
-  columns: Array<{ key: string; label: string }>;
-  onChange: (cols: Array<{ key: string; label: string }>) => void;
+  columns: DetailTableColumn[];
+  onChange: (cols: DetailTableColumn[]) => void;
 }> = ({ columns, onChange }) => {
-  const handleAdd = () => onChange([...columns, { key: '', label: '新列' }]);
+  const handleAdd = () => onChange([...columns, { key: '', label: '新列', type: 'text' }]);
   const handleRemove = (index: number) => {
     const next = [...columns];
     next.splice(index, 1);
     onChange(next);
   };
-  const handleUpdate = (index: number, partial: Partial<{ key: string; label: string }>) => {
+  const handleUpdate = (index: number, partial: Partial<DetailTableColumn>) => {
     const next = [...columns];
     next[index] = { ...next[index], ...partial };
     onChange(next);
   };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const oldIndex = columns.findIndex((_, i) => `col-${i}` === active.id);
+      const newIndex = columns.findIndex((_, i) => `col-${i}` === over.id);
+      if (oldIndex !== -1 && newIndex !== -1) {
+        onChange(arrayMove(columns, oldIndex, newIndex));
+      }
+    }
+  };
+
+  // Generate IDs for sortable
+  const items = columns.map((_, i) => `col-${i}`);
 
   return (
     <div style={{ background: '#fafafa', padding: 12, borderRadius: 8, border: '1px solid #f0f0f0' }}>
@@ -648,31 +1110,26 @@ const TableColumnDesigner: React.FC<{
         <span style={{ fontSize: 13, fontWeight: 600, color: '#595959' }}>列字段配置</span>
         <Button type="primary" ghost size="small" icon={<PlusOutlined />} onClick={handleAdd}>添加列</Button>
       </div>
-      {columns.map((col, idx) => (
-        <div key={idx} style={{ display: 'flex', gap: 6, marginBottom: 8, alignItems: 'center' }}>
-          <Input 
-            size="small" 
-            placeholder="列名" 
-            value={col.label} 
-            onChange={e => handleUpdate(idx, { label: e.target.value })} 
-            style={{ width: '45%' }}
-          />
-          <Input 
-            size="small" 
-            placeholder="字段" 
-            value={col.key} 
-            onChange={e => handleUpdate(idx, { key: e.target.value })} 
-            style={{ width: '45%', fontFamily: 'monospace' }}
-          />
-          <Button 
-            type="text" 
-            danger 
-            size="small" 
-            icon={<DeleteOutlined />} 
-            onClick={() => handleRemove(idx)} 
-          />
-        </div>
-      ))}
+      
+      <DndContext 
+        sensors={useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor))}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext items={items} strategy={verticalListSortingStrategy}>
+          {columns.map((col, idx) => (
+            <SortableTableColumnItem 
+              key={`col-${idx}`}
+              id={`col-${idx}`}
+              index={idx}
+              col={col}
+              onUpdate={handleUpdate}
+              onRemove={handleRemove}
+            />
+          ))}
+        </SortableContext>
+      </DndContext>
+      
       {columns.length === 0 && <div style={{ textAlign: 'center', color: '#bfbfbf', padding: '10px 0', fontSize: 12 }}>暂无列配置</div>}
     </div>
   );
@@ -695,7 +1152,7 @@ const QRBlock: React.FC<{ block: DesignerNodeSchema & { type: 'qrcode' }; select
         gap: 6,
         cursor: 'pointer',
       }}
-      onClick={onSelect}
+      onClick={(e) => { e.stopPropagation(); onSelect?.(); }}
     >
       <QRCodeSVG
         value={previewValue}
@@ -712,10 +1169,9 @@ const DroppableColumn: React.FC<{
   id: string; 
   children: React.ReactNode; 
   style?: React.CSSProperties;
-  onInsertToCol?: (type: 'text' | 'field' | 'qrcode' | 'divider' | 'barcode' | 'image' | 'spacer') => void;
   isSelected?: boolean;
   isDragging?: boolean;
-}> = ({ id, children, style, onInsertToCol, isSelected, isDragging }) => {
+}> = ({ id, children, style, isSelected, isDragging }) => {
   const { setNodeRef, isOver } = useDroppable({
     id,
     data: { type: 'column', colId: id }
@@ -736,21 +1192,13 @@ const DroppableColumn: React.FC<{
           ? '2px solid #1677ff'
           : isDragging
           ? '1.5px dashed #91caff'
-          : (style?.border as string) || '1px dotted #f0f0f0',
+          : (style?.border as string) || '1px dotted #d9d9d9',
         transition: 'all 0.2s',
         minHeight: isDragging ? 80 : undefined,
       }}
     >
       <div style={{ fontSize: 10, color: isOver ? '#1677ff' : '#bfbfbf', marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: isOver ? 600 : 400 }}>
-        <span>{isOver ? '↓ 放置到此列' : 'Column'}</span>
-        {isSelected && onInsertToCol && (
-          <Space size={4}>
-             <Button size="small" type="text" icon={<QrcodeOutlined />} onClick={(e) => { e.stopPropagation(); onInsertToCol('qrcode'); }} title="添加二维码" />
-             <Button size="small" type="text" icon={<BarcodeOutlined />} onClick={(e) => { e.stopPropagation(); onInsertToCol('barcode'); }} title="添加条形码" />
-             <Button size="small" type="text" icon={<PictureOutlined />} onClick={(e) => { e.stopPropagation(); onInsertToCol('image'); }} title="添加图片/Logo" />
-             <Button size="small" type="text" icon={<DashOutlined />} onClick={(e) => { e.stopPropagation(); onInsertToCol('divider'); }} title="添加分割线" />
-          </Space>
-        )}
+        <span>{isOver ? '↓ 放置到此列' : '分栏'}</span>
       </div>
       {children}
     </div>
@@ -762,9 +1210,8 @@ const ColumnsBlock: React.FC<{
   selectedId?: string | null; 
   onSelect: (id: string) => void;
   renderBlocks: (blocks: DesignerNodeSchema[]) => React.ReactNode;
-  onInsertToCol: (colId: string, type: 'text' | 'field' | 'qrcode' | 'divider' | 'barcode' | 'image' | 'spacer') => void;
   isDragging?: boolean;
-}> = ({ block, selectedId, onSelect, renderBlocks, onInsertToCol, isDragging }) => {
+}> = ({ block, selectedId, onSelect, renderBlocks, isDragging }) => {
   const isSelected = selectedId === block.id;
   const justifyContentMap: Record<string, React.CSSProperties['justifyContent']> = {
     start: 'flex-start',
@@ -801,11 +1248,11 @@ const ColumnsBlock: React.FC<{
         padding: 8, 
         border: isDragging
           ? '1.5px dashed #69b1ff'
-          : isSelected ? '1px solid #1677ff' : '1px dashed #d9d9d9',
+          : isSelected ? '1px solid #1677ff' : '1px dashed #bfbfbf',
         borderRadius: 6,
         background: isDragging ? 'rgba(230, 244, 255, 0.5)' : isSelected ? '#f0f7ff' : 'transparent',
         marginBottom: 0,
-        minHeight: isDragging ? 120 : 100,
+        minHeight: isDragging ? 120 : 60,
         transition: 'all 0.2s',
       }}
       onClick={(e) => { e.stopPropagation(); onSelect(block.id); }}
@@ -816,7 +1263,6 @@ const ColumnsBlock: React.FC<{
           id={col.id}
           isSelected={isSelected}
           isDragging={isDragging}
-          onInsertToCol={(type) => onInsertToCol(col.id, type)}
           style={{ 
             flex: col.width || '1', 
             padding: '8px 4px', 
@@ -848,12 +1294,12 @@ const ColumnsBlock: React.FC<{
                 color: isDragging ? '#69b1ff' : '#d9d9d9', 
                 fontSize: isDragging ? 12 : 11, 
                 fontWeight: isDragging ? 600 : 400,
-                border: isDragging ? '1px dashed #91caff' : '1px dashed #eee',
+                border: isDragging ? '1px dashed #91caff' : '1px dashed #d9d9d9',
                 borderRadius: 4,
                 transition: 'all 0.2s',
                 width: '100%',
               }}>
-                {isDragging ? '⬇ 拖拽到此处' : 'Drop Here'}
+                {isDragging ? '⬇ 拖拽到此处' : '点击或拖拽插入组件'}
               </div>
             )}
           </div>
@@ -863,22 +1309,56 @@ const ColumnsBlock: React.FC<{
   );
 };
 
-const CanvasArea: React.FC<{ children?: React.ReactNode; style?: React.CSSProperties }> = ({ children, style }) => (
-  <div
-    style={{
-      background: '#fff',
-      boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-      padding: '20mm 15mm', // Standard print margins
-      boxSizing: 'border-box',
-      position: 'absolute',
-      left: '10mm', // Offset for rulers
-      top: '10mm',
-      ...style,
-    }}
-  >
-    {children}
-  </div>
-);
+const CanvasArea: React.FC<{ children?: React.ReactNode; style?: React.CSSProperties }> = ({ children, style }) => {
+  const { setNodeRef } = useDroppable({
+    id: 'canvas-root',
+    data: { type: 'root' }
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        background: '#fff',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+        padding: 0, 
+        boxSizing: 'border-box',
+        position: 'absolute',
+        left: '10mm', // Offset for rulers
+        top: '10mm',
+        ...style,
+      }}
+    >
+      {children}
+    </div>
+  );
+};
+
+const RootEndDropZone: React.FC<{ activeDragId: string }> = ({ activeDragId }) => {
+  const { setNodeRef, isOver } = useDroppable({
+    id: 'root-end-drop',
+    data: { type: 'root-end' }
+  });
+
+  return (
+    <div 
+      ref={setNodeRef}
+      style={{ 
+        marginTop: 12,
+        padding: '24px',
+        textAlign: 'center',
+        background: isOver ? 'rgba(22, 119, 255, 0.1)' : 'rgba(22, 119, 255, 0.05)',
+        border: isOver ? '2px dashed #1677ff' : '2px dashed #91caff',
+        borderRadius: 8,
+        color: '#1677ff',
+        fontWeight: 500,
+        transition: 'all 0.2s'
+      }}
+    >
+      {isOver ? '松开移动到文档末尾' : '⬇ 拖拽到此处移动到文档末尾'}
+    </div>
+  );
+};
 
 const ComponentLibrary: React.FC<{
   onInsertText: () => void;
@@ -900,17 +1380,18 @@ const ComponentLibrary: React.FC<{
   onSpacer, onLogo, onHeader, onFooter,
   templateType 
 }) => {
-  const tableTemplates = useMemo(() => getArrayTableTemplates(templateType), [templateType]);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ fontWeight: 600, fontSize: 13, color: '#8c8c8c', marginBottom: 4 }}>基础组件</div>
-      <DraggableSidebarItem type="text" label="文本内容" icon={<FontSizeOutlined />} onClick={onInsertText} />
-      <DraggableSidebarItem type="divider" label="横向分割线" icon={<DashOutlined />} onClick={onDivider} />
-      <DraggableSidebarItem type="columns" label="分栏容器 (Row/Cols)" icon={<AppstoreOutlined />} onClick={onColumns} />
-      <DraggableSidebarItem type="spacer" label="纵向间距 (Spacer)" icon={<VerticalAlignBottomOutlined />} onClick={() => onSpacer(20)} />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        <DraggableSidebarItem type="text" label="文本内容" icon={<FontSizeOutlined />} onClick={onInsertText} />
+        <DraggableSidebarItem type="columns" label="分栏容器" icon={<AppstoreOutlined />} onClick={onColumns} />
+        <DraggableSidebarItem type="spacer" label="纵向间距" icon={<VerticalAlignBottomOutlined />} onClick={() => onSpacer(20)} />
+        <DraggableSidebarItem type="divider" label="横向分割线" icon={<DashOutlined />} onClick={onDivider} />
+      </div>
       
       <div style={{ fontWeight: 600, fontSize: 13, color: '#8c8c8c', marginTop: 12, marginBottom: 4 }}>工业标识</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
         <DraggableSidebarItem type="qrcode" label="二维码" icon={<QrcodeOutlined />} onClick={onQRCode} />
         <DraggableSidebarItem type="barcode" label="条形码" icon={<BarcodeOutlined />} onClick={onBarcode} />
         <DraggableSidebarItem type="image" label="图片内容" icon={<PictureOutlined />} onClick={onImage} />
@@ -918,26 +1399,15 @@ const ComponentLibrary: React.FC<{
       </div>
 
       <div style={{ fontWeight: 600, fontSize: 13, color: '#8c8c8c', marginTop: 12, marginBottom: 4 }}>页面预设</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <DraggableSidebarItem type="columns" label="标准页眉 (Logo+标题)" icon={<VerticalAlignTopOutlined />} onClick={() => onHeader(1)} />
-        <DraggableSidebarItem type="columns" label="居中页眉 (标题+线)" icon={<VerticalAlignTopOutlined />} onClick={() => onHeader(2)} />
-        <DraggableSidebarItem type="columns" label="标准页脚 (页码)" icon={<VerticalAlignBottomOutlined />} onClick={onFooter} />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        <DraggableSidebarItem type="columns" label="标准页眉" icon={<VerticalAlignTopOutlined />} onClick={() => onHeader(1)} />
+        <DraggableSidebarItem type="columns" label="标准页脚" icon={<VerticalAlignBottomOutlined />} onClick={onFooter} />
       </div>
       
-      <div style={{ fontWeight: 600, fontSize: 13, color: '#8c8c8c', marginTop: 12, marginBottom: 4 }}>逻辑与表格</div>
-      <DraggableSidebarItem type="if" label="条件判断 (If)" icon={<FunctionOutlined />} onClick={onIf} />
-      <DraggableSidebarItem type="for" label="循环遍历 (For)" icon={<FunctionOutlined />} onClick={onFor} />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {tableTemplates.map(tpl => (
-          <DraggableSidebarItem 
-            key={tpl.arrayKey} 
-            type="detail_table" 
-            label={`${tpl.label} (表格)`} 
-            icon={<AppstoreOutlined />} 
-            onClick={() => onTable(tpl.arrayKey, tpl.columns)} 
-            payload={{ collection: tpl.arrayKey, columns: tpl.columns }}
-          />
-        ))}
+      <div style={{ fontWeight: 600, fontSize: 13, color: '#8c8c8c', marginTop: 12, marginBottom: 4 }}>逻辑控制</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        <DraggableSidebarItem type="if" label="条件判断" icon={<FunctionOutlined />} onClick={onIf} />
+        <DraggableSidebarItem type="for" label="循环遍历" icon={<FunctionOutlined />} onClick={onFor} />
       </div>
     </div>
   );
@@ -946,8 +1416,9 @@ const ComponentLibrary: React.FC<{
 const VariableLibrary: React.FC<{
   onInsert: (key: string, label: string) => void;
   onInsertQR: (key: string) => void;
+  onInsertTable: (key: string, label: string) => void;
   templateType: string;
-}> = ({ onInsert, onInsertQR, templateType }) => {
+}> = ({ onInsert, onInsertQR, onInsertTable, templateType }) => {
   const [query, setQuery] = useState('');
   const allVars = useMemo(() => getTemplateVariableItems(templateType), [templateType]);
   const filteredVars = useMemo(() => {
@@ -985,14 +1456,24 @@ const VariableLibrary: React.FC<{
                   >
                     {v.label}
                   </Button>
-                  {/* Insert as QR Code */}
-                  <Button
-                    size="small"
-                    icon={<QrcodeOutlined />}
-                    onClick={() => onInsertQR(v.key)}
-                    title={`以二维码插入: ${v.key}`}
-                    style={{ flexShrink: 0, height: 36, width: 36 }}
-                  />
+                  {/* Insert as QR Code or Table */}
+                  {v.kind === 'detailTable' ? (
+                    <Button
+                      size="small"
+                      icon={<AppstoreOutlined />}
+                      onClick={() => onInsertTable(v.key, v.label)}
+                      title={`作为表格插入: ${v.key}`}
+                      style={{ flexShrink: 0, height: 36, width: 36 }}
+                    />
+                  ) : (
+                    <Button
+                      size="small"
+                      icon={<QrcodeOutlined />}
+                      onClick={() => onInsertQR(v.key)}
+                      title={`以二维码插入: ${v.key}`}
+                      style={{ flexShrink: 0, height: 36, width: 36 }}
+                    />
+                  )}
                 </div>
               ))}
             </div>
@@ -1028,6 +1509,8 @@ const PrintTemplateDesignPage: React.FC = () => {
   const [renderMode, setRenderMode] = useState<'design' | 'preview'>('design');
   const [activeSidebarKey, setActiveSidebarKey] = useState<'components' | 'variables' | 'outline' | 'preview' | 'settings'>('components');
   const [zoom, setZoom] = useState(100);
+  const [itemSpacing, setItemSpacing] = useState(0);
+  const [tableRowLimit, setTableRowLimit] = useState(0);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const workspaceRef = React.useRef<HTMLDivElement>(null);
 
@@ -1084,6 +1567,12 @@ const PrintTemplateDesignPage: React.FC = () => {
         if (existingSchema.blocks?.length) {
           setSchemaBlocks(existingSchema.blocks);
           setSelectedBlockId(existingSchema.blocks[0]?.id ?? null);
+        }
+        if (existingSchema.itemSpacing !== undefined) {
+          setItemSpacing(existingSchema.itemSpacing);
+        }
+        if (existingSchema.tableRowLimit !== undefined) {
+          setTableRowLimit(existingSchema.tableRowLimit);
         }
       } else {
         const first: DesignerNodeSchema = {
@@ -1142,16 +1631,50 @@ const PrintTemplateDesignPage: React.FC = () => {
     }
   }, [samplePresets, selectedSamplePreset]);
 
+  const getNormalizedSchema = useCallback((): DesignerSchema => {
+    const normalizeBlocks = (blocks: DesignerNodeSchema[]): DesignerNodeSchema[] => {
+      return blocks.map(blk => {
+        const newBlk = { ...blk } as any;
+        if (newBlk.style?.fontSize) {
+          newBlk.style = { 
+            ...newBlk.style, 
+            fontSize: normalizeFontSize(newBlk.style.fontSize) 
+          };
+        }
+        if (newBlk.type === 'field') {
+          const k = (newBlk.key || '').toLowerCase();
+          const isFin = (k.includes('amount') || k.includes('price') || k.includes('tax') || k.includes('total')) && !k.includes('quantity') && !k.includes('count');
+          if (isFin) {
+            if (newBlk.label && !newBlk.label.includes('元')) {
+              newBlk.label = `${newBlk.label} (元)`;
+            }
+          }
+        }
+        if (newBlk.type === 'columns') {
+          newBlk.cols = newBlk.cols.map((col: any) => ({
+            ...col,
+            blocks: normalizeBlocks(col.blocks)
+          }));
+        }
+        return newBlk;
+      });
+    };
+
+    return {
+      version: 'v1',
+      pageSize,
+      orientation,
+      margins,
+      itemSpacing,
+      tableRowLimit,
+      blocks: normalizeBlocks(schemaBlocks)
+    };
+  }, [pageSize, orientation, margins, itemSpacing, tableRowLimit, schemaBlocks]);
+
   const handleSave = async () => {
     if (!uuid) return;
     try {
-      const schema: DesignerSchema = { 
-        version: 'v1', 
-        pageSize, 
-        orientation, 
-        margins,
-        blocks: schemaBlocks 
-      };
+      const schema = getNormalizedSchema();
       const compiled = await compilePrintTemplate({
         source_type: 'designer_json',
         source: schema,
@@ -1183,13 +1706,7 @@ const PrintTemplateDesignPage: React.FC = () => {
   const handleCompilePreview = async () => {
     try {
       setPreviewLoading(true);
-      const schema: DesignerSchema = { 
-        version: 'v1', 
-        pageSize, 
-        orientation, 
-        margins,
-        blocks: schemaBlocks 
-      };
+      const schema = getNormalizedSchema();
       const compiled = await compilePrintTemplate({
         source_type: 'designer_json',
         source: schema,
@@ -1212,11 +1729,14 @@ const PrintTemplateDesignPage: React.FC = () => {
       let previewData: Record<string, any> = {};
       try {
         previewData = previewDataText.trim() ? JSON.parse(previewDataText) : {};
+        // Inject page variables if missing for preview purposes
+        if (previewData.page_num === undefined) previewData.page_num = 1;
+        if (previewData.total_pages === undefined) previewData.total_pages = 1;
       } catch {
         if (!silent) messageApi.error('样本数据 JSON 格式错误');
         return;
       }
-      const schema: DesignerSchema = { version: 'v1', pageSize, orientation, margins, blocks: schemaBlocks };
+      const schema = getNormalizedSchema();
       const result = await compilePreviewPrintTemplate({
         source_type: 'designer_json',
         source: schema,
@@ -1276,9 +1796,13 @@ const PrintTemplateDesignPage: React.FC = () => {
   };
 
   const handleInsertFieldToken = (key: string, label: string) => {
-    const token = `{{ ${key} }}`;
+    const k = key.toLowerCase();
+    const isFinancial = k.match(/amount|price|tax|total/) && !k.includes('quantity') && !k.includes('count');
+    const token = isFinancial ? `{{ "%.2f"|format(${key}) }} 元` : `{{ ${key} }}`;
     if (!selectedBlockId) {
-      handleInsertField(key, label);
+      const fieldKey = isFinancial ? `${key}|format("%.2f")` : key;
+      const fieldLabel = isFinancial ? `${label} (元)` : label;
+      handleInsertField(fieldKey, fieldLabel);
       return;
     }
     let consumed = false;
@@ -1305,6 +1829,25 @@ const PrintTemplateDesignPage: React.FC = () => {
     } else {
       handleInsertField(key, label);
       messageApi.info('当前块不支持内嵌变量，已新增字段块');
+    }
+  };
+
+  const handleInsertVariableAsTable = (key: string, label: string) => {
+    const tableTemplates = getArrayTableTemplates(templateType);
+    const tpl = tableTemplates.find(t => t.arrayKey === key);
+    if (tpl) {
+      handleInsertDetailTable(tpl.arrayKey, tpl.columns);
+      messageApi.success(`已插入明细表：${label}`);
+    } else {
+      // Fallback: 默认显示常用列
+      handleInsertDetailTable(key, [
+        { key: 'material_code', label: '物料编号' },
+        { key: 'material_name', label: '名称' },
+        { key: 'quote_quantity', label: '数量' },
+        { key: 'unit_price', label: '单价' },
+        { key: 'total_amount', label: '金额' },
+      ]);
+      messageApi.info(`已插入基础表格结构：${label}`);
     }
   };
 
@@ -1353,7 +1896,7 @@ const PrintTemplateDesignPage: React.FC = () => {
     const item: DesignerNodeSchema = { 
       id: `logo-${Date.now()}`, 
       type: 'image', 
-      url: siteLogoUrl || '{{ company_logo }}', 
+      url: siteLogoUrl || '{{ logo }}', 
       width: 100, 
       height: 60,
       style: { textAlign: 'right' }
@@ -1372,8 +1915,8 @@ const PrintTemplateDesignPage: React.FC = () => {
         horizontalAlign: 'start',
         verticalAlign: 'top',
         cols: [
-          { id: `c1-${Date.now()}`, width: '1', blocks: [{ id: `txt-${Date.now()}-1`, type: 'text', content: '### 某某制造有限公司', tag: 'h3' }] },
-          { id: `c2-${Date.now()}`, width: '1', horizontalAlign: 'end', blocks: [{ id: `img-${Date.now()}-2`, type: 'image', url: '{{ logo }}', width: 80, height: 40, style: { textAlign: 'right' } }] }
+          { id: `c1-${Date.now()}`, width: '1', blocks: [{ id: `txt-${Date.now()}-1`, type: 'text', content: '某某制造有限公司', tag: 'h3' }] },
+          { id: `c2-${Date.now()}`, width: '1', horizontalAlign: 'end', blocks: [{ id: `img-${Date.now()}-2`, type: 'image', url: siteLogoUrl || '{{ logo }}', width: 80, height: 40, style: { textAlign: 'right' } }] }
         ]
       };
     } else {
@@ -1385,7 +1928,7 @@ const PrintTemplateDesignPage: React.FC = () => {
         verticalAlign: 'top',
         cols: [
           { id: `c1-${Date.now()}`, width: '1', horizontalAlign: 'center', blocks: [
-            { id: `txt-${Date.now()}-1`, type: 'text', content: '## 报价单', tag: 'h2', style: { textAlign: 'center' } },
+            { id: `txt-${Date.now()}-1`, type: 'text', content: '报价单', tag: 'h2', style: { textAlign: 'center' } },
             { id: `div-${Date.now()}-2`, type: 'divider' }
           ] }
         ]
@@ -1460,17 +2003,23 @@ const PrintTemplateDesignPage: React.FC = () => {
   };
 
   const findTargetInfo = (blocks: DesignerNodeSchema[], targetId: string): { list: DesignerNodeSchema[], index: number } | null => {
+    const idStr = String(targetId);
+    
+    // Check if target is the root canvas or the special end drop zone
+    if (idStr === 'canvas-root' || idStr === 'root-end-drop') {
+      return { list: blocks, index: blocks.length };
+    }
+
     for (let i = 0; i < blocks.length; i++) {
       const blk = blocks[i];
-      if (blk.id === targetId) return { list: blocks, index: i };
+      if (String(blk.id) === idStr) return { list: blocks, index: i };
       
       if (blk.type === 'columns') {
         for (const col of blk.cols) {
-          // If the target is the column itself (e.g. drop on empty column)
-          if (col.id === targetId) {
+          if (String(col.id) === idStr) {
             return { list: col.blocks, index: col.blocks.length };
           }
-          const found = findTargetInfo(col.blocks, targetId);
+          const found = findTargetInfo(col.blocks, idStr);
           if (found) return found;
         }
       }
@@ -1478,45 +2027,27 @@ const PrintTemplateDesignPage: React.FC = () => {
     return null;
   };
 
-  const handleInsertToCol = (colId: string, type: 'text' | 'field' | 'qrcode' | 'divider' | 'barcode' | 'image' | 'spacer') => {
-    setSchemaBlocks((prev) => {
-      const recursiveInsert = (blocks: DesignerNodeSchema[]): DesignerNodeSchema[] => {
-        return blocks.map((blk) => {
-          if (blk.type === 'columns') {
-            const hasCol = blk.cols.find((c) => c.id === colId);
-            if (hasCol) {
-              const newInnerBlk: DesignerNodeSchema = 
-                type === 'text' ? { id: `text-${Date.now()}`, type: 'text', content: '子文本内容' } :
-                type === 'divider' ? { id: `divider-${Date.now()}`, type: 'divider' } :
-                type === 'qrcode' ? { id: `qr-${Date.now()}`, type: 'qrcode', key: 'qr_key', size: 60 } :
-                type === 'barcode' ? { id: `bc-${Date.now()}`, type: 'barcode', key: 'bc_key', format: 'CODE128', height: 40 } :
-                type === 'image' ? { id: `img-${Date.now()}`, type: 'image', url: '', width: 80, height: 40 } :
-                type === 'spacer' ? { id: `spacer-${Date.now()}`, type: 'spacer', height: 20 } :
-                { id: `field-${Date.now()}`, type: 'field', key: 'key', label: '变量' };
-              
-              return {
-                ...blk,
-                cols: blk.cols.map((c) =>
-                  c.id === colId ? { ...c, blocks: [...c.blocks, newInnerBlk] } : c
-                ),
-              };
-            }
-            return {
-              ...blk,
-              cols: blk.cols.map((c) => ({ ...c, blocks: recursiveInsert(c.blocks) })),
-            };
-          }
-          return blk;
-        });
-      };
-      return recursiveInsert(prev);
-    });
-  };
+
+  const customCollisionDetection = useCallback((args: any) => {
+    // 1. Try rectIntersection first to find specific drop zones (like the end zone)
+    const rectCollisions = rectIntersection(args);
+    
+    // Prioritize the "Drop to end" zone if we are over it
+    const endZone = rectCollisions.find(c => c.id === 'root-end-drop');
+    if (endZone) return [endZone];
+
+    // Prioritize column containers if we are over them (to allow dropping into empty columns)
+    const columnZone = rectCollisions.find(c => c.data?.current?.type === 'column');
+    if (columnZone) return [columnZone];
+
+    // 2. Use closestCenter for component reordering (Standard practice for vertical lists)
+    return closestCenter(args);
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 8,
+        distance: 5,
       },
     }),
     useSensor(KeyboardSensor, {
@@ -1533,97 +2064,64 @@ const PrintTemplateDesignPage: React.FC = () => {
     const { active, over } = event;
     if (!over) return;
 
-    // Handle reordering / internal moves
+    // Handle reordering / internal moves for existing canvas items
     if (active.id !== over.id && !String(active.id).startsWith('sidebar-')) {
       const activeId = String(active.id);
       const overId = String(over.id);
-      const overType = over.data?.current?.type;
 
-      // Case 1: Dropping a canvas block INTO a column container
-      if (overType === 'column') {
-        const colId = overId;
-        setSchemaBlocks(prev => {
-          // Step 1: find and remove the dragged block from wherever it is
-          let draggedBlock: DesignerNodeSchema | null = null;
-          const removeBlock = (blocks: DesignerNodeSchema[]): DesignerNodeSchema[] => {
-            const idx = blocks.findIndex(b => b.id === activeId);
-            if (idx !== -1) {
-              draggedBlock = blocks[idx];
-              return [...blocks.slice(0, idx), ...blocks.slice(idx + 1)];
+      setSchemaBlocks(prev => {
+        let draggedBlock: DesignerNodeSchema | null = null;
+        
+        // Step 1: Deep search and remove the block
+        const remove = (blocks: DesignerNodeSchema[]): DesignerNodeSchema[] => {
+          const idx = blocks.findIndex(b => String(b.id) === activeId);
+          if (idx !== -1) {
+            draggedBlock = blocks[idx];
+            return [...blocks.slice(0, idx), ...blocks.slice(idx + 1)];
+          }
+          return blocks.map(blk => {
+            if (blk.type === 'columns') {
+              return { ...blk, cols: blk.cols.map(c => ({ ...c, blocks: remove(c.blocks) })) };
             }
-            return blocks.map(blk => {
-              if (blk.type === 'columns') {
-                return { ...blk, cols: blk.cols.map(c => ({ ...c, blocks: removeBlock(c.blocks) })) };
-              }
-              return blk;
-            });
-          };
-          const afterRemove = removeBlock(prev);
-          if (!draggedBlock) return prev;
+            return blk;
+          });
+        };
 
-          // Step 2: append the block into the target column
-          const addToCol = (blocks: DesignerNodeSchema[]): DesignerNodeSchema[] => {
-            return blocks.map(blk => {
-              if (blk.type === 'columns') {
-                return {
-                  ...blk,
-                  cols: blk.cols.map(c => {
-                    if (c.id === colId) return { ...c, blocks: [...c.blocks, draggedBlock!] };
-                    return { ...c, blocks: addToCol(c.blocks) };
-                  })
-                };
-              }
-              return blk;
-            });
-          };
-          return addToCol(afterRemove);
-        });
-        return;
-      }
+        const afterRemove = remove(prev);
+        
+        if (!draggedBlock) {
+          console.error('[DnD] Could not find dragged block in schema:', activeId);
+          return prev;
+        }
 
-      // Case 2: Normal reorder within the same list (root or within a column)
-      const activeInfo = findTargetInfo(schemaBlocks, activeId);
-      const overInfo = findTargetInfo(schemaBlocks, overId);
-      if (!activeInfo || !overInfo) return;
-
-      if (activeInfo.list === overInfo.list) {
-        // Same container — simple reorder by IDs
-        setSchemaBlocks(prev => {
-
-          // Reorder by IDs — works for both root and nested column contexts
-          const reorder = (blocks: DesignerNodeSchema[]): DesignerNodeSchema[] => {
-            const ids = blocks.map(b => b.id);
-            if (ids.includes(activeId) && ids.includes(overId)) {
-              return arrayMove([...blocks], ids.indexOf(activeId), ids.indexOf(overId));
-            }
-            return blocks.map(blk => {
-              if (blk.type === 'columns') {
-                return { ...blk, cols: blk.cols.map(col => ({ ...col, blocks: reorder(col.blocks) })) };
-              }
-              return blk;
-            });
-          };
-          return reorder(prev);
-        });
-      } else {
-        // Cross-container: remove from source, insert at target position
-        setSchemaBlocks(prev => {
-          let removed: DesignerNodeSchema | null = null;
-          const remove = (blocks: DesignerNodeSchema[]): DesignerNodeSchema[] => {
-            const idx = blocks.findIndex(b => b.id === activeId);
-            if (idx !== -1) { removed = blocks[idx]; return [...blocks.slice(0, idx), ...blocks.slice(idx + 1)]; }
-            return blocks.map(blk => blk.type === 'columns' ? { ...blk, cols: blk.cols.map(c => ({ ...c, blocks: remove(c.blocks) })) } : blk);
-          };
-          const afterRemove = remove(prev);
-          if (!removed) return prev;
+        // Step 2: Find target info in the tree where the block has already been removed
+        const targetInfo = findTargetInfo(afterRemove, overId);
+        
+        if (targetInfo) {
           const insert = (blocks: DesignerNodeSchema[]): DesignerNodeSchema[] => {
-            const idx = blocks.findIndex(b => b.id === overId);
-            if (idx !== -1) { const l = [...blocks]; l.splice(idx, 0, removed!); return l; }
-            return blocks.map(blk => blk.type === 'columns' ? { ...blk, cols: blk.cols.map(c => ({ ...c, blocks: insert(c.blocks) })) } : blk);
+            // Reference equality check for the list
+            if (blocks === targetInfo.list) {
+              const list = [...blocks];
+              list.splice(targetInfo.index, 0, draggedBlock!);
+              return list;
+            }
+            return blocks.map(blk => {
+              if (blk.type === 'columns') {
+                return { ...blk, cols: blk.cols.map(c => ({ ...c, blocks: insert(c.blocks) })) };
+              }
+              return blk;
+            });
           };
-          return insert(afterRemove);
-        });
-      }
+          
+          const result = insert(afterRemove);
+          messageApi.success('组件移动成功');
+          return result;
+        } else {
+          // Fallback: Drop on root canvas background or unknown target -> move to end of root
+          messageApi.info('已移动至文档末尾');
+          return [...afterRemove, draggedBlock];
+        }
+      });
       return;
     }
 
@@ -1713,6 +2211,13 @@ const PrintTemplateDesignPage: React.FC = () => {
         return;
       }
 
+      // Drop onto the ROOT CANVAS (empty area)
+      if (overData?.type === 'root') {
+        setSchemaBlocks(prev => [...prev, newBlock]);
+        setSelectedBlockId(id);
+        return;
+      }
+
       // Drop onto a specific block position (or empty canvas)
       const overInfo = findTargetInfo(schemaBlocks, overId);
       if (overInfo) {
@@ -1738,11 +2243,11 @@ const PrintTemplateDesignPage: React.FC = () => {
   };
 
 
-  const renderDesignerBlocks = (blocks: DesignerNodeSchema[]) => {
+  const renderDesignerBlocks = (blocks: DesignerNodeSchema[], isNested = false) => {
     return blocks.map((blk) => {
       const isSelected = selectedBlockId === blk.id;
       return (
-        <SortableBlockWrapper key={blk.id} id={blk.id}>
+        <SortableBlockWrapper key={blk.id} id={blk.id} type={blk.type} marginBottom={isNested ? 0 : `${itemSpacing}mm`}>
           <div 
             style={{ position: 'relative', transition: 'all 0.2s' }}
             className="designer-block-wrap"
@@ -1759,8 +2264,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                 block={blk} 
                 selectedId={selectedBlockId} 
                 onSelect={setSelectedBlockId} 
-                renderBlocks={renderDesignerBlocks} 
-                onInsertToCol={handleInsertToCol}
+                renderBlocks={(nested) => renderDesignerBlocks(nested, true)} 
                 isDragging={!!activeDragId}
               />
             )}
@@ -1778,6 +2282,11 @@ const PrintTemplateDesignPage: React.FC = () => {
                 }
                 selected={isSelected}
                 onSelect={() => setSelectedBlockId(blk.id)}
+                extra={
+                  blk.type === 'detail_table' ? (
+                    <DetailTableMiniPreview tableStyle={blk.tableStyle} columns={blk.columns} />
+                  ) : undefined
+                }
               />
             )}
           </div>
@@ -1828,21 +2337,50 @@ const PrintTemplateDesignPage: React.FC = () => {
   const moveSelected = (delta: -1 | 1) => {
     if (!selectedBlockId) return;
     setSchemaBlocks((prev) => {
-      const idx = prev.findIndex((b) => b.id === selectedBlockId);
-      const target = idx + delta;
-      if (idx < 0 || target < 0 || target >= prev.length) return prev;
-      const copied = [...prev];
-      const [it] = copied.splice(idx, 1);
-      copied.splice(target, 0, it);
-      return copied;
+      const recursiveMove = (blocks: DesignerNodeSchema[]): DesignerNodeSchema[] => {
+        const idx = blocks.findIndex((b) => b.id === selectedBlockId);
+        if (idx !== -1) {
+          const target = idx + delta;
+          if (target < 0 || target >= blocks.length) return blocks;
+          const copied = [...blocks];
+          const [it] = copied.splice(idx, 1);
+          copied.splice(target, 0, it);
+          return copied;
+        }
+        return blocks.map((blk) => {
+          if (blk.type === 'columns') {
+            return {
+              ...blk,
+              cols: blk.cols.map((col) => ({ ...col, blocks: recursiveMove(col.blocks) })),
+            };
+          }
+          return blk;
+        });
+      };
+      return recursiveMove(prev);
     });
   };
 
   const removeSelected = () => {
     if (!selectedBlockId) return;
     setSchemaBlocks((prev) => {
-      const next = prev.filter((blk) => blk.id !== selectedBlockId);
-      setSelectedBlockId(next[0]?.id ?? null);
+      const recursiveRemove = (blocks: DesignerNodeSchema[]): DesignerNodeSchema[] => {
+        return blocks
+          .filter(blk => blk.id !== selectedBlockId)
+          .map(blk => {
+            if (blk.type === 'columns') {
+              return {
+                ...blk,
+                cols: blk.cols.map(c => ({ ...c, blocks: recursiveRemove(c.blocks) }))
+              };
+            }
+            return blk;
+          });
+      };
+      
+      const next = recursiveRemove(prev);
+      // Auto-select something else if possible, or null
+      setSelectedBlockId(null); 
       return next;
     });
   };
@@ -1860,7 +2398,13 @@ const PrintTemplateDesignPage: React.FC = () => {
   const scaledLayoutHeight = (paperBaseHeight + 20) * MM_TO_PX * (zoom / 100);
 
   return (
-    <div style={{ 
+    <DndContext 
+      sensors={sensors}
+      collisionDetection={customCollisionDetection}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
+      <div style={{ 
       height: 'calc(100vh - 48px)', 
       background: '#f0f2f5', 
       overflow: 'hidden'
@@ -1876,7 +2420,8 @@ const PrintTemplateDesignPage: React.FC = () => {
         {/* 1. Icon Sidebar (Left Rail) */}
         <div style={{
           width: 72,
-          background: '#001529',
+          background: '#fff',
+          borderRight: `1px solid ${token.colorBorderSecondary}`,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
@@ -1895,7 +2440,7 @@ const PrintTemplateDesignPage: React.FC = () => {
             <div
               key={item.key}
               style={{
-                color: activeSidebarKey === item.key ? '#fff' : '#8c8c8c',
+                color: activeSidebarKey === item.key ? token.colorPrimary : token.colorTextSecondary,
                 cursor: 'pointer',
                 display: 'flex',
                 flexDirection: 'column',
@@ -1908,12 +2453,16 @@ const PrintTemplateDesignPage: React.FC = () => {
               <div style={{ 
                 fontSize: 24, 
                 padding: 8, 
-                background: activeSidebarKey === item.key ? '#1677ff' : 'transparent',
-                borderRadius: 8
+                background: activeSidebarKey === item.key ? token.colorPrimaryBg : 'transparent',
+                borderRadius: 12,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s'
               }}>
                 {item.icon}
               </div>
-              <span style={{ fontSize: 12 }}>{item.label}</span>
+              <span style={{ fontSize: 12, fontWeight: activeSidebarKey === item.key ? 600 : 400 }}>{item.label}</span>
             </div>
           ))}
           
@@ -1921,7 +2470,7 @@ const PrintTemplateDesignPage: React.FC = () => {
             <Button 
               type="text" 
               icon={<ArrowLeftOutlined />} 
-              style={{ color: '#8c8c8c' }} 
+              style={{ color: token.colorTextQuaternary }} 
               onClick={() => navigate(-1)} 
             />
           </div>
@@ -1972,6 +2521,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                 templateType={templateType}
                 onInsert={handleInsertFieldToken}
                 onInsertQR={handleInsertFieldAsQR}
+                onInsertTable={handleInsertVariableAsTable}
               />
             )}
             {activeSidebarKey === 'outline' && (
@@ -2049,6 +2599,35 @@ const PrintTemplateDesignPage: React.FC = () => {
                     value={orientation}
                     onChange={setOrientation}
                   />
+                </div>
+                <Divider style={{ margin: '8px 0' }} />
+                <div>
+                  <div style={{ marginBottom: 8, color: '#8c8c8c' }}>组件间距 (mm)</div>
+                  <InputNumber 
+                    size="small" 
+                    style={{ width: '100%' }} 
+                    value={itemSpacing} 
+                    onChange={v => setItemSpacing(v || 0)} 
+                    placeholder="例如: 2"
+                  />
+                  <div style={{ fontSize: 11, color: '#bfbfbf', marginTop: 4 }}>
+                    设计和打印时自动为每个组件添加底部间距 (mm)
+                  </div>
+                </div>
+                <Divider style={{ margin: '8px 0' }} />
+                <div>
+                  <div style={{ marginBottom: 8, color: '#8c8c8c' }}>明细行数</div>
+                  <InputNumber 
+                    size="small" 
+                    style={{ width: '100%' }} 
+                    value={tableRowLimit} 
+                    onChange={v => setTableRowLimit(v || 0)} 
+                    placeholder="例如: 10"
+                    min={0}
+                  />
+                  <div style={{ fontSize: 11, color: '#bfbfbf', marginTop: 4 }}>
+                    固定明细行数。不足时显示空行，为 0 时自动伸缩。
+                  </div>
                 </div>
                 <Divider style={{ margin: '8px 0' }} />
                 <div>
@@ -2175,19 +2754,17 @@ const PrintTemplateDesignPage: React.FC = () => {
                           <div>从左侧点击或拖拽组件开始设计</div>
                         </div>
                       )}
-                      <DndContext 
-                        sensors={sensors}
-                        collisionDetection={closestCorners}
-                        onDragStart={handleDragStart}
-                        onDragEnd={handleDragEnd}
-                      >
                         <SortableContext 
                           items={schemaBlocks.map(b => b.id)}
                           strategy={verticalListSortingStrategy}
                         >
                           {renderDesignerBlocks(schemaBlocks)}
                         </SortableContext>
-                      </DndContext>
+                        
+                        {/* Drop zone at the end of the root canvas */}
+                        {activeDragId && (
+                           <RootEndDropZone activeDragId={activeDragId} />
+                        )}
                     </>
                   ) : (
                     <div 
@@ -2197,9 +2774,55 @@ const PrintTemplateDesignPage: React.FC = () => {
                         minHeight: '100%', 
                         background: '#fff',
                         position: 'relative',
-                        // Ensure images and barcodes don't overflow
+                        boxSizing: 'border-box'
                       }}
-                      dangerouslySetInnerHTML={{ __html: renderedHtmlPreview }}
+                      dangerouslySetInnerHTML={{ 
+                        __html: `
+                        <style>
+                          .print-preview-inner > div, 
+                          .print-preview-inner > table, 
+                          .print-preview-inner > p, 
+                          .print-preview-inner > h1, 
+                          .print-preview-inner > h2, 
+                          .print-preview-inner > h3, 
+                          .print-preview-inner > h4 { 
+                            width: 100%; 
+                            margin-top: 0 !important; 
+                            margin-bottom: ${itemSpacing}mm !important; 
+                            word-break: break-all; 
+                            min-height: 0 !important; 
+                          }
+                          .print-preview-inner table { 
+                            border-collapse: collapse; 
+                            margin-bottom: ${itemSpacing}mm !important; 
+                          }
+                          .print-preview-inner th, .print-preview-inner td { 
+                            border: 1px solid #d9d9d9; 
+                            padding: 6px 8px; 
+                            text-align: left;
+                          }
+                          .print-preview-inner .columns-layout { 
+                            margin-bottom: ${itemSpacing}mm !important; 
+                          }
+                          .print-preview-inner .columns-layout div { 
+                            margin-bottom: 0 !important; 
+                          }
+                          .print-preview-inner .page-current, 
+                          .print-preview-inner .page-total { 
+                            display: inline-block !important; 
+                            min-width: 1ch; 
+                            text-align: center; 
+                          }
+                          .print-preview-inner .page-current::after { content: "1"; }
+                          .print-preview-inner .page-total::after { content: "1"; }
+                          .print-preview-inner .print-block {
+                            width: 100%;
+                            position: relative;
+                            margin-bottom: ${itemSpacing}mm !important;
+                          }
+                        </style>
+                        ${renderedHtmlPreview}` 
+                      }} 
                     />
                   )}
                 </CanvasArea>
@@ -2427,6 +3050,249 @@ const PrintTemplateDesignPage: React.FC = () => {
                         <TableOutlined style={{ marginRight: 8 }} />
                         明细表组件：用于渲染动态列表数据。
                       </div>
+                      <Card size="small" title="表格样式" headStyle={{ border: 0, fontSize: 13, color: '#8c8c8c' }}>
+                        <Space direction="vertical" style={{ width: '100%' }} size={12}>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                            <div>
+                              <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>边框样式</div>
+                              <Select
+                                style={{ width: '100%' }}
+                                value={selectedBlock.tableStyle?.borderStyle ?? 'solid'}
+                                onChange={(v) =>
+                                  updateSelectedBlock({
+                                    tableStyle: { ...selectedBlock.tableStyle, borderStyle: v },
+                                  })
+                                }
+                                options={[
+                                  { label: '实线', value: 'solid' },
+                                  { label: '虚线', value: 'dashed' },
+                                  { label: '无边框', value: 'none' },
+                                ]}
+                              />
+                            </div>
+                            <div>
+                              <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>边框宽度 (px)</div>
+                              <InputNumber
+                                min={0}
+                                max={8}
+                                style={{ width: '100%' }}
+                                value={selectedBlock.tableStyle?.borderWidth ?? 1}
+                                disabled={selectedBlock.tableStyle?.borderStyle === 'none'}
+                                onChange={(v) =>
+                                  updateSelectedBlock({
+                                    tableStyle: { ...selectedBlock.tableStyle, borderWidth: v ?? 1 },
+                                  })
+                                }
+                              />
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 12, color: '#8c8c8c', flexShrink: 0 }}>边框颜色</span>
+                            <ColorPicker
+                              value={selectedBlock.tableStyle?.borderColor ?? '#e2e8f0'}
+                              disabled={selectedBlock.tableStyle?.borderStyle === 'none'}
+                              onChange={(_, hex) =>
+                                updateSelectedBlock({
+                                  tableStyle: { ...selectedBlock.tableStyle, borderColor: hex },
+                                })
+                              }
+                            />
+                          </div>
+                          <div>
+                            <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>单元格内边距 (px)</div>
+                            <InputNumber
+                              min={0}
+                              max={32}
+                              style={{ width: '100%' }}
+                              value={selectedBlock.tableStyle?.cellPadding ?? 8}
+                              onChange={(v) =>
+                                updateSelectedBlock({
+                                  tableStyle: { ...selectedBlock.tableStyle, cellPadding: v ?? 8 },
+                                })
+                              }
+                            />
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                            <div>
+                              <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>表体字号</div>
+                              <Input
+                                placeholder="默认 13px"
+                                value={selectedBlock.tableStyle?.fontSize ?? ''}
+                                onChange={(e) =>
+                                  updateSelectedBlock({
+                                    tableStyle: {
+                                      ...selectedBlock.tableStyle,
+                                      fontSize: e.target.value.trim() || undefined,
+                                    },
+                                  })
+                                }
+                              />
+                            </div>
+                            <div>
+                              <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>表头字号</div>
+                              <Input
+                                placeholder="默认与表体相同"
+                                value={selectedBlock.tableStyle?.headerFontSize ?? ''}
+                                onChange={(e) =>
+                                  updateSelectedBlock({
+                                    tableStyle: {
+                                      ...selectedBlock.tableStyle,
+                                      headerFontSize: e.target.value.trim() || undefined,
+                                    },
+                                  })
+                                }
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>表头字重</div>
+                            <Select
+                              style={{ width: '100%' }}
+                              value={selectedBlock.tableStyle?.headerFontWeight ?? '600'}
+                              onChange={(v) =>
+                                updateSelectedBlock({
+                                  tableStyle: { ...selectedBlock.tableStyle, headerFontWeight: v },
+                                })
+                              }
+                              options={[
+                                { label: '常规', value: '400' },
+                                { label: '中等', value: '500' },
+                                { label: '半粗', value: '600' },
+                                { label: '粗体', value: 'bold' },
+                              ]}
+                            />
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                            <div>
+                              <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>表头背景</div>
+                              <ColorPicker
+                                value={selectedBlock.tableStyle?.headerBgColor ?? '#f8fafc'}
+                                onChange={(_, hex) =>
+                                  updateSelectedBlock({
+                                    tableStyle: { ...selectedBlock.tableStyle, headerBgColor: hex },
+                                  })
+                                }
+                              />
+                            </div>
+                            <div>
+                              <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>表头文字</div>
+                              <ColorPicker
+                                value={selectedBlock.tableStyle?.headerTextColor ?? '#475569'}
+                                onChange={(_, hex) =>
+                                  updateSelectedBlock({
+                                    tableStyle: { ...selectedBlock.tableStyle, headerTextColor: hex },
+                                  })
+                                }
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>表体文字</div>
+                            <ColorPicker
+                              value={selectedBlock.tableStyle?.bodyTextColor ?? '#334155'}
+                              onChange={(_, hex) =>
+                                updateSelectedBlock({
+                                  tableStyle: { ...selectedBlock.tableStyle, bodyTextColor: hex },
+                                })
+                              }
+                            />
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                            <div>
+                              <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>表头对齐</div>
+                              <Radio.Group
+                                size="small"
+                                value={selectedBlock.tableStyle?.headerTextAlign ?? 'left'}
+                                onChange={(e) =>
+                                  updateSelectedBlock({
+                                    tableStyle: { ...selectedBlock.tableStyle, headerTextAlign: e.target.value },
+                                  })
+                                }
+                              >
+                                <Radio.Button value="left"><AlignLeftOutlined /></Radio.Button>
+                                <Radio.Button value="center"><AlignCenterOutlined /></Radio.Button>
+                                <Radio.Button value="right"><AlignRightOutlined /></Radio.Button>
+                              </Radio.Group>
+                            </div>
+                            <div>
+                              <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>表体对齐</div>
+                              <Radio.Group
+                                size="small"
+                                value={selectedBlock.tableStyle?.bodyTextAlign ?? 'left'}
+                                onChange={(e) =>
+                                  updateSelectedBlock({
+                                    tableStyle: { ...selectedBlock.tableStyle, bodyTextAlign: e.target.value },
+                                  })
+                                }
+                              >
+                                <Radio.Button value="left"><AlignLeftOutlined /></Radio.Button>
+                                <Radio.Button value="center"><AlignCenterOutlined /></Radio.Button>
+                                <Radio.Button value="right"><AlignRightOutlined /></Radio.Button>
+                              </Radio.Group>
+                            </div>
+                          </div>
+                          <div>
+                            <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>垂直对齐</div>
+                            <Radio.Group
+                              size="small"
+                              value={selectedBlock.tableStyle?.verticalAlign ?? 'top'}
+                              onChange={(e) =>
+                                updateSelectedBlock({
+                                  tableStyle: { ...selectedBlock.tableStyle, verticalAlign: e.target.value },
+                                })
+                              }
+                            >
+                              <Radio.Button value="top" title="顶部">
+                                <VerticalAlignTopOutlined />
+                              </Radio.Button>
+                              <Radio.Button value="middle" title="居中">
+                                <AlignCenterOutlined />
+                              </Radio.Button>
+                              <Radio.Button value="bottom" title="底部">
+                                <VerticalAlignBottomOutlined />
+                              </Radio.Button>
+                            </Radio.Group>
+                          </div>
+                          <div>
+                            <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>表格宽度</div>
+                            <Input
+                              placeholder="默认 100%"
+                              value={selectedBlock.tableStyle?.width ?? ''}
+                              onChange={(e) =>
+                                updateSelectedBlock({
+                                  tableStyle: {
+                                    ...selectedBlock.tableStyle,
+                                    width: e.target.value.trim() || undefined,
+                                  },
+                                })
+                              }
+                            />
+                          </div>
+                          <Checkbox
+                            checked={selectedBlock.tableStyle?.zebraStripe === true}
+                            onChange={(e) =>
+                              updateSelectedBlock({
+                                tableStyle: { ...selectedBlock.tableStyle, zebraStripe: e.target.checked },
+                              })
+                            }
+                          >
+                            斑马纹隔行底色
+                          </Checkbox>
+                          {selectedBlock.tableStyle?.zebraStripe ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ fontSize: 12, color: '#8c8c8c' }}>隔行颜色</span>
+                              <ColorPicker
+                                value={selectedBlock.tableStyle?.zebraBgColor ?? '#fafafa'}
+                                onChange={(_, hex) =>
+                                  updateSelectedBlock({
+                                    tableStyle: { ...selectedBlock.tableStyle, zebraBgColor: hex },
+                                  })
+                                }
+                              />
+                            </div>
+                          ) : null}
+                        </Space>
+                      </Card>
                       <div>
                         <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>明细集合变量 (e.g. items)</div>
                         <Input value={selectedBlock.collection} onChange={e => updateSelectedBlock({ collection: e.target.value })} />
@@ -2444,7 +3310,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                   {selectedBlock.type === 'columns' && (
                     <Space direction="vertical" style={{ width: '100%' }}>
                       <div style={{ marginBottom: 8, fontWeight: 600 }}>分栏配置</div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                      <Space direction="vertical" style={{ width: '100%' }} size={12}>
                         <div>
                           <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>水平对齐</div>
                           <Radio.Group
@@ -2476,7 +3342,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                             <Radio.Button value="bottom" title="底部"><VerticalAlignBottomOutlined /></Radio.Button>
                           </Radio.Group>
                         </div>
-                      </div>
+                      </Space>
                       {selectedBlock.cols.map((col, idx) => (
                         <div key={col.id} style={{ marginBottom: 12, padding: 8, border: '1px solid #f0f0f0', borderRadius: 4 }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -2552,8 +3418,42 @@ const PrintTemplateDesignPage: React.FC = () => {
           </div>
         </div>
       </div>
-
     </div>
+
+      <DragOverlay adjustScale={false} dropAnimation={null}>
+        {activeDragId ? (
+            (() => {
+              // 1. Sidebar Item Check
+              if (activeDragId.startsWith('sidebar-')) {
+                const parts = activeDragId.split('-');
+                const type = parts[1];
+                return <DragOverlayBlock type={type} label="添加新组件" />;
+              }
+              
+              // 2. Canvas Item Check
+              const block = findBlockById(schemaBlocks, activeDragId);
+              if (block) {
+                const typeLabels: Record<string, string> = {
+                  text: '文本内容',
+                  field: '字段变量',
+                  qrcode: '二维码',
+                  barcode: '条形码',
+                  image: '图片/Logo',
+                  divider: '分割线',
+                  spacer: '间距组件',
+                  columns: '分栏容器',
+                  detail_table: '明细表块',
+                  if: '条件判断',
+                  for: '循环遍历'
+                };
+                return <DragOverlayBlock type={block.type} label={typeLabels[block.type] || '移动组件'} />;
+              }
+              
+              return null;
+            })()
+        ) : null}
+      </DragOverlay>
+    </DndContext>
   );
 };
 

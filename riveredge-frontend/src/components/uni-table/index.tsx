@@ -16,7 +16,7 @@ import {
   ProFormInstance,
   ProTableProps,
 } from '@ant-design/pro-components'
-import { Button, Space, Radio, Input, theme, Empty, ConfigProvider, Dropdown, Popconfirm } from 'antd'
+import { Button, Space, Radio, Input, theme, Empty, ConfigProvider, Dropdown, Popconfirm, Grid, Descriptions, Card, Tag } from 'antd'
 import type { MenuProps } from 'antd'
 import {
   PlusOutlined,
@@ -798,6 +798,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const getPreference = useUserPreferenceStore((s) => s.getPreference);
   const updatePreferences = useUserPreferenceStore((s) => s.updatePreferences);
   const syncTablePreference = useUserPreferenceStore((s) => s.syncTablePreference);
+  const screens = Grid.useBreakpoint()
+  const isMobile = !screens.md && screens.xs // 手机端判定：小于 768px 且有 xs
 
   // 全局 Alt+N：当前页有新建按钮时，按 Alt+N 触发新建（与点击新建按钮一致）
   useNewShortcut(showCreateButton && onCreate ? onCreate : undefined);
@@ -1724,7 +1726,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     },
   }), [mergedToolbarOptions, queryClient, handleColumnReset])
 
-  const memoizedRightActions = buildRightActions()
+  const memoizedRightActions = !isMobile ? buildRightActions() : undefined
 
   const memoizedToolbar = React.useMemo(() => ({
     actions: [
@@ -1784,11 +1786,12 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         className="uni-table-container"
         style={{
           position: 'relative',
-          padding: 0,
+          padding: isMobile ? '0 8px' : 0,
           margin: 0,
           width: '100%',
           display: 'flex',
           flexDirection: 'column',
+          boxSizing: 'border-box',
         }}
       >
         <div style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -1803,6 +1806,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               gap: 8,
               rowGap: 8,
               width: '100%',
+              marginTop: isMobile ? 8 : 0,
             }}
           >
             <div
@@ -1827,12 +1831,26 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                   onChange={e => handleFuzzySearch(e.target.value)}
                   onPressEnter={e => handleFuzzySearch((e.target as HTMLInputElement).value)}
                   style={{
-                    width: 160,
+                    width: isMobile ? 'calc(100% - 100px)' : 160,
                     height: '32px',
+                    flex: isMobile ? '1 1 auto' : '0 0 160px',
                   }}
                 />
               )}
-              {showAdvancedSearch && (
+              {/* 手机端：将新建按钮提到此处显示 */}
+              {isMobile && showCreateButton && onCreate && (
+                <Button 
+                  key="mobile-create" 
+                  type="primary" 
+                  icon={<PlusOutlined />} 
+                  onClick={onCreate} 
+                  size={toolBarButtonSize}
+                  style={{ flexShrink: 0 }}
+                >
+                  {createButtonText ?? t('components.uniTable.create')}
+                </Button>
+              )}
+              {!isMobile && showAdvancedSearch && (
                 <ErrorBoundary fallback={<span style={{ color: 'red', fontSize: '12px' }}>{t('components.uniTable.searchError')}</span>}>
                   <Suspense fallback={<span style={{ opacity: 0.6 }}>…</span>}>
                     <LazyQuerySearchButton
@@ -1846,16 +1864,16 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               )}
               {afterSearchButtons}
             </div>
-            {viewTypes && viewTypes.length > 1 && buildViewTypeButtons()}
+            {!isMobile && viewTypes && viewTypes.length > 1 && buildViewTypeButtons()}
           </div>
 
           <ConfigProvider getPopupContainer={() => document.body}>
             <div
               style={{
                 display:
-                  currentViewType === 'table' ||
+                  (currentViewType === 'table' ||
                   currentViewType === 'detailTable' ||
-                  (tableViewTypes && tableViewTypes.includes(currentViewType))
+                  (tableViewTypes && tableViewTypes.includes(currentViewType))) && !isMobile
                     ? 'block'
                     : 'none',
                 width: '100%',
@@ -2305,6 +2323,77 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* 手机端专用卡片视图 - 自动触发 */}
+          {isMobile && (currentViewType === 'table' || currentViewType === 'detailTable' || (tableViewTypes && tableViewTypes.includes(currentViewType))) && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '4px 0 16px 0' }}>
+              {tableData.length > 0 ? (
+                tableData.map((record, index) => {
+                  // 找到主显示列（通常是第一列，排除索引、勾选等）
+                  const mainCol = effectiveTableColumns.find(c => c.dataIndex && !c.hideInTable && !isUniTableOperationColumn(c))
+                  const otherCols = effectiveTableColumns.filter(c => c.dataIndex && !c.hideInTable && !isUniTableOperationColumn(c) && c !== mainCol).slice(0, 5)
+                  const opCol = effectiveTableColumns.find(c => isUniTableOperationColumn(c))
+                  
+                  const getVal = (col: any) => {
+                    const di = col.dataIndex
+                    if (!di) return null
+                    const val = Array.isArray(di) ? di.reduce((acc, k) => acc?.[k], record) : record[di]
+                    if (col.render) return col.render(val, record, index)
+                    if (col.valueEnum) {
+                      const enumItem = col.valueEnum[val]
+                      return enumItem?.text || val
+                    }
+                    return val
+                  }
+
+                  return (
+                    <Card 
+                      key={record[rowKey as string] || index}
+                      variant="borderless"
+                      styles={{ body: { padding: '16px' } }}
+                      style={{ 
+                        borderRadius: 12, 
+                        background: token.colorBgContainer,
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                        border: `1px solid ${token.colorBorderSecondary}`
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                        <div style={{ fontSize: 16, fontWeight: 600, color: token.colorText }}>
+                          {mainCol ? getVal(mainCol) : `#${index + 1}`}
+                        </div>
+                        {opCol && (
+                          <div className="uni-table-mobile-op">
+                            {getVal(opCol)}
+                          </div>
+                        )}
+                      </div>
+                      
+                      <Descriptions 
+                        column={1} 
+                        size="small" 
+                        colon={false}
+                        labelStyle={{ color: token.colorTextSecondary, width: 80 }}
+                        contentStyle={{ color: token.colorText }}
+                      >
+                        {otherCols.map((col, idx) => (
+                          <Descriptions.Item key={idx} label={col.title as string}>
+                            {getVal(col)}
+                          </Descriptions.Item>
+                        ))}
+                      </Descriptions>
+                    </Card>
+                  )
+                })
+              ) : (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />
+              )}
+              {/* 手机端简单的分页提示 */}
+              <div style={{ textAlign: 'center', padding: '16px 0', opacity: 0.5, fontSize: 12 }}>
+                {t('components.uniTable.paginationTotal', { total: tableData.length, start: 1, end: tableData.length })}
+              </div>
             </div>
           )}
 
