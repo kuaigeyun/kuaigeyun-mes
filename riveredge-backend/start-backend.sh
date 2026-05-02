@@ -58,7 +58,7 @@ fi
 # 使用 --no-install-project 避免安装项目本身，防止生成 egg-info 目录
 if [ ! -d ".venv" ] || [ "pyproject.toml" -nt ".venv" ] || [ "uv.lock" -nt ".venv" ]; then
     echo "同步 UV 依赖..."
-    uv sync --no-install-project
+    uv sync --no-install-project --extra pdf
     echo ""
 fi
 
@@ -89,7 +89,7 @@ echo ""
 #   --reload-exclude: 排除不需要监听的文件/目录，减少不必要的重启
 #   --reload-delay: 增加检测间隔到 1.0 秒，减少频繁检测（Windows 上更稳定）
 #   --reload-include: 只监听 .py 文件，忽略其他文件类型
-PYTHONPATH="${PYTHONPATH}:$(pwd)/src" uv run uvicorn server.main:app \
+PYTHONPATH="${PYTHONPATH}:$(pwd)/src" uv run --extra pdf uvicorn server.main:app \
   --host "${BACKEND_HOST}" \
   --port "${BACKEND_PORT}" \
   --reload \

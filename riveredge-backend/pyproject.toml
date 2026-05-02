@@ -34,11 +34,14 @@ dependencies = [
     "taskiq>=0.12.0",
     "taskiq-postgres[asyncpg]>=0.7.0",
     "webauthn>=2.7.1",
-    # HTML→PDF 唯一实现，生产必需（勿改为 optional，否则部署漏装会导致 PDF 功能不可用）
-    "playwright>=1.59.0",
 ]
 
+# Playwright：仅 HTML→PDF。列入主依赖会导致每次「uv run aerich」都解析/下载大包、拖死迁移。
+# 运行后端 / Taskiq / 需要 PDF 时：uv sync --extra pdf，且 uv run --extra pdf …
 [project.optional-dependencies]
+pdf = [
+    "playwright>=1.59.0",
+]
 dev = [
     "pytest>=8.0.0",  # 测试框架,主流稳定版
     "pytest-asyncio>=0.23.0",  # 异步测试支持,主流稳定版

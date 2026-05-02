@@ -33,7 +33,7 @@ start_backend() {
     cd riveredge-backend
     # 强制清理旧的 PID
     [ -f "../.logs/backend.pid" ] && rm -f "../.logs/backend.pid"
-    PYTHONPATH="src" nohup uv run uvicorn server.main:app --host 0.0.0.0 --port "${BACKEND_PORT}" --reload --reload-dir src > ../.logs/backend.log 2>&1 &
+    PYTHONPATH="src" nohup uv run --extra pdf uvicorn server.main:app --host 0.0.0.0 --port "${BACKEND_PORT}" --reload --reload-dir src > ../.logs/backend.log 2>&1 &
     echo $! > ../.logs/backend.pid
     cd ..
     
@@ -53,7 +53,7 @@ start_worker() {
     cd riveredge-backend
     # 启动 Worker
     [ -f "../.logs/worker.pid" ] && rm -f "../.logs/worker.pid"
-    PYTHONPATH="src" nohup uv run taskiq worker core.tasks.taskiq_app:broker --fs-discover \
+    PYTHONPATH="src" nohup uv run --extra pdf taskiq worker core.tasks.taskiq_app:broker --fs-discover \
         core.tasks.taskiq_app \
         core.tasks.data_backup_handlers \
         core.inngest.functions \
@@ -63,7 +63,7 @@ start_worker() {
     
     # 启动 Scheduler
     [ -f "../.logs/scheduler.pid" ] && rm -f "../.logs/scheduler.pid"
-    PYTHONPATH="src" nohup uv run taskiq scheduler core.tasks.taskiq_app:scheduler --fs-discover \
+    PYTHONPATH="src" nohup uv run --extra pdf taskiq scheduler core.tasks.taskiq_app:scheduler --fs-discover \
         core.tasks.taskiq_app \
         core.inngest.functions \
         apps.master_data.inngest.functions \

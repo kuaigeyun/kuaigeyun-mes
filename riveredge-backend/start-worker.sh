@@ -19,7 +19,7 @@ fi
 
 # Worker：消费 PG 队列中的任务（与 API 共用 core.tasks.taskiq_app:broker）
 echo "📦 正在启动 Taskiq worker..."
-uv run taskiq worker \
+uv run --extra pdf taskiq worker \
     --app-dir src \
     --fs-discover \
     $RELOAD \
@@ -27,7 +27,7 @@ uv run taskiq worker \
 
 # Scheduler：cron 任务（schedule 标签 + AsyncpgScheduleSource）
 echo "⏰ 正在启动 Taskiq scheduler..."
-uv run taskiq scheduler \
+uv run --extra pdf taskiq scheduler \
     --app-dir src \
     --fs-discover \
     $RELOAD \
