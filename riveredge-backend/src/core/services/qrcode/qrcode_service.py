@@ -27,7 +27,10 @@ try:
     PYZBAR_AVAILABLE = True
 except ImportError:
     PYZBAR_AVAILABLE = False
-    logger.warning("pyzbar库未安装，二维码解析功能将不可用。请运行: pip install pyzbar")
+    logger.warning(
+        "pyzbar 不可用，二维码解析将关闭。若 uv 已同步仍如此，Linux 通常缺少系统库，请执行: "
+        "sudo apt install -y libzbar0（再重启后端）"
+    )
 
 from infra.exceptions.exceptions import ValidationError, NotFoundError
 
