@@ -1747,7 +1747,7 @@ export default {
   'app.kuaizhizao.common.materialBatchSelect': 'Batch select materials',
   'app.kuaizhizao.common.materialBatchAdded': 'Added {{count}} line(s)',
   'app.uniDetail.sectionBasic': 'Basics',
-  'app.uniDetail.sectionCollaboration': 'Flow and links',
+  'app.uniDetail.sectionCollaboration': 'Lifecycle',
   'app.uniDetail.sectionLines': 'Line items',
   'app.uniDetail.sectionTimeline': 'Activity',
   'app.kuaicaiwu.name': 'Kuaicaiwu',

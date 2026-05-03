@@ -1751,7 +1751,7 @@ export default {
   'app.kuaizhizao.common.materialBatchSelect': '多选物料',
   'app.kuaizhizao.common.materialBatchAdded': '已添加 {{count}} 条明细',
   'app.uniDetail.sectionBasic': '基本信息',
-  'app.uniDetail.sectionCollaboration': '上下游',
+  'app.uniDetail.sectionCollaboration': '生命周期',
   'app.uniDetail.sectionLines': '明细信息',
   'app.uniDetail.sectionTimeline': '操作记录',
   'app.kuaicaiwu.name': '快财务',

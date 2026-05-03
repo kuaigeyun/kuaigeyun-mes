@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Select, Spin } from 'antd';
 import { materialApi } from '../../apps/master-data/services/material';
-import { getDataDictionaryByCode, getDictionaryItemList } from '../../services/dataDictionary';
 import type { Material } from '../../apps/master-data/types/material';
+import { getMaterialUnitDisplayMapShared, normUnitKey } from '../../utils/materialUnitDisplay';
 
 interface MaterialUnitSelectProps {
   /** 物料 ID (支持数字 ID 或字符串 UUID) */
@@ -25,15 +25,7 @@ interface MaterialUnitSelectProps {
 // 实际生产中可考虑更完善的缓存机制。
 export const materialCache: Record<string, Material> = {};
 
-/** 单位字典标签：全应用共享一次 in-flight 请求，避免表格每行各打一遍字典接口 */
-let materialUnitDisplayMapPromise: Promise<Record<string, string>> | null = null;
-
-function getMaterialUnitDisplayMapShared(): Promise<Record<string, string>> {
-  if (!materialUnitDisplayMapPromise) {
-    materialUnitDisplayMapPromise = loadMaterialUnitDisplayMap().catch(() => ({}));
-  }
-  return materialUnitDisplayMapPromise;
-}
+export { getMaterialUnitDisplayMapShared } from '../../utils/materialUnitDisplay';
 
 /**
  * 拉取单条物料并写入缓存（与组件内逻辑一致，供批量预取复用）
@@ -96,42 +88,6 @@ export async function prefetchMaterialsForUnitSelect(
       }
     })
   );
-}
-
-function normUnitKey(s: string): string {
-  return String(s).trim().toLowerCase();
-}
-
-/** 单位 code / 旧数据里存的展示文案 -> 字典标签（含小写键，兼容大小写不一致） */
-function buildUnitDisplayMap(items: { value: string; label: string }[]): Record<string, string> {
-  const rec: Record<string, string> = {};
-  for (const i of items) {
-    const v = String(i.value).trim();
-    const l = String(i.label).trim();
-    const label = i.label;
-    if (v) {
-      rec[v] = label;
-      rec[normUnitKey(v)] = label;
-    }
-    if (l) {
-      rec[l] = label;
-      rec[normUnitKey(l)] = label;
-    }
-  }
-  return rec;
-}
-
-async function loadMaterialUnitDisplayMap(): Promise<Record<string, string>> {
-  for (const code of ['MATERIAL_UNIT', 'unit'] as const) {
-    try {
-      const dictionary = await getDataDictionaryByCode(code);
-      const items = await getDictionaryItemList(dictionary.uuid, true);
-      return buildUnitDisplayMap(items);
-    } catch {
-      /* try next code */
-    }
-  }
-  return {};
 }
 
 /**

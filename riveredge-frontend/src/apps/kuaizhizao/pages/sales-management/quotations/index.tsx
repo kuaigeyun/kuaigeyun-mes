@@ -331,6 +331,14 @@ const QuotationsPage: React.FC = () => {
     detailDrawerVisible && quotationDetail ? 'quotation' : undefined,
     quotationDetail?.id
   );
+  const quotationLifecycleDetail = useMemo(
+    () => (quotationDetail ? getQuotationLifecycle(quotationDetail) : null),
+    [quotationDetail],
+  );
+  const quotationNextSteps = quotationLifecycleDetail?.nextStepSuggestions;
+  const hideQuotationStepperNextRow = Boolean(quotationNextSteps?.length);
+  const showQuotationLifecycleNextInTitle =
+    Boolean(quotationNextSteps?.length) && !quotationDetail?.conversion_downstream_missing;
   const [syncModalVisible, setSyncModalVisible] = useState(false);
   const [pdfPreviewVisible, setPdfPreviewVisible] = useState(false);
   const [pdfPreviewBlobUrl, setPdfPreviewBlobUrl] = useState<string | null>(null);
@@ -2302,9 +2310,6 @@ const QuotationsPage: React.FC = () => {
                   >
                     {t('components.documentTrackingPanel.relationsFullChainTitle')}
                   </div>
-                  <Typography.Text type="secondary" style={{ fontSize: 12, marginTop: 4, display: 'block' }}>
-                    {t('components.documentTrackingPanel.traceBriefClickHint')}
-                  </Typography.Text>
                 </div>
                 <Button
                   type="default"
@@ -2357,22 +2362,13 @@ const QuotationsPage: React.FC = () => {
               style={{
                 fontWeight: 600,
                 fontSize: 13,
-                marginBottom: fullChainBriefDoc ? 4 : 8,
+                marginBottom: 8,
                 flexShrink: 0,
                 color: 'var(--ant-color-text)',
               }}
             >
               {t('components.documentTrackingPanel.traceBriefTitle')}
             </div>
-            {fullChainBriefDoc ? (
-              <Typography.Text type="secondary" style={{ fontSize: 12, marginBottom: 8, flexShrink: 0, display: 'block' }}>
-                {t(`components.documentTrackingPanel.docType.${fullChainBriefDoc.document_type}`, {
-                  defaultValue: fullChainBriefDoc.document_type,
-                })}
-                {' · '}
-                #{fullChainBriefDoc.document_id}
-              </Typography.Text>
-            ) : null}
             <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
               <TraceLinkedDocumentBrief
                 documentType={fullChainBriefDoc?.document_type}
@@ -2487,25 +2483,30 @@ const QuotationsPage: React.FC = () => {
             />
           ) : undefined
         }
+        collaborationTitleSuffix={
+          showQuotationLifecycleNextInTitle ? (
+            <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
+              {t('components.uniLifecycle.nextStep')}：
+              {quotationNextSteps!.join(t('components.uniLifecycle.nextStepSeparator'))}
+            </Typography.Text>
+          ) : undefined
+        }
         collaborationMetrics={
           quotationDetail &&
           quotationDetail.conversion_downstream_missing &&
-          (() => {
-            const lc = getQuotationLifecycle(quotationDetail);
-            return lc.nextStepSuggestions?.length ? (
-              <Alert
-                type="warning"
-                showIcon
-                message="下游销售订单已不存在"
-                description={lc.nextStepSuggestions.join('；')}
-              />
-            ) : undefined;
-          })()
+          quotationNextSteps?.length ? (
+            <Alert
+              type="warning"
+              showIcon
+              message="下游销售订单已不存在"
+              description={quotationNextSteps.join('；')}
+            />
+          ) : undefined
         }
         collaborationLifecycle={
-          quotationDetail
+          quotationDetail && quotationLifecycleDetail
             ? (() => {
-                const lifecycle = getQuotationLifecycle(quotationDetail);
+                const lifecycle = quotationLifecycleDetail;
                 const mainStages = lifecycle.mainStages ?? [];
                 const subStages = lifecycle.subStages ?? [];
                 if (mainStages.length === 0 && subStages.length === 0) return undefined;
@@ -2517,6 +2518,7 @@ const QuotationsPage: React.FC = () => {
                         status={lifecycle.status}
                         showLabels
                         nextStepSuggestions={lifecycle.nextStepSuggestions}
+                        hideNextStepSuggestions={hideQuotationStepperNextRow}
                       />
                     )}
                     {subStages.length > 0 && (

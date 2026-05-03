@@ -167,48 +167,51 @@ class DocumentRelationService:
         return []
 
     async def _get_demand_computation_upstream(self, tenant_id: int, computation_id: int) -> List[Dict[str, Any]]:
-        """获取需求计算的上游单据（需求、销售预测/销售订单）"""
+        """获取需求计算的上游单据（MTO 销售订单场景直连订单；预测场景仍经 Demand→Forecast）"""
         computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
         if not computation:
             return []
 
         upstream = []
 
-        # 需求
         demand = await Demand.get_or_none(tenant_id=tenant_id, id=computation.demand_id)
-        if demand:
-            upstream.append({
-                "document_type": "demand",
-                "document_id": demand.id,
-                "document_code": demand.demand_code,
-                "document_name": getattr(demand, "demand_name", None) or demand.demand_code,
-                "status": getattr(demand, "status", None),
-                "created_at": demand.created_at.isoformat() if demand.created_at else None
-            })
+        if not demand:
+            return upstream
 
-            # 根据需求来源追溯销售预测或销售订单
-            if demand.source_type == "sales_forecast" and demand.source_id:
-                forecast = await SalesForecast.get_or_none(tenant_id=tenant_id, id=demand.source_id)
-                if forecast:
-                    upstream.append({
-                        "document_type": "sales_forecast",
-                        "document_id": forecast.id,
-                        "document_code": forecast.forecast_code,
-                        "document_name": forecast.forecast_name,
-                        "status": forecast.status,
-                        "created_at": forecast.created_at.isoformat() if forecast.created_at else None
-                    })
-            elif demand.source_type == "sales_order" and demand.source_id:
-                order = await SalesOrder.get_or_none(tenant_id=tenant_id, id=demand.source_id)
-                if order:
-                    upstream.append({
-                        "document_type": "sales_order",
-                        "document_id": order.id,
-                        "document_code": order.order_code,
-                        "document_name": getattr(order, "order_name", None) or order.order_code,
-                        "status": order.status,
-                        "created_at": order.created_at.isoformat() if order.created_at else None
-                    })
+        # 销售订单来源：追溯链不再插入「需求」节点，上游即为销售订单
+        if demand.source_type == "sales_order" and demand.source_id:
+            order = await SalesOrder.get_or_none(tenant_id=tenant_id, id=demand.source_id)
+            if order:
+                upstream.append({
+                    "document_type": "sales_order",
+                    "document_id": order.id,
+                    "document_code": order.order_code,
+                    "document_name": getattr(order, "order_name", None) or order.order_code,
+                    "status": order.status,
+                    "created_at": order.created_at.isoformat() if order.created_at else None
+                })
+                return upstream
+
+        upstream.append({
+            "document_type": "demand",
+            "document_id": demand.id,
+            "document_code": demand.demand_code,
+            "document_name": getattr(demand, "demand_name", None) or demand.demand_code,
+            "status": getattr(demand, "status", None),
+            "created_at": demand.created_at.isoformat() if demand.created_at else None
+        })
+
+        if demand.source_type == "sales_forecast" and demand.source_id:
+            forecast = await SalesForecast.get_or_none(tenant_id=tenant_id, id=demand.source_id)
+            if forecast:
+                upstream.append({
+                    "document_type": "sales_forecast",
+                    "document_id": forecast.id,
+                    "document_code": forecast.forecast_code,
+                    "document_name": forecast.forecast_name,
+                    "status": forecast.status,
+                    "created_at": forecast.created_at.isoformat() if forecast.created_at else None
+                })
 
         return upstream
 

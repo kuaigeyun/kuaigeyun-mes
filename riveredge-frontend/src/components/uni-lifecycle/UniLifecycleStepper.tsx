@@ -45,6 +45,8 @@ export interface UniLifecycleStepperProps {
   innerFontSize?: number;
   /** 当前阶段的下一步操作建议，可选 */
   nextStepSuggestions?: string[];
+  /** 为 true 时不渲染下一步提示行（可由外层如抽屉区块标题承接） */
+  hideNextStepSuggestions?: boolean;
 }
 
 const NODE_SIZE = 40;
@@ -205,6 +207,7 @@ export const UniLifecycleStepper: React.FC<UniLifecycleStepperProps> = ({
   showLabels = true,
   innerFontSize = INNER_FONT_SIZE,
   nextStepSuggestions,
+  hideNextStepSuggestions = false,
 }) => {
   const { t } = useTranslation();
   const isException = status === 'exception';
@@ -244,7 +247,7 @@ export const UniLifecycleStepper: React.FC<UniLifecycleStepperProps> = ({
           </React.Fragment>
         ))}
       </div>
-      {nextStepSuggestions && nextStepSuggestions.length > 0 && (
+      {!hideNextStepSuggestions && nextStepSuggestions && nextStepSuggestions.length > 0 && (
         <div
           style={{
             display: 'flex',

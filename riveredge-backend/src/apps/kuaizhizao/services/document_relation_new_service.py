@@ -221,6 +221,13 @@ class DocumentRelationNewService:
         except Exception as e:
             logger.warning(f"业务推导关联获取失败，仅返回表驱动结果: {e}")
 
+        # 兼容历史库：旧版曾写入 DocumentRelation(sales_order→demand)；新建订单已不再创建该边，
+        # 合并结果时仍丢弃订单→「需求」下游，避免追溯图分叉。
+        if document_type == "sales_order":
+            downstream_responses = [
+                r for r in downstream_responses if r.target_type != "demand"
+            ]
+
         return DocumentRelationListResponse(
             upstream=upstream_responses,
             downstream=downstream_responses,

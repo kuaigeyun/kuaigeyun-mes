@@ -47,7 +47,8 @@ class SalesOrderService:
     销售订单管理服务
 
     销售订单数据存储于 SalesOrder 表，支持与其他系统对接。
-    下推需求计算时由 SalesOrder 生成 Demand（source_type=sales_order, source_id=订单ID）。
+    下推需求计算时由 SalesOrder 生成 Demand（source_type=sales_order, source_id=订单ID），
+    不再写入 DocumentRelation(订单→demand)；追溯图由推导直连需求计算。
     """
 
     def __init__(self):
@@ -1629,31 +1630,8 @@ class SalesOrderService:
             )
         logger.info("从销售订单 %s 生成需求 %s", order.order_code, demand.demand_code)
 
-        # 建立销售订单→Demand 的 DocumentRelation（支持单据追溯）
-        try:
-            from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
-            from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
-
-            rel_svc = DocumentRelationNewService()
-            await rel_svc.create_relation(
-                tenant_id=tenant_id,
-                relation_data=DocumentRelationCreate(
-                    source_type="sales_order",
-                    source_id=sales_order_id,
-                    source_code=order.order_code,
-                    source_name=order.order_code,
-                    target_type="demand",
-                    target_id=demand.id,
-                    target_code=demand.demand_code,
-                    target_name=demand.demand_name or demand.demand_code,
-                    relation_type="source",
-                    relation_mode="push",
-                    relation_desc="销售订单审核通过自动生成需求",
-                ),
-                created_by=created_by,
-            )
-        except Exception as e:
-            logger.warning("创建销售订单→Demand 单据关联失败: %s", e)
+        # 不再写入 DocumentRelation(sales_order→demand)：全链路追溯以订单→需求计算为主，
+        # Demand 仍存表供计算与明细；关联路径见推导逻辑 _get_sales_order_downstream。
 
         return demand
 

@@ -47,6 +47,8 @@ export interface DetailDrawerTemplateProps<T = Record<string, unknown>> {
   collaborationLifecycle?: ReactNode;
   collaborationRelations?: ReactNode;
   collaborationTitle?: ReactNode;
+  /** 显示在协作/生命周期区块标题同一行的附加说明（如「下一步：…」） */
+  collaborationTitleSuffix?: ReactNode;
   collaborationVisible?: boolean;
 
   lines?: ReactNode;
@@ -112,6 +114,7 @@ export const DetailDrawerTemplate = <T extends Record<string, unknown> = Record<
   collaborationLifecycle,
   collaborationRelations,
   collaborationTitle,
+  collaborationTitleSuffix,
   collaborationVisible,
   lines,
   linesTitle,
@@ -140,6 +143,23 @@ export const DetailDrawerTemplate = <T extends Record<string, unknown> = Record<
 
   const resolvedBasicTitle = basicTitle ?? t('app.uniDetail.sectionBasic');
   const resolvedCollaborationTitle = collaborationTitle ?? t('app.uniDetail.sectionCollaboration');
+  const collaborationSectionTitle =
+    collaborationTitleSuffix != null ? (
+      <span
+        style={{
+          display: 'inline-flex',
+          flexWrap: 'wrap',
+          alignItems: 'baseline',
+          columnGap: 8,
+          rowGap: 4,
+        }}
+      >
+        <span>{resolvedCollaborationTitle}</span>
+        {collaborationTitleSuffix}
+      </span>
+    ) : (
+      resolvedCollaborationTitle
+    );
   const resolvedLinesTitle = linesTitle ?? t('app.uniDetail.sectionLines');
   const resolvedTimelineTitle = timelineTitle ?? t('app.uniDetail.sectionTimeline');
 
@@ -194,7 +214,7 @@ export const DetailDrawerTemplate = <T extends Record<string, unknown> = Record<
         <DetailDrawerSection title={resolvedBasicTitle}>{basic}</DetailDrawerSection>
       ) : null}
       {showCollaboration ? (
-        <DetailDrawerSection title={resolvedCollaborationTitle}>{stackedCollaboration}</DetailDrawerSection>
+        <DetailDrawerSection title={collaborationSectionTitle}>{stackedCollaboration}</DetailDrawerSection>
       ) : null}
       {showLines ? (
         <DetailDrawerSection title={resolvedLinesTitle}>{lines}</DetailDrawerSection>
