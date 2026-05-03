@@ -49,6 +49,25 @@ import { variantAttributeApi } from '../../../apps/master-data/services/variant-
 import { batchRuleApi, serialRuleApi } from '../../../apps/master-data/services/batchSerialRules';
 import { useThemeStore } from '../../../stores/themeStore';
 import { ManufacturingIcons } from '../../../utils/manufacturingIcons';
+import { getDepartmentTree } from '../../../services/department';
+import { getPositionList } from '../../../services/position';
+import { getRoleList } from '../../../services/role';
+import { getCodeRuleList } from '../../../services/codeRule';
+import { getDataDictionaryList } from '../../../services/dataDictionary';
+import { getLanguageList } from '../../../services/language';
+import { getCustomFieldList } from '../../../services/customField';
+import { getMenus } from '../../../services/menu';
+import { getApprovalProcessList } from '../../../services/approvalProcess';
+import { getMessageTemplateList } from '../../../services/messageTemplate';
+import { getPrintTemplateList } from '../../../services/printTemplate';
+import { getFileList } from '../../../services/file';
+import { getDataSourceList } from '../../../services/dataSource';
+import { getApplicationConnectionList } from '../../../services/applicationConnection';
+import { getDatasetList } from '../../../services/dataset';
+import { getOperationLogs } from '../../../services/operationLog';
+import { getLoginLogs } from '../../../services/loginLog';
+import { getBackups } from '../../../services/dataBackup';
+import { getInstalledApplicationList } from '../../../services/application';
 
 const { Title, Paragraph, Text } = Typography;
 const { Step } = Steps;
@@ -92,6 +111,39 @@ const ROLE_KEYS: Array<{ code: string; name: string; icon: React.ReactNode }> = 
   { code: 'manager', name: '管理决策向导', icon: onboardingMenuIcon(ManufacturingIcons.trophy) }, // 绩效管理/经营结果
   { code: 'implementer', name: '系统设定向导', icon: onboardingMenuIcon(ManufacturingIcons.package) }, // 实施交付（与菜单包裹应用包意象一致，不重复）
 ];
+
+/**
+ * 系统上线向导 — 与列表卡片「智能存量」一致，供环形进度与阶段计算复用
+ */
+function getSystemLaunchStockCount(
+  item: { id?: string; name?: string },
+  realCounts: Record<string, number>
+): number {
+  if (item.id != null && realCounts[item.id] !== undefined) return Number(realCounts[item.id]) || 0;
+  const name = item.name || '';
+  if (name.includes('单据') || name.includes('订单')) return realCounts['order_data'] || 0;
+  if (name.includes('首笔') || name.includes('试运行')) return realCounts['order_data'] || 0;
+  if (name.includes('用户') || name.includes('人员')) return realCounts['user_data'] || 0;
+  if (name.includes('客户') || name.includes('供应商')) return realCounts['partner_data'] || 0;
+  if (name.includes('物料') || name.includes('产品')) return realCounts['material_data'] || 0;
+  if (name.includes('仓库') || name.includes('库位')) return realCounts['warehouse_data'] || 0;
+  if (name.includes('BOM') || name.includes('清单')) return realCounts['bom_config'] || 0;
+  if (name.includes('工作中心') || name.includes('产线')) return realCounts['work_center_config'] || 0;
+  if (name.includes('工艺') || name.includes('路线')) return realCounts['process_routing'] || 0;
+  return 0;
+}
+
+function isSystemLaunchListItemCompleted(
+  item: any,
+  realCounts: Record<string, number>,
+  completedItems: Set<string>
+): boolean {
+  return (
+    getSystemLaunchStockCount(item, realCounts) > 0 ||
+    item.completed === true ||
+    completedItems.has(item.id)
+  );
+}
 
 /**
  * 自助式上线向导页面组件
@@ -605,8 +657,22 @@ const OnboardingWizardPage: React.FC = () => {
   const [realCounts, setRealCounts] = useState<Record<string, number>>({});
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [currentDetailItem, setCurrentDetailItem] = useState<any>(null);
+  /** 点击「刷新状态」时递增，触发 system/implementer 重新拉取 realCounts */
+  const [realCountsRefreshKey, setRealCountsRefreshKey] = useState(0);
 
-  // 实时存量补偿器：加入用户、订单统计
+  /** 部门树节点数（total 优先，缺省时递归统计树根） */
+  const countDepartmentRecords = (tree: any): number => {
+    if (!tree || typeof tree !== 'object') return 0;
+    const t = Number(tree.total);
+    if (!Number.isNaN(t) && t > 0) return t;
+    const walk = (nodes: any[] | undefined): number => {
+      if (!nodes?.length) return 0;
+      return nodes.reduce((acc, n) => acc + 1 + walk(n?.children), 0);
+    };
+    return walk(tree.items);
+  };
+
+  // 实时存量：主数据 + 订单 + 系统设定向导各页面对应的接口检测（与清单子项 id 对齐）
   useEffect(() => {
     const fetchRealCounts = async () => {
       try {
@@ -615,7 +681,26 @@ const OnboardingWizardPage: React.FC = () => {
           plants, workshops, lines, stations, workCenters, workGroups, 
           defectTypes, operations, routes, sops,
           variantAttrs, batchRules, serialRules,
-          users, sales, purchases
+          users, sales, purchases,
+          deptTree,
+          positions,
+          roles,
+          codeRules,
+          dicts,
+          langs,
+          customFields,
+          menus,
+          workflows,
+          msgTemplates,
+          printTemplates,
+          files,
+          dataSources,
+          appConnections,
+          datasets,
+          opLogs,
+          loginLogs,
+          backups,
+          installedApps,
         ] = await Promise.all([
           customerApi.list().catch(() => null),
           supplierApi.list().catch(() => null),
@@ -639,7 +724,26 @@ const OnboardingWizardPage: React.FC = () => {
           serialRuleApi.list().catch(() => null),
           getUserList({ page: 1, page_size: 1 }).catch(() => null),
           listSalesOrders({ limit: 1 }).catch(() => null),
-          listPurchaseOrders({ limit: 1 }).catch(() => null)
+          listPurchaseOrders({ limit: 1 }).catch(() => null),
+          getDepartmentTree().catch(() => null),
+          getPositionList({ page: 1, page_size: 1 }).catch(() => null),
+          getRoleList({ page: 1, page_size: 1 }).catch(() => null),
+          getCodeRuleList({ page: 1, page_size: 500 }).catch(() => null),
+          getDataDictionaryList({ page: 1, page_size: 1 }).catch(() => null),
+          getLanguageList({ page: 1, page_size: 1 }).catch(() => null),
+          getCustomFieldList({ page: 1, page_size: 1 }).catch(() => null),
+          getMenus().catch(() => null),
+          getApprovalProcessList({ skip: 0, limit: 500 }).catch(() => null),
+          getMessageTemplateList({ skip: 0, limit: 500 }).catch(() => null),
+          getPrintTemplateList().catch(() => null),
+          getFileList({ page: 1, page_size: 1 }).catch(() => null),
+          getDataSourceList({ page: 1, page_size: 1 }).catch(() => null),
+          getApplicationConnectionList({ page: 1, page_size: 1 }).catch(() => null),
+          getDatasetList({ page: 1, page_size: 1 }).catch(() => null),
+          getOperationLogs({ page: 1, page_size: 1 }).catch(() => null),
+          getLoginLogs({ page: 1, page_size: 1 }).catch(() => null),
+          getBackups({ page: 1, page_size: 1 }).catch(() => null),
+          getInstalledApplicationList().catch(() => null),
         ]);
 
         const getCount = (res: any) => {
@@ -700,6 +804,33 @@ const OnboardingWizardPage: React.FC = () => {
         const soCount = getCount(sales);
         const poCount = getCount(purchases);
         if (soCount !== undefined || poCount !== undefined) counts['order_data'] = (soCount || 0) + (poCount || 0);
+        counts['first_order_run'] = counts['order_data'] ?? 0;
+
+        // 系统设定向导：与 IMPLEMENTER_ENHANCED_CHECKLIST 子项 id 对齐（站点/业务配置/个人中心等由人工勾选或后续再接专项接口）
+        counts['imp_dept'] = countDepartmentRecords(deptTree);
+        counts['imp_post'] = getCount(positions) ?? 0;
+        counts['imp_role'] = getCount(roles) ?? 0;
+        counts['imp_user'] = counts['user_data'] ?? 0;
+        counts['imp_rule'] = getCount(codeRules) ?? 0;
+        counts['imp_dict'] = getCount(dicts) ?? 0;
+        counts['imp_lang'] = getCount(langs) ?? 0;
+        counts['imp_field'] = getCount(customFields) ?? 0;
+        counts['imp_menu'] = Array.isArray(menus) ? menus.length : 0;
+        counts['imp_workflow'] = Array.isArray(workflows) ? workflows.length : 0;
+        counts['imp_msg'] = Array.isArray(msgTemplates) ? msgTemplates.length : 0;
+        counts['imp_print'] = Array.isArray(printTemplates) ? printTemplates.length : 0;
+        counts['imp_file'] = getCount(files) ?? 0;
+        counts['imp_api'] = getCount(dataSources) ?? 0;
+        counts['imp_connector'] = getCount(appConnections) ?? 0;
+        counts['imp_dataset'] = getCount(datasets) ?? 0;
+        counts['imp_audit'] =
+          opLogs && typeof opLogs === 'object' && 'total' in opLogs ? Math.max(0, Number((opLogs as any).total) || 0) : 0;
+        counts['imp_login'] =
+          loginLogs && typeof loginLogs === 'object' && 'total' in loginLogs
+            ? Math.max(0, Number((loginLogs as any).total) || 0)
+            : 0;
+        counts['imp_backup'] = getCount(backups) ?? 0;
+        counts['imp_app_center'] = Array.isArray(installedApps) ? installedApps.length : 0;
 
         setRealCounts(counts);
       } catch (error) {
@@ -707,8 +838,10 @@ const OnboardingWizardPage: React.FC = () => {
       }
     };
 
-    fetchRealCounts();
-  }, []);
+    if (activeTab === 'system' || activeTab === 'implementer') {
+      fetchRealCounts();
+    }
+  }, [activeTab, realCountsRefreshKey]);
 
   /**
    * 加载系统上线向导
@@ -860,10 +993,12 @@ const OnboardingWizardPage: React.FC = () => {
         let isGroupCompleted = completedItems.has(item.id);
         
         if (hasSubItems && !isGroupCompleted) {
-          // 如果所有必填子项都已手动勾选或满足条件，则视为完成
+          // 如果所有必填子项都已手动勾选或接口检测到存量，则视为完成
           const requiredSubs = item.subItems!.filter(s => s.required);
           if (requiredSubs.length > 0) {
-            isGroupCompleted = requiredSubs.every(s => completedItems.has(s.id));
+            isGroupCompleted = requiredSubs.every(
+              (s) => completedItems.has(s.id) || (realCounts[s.id] ?? 0) > 0
+            );
           }
         }
 
@@ -873,31 +1008,45 @@ const OnboardingWizardPage: React.FC = () => {
         };
       })
     }));
-  }, [completedItems]);
+  }, [completedItems, realCounts]);
 
+  /** 仅统计「核心必办」大项；完成判定与列表卡片一致（存量 + 后端 completed + 手动勾选） */
   const sysProgress = useMemo(() => {
     let sysCompleted = 0;
     let sysTotal = 0;
     systemChecklist.forEach((cat: any) => {
       cat.items?.forEach((item: any) => {
+        if (!item.required) return;
         sysTotal++;
-        if (item.completed || completedItems.has(item.id)) sysCompleted++;
+        if (isSystemLaunchListItemCompleted(item, realCounts, completedItems)) sysCompleted++;
       });
     });
     return sysTotal > 0 ? Math.round((sysCompleted / sysTotal) * 100) : 0;
-  }, [systemChecklist, completedItems]);
+  }, [systemChecklist, completedItems, realCounts]);
 
+  /** 系统设定向导：环形进度仅统计必填子项（与卡片内「进度 (必选)」口径一致，不含可选页） */
   const impProgress = useMemo(() => {
-    let impCompleted = 0;
-    let impTotal = 0;
+    let done = 0;
+    let total = 0;
     implementerChecklist.forEach((cat: any) => {
       cat.items?.forEach((item: any) => {
-        impTotal++;
-        if (item.completed) impCompleted++;
+        const subs = item.subItems || [];
+        if (!subs.length) {
+          if (item.required) {
+            total += 1;
+            if (item.completed) done += 1;
+          }
+          return;
+        }
+        subs.forEach((sub: any) => {
+          if (!sub.required) return;
+          total += 1;
+          if (completedItems.has(sub.id) || (realCounts[sub.id] ?? 0) > 0) done += 1;
+        });
       });
     });
-    return impTotal > 0 ? Math.round((impCompleted / impTotal) * 100) : 0;
-  }, [implementerChecklist]);
+    return total > 0 ? Math.round((done / total) * 100) : 0;
+  }, [implementerChecklist, completedItems, realCounts]);
 
 
 
@@ -1242,8 +1391,8 @@ const OnboardingWizardPage: React.FC = () => {
     }
 
     // 计算当前应该进行到哪一个阶段（第一个包含未完成项的阶段）
-    const currentStep = systemChecklist.findIndex((cat: any) => 
-      (cat.items || []).some((item: any) => !item.completed && !completedItems.has(item.id))
+    const currentStep = systemChecklist.findIndex((cat: any) =>
+      (cat.items || []).some((item: any) => !isSystemLaunchListItemCompleted(item, realCounts, completedItems))
     );
     const activeStep = currentStep === -1 ? systemChecklist.length : currentStep;
 
@@ -1341,23 +1490,8 @@ const OnboardingWizardPage: React.FC = () => {
                     <List
                       dataSource={category.items || []}
                       renderItem={(item: any) => {
-                        // 智能存量匹配
-                        const getSmartCount = () => {
-                          if (realCounts[item.id] !== undefined) return realCounts[item.id];
-                          const name = item.name || '';
-                          if (name.includes('单据') || name.includes('订单')) return realCounts['order_data'] || 0;
-                          if (name.includes('用户') || name.includes('人员')) return realCounts['user_data'] || 0;
-                          if (name.includes('客户') || name.includes('供应商')) return realCounts['partner_data'] || 0;
-                          if (name.includes('物料') || name.includes('产品')) return realCounts['material_data'] || 0;
-                          if (name.includes('仓库') || name.includes('库位')) return realCounts['warehouse_data'] || 0;
-                          if (name.includes('BOM') || name.includes('清单')) return realCounts['bom_config'] || 0;
-                          if (name.includes('工作中心') || name.includes('产线')) return realCounts['work_center_config'] || 0;
-                          if (name.includes('工艺') || name.includes('路线')) return realCounts['process_routing'] || 0;
-                          return 0;
-                        };
-
-                        const realCount = getSmartCount();
-                        const isCompleted = realCount > 0 || item.completed === true || completedItems.has(item.id);
+                        const realCount = getSystemLaunchStockCount(item, realCounts);
+                        const isCompleted = isSystemLaunchListItemCompleted(item, realCounts, completedItems);
                         const enhanced = ENHANCED_MISSION_GUIDE[item.id] || ENHANCED_MISSION_GUIDE[item.check_key || ''];
                         
                         return (
@@ -1426,7 +1560,7 @@ const OnboardingWizardPage: React.FC = () => {
                                     if (item.subItems && item.subItems.length > 0) {
                                       item.subItems.forEach((sub: any) => {
                                         if (sub.required) req++; else opt++;
-                                        if (realCounts[sub.check_key] > 0) done++;
+                                        if (sub.required && (realCounts[sub.check_key] ?? 0) > 0) done++;
                                       });
                                     } else {
                                       if (item.required) req = 1; else opt = 1;
@@ -1578,16 +1712,6 @@ const OnboardingWizardPage: React.FC = () => {
           )}
         </Card>
 
-        {sysProgress === 100 && (
-          <Alert
-            message={t('pages.system.onboardingWizard.systemComplete')}
-            description={t('pages.system.onboardingWizard.systemCompleteDesc')}
-            type="success"
-            showIcon
-            icon={wizIcon(CheckCircle2, 18)}
-            style={{ marginTop: 16, borderRadius: token.borderRadiusLG }}
-          />
-        )}
       </div>
     );
   };
@@ -2049,7 +2173,16 @@ const OnboardingWizardPage: React.FC = () => {
                 type="text" 
                 size="small" 
                 icon={wizIcon(RefreshCw, 15)} 
-                onClick={activeTab === 'system' ? loadSystemGuide : () => loadRoleGuide(activeTab)}
+                onClick={() => {
+                  if (activeTab === 'system') {
+                    loadSystemGuide();
+                    setRealCountsRefreshKey((k) => k + 1);
+                  } else if (activeTab === 'implementer') {
+                    setRealCountsRefreshKey((k) => k + 1);
+                  } else {
+                    loadRoleGuide(activeTab);
+                  }
+                }}
                 style={{ fontSize: 12, color: token.colorTextSecondary, padding: 0, height: 'auto', lineHeight: 1 }}
               >
                 {t('pages.system.onboardingWizard.refresh')}
@@ -2144,7 +2277,8 @@ const OnboardingWizardPage: React.FC = () => {
                 fixed: 'left',
                 render: (text, record) => (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    {(completedItems.has(record.id) || realCounts[record.id] > 0) && (
+                    {((record.check_key ? (realCounts[record.check_key] ?? 0) : (realCounts[record.id] ?? 0)) > 0 ||
+                      (record.id && completedItems.has(record.id))) && (
                       <CheckCircle2 size={14} color={token.colorSuccess} style={{ flexShrink: 0 }} />
                     )}
                     <Text strong>{text}</Text>
