@@ -1,5 +1,5 @@
 import React from 'react'
-import { Button, Dropdown, Space } from 'antd'
+import { Button, Dropdown, Space, Popconfirm, Tooltip } from 'antd'
 import { MoreOutlined } from '@ant-design/icons'
 import type { NormalizeActionContext, RenderRowActionsOverflowOptions } from './types'
 import {
@@ -12,6 +12,12 @@ import {
 import { normalizeActionTree } from './normalize'
 
 export const ROW_ACTIONS_DIRECT_MAX = 4
+
+/**
+ * 有溢出菜单时，主行至少展示的可点击操作数（会从「更多」中顺延补足）。
+ * 与 ROW_ACTIONS_DIRECT_MAX 兼容：`max(directMax - 1, 该常量)`。
+ */
+export const ROW_ACTIONS_MIN_PRIMARY_VISIBLE = 4
 
 /** 列表操作列内联按钮横向间距（Ant Design Space） */
 export const ROW_ACTIONS_INLINE_GAP = 4
@@ -44,21 +50,29 @@ function normalizeAndSortActions(
 
 function findInteractiveElement(node: React.ReactNode): React.ReactElement | null {
   if (!React.isValidElement(node)) return null
-  if (node.type === Button || (typeof node.type === 'string' && node.type === 'a')) {
+  const t = node.type
+  if (t === Button || (typeof node.type === 'string' && node.type === 'a')) {
     return node
   }
-  if (node.props?.children) {
-    if (React.isValidElement(node.props.children)) {
-      return findInteractiveElement(node.props.children)
-    }
-    if (Array.isArray(node.props.children)) {
-      for (const child of node.props.children) {
-        const found = findInteractiveElement(child)
-        if (found) return found
-      }
+  if (t === Popconfirm || t === Tooltip) {
+    return findInteractiveElement((node.props as { children?: React.ReactNode }).children)
+  }
+  const ch = (node.props as { children?: React.ReactNode } | undefined)?.children
+  if (ch != null) {
+    for (const child of React.Children.toArray(ch)) {
+      const found = findInteractiveElement(child)
+      if (found) return found
     }
   }
   return null
+}
+
+/** 不可点（disabled 或无按钮/链接）的操作不展示 */
+function isClickableVisibleAction(node: React.ReactNode): boolean {
+  const interactive = findInteractiveElement(node)
+  if (!interactive) return false
+  const p = (interactive.props || {}) as { disabled?: boolean }
+  return !p.disabled
 }
 
 function toMenuItem(node: React.ReactNode, key: string) {
@@ -99,7 +113,7 @@ function parseOverflowArgs(directMaxOrOptions?: number | RenderRowActionsOverflo
 }
 
 /**
- * 列表操作列：统一顺序 + 超过上限收纳到「更多」
+ * 列表操作列：统一顺序；禁用项隐藏；需要溢出时主行至少 ROW_ACTIONS_MIN_PRIMARY_VISIBLE 个可点操作，其余进「更多」。
  */
 export function renderRowActionsOverflow(
   nodes: React.ReactNode[],
@@ -108,15 +122,24 @@ export function renderRowActionsOverflow(
 ): React.ReactNode {
   const { directMax, ctx } = parseOverflowArgs(directMaxOrOptions)
   const sorted = normalizeAndSortActions(nodes, ctx)
-  if (sorted.length <= directMax) {
+  const enabled = sorted.filter(isClickableVisibleAction)
+  /** 原先为 directMax-1 留「更多」一格；抬高下限为 4，避免禁项隐藏后主行过空 */
+  const primarySlotsBeforeMore = Math.max(1, directMax - 1, ROW_ACTIONS_MIN_PRIMARY_VISIBLE)
+
+  if (enabled.length === 0) {
+    return null
+  }
+
+  if (enabled.length <= primarySlotsBeforeMore) {
     return (
       <Space size={ROW_ACTIONS_INLINE_GAP} wrap={false} style={{ whiteSpace: 'nowrap' }}>
-        {sorted}
+        {enabled}
       </Space>
     )
   }
-  const inline = sorted.slice(0, Math.max(1, directMax - 1))
-  const overflow = sorted.slice(Math.max(1, directMax - 1))
+
+  const inline = enabled.slice(0, primarySlotsBeforeMore)
+  const overflow = enabled.slice(primarySlotsBeforeMore)
 
   return (
     <Space size={ROW_ACTIONS_INLINE_GAP} wrap={false} style={{ whiteSpace: 'nowrap' }}>

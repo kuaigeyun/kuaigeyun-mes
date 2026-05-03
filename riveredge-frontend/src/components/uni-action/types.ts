@@ -2,7 +2,9 @@
  * UniAction：表格操作列渲染选项
  */
 export type UniActionRenderOptions = {
-  /** 直显操作项上限，超出部分收入「更多」下拉，默认 3 */
+  /**
+   * 与 `ROW_ACTIONS_DIRECT_MAX` 配合：溢出时主行保留 `max(directMax - 1, ROW_ACTIONS_MIN_PRIMARY_VISIBLE)` 个可点击项。
+   */
   directMax?: number
   /** 为 true 时，在无站点级审核配置下隐藏「确认 / 审核 / 审批 / 驳回」等审核语义按钮 */
   suppressAuditSemanticActions?: boolean

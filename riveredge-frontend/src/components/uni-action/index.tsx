@@ -6,7 +6,11 @@ export type {
   RenderRowActionsOverflowOptions,
   NormalizeActionContext,
 } from './types'
-export { ROW_ACTIONS_DIRECT_MAX, renderRowActionsOverflow } from './overflow'
+export {
+  ROW_ACTIONS_DIRECT_MAX,
+  ROW_ACTIONS_MIN_PRIMARY_VISIBLE,
+  renderRowActionsOverflow,
+} from './overflow'
 export { renderUniTableOperationCell } from './renderCell'
 export { collectOperationActions } from './collect'
 export { normalizeActionTree } from './normalize'
