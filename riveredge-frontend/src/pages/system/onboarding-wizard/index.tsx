@@ -361,6 +361,8 @@ const OnboardingWizardPage: React.FC = () => {
   /**
    * 系统设定向导 (实施人员/管理员) 建设标准
    * 按 4 阶段拆解，引导管理员完成系统底层配置
+   *
+   * 子项 required：表示跳过易导致下游建单、过账、派工等环节校验失败或无法闭环（不仅是“建议配置”）。
    */
   const IMPLEMENTER_ENHANCED_CHECKLIST = [
     {
@@ -389,10 +391,11 @@ const OnboardingWizardPage: React.FC = () => {
           id: 'imp_standard_group',
           name: '业务建模与标准化',
           required: true,
-          description: '定义全系统的编码逻辑、数据字典、自定义字段等核心建模标准。',
+          description: '以编号规则为主干；数据字典与业务参数多为系统预置，可按企业规则再细化。',
           subItems: [
             { id: 'imp_rule', name: '编号规则', description: '物料、订单的自动编号逻辑设定。', required: true, jump_path: '/system/code-rules' },
-            { id: 'imp_dict', name: '数据字典', description: '预定义枚举项（支付方式、单据分类等）。', required: true, jump_path: '/system/data-dictionaries' },
+            { id: 'imp_dict', name: '数据字典', description: '预定义枚举项（支付方式、单据分类等）；通常已预置，可按需增补。', required: false, jump_path: '/system/data-dictionaries' },
+            { id: 'imp_business', name: '业务配置', description: '仓储策略、负库存、批号/序列号/库位等开关；默认即可起步，启用进阶能力后再逐项对齐。', required: false, jump_path: '/system/config-center' },
             { id: 'imp_lang', name: '语言管理', description: '多语言翻译字典维护，支撑全球化作业。', required: false, jump_path: '/system/languages' },
             { id: 'imp_field', name: '自定义字段', description: '单据动态字段扩展与数据采集配置。', required: false, jump_path: '/system/custom-fields' },
           ]
@@ -401,11 +404,10 @@ const OnboardingWizardPage: React.FC = () => {
           id: 'imp_site_group',
           name: '界面布局与站点配置',
           required: false,
-          description: '配置左侧菜单布局、系统 LOGO、租户名称等全局性视觉属性。',
+          description: '配置左侧菜单布局、系统 LOGO、租户名称等全局性视觉属性（不影响核心过账链路）。',
           subItems: [
             { id: 'imp_menu', name: '菜单管理', description: '自定义侧栏排序、图标与显示名称。', required: false, jump_path: '/system/menus' },
             { id: 'imp_site', name: '站点设置', description: '配置系统名称、LOGO 与多租户参数。', required: false, jump_path: '/system/site-settings' },
-            { id: 'imp_business', name: '业务配置', description: '各类具体业务开关（如库存负库存限制）。', required: false, jump_path: '/system/config-center' },
           ]
         }
       ]
@@ -452,13 +454,13 @@ const OnboardingWizardPage: React.FC = () => {
         {
           id: 'imp_ops_group',
           name: '全方位运维与监控',
-          required: true,
-          description: '建立审计日志追溯系统，实施在线用户监控与数据自动化备份。',
+          required: false,
+          description: '安全审计、登录与会话监控、备份策略等治理与灾备项；不参与业务单据硬门禁，建议在上线前按合规要求落实。',
           subItems: [
-            { id: 'imp_audit', name: '操作日志', description: '全量追溯系统操作动作，确保安全审计。', required: true, jump_path: '/system/operation-logs' },
+            { id: 'imp_audit', name: '操作日志', description: '查询操作留痕，支撑安全审计（非业务过账前置条件）。', required: false, jump_path: '/system/operation-logs' },
             { id: 'imp_login', name: '登录日志', description: '监控系统访问记录，识别异常登录。', required: false, jump_path: '/system/login-logs' },
             { id: 'imp_online', name: '在线用户', description: '实时掌握活跃人员状态，保障登录安全。', required: false, jump_path: '/system/online-users' },
-            { id: 'imp_backup', name: '数据备份', description: '设置定时备份策略，保护企业核心资产。', required: true, jump_path: '/system/data-backups' },
+            { id: 'imp_backup', name: '数据备份', description: '定时备份与恢复策略，降低丢失风险（不做一般不阻塞日常开单）。', required: false, jump_path: '/system/data-backups' },
           ]
         }
       ]
@@ -498,8 +500,8 @@ const OnboardingWizardPage: React.FC = () => {
             { name: '车间管理', description: '划分工厂内部的生产车间，建立物理生产区域', required: true, jump_path: '/apps/master-data/factory/workshops', check_key: 'factory_workshops' },
             { name: '产线管理', description: '配置具体的生产线，支持多产线并行作业', required: true, jump_path: '/apps/master-data/factory/production-lines', check_key: 'factory_lines' },
             { name: '工位管理', description: '定义产线上的最小作业单元（工位），实现精细化报工', required: true, jump_path: '/apps/master-data/factory/workstations', check_key: 'factory_stations' },
-            { name: '工作中心', description: '聚合生产资源（人员/设备），作为排程与成本核算的核心单元', required: false, jump_path: '/apps/master-data/factory/work-centers', check_key: 'factory_work_centers' },
-            { name: '工作小组', description: '管理车间班组人员分配，支持计件工资与效率统计', required: false, jump_path: '/apps/master-data/factory/work-groups', check_key: 'factory_work_groups' },
+            { name: '工作中心', description: '聚合生产资源（人员/设备），作为排程与成本核算的核心单元', required: true, jump_path: '/apps/master-data/factory/work-centers', check_key: 'factory_work_centers' },
+            { name: '工作小组', description: '管理车间班组人员分配，支持计件工资与效率统计', required: true, jump_path: '/apps/master-data/factory/work-groups', check_key: 'factory_work_groups' },
           ]
         },
         { 
@@ -967,6 +969,7 @@ const OnboardingWizardPage: React.FC = () => {
               <Text type="secondary" style={{ fontSize: 13 }}>
                 <span style={{ color: token.colorWarning, fontWeight: 500 }}>专家提示：</span>
                 作为系统管理员，您的配置决定了系统的“骨架”。请务必先行完成第一阶段的组织与权限设定，这是所有业务模块运行的前置条件。
+                清单中标记为「必填」的子项表示若缺失，下游建单、过账或派工等环节容易出现校验失败；未标记项多为体验或扩展类配置。
               </Text>
             </div>
           </div>
@@ -2112,12 +2115,12 @@ const OnboardingWizardPage: React.FC = () => {
         footer={[
           <Button key="close" onClick={() => setDetailModalVisible(false)}>
             返回向导
-          </Button>
+          </Button>,
         ]}
-        width={800}
+        width={960}
         centered
-        styles={{ 
-          body: { padding: '0 24px 24px 0' } 
+        styles={{
+          body: { padding: '0 24px 24px 0' },
         }}
       >
         <div style={{ paddingTop: 16, marginBottom: 16 }}>
@@ -2125,70 +2128,85 @@ const OnboardingWizardPage: React.FC = () => {
             完成以下各项核心子功能的配置与数据录入，即可完成“{currentDetailItem?.name}”阶段的任务。
           </Text>
         </div>
-        <Table
-          dataSource={currentDetailItem?.subItems || []}
-          pagination={false}
-          size="middle"
-          rowKey="name"
-          columns={[
-            {
-              title: '功能清单',
-              dataIndex: 'name',
-              key: 'name',
-              width: 180,
-              render: (text, record) => (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {(completedItems.has(record.id) || realCounts[record.id] > 0) && (
-                    <CheckCircle2 size={14} color={token.colorSuccess} style={{ flexShrink: 0 }} />
-                  )}
-                  <Text strong>{text}</Text>
-                </div>
-              )
-            },
-            {
-              title: '功能简介',
-              dataIndex: 'description',
-              key: 'description',
-              render: (text) => <Text type="secondary" style={{ fontSize: 13 }}>{text}</Text>
-            },
-            {
-              title: '是否必填',
-              dataIndex: 'required',
-              key: 'required',
-              width: 100,
-              align: 'center',
-              render: (required) => (
-                required 
-                  ? <Tag color="error" bordered={false} style={{ fontSize: 11 }}>必填</Tag> 
-                  : <Tag color="default" bordered={false} style={{ fontSize: 11 }}>可选</Tag>
-              )
-            },
-            {
-              title: '操作',
-              key: 'action',
-              width: 140,
-              align: 'center',
-              render: (_, record) => (
-                <Typography.Link 
-                  onClick={() => {
-                    setDetailModalVisible(false);
-                    navigate(record.jump_path);
-                  }}
-                  style={{ 
-                    fontSize: 13, 
-                    fontWeight: 500, 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center', 
-                    gap: 4 
-                  }}
-                >
-                  立即前往 {wizIcon(ArrowRight, 14)}
-                </Typography.Link>
-              )
-            }
-          ]}
-        />
+        <div style={{ overflowX: 'auto', maxWidth: '100%' }}>
+          <Table
+            dataSource={currentDetailItem?.subItems || []}
+            pagination={false}
+            size="middle"
+            rowKey="name"
+            scroll={{ x: 'max-content' }}
+            columns={[
+              {
+                title: '功能清单',
+                dataIndex: 'name',
+                key: 'name',
+                width: 160,
+                fixed: 'left',
+                render: (text, record) => (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {(completedItems.has(record.id) || realCounts[record.id] > 0) && (
+                      <CheckCircle2 size={14} color={token.colorSuccess} style={{ flexShrink: 0 }} />
+                    )}
+                    <Text strong>{text}</Text>
+                  </div>
+                ),
+              },
+              {
+                title: '功能简介',
+                dataIndex: 'description',
+                key: 'description',
+                render: (text) => (
+                  <Text type="secondary" style={{ fontSize: 13, whiteSpace: 'nowrap' }}>
+                    {text}
+                  </Text>
+                ),
+              },
+              {
+                title: '是否必填',
+                dataIndex: 'required',
+                key: 'required',
+                width: 96,
+                align: 'center',
+                render: (required) =>
+                  required ? (
+                    <Tag color="error" bordered={false} style={{ fontSize: 11 }}>
+                      必填
+                    </Tag>
+                  ) : (
+                    <Tag color="default" bordered={false} style={{ fontSize: 11 }}>
+                      可选
+                    </Tag>
+                  ),
+              },
+              {
+                title: '操作',
+                key: 'action',
+                width: 132,
+                align: 'center',
+                fixed: 'right',
+                render: (_, record) => (
+                  <Typography.Link
+                    onClick={() => {
+                      setDetailModalVisible(false);
+                      navigate(record.jump_path);
+                    }}
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 500,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 4,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    立即前往 {wizIcon(ArrowRight, 14)}
+                  </Typography.Link>
+                ),
+              },
+            ]}
+          />
+        </div>
       </Modal>
     </div>
   );
