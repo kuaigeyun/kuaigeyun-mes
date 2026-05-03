@@ -11,7 +11,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Card, Tabs, Steps, Checkbox, Space, Typography, Tag, Button, List, Empty, Alert, theme, ConfigProvider, Row, Col, Menu, Popover, Progress } from 'antd';
+import { Card, Tabs, Steps, Checkbox, Space, Typography, Tag, Button, List, Empty, Alert, theme, ConfigProvider, Row, Col, Menu, Popover, Progress, Modal, Table } from 'antd';
 import Lottie from 'lottie-react';
 import guideAnimation from '../../../../static/lottie/guide.json';
 import { getTenantId } from '../../../utils/auth';
@@ -27,6 +27,9 @@ import {
   Target,
   Zap,
   CalendarClock,
+  ArrowRight,
+  Layers,
+  Activity,
   type LucideIcon,
 } from 'lucide-react';
 import { App } from 'antd';
@@ -39,9 +42,11 @@ import { listPurchaseOrders } from '../../../apps/kuaizhizao/services/purchase';
 // 引入真实的业务接口
 import { customerApi, supplierApi } from '../../../apps/master-data/services/supply-chain';
 import { materialApi, bomApi } from '../../../apps/master-data/services/material';
-import { warehouseApi } from '../../../apps/master-data/services/warehouse';
-import { workCenterApi } from '../../../apps/master-data/services/factory';
-import { processRouteApi } from '../../../apps/master-data/services/process';
+import { warehouseApi, storageAreaApi, storageLocationApi } from '../../../apps/master-data/services/warehouse';
+import { plantApi, workshopApi, productionLineApi, workstationApi, workCenterApi, workGroupApi } from '../../../apps/master-data/services/factory';
+import { defectTypeApi, operationApi, processRouteApi, sopApi } from '../../../apps/master-data/services/process';
+import { variantAttributeApi } from '../../../apps/master-data/services/variant-attribute';
+import { batchRuleApi, serialRuleApi } from '../../../apps/master-data/services/batchSerialRules';
 import { useThemeStore } from '../../../stores/themeStore';
 import { ManufacturingIcons } from '../../../utils/manufacturingIcons';
 
@@ -77,7 +82,7 @@ const ROLE_KEYS: Array<{ code: string; name: string; icon: React.ReactNode }> = 
   { code: 'sales', name: '销售业务向导', icon: onboardingMenuIcon(ManufacturingIcons.chartLine) }, // 销售管理
   { code: 'purchase', name: '采购业务向导', icon: onboardingMenuIcon(ManufacturingIcons.shoppingBag) }, // 采购管理
   { code: 'warehouse', name: '仓储管理向导', icon: onboardingMenuIcon(ManufacturingIcons.warehouse) }, // 仓储管理
-  { code: 'technician', name: '工艺与技术向导', icon: onboardingMenuIcon(ManufacturingIcons.workflow) }, // 工艺路线/工作流
+  { code: 'technician', name: '技术研发向导', icon: onboardingMenuIcon(ManufacturingIcons.workflow) }, // 工艺路线/工作流
   { code: 'planner', name: '生产计划向导', icon: onboardingMenuIcon(ManufacturingIcons.calendar) }, // 计划管理
   { code: 'supervisor', name: '车间班组向导', icon: onboardingMenuIcon(ManufacturingIcons.users) }, // 现场班组
   { code: 'operator', name: '生产操作向导', icon: onboardingMenuIcon(ManufacturingIcons.activity) }, // 生产执行
@@ -85,7 +90,7 @@ const ROLE_KEYS: Array<{ code: string; name: string; icon: React.ReactNode }> = 
   { code: 'equipment', name: '设备运维向导', icon: onboardingMenuIcon(ManufacturingIcons.wrench) }, // 设备管理
   { code: 'finance', name: '财务结算向导', icon: onboardingMenuIcon(ManufacturingIcons.wallet) }, // 财务管理
   { code: 'manager', name: '管理决策向导', icon: onboardingMenuIcon(ManufacturingIcons.trophy) }, // 绩效管理/经营结果
-  { code: 'implementer', name: '系统实施专家向导', icon: onboardingMenuIcon(ManufacturingIcons.package) }, // 实施交付（与菜单包裹应用包意象一致，不重复）
+  { code: 'implementer', name: '系统设定向导', icon: onboardingMenuIcon(ManufacturingIcons.package) }, // 实施交付（与菜单包裹应用包意象一致，不重复）
 ];
 
 /**
@@ -109,6 +114,11 @@ const OnboardingWizardPage: React.FC = () => {
       width: 100% !important;
       padding-right: 0 !important;
       display: block !important;
+      margin-bottom: 8px !important;
+    }
+    .onboarding-steps .ant-steps-item-description {
+      padding-top: 8px !important;
+      padding-bottom: 12px !important;
     }
     .onboarding-action-btn {
       transition: all 0.3s ease !important;
@@ -117,6 +127,14 @@ const OnboardingWizardPage: React.FC = () => {
       transform: translateY(-1px);
       filter: brightness(1.1);
       box-shadow: 0 6px 15px rgba(0,0,0,0.15) !important;
+    }
+    .onboarding-list-item {
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      cursor: pointer;
+    }
+    .onboarding-list-item:hover {
+      border-color: ${token.colorPrimary}40 !important;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.06);
     }
     /* 完成态：避免 ant-btn-default 的灰底/hover 盖住 inline，读起来像禁用 */
     .onboarding-completed-btn.ant-btn {
@@ -148,38 +166,42 @@ const OnboardingWizardPage: React.FC = () => {
    * 严格切合制造现场与仓储流转的真实业务场景
    */
   const ENHANCED_MISSION_GUIDE: Record<string, { mission: string; standard: string; tip?: string; dependency?: string }> = {
-    'material_data': {
+    'warehouse_main': {
+      mission: '定义工厂的物理仓储中心，支撑原材料、在制品与成品的数字化入出库流转。',
+      standard: '完成核心原材料仓与成品仓的建立，确立基本的出入库策略。',
+      tip: '建议将线边仓与原材料仓分开定义，便于实现生产现场的 WIP 在制品库存管理。'
+    },
+    'warehouse_locations': {
+      mission: '细化仓库内的物理坐标，实现物料的精准定位与扫码自动化作业。',
+      standard: '完成高频作业区域的货位定义，且货位编码规则已与货架标牌同步。',
+      tip: '对于快速流转物料，建议设置“拣货位”，缩短作业人员的步行距离。'
+    },
+    'material_main': {
       mission: '定义物料的“数字孪生”属性，包括进销存端的采购/销售单价，及生产端的 BOM/工艺关联关系。',
       standard: '完成核心原料、半成品、成品的分类录入，且计量单位体系（主/辅单位）已确立。',
       tip: '物料的“提前期”设置将直接影响后续计划系统的准确性，请根据历史平均值填写。',
       dependency: '需预先确立物料编码规范与分类体系。'
     },
-    'bom_config': {
-      mission: '构建产品的制造结构，确立物料清单（BOM）与进销存端成本核算的对应关系。',
-      standard: '主推产品的 BOM 处于“已审核”状态，且损耗率配置符合车间实际损耗情况。',
-      tip: '对于需要批次追溯的物料，请在 BOM 子项中明确标注，这会触发生产领料时的校验。',
-      dependency: '需先完成所有子项物料的【主数据录入】。'
-    },
-    'warehouse_data': {
-      mission: '规划物理仓库在数字化系统中的逻辑布局，支撑进销存出入库与生产领料。',
-      standard: '完成原材料仓、半成品/成品仓的定义，且货位管理逻辑（如开启/关闭）已明确。',
-      tip: '生产现场建议设置一个“现场仓（线边仓）”，用于管理正在加工中的在制品（WIP）。'
-    },
-    'process_routing': {
-      mission: '锁定生产工序流转顺序、标准工时及工作中心。这是生产成本核算与进度跟踪的核心。',
-      standard: '完成产品工艺路线配置，且工序间的逻辑关系（串行/并行）与车间实操一致。',
-      tip: '工时数据的精度直接影响排产（APS）的有效性，初期可使用经验值，后期通过报工数据优化。',
-      dependency: '需预先定义【工作中心】与【资源组】。'
-    },
-    'sales_config': {
+    'partner_customers': {
       mission: '建立以销定产的源头，定义客户档案、价格体系及销售订单流转规则。',
       standard: '完成核心客户数据录入，且销售订单到生产订单的触发逻辑已配置。',
       tip: '建议开启“信用额度”控制，将财务风险防范前置到销售录单阶段。'
     },
-    'purchase_config': {
+    'partner_suppliers': {
       mission: '确保生产物料的稳定供应，定义供应商档案、采购合同模板及入库检验流程。',
       standard: '完成核心供应商录入，且采购到收货入库的流程已跑通。',
       tip: '配置“收货待检区”能有效配合质量管理（QC）流程，确保入库物料 100% 合格。'
+    },
+    'process_operations': {
+      mission: '定义标准作业工序，确立每一道加工环节的质量标准与能力要求。',
+      standard: '完成全流程工序档案建立，且工序代码与车间物理工序一一对应。',
+      tip: '在工序中定义“报工触发器”，可实现生产进度的实时感知。'
+    },
+    'process_routes': {
+      mission: '锁定生产工序流转顺序、标准工时及工作中心。这是生产成本核算与进度跟踪的核心。',
+      standard: '完成产品工艺路线配置，且工序间的逻辑关系（串行/并行）与车间实操一致。',
+      tip: '工时数据的精度直接影响排产（APS）的有效性，初期可使用经验值，后期通过报工数据优化。',
+      dependency: '需预先定义【工作中心】与【资源组】。'
     },
     'first_order_run': {
       mission: '快格云制造全链路闭环验证：销售下单 -> 计划排产 -> 车间生产/报工 -> 完工入库 -> 销售发货。',
@@ -197,14 +219,15 @@ const OnboardingWizardPage: React.FC = () => {
     'sales': '核心使命：打通从客户询价到订单交付的全过程，确保交货不延期。',
     'purchase': '核心使命：找准供应商，管好采购进度，确保生产不缺料。',
     'warehouse': '核心使命：管好仓库，确保存货账实相符，物料找得到、发得快。',
-    'technician': '核心使命：规范产品资料与生产工艺，让生产有标准可循。',
+    'technician': '核心使命：规范产品资料与研发工艺，让生产有标准可循，提升产品竞争力。',
     'planner': '核心使命：排好生产计划，平衡订单与产能，解决车间堵点。',
     'supervisor': '核心使命：盯着现场进度，及时解决异常，把控生产节奏。',
     'quality': '核心使命：严控产品质量，实现全过程追溯，降低废品成本。',
     'equipment': '核心使命：保养好机器设备，减少临时停机，保障生产不停工。',
     'finance': '核心使命：算清每一笔账，实时掌握成本，为老板提供决策参考。',
     'manager': '核心使命：通过数字化看板，随时随地掌握工厂全局动态。',
-    'implementer': '核心使命：负责整个快格云制造系统的架构搭建与平滑上线。'
+    'implementer': '核心使命：负责系统底层架构配置与全局参数设定，确保软件运行环境稳健。',
+    'system': '核心使命：通过建立标准化的工厂、物料、仓库与工艺模型，为数字化运营奠定坚实底座。'
   };
 
   const ROLE_DETAILS_MAP: Record<string, { data: string; docs: string; value: string }> = {
@@ -224,9 +247,9 @@ const OnboardingWizardPage: React.FC = () => {
       value: '告别手工做账，实现库存流水扫码即时更新，库存数据 100% 准确。'
     },
     'technician': {
-      data: '物料主数据、产品 BOM、工艺路线与标准工时',
-      docs: '工程变更单 (ECO)、打样申请单、工艺图纸挂载',
-      value: '实现工艺图纸和 BOM 的版本管控，确保车间拿到的永远是最新标准。'
+      data: '物料主数据、产品 BOM、研发图纸、打样参数',
+      docs: '工程变更单 (ECO)、技术标准书、工艺图纸挂载',
+      value: '实现研发资料与 BOM 的版本管控，确保车间拿到的永远是最新标准。'
     },
     'planner': {
       data: '工作中心定义、产线产能配置、日历与排班',
@@ -264,9 +287,14 @@ const OnboardingWizardPage: React.FC = () => {
       value: '随时随地通过数字驾驶舱掌握工厂经营全貌（营收/产能/库存）。'
     },
     'implementer': {
-      data: '组织架构设置、角色与权限分配、系统全局参数配置',
-      docs: '系统日志、数据导入模板、实施验收报告',
-      value: '利用向导快速完成初始化建模，降低实施交付周期与沟通成本。'
+      data: '组织架构、权限模型、审批工作流、单据流水号规则',
+      docs: '系统参数配置表、审计日志、自定义字段定义',
+      value: '建立工厂数字底座，通过标准化配置降低运维成本，确保数据安全合规。'
+    },
+    'system': {
+      data: '工厂组织、仓库库位、物料主文件、业务伙伴档案',
+      docs: '产品 BOM、工艺路线、期初库存建账',
+      value: '统一全厂数据语言，消除信息孤岛，支撑从销售到生产的全链路自动化流转。'
     }
   };
 
@@ -274,21 +302,21 @@ const OnboardingWizardPage: React.FC = () => {
   const ROLE_DEFAULT_CHECKLISTS: Record<string, any[]> = {
     'sales': [
       { id: 'sales_customer', name: '维护客户档案', description: '录入客户的基本信息、联系人与账期', required: true, jump_path: '/apps/master-data/supply-chain/customers' },
-      { id: 'sales_price', name: '制定产品报价', description: '为不同的客户设定针对性的销售价格', required: false, jump_path: '/apps/kuaizhizao/sales-management/price-lists' },
+      { id: 'sales_price', name: '制定产品报价', description: '为不同的客户设定针对性的销售价格', required: false, jump_path: '/apps/kuaizhizao/sales-management/quotations' },
       { id: 'sales_order', name: '录入销售订单', description: '承接客户需求，生成正式的销售订单，触发生产或发货需求', required: true, jump_path: '/apps/kuaizhizao/sales-management/sales-orders' },
       { id: 'sales_delivery', name: '跟进发货进度', description: '根据库存和生产情况，开具发货通知单', required: true, jump_path: '/apps/kuaizhizao/sales-management/deliveries' }
     ],
     'purchase': [
       { id: 'pur_supplier', name: '建立供应商档案', description: '录入供应商库，进行资质管理', required: true, jump_path: '/apps/master-data/supply-chain/suppliers' },
-      { id: 'pur_price', name: '维护采购价目表', description: '记录物料的采购成本价与最小起订量', required: true, jump_path: '/apps/kuaizhizao/purchase-management/price-lists' },
+      { id: 'pur_price', name: '维护采购价目', description: '记录物料的采购成本价与历史采购记录', required: true, jump_path: '/apps/kuaizhizao/purchase-management/purchase-orders' },
       { id: 'pur_order', name: '下达采购订单', description: '向供应商正式下达采购任务，明确交期', required: true, jump_path: '/apps/kuaizhizao/purchase-management/purchase-orders' },
-      { id: 'pur_receipt', name: '跟踪到货入库', description: '确认供应商送货情况，协同质检与仓储入库', required: true, jump_path: '/apps/kuaizhizao/purchase-management/receipts' }
+      { id: 'pur_receipt', name: '跟踪到货入库', description: '确认供应商送货情况，协同质检与仓储入库', required: true, jump_path: '/apps/kuaizhizao/purchase-management/receipt-notices' }
     ],
     'warehouse': [
       { id: 'wh_setup', name: '规划物理仓库', description: '定义原材料仓、半成品仓及成品仓', required: true, jump_path: '/apps/master-data/warehouse/warehouses' },
-      { id: 'wh_stock_in', name: '处理采购入库', description: '核对采购到货单，完成物料实物入库', required: true, jump_path: '/apps/kuaizhizao/warehouse-management/stock-in' },
-      { id: 'wh_picking', name: '处理生产领料', description: '根据车间领料申请，精准发料出库', required: true, jump_path: '/apps/kuaizhizao/warehouse-management/picking' },
-      { id: 'wh_stock_out', name: '处理销售发货', description: '拣货打包，完成成品出库发给客户', required: true, jump_path: '/apps/kuaizhizao/warehouse-management/stock-out' }
+      { id: 'wh_stock_in', name: '处理采购入库', description: '核对采购到货单，完成物料实物入库', required: true, jump_path: '/apps/kuaizhizao/warehouse-management/inbound' },
+      { id: 'wh_picking', name: '处理生产领料', description: '根据车间领料申请，精准发料出库', required: true, jump_path: '/apps/kuaizhizao/warehouse-management/outbound' },
+      { id: 'wh_stock_out', name: '处理销售发货', description: '拣货打包，完成成品出库发给客户', required: true, jump_path: '/apps/kuaizhizao/warehouse-management/outbound' }
     ],
     'technician': [
       { id: 'tech_material', name: '定义物料主数据', description: '统一下发全厂的物料编码与属性', required: true, jump_path: '/apps/master-data/materials' },
@@ -328,51 +356,126 @@ const OnboardingWizardPage: React.FC = () => {
       { id: 'mgr_dashboard', name: '经营分析看板', description: '查看营收、利润、库存周转等核心指标', required: true, jump_path: '/apps/dashboard/bi' }
     ],
     'implementer': [
-      { id: 'imp_org', name: '组织架构搭建', description: '建立公司部门层级树', required: true, jump_path: '/apps/system/departments' },
-      { id: 'imp_role', name: '角色权限分配', description: '为各个岗位赋予对应的系统操作权限', required: true, jump_path: '/apps/system/roles' }
+      { id: 'imp_org', name: '建立组织架构', description: '定义公司部门、工厂与分支机构', required: true, jump_path: '/apps/system/departments' },
+      { id: 'imp_role', name: '分配角色权限', description: '按岗授权，确保系统操作安全合规', required: true, jump_path: '/apps/system/roles' },
+      { id: 'imp_workflow', name: '配置审批流程', description: '定义销售、采购等核心单据的审批链路', required: true, jump_path: '/apps/system/workflow/definitions' },
+      { id: 'imp_print', name: '设计打印模板', description: '配置送货单、入库单等单据的打印样式', required: false, jump_path: '/apps/system/print-templates' },
+      { id: 'imp_rule', name: '定义编码规则', description: '设置物料、单据的自动编号与批次规则', required: true, jump_path: '/apps/system/coding-rules' }
     ]
   };
 
   const ENHANCED_CHECKLIST = [
     {
-      id: 'foundation_phase',
-      name: '第一阶段：基础资料准备',
+      id: 'infrastructure_phase',
+      name: '第一阶段：制造基建建模 (工厂与仓库)',
       items: [
-        { id: 'material_data', name: '创建物料与产品', required: true, description: '录入原材料、半成品和成品的档案', completed: false, jump_path: '/apps/master-data/materials' },
-        { id: 'warehouse_data', name: '划分仓库与库位', required: true, description: '建立原材料仓、成品仓及车间仓库', completed: false, jump_path: '/apps/master-data/warehouse/warehouses' },
-        { id: 'partner_data', name: '登记客户与供应商', required: true, description: '建立合作伙伴档案，方便后续开单', completed: false, jump_path: '/apps/master-data/supply-chain/customers' },
+        { 
+          id: 'factory_data', 
+          name: '建立工厂数据', 
+          required: true, 
+          description: '在“工厂数据”中定义工作中心、车间与产线建模', 
+          completed: false, 
+          jump_path: '/apps/master-data/factory/work-centers',
+          subItems: [
+            { name: '厂区管理', description: '定义工厂的地理位置、厂区分布与基本信息', required: false, jump_path: '/apps/master-data/factory/plants', check_key: 'factory_plants' },
+            { name: '车间管理', description: '划分工厂内部的生产车间，建立物理生产区域', required: true, jump_path: '/apps/master-data/factory/workshops', check_key: 'factory_workshops' },
+            { name: '产线管理', description: '配置具体的生产线，支持多产线并行作业', required: true, jump_path: '/apps/master-data/factory/production-lines', check_key: 'factory_lines' },
+            { name: '工位管理', description: '定义产线上的最小作业单元（工位），实现精细化报工', required: true, jump_path: '/apps/master-data/factory/workstations', check_key: 'factory_stations' },
+            { name: '工作中心', description: '聚合生产资源（人员/设备），作为排程与成本核算的核心单元', required: false, jump_path: '/apps/master-data/factory/work-centers', check_key: 'factory_work_centers' },
+            { name: '工作小组', description: '管理车间班组人员分配，支持计件工资与效率统计', required: false, jump_path: '/apps/master-data/factory/work-groups', check_key: 'factory_work_groups' },
+          ]
+        },
+        { 
+          id: 'warehouse_data', 
+          name: '规划仓库数据', 
+          required: true, 
+          description: '在“仓库数据”中划分物理仓库、库位与逻辑仓储关系', 
+          completed: false, 
+          jump_path: '/apps/master-data/warehouse/warehouses',
+          subItems: [
+            { name: '仓库管理', description: '定义物理仓库，如原材料仓、成品仓等', required: true, jump_path: '/apps/master-data/warehouse/warehouses', check_key: 'warehouse_main' },
+            { name: '库区管理', description: '在仓库内划分逻辑库区，方便物料归类存放', required: false, jump_path: '/apps/master-data/warehouse/storage-areas', check_key: 'warehouse_areas' },
+            { name: '库位管理', description: '定义精确的货位坐标，实现扫码精准上下架', required: false, jump_path: '/apps/master-data/warehouse/storage-locations', check_key: 'warehouse_locations' },
+          ]
+        },
       ]
     },
     {
-      id: 'manufacturing_model_phase',
-      name: '第二阶段：生产流程建模',
+      id: 'modeling_phase',
+      name: '第二阶段：核心资源定义 (物料与伙伴)',
       items: [
-        { id: 'bom_config', name: '配置产品 BOM', required: true, description: '定义产品的物料清单与零件构成', completed: false, jump_path: '/apps/master-data/process/engineering-bom' },
-        { id: 'work_center_config', name: '建立车间与产线', required: true, description: '划分生产区域，定义工位与设备', completed: false, jump_path: '/apps/master-data/factory/work-centers' },
-        { id: 'process_routing', name: '设置工艺流程', required: true, description: '规划工序顺序，明确生产该怎么做', completed: false, jump_path: '/apps/master-data/process/routes' },
+        { 
+          id: 'material_data', 
+          name: '完善物料数据', 
+          required: true, 
+          description: '在“物料数据”中录入产品主文件、分类及关键属性', 
+          completed: false, 
+          jump_path: '/apps/master-data/materials',
+          subItems: [
+            { name: '物料管理', description: '录入物料主文件，定义编码、名称及基本属性', required: true, jump_path: '/apps/master-data/materials', check_key: 'material_main' },
+            { name: '变体属性', description: '定义物料的规格属性（如颜色、尺寸），支持多 SKU 管理', required: false, jump_path: '/apps/master-data/materials/variant-attributes', check_key: 'material_variants' },
+            { name: '批次规则', description: '设置物料的批次生成规则，支持先进先出与质量追溯', required: false, jump_path: '/apps/master-data/materials/batch-rules', check_key: 'material_batch_rules' },
+            { name: '序列号规则', description: '定义唯一序列号规则，实现单品级的精准追踪', required: false, jump_path: '/apps/master-data/materials/serial-rules', check_key: 'material_serial_rules' },
+          ]
+        },
+        { 
+          id: 'partner_data', 
+          name: '录入业务伙伴', 
+          required: true, 
+          description: '在“业务伙伴”中建立客户档案与供应商合格名录', 
+          completed: false, 
+          jump_path: '/apps/master-data/supply-chain/customers',
+          subItems: [
+            { name: '客户管理', description: '维护客户档案，配置账期、信用额度与收货地址', required: true, jump_path: '/apps/master-data/supply-chain/customers', check_key: 'partner_customers' },
+            { name: '供应商管理', description: '建立合格供应商库，管理采购单价与交期可靠性', required: true, jump_path: '/apps/master-data/supply-chain/suppliers', check_key: 'partner_suppliers' },
+          ]
+        },
       ]
     },
     {
-      id: 'rules_phase',
-      name: '第三阶段：业务规则定义',
+      id: 'process_phase',
+      name: '第三阶段：生产工艺模型 (BOM 与路线)',
       items: [
-        { id: 'sales_config', name: '销售规则配置', required: true, description: '设置产品价格体系与订单规则', completed: false, jump_path: '/apps/kuaizhizao/sales-management/sales-orders' },
-        { id: 'user_config', name: '创建业务用户', required: true, description: '为同事分配账号，协作开展业务', completed: false, jump_path: '/apps/system/users' },
-        { id: 'data_collection_config', name: '生产现场报工', required: true, description: '配置扫码报工模式，实时反馈进度', completed: false, jump_path: '/apps/kuaizhizao/production-execution/reporting' },
+        { 
+          id: 'bom_config', 
+          name: '导入工艺数据 (BOM)', 
+          required: true, 
+          description: '在“工艺数据”中确立物料清单，作为成本与计划的核心', 
+          completed: false, 
+          jump_path: '/apps/master-data/process/engineering-bom',
+          subItems: [
+            { name: '物料清单BOM', description: '构建产品结构的数字孪生，定义父项与子项的组成关系', required: true, jump_path: '/apps/master-data/process/engineering-bom', check_key: 'process_bom' },
+          ]
+        },
+        { 
+          id: 'process_routing', 
+          name: '配置工艺数据 (路线)', 
+          required: true, 
+          description: '在“工艺数据”中规划生产工序、工时标准与工序流转', 
+          completed: false, 
+          jump_path: '/apps/master-data/process/routes',
+          subItems: [
+            { name: '工序管理', description: '定义标准生产工序，如切割、组装、检验等', required: true, jump_path: '/apps/master-data/process/operations', check_key: 'process_operations' },
+            { name: '工艺路线', description: '串联工序流转顺序，配置标准工时与资源需求', required: true, jump_path: '/apps/master-data/process/routes', check_key: 'process_routes' },
+            { name: '不良品项', description: '定义生产异常与质量缺陷分类，支撑报工时的质量统计', required: false, jump_path: '/apps/master-data/process/defect-types', check_key: 'process_defects' },
+            { name: '标准操作SOP', description: '挂载图纸与作业指导书，确保车间操作规范化', required: false, jump_path: '/apps/master-data/process/sop', check_key: 'process_sop' },
+          ]
+        },
       ]
     },
     {
       id: 'validation_phase',
-      name: '第四阶段：业务链路试运行',
+      name: '第四阶段：全链路闭环验证',
       items: [
-        { id: 'first_order_run', name: '开出第一张生产单据', required: true, description: '全流程走通：销售->生产->报工->入库', completed: false, jump_path: '/apps/kuaizhizao/production-execution/work-orders' },
+        { id: 'first_order_run', name: '完成首笔业务试运行', required: true, description: '通过一笔完整的模拟订单（从销售下单开始）验证所有主数据的准确性与连通性', completed: false, jump_path: '/apps/kuaizhizao/sales-management/sales-orders' },
       ]
     }
   ];
 
   const allTabs = useMemo(() => [
+    { code: 'implementer', name: '系统设定向导', icon: onboardingMenuIcon(ManufacturingIcons.package) },
     { code: 'system', name: '系统上线向导', icon: onboardingMenuIcon(ManufacturingIcons.compass) },
-    ...ROLE_KEYS.map((r) => ({ code: r.code, name: r.name, icon: r.icon })),
+    ...ROLE_KEYS.filter(r => r.code !== 'implementer').map((r) => ({ code: r.code, name: r.name, icon: r.icon })),
   ], []);
 
   const [loading, setLoading] = useState(false);
@@ -381,19 +484,40 @@ const OnboardingWizardPage: React.FC = () => {
   const [completedItems, setCompletedItems] = useState<Set<string>>(new Set());
   const [systemGuideData, setSystemGuideData] = useState<any>(null);
   const [realCounts, setRealCounts] = useState<Record<string, number>>({});
+  const [detailModalVisible, setDetailModalVisible] = useState(false);
+  const [currentDetailItem, setCurrentDetailItem] = useState<any>(null);
 
   // 实时存量补偿器：加入用户、订单统计
   useEffect(() => {
     const fetchRealCounts = async () => {
       try {
-        const [customers, suppliers, materials, warehouses, boms, workCenters, routes, users, sales, purchases] = await Promise.all([
+        const [
+          customers, suppliers, materials, warehouses, storageAreas, storageLocations, boms, 
+          plants, workshops, lines, stations, workCenters, workGroups, 
+          defectTypes, operations, routes, sops,
+          variantAttrs, batchRules, serialRules,
+          users, sales, purchases
+        ] = await Promise.all([
           customerApi.list().catch(() => null),
           supplierApi.list().catch(() => null),
           materialApi.list().catch(() => null),
           warehouseApi.list().catch(() => null),
+          storageAreaApi.list().catch(() => null),
+          storageLocationApi.list().catch(() => null),
           bomApi.getGroups().catch(() => null),
+          plantApi.list().catch(() => null),
+          workshopApi.list().catch(() => null),
+          productionLineApi.list().catch(() => null),
+          workstationApi.list().catch(() => null),
           workCenterApi.list().catch(() => null),
+          workGroupApi.list().catch(() => null),
+          defectTypeApi.list().catch(() => null),
+          operationApi.list().catch(() => null),
           processRouteApi.list().catch(() => null),
+          sopApi.list().catch(() => null),
+          variantAttributeApi.list().catch(() => null),
+          batchRuleApi.list().catch(() => null),
+          serialRuleApi.list().catch(() => null),
           getUserList({ page: 1, page_size: 1 }).catch(() => null),
           listSalesOrders({ limit: 1 }).catch(() => null),
           listPurchaseOrders({ limit: 1 }).catch(() => null)
@@ -410,15 +534,44 @@ const OnboardingWizardPage: React.FC = () => {
         };
 
         const counts: Record<string, number> = {};
-        const cCount = getCount(customers);
-        const sCount = getCount(suppliers);
-        if (cCount !== undefined || sCount !== undefined) counts['partner_data'] = (cCount || 0) + (sCount || 0);
         
-        counts['material_data'] = getCount(materials) ?? 0;
-        counts['warehouse_data'] = getCount(warehouses) ?? 0;
-        counts['bom_config'] = getCount(boms) ?? 0;
-        counts['work_center_config'] = getCount(workCenters) ?? 0;
-        counts['process_routing'] = getCount(routes) ?? 0;
+        // 供应链
+        counts['partner_customers'] = getCount(customers) ?? 0;
+        counts['partner_suppliers'] = getCount(suppliers) ?? 0;
+        counts['partner_data'] = (counts['partner_customers'] || 0) + (counts['partner_suppliers'] || 0);
+        
+        // 物料
+        counts['material_main'] = getCount(materials) ?? 0;
+        counts['material_variants'] = getCount(variantAttrs) ?? 0;
+        counts['material_batch_rules'] = getCount(batchRules) ?? 0;
+        counts['material_serial_rules'] = getCount(serialRules) ?? 0;
+        counts['material_data'] = counts['material_main'];
+
+        // 仓库
+        counts['warehouse_main'] = getCount(warehouses) ?? 0;
+        counts['warehouse_areas'] = getCount(storageAreas) ?? 0;
+        counts['warehouse_locations'] = getCount(storageLocations) ?? 0;
+        counts['warehouse_data'] = counts['warehouse_main'];
+
+        // 工艺
+        counts['process_bom'] = getCount(boms) ?? 0;
+        counts['process_operations'] = getCount(operations) ?? 0;
+        counts['process_routes'] = getCount(routes) ?? 0;
+        counts['process_defects'] = getCount(defectTypes) ?? 0;
+        counts['process_sop'] = getCount(sops) ?? 0;
+        counts['bom_config'] = counts['process_bom'];
+        counts['process_routing'] = counts['process_routes'];
+
+        // 细化工厂子项
+        counts['factory_plants'] = getCount(plants) ?? 0;
+        counts['factory_workshops'] = getCount(workshops) ?? 0;
+        counts['factory_lines'] = getCount(lines) ?? 0;
+        counts['factory_stations'] = getCount(stations) ?? 0;
+        counts['factory_work_centers'] = getCount(workCenters) ?? 0;
+        counts['factory_work_groups'] = getCount(workGroups) ?? 0;
+
+        // 汇总工厂数据：只要有一个有数据就算完成了“建立工厂数据”的初步
+        counts['factory_data'] = (counts['factory_workshops'] || counts['factory_lines'] || counts['factory_stations']) ? 1 : 0;
         
         // 特别处理用户：减去 1 个（通常是超级管理员）
         const uCount = getCount(users);
@@ -631,239 +784,314 @@ const OnboardingWizardPage: React.FC = () => {
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         {/* 四阶段分层引导 */}
         <Card 
-          title={
-            <Space size={8}>
-              <span style={{ color: token.colorPrimary, display: 'flex', alignItems: 'center' }}>
-                {onboardingMenuIcon(ManufacturingIcons.compass)}
-              </span>
-              <span>{guide?.name || '系统上线向导'}</span>
-              <Tag color="blue" bordered={false} style={{ fontSize: 10, borderRadius: token.borderRadiusSM }}>正式环境部署</Tag>
-            </Space>
-          }
-          style={{ borderRadius: token.borderRadiusLG, border: `1px solid ${token.colorBorderSecondary}`, marginBottom: '16px' }}
-          styles={{ body: { padding: '16px' } }}
+          style={{ borderRadius: token.borderRadiusLG, border: `1px solid ${token.colorBorderSecondary}`, overflow: 'hidden' }}
+          styles={{ body: { padding: 0 } }}
         >
-          <Steps
-            direction="vertical"
-            size="small"
-            className="onboarding-steps"
-            current={activeStep}
-            items={systemChecklist.map((category: any, idx: number) => {
-              const incompleteItems = (category.items || []).filter((i: any) => !i.completed && i.jump_path);
-              const hasIncomplete = incompleteItems.length > 0;
-              
-              const handleDirectJump = () => {
-                if (incompleteItems.length === 1) {
-                  navigate(incompleteItems[0].jump_path);
-                }
-              };
+          {/* 顶层整合 Header */}
+          <div style={{ 
+            padding: '24px', 
+            background: isDark ? `linear-gradient(135deg, ${token.colorPrimary}1A 0%, #141414 100%)` : `linear-gradient(135deg, ${token.colorInfoBg} 0%, #ffffff 100%)`,
+            borderBottom: `1px solid ${token.colorBorderSecondary}`
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+              <div style={{ 
+                width: 48, height: 48, borderRadius: 12, 
+                background: `linear-gradient(135deg, ${token.colorPrimary} 0%, ${token.colorPrimaryActive} 100%)`, 
+                color: '#fff', 
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 24, marginRight: 16,
+                boxShadow: `0 4px 12px ${token.colorPrimary}40`
+              }}>
+                {onboardingMenuIcon(ManufacturingIcons.compass)}
+              </div>
+              <div>
+                <Typography.Title level={4} style={{ margin: 0 }}>
+                  系统上线向导
+                </Typography.Title>
+                <Text type="secondary" style={{ fontSize: 14, marginTop: 4, display: 'flex', alignItems: 'center' }}>
+                  {wizIcon(Target, 16, { marginRight: 6, flexShrink: 0 }, token.colorPrimary)}
+                  {ROLE_MISSION_MAP[activeTab] || '核心使命：建立工厂数字孪生底座，确保业务数据标准化。'}
+                </Text>
+              </div>
+            </div>
 
-              const popoverContent = (
-                <div style={{ width: 280 }}>
-                  <div style={{ padding: '8px 12px', borderBottom: `1px solid ${token.colorBorderSecondary}`, marginBottom: 4 }}>
-                    <Text strong style={{ fontSize: 13 }}>待完善任务</Text>
+            {ROLE_DETAILS_MAP[activeTab] && (
+              <Row gutter={16}>
+                <Col xs={24} md={12}>
+                  <div style={{ background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.7)', padding: '16px', borderRadius: token.borderRadiusLG, border: `1px solid ${token.colorBorderSecondary}60`, height: '100%', backdropFilter: 'blur(8px)' }}>
+                    <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                      {wizIcon(Archive, 14, { marginRight: 6, verticalAlign: 'middle', display: 'inline-block' })}
+                      需要录入的基础数据
+                    </Text>
+                    <Text strong style={{ fontSize: 13, color: token.colorText }}>{ROLE_DETAILS_MAP[activeTab].data}</Text>
                   </div>
-                  <List
-                    size="small"
-                    dataSource={incompleteItems}
-                    renderItem={(item: any) => (
-                      <List.Item
-                        style={{ padding: '8px 12px' }}
-                        actions={[
-                          <Button 
-                            key="go" 
-                            type="primary" 
-                            ghost 
-                            size="small" 
-                            onClick={() => navigate(item.jump_path)}
-                            style={{ borderRadius: token.borderRadius, fontSize: 11 }}
+                </Col>
+                <Col xs={24} md={12}>
+                  <div style={{ background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.7)', padding: '16px', borderRadius: token.borderRadiusLG, border: `1px solid ${token.colorBorderSecondary}60`, height: '100%', backdropFilter: 'blur(8px)' }}>
+                    <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                      {wizIcon(FileSearch, 14, { marginRight: 6, verticalAlign: 'middle', display: 'inline-block' })}
+                      可以操作的业务单据
+                    </Text>
+                    <Text strong style={{ fontSize: 13, color: token.colorText }}>{ROLE_DETAILS_MAP[activeTab].docs}</Text>
+                  </div>
+                </Col>
+              </Row>
+            )}
+            
+            <div style={{ marginTop: 16, display: 'flex', alignItems: 'flex-start' }}>
+              {wizIcon(AlertCircle, 16, { marginTop: 4, marginRight: 8, flexShrink: 0 }, token.colorWarning)}
+              <Text type="secondary" style={{ fontSize: 13 }}>
+                <span style={{ color: token.colorWarning, fontWeight: 500 }}>实施建议：</span>
+                系统上线是数字化转期的关键里程碑。请按照引导顺序逐步完成基础数据建模，这是后续业务全链路跑通的先决条件。
+              </Text>
+            </div>
+          </div>
+
+          {/* 清单部分 */}
+          <div style={{ padding: '24px' }}>
+            <Steps
+              direction="vertical"
+              size="small"
+              className="onboarding-steps"
+              current={activeStep}
+              items={systemChecklist.map((category: any, idx: number) => {
+                const isCurrentStep = idx === activeStep;
+
+                return {
+                  title: (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                      <span style={{ 
+                        fontSize: 14, 
+                        fontWeight: 500,
+                        color: isCurrentStep ? token.colorText : token.colorTextSecondary 
+                      }}>
+                        {category.name}
+                      </span>
+                    </div>
+                  ),
+                  status: 'finish',
+                  description: (
+                    <List
+                      dataSource={category.items || []}
+                      renderItem={(item: any) => {
+                        // 智能存量匹配
+                        const getSmartCount = () => {
+                          if (realCounts[item.id] !== undefined) return realCounts[item.id];
+                          const name = item.name || '';
+                          if (name.includes('单据') || name.includes('订单')) return realCounts['order_data'] || 0;
+                          if (name.includes('用户') || name.includes('人员')) return realCounts['user_data'] || 0;
+                          if (name.includes('客户') || name.includes('供应商')) return realCounts['partner_data'] || 0;
+                          if (name.includes('物料') || name.includes('产品')) return realCounts['material_data'] || 0;
+                          if (name.includes('仓库') || name.includes('库位')) return realCounts['warehouse_data'] || 0;
+                          if (name.includes('BOM') || name.includes('清单')) return realCounts['bom_config'] || 0;
+                          if (name.includes('工作中心') || name.includes('产线')) return realCounts['work_center_config'] || 0;
+                          if (name.includes('工艺') || name.includes('路线')) return realCounts['process_routing'] || 0;
+                          return 0;
+                        };
+
+                        const realCount = getSmartCount();
+                        const isCompleted = realCount > 0 || item.completed === true || completedItems.has(item.id);
+                        const enhanced = ENHANCED_MISSION_GUIDE[item.id] || ENHANCED_MISSION_GUIDE[item.check_key || ''];
+                        
+                        return (
+                          <List.Item
+                            className="onboarding-list-item"
+                            style={{
+                              padding: '20px 24px',
+                              marginBottom: 16,
+                              borderRadius: token.borderRadiusLG,
+                              border: `1px solid ${isCompleted ? 'rgba(82, 196, 26, 0.2)' : token.colorBorderSecondary}`,
+                              background: isCompleted 
+                                ? (isDark 
+                                    ? 'linear-gradient(145deg, rgba(82, 196, 26, 0.05) 0%, rgba(0, 0, 0, 0) 100%)' 
+                                    : 'linear-gradient(145deg, rgba(82, 196, 26, 0.04) 0%, rgba(255, 255, 255, 0.6) 100%)')
+                                : token.colorBgContainer,
+                            }}
                           >
-                            立即前往
-                          </Button>
-                        ]}
-                      >
-                        <Text style={{ fontSize: 13 }}>{item.name}</Text>
-                      </List.Item>
-                    )}
-                  />
-                </div>
-              );
-
-              const isCurrentStep = idx === activeStep;
-
-              return {
-                title: (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                    <span style={{ 
-                      fontSize: 14, 
-                      fontWeight: isCurrentStep ? 600 : 500,
-                      color: isCurrentStep ? token.colorText : token.colorTextSecondary 
-                    }}>
-                      {category.name}
-                    </span>
-                  </div>
-                ),
-                status: 'finish',
-                description: (
-                  <List
-                    dataSource={category.items || []}
-                    renderItem={(item: any) => {
-                      // 激进式数据探测：扫描 item 中所有可能的数值字段
-                      const getAggressiveCount = (obj: any) => {
-                        if (!obj) return 0;
-                        // 优先寻找已知字段
-                        const known = obj.actual_count ?? obj.actualCount ?? obj.current_count ?? obj.count ?? obj.total;
-                        if (known !== undefined && known !== null) return Number(known);
-                        // 扫描所有 key，寻找数值
-                        for (const key in obj) {
-                          if (typeof obj[key] === 'number' && !['id', 'order', 'sort', 'status'].includes(key.toLowerCase())) {
-                            return obj[key];
-                          }
-                        }
-                        return 0;
-                      };
-
-                      // 智能存量匹配：优先 ID 匹配，其次名称关键词模糊匹配
-                      const getSmartCount = () => {
-                        // 1. 优先尝试 ID 精确匹配
-                        if (realCounts[item.id] !== undefined) return realCounts[item.id];
-                        
-                        // 2. 备选方案：通过名称关键词模糊匹配（解决后端 ID 不固定的问题）
-                        const name = item.name || '';
-                        if (name.includes('单据') || name.includes('订单') || name.includes('开单')) return realCounts['order_data'] || 0;
-                        if (name.includes('用户') || name.includes('人员')) return realCounts['user_data'] || 0;
-                        if (name.includes('客户') || name.includes('供应商')) return realCounts['partner_data'] || 0;
-                        if (name.includes('物料') || name.includes('产品')) return realCounts['material_data'] || 0;
-                        if (name.includes('仓库') || name.includes('库位')) return realCounts['warehouse_data'] || 0;
-                        if (name.includes('BOM') || name.includes('清单')) return realCounts['bom_config'] || 0;
-                        if (name.includes('工作中心') || name.includes('产线')) return realCounts['work_center_config'] || 0;
-                        if (name.includes('工艺') || name.includes('路线')) return realCounts['process_routing'] || 0;
-                        
-                        // 3. 最后手段：使用对象属性扫描器
-                        return getAggressiveCount(item);
-                      };
-
-                      const realCount = getSmartCount();
-                      // 终极状态纠正：如果探测到存量为 0，即便后端返回 completed: true，也强行标记为未完成（除非手动勾选）
-                      const isCompleted = (realCount > 0 && (item.completed === true || completedItems.has(item.id)));
-                      const enhanced = ENHANCED_MISSION_GUIDE[item.id] || ENHANCED_MISSION_GUIDE[item.check_key || ''];
-                      
-                      return (
-                        <List.Item
-                          style={{
-                            padding: '16px',
-                            marginBottom: 12,
-                            borderRadius: token.borderRadiusLG,
-                            border: `1px solid ${isCompleted ? 'rgba(82, 196, 26, 0.25)' : token.colorBorderSecondary}`,
-                            background: isCompleted 
-                              ? (isDark 
-                                  ? 'linear-gradient(145deg, rgba(82, 196, 26, 0.08) 0%, rgba(0, 0, 0, 0) 100%)' 
-                                  : 'linear-gradient(145deg, rgba(82, 196, 26, 0.06) 0%, rgba(255, 255, 255, 0.6) 100%)')
-                              : token.colorBgContainer,
-                            position: 'relative',
-                            transition: 'all 0.3s ease',
-                            boxShadow: isCompleted ? `0 4px 12px rgba(82, 196, 26, 0.04)` : 'none',
-                          }}
-                        >
-                          <Space direction="vertical" style={{ width: '100%' }} size={12}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                              <Space size={12} align="center">
+                            <div style={{ display: 'flex', width: '100%', alignItems: 'center', gap: 24 }}>
+                              {/* Left: Info */}
+                              <div style={{ display: 'flex', flex: 1, gap: 16, alignItems: 'flex-start' }}>
                                 <Checkbox 
                                   checked={isCompleted}
                                   onChange={(e) => handleItemToggle(item.id)}
-                                  style={{ transform: 'scale(1.1)' }}
+                                  style={{ marginTop: 4 }}
                                 />
-                                <Text strong style={{ fontSize: 15, color: isCompleted ? token.colorSuccess : token.colorText }}>
-                                  {item.name}
-                                </Text>
-                                {item.required && !isCompleted && (
-                                  <Tag bordered color="error" style={{ fontSize: 10, borderRadius: token.borderRadiusSM }}>核心必办</Tag>
-                                )}
-                              </Space>
-                              <Space size={16} align="center">
-                                {/* 深度探测后端真实数据字段 */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <Text strong style={{ fontSize: 16, color: isCompleted ? token.colorSuccess : token.colorText }}>
+                                      {item.name}
+                                    </Text>
+                                    {item.required && !isCompleted && (
+                                      <Tag bordered={false} color="error" style={{ fontSize: 10, borderRadius: 4, paddingInline: 6 }}>核心必办</Tag>
+                                    )}
+                                  </div>
+                                  <Text type="secondary" style={{ fontSize: 13, lineHeight: '1.6', maxWidth: 500 }}>{item.description}</Text>
+                                  
+                                  {(enhanced?.dependency || enhanced?.tip) && (
+                                    <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                      {enhanced?.dependency && (
+                                        <Text type="danger" style={{ fontSize: 12, display: 'flex', alignItems: 'center' }}>
+                                          {wizIcon(CalendarClock, 12, { marginRight: 6 })} 前置要求：{enhanced.dependency}
+                                        </Text>
+                                      )}
+                                      {enhanced?.tip && (
+                                        <Text type="warning" style={{ fontSize: 12, display: 'flex', alignItems: 'center' }}>
+                                          {wizIcon(AlertCircle, 12, { marginRight: 6 })} 专家建议：{enhanced.tip}
+                                        </Text>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Right: Status & Action */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
                                 <div style={{ 
                                   display: 'flex', 
                                   alignItems: 'center', 
-                                  gap: 6,
-                                  background: (realCount > 0) ? (isDark ? 'rgba(82, 196, 26, 0.1)' : '#f6ffed') : 'transparent',
-                                  padding: (realCount > 0) ? '2px 10px' : '0',
-                                  borderRadius: token.borderRadiusSM,
-                                  border: (realCount > 0) ? `1px solid ${token.colorSuccess}20` : 'none',
+                                  background: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.015)',
+                                  borderRadius: 14,
+                                  border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)'}`,
+                                  overflow: 'hidden'
                                 }}>
-                                  {realCount > 0 ? (
-                                    <Text style={{ fontSize: 12, color: token.colorSuccess }}>
-                                      当前存量 <Text strong>{realCount}</Text>
-                                    </Text>
-                                  ) : (
-                                    <Text type="secondary" style={{ fontSize: 12 }}>暂无数据</Text>
-                                  )}
+                                  {(() => {
+                                    let req = 0, opt = 0, done = 0;
+                                    if (item.subItems && item.subItems.length > 0) {
+                                      item.subItems.forEach((sub: any) => {
+                                        if (sub.required) req++; else opt++;
+                                        if (realCounts[sub.check_key] > 0) done++;
+                                      });
+                                    } else {
+                                      if (item.required) req = 1; else opt = 1;
+                                      if (realCounts[item.id] > 0) done = 1;
+                                    }
+                                    
+                                    const StatItem = ({ label, value, subValue, icon: Icon, isError, iconColor, valueColor }: any) => (
+                                      <div style={{ 
+                                        padding: '8px 16px', 
+                                        paddingRight: 24,
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        gap: 12,
+                                        minWidth: 120
+                                      }}>
+                                        <div style={{ 
+                                          width: 32, 
+                                          height: 32, 
+                                          borderRadius: 10, 
+                                          background: iconColor ? `${iconColor}1A` : (isDark ? 'rgba(255,255,255,0.08)' : '#fff'),
+                                          boxShadow: !iconColor && !isDark ? '0 2px 4px rgba(0,0,0,0.02)' : 'none',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          color: iconColor || token.colorPrimary
+                                        }}>
+                                          <Icon size={16} strokeWidth={2.5} />
+                                        </div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                          <span style={{ fontSize: 10, color: token.colorTextSecondary, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.02em' }}>{label}</span>
+                                          <div style={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
+                                            <span style={{ 
+                                              fontSize: 18, 
+                                              fontWeight: 700, 
+                                              color: valueColor || (isError ? token.colorError : token.colorText), 
+                                              fontFamily: 'Inter, system-ui, sans-serif' 
+                                            }}>
+                                              {value}
+                                            </span>
+                                            {subValue !== undefined && (
+                                              <span style={{ fontSize: 12, color: token.colorTextTertiary, fontWeight: 500 }}>
+                                                / {subValue}
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+
+                                    return (
+                                      <>
+                                        <StatItem 
+                                          label="进度 (必选)" 
+                                          value={done} 
+                                          subValue={req}
+                                          isError={req > 0 && done === 0}
+                                          iconColor="#EAB308"
+                                          valueColor={done > 0 ? token.colorSuccess : (req > 0 ? token.colorError : undefined)}
+                                          icon={Target} 
+                                        />
+                                        <div style={{ width: 1, height: 24, background: token.colorBorderSecondary, opacity: 0.3 }} />
+                                        <StatItem 
+                                          label="全部模块" 
+                                          value={req + opt} 
+                                          icon={Layers} 
+                                          iconColor={isDark ? '#8b5cf6' : '#7c3aed'}
+                                        />
+                                      </>
+                                    );
+                                  })()}
                                 </div>
+
                                 {item.jump_path && (
                                   <Button
                                     type={isCompleted ? 'default' : 'primary'}
-                                    size="small"
-                                    className={isCompleted ? 'onboarding-completed-btn' : undefined}
-                                    icon={
-                                      isCompleted
-                                        ? wizIcon(CheckCircle2, 14, undefined, token.colorSuccess)
-                                        : wizIcon(PlayCircle, 14)
-                                    }
-                                    onClick={() => !isCompleted && navigate(item.jump_path)}
-                                    style={{
-                                      borderRadius: token.borderRadiusLG,
-                                      ...(isCompleted
-                                        ? {
-                                            background: token.colorSuccessBg,
-                                            borderColor: token.colorSuccessBorder,
-                                            color: token.colorSuccess,
-                                            borderWidth: 1,
-                                            borderStyle: 'solid',
-                                            boxShadow: 'none',
-                                            cursor: 'default',
-                                          }
-                                        : {}),
+                                    size="middle"
+                                    shape="round"
+                                    icon={isCompleted ? wizIcon(CheckCircle2, 16, undefined, token.colorSuccess) : wizIcon(ArrowRight, 16)}
+                                    onClick={() => {
+                                      if (!isCompleted) {
+                                        if (item.subItems) {
+                                          setCurrentDetailItem(item);
+                                          setDetailModalVisible(true);
+                                        } else {
+                                          navigate(item.jump_path);
+                                        }
+                                      }
+                                    }}
+                                    style={{ 
+                                      height: 36, 
+                                      paddingInline: 24, 
+                                      minWidth: 140,
+                                      fontSize: 14, 
+                                      fontWeight: 600,
+                                      boxShadow: isCompleted ? 'none' : `0 4px 12px ${token.colorPrimary}30`
                                     }}
                                   >
                                     {isCompleted ? '已完成' : '立即前往'}
                                   </Button>
                                 )}
-                              </Space>
+                              </div>
                             </div>
-                            <div style={{ paddingLeft: 40 }}>
-                              {item.description && (
-                                <Text type="secondary" style={{ fontSize: 13, display: 'block', marginBottom: 8 }}>
-                                  {item.description}
-                                </Text>
-                              )}
-                              {enhanced?.dependency && (
-                                <div style={{ marginTop: 2 }}>
-                                  <Text type="danger" style={{ fontSize: 13 }}>
-                                    {wizIcon(CalendarClock, 14, { marginRight: 6, verticalAlign: 'middle', display: 'inline-block' })}
-                                    <Text strong type="danger" style={{ fontSize: 13 }}>前置要求：</Text>
-                                    {enhanced.dependency}
-                                  </Text>
-                                </div>
-                              )}
-                              {enhanced?.tip && (
-                                <div style={{ marginTop: 2 }}>
-                                  <Text type="warning" style={{ fontSize: 13 }}>
-                                    {wizIcon(AlertCircle, 14, { marginRight: 6, verticalAlign: 'middle', display: 'inline-block' }, token.colorWarning)}
-                                    <Text strong type="warning" style={{ fontSize: 13 }}>专家建议：</Text>
-                                    {enhanced.tip}
-                                  </Text>
-                                </div>
-                              )}
-                            </div>
-                          </Space>
-                        </List.Item>
-                      );
-                    }}
+                          </List.Item>
+                        );
+                      }}
                     />
                   ),
                 };
               })}
-          />
+            />
+          </div>
+
+          {ROLE_DETAILS_MAP[activeTab]?.value && (
+            <div
+              style={{
+                padding: '16px 24px',
+                borderTop: `1px solid ${token.colorBorderSecondary}`,
+                background: token.colorSuccessBg,
+                borderRadius: `0 0 ${token.borderRadiusLG}px ${token.borderRadiusLG}px`
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+                {wizIcon(Zap, 16, { marginRight: 8, flexShrink: 0 }, token.colorSuccess)}
+                <Text style={{ fontSize: 12, fontWeight: 600, color: token.colorSuccess, margin: 0 }}>
+                  系统使用赋能与收益
+                </Text>
+              </div>
+              <Text strong style={{ fontSize: 13, color: token.colorText, fontWeight: 500 }}>
+                {ROLE_DETAILS_MAP[activeTab].value}
+              </Text>
+            </div>
+          )}
         </Card>
 
         {sysProgress === 100 && (
@@ -873,6 +1101,7 @@ const OnboardingWizardPage: React.FC = () => {
             type="success"
             showIcon
             icon={wizIcon(CheckCircle2, 18)}
+            style={{ marginTop: 16, borderRadius: token.borderRadiusLG }}
           />
         )}
       </div>
@@ -978,14 +1207,16 @@ const OnboardingWizardPage: React.FC = () => {
               <Empty description={t('pages.system.onboardingWizard.emptyRole') || '该角色暂无配置项'} />
             ) : (
               <List
+                style={{ paddingTop: 8 }}
                 dataSource={roleChecklistItems}
                 renderItem={(item: any) => {
                   const isCompleted = completedItems.has(item.id) || item.completed === true;
                   return (
                     <List.Item
+                      className="onboarding-list-item"
                       style={{
-                        padding: '16px',
-                        marginBottom: 12,
+                        padding: '20px 24px',
+                        marginBottom: 16,
                         borderRadius: token.borderRadiusLG,
                         border: `1px solid ${isCompleted ? token.colorBorder : token.colorBorderSecondary}`,
                         background: isCompleted 
@@ -993,74 +1224,83 @@ const OnboardingWizardPage: React.FC = () => {
                           : token.colorBgContainer,
                       }}
                     >
-                      <Space direction="vertical" style={{ width: '100%' }} size={12}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <Space size={12}>
-                            <Checkbox 
-                              checked={isCompleted}
-                              disabled={isCompleted}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  handleItemToggle(item.id);
-                                  messageApi.success(`已标记完成: ${item.name}`);
-                                }
-                              }}
-                            />
-                            <Text strong={item.required} style={{ fontSize: 14 }}>{item.name}</Text>
-                            {item.required && <Tag bordered color="error" style={{ fontSize: 10 }}>核心必办</Tag>}
-                            {isCompleted && wizIcon(CheckCircle2, 16, { color: token.colorSuccess })}
-                          </Space>
-                          <Space>
-                            {item.jump_path && (
-                              <Button
-                                type={isCompleted ? 'default' : 'primary'}
-                                size="small"
-                                icon={
-                                  isCompleted
-                                    ? wizIcon(CheckCircle2, 14, undefined, token.colorSuccess)
-                                    : wizIcon(PlayCircle, 14)
-                                }
-                                onClick={() => !isCompleted && navigate(item.jump_path)}
-                                className={
-                                  isCompleted ? 'onboarding-completed-btn' : 'onboarding-action-btn'
-                                }
-                                style={{ 
-                                  borderRadius: token.borderRadiusLG, 
-                                  padding: '0 16px',
-                                  fontSize: 12,
-                                  height: 28,
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  ...(isCompleted
-                                    ? {
-                                        background: token.colorSuccessBg,
-                                        border: `1px solid ${token.colorSuccessBorder}`,
-                                        color: token.colorSuccess,
-                                        boxShadow: 'none',
-                                        cursor: 'default',
-                                      }
-                                    : {
-                                        background: `linear-gradient(90deg, ${token.colorPrimary} 0%, ${token.colorPrimaryActive} 100%)`,
-                                        border: 'none',
-                                        boxShadow: `0 4px 10px ${token.colorPrimary}40`,
-                                        color: '#fff',
-                                      }),
-                                }}
-                              >
-                                {isCompleted ? '已完成' : '立即前往'}
-                              </Button>
-                            )}
-                          </Space>
-                        </div>
-                        <div style={{ paddingLeft: 32 }}>
-                          <Text type="secondary" style={{ fontSize: 13 }}>
-                            {item.description}
-                          </Text>
-                          <div style={{ marginTop: 8, fontSize: 12, opacity: 0.8 }}>
-                            <Tag bordered={false} style={{ fontSize: 11 }}>业务准则：确保数据录入的完整性与及时性</Tag>
+                      <div style={{ display: 'flex', width: '100%', alignItems: 'center', gap: 24 }}>
+                        {/* Left: Info */}
+                        <div style={{ display: 'flex', flex: 1, gap: 16, alignItems: 'flex-start' }}>
+                          <Checkbox 
+                            checked={isCompleted}
+                            disabled={isCompleted}
+                            style={{ marginTop: 4 }}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                handleItemToggle(item.id);
+                                messageApi.success(`已标记完成: ${item.name}`);
+                              }
+                            }}
+                          />
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <Text strong={item.required} style={{ fontSize: 16 }}>{item.name}</Text>
+                              {item.required && <Tag bordered={false} color="error" style={{ fontSize: 10, borderRadius: 4, paddingInline: 6 }}>核心必办</Tag>}
+                              {isCompleted && wizIcon(CheckCircle2, 16, { color: token.colorSuccess })}
+                            </div>
+                            <Text type="secondary" style={{ fontSize: 13, lineHeight: '1.6', maxWidth: 600 }}>
+                              {item.description}
+                            </Text>
+                            <div style={{ marginTop: 4, opacity: 0.8 }}>
+                              <Tag bordered={false} style={{ fontSize: 11, background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }}>
+                                业务准则：确保数据录入的完整性与及时性
+                              </Tag>
+                            </div>
                           </div>
                         </div>
-                      </Space>
+
+                        {/* Right: Action */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                          {item.jump_path && (
+                            <Button
+                              type={isCompleted ? 'default' : 'primary'}
+                              size="middle"
+                              shape="round"
+                              icon={
+                                isCompleted
+                                  ? wizIcon(CheckCircle2, 16, undefined, token.colorSuccess)
+                                  : wizIcon(PlayCircle, 16)
+                              }
+                              onClick={() => !isCompleted && navigate(item.jump_path)}
+                              className={
+                                isCompleted ? 'onboarding-completed-btn' : 'onboarding-action-btn'
+                              }
+                              style={{ 
+                                borderRadius: token.borderRadiusLG, 
+                                paddingInline: 24,
+                                minWidth: 120,
+                                fontSize: 14, 
+                                height: 36,
+                                fontWeight: 600,
+                                display: 'flex',
+                                alignItems: 'center',
+                                ...(isCompleted
+                                  ? {
+                                      background: token.colorSuccessBg,
+                                      border: `1px solid ${token.colorSuccessBorder}`,
+                                      color: token.colorSuccess,
+                                      boxShadow: 'none',
+                                      cursor: 'default',
+                                    }
+                                  : {
+                                      background: `linear-gradient(90deg, ${token.colorPrimary} 0%, ${token.colorPrimaryActive} 100%)`,
+                                      border: 'none',
+                                      boxShadow: `0 4px 12px ${token.colorPrimary}40`,
+                                      color: '#fff',
+                                    }),
+                              }}
+                            >
+                              {isCompleted ? '已完成' : '立即前往'}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
                     </List.Item>
                   );
                 }}
@@ -1073,13 +1313,13 @@ const OnboardingWizardPage: React.FC = () => {
               style={{
                 padding: '16px 24px',
                 borderTop: `1px solid ${token.colorBorderSecondary}`,
-                background: token.colorPrimaryBg,
-                borderInlineStart: `3px solid ${token.colorPrimary}`,
+                background: token.colorSuccessBg,
+                borderRadius: `0 0 ${token.borderRadiusLG}px ${token.borderRadiusLG}px`
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
-                {wizIcon(Zap, 16, { marginRight: 8, flexShrink: 0 }, token.colorPrimary)}
-                <Text style={{ fontSize: 12, fontWeight: 600, color: token.colorPrimary, margin: 0 }}>
+                {wizIcon(Zap, 16, { marginRight: 8, flexShrink: 0 }, token.colorSuccess)}
+                <Text style={{ fontSize: 12, fontWeight: 600, color: token.colorSuccess, margin: 0 }}>
                   系统使用赋能与收益
                 </Text>
               </div>
@@ -1232,7 +1472,7 @@ const OnboardingWizardPage: React.FC = () => {
                             {isCompleted ? '已完成' : '立即前往'}
                           </Button>
                         )}
-                        {item.guide_id && (
+                        {/* item.guide_id && (
                           <Button
                             type="primary"
                             ghost
@@ -1242,7 +1482,7 @@ const OnboardingWizardPage: React.FC = () => {
                           >
                             开始引导
                           </Button>
-                        )}
+                        ) */}
                       </Space>
                     </div>
                     <div style={{ paddingLeft: 32 }}>
@@ -1266,14 +1506,13 @@ const OnboardingWizardPage: React.FC = () => {
               marginTop: 16,
               padding: '16px 20px',
               borderRadius: token.borderRadiusLG,
-              border: `1px solid ${token.colorPrimaryBorder}`,
-              background: token.colorPrimaryBg,
-              borderInlineStart: `3px solid ${token.colorPrimary}`,
+              border: `1px solid ${token.colorSuccessBorder}`,
+              background: token.colorSuccessBg,
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
-              {wizIcon(Zap, 16, { marginRight: 8, flexShrink: 0 }, token.colorPrimary)}
-              <Text style={{ fontSize: 12, fontWeight: 600, color: token.colorPrimary, margin: 0 }}>
+              {wizIcon(Zap, 16, { marginRight: 8, flexShrink: 0 }, token.colorSuccess)}
+              <Text style={{ fontSize: 12, fontWeight: 600, color: token.colorSuccess, margin: 0 }}>
                 系统使用赋能与收益
               </Text>
             </div>
@@ -1290,14 +1529,6 @@ const OnboardingWizardPage: React.FC = () => {
     <div style={{ width: '100%', padding: 0, boxSizing: 'border-box' }}>
       <style>{stepStyle}</style>
       <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'flex-start', marginBottom: 16 }}>
-        <div style={{ width: 140, height: 85, marginTop: -25, marginLeft: -10,marginRight:-20, overflow: 'hidden', pointerEvents: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Lottie 
-            animationData={guideAnimation} 
-            loop 
-            autoplay 
-            style={{ width: 160, height: 160, marginBottom: -25 }} // 通过负边距向上拉伸，裁切底部空白
-          />
-        </div>
         <div style={{ flex: 1 }}>
           <Title level={2} style={{ marginTop: 0, marginBottom: 8, letterSpacing: '-0.02em', fontSize: '24px' }}>
             {t('pages.system.onboardingWizard.title')}
@@ -1313,7 +1544,7 @@ const OnboardingWizardPage: React.FC = () => {
           alignItems: 'center', 
           gap: 16, 
           background: token.colorBgContainer, 
-          padding: '8px 16px', 
+          padding: '8px 8px 8px 24px', 
           borderRadius: 32,
           border: `1px solid ${token.colorBorderSecondary}`,
           boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
@@ -1384,6 +1615,86 @@ const OnboardingWizardPage: React.FC = () => {
           </div>
         </Col>
       </Row>
+
+      {/* 详细功能指引 Modal */}
+      <Modal
+        title={<span>{currentDetailItem?.name} - 功能详情清单</span>}
+        open={detailModalVisible}
+        onCancel={() => setDetailModalVisible(false)}
+        footer={[
+          <Button key="close" onClick={() => setDetailModalVisible(false)}>
+            返回向导
+          </Button>
+        ]}
+        width={800}
+        centered
+        styles={{ 
+          body: { padding: '0 24px 24px 0' } 
+        }}
+      >
+        <div style={{ paddingTop: 16, marginBottom: 16 }}>
+          <Text type="secondary">
+            完成以下各项核心子功能的配置与数据录入，即可完成“{currentDetailItem?.name}”阶段的任务。
+          </Text>
+        </div>
+        <Table
+          dataSource={currentDetailItem?.subItems || []}
+          pagination={false}
+          size="middle"
+          rowKey="name"
+          columns={[
+            {
+              title: '功能清单',
+              dataIndex: 'name',
+              key: 'name',
+              width: 140,
+              render: (text) => <Text strong>{text}</Text>
+            },
+            {
+              title: '功能简介',
+              dataIndex: 'description',
+              key: 'description',
+              render: (text) => <Text type="secondary" style={{ fontSize: 13 }}>{text}</Text>
+            },
+            {
+              title: '是否必填',
+              dataIndex: 'required',
+              key: 'required',
+              width: 100,
+              align: 'center',
+              render: (required) => (
+                required 
+                  ? <Tag color="error" bordered={false} style={{ fontSize: 11 }}>必填</Tag> 
+                  : <Tag color="default" bordered={false} style={{ fontSize: 11 }}>可选</Tag>
+              )
+            },
+            {
+              title: '操作',
+              key: 'action',
+              width: 140,
+              align: 'center',
+              render: (_, record) => (
+                <Typography.Link 
+                  onClick={() => {
+                    setDetailModalVisible(false);
+                    navigate(record.jump_path);
+                  }}
+                  style={{ 
+                    fontSize: 13, 
+                    fontWeight: 500, 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    gap: 4 
+                  }}
+                >
+                  立即前往 {wizIcon(ArrowRight, 14)}
+                </Typography.Link>
+              )
+            }
+          ]}
+        />
+      </Modal>
     </div>
   );
 };

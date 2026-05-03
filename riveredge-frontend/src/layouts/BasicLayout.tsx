@@ -708,6 +708,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const [breadcrumbVisible, setBreadcrumbVisible] = useState(true);
   const [userOpenKeys, setUserOpenKeys] = useState<string[]>([]); // 用户手动展开的菜单 key
   const [userClosedKeys, setUserClosedKeys] = useState<string[]>([]); // 用户手动收起的菜单 key
+  const [onboardingHovered, setOnboardingHovered] = useState(false);
   const breadcrumbRef = useRef<HTMLDivElement>(null);
   const systemSettingsPanelRef = useRef<HTMLDivElement>(null);
   const systemSettingsTriggerRef = useRef<HTMLButtonElement>(null);
@@ -4615,9 +4616,11 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.background = isLightModeLightBg ? token.colorFillSecondary : 'rgba(255, 255, 255, 0.15)';
+                  setOnboardingHovered(true);
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.background = isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)';
+                  setOnboardingHovered(false);
                 }}
               >
                 <span
@@ -4633,8 +4636,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                 >
                   <Lottie
                     animationData={compassAnimation}
-                    loop
-                    autoplay
+                    loop={onboardingHovered}
+                    autoplay={onboardingHovered}
                     style={{
                       width: 32,
                       height: 32,
@@ -5369,7 +5372,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       />
 
       {/* 新手引导 */}
-      <OnboardingGuide />
+      {/* <OnboardingGuide /> */}
 
       {/* 键盘快捷键帮助 */}
       <Modal
