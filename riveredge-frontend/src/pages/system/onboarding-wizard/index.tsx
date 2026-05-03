@@ -355,14 +355,131 @@ const OnboardingWizardPage: React.FC = () => {
       { id: 'mgr_approve', name: '业务单据审批', description: '集中处理各部门提交的核心业务审批流', required: true, jump_path: '/apps/system/workflow/approvals' },
       { id: 'mgr_dashboard', name: '经营分析看板', description: '查看营收、利润、库存周转等核心指标', required: true, jump_path: '/apps/dashboard/bi' }
     ],
-    'implementer': [
-      { id: 'imp_org', name: '建立组织架构', description: '定义公司部门、工厂与分支机构', required: true, jump_path: '/apps/system/departments' },
-      { id: 'imp_role', name: '分配角色权限', description: '按岗授权，确保系统操作安全合规', required: true, jump_path: '/apps/system/roles' },
-      { id: 'imp_workflow', name: '配置审批流程', description: '定义销售、采购等核心单据的审批链路', required: true, jump_path: '/apps/system/workflow/definitions' },
-      { id: 'imp_print', name: '设计打印模板', description: '配置送货单、入库单等单据的打印样式', required: false, jump_path: '/apps/system/print-templates' },
-      { id: 'imp_rule', name: '定义编码规则', description: '设置物料、单据的自动编号与批次规则', required: true, jump_path: '/apps/system/coding-rules' }
-    ]
+    'implementer': [] // 基础列表留空，使用下方的 IMPLEMENTER_ENHANCED_CHECKLIST
   };
+
+  /**
+   * 系统设定向导 (实施人员/管理员) 建设标准
+   * 按 4 阶段拆解，引导管理员完成系统底层配置
+   */
+  const IMPLEMENTER_ENHANCED_CHECKLIST = [
+    {
+      id: 'imp_security_phase',
+      name: '第一阶段：权限基建与用户体系',
+      items: [
+        {
+          id: 'imp_security_group',
+          name: '建立用户与权限基座',
+          required: true,
+          description: '配置公司的部门架构、岗位体系以及基于角色的权限访问控制。',
+          subItems: [
+            { id: 'imp_dept', name: '部门管理', description: '定义行政组织架构，建立部门树。', required: true, jump_path: '/system/departments' },
+            { id: 'imp_post', name: '职位管理', description: '定义企业岗位的职责边界与职等。', required: false, jump_path: '/system/positions' },
+            { id: 'imp_role', name: '角色权限', description: '分配菜单与操作权限，实现安全隔离。', required: true, jump_path: '/system/roles' },
+            { id: 'imp_user', name: '账户管理', description: '开通人员账号，绑定角色并激活。', required: true, jump_path: '/system/users' },
+          ]
+        }
+      ]
+    },
+    {
+      id: 'imp_config_phase',
+      name: '第二阶段：核心业务建模规则',
+      items: [
+        {
+          id: 'imp_standard_group',
+          name: '业务建模与标准化',
+          required: true,
+          description: '定义全系统的编码逻辑、数据字典、自定义字段等核心建模标准。',
+          subItems: [
+            { id: 'imp_rule', name: '编号规则', description: '物料、订单的自动编号逻辑设定。', required: true, jump_path: '/system/code-rules' },
+            { id: 'imp_dict', name: '数据字典', description: '预定义枚举项（支付方式、单据分类等）。', required: true, jump_path: '/system/data-dictionaries' },
+            { id: 'imp_lang', name: '语言管理', description: '多语言翻译字典维护，支撑全球化作业。', required: false, jump_path: '/system/languages' },
+            { id: 'imp_field', name: '自定义字段', description: '单据动态字段扩展与数据采集配置。', required: false, jump_path: '/system/custom-fields' },
+          ]
+        },
+        {
+          id: 'imp_site_group',
+          name: '界面布局与站点配置',
+          required: false,
+          description: '配置左侧菜单布局、系统 LOGO、租户名称等全局性视觉属性。',
+          subItems: [
+            { id: 'imp_menu', name: '菜单管理', description: '自定义侧栏排序、图标与显示名称。', required: false, jump_path: '/system/menus' },
+            { id: 'imp_site', name: '站点设置', description: '配置系统名称、LOGO 与多租户参数。', required: false, jump_path: '/system/site-settings' },
+            { id: 'imp_business', name: '业务配置', description: '各类具体业务开关（如库存负库存限制）。', required: false, jump_path: '/system/config-center' },
+          ]
+        }
+      ]
+    },
+    {
+      id: 'imp_process_phase',
+      name: '第三阶段：流程引擎与交付模板',
+      items: [
+        {
+          id: 'imp_workflow_group',
+          name: '定义审批与交付标准',
+          required: true,
+          description: '配置全业务全链路的审批流、消息预警触发以及单据打印模板。',
+          subItems: [
+            { id: 'imp_workflow', name: '审批流程', description: '销售、采购单据的多级审批链路定义。', required: true, jump_path: '/system/approval-processes' },
+            { id: 'imp_msg', name: '消息与渠道', description: '消息模板设定与通知渠道配置。', required: false, jump_path: '/system/message-templates' },
+            { id: 'imp_print', name: '打印与设备', description: '送货单等模板设计及车间打印设备关联。', required: false, jump_path: '/system/print-templates' },
+          ]
+        }
+      ]
+    },
+    {
+      id: 'imp_data_phase',
+      name: '第四阶段：数据治理与接口集成',
+      items: [
+        {
+          id: 'imp_integration_group',
+          name: '外部集成与数据治理',
+          required: false,
+          description: '配置外部 API、数据集管理以及文件中心，打通系统间数据壁垒。',
+          subItems: [
+            { id: 'imp_file', name: '文件管理', description: '集中管理图纸、SOP 等非结构化文件。', required: false, jump_path: '/system/files' },
+            { id: 'imp_api', name: '接口与数据源', description: '外部 API 注册与数据库连接配置。', required: false, jump_path: '/system/apis' },
+            { id: 'imp_connector', name: '应用连接器', description: '标准连接器快速打通第三方 SaaS 数据。', required: false, jump_path: '/system/application-connections' },
+            { id: 'imp_dataset', name: '数据集管理', description: '定义 BI 看板与报表底层的数据集逻辑。', required: false, jump_path: '/system/datasets' },
+          ]
+        }
+      ]
+    },
+    {
+      id: 'imp_ops_phase',
+      name: '第五阶段：系统运维与安全监控',
+      items: [
+        {
+          id: 'imp_ops_group',
+          name: '全方位运维与监控',
+          required: true,
+          description: '建立审计日志追溯系统，实施在线用户监控与数据自动化备份。',
+          subItems: [
+            { id: 'imp_audit', name: '操作日志', description: '全量追溯系统操作动作，确保安全审计。', required: true, jump_path: '/system/operation-logs' },
+            { id: 'imp_login', name: '登录日志', description: '监控系统访问记录，识别异常登录。', required: false, jump_path: '/system/login-logs' },
+            { id: 'imp_online', name: '在线用户', description: '实时掌握活跃人员状态，保障登录安全。', required: false, jump_path: '/system/online-users' },
+            { id: 'imp_backup', name: '数据备份', description: '设置定时备份策略，保护企业核心资产。', required: true, jump_path: '/system/data-backups' },
+          ]
+        }
+      ]
+    },
+    {
+      id: 'imp_app_phase',
+      name: '第六阶段：应用扩展与个人效能',
+      items: [
+        {
+          id: 'imp_ext_group',
+          name: '功能扩展与个人定制',
+          required: false,
+          description: '通过应用中心动态扩展功能，并为个人定制专属的作业环境。',
+          subItems: [
+            { id: 'imp_app_center', name: '应用中心', description: '功能模块的安装、升级与版本管理。', required: false, jump_path: '/system/applications' },
+            { id: 'imp_personal', name: '个人资料', description: '个人资料设置、语言主题偏好及任务中心。', required: false, jump_path: '/personal/profile' },
+          ]
+        }
+      ]
+    }
+  ];
 
   const ENHANCED_CHECKLIST = [
     {
@@ -683,6 +800,8 @@ const OnboardingWizardPage: React.FC = () => {
   useEffect(() => {
     if (activeTab === 'system') {
       loadSystemGuide();
+    } else if (activeTab === 'implementer') {
+      // Logic handled via renderImplementerTab
     } else {
       loadRoleGuide(activeTab);
     }
@@ -728,6 +847,31 @@ const OnboardingWizardPage: React.FC = () => {
       };
     });
   }, [systemGuideData]);
+  
+  const implementerChecklist = useMemo(() => {
+    // 强制使用 IMPLEMENTER_ENHANCED_CHECKLIST 作为实施向导的骨架
+    return IMPLEMENTER_ENHANCED_CHECKLIST.map((cat) => ({
+      ...cat,
+      items: cat.items.map((item) => {
+        // 如果有子项，根据子项状态判断整体完成度（这里简化处理，手动勾选 group 也会记录）
+        const hasSubItems = item.subItems && item.subItems.length > 0;
+        let isGroupCompleted = completedItems.has(item.id);
+        
+        if (hasSubItems && !isGroupCompleted) {
+          // 如果所有必填子项都已手动勾选或满足条件，则视为完成
+          const requiredSubs = item.subItems!.filter(s => s.required);
+          if (requiredSubs.length > 0) {
+            isGroupCompleted = requiredSubs.every(s => completedItems.has(s.id));
+          }
+        }
+
+        return {
+          ...item,
+          completed: isGroupCompleted
+        };
+      })
+    }));
+  }, [completedItems]);
 
   const sysProgress = useMemo(() => {
     let sysCompleted = 0;
@@ -741,6 +885,326 @@ const OnboardingWizardPage: React.FC = () => {
     return sysTotal > 0 ? Math.round((sysCompleted / sysTotal) * 100) : 0;
   }, [systemChecklist, completedItems]);
 
+  const impProgress = useMemo(() => {
+    let impCompleted = 0;
+    let impTotal = 0;
+    implementerChecklist.forEach((cat: any) => {
+      cat.items?.forEach((item: any) => {
+        impTotal++;
+        if (item.completed) impCompleted++;
+      });
+    });
+    return impTotal > 0 ? Math.round((impCompleted / impTotal) * 100) : 0;
+  }, [implementerChecklist]);
+
+
+
+  /** 系统设定向导 (管理员专用) */
+  const renderImplementerTab = () => {
+    // 计算当前阶段
+    const currentStep = implementerChecklist.findIndex((cat: any) => 
+      (cat.items || []).some((item: any) => !item.completed)
+    );
+    const activeStep = currentStep === -1 ? implementerChecklist.length : currentStep;
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
+        <Card 
+          style={{ borderRadius: token.borderRadiusLG, border: `1px solid ${token.colorBorderSecondary}`, overflow: 'hidden' }}
+          styles={{ body: { padding: 0 } }}
+        >
+          {/* Header */}
+          <div style={{ 
+            padding: '24px', 
+            background: isDark ? `linear-gradient(135deg, ${token.colorPrimary}1A 0%, #141414 100%)` : `linear-gradient(135deg, ${token.colorInfoBg} 0%, #ffffff 100%)`,
+            borderBottom: `1px solid ${token.colorBorderSecondary}`
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+              <div style={{ 
+                width: 48, height: 48, borderRadius: 12, 
+                background: `linear-gradient(135deg, ${token.colorPrimary} 0%, ${token.colorPrimaryActive} 100%)`, 
+                color: '#fff', 
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 24, marginRight: 16,
+                boxShadow: `0 4px 12px ${token.colorPrimary}40`
+              }}>
+                {onboardingMenuIcon(ManufacturingIcons.package)}
+              </div>
+              <div>
+                <Typography.Title level={4} style={{ margin: 0 }}>
+                  系统设定向导
+                </Typography.Title>
+                <Text type="secondary" style={{ fontSize: 14, marginTop: 4, display: 'flex', alignItems: 'center' }}>
+                  {wizIcon(Target, 16, { marginRight: 6, flexShrink: 0 }, token.colorPrimary)}
+                  {ROLE_MISSION_MAP[activeTab] || '核心使命：负责系统底层架构配置与全局参数设定，确保软件运行环境稳健。'}
+                </Text>
+              </div>
+            </div>
+
+            <Row gutter={16}>
+              <Col xs={24} md={12}>
+                <div style={{ background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.7)', padding: '16px', borderRadius: token.borderRadiusLG, border: `1px solid ${token.colorBorderSecondary}60`, height: '100%', backdropFilter: 'blur(8px)' }}>
+                  <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                    {wizIcon(Archive, 14, { marginRight: 6, verticalAlign: 'middle', display: 'inline-block' })}
+                    管理员核心职责
+                  </Text>
+                  <Text strong style={{ fontSize: 13, color: token.colorText }}>组织架构、账号权限、流程引擎、系统安全</Text>
+                </div>
+              </Col>
+              <Col xs={24} md={12}>
+                <div style={{ background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.7)', padding: '16px', borderRadius: token.borderRadiusLG, border: `1px solid ${token.colorBorderSecondary}60`, height: '100%', backdropFilter: 'blur(8px)' }}>
+                  <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                    {wizIcon(FileSearch, 14, { marginRight: 6, verticalAlign: 'middle', display: 'inline-block' })}
+                    交付验收标准
+                  </Text>
+                  <Text strong style={{ fontSize: 13, color: token.colorText }}>全员账号开通、核心流程走通、单据样式符合标准</Text>
+                </div>
+              </Col>
+            </Row>
+            
+            <div style={{ marginTop: 16, display: 'flex', alignItems: 'flex-start' }}>
+              {wizIcon(AlertCircle, 16, { marginTop: 4, marginRight: 8, flexShrink: 0 }, token.colorWarning)}
+              <Text type="secondary" style={{ fontSize: 13 }}>
+                <span style={{ color: token.colorWarning, fontWeight: 500 }}>专家提示：</span>
+                作为系统管理员，您的配置决定了系统的“骨架”。请务必先行完成第一阶段的组织与权限设定，这是所有业务模块运行的前置条件。
+              </Text>
+            </div>
+          </div>
+          {/* List Section */}
+          <div style={{ padding: '24px' }}>
+            <Steps
+              direction="vertical"
+              size="small"
+              className="onboarding-steps"
+              current={activeStep}
+              items={implementerChecklist.map((category: any, idx: number) => {
+                const isCurrentStep = idx === activeStep;
+
+                return {
+                  title: (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                      <span style={{ 
+                        fontSize: 14, 
+                        fontWeight: 500,
+                        color: isCurrentStep ? token.colorText : token.colorTextSecondary 
+                      }}>
+                        {category.name}
+                      </span>
+                    </div>
+                  ),
+                  status: 'finish',
+                  description: (
+                    <List
+                      dataSource={category.items || []}
+                      renderItem={(item: any) => {
+                        const isCompleted = item.completed;
+                        
+                        return (
+                          <List.Item
+                            className="onboarding-list-item"
+                            style={{
+                              padding: '20px 24px',
+                              marginBottom: 16,
+                              borderRadius: token.borderRadiusLG,
+                              border: `1px solid ${isCompleted ? 'rgba(82, 196, 26, 0.2)' : token.colorBorderSecondary}`,
+                              background: isCompleted 
+                                ? (isDark 
+                                    ? 'linear-gradient(145deg, rgba(82, 196, 26, 0.05) 0%, rgba(0, 0, 0, 0) 100%)' 
+                                    : 'linear-gradient(145deg, rgba(82, 196, 26, 0.04) 0%, rgba(255, 255, 255, 0.6) 100%)')
+                                : token.colorBgContainer,
+                            }}
+                          >
+                            <div style={{ display: 'flex', width: '100%', alignItems: 'center', gap: 24 }}>
+                              <div style={{ display: 'flex', flex: 1, gap: 16, alignItems: 'flex-start' }}>
+                                <Checkbox 
+                                  checked={isCompleted}
+                                  onChange={() => handleItemToggle(item.id)}
+                                  style={{ marginTop: 4 }}
+                                />
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <Text strong style={{ fontSize: 16, color: isCompleted ? token.colorSuccess : token.colorText }}>
+                                      {item.name}
+                                    </Text>
+                                    {item.required && !isCompleted && (
+                                      <Tag bordered={false} color="error" style={{ fontSize: 10, borderRadius: 4, paddingInline: 6 }}>核心必办</Tag>
+                                    )}
+                                  </div>
+                                  <Text type="secondary" style={{ fontSize: 13, lineHeight: '1.6', maxWidth: 500 }}>{item.description}</Text>
+                                </div>
+                              </div>
+
+                              {/* Right: Status & Action */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+                                <div style={{ 
+                                  display: 'flex', 
+                                  alignItems: 'center', 
+                                  background: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.015)',
+                                  borderRadius: 14,
+                                  border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)'}`,
+                                  overflow: 'hidden'
+                                }}>
+                                  {(() => {
+                                    let req = 0, opt = 0, done = 0;
+                                    if (item.subItems && item.subItems.length > 0) {
+                                      item.subItems.forEach((sub: any) => {
+                                        if (sub.required) req++; else opt++;
+                                        if (completedItems.has(sub.id) || realCounts[sub.id] > 0) done++;
+                                      });
+                                    } else {
+                                      if (item.required) req = 1; else opt = 1;
+                                      if (isCompleted) done = 1;
+                                    }
+                                    
+                                    const StatItem = ({ label, value, subValue, icon: Icon, isError, iconColor, valueColor }: any) => (
+                                      <div style={{ 
+                                        padding: '8px 16px', 
+                                        paddingRight: 24,
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        gap: 12,
+                                        minWidth: 120
+                                      }}>
+                                        <div style={{ 
+                                          width: 32, 
+                                          height: 32, 
+                                          borderRadius: 10, 
+                                          background: iconColor ? `${iconColor}1A` : (isDark ? 'rgba(255,255,255,0.08)' : '#fff'),
+                                          boxShadow: !iconColor && !isDark ? '0 2px 4px rgba(0,0,0,0.02)' : 'none',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          color: iconColor || token.colorPrimary
+                                        }}>
+                                          <Icon size={16} strokeWidth={2.5} />
+                                        </div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                          <span style={{ fontSize: 10, color: token.colorTextSecondary, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.02em' }}>{label}</span>
+                                          <div style={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
+                                            <span style={{ 
+                                              fontSize: 18, 
+                                              fontWeight: 700, 
+                                              color: valueColor || (isError ? token.colorError : token.colorText), 
+                                              fontFamily: 'Inter, system-ui, sans-serif' 
+                                            }}>
+                                              {value}
+                                            </span>
+                                            {subValue !== undefined && (
+                                              <span style={{ fontSize: 12, color: token.colorTextTertiary, fontWeight: 500 }}>
+                                                / {subValue}
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+
+                                    return (
+                                      <>
+                                        <StatItem 
+                                          label="进度 (必选)" 
+                                          value={done} 
+                                          subValue={req}
+                                          isError={req > 0 && done === 0}
+                                          iconColor="#EAB308"
+                                          valueColor={done > 0 ? token.colorSuccess : (req > 0 ? token.colorError : undefined)}
+                                          icon={Target} 
+                                        />
+                                        <div style={{ width: 1, height: 24, background: token.colorBorderSecondary, opacity: 0.3 }} />
+                                        <StatItem 
+                                          label="全部模块" 
+                                          value={req + opt} 
+                                          icon={Layers} 
+                                          iconColor={isDark ? '#8b5cf6' : '#7c3aed'}
+                                        />
+                                      </>
+                                    );
+                                  })()}
+                                </div>
+
+                                {(item.jump_path || (item.subItems && item.subItems.length > 0)) && (
+                                  <Button
+                                    type={isCompleted ? 'default' : 'primary'}
+                                    size="large"
+                                    shape="round"
+                                    icon={
+                                      isCompleted
+                                        ? wizIcon(CheckCircle2, 16, undefined, token.colorSuccess)
+                                        : wizIcon(ArrowRight, 16)
+                                    }
+                                    onClick={() => {
+                                      if (!isCompleted) {
+                                        if (item.subItems) {
+                                          setCurrentDetailItem(item);
+                                          setDetailModalVisible(true);
+                                        } else {
+                                          navigate(item.jump_path);
+                                        }
+                                      }
+                                    }}
+                                    style={{ 
+                                      borderRadius: 25, 
+                                      paddingInline: 36,
+                                      minWidth: 160,
+                                      fontSize: 16, 
+                                      height: 50,
+                                      fontWeight: 600,
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      ...(isCompleted
+                                        ? {
+                                            background: token.colorSuccessBg,
+                                            border: `1px solid ${token.colorSuccessBorder}`,
+                                            color: token.colorSuccess,
+                                            boxShadow: 'none',
+                                            cursor: 'default',
+                                          }
+                                        : {
+                                            background: `linear-gradient(90deg, #1890ff 0%, #0070f3 100%)`,
+                                            border: 'none',
+                                            boxShadow: `0 6px 16px rgba(0, 112, 243, 0.3)`,
+                                            color: '#fff',
+                                          }),
+                                    }}
+                                  >
+                                    {isCompleted ? '已完成' : '立即前往'}
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          </List.Item>
+                        );
+                      }}
+                    />
+                  )
+                };
+              })}
+            />
+          </div>
+
+          <div
+            style={{
+              padding: '16px 24px',
+              borderTop: `1px solid ${token.colorBorderSecondary}`,
+              background: token.colorSuccessBg,
+              borderRadius: `0 0 ${token.borderRadiusLG}px ${token.borderRadiusLG}px`
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+              {wizIcon(Zap, 16, { marginRight: 8, flexShrink: 0 }, token.colorSuccess)}
+              <Text style={{ fontSize: 12, fontWeight: 600, color: token.colorSuccess, margin: 0 }}>
+                管理员赋能与收益
+              </Text>
+            </div>
+            <Text strong style={{ fontSize: 13, color: token.colorText, fontWeight: 500 }}>
+              通过标准化的系统设定，您将建立起稳健的数字化底座，实现全流程的规范化管理与风险管控。
+            </Text>
+          </div>
+        </Card>
+      </div>
+    );
+  };
 
   /** 系统上线 Tab 内容 */
   const renderSystemTab = () => {
@@ -1035,7 +1499,7 @@ const OnboardingWizardPage: React.FC = () => {
                                 {item.jump_path && (
                                   <Button
                                     type={isCompleted ? 'default' : 'primary'}
-                                    size="middle"
+                                    size="large"
                                     shape="round"
                                     icon={isCompleted ? wizIcon(CheckCircle2, 16, undefined, token.colorSuccess) : wizIcon(ArrowRight, 16)}
                                     onClick={() => {
@@ -1049,12 +1513,29 @@ const OnboardingWizardPage: React.FC = () => {
                                       }
                                     }}
                                     style={{ 
-                                      height: 36, 
-                                      paddingInline: 24, 
-                                      minWidth: 140,
-                                      fontSize: 14, 
+                                      borderRadius: 25, 
+                                      paddingInline: 36,
+                                      minWidth: 160,
+                                      fontSize: 16, 
+                                      height: 50,
                                       fontWeight: 600,
-                                      boxShadow: isCompleted ? 'none' : `0 4px 12px ${token.colorPrimary}30`
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      ...(isCompleted
+                                        ? {
+                                            background: token.colorSuccessBg,
+                                            border: `1px solid ${token.colorSuccessBorder}`,
+                                            color: token.colorSuccess,
+                                            boxShadow: 'none',
+                                            cursor: 'default',
+                                          }
+                                        : {
+                                            background: `linear-gradient(90deg, #1890ff 0%, #0070f3 100%)`,
+                                            border: 'none',
+                                            boxShadow: `0 6px 16px rgba(0, 112, 243, 0.3)`,
+                                            color: '#fff',
+                                          }),
                                     }}
                                   >
                                     {isCompleted ? '已完成' : '立即前往'}
@@ -1110,6 +1591,13 @@ const OnboardingWizardPage: React.FC = () => {
 
   /** 角色 Tab 内容 */
   const renderRoleTab = () => {
+    if (activeTab === 'system') {
+      return renderSystemTab();
+    }
+    if (activeTab === 'implementer') {
+      return renderImplementerTab();
+    }
+
     if (loading && !guideData) return <Card loading={loading} />;
     
     // 优先使用后端的 guideData 清单，如果后端没有返回任何 items，则启用强大的前端默认指引兜底
@@ -1551,7 +2039,7 @@ const OnboardingWizardPage: React.FC = () => {
         }}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
             <Text strong style={{ fontSize: 14 }}>
-              {activeTab === 'system' ? t('pages.system.onboardingWizard.systemProgress') : t('pages.system.onboardingWizard.roleProgress')}
+              {activeTab === 'system' ? t('pages.system.onboardingWizard.systemProgress') : (activeTab === 'implementer' ? '设定进度' : t('pages.system.onboardingWizard.roleProgress'))}
             </Text>
             <Space size={4}>
               <Button 
@@ -1567,7 +2055,7 @@ const OnboardingWizardPage: React.FC = () => {
           </div>
           <Progress 
             type="circle" 
-            percent={activeTab === 'system' ? sysProgress : progress} 
+            percent={activeTab === 'system' ? sysProgress : (activeTab === 'implementer' ? impProgress : progress)} 
             size={48} 
             strokeColor={token.colorSuccess}
             format={(percent) => (
@@ -1647,8 +2135,15 @@ const OnboardingWizardPage: React.FC = () => {
               title: '功能清单',
               dataIndex: 'name',
               key: 'name',
-              width: 140,
-              render: (text) => <Text strong>{text}</Text>
+              width: 180,
+              render: (text, record) => (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {(completedItems.has(record.id) || realCounts[record.id] > 0) && (
+                    <CheckCircle2 size={14} color={token.colorSuccess} style={{ flexShrink: 0 }} />
+                  )}
+                  <Text strong>{text}</Text>
+                </div>
+              )
             },
             {
               title: '功能简介',

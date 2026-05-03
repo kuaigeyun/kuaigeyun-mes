@@ -140,7 +140,7 @@ const getSamplePresetsByDocType = (t: any, docType: string): SamplePreset[] => {
   const QUOTATION_SAMPLE_PRESETS: SamplePreset[] = [
     {
       key: 'quotation-short',
-      label: 'pages.system.printTemplatesDesign.sampleQuotationShort',
+      label: t('pages.system.printTemplatesDesign.sampleQuotationShort'),
       data: {
       quotation_code: 'BJ-2026-0001',
       customer_name: t('pages.system.printTemplatesDesign.sampleCustomer1'),
@@ -162,7 +162,7 @@ const getSamplePresetsByDocType = (t: any, docType: string): SamplePreset[] => {
   },
   {
     key: 'quotation-long',
-    label: 'pages.system.printTemplatesDesign.sampleQuotationLong',
+    label: t('pages.system.printTemplatesDesign.sampleQuotationLong'),
     data: {
       quotation_code: 'BJ-2026-0099',
       customer_name: t('pages.system.printTemplatesDesign.sampleCustomer2'),
@@ -182,7 +182,7 @@ const getSamplePresetsByDocType = (t: any, docType: string): SamplePreset[] => {
   },
   {
     key: 'quotation-notes',
-    label: 'pages.system.printTemplatesDesign.sampleQuotationNotes',
+    label: t('pages.system.printTemplatesDesign.sampleQuotationNotes'),
     data: {
       quotation_code: 'BJ-2026-0108',
       customer_name: t('pages.system.printTemplatesDesign.sampleCustomer3'),
@@ -219,7 +219,7 @@ const getSamplePresetsByDocType = (t: any, docType: string): SamplePreset[] => {
 const SALES_ORDER_SAMPLE_PRESETS: SamplePreset[] = [
   {
     key: 'sales-order-default',
-    label: 'pages.system.printTemplatesDesign.sampleSalesOrder',
+    label: t('pages.system.printTemplatesDesign.sampleSalesOrder'),
     data: {
       order_code: 'SO-2026-0012',
       customer_name: t('pages.system.printTemplatesDesign.sampleCustomer4'),
@@ -238,7 +238,7 @@ const SALES_ORDER_SAMPLE_PRESETS: SamplePreset[] = [
 const PURCHASE_ORDER_SAMPLE_PRESETS: SamplePreset[] = [
   {
     key: 'purchase-order-default',
-    label: 'pages.system.printTemplatesDesign.samplePurchaseOrder',
+    label: t('pages.system.printTemplatesDesign.samplePurchaseOrder'),
     data: {
       order_code: 'PO-2026-0038',
       supplier_name: t('pages.system.printTemplatesDesign.sampleSupplier1'),
@@ -257,7 +257,7 @@ const PURCHASE_ORDER_SAMPLE_PRESETS: SamplePreset[] = [
 const COMMON_SAMPLE_PRESETS: SamplePreset[] = [
   {
     key: 'common-default',
-    label: 'pages.system.printTemplatesDesign.sampleCommon',
+    label: t('pages.system.printTemplatesDesign.sampleCommon'),
     data: {
       code: 'DOC-2026-0001',
       name: t('pages.system.printTemplatesDesign.sampleName1'),
@@ -2672,7 +2672,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                    <Select
                       style={{ flex: 1 }}
                       value={selectedSamplePreset}
-                      options={samplePresets.map((x) => ({ label: x.label, value: x.key }))}
+                      options={samplePresets.map((x) => ({ label: t(x.label), value: x.key }))}
                       onChange={setSelectedSamplePreset}
                     />
                     <Button onClick={() => handleApplySamplePreset(selectedSamplePreset)}>{t('pages.system.printTemplatesDesign.apply')}</Button>
