@@ -32,6 +32,19 @@ const TRACE_FLOW_GRID_BACKGROUND = {
 /** fitView 时画布内边距（左右留白），与视口选项 padding 一致 */
 const TRACE_FLOW_VIEWPORT_PADDING = { compact: 24, normal: 36 } as const;
 
+/** React 自定义节点基准尺寸 [宽, 高]（与下方 node.style.size 一致） */
+const TRACE_FLOW_NODE_BASE_SIZE: Record<'compact' | 'normal', [number, number]> = {
+  compact: [172, 52],
+  normal: [216, 58],
+};
+
+/**
+ * 仅 1 个节点时 fitView 会把缩放拉得很高，节点在屏幕上过宽；
+ * 限制首次适配后的 zoom 上限（约等于「节点视窗宽度不超过该像素」）。
+ * 不写入 zoomRange，用户仍可滚轮/手势继续放大画布。
+ */
+const TRACE_FLOW_SINGLE_NODE_MAX_VIEW_WIDTH_PX = { compact: 220, normal: 260 } as const;
+
 /** G6 v5：节点点击为 target.id；旧版可能含 item.getModel */
 type FlowGraphNodeClickEvt = {
   target?: { id?: string };
@@ -306,6 +319,10 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
 
     const flowKey = `${documentType}-${documentId}-${nodes.length}-${edges.length}-${refreshKey}`;
     const viewportPadding = compact ? TRACE_FLOW_VIEWPORT_PADDING.compact : TRACE_FLOW_VIEWPORT_PADDING.normal;
+    const layoutMode = compact ? 'compact' : 'normal';
+    const [nodeBaseWidth] = TRACE_FLOW_NODE_BASE_SIZE[layoutMode];
+    const singleNodeFitMaxZoom =
+      TRACE_FLOW_SINGLE_NODE_MAX_VIEW_WIDTH_PX[layoutMode] / nodeBaseWidth;
 
     const config: Record<string, unknown> = {
       /** fitView 内边距：适配视口时四周留白 */
@@ -349,7 +366,7 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
       /** React 自定义节点（对齐 UniFlowNode 层次）；勿改为 rect，否则不走 React 挂载链路 */
       node: {
         style: {
-          size: (compact ? [172, 52] : [216, 58]) as [number, number],
+          size: TRACE_FLOW_NODE_BASE_SIZE[layoutMode],
           component: (data: NodeData) => {
             const datum = data?.data as {
               label?: string;
@@ -395,7 +412,16 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
         traceFlowViewportFitKeyRef.current = flowKey;
         const runFitView = () => {
           if (graph.destroyed) return;
-          void graph.fitView({ when: 'always', direction: 'both' }, false);
+          void graph.fitView({ when: 'always', direction: 'both' }, false).then(() => {
+            if (graph.destroyed) return;
+            /** 仅拓扑极少节点时限制初始缩放，避免单节点铺满；后续 zoom-canvas 仍可放大 */
+            if (nodes.length <= 1) {
+              const z = graph.getZoom();
+              if (z > singleNodeFitMaxZoom) {
+                void graph.zoomTo(singleNodeFitMaxZoom, false);
+              }
+            }
+          });
         };
         queueMicrotask(() => requestAnimationFrame(runFitView));
       },

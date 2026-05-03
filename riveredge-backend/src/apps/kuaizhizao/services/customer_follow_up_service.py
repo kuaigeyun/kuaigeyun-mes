@@ -283,7 +283,11 @@ class CustomerFollowUpService:
             pending_only,
         )
         total = await query.count()
-        rows = await query.offset(skip).limit(limit).order_by("-occurred_at", "-id")
+        if pending_only:
+            # 已到期的回访队列：按计划时间升序，最早到期优先
+            rows = await query.offset(skip).limit(limit).order_by("next_follow_up_at", "id")
+        else:
+            rows = await query.offset(skip).limit(limit).order_by("-occurred_at", "-id")
         await cls._attach_creator_names(rows)
         out: List[CustomerFollowUpListResponse] = []
         for row in rows:

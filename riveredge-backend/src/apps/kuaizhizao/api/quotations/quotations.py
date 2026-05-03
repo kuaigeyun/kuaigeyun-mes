@@ -116,7 +116,7 @@ async def get_quotation(
 @router.post(
     "/{quotation_id}/revision",
     response_model=QuotationResponse,
-    summary="另存为新版本（修订）",
+    summary="新建修订版（复制系列最新版为新草稿修订）",
 )
 async def create_quotation_revision(
     quotation_id: int = Path(..., description="报价单ID（系列内任一行，系统解析最新版）"),

@@ -184,7 +184,7 @@ export async function revokePushQuotation(id: number): Promise<Quotation> {
   });
 }
 
-/** 另存为新版本（修订）：从系列当前最新版复制为草稿 */
+/** 新建修订版：从系列当前最新版复制为草稿修订 */
 export async function createQuotationRevision(
   quotationId: number,
   data?: Record<string, unknown>

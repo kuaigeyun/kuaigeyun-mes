@@ -185,7 +185,7 @@ class QuotationReviewAction(BaseSchema):
 
 
 class QuotationRevisionBody(BaseSchema):
-    """另存为新版本：可选覆盖头字段与明细；未传则复制系列当前最新版。"""
+    """新建修订版：可选覆盖头字段与明细；未传则复制系列当前最新版。"""
 
     quotation_date: Optional[date] = None
     valid_until: Optional[date] = None

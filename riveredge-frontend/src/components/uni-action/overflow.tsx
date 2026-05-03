@@ -13,6 +13,9 @@ import { normalizeActionTree } from './normalize'
 
 export const ROW_ACTIONS_DIRECT_MAX = 4
 
+/** 列表操作列内联按钮横向间距（Ant Design Space） */
+export const ROW_ACTIONS_INLINE_GAP = 4
+
 function normalizeAndSortActions(
   nodes: React.ReactNode[],
   ctx: NormalizeActionContext,
@@ -107,7 +110,7 @@ export function renderRowActionsOverflow(
   const sorted = normalizeAndSortActions(nodes, ctx)
   if (sorted.length <= directMax) {
     return (
-      <Space size={10} wrap={false} style={{ whiteSpace: 'nowrap' }}>
+      <Space size={ROW_ACTIONS_INLINE_GAP} wrap={false} style={{ whiteSpace: 'nowrap' }}>
         {sorted}
       </Space>
     )
@@ -116,7 +119,7 @@ export function renderRowActionsOverflow(
   const overflow = sorted.slice(Math.max(1, directMax - 1))
 
   return (
-    <Space size={10} wrap={false} style={{ whiteSpace: 'nowrap' }}>
+    <Space size={ROW_ACTIONS_INLINE_GAP} wrap={false} style={{ whiteSpace: 'nowrap' }}>
       {inline}
       <Dropdown
         menu={{
@@ -124,7 +127,7 @@ export function renderRowActionsOverflow(
         }}
         trigger={['click']}
       >
-        <Button type="text" size="small" className="ant-btn-row-action" icon={<MoreOutlined />} style={{ padding: '4px 6px' }}>
+        <Button type="text" size="small" className="ant-btn-row-action" icon={<MoreOutlined />} style={{ padding: '4px 4px' }}>
           {overflow.length > 0 ? (
             <Space size={4}>
               <span>更多</span>

@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { ProFormInstance } from '@ant-design/pro-components';
 import { App, Modal, Input } from 'antd';
 import { FormModalTemplate } from '../../../components/layout-templates';
-import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
+import { MODAL_CONFIG, MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../components/layout-templates/constants';
 import { customerApi, getUserOptions, getDictionaryOptions } from '../services/supply-chain';
 import { testGenerateCode, generateCode, getCodeRulePageConfig } from '../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../utils/codeRulePage';
@@ -28,6 +28,8 @@ export interface CustomerFormModalProps {
   editUuid: string | null;
   /** 保存成功回调（新建或编辑后返回当前客户数据） */
   onSuccess: (customer: Customer) => void;
+  /** 与详情抽屉、追溯浮层或已抬升的表单 Modal 同屏时使用 */
+  zIndex?: number;
 }
 
 export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
@@ -35,6 +37,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
   onClose,
   editUuid,
   onSuccess,
+  zIndex,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -263,6 +266,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
         initialValues={{ isActive: true, isPublic: false }}
         layout="vertical"
         grid
+        zIndex={zIndex}
       >
         <SchemaFormRenderer
           schema={customerFormSchema}
@@ -284,6 +288,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
         open={!!quickCreateTarget}
         onOk={handleQuickCreateSubmit}
         confirmLoading={quickCreateLoading}
+        zIndex={zIndex != null ? zIndex + MODAL_NESTED_ABOVE_PARENT_OFFSET : undefined}
         onCancel={() => {
           setQuickCreateTarget(null);
           setQuickCreateName('');

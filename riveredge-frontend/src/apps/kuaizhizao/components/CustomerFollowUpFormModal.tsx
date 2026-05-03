@@ -7,6 +7,7 @@ import { App, Button, Col, DatePicker, Form, Input, Row, Space, List, Typography
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import { FormModalTemplate } from '../../../components/layout-templates';
+import { MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../components/layout-templates/constants';
 import { DictionarySelect } from '../../../components/dictionary-select';
 import { UniDropdown } from '../../../components/uni-dropdown';
 import { useSubmitShortcut } from '../../../hooks/useSubmitShortcut';
@@ -48,6 +49,8 @@ export interface CustomerFollowUpFormModalProps {
   editing?: CustomerFollowUp | null;
   /** 新建并预填关联报价单/销售订单 */
   preset?: CustomerFollowUpPreset | null;
+  /** 与详情抽屉、追溯浮层同屏时抬高 */
+  zIndex?: number;
 }
 
 export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps> = ({
@@ -56,6 +59,7 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
   onSuccess,
   editing = null,
   preset = null,
+  zIndex,
 }) => {
   const { t } = useTranslation();
   const { message } = App.useApp();
@@ -313,6 +317,7 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
         onFinish={submit}
         form={form}
         width={1280}
+        zIndex={zIndex}
       >
         <Row gutter={[24, 0]}>
           <Col xs={24} lg={16}>
@@ -511,6 +516,7 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
         open={customerModalVisible}
         editUuid={null}
         onClose={() => setCustomerModalVisible(false)}
+        zIndex={zIndex != null ? zIndex + MODAL_NESTED_ABOVE_PARENT_OFFSET : undefined}
         onSuccess={(newCust) => {
           setCustomers((prev) => [...prev, newCust]);
           form.setFieldValue('customer_id', newCust.id);

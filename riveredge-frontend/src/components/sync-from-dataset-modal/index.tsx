@@ -26,6 +26,8 @@ export interface SyncFromDatasetModalProps {
   fieldMapping?: Record<string, string>;
   /** 最多获取行数（默认：500） */
   limit?: number;
+  /** 与详情抽屉、左侧追溯浮层同屏时抬高 */
+  zIndex?: number;
 }
 
 /**
@@ -39,6 +41,7 @@ const SyncFromDatasetModal: React.FC<SyncFromDatasetModalProps> = ({
   width = 800,
   fieldMapping,
   limit = 500,
+  zIndex,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -136,6 +139,7 @@ const SyncFromDatasetModal: React.FC<SyncFromDatasetModalProps> = ({
       title={title}
       open={open}
       onCancel={onClose}
+      zIndex={zIndex}
       width={width}
       footer={[
         <Button key="cancel" onClick={onClose}>

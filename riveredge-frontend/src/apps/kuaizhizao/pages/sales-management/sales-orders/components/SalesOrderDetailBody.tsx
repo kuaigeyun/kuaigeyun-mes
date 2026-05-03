@@ -1,21 +1,22 @@
 /**
- * 销售订单详情主体（四区块）
- * 保留订单全息追踪，同时拆分上下游/操作记录，避免框套框。
+ * 销售订单详情主体（基本信息 / 生命周期·协作 / 明细 / 操作记录）
+ *
+ * 支持两种外壳：
+ * - SalesOrderDetailBody：自带 DetailDrawerSection（报价单嵌套抽屉等 plainBody）
+ * - Provider + *Pane：配合 DetailDrawerTemplate 插槽（销售订单列表详情）
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { App, Button, Space, Table, Tooltip, Typography, Descriptions } from 'antd';
 import { CopyOutlined, PrinterOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { AmountDisplay } from '../../../../../../components/permission';
+import { DictionaryLabel } from '../../../../../../components/dictionary-label';
 import { MaterialBomIndicator } from '../../../../components/MaterialBomIndicator';
 import { MaterialInventoryIndicator } from '../../../../components/MaterialInventoryIndicator';
 import { UniLifecycleStepper } from '../../../../../../components/uni-lifecycle';
-import {
-  DocumentTrackingRelationsBody,
-  DocumentTrackingTimelineBody,
-  useDocumentTracking,
-} from '../../../../../../components/document-tracking-panel';
+import type { LifecycleResult } from '../../../../../../components/uni-lifecycle/types';
+import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../../components/document-tracking-panel';
 import { DetailDrawerSection } from '../../../../../../components/layout-templates';
 import { SalesOrderTrackingRadar } from './SalesOrderTrackingRadar';
 import { getSalesOrderLifecycle } from '../../../../utils/salesOrderLifecycle';
@@ -27,19 +28,39 @@ import type { DocumentPrintApiResult } from '../../../../../../utils/printRespon
 export interface SalesOrderDetailBodyProps {
   order: SalesOrder;
   trackingRefreshKey?: number;
-  onTrackingDocumentClick?: (type: string, id: number) => void;
   shippingMethodOptions?: Array<{ label: string; value: string }>;
   paymentTermsOptions?: Array<{ label: string; value: string }>;
   feeTypeOptions?: any[];
 }
 
-export const SalesOrderDetailBody: React.FC<SalesOrderDetailBodyProps> = ({
+interface SalesOrderDetailContextValue {
+  order: SalesOrder;
+  lifecycle: LifecycleResult;
+  tracking: ReturnType<typeof useDocumentTracking>;
+  feeTypeOptions: any[];
+  shippingMethodOptions: Array<{ label: string; value: string }>;
+  paymentTermsOptions: Array<{ label: string; value: string }>;
+  handlePrintSalesOrder: () => Promise<void>;
+}
+
+const SalesOrderDetailContext = createContext<SalesOrderDetailContextValue | null>(null);
+
+function useSalesOrderDetailContext(): SalesOrderDetailContextValue {
+  const v = useContext(SalesOrderDetailContext);
+  if (!v) throw new Error('SalesOrderDetailProvider required');
+  return v;
+}
+
+export const SalesOrderDetailProvider: React.FC<
+  SalesOrderDetailBodyProps & { auditRequired: boolean; children: React.ReactNode }
+> = ({
   order,
+  auditRequired,
   trackingRefreshKey = 0,
-  onTrackingDocumentClick,
   shippingMethodOptions: shippingProp,
   paymentTermsOptions: paymentProp,
   feeTypeOptions: feeProp,
+  children,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -111,11 +132,7 @@ export const SalesOrderDetailBody: React.FC<SalesOrderDetailBodyProps> = ({
     };
   }, [feeProp, shippingProp, paymentProp]);
 
-  const handleDocClick = onTrackingDocumentClick ?? ((type: string, id: number) => {
-    messageApi.info(`跳转到${type}#${id}`);
-  });
-
-  const handlePrintSalesOrder = async () => {
+  const handlePrintSalesOrder = useCallback(async () => {
     if (order.id == null) return;
     try {
       const result = await apiRequest<DocumentPrintApiResult>(
@@ -123,14 +140,14 @@ export const SalesOrderDetailBody: React.FC<SalesOrderDetailBodyProps> = ({
         {
           method: 'GET',
           params: { response_format: 'json', output_format: 'html' },
-        }
+        },
       );
       const html = result?.content || '';
       if (html) {
         const printWindow = window.open('', '_blank');
         if (printWindow) {
           printWindow.document.write(
-            `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${t('app.kuaizhizao.salesOrder.detail')}</title></head><body>${html}</body></html>`
+            `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${t('app.kuaizhizao.salesOrder.detail')}</title></head><body>${html}</body></html>`,
           );
           printWindow.document.close();
           printWindow.onload = () => printWindow.print();
@@ -143,225 +160,334 @@ export const SalesOrderDetailBody: React.FC<SalesOrderDetailBodyProps> = ({
     } catch (e: any) {
       messageApi.error(e?.message || '打印失败');
     }
-  };
+  }, [order.id, t, messageApi]);
 
-  const lifecycle = getSalesOrderLifecycle(order);
+  const lifecycle = useMemo(() => getSalesOrderLifecycle(order, auditRequired), [order, auditRequired]);
+
+  const ctxValue = useMemo<SalesOrderDetailContextValue>(
+    () => ({
+      order,
+      lifecycle,
+      tracking,
+      feeTypeOptions,
+      shippingMethodOptions,
+      paymentTermsOptions,
+      handlePrintSalesOrder,
+    }),
+    [
+      order,
+      lifecycle,
+      tracking,
+      feeTypeOptions,
+      shippingMethodOptions,
+      paymentTermsOptions,
+      handlePrintSalesOrder,
+    ],
+  );
+
+  return <SalesOrderDetailContext.Provider value={ctxValue}>{children}</SalesOrderDetailContext.Provider>;
+};
+
+/** DetailDrawerTemplate.collaborationTitleSuffix（须在 Provider 内） */
+export const SalesOrderDetailCollaborationTitleSuffix: React.FC = () => {
+  const { t } = useTranslation();
+  const { lifecycle } = useSalesOrderDetailContext();
+  const next = lifecycle.nextStepSuggestions;
+  if (!next?.length) return null;
+  return (
+    <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
+      {t('components.uniLifecycle.nextStep')}：
+      {next.join(t('components.uniLifecycle.nextStepSeparator'))}
+    </Typography.Text>
+  );
+};
+
+function SalesOrderDetailCollaborationDrawerTitle() {
+  const { t } = useTranslation();
+  return (
+    <span style={{ display: 'inline-flex', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 8, rowGap: 4 }}>
+      <span>{t('app.uniDetail.sectionCollaboration')}</span>
+      <SalesOrderDetailCollaborationTitleSuffix />
+    </span>
+  );
+}
+
+export const SalesOrderDetailBasicPane: React.FC = () => {
+  const { t } = useTranslation();
+  const { message: messageApi } = App.useApp();
+  const { order, shippingMethodOptions, paymentTermsOptions, handlePrintSalesOrder } = useSalesOrderDetailContext();
+  return (
+    <Descriptions
+      column={3}
+      size="small"
+      items={[
+        // 单据与时间
+        {
+          key: 'order_code',
+          label: t('app.kuaizhizao.salesOrder.orderCode'),
+          children: (
+            <Space size={4}>
+              <span>{order.order_code ?? '-'}</span>
+              <Tooltip title={t('app.kuaizhizao.salesOrder.printPdf')}>
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<PrinterOutlined style={{ fontSize: 12 }} />}
+                  onClick={handlePrintSalesOrder}
+                />
+              </Tooltip>
+              <Tooltip title={t('field.invitationCode.copy')}>
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<CopyOutlined style={{ fontSize: 12 }} />}
+                  onClick={() => {
+                    const text = order.order_code ?? '';
+                    if (text) {
+                      navigator.clipboard.writeText(text).then(
+                        () => messageApi.success(t('common.copySuccess')),
+                        () => messageApi.error(t('common.copyFailed')),
+                      );
+                    }
+                  }}
+                />
+              </Tooltip>
+            </Space>
+          ),
+        },
+        { key: 'order_date', label: t('app.kuaizhizao.salesOrder.orderDate'), children: order.order_date || '-' },
+        { key: 'delivery_date', label: t('app.kuaizhizao.salesOrder.deliveryDate'), children: order.delivery_date || '-' },
+        // 客户联系
+        { key: 'customer_name', label: t('app.kuaizhizao.salesOrder.customerName'), children: order.customer_name || '-' },
+        { key: 'customer_contact', label: t('app.kuaizhizao.salesOrder.customerContact'), children: order.customer_contact || '-' },
+        { key: 'customer_phone', label: t('app.kuaizhizao.salesOrder.customerPhone'), children: order.customer_phone || '-' },
+        {
+          key: 'shipping_address',
+          label: t('app.kuaizhizao.salesOrder.shippingAddress'),
+          children: order.shipping_address || '-',
+          span: 3,
+        },
+        // 销售与履约（交货方式、付款条件）
+        { key: 'salesman_name', label: t('app.kuaizhizao.salesOrder.salesman'), children: order.salesman_name || '-' },
+        {
+          key: 'shipping_method',
+          label: t('app.kuaizhizao.salesOrder.shippingMethod'),
+          children: shippingMethodOptions.find((o) => o.value === order.shipping_method)?.label ?? order.shipping_method ?? '-',
+        },
+        {
+          key: 'payment_terms',
+          label: t('app.kuaizhizao.salesOrder.paymentTerms'),
+          children: paymentTermsOptions.find((o) => o.value === order.payment_terms)?.label ?? order.payment_terms ?? '-',
+        },
+        // 计价与金额
+        {
+          key: 'price_type',
+          label: t('app.kuaizhizao.salesOrder.priceType'),
+          children:
+            order.price_type === 'tax_inclusive'
+              ? t('app.kuaizhizao.salesOrder.taxInclusive')
+              : t('app.kuaizhizao.salesOrder.taxExclusive'),
+        },
+        {
+          key: 'total_amount',
+          label: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
+          children: <AmountDisplay resource="sales_order" value={order.total_amount ?? 0} />,
+        },
+        {
+          key: 'total_fee_amount',
+          label: '总费用金额',
+          children: <AmountDisplay resource="sales_order" value={order.total_fee_amount ?? 0} />,
+        },
+        { key: 'notes', label: t('app.kuaizhizao.salesOrder.notes'), children: order.notes || '-', span: 3 },
+      ]}
+    />
+  );
+};
+
+export const SalesOrderDetailCollaborationPane: React.FC = () => {
+  const { order, lifecycle } = useSalesOrderDetailContext();
   const mainStages = lifecycle.mainStages ?? [];
-  const subStages = lifecycle.subStages ?? [];
+  const hideStepperNext = Boolean(lifecycle.nextStepSuggestions?.length);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {order.id != null && <SalesOrderTrackingRadar salesOrderId={order.id} />}
+      {mainStages.length > 0 && (
+        <UniLifecycleStepper
+          steps={mainStages}
+          status={lifecycle.status}
+          showLabels
+          nextStepSuggestions={lifecycle.nextStepSuggestions}
+          hideNextStepSuggestions={hideStepperNext}
+        />
+      )}
+    </div>
+  );
+};
+
+export const SalesOrderDetailLinesPane: React.FC = () => {
+  const { t } = useTranslation();
+  const { order, feeTypeOptions } = useSalesOrderDetailContext();
 
   return (
     <>
-      <DetailDrawerSection title="基本信息">
-        <Descriptions
-          column={3}
-          size="small"
-          items={[
-            {
-              key: 'order_code',
-              label: t('app.kuaizhizao.salesOrder.orderCode'),
-              children: (
-                <Space size={4}>
-                  <span>{order.order_code ?? '-'}</span>
-                  <Tooltip title={t('app.kuaizhizao.salesOrder.printPdf')}>
-                    <Button
-                      type="link"
-                      size="small"
-                      icon={<PrinterOutlined style={{ fontSize: 12 }} />}
-                      onClick={handlePrintSalesOrder}
-                    />
-                  </Tooltip>
-                  <Tooltip title={t('field.invitationCode.copy')}>
-                    <Button
-                      type="link"
-                      size="small"
-                      icon={<CopyOutlined style={{ fontSize: 12 }} />}
-                      onClick={() => {
-                        const text = order.order_code ?? '';
-                        if (text) {
-                          navigator.clipboard.writeText(text).then(
-                            () => messageApi.success(t('common.copySuccess')),
-                            () => messageApi.error(t('common.copyFailed')),
-                          );
-                        }
-                      }}
-                    />
-                  </Tooltip>
-                </Space>
-              ),
-            },
-            { key: 'order_date', label: t('app.kuaizhizao.salesOrder.orderDate'), children: order.order_date || '-' },
-            { key: 'delivery_date', label: t('app.kuaizhizao.salesOrder.deliveryDate'), children: order.delivery_date || '-' },
-            { key: 'customer_name', label: t('app.kuaizhizao.salesOrder.customerName'), children: order.customer_name || '-' },
-            { key: 'customer_contact', label: t('app.kuaizhizao.salesOrder.customerContact'), children: order.customer_contact || '-' },
-            { key: 'customer_phone', label: t('app.kuaizhizao.salesOrder.customerPhone'), children: order.customer_phone || '-' },
-            { key: 'salesman_name', label: t('app.kuaizhizao.salesOrder.salesman'), children: order.salesman_name || '-' },
-            {
-              key: 'shipping_method',
-              label: t('app.kuaizhizao.salesOrder.shippingMethod'),
-              children: shippingMethodOptions.find((o) => o.value === order.shipping_method)?.label ?? order.shipping_method ?? '-',
-            },
-            {
-              key: 'payment_terms',
-              label: t('app.kuaizhizao.salesOrder.paymentTerms'),
-              children: paymentTermsOptions.find((o) => o.value === order.payment_terms)?.label ?? order.payment_terms ?? '-',
-            },
-            {
-              key: 'price_type',
-              label: t('app.kuaizhizao.salesOrder.priceType'),
-              children: order.price_type === 'tax_inclusive'
-                ? t('app.kuaizhizao.salesOrder.taxInclusive')
-                : t('app.kuaizhizao.salesOrder.taxExclusive'),
-            },
-            {
-              key: 'total_amount',
-              label: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
-              children: <AmountDisplay resource="sales_order" value={order.total_amount ?? 0} />,
-            },
-            {
-              key: 'total_fee_amount',
-              label: '总费用金额',
-              children: <AmountDisplay resource="sales_order" value={order.total_fee_amount ?? 0} />,
-            },
-            { key: 'shipping_address', label: t('app.kuaizhizao.salesOrder.shippingAddress'), children: order.shipping_address || '-', span: 3 },
-            { key: 'notes', label: t('app.kuaizhizao.salesOrder.notes'), children: order.notes || '-', span: 3 },
-          ]}
-        />
-      </DetailDrawerSection>
-
-      <DetailDrawerSection title="生命周期">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {order.id != null && (
-            <SalesOrderTrackingRadar salesOrderId={order.id} />
-          )}
-          {mainStages.length > 0 && (
-            <UniLifecycleStepper
-              steps={mainStages}
-              status={lifecycle.status}
-              showLabels
-              nextStepSuggestions={lifecycle.nextStepSuggestions}
-            />
-          )}
-          {subStages.length > 0 && (
-            <div>
-              <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>执行中 · 全链路</div>
-              <UniLifecycleStepper steps={subStages} showLabels />
-            </div>
-          )}
-          <div style={{ paddingTop: 12, borderTop: '1px solid var(--ant-color-border-secondary)' }}>
-            <div style={{ marginBottom: 8, fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>上下游单据</div>
-            {tracking.data ? (
-              <DocumentTrackingRelationsBody data={tracking.data} onDocumentClick={handleDocClick} />
-            ) : (
-              <Typography.Text type="secondary">暂无上下游关联</Typography.Text>
-            )}
-          </div>
-        </div>
-      </DetailDrawerSection>
-
-      <DetailDrawerSection title="明细信息">
-        <style>{`
-          /* 仅保留外层横向滚动，避免出现表格内第二层滚动条 */
-          .sales-order-detail-drawer-items .ant-table-wrapper .ant-table-content,
-          .sales-order-detail-drawer-items .ant-table-wrapper .ant-table-body {
-            overflow-x: hidden !important;
-          }
-          .sales-order-detail-drawer-items .ant-table-thead > tr > th {
-            white-space: nowrap;
-          }
-        `}</style>
-        {order.fee_details && order.fee_details.length > 0 && (
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ marginBottom: 8, fontWeight: 600, fontSize: 13 }}>费用明细</div>
-            <div className="sales-order-detail-drawer-items" style={{ width: '100%', overflowX: 'auto', overflowY: 'hidden' }}>
-              <Table
-                size="small"
-                tableLayout="fixed"
-                style={{ minWidth: 560 }}
-                columns={[
-                  {
-                    title: '费用类型',
-                    dataIndex: 'type',
-                    width: 120,
-                    render: (val: string) => feeTypeOptions.find((o: any) => o.value === val)?.label ?? val,
-                  },
-                  { title: '金额', dataIndex: 'amount', width: 120, align: 'right', render: (val: number) => <AmountDisplay resource="sales_order" value={val} /> },
-                  { title: '承担方', dataIndex: 'bearer', width: 100, render: (val: string) => (val === 'our_side' ? '我方' : '对方') },
-                  { title: '备注', dataIndex: 'notes' },
-                ]}
-                dataSource={order.fee_details}
-                rowKey={(_: any, i?: number) => i ?? 0}
-                pagination={false}
-              />
-            </div>
-          </div>
-        )}
-
-        {order.items && order.items.length > 0 ? (
+      <style>{`
+        .sales-order-detail-drawer-items .ant-table-wrapper .ant-table-content,
+        .sales-order-detail-drawer-items .ant-table-wrapper .ant-table-body {
+          overflow-x: hidden !important;
+        }
+        .sales-order-detail-drawer-items .ant-table-thead > tr > th {
+          white-space: nowrap;
+        }
+      `}</style>
+      {order.fee_details && order.fee_details.length > 0 && (
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ marginBottom: 8, fontWeight: 600, fontSize: 13 }}>费用明细</div>
           <div className="sales-order-detail-drawer-items" style={{ width: '100%', overflowX: 'auto', overflowY: 'hidden' }}>
-            <Table<SalesOrderItem>
+            <Table
               size="small"
               tableLayout="fixed"
-              style={{ minWidth: 1280 }}
+              style={{ minWidth: 560 }}
               columns={[
-                { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 120 },
-                { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 200 },
-                { title: t('app.kuaizhizao.salesOrder.materialSpec'), dataIndex: 'material_spec', width: 120 },
-                { title: t('app.kuaizhizao.salesOrder.unit'), dataIndex: 'material_unit', width: 80 },
                 {
-                  title: t('app.kuaizhizao.salesOrder.bomCheck'),
-                  key: 'bom_check',
-                  width: 80,
-                  render: (_: unknown, record: SalesOrderItem) => <MaterialBomIndicator materialId={record.material_id} />,
-                },
-                {
-                  title: t('app.kuaizhizao.salesOrder.quantity'),
-                  dataIndex: 'required_quantity',
-                  width: 100,
-                  align: 'right' as const,
-                  render: (val: number, record: SalesOrderItem) => (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
-                      <MaterialInventoryIndicator materialId={record.material_id} requiredQuantity={record.required_quantity} />
-                      {val ?? 0}
-                    </span>
-                  ),
-                },
-                {
-                  title: t('app.kuaizhizao.salesOrder.unitPrice'),
-                  dataIndex: 'unit_price',
-                  width: 100,
-                  align: 'right' as const,
-                  render: (val: number) => <AmountDisplay resource="sales_order" value={val} />,
-                },
-                { title: t('app.kuaizhizao.salesOrder.taxRate'), dataIndex: 'tax_rate', width: 80, align: 'right' as const, render: (val: number) => val ?? 0 },
-                {
-                  title: t('app.kuaizhizao.salesOrder.inclAmount'),
-                  dataIndex: 'item_amount',
+                  title: '费用类型',
+                  dataIndex: 'type',
                   width: 120,
-                  align: 'right' as const,
+                  render: (val: string) => feeTypeOptions.find((o: any) => o.value === val)?.label ?? val,
+                },
+                {
+                  title: '金额',
+                  dataIndex: 'amount',
+                  width: 120,
+                  align: 'right',
                   render: (val: number) => <AmountDisplay resource="sales_order" value={val} />,
                 },
-                { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', width: 120 },
-                { title: t('app.kuaizhizao.salesOrder.deliveredQty'), dataIndex: 'delivered_quantity', width: 100, align: 'right' as const, render: (text: number) => text || 0 },
-                { title: t('app.kuaizhizao.salesOrder.remainingQty'), dataIndex: 'remaining_quantity', width: 100, align: 'right' as const, render: (text: number) => text || 0 },
+                {
+                  title: '承担方',
+                  dataIndex: 'bearer',
+                  width: 100,
+                  render: (val: string) => (val === 'our_side' ? '我方' : '对方'),
+                },
+                { title: '备注', dataIndex: 'notes' },
               ]}
-              dataSource={order.items}
-              rowKey="id"
+              dataSource={order.fee_details}
+              rowKey={(_: any, i?: number) => i ?? 0}
               pagination={false}
             />
           </div>
-        ) : (
-          <Typography.Text type="secondary">暂无明细</Typography.Text>
-        )}
-      </DetailDrawerSection>
+        </div>
+      )}
 
-      <DetailDrawerSection title="操作记录">
-        {tracking.data ? (
-          <DocumentTrackingTimelineBody data={tracking.data} />
-        ) : (
-          <Typography.Text type="secondary">暂无操作记录</Typography.Text>
-        )}
-      </DetailDrawerSection>
+      {order.items && order.items.length > 0 ? (
+        <div className="sales-order-detail-drawer-items" style={{ width: '100%', overflowX: 'auto', overflowY: 'hidden' }}>
+          <Table<SalesOrderItem>
+            size="small"
+            tableLayout="fixed"
+            style={{ minWidth: 1280 }}
+            columns={[
+              { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 120 },
+              { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 200 },
+              { title: t('app.kuaizhizao.salesOrder.materialSpec'), dataIndex: 'material_spec', width: 120 },
+              {
+                title: t('app.kuaizhizao.salesOrder.unit'),
+                dataIndex: 'material_unit',
+                width: 80,
+                render: (v: string) => <DictionaryLabel dictionaryCode="MATERIAL_UNIT" value={v} />,
+              },
+              {
+                title: t('app.kuaizhizao.salesOrder.bomCheck'),
+                key: 'bom_check',
+                width: 80,
+                render: (_: unknown, record: SalesOrderItem) => <MaterialBomIndicator materialId={record.material_id} />,
+              },
+              {
+                title: t('app.kuaizhizao.salesOrder.quantity'),
+                dataIndex: 'required_quantity',
+                width: 100,
+                align: 'right' as const,
+                render: (val: number, record: SalesOrderItem) => (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+                    <MaterialInventoryIndicator materialId={record.material_id} requiredQuantity={record.required_quantity} />
+                    {val ?? 0}
+                  </span>
+                ),
+              },
+              {
+                title: t('app.kuaizhizao.salesOrder.unitPrice'),
+                dataIndex: 'unit_price',
+                width: 100,
+                align: 'right' as const,
+                render: (val: number) => <AmountDisplay resource="sales_order" value={val} />,
+              },
+              {
+                title: t('app.kuaizhizao.salesOrder.taxRate'),
+                dataIndex: 'tax_rate',
+                width: 80,
+                align: 'right' as const,
+                render: (val: number) => val ?? 0,
+              },
+              {
+                title: t('app.kuaizhizao.salesOrder.inclAmount'),
+                dataIndex: 'item_amount',
+                width: 120,
+                align: 'right' as const,
+                render: (val: number) => <AmountDisplay resource="sales_order" value={val} />,
+              },
+              { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', width: 120 },
+              {
+                title: t('app.kuaizhizao.salesOrder.deliveredQty'),
+                dataIndex: 'delivered_quantity',
+                width: 100,
+                align: 'right' as const,
+                render: (text: number) => text || 0,
+              },
+              {
+                title: t('app.kuaizhizao.salesOrder.remainingQty'),
+                dataIndex: 'remaining_quantity',
+                width: 100,
+                align: 'right' as const,
+                render: (text: number) => text || 0,
+              },
+            ]}
+            dataSource={order.items}
+            rowKey="id"
+            pagination={false}
+          />
+        </div>
+      ) : (
+        <Typography.Text type="secondary">暂无明细</Typography.Text>
+      )}
     </>
   );
 };
 
+export const SalesOrderDetailTimelinePane: React.FC = () => {
+  const { tracking } = useSalesOrderDetailContext();
+  return tracking.data ? (
+    <DocumentTrackingTimelineBody data={tracking.data} />
+  ) : (
+    <Typography.Text type="secondary">暂无操作记录</Typography.Text>
+  );
+};
+
+/** plainBody / 嵌套抽屉：自带分区卡片 */
+export const SalesOrderDetailBody: React.FC<SalesOrderDetailBodyProps & { auditRequired?: boolean }> = (props) => {
+  const { t } = useTranslation();
+  const auditRequired = props.auditRequired ?? false;
+  return (
+    <SalesOrderDetailProvider {...props} auditRequired={auditRequired}>
+      <DetailDrawerSection title={t('app.uniDetail.sectionBasic')}>
+        <SalesOrderDetailBasicPane />
+      </DetailDrawerSection>
+      <DetailDrawerSection title={<SalesOrderDetailCollaborationDrawerTitle />}>
+        <SalesOrderDetailCollaborationPane />
+      </DetailDrawerSection>
+      <DetailDrawerSection title={t('app.uniDetail.sectionLines')}>
+        <SalesOrderDetailLinesPane />
+      </DetailDrawerSection>
+      <DetailDrawerSection title={t('app.uniDetail.sectionTimeline')}>
+        <SalesOrderDetailTimelinePane />
+      </DetailDrawerSection>
+    </SalesOrderDetailProvider>
+  );
+};

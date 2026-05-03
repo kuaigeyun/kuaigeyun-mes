@@ -52,6 +52,16 @@ export const DRAWER_CONFIG = {
 } as const;
 
 /**
+ * 与详情 Drawer（通常为 theme.zIndexPopupBase）、左侧全链路浮层（常见 base+1）、
+ * 嵌套抽屉（常见 base+50）同屏时，业务 Modal 使用 theme.zIndexPopupBase + 本常量，
+ * 以保证盖住上述层级。
+ */
+export const MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET = 100;
+
+/** 已抬升的 Modal 之上的嵌套 Modal / Drawer（如表单内的批量选择器、敏捷核价抽屉） */
+export const MODAL_NESTED_ABOVE_PARENT_OFFSET = 10;
+
+/**
  * 表单布局配置
  */
 export const FORM_LAYOUT = {

@@ -937,6 +937,15 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           render: (val: any) => <DictionaryLabel dictionaryCode="unit" value={val} />,
         }
       }
+      /** 生命周期列：不参与拖拽改宽，宽度以页面列定义为准（避免持久化盖住代码里的 width） */
+      if (isUniTableLifecycleColumn(col)) {
+        const w = typeof col.width === 'number' ? col.width : 112
+        return {
+          ...col,
+          width: w,
+          resizable: false,
+        }
+      }
       if (isOperationColumn(col)) {
         const { width, ...rest } = col
         const baseRender = col.render

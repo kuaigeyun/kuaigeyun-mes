@@ -4,6 +4,7 @@
  */
 
 import type { LifecycleResult, SubStage } from '../../../../components/uni-lifecycle/types';
+import { deriveLifecycleRingPercent } from '../../../utils/lifecycleRingPercent';
 
 export interface BackendLifecycleStage {
   key: string;
@@ -22,7 +23,8 @@ export interface BackendLifecycle {
   next_step_suggestions?: string[];
 }
 
-const STAGE_PERCENT: Record<string, number> = {
+/** 无 main_stages 或无法从节点推导进度时的兜底（兼容旧接口） */
+const LEGACY_STAGE_PERCENT_FALLBACK: Record<string, number> = {
   draft: 0,
   submitted: 25,
   reviewed: 50,
@@ -41,7 +43,6 @@ const STAGE_PERCENT: Record<string, number> = {
   effective: 50,
   executing: 50,
   delivered: 75,
-  completed: 100,
 };
 
 /**
@@ -66,9 +67,10 @@ export function parseBackendLifecycle(lifecycle: BackendLifecycle | null | undef
         ...(s.percent != null && { percent: s.percent }),
       }))
     : undefined;
-  const percent = lifecycle.current_stage_key
-    ? (STAGE_PERCENT[lifecycle.current_stage_key] ?? 30)
-    : 30;
+  const computedPercent = deriveLifecycleRingPercent(lifecycle.main_stages ?? []);
+  const percent =
+    computedPercent ??
+    (lifecycle.current_stage_key ? LEGACY_STAGE_PERCENT_FALLBACK[lifecycle.current_stage_key] ?? 30 : 30);
   return {
     percent,
     stageName,

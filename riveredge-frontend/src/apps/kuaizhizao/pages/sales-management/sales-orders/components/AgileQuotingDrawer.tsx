@@ -10,13 +10,16 @@ interface AgileQuotingDrawerProps {
   open: boolean;
   onClose: () => void;
   onAdopt?: (price: number) => void;
+  /** 高于新建/编辑订单 Modal（与同页 Drawer 追溯浮层错层） */
+  zIndex?: number;
 }
 
 export const AgileQuotingDrawer: React.FC<AgileQuotingDrawerProps> = ({
   materialId,
   open,
   onClose,
-  onAdopt
+  onAdopt,
+  zIndex,
 }) => {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<QuoteBreakdownResponse | null>(null);
@@ -112,6 +115,7 @@ export const AgileQuotingDrawer: React.FC<AgileQuotingDrawerProps> = ({
         </Space>
       }
       placement="right"
+      zIndex={zIndex}
       styles={{
         wrapper: { width: 800 }
       }}

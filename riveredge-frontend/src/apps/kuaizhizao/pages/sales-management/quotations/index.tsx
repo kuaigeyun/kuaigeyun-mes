@@ -9,7 +9,8 @@
 
 import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
-import { useNavigate } from 'react-router-dom';
+import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, List, Typography, Alert, theme as AntdTheme, Descriptions, Empty, Spin, Dropdown, Tooltip, Select } from 'antd';
 import type { DescriptionsProps } from 'antd';
@@ -24,8 +25,9 @@ import { MaterialBatchPickerModal } from '../../../../../components/material-bat
 import type { Material } from '../../../../master-data/types/material';
 import { CustomerFormModal } from '../../../../master-data/components/CustomerFormModal';
 import { customerApi } from '../../../../master-data/services/supply-chain';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET, MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../../../components/layout-templates';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import type { SubStage } from '../../../../../components/uni-lifecycle/types';
 import { AmountDisplay } from '../../../../../components/permission';
 import { DictionaryLabel } from '../../../../../components/dictionary-label';
 import {
@@ -45,7 +47,6 @@ import {
   revokePushQuotation,
   createQuotationRevision,
   printQuotation,
-  getQuotationPrintVariables,
   recordQuotationPrint,
   Quotation,
 } from '../../../services/quotation';
@@ -154,7 +155,7 @@ function canPrintFormalQuotation(q: Quotation): boolean {
   return false;
 }
 
-/** 另存为新版本：非草稿的最新系列行 */
+/** 新建修订版：非草稿的最新系列行 */
 function canCreateRevision(q: Quotation): boolean {
   if (q.is_latest_in_series === false) return false;
   if ((q.status || '').trim() === '草稿') return false;
@@ -198,12 +199,8 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
 /** 报价明细表最小横向滚动宽度（避免列换行，以横向滚动为主） */
 const QUOTATION_DETAIL_ITEMS_SCROLL_X = 1060;
 
-/** 报价单详情内打开下游销售订单时：二层抽屉宽度与 zIndex（叠在报价单抽屉之上） */
+/** 报价单详情内打开下游销售订单时：二层抽屉宽度（zIndex 见组件内 token.zIndexPopupBase + 50） */
 const LINKED_DOCUMENT_DRAWER_WIDTH = '45%';
-const LINKED_DOCUMENT_DRAWER_Z_INDEX = 1050;
-
-/** 抽屉外左上角全链路浮层：高于默认抽屉遮罩，低于二层抽屉避免挡住下游单据 */
-const QUOTATION_FULL_CHAIN_OVERLAY_Z_INDEX = 1030;
 
 /** 全链路悬浮层外边距：左/上与视口留白；宽度方向仍与中线各收一侧（左半屏）；高度方向为视口上下留白 */
 const QUOTATION_FULL_CHAIN_FLOAT_MARGIN = 16;
@@ -311,7 +308,13 @@ const QuotationFormSummary: React.FC = () => {
 const QuotationsPage: React.FC = () => {
   const { t } = useTranslation();
   const { token } = AntdTheme.useToken();
+  const quotationDetailDrawerZIndex = token.zIndexPopupBase;
+  const quotationChainOverlayZIndex = token.zIndexPopupBase + 1;
+  const linkedSalesOrderDrawerZIndex = token.zIndexPopupBase + 50;
+  const quotationElevatedModalZIndex = token.zIndexPopupBase + MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET;
+  const quotationNestedElevatedPopupZIndex = quotationElevatedModalZIndex + MODAL_NESTED_ABOVE_PARENT_OFFSET;
   const navigate = useNavigate();
+  const location = useLocation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
@@ -331,9 +334,11 @@ const QuotationsPage: React.FC = () => {
     detailDrawerVisible && quotationDetail ? 'quotation' : undefined,
     quotationDetail?.id
   );
+  const quotationAuditRequired = useAuditRequired('quotation', true);
+  const salesOrderAuditRequired = useAuditRequired('sales_order', false);
   const quotationLifecycleDetail = useMemo(
-    () => (quotationDetail ? getQuotationLifecycle(quotationDetail) : null),
-    [quotationDetail],
+    () => (quotationDetail ? getQuotationLifecycle(quotationDetail, quotationAuditRequired) : null),
+    [quotationDetail, quotationAuditRequired],
   );
   const quotationNextSteps = quotationLifecycleDetail?.nextStepSuggestions;
   const hideQuotationStepperNextRow = Boolean(quotationNextSteps?.length);
@@ -348,7 +353,6 @@ const QuotationsPage: React.FC = () => {
   const [printTemplates, setPrintTemplates] = useState<PrintTemplate[]>([]);
   const [selectedPrintTemplateUuid, setSelectedPrintTemplateUuid] = useState<string | undefined>(undefined);
   const [printSubmitting, setPrintSubmitting] = useState(false);
-  const [printVariablesPreview, setPrintVariablesPreview] = useState<Record<string, any> | null>(null);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [importModalVisible, setImportModalVisible] = useState(false);
@@ -454,6 +458,7 @@ const QuotationsPage: React.FC = () => {
       width: 140,
       ellipsis: true,
       hideInSearch: true,
+      hideInTable: true,
       order: 12,
       render: (_, r) => r.quotation_series_code || r.quotation_code || '-',
     },
@@ -528,13 +533,13 @@ const QuotationsPage: React.FC = () => {
     {
       title: '生命周期',
       dataIndex: 'lifecycle',
-      width: 132,
+      width: 100,
       fixed: 'right',
       align: 'left',
       hideInSearch: true,
       render: (_, record) => {
-        const lifecycle = getQuotationLifecycle(record);
-        const activeStage = lifecycle.mainStages?.find((s) => s.status === 'active');
+        const lifecycle = getQuotationLifecycle(record, quotationAuditRequired);
+        const activeStage = lifecycle.mainStages?.find((s: SubStage) => s.status === 'active');
         const displayLabel = activeStage?.label ?? lifecycle.stageName;
         return (
           <UniLifecycle
@@ -713,6 +718,25 @@ const QuotationsPage: React.FC = () => {
       messageApi.error('获取报价单详情失败');
     }
   };
+
+  /** 从销售订单全链路浮层「打开报价单」跳转携带 state，到达本页后自动打开详情 */
+  useEffect(() => {
+    const raw = (location.state as { openQuotationDetailId?: unknown } | null)?.openQuotationDetailId;
+    const id = typeof raw === 'number' ? raw : raw != null ? Number(raw) : NaN;
+    if (!Number.isFinite(id) || id <= 0) return;
+    navigate(`${location.pathname}${location.search}`, { replace: true, state: {} });
+    void (async () => {
+      try {
+        const res = await getQuotation(id);
+        if (res) {
+          setQuotationDetail(res);
+          setDetailDrawerVisible(true);
+        }
+      } catch {
+        messageApi.error('获取报价单详情失败');
+      }
+    })();
+  }, [location.state, location.pathname, location.search, navigate, messageApi]);
 
   const openFollowUpFromQuotation = (record: Quotation) => {
     const cid = record.customer_id;
@@ -1299,16 +1323,6 @@ const QuotationsPage: React.FC = () => {
       setPrintTemplates([]);
       setSelectedPrintTemplateUuid(undefined);
     }
-    try {
-      if (record.id != null) {
-        const vars = await getQuotationPrintVariables(record.id);
-        setPrintVariablesPreview(vars);
-      } else {
-        setPrintVariablesPreview(null);
-      }
-    } catch {
-      setPrintVariablesPreview(null);
-    }
     setPrintingRecord(record);
     setPrintModalVisible(true);
   };
@@ -1526,37 +1540,23 @@ const QuotationsPage: React.FC = () => {
     actionRef.current?.reload();
   };
 
-  /** 详情-基本信息（平铺，与抽屉四区块一致） */
-  const detailSummaryColumns: ProDescriptionsItemProps<Quotation>[] = [
+  /** 详情-基本信息：顺序按相近职能分组（单据标识 → 客户 → 商务条款 → 交货 → 关联 → 系统） */
+  const detailBasicColumns: ProDescriptionsItemProps<Quotation>[] = [
+    // —— 单据标识与状态 ——
     { title: '报价单编号', dataIndex: 'quotation_code' },
-    {
-      title: t('app.kuaizhizao.quotation.colSeries'),
-      dataIndex: 'quotation_series_code',
-      render: (_: unknown, r: Quotation) => r.quotation_series_code || r.quotation_code || '-',
-    },
     {
       title: t('app.kuaizhizao.quotation.colVersion'),
       dataIndex: 'version_no',
-      render: (_: unknown, r: Quotation) =>
-        t('app.kuaizhizao.quotation.versionDisplay', { n: r.version_no ?? 1 }),
-    },
-    {
-      title: t('app.kuaizhizao.quotation.colVersionState'),
-      dataIndex: 'is_latest_in_series',
-      render: (_: unknown, r: Quotation) =>
-        r.is_latest_in_series === false ? (
-          <Tag>{t('app.kuaizhizao.quotation.historyTag')}</Tag>
-        ) : (
-          <Tag color="blue">{t('app.kuaizhizao.quotation.latestTag')}</Tag>
-        ),
-    },
-    { title: '客户', dataIndex: 'customer_name' },
-    { title: '报价日期', dataIndex: 'quotation_date', valueType: 'date' },
-    { title: '销售员', dataIndex: 'salesman_name' },
-    {
-      title: '总金额',
-      dataIndex: 'total_amount',
-      render: (_, r) => <AmountDisplay resource="sales_order" value={r.total_amount} />,
+      render: (_: unknown, r: Quotation) => (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span>{t('app.kuaizhizao.quotation.versionDisplay', { n: r.version_no ?? 1 })}</span>
+          {r.is_latest_in_series === false ? (
+            <Tag>{t('app.kuaizhizao.quotation.historyTag')}</Tag>
+          ) : (
+            <Tag color="blue">{t('app.kuaizhizao.quotation.latestTag')}</Tag>
+          )}
+        </span>
+      ),
     },
     {
       title: '状态',
@@ -1566,23 +1566,24 @@ const QuotationsPage: React.FC = () => {
         return <Tag {...resolveStatusTagDisplayProps(c)}>{c.text}</Tag>;
       },
     },
-    { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
-  ];
-
-  const detailCustomerDeliveryColumns: ProDescriptionsItemProps<Quotation>[] = [
+    // —— 客户信息 ——
+    { title: '客户', dataIndex: 'customer_name' },
     { title: '联系人', dataIndex: 'customer_contact' },
     { title: '电话', dataIndex: 'customer_phone' },
+    // —— 商务条款（日期、金额、支付、本方责任人）——
+    { title: '报价日期', dataIndex: 'quotation_date', valueType: 'date' },
     { title: '有效期至', dataIndex: 'valid_until', valueType: 'date' },
-    { title: '预计交货日期', dataIndex: 'delivery_date', valueType: 'date' },
-    { title: '收货地址', dataIndex: 'shipping_address', span: 3 },
     {
-      title: '发货方式',
-      dataIndex: 'shipping_method',
-      render: (_, record) => {
-        const val = record.shipping_method;
-        const opt = shippingMethodOptions.find((o) => o.value === val);
-        return opt?.label ?? val ?? '-';
-      },
+      title: '总金额',
+      dataIndex: 'total_amount',
+      render: (_, r) => <AmountDisplay resource="sales_order" value={r.total_amount} />,
+    },
+    {
+      title: '币种',
+      dataIndex: 'currency_code',
+      render: (_: unknown, record: Quotation) => (
+        <DictionaryLabel dictionaryCode="CURRENCY" value={record.currency_code || DEFAULT_QUOTATION_CURRENCY} />
+      ),
     },
     {
       title: '付款条件',
@@ -1593,24 +1594,24 @@ const QuotationsPage: React.FC = () => {
         return opt?.label ?? val ?? '-';
       },
     },
+    { title: '销售员', dataIndex: 'salesman_name' },
+    // —— 交货履约 ——
+    { title: '预计交货日期', dataIndex: 'delivery_date', valueType: 'date' },
     {
-      title: '币种',
-      dataIndex: 'currency_code',
-      render: (_: unknown, record: Quotation) => (
-        <DictionaryLabel dictionaryCode="CURRENCY" value={record.currency_code || DEFAULT_QUOTATION_CURRENCY} />
-      ),
+      title: '发货方式',
+      dataIndex: 'shipping_method',
+      render: (_, record) => {
+        const val = record.shipping_method;
+        const opt = shippingMethodOptions.find((o) => o.value === val);
+        return opt?.label ?? val ?? '-';
+      },
     },
-  ];
-
-  const detailLinkNotesColumns: ProDescriptionsItemProps<Quotation>[] = [
+    { title: '收货地址', dataIndex: 'shipping_address', span: 3 },
+    // —— 关联与其它 ——
     { title: '关联销售订单', dataIndex: 'sales_order_code' },
     { title: '备注', dataIndex: 'notes', span: 3 },
-  ];
-
-  const detailBasicColumns: ProDescriptionsItemProps<Quotation>[] = [
-    ...detailSummaryColumns,
-    ...detailCustomerDeliveryColumns,
-    ...detailLinkNotesColumns,
+    // —— 系统信息 ——
+    { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
   ];
 
   const openLinkedSalesOrderDrawer = useCallback(
@@ -1629,15 +1630,6 @@ const QuotationsPage: React.FC = () => {
       }
     },
     [messageApi]
-  );
-
-  const onQuotationTrackingDocClick = useCallback(
-    (type: string, id: number) => {
-      if (type === 'sales_order' && id) {
-        openLinkedSalesOrderDrawer(id);
-      }
-    },
-    [openLinkedSalesOrderDrawer]
   );
 
   const onFullChainGraphNodeClick = useCallback(
@@ -2116,6 +2108,7 @@ const QuotationsPage: React.FC = () => {
       <ProFormTextArea name="notes" label="备注" fieldProps={{ rows: 2 }} />
       <MaterialBatchPickerModal
         open={materialPickerOpen}
+        zIndex={quotationNestedElevatedPopupZIndex}
         onCancel={() => setMaterialPickerOpen(false)}
         onConfirm={appendQuotationItemsFromMaterials}
       />
@@ -2126,6 +2119,7 @@ const QuotationsPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable
+          columnPersistenceId="kuaizhizao-sales-quotations"
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           headerTitle="报价单"
@@ -2278,7 +2272,7 @@ const QuotationsPage: React.FC = () => {
               top: QUOTATION_FULL_CHAIN_FLOAT_MARGIN,
               width: quotationChainPanelWidthCss,
               height: quotationChainHalfHeightCss,
-              zIndex: QUOTATION_FULL_CHAIN_OVERLAY_Z_INDEX,
+              zIndex: quotationChainOverlayZIndex,
               boxSizing: 'border-box',
               padding: 16,
               borderRadius: token.borderRadiusLG,
@@ -2345,7 +2339,7 @@ const QuotationsPage: React.FC = () => {
               top: quotationBriefPanelTopCss,
               width: quotationChainPanelWidthCss,
               height: quotationChainHalfHeightCss,
-              zIndex: QUOTATION_FULL_CHAIN_OVERLAY_Z_INDEX,
+              zIndex: quotationChainOverlayZIndex,
               boxSizing: 'border-box',
               padding: 16,
               borderRadius: token.borderRadiusLG,
@@ -2409,6 +2403,7 @@ const QuotationsPage: React.FC = () => {
       <DetailDrawerTemplate
         title={`报价单详情${quotationDetail?.quotation_code ? ` - ${quotationDetail.quotation_code}` : ''}`}
         open={detailDrawerVisible}
+        zIndex={quotationDetailDrawerZIndex}
         onClose={() => {
           setDetailDrawerVisible(false);
           setQuotationDetail(null);
@@ -2620,7 +2615,7 @@ const QuotationsPage: React.FC = () => {
         open={linkedSalesOrderDrawerOpen}
         onClose={closeLinkedSalesOrderDrawer}
         width={LINKED_DOCUMENT_DRAWER_WIDTH}
-        zIndex={LINKED_DOCUMENT_DRAWER_Z_INDEX}
+        zIndex={linkedSalesOrderDrawerZIndex}
         extra={
           <Button
             type="link"
@@ -2635,7 +2630,10 @@ const QuotationsPage: React.FC = () => {
         }
         plainBody={
           linkedSalesOrder ? (
-            <SalesOrderDetailBody order={linkedSalesOrder} onTrackingDocumentClick={onQuotationTrackingDocClick} />
+            <SalesOrderDetailBody
+              order={linkedSalesOrder}
+              auditRequired={salesOrderAuditRequired}
+            />
           ) : linkedSalesOrderLoading ? (
             <div style={{ textAlign: 'center', padding: 48 }}>
               <Spin />
@@ -2647,6 +2645,7 @@ const QuotationsPage: React.FC = () => {
       <FormModalTemplate
         title={editingId != null ? '编辑报价单' : '新建报价单'}
         open={modalVisible}
+        zIndex={quotationElevatedModalZIndex}
         onClose={() => { setModalVisible(false); setEditingId(null); setEffectiveRuleCode(null); setEffectiveAutoGen(null); }}
         onFinish={async (values) => {
           if (editingId != null) await submitEdit(values);
@@ -2680,6 +2679,7 @@ const QuotationsPage: React.FC = () => {
 
       <CustomerFormModal
         open={customerCreateVisible}
+        zIndex={quotationNestedElevatedPopupZIndex}
         onClose={() => setCustomerCreateVisible(false)}
         editUuid={null}
         onSuccess={(customer) => {
@@ -2702,6 +2702,7 @@ const QuotationsPage: React.FC = () => {
       <Suspense fallback={null}>
         <LazySyncFromDatasetModal
           open={syncModalVisible}
+          zIndex={quotationElevatedModalZIndex}
           onClose={() => setSyncModalVisible(false)}
           onConfirm={handleSyncConfirm}
           title="从数据集同步报价单"
@@ -2719,6 +2720,7 @@ const QuotationsPage: React.FC = () => {
 
       <CustomerFollowUpFormModal
         open={followUpModalOpen}
+        zIndex={quotationElevatedModalZIndex}
         editing={null}
         preset={followUpPreset}
         onClose={() => {
@@ -2730,6 +2732,7 @@ const QuotationsPage: React.FC = () => {
       <Modal
         title="驳回报价单"
         open={rejectModalOpen}
+        zIndex={quotationElevatedModalZIndex}
         okText="确认驳回"
         okButtonProps={{ danger: true }}
         onOk={submitReject}
@@ -2756,6 +2759,7 @@ const QuotationsPage: React.FC = () => {
       <Modal
         open={printModalVisible}
         title="选择打印模板"
+        zIndex={quotationElevatedModalZIndex}
         onCancel={() => {
           if (printSubmitting) return;
           setPrintModalVisible(false);
@@ -2777,9 +2781,6 @@ const QuotationsPage: React.FC = () => {
             onChange={(v) => setSelectedPrintTemplateUuid(v)}
             options={printTemplates.map((tpl) => ({ label: tpl.name, value: tpl.uuid }))}
           />
-          <Typography.Text type="secondary">
-            变量预览字段数：{Object.keys(printVariablesPreview?.variables || printVariablesPreview || {}).length}
-          </Typography.Text>
         </Space>
       </Modal>
 
@@ -2788,6 +2789,7 @@ const QuotationsPage: React.FC = () => {
         title={pdfPreviewFileName}
         width="90vw"
         style={{ top: 20 }}
+        zIndex={quotationElevatedModalZIndex}
         styles={{ body: { padding: 0, height: '80vh' } }}
         footer={
           <Space>

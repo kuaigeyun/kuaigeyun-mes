@@ -44,6 +44,8 @@ export interface MaterialBatchPickerModalProps {
   onCancel: () => void;
   /** 确认返回已选物料（顺序为选择顺序近似：按确认时 Map 迭代顺序） */
   onConfirm: (materials: Material[]) => void;
+  /** 表单 Modal 已抬高时需高于父级 Modal */
+  zIndex?: number;
 }
 
 const PAGE_SIZE = 20;
@@ -52,6 +54,7 @@ export const MaterialBatchPickerModal: React.FC<MaterialBatchPickerModalProps> =
   open,
   onCancel,
   onConfirm,
+  zIndex,
 }) => {
   const { t } = useTranslation();
   const { message } = App.useApp();
@@ -263,6 +266,7 @@ export const MaterialBatchPickerModal: React.FC<MaterialBatchPickerModalProps> =
       open={open}
       onCancel={handleCancel}
       onOk={handleOk}
+      zIndex={zIndex}
       width={960}
       destroyOnHidden
       okText={t('common.confirm')}

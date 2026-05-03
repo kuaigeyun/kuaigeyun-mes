@@ -940,7 +940,7 @@ class QuotationService:
         revision_data: Optional[QuotationRevisionBody] = None,
     ) -> QuotationResponse:
         """
-        另存为新版本：复制系列当前最新版为新的草稿行，旧版标记为非最新。
+        新建修订版：复制系列当前最新版为新的草稿修订行，旧版标记为非最新。
         source_quotation_id 可为系列内任一行，系统会解析到 is_latest_in_series 行。
         """
         is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "quotation")

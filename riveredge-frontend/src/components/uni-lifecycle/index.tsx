@@ -7,7 +7,8 @@
 
 import React from 'react';
 import { Progress, Tooltip } from 'antd';
-import { CheckCircleOutlined, MinusCircleOutlined, PlayCircleOutlined } from '@ant-design/icons';
+import { CheckCircle, CircleMinus, PlayCircle } from 'lucide-react';
+import './UniLifecycleStepper.less';
 import type { LifecycleResult, SubStage } from './types';
 
 export interface UniLifecycleProps extends LifecycleResult {
@@ -26,10 +27,12 @@ export interface UniLifecycleProps extends LifecycleResult {
 const CIRCLE_SIZE = 22;
 
 function SubStageIcon({ status }: { status: SubStage['status'] }) {
-  if (status === 'done') return <CheckCircleOutlined style={{ color: 'var(--ant-color-success)' }} />;
+  const iconProps = { size: 14, strokeWidth: 2 } as const;
+  if (status === 'done')
+    return <CheckCircle {...iconProps} color="var(--uni-lc-done-solid)" aria-hidden />;
   if (status === 'active')
-    return <PlayCircleOutlined style={{ color: 'var(--ant-color-primary)' }} />;
-  return <MinusCircleOutlined style={{ color: 'var(--ant-color-text-tertiary)' }} />;
+    return <PlayCircle {...iconProps} color="var(--ant-color-primary)" aria-hidden />;
+  return <CircleMinus {...iconProps} color="var(--ant-color-text-tertiary)" aria-hidden />;
 }
 
 function TooltipContent(props: {
@@ -94,9 +97,16 @@ export const UniLifecycle: React.FC<UniLifecycleProps> = ({
       percent={Math.min(100, Math.max(0, Math.round(percent)))}
       size={sizeNum}
       status={progressStatus}
-      strokeWidth={12}
-      strokeColor={progressStatus === 'exception' ? 'var(--ant-color-error)' : undefined}
-      railColor="var(--ant-color-border)"
+      strokeWidth={10}
+      strokeLinecap="round"
+      strokeColor={
+        progressStatus === 'exception'
+          ? 'var(--ant-color-error)'
+          : progressStatus === 'success'
+            ? 'var(--uni-lc-done-solid)'
+            : undefined
+      }
+      railColor="var(--ant-color-fill-secondary)"
       format={
         showPercent
           ? undefined

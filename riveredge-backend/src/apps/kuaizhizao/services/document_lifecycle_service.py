@@ -1134,15 +1134,15 @@ def get_finished_goods_inspection_lifecycle(
 
 
 # ---------------------------------------------------------------------------
-# 报价单生命周期（最佳实践：草稿 → 已提交 → 已审核 → 发送|下推 → 已下推）
-# 数据层仍用 status + review_status；展示层拆阶段。
+# 报价单生命周期（与 status / review_status 一致的可读拆分）
+# 草稿 → 已发送（提交后即此状态，内含待审核/已通过）→ 已审核 → 客户确认或转订单 → 已转订单
 # ---------------------------------------------------------------------------
 QUOTATION_MAIN_STAGES = [
     {"key": "draft", "label": "草稿"},
-    {"key": "submitted", "label": "已提交"},
+    {"key": "submitted", "label": "已发送"},
     {"key": "reviewed", "label": "已审核"},
-    {"key": "send_or_push", "label": "发送/下推"},
-    {"key": "converted", "label": "已下推"},
+    {"key": "send_or_push", "label": "客户确认·转订单"},
+    {"key": "converted", "label": "已转订单"},
 ]
 
 
@@ -1209,7 +1209,7 @@ def get_demand_computation_lifecycle(
 
 
 # ---------------------------------------------------------------------------
-# 报价单生命周期（草稿 → 已提交 → 已审核 → 发送/下推 → 已下推）
+# 报价单生命周期（草稿 → 已发送 → 已审核 → 客户确认·转订单 → 已转订单）
 # ---------------------------------------------------------------------------
 def _merge_quotation_version_meta(quotation: Any, result: Dict[str, Any]) -> Dict[str, Any]:
     """为生命周期结果附加版本系列信息，供列表/详情 UniLifecycle 与引导文案使用。"""
@@ -1225,7 +1225,7 @@ def _merge_quotation_version_meta(quotation: Any, result: Dict[str, Any]) -> Dic
     st = _norm(getattr(quotation, "status", None))
     sugg = list(result.get("next_step_suggestions") or [])
     if result["is_latest_in_series"] and st not in ("草稿", "draft"):
-        tag = "另存为新版本（修订）"
+        tag = "新建修订版"
         if tag not in sugg:
             sugg.append(tag)
     if not result["is_latest_in_series"]:
@@ -1242,7 +1242,7 @@ def get_quotation_lifecycle(
     *,
     converted_sales_order_missing: bool = False,
 ) -> Dict[str, Any]:
-    """报价单生命周期：结合 status 与 review_status 映射五阶段。"""
+    """报价单生命周期：结合 status 与 review_status 映射为主轴五节点（见 QUOTATION_MAIN_STAGES）。"""
     status = _norm(getattr(quotation, "status", None))
     review_status = _norm(getattr(quotation, "review_status", None))
     milestones = milestones or []
@@ -1269,7 +1269,7 @@ def get_quotation_lifecycle(
             quotation,
             _ret(
                 "converted",
-                "已下推（下游销售订单已删除）",
+                "已转订单（下游销售订单已删除）",
                 "normal",
                 [
                     "可点击「撤回下推」解除与已删订单的关联并回到已接受",
@@ -1298,7 +1298,7 @@ def get_quotation_lifecycle(
 
     if status == "已转订单":
         return _merge_quotation_version_meta(
-            quotation, _ret("converted", "已下推", "success", [])
+            quotation, _ret("converted", "已转订单", "success", [])
         )
 
     if status == "已接受":

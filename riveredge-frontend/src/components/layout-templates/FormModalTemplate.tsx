@@ -33,6 +33,8 @@ export interface FormModalTemplateProps {
   extraFooter?: ReactNode;
   /** Modal 打开/关闭动画结束后的回调（open 为当前是否打开） */
   afterOpenChange?: (open: boolean) => void;
+  /** 与详情抽屉、左侧全链路等同屏时需高于 theme.zIndexPopupBase + 嵌套偏移时使用 */
+  zIndex?: number;
 }
 
 export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
@@ -54,6 +56,7 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
   modalRender,
   extraFooter,
   afterOpenChange,
+  zIndex,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -70,6 +73,7 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
       open={open}
       onCancel={onClose}
       afterOpenChange={afterOpenChange}
+      zIndex={zIndex}
       width={width}
       destroyOnHidden
       className={[className, 'form-modal-template'].filter(Boolean).join(' ')}

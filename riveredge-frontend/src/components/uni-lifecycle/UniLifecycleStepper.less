@@ -1,0 +1,60 @@
+/** 详情页全链路生命周期步进条：连接线圆角与过渡 */
+
+.uni-lifecycle-stepper,
+.uni-lifecycle {
+  /* 柔和薄荷绿：基于主题 success 与画布底色混合 */
+  --uni-lc-done-solid: color-mix(in srgb, var(--ant-color-success) 62%, var(--ant-color-bg-container));
+  --uni-lc-done-label: color-mix(in srgb, var(--ant-color-success) 34%, var(--ant-color-text));
+  /* 连线：中性灰细线（加深一档，避免 split / secondary 边框在白底上过浅） */
+  --uni-lc-link-gray: color-mix(in srgb, var(--ant-color-border) 32%, var(--ant-color-text-secondary));
+  --uni-lc-link-gray-soft: color-mix(in srgb, var(--ant-color-border) 48%, var(--ant-color-text-secondary));
+}
+
+.uni-lifecycle-stepper__track {
+  display: block;
+  align-self: center;
+  flex-shrink: 0;
+  border-radius: 999px;
+  transition: opacity 0.18s ease;
+}
+
+/* 已走过的区间：细实线 */
+.uni-lifecycle-stepper__track--done {
+  height: 1px;
+  background-color: var(--uni-lc-link-gray);
+}
+
+/* 尚未走过的区间：细虚线 */
+.uni-lifecycle-stepper__track--todo {
+  height: 1px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--uni-lc-link-gray-soft) 0 4px,
+    transparent 4px 9px
+  );
+}
+
+.uni-lifecycle-stepper__node {
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.uni-lifecycle-stepper__next {
+  border-radius: 10px;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.uni-lifecycle-stepper__next-icon-wrap {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ant-color-warning-bg);
+  color: var(--ant-color-warning);
+}

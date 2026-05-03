@@ -1,6 +1,6 @@
 /**
- * 报价单生命周期：前端兜底（无 lifecycle 字段时），与后端 get_quotation_lifecycle 语义对齐。
- * 阶段：草稿 → 已提交 → 已审核 → 发送/下推 → 已下推
+ * 报价单生命周期：前端兜底（无 lifecycle 字段时），与后端 get_quotation_lifecycle / QUOTATION_MAIN_STAGES 对齐。
+ * 主轴：草稿 → 已发送 → 已审核 → 客户确认·转订单 → 已转订单（关闭审核时跳过「已审核」）
  */
 
 import type { LifecycleResult, SubStage } from '../../../../components/uni-lifecycle/types';
@@ -14,10 +14,10 @@ function norm(s: string | undefined): string {
 const MAIN_STAGE_KEYS = ['draft', 'submitted', 'reviewed', 'send_or_push', 'converted'] as const;
 const MAIN_STAGE_LABELS: Record<string, string> = {
   draft: '草稿',
-  submitted: '已提交',
+  submitted: '已发送',
   reviewed: '已审核',
-  send_or_push: '发送/下推',
-  converted: '已下推',
+  send_or_push: '客户确认·转订单',
+  converted: '已转订单',
 };
 
 function isPendingRs(rs: string): boolean {
@@ -52,6 +52,95 @@ function buildMainStages(currentKey: (typeof MAIN_STAGE_KEYS)[number]): SubStage
   });
 }
 
+/** 未启用审核时主轴跳过「已审核」节点：草稿 → 已发送 → 客户确认·转订单 → 已转订单 */
+const MAIN_STAGE_KEYS_NO_AUDIT = ['draft', 'submitted', 'send_or_push', 'converted'] as const;
+
+const NO_AUDIT_STAGE_PERCENT: Record<string, number> = {
+  draft: 0,
+  submitted: 34,
+  send_or_push: 67,
+  converted: 100,
+};
+
+function buildMainStagesNoAudit(currentKey: (typeof MAIN_STAGE_KEYS_NO_AUDIT)[number]): SubStage[] {
+  const currentIdx = Math.max(
+    0,
+    MAIN_STAGE_KEYS_NO_AUDIT.indexOf(currentKey as (typeof MAIN_STAGE_KEYS_NO_AUDIT)[number])
+  );
+  return MAIN_STAGE_KEYS_NO_AUDIT.map((key, i) => {
+    let status: SubStage['status'] = 'pending';
+    if (currentKey === 'converted' && key === 'converted') {
+      status = 'done';
+    } else if (i < currentIdx) {
+      status = 'done';
+    } else if (i === currentIdx) {
+      status = 'active';
+    } else {
+      status = 'pending';
+    }
+    return { key, label: MAIN_STAGE_LABELS[key] ?? key, status };
+  });
+}
+
+function mapQuotationStageKeyWhenNoAudit(key: string): (typeof MAIN_STAGE_KEYS_NO_AUDIT)[number] {
+  const k = String(key ?? '').trim();
+  if (k === 'reviewed') return 'send_or_push';
+  const allowed = MAIN_STAGE_KEYS_NO_AUDIT as readonly string[];
+  if (allowed.includes(k)) return k as (typeof MAIN_STAGE_KEYS_NO_AUDIT)[number];
+  return 'draft';
+}
+
+function resolveQuotationBackendStageKey(record: Record<string, unknown>, base: LifecycleResult): string {
+  const lc = record.lifecycle as BackendLifecycle | undefined;
+  if (lc?.current_stage_key) return String(lc.current_stage_key);
+  const active = base.mainStages?.find((s) => s.status === 'active');
+  if (active?.key) return active.key;
+  return 'draft';
+}
+
+function sanitizeQuotationSuggestionsNoAudit(suggestions: string[]): string[] {
+  return suggestions
+    .map((s) =>
+      String(s)
+        .replace(/（进入审核）/g, '')
+        .replace(/进入审核/g, '')
+        .replace(/再提交审核/g, '再提交')
+        .trim()
+    )
+    .filter(
+      (s) =>
+        s.length > 0 &&
+        !['审核通过', '审核驳回', '撤回审核'].some((w) => s.includes(w)),
+    );
+}
+
+/** 关闭报价审核后：移除「已审核」节点并重映射进度 */
+function adaptQuotationLifecycleForNoAudit(
+  base: LifecycleResult,
+  record: Record<string, unknown>,
+): LifecycleResult {
+  const backendKey = resolveQuotationBackendStageKey(record, base);
+  const pipelineKey = mapQuotationStageKeyWhenNoAudit(backendKey);
+  const mainStages = buildMainStagesNoAudit(pipelineKey);
+  const percent = NO_AUDIT_STAGE_PERCENT[pipelineKey] ?? base.percent;
+
+  let stageName = base.stageName;
+  if (stageName === '已审核' || stageName === '待审核') {
+    const active = mainStages.find((s) => s.status === 'active');
+    stageName = active?.label ?? stageName;
+  }
+
+  const nextStepSuggestions = sanitizeQuotationSuggestionsNoAudit(base.nextStepSuggestions ?? []);
+
+  return {
+    ...base,
+    percent,
+    stageName,
+    mainStages,
+    nextStepSuggestions,
+  };
+}
+
 function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecycle {
   const status = norm(record?.status as string);
   const rs = norm(record?.review_status as string);
@@ -60,7 +149,7 @@ function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecyc
   if (convMissing && status === '已转订单') {
     return {
       current_stage_key: 'converted',
-      current_stage_name: '已下推（下游销售订单已删除）',
+      current_stage_name: '已转订单（下游销售订单已删除）',
       status: 'normal',
       main_stages: buildMainStages('converted'),
       next_step_suggestions: [
@@ -93,7 +182,7 @@ function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecyc
   if (status === '已转订单') {
     return {
       current_stage_key: 'converted',
-      current_stage_name: '已下推',
+      current_stage_name: '已转订单',
       status: 'success',
       main_stages: buildMainStages('converted'),
       next_step_suggestions: [],
@@ -159,12 +248,15 @@ export interface QuotationLike {
 }
 
 export function getQuotationLifecycle(
-  record: QuotationLike | Record<string, unknown> | null | undefined
+  record: QuotationLike | Record<string, unknown> | null | undefined,
+  auditRequired = true,
 ): LifecycleResult {
   if (!record) return { percent: 0, stageName: '-', mainStages: [] };
-  const backend = (record?.lifecycle ?? (record as Record<string, unknown>).lifecycle) as BackendLifecycle | undefined;
-  if (backend?.main_stages?.length) {
-    return parseBackendLifecycle(backend);
-  }
-  return parseBackendLifecycle(buildFallbackLifecycle(record as Record<string, unknown>));
+  const raw = record as Record<string, unknown>;
+  const backend = (record?.lifecycle ?? raw.lifecycle) as BackendLifecycle | undefined;
+  const base = backend?.main_stages?.length
+    ? parseBackendLifecycle(backend)
+    : parseBackendLifecycle(buildFallbackLifecycle(raw));
+  if (auditRequired) return base;
+  return adaptQuotationLifecycleForNoAudit(base, raw);
 }
