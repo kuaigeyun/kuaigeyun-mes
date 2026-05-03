@@ -1112,12 +1112,6 @@
                 "path": "/apps/kuaizhizao/warehouse-management/barcode-mapping-rules",
                 "permission": "kuaizhizao:warehouse-management-barcode-mapping-rules:read",
                 "sort_order": 7
-              },
-              {
-                "title": "app.kuaizhizao.menu.warehouse-management.initial-data",
-                "path": "/apps/kuaizhizao/warehouse-management/initial-data",
-                "permission": "kuaizhizao:warehouse-management-initial-data:read",
-                "sort_order": 8
               }
             ]
           },

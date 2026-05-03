@@ -15,6 +15,8 @@ const pageModules = import.meta.glob([
   '../pages/system/**/*.tsx',
   '../pages/infra/**/*.tsx',
   '../pages/personal/**/*.tsx',
+  // 系统级路由复用应用内页面（如 /system/initial-data）
+  '../apps/kuaizhizao/pages/warehouse-management/initial-data/index.tsx',
 ]) as Record<string, () => Promise<unknown>>
 
 /**
@@ -33,6 +35,9 @@ const ROUTE_MODULE_OVERRIDES: Record<string, string> = {
   // API 服务路由两种别名指向同一模块
   '/system/api-services': '../pages/system/apis/list/index.tsx',
   '/system/apis': '../pages/system/apis/list/index.tsx',
+
+  // 期初数据导入：系统入口，组件仍在快智造包内
+  '/system/initial-data': '../apps/kuaizhizao/pages/warehouse-management/initial-data/index.tsx',
 
   // 消息模板/配置两种 URL 别名
   '/system/message-templates': '../pages/system/messages/template/index.tsx',

@@ -442,6 +442,7 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/system/data-sources': ManufacturingIcons.database, // 数据源 - 使用数据库图标
       '/system/application-connections': ManufacturingIcons.gitBranch, // 应用连接器 - 使用分支连接图标
       '/system/datasets': ManufacturingIcons.inventory, // 数据集 - 使用库存图标
+      '/system/initial-data': ManufacturingIcons.arrowDownToLine, // 期初数据导入（导入入库）
       '/system/onboarding-wizard': ManufacturingIcons.compass, // 上线向导 - 指引/向导
       '/system/messages/config': ManufacturingIcons.bell, // 消息配置 - 使用铃铛图标
       '/system/messages/template': ManufacturingIcons.fileText, // 消息模板 - 使用文件文本图标
@@ -593,6 +594,12 @@ const getMenuConfig = (t: (key: string) => string): PermissionMenuDataItem[] => 
         { path: '/system/users', name: t('menu.system.users'), icon: getMenuIcon(t('menu.system.users'), '/system/users'), permissionCodes: ['system:user:read', 'system:user:update'] },
       ]},
       { key: 'data-center-group', type: 'group', name: t('menu.group.data-center'), label: t('menu.group.data-center'), className: 'riveredge-menu-group-title', children: [
+        {
+          path: '/system/initial-data',
+          name: t('menu.system.initial-data'),
+          icon: getMenuIcon(t('menu.system.initial-data'), '/system/initial-data'),
+          permissionCodes: ['kuaizhizao:warehouse-management-initial-data:read'],
+        },
         { path: '/system/files', name: t('menu.system.files'), icon: getMenuIcon(t('menu.system.files'), '/system/files') },
         { path: '/system/apis', name: t('menu.system.apis'), icon: getMenuIcon(t('menu.system.apis'), '/system/apis') },
         { path: '/system/data-sources', name: t('menu.system.data-sources'), icon: getMenuIcon(t('menu.system.data-sources'), '/system/data-sources') },
@@ -1167,7 +1174,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       '/system/roles': 'fluent-color:shield-24',
       '/system/users': 'fluent-color:people-24',
       '/system/files': 'fluent-color:document-folder-24',
-      '/system/apis': 'fluent-color:link-multiple-24',
+      '/system/initial-data': 'fluent-color:text-bullet-list-square-sparkle-16',
+      '/system/apis': 'fluent-color:puzzle-piece-16',
       '/system/data-sources': 'fluent-color:database-24',
       '/system/application-connections': 'fluent-color:data-pie-24',
       '/system/datasets': 'fluent-color:table-24',
@@ -1175,8 +1183,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       '/system/approval-instances': 'fluent-color:checkmark-circle-24',
       '/system/messages/template': 'fluent-color:drafts-24',
       '/system/messages/config': 'fluent-color:chat-24',
-      // fluent-color 无专用打印机图标；receipt 与实体票据/热敏打印输出最接近，视觉与同套彩色图标一致
-      '/system/print-devices': 'fluent-color:receipt-24',
+      '/system/print-devices': 'fluent-color:phone-laptop-16',
       '/system/print-templates': 'fluent-color:document-24',
       '/system/operation-logs': 'fluent-color:history-24',
       '/system/login-logs': 'fluent-color:clock-24',

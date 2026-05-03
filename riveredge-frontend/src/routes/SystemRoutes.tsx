@@ -140,6 +140,8 @@ const DataSourcesPage = React.lazy(() => import('../pages/system/data-sources/li
 const ApplicationConnectionsPage = React.lazy(() => import('../pages/system/application-connections/list'));
 const DatasetsPage = React.lazy(() => import('../pages/system/datasets/list'));
 const DatasetDesignerPage = React.lazy(() => import('../pages/system/datasets/designer'));
+/** 期初数据导入：业务页面仍在快智造模块，系统级入口挂载于此路径 */
+const InitialDataImportPage = React.lazy(() => import('../apps/kuaizhizao/pages/warehouse-management/initial-data'));
 
 const DataBackupsPage = React.lazy(() => import('../pages/system/data-backups'));
 const CustomFieldsPage = React.lazy(() => import('../pages/system/custom-fields/list'));
@@ -215,6 +217,10 @@ const SystemRoutes: React.FC = () => (
     <Route path="/system/data-dictionaries" element={withSuspense(DataDictionariesPage)} />
     <Route path="/system/data-sources" element={withSuspense(DataSourcesPage)} />
     <Route path="/system/application-connections" element={withSuspense(ApplicationConnectionsPage)} />
+    <Route
+      path="/system/initial-data"
+      element={withPermission(withSuspense(InitialDataImportPage), ['kuaizhizao:warehouse-management-initial-data:read'])}
+    />
     <Route path="/system/datasets" element={withSuspense(DatasetsPage)} />
     <Route path="/system/datasets/designer" element={withSuspense(DatasetDesignerPage)} />
 

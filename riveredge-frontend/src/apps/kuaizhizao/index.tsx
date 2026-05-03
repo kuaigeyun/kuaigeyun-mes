@@ -103,7 +103,6 @@ const OtherInboundPage = lazy(() => import('./pages/warehouse-management/other-i
 const OtherOutboundPage = lazy(() => import('./pages/warehouse-management/other-outbound'));
 const MaterialBorrowsPage = lazy(() => import('./pages/warehouse-management/material-borrows'));
 const MaterialReturnsPage = lazy(() => import('./pages/warehouse-management/material-returns'));
-const InitialDataImportPage = lazy(() => import('./pages/warehouse-management/initial-data'));
 const OutboundPage = lazy(() => import('./pages/warehouse-management/outbound'));
 const CustomerMaterialRegistrationPage = lazy(() => import('./pages/warehouse-management/customer-material-registration'));
 const BarcodeMappingRulesPage = lazy(() => import('./pages/warehouse-management/barcode-mapping-rules'));
@@ -318,7 +317,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="warehouse-management/outbound" element={withPageSuspense(OutboundPage)} />
       <Route path="warehouse-management/customer-material-registration" element={withPageSuspense(CustomerMaterialRegistrationPage)} />
       <Route path="warehouse-management/barcode-mapping-rules" element={withPageSuspense(BarcodeMappingRulesPage)} />
-      <Route path="warehouse-management/initial-data" element={withPageSuspense(InitialDataImportPage)} />
+      <Route path="warehouse-management/initial-data" element={<Navigate to="/system/initial-data" replace />} />
       <Route path="warehouse-management/stocktaking" element={withPageSuspense(StocktakingPage)} />
       <Route path="warehouse-management/inventory-transfer" element={withPageSuspense(InventoryTransferPage)} />
       <Route path="warehouse-management/delivery-notes" element={withPageSuspense(DeliveryNotesPage)} />
