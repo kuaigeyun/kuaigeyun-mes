@@ -33,7 +33,13 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { App } from 'antd';
-import { getRoleOnboardingGuide, getSystemGoLiveGuide } from '../../../services/onboarding';
+import {
+  getRoleOnboardingGuide,
+  getSystemGoLiveGuide,
+  getOnboardingCounts,
+  markInitialDataVerified,
+  revokeInitialDataVerified,
+} from '../../../services/onboarding';
 import { useGuideStore } from '../../../components/onboarding-guide/store';
 import { getUserList } from '../../../services/user';
 import { listSalesOrders } from '../../../apps/kuaizhizao/services/sales-order';
@@ -639,6 +645,7 @@ const OnboardingWizardPage: React.FC = () => {
       name: '第四阶段：全链路闭环验证',
       items: [
         { id: 'first_order_run', name: '完成首笔业务试运行', required: true, description: '通过一笔完整的模拟订单（从销售下单开始）验证所有主数据的准确性与连通性', completed: false, jump_path: '/apps/kuaizhizao/sales-management/sales-orders' },
+        { id: 'initial_data_verified', name: '期初数据核对完成', required: true, description: '确认期初库存 / 在制 / 应收应付等期初数据已与线下账目核对一致', completed: false, jump_path: '/apps/kuaizhizao/warehouse-management/initial-data', check_key: 'initial_data_verified', actionable: 'mark_initial_data_verified' },
       ]
     }
   ];
@@ -672,175 +679,275 @@ const OnboardingWizardPage: React.FC = () => {
     return walk(tree.items);
   };
 
-  // 实时存量：主数据 + 订单 + 系统设定向导各页面对应的接口检测（与清单子项 id 对齐）
+  const getApiListCount = (res: any): number | undefined => {
+    if (!res) return undefined;
+    const data = res.data || res;
+    if (Array.isArray(data)) return data.length;
+    if (data.total !== undefined) return Number(data.total);
+    if (data.count !== undefined) return Number(data.count);
+    if (Array.isArray(data.items)) return data.items.length;
+    return 0;
+  };
+
+  /** 同 Tab 内若 60s 内已成功拉过，且未点「刷新状态」，跳过重拉避免反复触发慢接口。 */
+  const COUNT_CACHE_TTL_MS = 60_000;
+  const realCountsCacheRef = React.useRef<Record<string, number>>({});
+
+  // 按 Tab 分流并改为「流式」——每个接口独立 setState，避免被最慢请求阻塞整张右栏；
+  // 同时叠加 60s 缓存，切回原 Tab 不再重复拉。
+  // 优先尝试后端聚合接口 /core/onboarding/counts（单次并行），失败再回退到多请求模式。
   useEffect(() => {
-    const fetchRealCounts = async () => {
-      try {
-        const [
-          customers, suppliers, materials, warehouses, storageAreas, storageLocations, boms, 
-          plants, workshops, lines, stations, workCenters, workGroups, 
-          defectTypes, operations, routes, sops,
-          variantAttrs, batchRules, serialRules,
-          users, sales, purchases,
-          deptTree,
-          positions,
-          roles,
-          codeRules,
-          dicts,
-          langs,
-          customFields,
-          menus,
-          workflows,
-          msgTemplates,
-          printTemplates,
-          files,
-          dataSources,
-          appConnections,
-          datasets,
-          opLogs,
-          loginLogs,
-          backups,
-          installedApps,
-        ] = await Promise.all([
+    if (activeTab !== 'system' && activeTab !== 'implementer') return;
+
+    const cacheKey = activeTab;
+    const lastTs = realCountsCacheRef.current[cacheKey] ?? 0;
+    const isManualRefresh = realCountsRefreshKey > 0;
+    const recentlyFetched = !isManualRefresh && Date.now() - lastTs < COUNT_CACHE_TTL_MS;
+    if (recentlyFetched) return;
+
+    let cancelled = false;
+
+    // ---- 优先聚合接口 ----
+    const aggregatedScope: 'system_launch' | 'implementer' =
+      activeTab === 'system' ? 'system_launch' : 'implementer';
+    let aggregatedSucceeded = false;
+    // 手动刷新（点击「刷新状态」）时同时绕过后端 30s TTL 缓存
+    getOnboardingCounts(aggregatedScope, isManualRefresh)
+      .then((res) => {
+        if (cancelled) return;
+        const counts = res?.counts || {};
+        const flags = res?.flags || {};
+        // flags 也以 0/1 写入 realCounts，便于现有 (realCounts[id] ?? 0) > 0 的判定逻辑
+        const flagAsCounts: Record<string, number> = {};
+        Object.entries(flags).forEach(([k, v]) => {
+          flagAsCounts[k] = v ? 1 : 0;
+        });
+        const merged = { ...flagAsCounts, ...counts };
+        if (Object.keys(merged).length > 0) {
+          aggregatedSucceeded = true;
+          setRealCounts((prev) => ({ ...prev, ...merged }));
+          realCountsCacheRef.current[cacheKey] = Date.now();
+        }
+      })
+      .catch((err) => {
+        console.warn('[Onboarding] aggregated counts unavailable, fall back to multi-request', err?.message);
+      });
+
+    // 100ms 内若聚合接口返回完整数据，则跳过后续多请求；否则保留并行回退避免视觉空白
+    setTimeout(() => {
+      if (cancelled) return;
+      if (aggregatedSucceeded) return;
+      kickoffStreamingFallback();
+    }, 150);
+
+    function kickoffStreamingFallback() {
+      if (cancelled) return;
+
+    /** 单源请求：完成即写回，独立失败不影响其他源 */
+    const runSource = (
+      name: string,
+      task: () => Promise<Partial<Record<string, number>>>
+    ) => {
+      task()
+        .then((partial) => {
+          if (cancelled) return;
+          setRealCounts((prev) => ({ ...prev, ...partial }));
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          console.warn(`[Onboarding] count source "${name}" failed`, err?.message);
+        });
+    };
+
+    if (activeTab === 'system') {
+      runSource('customer', async () => {
+        const r = await customerApi.list();
+        const v = getApiListCount(r) ?? 0;
+        return { partner_customers: v };
+      });
+      runSource('supplier', async () => {
+        const r = await supplierApi.list();
+        const v = getApiListCount(r) ?? 0;
+        return { partner_suppliers: v };
+      });
+      runSource('partner_data_join', async () => {
+        // 单独并发两个，再写聚合
+        const [c, s] = await Promise.all([
           customerApi.list().catch(() => null),
           supplierApi.list().catch(() => null),
-          materialApi.list().catch(() => null),
-          warehouseApi.list().catch(() => null),
-          storageAreaApi.list().catch(() => null),
-          storageLocationApi.list().catch(() => null),
-          bomApi.getGroups().catch(() => null),
-          plantApi.list().catch(() => null),
+        ]);
+        const cv = getApiListCount(c) ?? 0;
+        const sv = getApiListCount(s) ?? 0;
+        return { partner_data: cv + sv };
+      });
+      runSource('material', async () => {
+        const r = await materialApi.list();
+        const v = getApiListCount(r) ?? 0;
+        return { material_main: v, material_data: v };
+      });
+      runSource('variantAttr', async () => ({
+        material_variants: getApiListCount(await variantAttributeApi.list()) ?? 0,
+      }));
+      runSource('batchRule', async () => ({
+        material_batch_rules: getApiListCount(await batchRuleApi.list()) ?? 0,
+      }));
+      runSource('serialRule', async () => ({
+        material_serial_rules: getApiListCount(await serialRuleApi.list()) ?? 0,
+      }));
+      runSource('warehouse', async () => {
+        const v = getApiListCount(await warehouseApi.list()) ?? 0;
+        return { warehouse_main: v, warehouse_data: v };
+      });
+      runSource('storageArea', async () => ({
+        warehouse_areas: getApiListCount(await storageAreaApi.list()) ?? 0,
+      }));
+      runSource('storageLocation', async () => ({
+        warehouse_locations: getApiListCount(await storageLocationApi.list()) ?? 0,
+      }));
+      runSource('bom', async () => {
+        const v = getApiListCount(await bomApi.getGroups()) ?? 0;
+        return { process_bom: v, bom_config: v };
+      });
+      runSource('operation', async () => ({
+        process_operations: getApiListCount(await operationApi.list()) ?? 0,
+      }));
+      runSource('route', async () => {
+        const v = getApiListCount(await processRouteApi.list()) ?? 0;
+        return { process_routes: v, process_routing: v };
+      });
+      runSource('defectType', async () => ({
+        process_defects: getApiListCount(await defectTypeApi.list()) ?? 0,
+      }));
+      runSource('sop', async () => ({
+        process_sop: getApiListCount(await sopApi.list()) ?? 0,
+      }));
+      runSource('factory_plants', async () => ({
+        factory_plants: getApiListCount(await plantApi.list()) ?? 0,
+      }));
+      runSource('factory_workshops', async () => ({
+        factory_workshops: getApiListCount(await workshopApi.list()) ?? 0,
+      }));
+      runSource('factory_lines', async () => ({
+        factory_lines: getApiListCount(await productionLineApi.list()) ?? 0,
+      }));
+      runSource('factory_stations', async () => ({
+        factory_stations: getApiListCount(await workstationApi.list()) ?? 0,
+      }));
+      runSource('factory_work_centers', async () => ({
+        factory_work_centers: getApiListCount(await workCenterApi.list()) ?? 0,
+      }));
+      runSource('factory_work_groups', async () => ({
+        factory_work_groups: getApiListCount(await workGroupApi.list()) ?? 0,
+      }));
+      runSource('factory_data_join', async () => {
+        const [w, l, s] = await Promise.all([
           workshopApi.list().catch(() => null),
           productionLineApi.list().catch(() => null),
           workstationApi.list().catch(() => null),
-          workCenterApi.list().catch(() => null),
-          workGroupApi.list().catch(() => null),
-          defectTypeApi.list().catch(() => null),
-          operationApi.list().catch(() => null),
-          processRouteApi.list().catch(() => null),
-          sopApi.list().catch(() => null),
-          variantAttributeApi.list().catch(() => null),
-          batchRuleApi.list().catch(() => null),
-          serialRuleApi.list().catch(() => null),
-          getUserList({ page: 1, page_size: 1 }).catch(() => null),
+        ]);
+        const wv = getApiListCount(w) ?? 0;
+        const lv = getApiListCount(l) ?? 0;
+        const sv = getApiListCount(s) ?? 0;
+        return { factory_data: wv || lv || sv ? 1 : 0 };
+      });
+      runSource('user_data', async () => {
+        const r = await getUserList({ page: 1, page_size: 1 });
+        const total = getApiListCount(r) ?? 0;
+        return { user_data: Math.max(0, total - 1) };
+      });
+      runSource('order_data', async () => {
+        const [s, p] = await Promise.all([
           listSalesOrders({ limit: 1 }).catch(() => null),
           listPurchaseOrders({ limit: 1 }).catch(() => null),
-          getDepartmentTree().catch(() => null),
-          getPositionList({ page: 1, page_size: 1 }).catch(() => null),
-          getRoleList({ page: 1, page_size: 1 }).catch(() => null),
-          getCodeRuleList({ page: 1, page_size: 500 }).catch(() => null),
-          getDataDictionaryList({ page: 1, page_size: 1 }).catch(() => null),
-          getLanguageList({ page: 1, page_size: 1 }).catch(() => null),
-          getCustomFieldList({ page: 1, page_size: 1 }).catch(() => null),
-          getMenus().catch(() => null),
-          getApprovalProcessList({ skip: 0, limit: 500 }).catch(() => null),
-          getMessageTemplateList({ skip: 0, limit: 500 }).catch(() => null),
-          getPrintTemplateList().catch(() => null),
-          getFileList({ page: 1, page_size: 1 }).catch(() => null),
-          getDataSourceList({ page: 1, page_size: 1 }).catch(() => null),
-          getApplicationConnectionList({ page: 1, page_size: 1 }).catch(() => null),
-          getDatasetList({ page: 1, page_size: 1 }).catch(() => null),
-          getOperationLogs({ page: 1, page_size: 1 }).catch(() => null),
-          getLoginLogs({ page: 1, page_size: 1 }).catch(() => null),
-          getBackups({ page: 1, page_size: 1 }).catch(() => null),
-          getInstalledApplicationList().catch(() => null),
         ]);
-
-        const getCount = (res: any) => {
-          if (!res) return undefined;
-          const data = res.data || res;
-          if (Array.isArray(data)) return data.length;
-          if (data.total !== undefined) return Number(data.total);
-          if (data.count !== undefined) return Number(data.count);
-          if (Array.isArray(data.items)) return data.items.length;
-          return 0;
-        };
-
-        const counts: Record<string, number> = {};
-        
-        // 供应链
-        counts['partner_customers'] = getCount(customers) ?? 0;
-        counts['partner_suppliers'] = getCount(suppliers) ?? 0;
-        counts['partner_data'] = (counts['partner_customers'] || 0) + (counts['partner_suppliers'] || 0);
-        
-        // 物料
-        counts['material_main'] = getCount(materials) ?? 0;
-        counts['material_variants'] = getCount(variantAttrs) ?? 0;
-        counts['material_batch_rules'] = getCount(batchRules) ?? 0;
-        counts['material_serial_rules'] = getCount(serialRules) ?? 0;
-        counts['material_data'] = counts['material_main'];
-
-        // 仓库
-        counts['warehouse_main'] = getCount(warehouses) ?? 0;
-        counts['warehouse_areas'] = getCount(storageAreas) ?? 0;
-        counts['warehouse_locations'] = getCount(storageLocations) ?? 0;
-        counts['warehouse_data'] = counts['warehouse_main'];
-
-        // 工艺
-        counts['process_bom'] = getCount(boms) ?? 0;
-        counts['process_operations'] = getCount(operations) ?? 0;
-        counts['process_routes'] = getCount(routes) ?? 0;
-        counts['process_defects'] = getCount(defectTypes) ?? 0;
-        counts['process_sop'] = getCount(sops) ?? 0;
-        counts['bom_config'] = counts['process_bom'];
-        counts['process_routing'] = counts['process_routes'];
-
-        // 细化工厂子项
-        counts['factory_plants'] = getCount(plants) ?? 0;
-        counts['factory_workshops'] = getCount(workshops) ?? 0;
-        counts['factory_lines'] = getCount(lines) ?? 0;
-        counts['factory_stations'] = getCount(stations) ?? 0;
-        counts['factory_work_centers'] = getCount(workCenters) ?? 0;
-        counts['factory_work_groups'] = getCount(workGroups) ?? 0;
-
-        // 汇总工厂数据：只要有一个有数据就算完成了“建立工厂数据”的初步
-        counts['factory_data'] = (counts['factory_workshops'] || counts['factory_lines'] || counts['factory_stations']) ? 1 : 0;
-        
-        // 特别处理用户：减去 1 个（通常是超级管理员）
-        const uCount = getCount(users);
-        if (uCount !== undefined) counts['user_data'] = Math.max(0, uCount - 1);
-
-        // 订单/单据统计
-        const soCount = getCount(sales);
-        const poCount = getCount(purchases);
-        if (soCount !== undefined || poCount !== undefined) counts['order_data'] = (soCount || 0) + (poCount || 0);
-        counts['first_order_run'] = counts['order_data'] ?? 0;
-
-        // 系统设定向导：与 IMPLEMENTER_ENHANCED_CHECKLIST 子项 id 对齐（站点/业务配置/个人中心等由人工勾选或后续再接专项接口）
-        counts['imp_dept'] = countDepartmentRecords(deptTree);
-        counts['imp_post'] = getCount(positions) ?? 0;
-        counts['imp_role'] = getCount(roles) ?? 0;
-        counts['imp_user'] = counts['user_data'] ?? 0;
-        counts['imp_rule'] = getCount(codeRules) ?? 0;
-        counts['imp_dict'] = getCount(dicts) ?? 0;
-        counts['imp_lang'] = getCount(langs) ?? 0;
-        counts['imp_field'] = getCount(customFields) ?? 0;
-        counts['imp_menu'] = Array.isArray(menus) ? menus.length : 0;
-        counts['imp_workflow'] = Array.isArray(workflows) ? workflows.length : 0;
-        counts['imp_msg'] = Array.isArray(msgTemplates) ? msgTemplates.length : 0;
-        counts['imp_print'] = Array.isArray(printTemplates) ? printTemplates.length : 0;
-        counts['imp_file'] = getCount(files) ?? 0;
-        counts['imp_api'] = getCount(dataSources) ?? 0;
-        counts['imp_connector'] = getCount(appConnections) ?? 0;
-        counts['imp_dataset'] = getCount(datasets) ?? 0;
-        counts['imp_audit'] =
-          opLogs && typeof opLogs === 'object' && 'total' in opLogs ? Math.max(0, Number((opLogs as any).total) || 0) : 0;
-        counts['imp_login'] =
-          loginLogs && typeof loginLogs === 'object' && 'total' in loginLogs
-            ? Math.max(0, Number((loginLogs as any).total) || 0)
-            : 0;
-        counts['imp_backup'] = getCount(backups) ?? 0;
-        counts['imp_app_center'] = Array.isArray(installedApps) ? installedApps.length : 0;
-
-        setRealCounts(counts);
-      } catch (error) {
-        console.error('实时存量获取系统异常:', error);
-      }
-    };
-
-    if (activeTab === 'system' || activeTab === 'implementer') {
-      fetchRealCounts();
+        const sv = getApiListCount(s) ?? 0;
+        const pv = getApiListCount(p) ?? 0;
+        const total = sv + pv;
+        return { order_data: total, first_order_run: total };
+      });
+    } else {
+      // implementer
+      runSource('user_data', async () => {
+        const r = await getUserList({ page: 1, page_size: 1 });
+        const total = getApiListCount(r) ?? 0;
+        const v = Math.max(0, total - 1);
+        return { user_data: v, imp_user: v };
+      });
+      runSource('imp_dept', async () => ({
+        imp_dept: countDepartmentRecords(await getDepartmentTree()),
+      }));
+      runSource('imp_post', async () => ({
+        imp_post: getApiListCount(await getPositionList({ page: 1, page_size: 1 })) ?? 0,
+      }));
+      runSource('imp_role', async () => ({
+        imp_role: getApiListCount(await getRoleList({ page: 1, page_size: 1 })) ?? 0,
+      }));
+      runSource('imp_rule', async () => ({
+        imp_rule: getApiListCount(await getCodeRuleList({ page: 1, page_size: 1 })) ?? 0,
+      }));
+      runSource('imp_dict', async () => ({
+        imp_dict: getApiListCount(await getDataDictionaryList({ page: 1, page_size: 1 })) ?? 0,
+      }));
+      runSource('imp_lang', async () => ({
+        imp_lang: getApiListCount(await getLanguageList({ page: 1, page_size: 1 })) ?? 0,
+      }));
+      runSource('imp_field', async () => ({
+        imp_field: getApiListCount(await getCustomFieldList({ page: 1, page_size: 1 })) ?? 0,
+      }));
+      runSource('imp_menu', async () => {
+        const r = await getMenus({ page: 1, page_size: 1 });
+        return { imp_menu: Array.isArray(r) ? r.length : 0 };
+      });
+      runSource('imp_workflow', async () => {
+        const r = await getApprovalProcessList({ skip: 0, limit: 1 });
+        return { imp_workflow: Array.isArray(r) ? r.length : 0 };
+      });
+      runSource('imp_msg', async () => {
+        const r = await getMessageTemplateList({ skip: 0, limit: 1 });
+        return { imp_msg: Array.isArray(r) ? r.length : 0 };
+      });
+      runSource('imp_print', async () => {
+        const r = await getPrintTemplateList({ skip: 0, limit: 1 });
+        return { imp_print: Array.isArray(r) ? r.length : 0 };
+      });
+      runSource('imp_file', async () => ({
+        imp_file: getApiListCount(await getFileList({ page: 1, page_size: 1 })) ?? 0,
+      }));
+      runSource('imp_api', async () => ({
+        imp_api: getApiListCount(await getDataSourceList({ page: 1, page_size: 1 })) ?? 0,
+      }));
+      runSource('imp_connector', async () => ({
+        imp_connector:
+          getApiListCount(await getApplicationConnectionList({ page: 1, page_size: 1 })) ?? 0,
+      }));
+      runSource('imp_dataset', async () => ({
+        imp_dataset: getApiListCount(await getDatasetList({ page: 1, page_size: 1 })) ?? 0,
+      }));
+      runSource('imp_audit', async () => {
+        const r = await getOperationLogs({ page: 1, page_size: 1 });
+        const total = r && typeof r === 'object' && 'total' in r ? Number((r as any).total) || 0 : 0;
+        return { imp_audit: Math.max(0, total) };
+      });
+      runSource('imp_login', async () => {
+        const r = await getLoginLogs({ page: 1, page_size: 1 });
+        const total = r && typeof r === 'object' && 'total' in r ? Number((r as any).total) || 0 : 0;
+        return { imp_login: Math.max(0, total) };
+      });
+      runSource('imp_backup', async () => ({
+        imp_backup: getApiListCount(await getBackups({ page: 1, page_size: 1 })) ?? 0,
+      }));
+      runSource('imp_app_center', async () => {
+        const r = await getInstalledApplicationList();
+        return { imp_app_center: Array.isArray(r) ? r.length : 0 };
+      });
     }
+
+      realCountsCacheRef.current[cacheKey] = Date.now();
+    }
+
+    return () => {
+      cancelled = true;
+    };
   }, [activeTab, realCountsRefreshKey]);
 
   /**
@@ -1633,7 +1740,58 @@ const OnboardingWizardPage: React.FC = () => {
                                   })()}
                                 </div>
 
-                                {item.jump_path && (
+                                {item.actionable === 'mark_initial_data_verified' ? (
+                                  <Button
+                                    type={isCompleted ? 'default' : 'primary'}
+                                    size="large"
+                                    shape="round"
+                                    icon={isCompleted ? wizIcon(CheckCircle2, 16, undefined, token.colorSuccess) : wizIcon(ArrowRight, 16)}
+                                    onClick={async () => {
+                                      try {
+                                        if (isCompleted) {
+                                          await revokeInitialDataVerified();
+                                          messageApi.success('已撤销「期初数据已核对」标记');
+                                        } else {
+                                          await markInitialDataVerified();
+                                          messageApi.success('已标记「期初数据已核对」');
+                                        }
+                                        setRealCounts((prev) => ({
+                                          ...prev,
+                                          initial_data_verified: isCompleted ? 0 : 1,
+                                        }));
+                                        setRealCountsRefreshKey((k) => k + 1);
+                                      } catch (err: any) {
+                                        messageApi.error(err?.message || '操作失败');
+                                      }
+                                    }}
+                                    style={{
+                                      borderRadius: 25,
+                                      paddingInline: 36,
+                                      minWidth: 160,
+                                      fontSize: 16,
+                                      height: 50,
+                                      fontWeight: 600,
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      ...(isCompleted
+                                        ? {
+                                            background: token.colorSuccessBg,
+                                            border: `1px solid ${token.colorSuccessBorder}`,
+                                            color: token.colorSuccess,
+                                            boxShadow: 'none',
+                                          }
+                                        : {
+                                            background: `linear-gradient(90deg, #1890ff 0%, #0070f3 100%)`,
+                                            border: 'none',
+                                            boxShadow: `0 6px 16px rgba(0, 112, 243, 0.3)`,
+                                            color: '#fff',
+                                          }),
+                                    }}
+                                  >
+                                    {isCompleted ? '已核对（点击撤销）' : '标记已核对'}
+                                  </Button>
+                                ) : item.jump_path && (
                                   <Button
                                     type={isCompleted ? 'default' : 'primary'}
                                     size="large"

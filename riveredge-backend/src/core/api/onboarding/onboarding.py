@@ -269,6 +269,57 @@ async def get_system_go_live_guide(
         )
 
 
+@router.get("/counts")
+async def get_onboarding_counts(
+    scope: str = Query("all", description="范围：system_launch | implementer | all"),
+    force_refresh: bool = Query(False, description="跳过 30s 进程内缓存强制重算"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    聚合返回上线/设定向导各 check_key 的存在性（EXISTS 0/1）+ 租户阶段标记
+
+    Args:
+        scope: 范围筛选，默认 all；前端按 Tab 选择以减少不必要查询
+        force_refresh: 跳过 30s 进程内缓存
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+
+    Returns:
+        Dict[str, Any]: {"scope", "counts": {check_key: 0|1}, "flags": {...}, "cached": bool, "generated_at": iso}
+    """
+    try:
+        data = await OnboardingService.get_onboarding_counts(
+            tenant_id=tenant_id, scope=scope, force_refresh=force_refresh
+        )
+        return {"success": True, "data": data}
+    except Exception as e:
+        logger.error(f"获取上线向导聚合计数失败: tenant={tenant_id}, scope={scope}, 错误: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取上线向导聚合计数失败: {str(e)}",
+        )
+
+
+@router.delete("/go-live-assistant/initial-data-verified")
+async def revoke_initial_data_verified(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """撤销「期初数据已核对」标记（误点回滚用）"""
+    try:
+        await OnboardingService.revoke_initial_data_verified(tenant_id=tenant_id)
+        return {"success": True, "message": "已撤销期初数据核对标记"}
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.error(f"撤销期初数据核对失败: {tenant_id}, 错误: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"撤销期初数据核对失败: {str(e)}",
+        )
+
+
 @router.get("/quick-start")
 async def get_quick_start_tutorial(
     current_user: User = Depends(soil_get_current_user),

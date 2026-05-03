@@ -814,6 +814,313 @@ class OnboardingService:
             "all_completed": all_required_completed,
         }
 
+    # ---------------- 进程内 TTL 缓存（不依赖 Redis） ----------------
+    # 仅缓存「上线向导聚合计数」结果；TTL 30s，按 (tenant_id, scope) 分桶。
+    # 所有写入入口（mark_initial_data_verified 等）都会主动失效本地缓存。
+    _COUNTS_CACHE_TTL_S = 30.0
+    _counts_cache: Dict[tuple, tuple] = {}  # {(tenant_id, scope): (expires_at, payload)}
+
+    @classmethod
+    def _counts_cache_get(cls, tenant_id: int, scope: str):
+        import time
+
+        entry = cls._counts_cache.get((tenant_id, scope))
+        if not entry:
+            return None
+        expires_at, payload = entry
+        if expires_at < time.time():
+            cls._counts_cache.pop((tenant_id, scope), None)
+            return None
+        return payload
+
+    @classmethod
+    def _counts_cache_set(cls, tenant_id: int, scope: str, payload: Dict[str, Any]) -> None:
+        import time
+
+        cls._counts_cache[(tenant_id, scope)] = (
+            time.time() + cls._COUNTS_CACHE_TTL_S,
+            payload,
+        )
+
+    @classmethod
+    def invalidate_counts_cache(cls, tenant_id: Optional[int] = None) -> None:
+        """主动失效缓存：组织维度或全量。在写入入口调用，避免脏读。"""
+        if tenant_id is None:
+            cls._counts_cache.clear()
+            return
+        for k in [k for k in cls._counts_cache if k[0] == tenant_id]:
+            cls._counts_cache.pop(k, None)
+
+    @staticmethod
+    async def get_onboarding_counts(
+        tenant_id: int,
+        scope: str = "all",
+        force_refresh: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        聚合获取系统上线 / 系统设定向导各项的「存在性」与租户阶段标记
+        - 用 PostgreSQL 的 EXISTS 替换 COUNT，单值 0/1，避免大表 count 拖慢
+        - asyncio.gather 并行 ~30 项查询；返回租户级 flags（如 initial_data_verified）
+        - 内置 30s 进程内 TTL 缓存（非 Redis），写操作通过 invalidate_counts_cache 失效
+
+        Args:
+            tenant_id: 组织ID
+            scope: 范围 system_launch | implementer | all
+            force_refresh: 跳过缓存强制重算
+
+        Returns:
+            Dict[str, Any]: {"scope", "counts": {check_key: 0|1}, "flags": {...}, "cached": bool, "generated_at": iso}
+        """
+        import asyncio
+        import time
+        from datetime import datetime, timezone
+
+        scope = (scope or "all").lower()
+        if scope not in ("system_launch", "system", "implementer", "system_setup", "all"):
+            scope = "all"
+        want_system = scope in ("system_launch", "system", "all")
+        want_implementer = scope in ("implementer", "system_setup", "all")
+
+        if not force_refresh:
+            cached = OnboardingService._counts_cache_get(tenant_id, scope)
+            if cached is not None:
+                return {**cached, "cached": True}
+
+        async def _safe_exists(qs) -> int:
+            """对查询集做 EXISTS（内部 LIMIT 1），返回 0/1。"""
+            try:
+                return 1 if await qs.exists() else 0
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(f"onboarding exists check failed: {exc}")
+                return 0
+
+        async def _safe_user_business_exists(t_id: int) -> int:
+            """是否存在「除超管外的业务用户」。优先用 is_tenant_admin=False，回退到 total>1。"""
+            try:
+                from infra.models.user import User as _User
+                if await _User.filter(
+                    tenant_id=t_id, is_tenant_admin=False, deleted_at__isnull=True
+                ).exists():
+                    return 1
+                return 0
+            except Exception as exc:  # noqa: BLE001 - 字段缺失时按 total>1 兜底
+                logger.warning(f"user business exists fallback: {exc}")
+                try:
+                    from infra.models.user import User as _User
+                    return 1 if (await _User.filter(tenant_id=t_id).count()) > 1 else 0
+                except Exception:
+                    return 0
+
+        # 租户级 flags（蓝图功能已下线；保留期初核对、init_completed）
+        flags: Dict[str, bool] = {
+            "init_completed": False,
+            "initial_data_verified": False,
+        }
+        try:
+            from infra.models.tenant import Tenant
+            tenant = await Tenant.get_or_none(id=tenant_id)
+            settings = (tenant.settings if tenant else None) or {}
+            flags["init_completed"] = bool(settings.get("init_completed"))
+            flags["initial_data_verified"] = bool(settings.get("initial_data_verified"))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"load tenant settings flags failed: {exc}")
+
+        tasks: Dict[str, asyncio.Task] = {}
+
+        if want_system:
+            from apps.master_data.models.customer import Customer
+            from apps.master_data.models.supplier import Supplier
+            from apps.master_data.models.material import Material, BOM
+            from apps.master_data.models.warehouse import Warehouse, StorageArea, StorageLocation
+            from apps.master_data.models.process import DefectType, Operation, ProcessRoute, SOP
+            from apps.master_data.models.factory import (
+                Plant, Workshop, ProductionLine, Workstation, WorkCenter, WorkGroup,
+            )
+            from core.models.material_variant_attribute import MaterialVariantAttributeDefinition
+            from core.models.batch_rule import BatchRule
+            from core.models.serial_rule import SerialRule
+            from apps.kuaizhizao.models.sales_order import SalesOrder
+            from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+
+            def _add(key: str, qs):
+                tasks[key] = asyncio.ensure_future(_safe_exists(qs))
+
+            _add("partner_customers", Customer.filter(tenant_id=tenant_id, deleted_at__isnull=True))
+            _add("partner_suppliers", Supplier.filter(tenant_id=tenant_id, deleted_at__isnull=True))
+            _add("material_main", Material.filter(tenant_id=tenant_id, deleted_at__isnull=True))
+            _add("material_variants", MaterialVariantAttributeDefinition.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True
+            ))
+            _add("material_batch_rules", BatchRule.filter(tenant_id=tenant_id, deleted_at__isnull=True))
+            _add("material_serial_rules", SerialRule.filter(tenant_id=tenant_id, deleted_at__isnull=True))
+            _add("warehouse_main", Warehouse.filter(tenant_id=tenant_id, deleted_at__isnull=True))
+            _add("warehouse_areas", StorageArea.filter(tenant_id=tenant_id, deleted_at__isnull=True))
+            _add("warehouse_locations", StorageLocation.filter(tenant_id=tenant_id, deleted_at__isnull=True))
+            _add("process_bom", BOM.filter(tenant_id=tenant_id, deleted_at__isnull=True))
+            _add("process_operations", Operation.filter(tenant_id=tenant_id, deleted_at__isnull=True))
+            _add("process_routes", ProcessRoute.filter(tenant_id=tenant_id, deleted_at__isnull=True))
+            _add("process_defects", DefectType.filter(tenant_id=tenant_id, deleted_at__isnull=True))
+            _add("process_sop", SOP.filter(tenant_id=tenant_id, deleted_at__isnull=True))
+            _add("factory_plants", Plant.filter(tenant_id=tenant_id, deleted_at__isnull=True))
+            _add("factory_workshops", Workshop.filter(tenant_id=tenant_id, deleted_at__isnull=True))
+            _add("factory_lines", ProductionLine.filter(tenant_id=tenant_id, deleted_at__isnull=True))
+            _add("factory_stations", Workstation.filter(tenant_id=tenant_id, deleted_at__isnull=True))
+            _add("factory_work_centers", WorkCenter.filter(tenant_id=tenant_id, deleted_at__isnull=True))
+            _add("factory_work_groups", WorkGroup.filter(tenant_id=tenant_id, deleted_at__isnull=True))
+            _add("__sales_order__", SalesOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True))
+            _add("__purchase_order__", PurchaseOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True))
+
+            # 业务用户存在性（独立查询，处理超管字段差异）
+            tasks["__user_business__"] = asyncio.ensure_future(_safe_user_business_exists(tenant_id))
+
+        if want_implementer:
+            from core.models.department import Department
+            from core.models.position import Position
+            from core.models.role import Role
+            from core.models.code_rule import CodeRule
+            from core.models.data_dictionary import DataDictionary
+            from core.models.language import Language
+            from core.models.custom_field import CustomField
+            from core.models.menu import Menu
+            from core.models.approval_process import ApprovalProcess
+            from core.models.message_template import MessageTemplate
+            from core.models.print_template import PrintTemplate
+            from core.models.file import File as CoreFile
+            from core.models.integration_config import IntegrationConfig
+            from core.models.dataset import Dataset
+            from core.models.operation_log import OperationLog
+            from core.models.login_log import LoginLog
+            from core.models.data_backup import DataBackup
+            from core.models.application import Application
+
+            APPLICATION_TYPES = (
+                "feishu", "dingtalk", "wecom",
+                "sap", "kingdee", "yonyou", "dsc", "inspur", "digiwin_e10",
+                "grasp_erp", "super_erp", "chanjet_tplus", "kingdee_kis",
+                "oracle_netsuite", "erpnext", "odoo", "sunlike_erp",
+                "teamcenter", "windchill", "caxa", "sanpin_plm", "sunlike_plm", "sipm", "inteplm",
+                "salesforce", "xiaoshouyi", "fenxiang", "qidian", "supra_crm",
+                "weaver", "seeyon", "landray", "cloudhub", "tongda_oa",
+                "rootcloud", "casicloud", "alicloud_iot", "huaweicloud_iot", "thingsboard", "jetlinks",
+                "flux_wms", "kejian_wms", "digiwin_wms", "openwms",
+            )
+            DATA_SOURCE_TYPES = ("postgresql", "mysql", "mongodb", "api")
+
+            def _add_imp(key: str, qs):
+                tasks[key] = asyncio.ensure_future(_safe_exists(qs))
+
+            _add_imp("imp_dept", Department.filter(tenant_id=tenant_id, deleted_at__isnull=True))
+            _add_imp("imp_post", Position.filter(tenant_id=tenant_id, deleted_at__isnull=True))
+            _add_imp("imp_role", Role.filter(tenant_id=tenant_id, deleted_at__isnull=True))
+            _add_imp("imp_rule", CodeRule.filter(tenant_id=tenant_id, deleted_at__isnull=True))
+            _add_imp("imp_dict", DataDictionary.filter(tenant_id=tenant_id, deleted_at__isnull=True))
+            _add_imp("imp_lang", Language.filter(tenant_id=tenant_id, deleted_at__isnull=True))
+            _add_imp("imp_field", CustomField.filter(tenant_id=tenant_id, deleted_at__isnull=True))
+            _add_imp("imp_menu", Menu.filter(tenant_id=tenant_id, deleted_at__isnull=True))
+            _add_imp("imp_workflow", ApprovalProcess.filter(tenant_id=tenant_id, deleted_at__isnull=True))
+            _add_imp("imp_msg", MessageTemplate.filter(tenant_id=tenant_id, deleted_at__isnull=True))
+            _add_imp("imp_print", PrintTemplate.filter(tenant_id=tenant_id, deleted_at__isnull=True))
+            _add_imp("imp_file", CoreFile.filter(tenant_id=tenant_id, deleted_at__isnull=True))
+            _add_imp("imp_api", IntegrationConfig.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True, type__in=DATA_SOURCE_TYPES,
+            ))
+            _add_imp("imp_connector", IntegrationConfig.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True, type__in=APPLICATION_TYPES,
+            ))
+            _add_imp("imp_dataset", Dataset.filter(tenant_id=tenant_id, deleted_at__isnull=True))
+            _add_imp("imp_audit", OperationLog.filter(tenant_id=tenant_id))
+            _add_imp("imp_login", LoginLog.filter(tenant_id=tenant_id))
+            _add_imp("imp_backup", DataBackup.filter(tenant_id=tenant_id))
+            _add_imp("imp_app_center", Application.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True, is_installed=True,
+            ))
+
+            if "__user_business__" not in tasks:
+                tasks["__user_business__"] = asyncio.ensure_future(
+                    _safe_user_business_exists(tenant_id)
+                )
+
+        if tasks:
+            await asyncio.gather(*tasks.values(), return_exceptions=False)
+        results: Dict[str, int] = {k: t.result() for k, t in tasks.items()}
+
+        counts: Dict[str, int] = {}
+
+        if want_system:
+            counts["partner_customers"] = results.get("partner_customers", 0)
+            counts["partner_suppliers"] = results.get("partner_suppliers", 0)
+            counts["partner_data"] = (
+                1 if (counts["partner_customers"] or counts["partner_suppliers"]) else 0
+            )
+
+            counts["material_main"] = results.get("material_main", 0)
+            counts["material_data"] = counts["material_main"]
+            counts["material_variants"] = results.get("material_variants", 0)
+            counts["material_batch_rules"] = results.get("material_batch_rules", 0)
+            counts["material_serial_rules"] = results.get("material_serial_rules", 0)
+
+            counts["warehouse_main"] = results.get("warehouse_main", 0)
+            counts["warehouse_data"] = counts["warehouse_main"]
+            counts["warehouse_areas"] = results.get("warehouse_areas", 0)
+            counts["warehouse_locations"] = results.get("warehouse_locations", 0)
+
+            counts["process_bom"] = results.get("process_bom", 0)
+            counts["bom_config"] = counts["process_bom"]
+            counts["process_operations"] = results.get("process_operations", 0)
+            counts["process_routes"] = results.get("process_routes", 0)
+            counts["process_routing"] = counts["process_routes"]
+            counts["process_defects"] = results.get("process_defects", 0)
+            counts["process_sop"] = results.get("process_sop", 0)
+
+            counts["factory_plants"] = results.get("factory_plants", 0)
+            counts["factory_workshops"] = results.get("factory_workshops", 0)
+            counts["factory_lines"] = results.get("factory_lines", 0)
+            counts["factory_stations"] = results.get("factory_stations", 0)
+            counts["factory_work_centers"] = results.get("factory_work_centers", 0)
+            counts["factory_work_groups"] = results.get("factory_work_groups", 0)
+            counts["factory_data"] = (
+                1
+                if (
+                    counts["factory_workshops"]
+                    or counts["factory_lines"]
+                    or counts["factory_stations"]
+                )
+                else 0
+            )
+
+            counts["order_data"] = (
+                1 if (results.get("__sales_order__", 0) or results.get("__purchase_order__", 0)) else 0
+            )
+            counts["first_order_run"] = counts["order_data"]
+
+            # 期初核对：把 flag 也当作存在性数据写回，前端通过 realCounts['initial_data_verified'] > 0 判定完成
+            counts["initial_data_verified"] = 1 if flags["initial_data_verified"] else 0
+
+        if "__user_business__" in results:
+            counts["user_data"] = results["__user_business__"]
+            if want_implementer:
+                counts["imp_user"] = counts["user_data"]
+
+        if want_implementer:
+            for key in (
+                "imp_dept", "imp_post", "imp_role",
+                "imp_rule", "imp_dict", "imp_lang", "imp_field",
+                "imp_menu", "imp_workflow", "imp_msg", "imp_print",
+                "imp_file", "imp_api", "imp_connector", "imp_dataset",
+                "imp_audit", "imp_login", "imp_backup", "imp_app_center",
+            ):
+                counts[key] = results.get(key, 0)
+
+        payload = {
+            "scope": scope,
+            "counts": counts,
+            "flags": flags,
+            "cached": False,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        OnboardingService._counts_cache_set(tenant_id, scope, payload)
+        return payload
+
     @staticmethod
     async def mark_blueprint_confirmed(tenant_id: int) -> None:
         """标记业务蓝图已确认"""
@@ -826,6 +1133,7 @@ class OnboardingService:
         settings["blueprint_confirmed"] = True
         tenant.settings = settings
         await tenant.save(update_fields=["settings"])
+        OnboardingService.invalidate_counts_cache(tenant_id)
 
     @staticmethod
     async def mark_initial_data_verified(tenant_id: int) -> None:
@@ -839,6 +1147,22 @@ class OnboardingService:
         settings["initial_data_verified"] = True
         tenant.settings = settings
         await tenant.save(update_fields=["settings"])
+        OnboardingService.invalidate_counts_cache(tenant_id)
+
+    @staticmethod
+    async def revoke_initial_data_verified(tenant_id: int) -> None:
+        """撤销「期初数据已核对」标记（误点回滚用）"""
+        from infra.models.tenant import Tenant
+
+        tenant = await Tenant.get_or_none(id=tenant_id)
+        if not tenant:
+            raise NotFoundError("组织不存在")
+        settings = dict(tenant.settings or {})
+        if settings.get("initial_data_verified"):
+            settings["initial_data_verified"] = False
+            tenant.settings = settings
+            await tenant.save(update_fields=["settings"])
+            OnboardingService.invalidate_counts_cache(tenant_id)
 
     @staticmethod
     async def get_role_onboarding_guide(

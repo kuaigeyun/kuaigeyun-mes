@@ -205,3 +205,39 @@ export async function markInitialDataVerified(): Promise<void> {
     method: 'PUT',
   });
 }
+
+/** 上线向导聚合计数响应（后端单次并行 EXISTS + 30s 进程内 TTL 缓存） */
+export interface OnboardingCountsResponse {
+  scope: 'system_launch' | 'implementer' | 'all' | string;
+  /** check_key -> 0/1（EXISTS 结果） */
+  counts: Record<string, number>;
+  /** 租户阶段标记，例如 init_completed / initial_data_verified */
+  flags?: Record<string, boolean>;
+  cached?: boolean;
+  generated_at?: string;
+}
+
+/**
+ * 一次性聚合获取系统上线 / 系统设定向导各 check_key 的存在性 + 阶段标记
+ * scope 可选 system_launch | implementer | all（默认 all）
+ * forceRefresh 跳过后端 30s 缓存
+ */
+export async function getOnboardingCounts(
+  scope: 'system_launch' | 'implementer' | 'all' = 'all',
+  forceRefresh = false
+): Promise<OnboardingCountsResponse> {
+  const params = new URLSearchParams({ scope });
+  if (forceRefresh) params.set('force_refresh', 'true');
+  const response = await apiRequest<{ success: boolean; data: OnboardingCountsResponse }>(
+    `/core/onboarding/counts?${params.toString()}`,
+    { method: 'GET' }
+  );
+  return response.data || (response as any);
+}
+
+/** 撤销「期初数据已核对」标记（误点回滚） */
+export async function revokeInitialDataVerified(): Promise<void> {
+  await apiRequest('/core/onboarding/go-live-assistant/initial-data-verified', {
+    method: 'DELETE',
+  });
+}
