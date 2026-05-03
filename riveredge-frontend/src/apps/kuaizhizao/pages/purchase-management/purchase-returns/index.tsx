@@ -497,7 +497,7 @@ const PurchaseReturnsPage: React.FC = () => {
         />
       </ListPageTemplate>
 
-      <DetailDrawerTemplate<PurchaseReturnDetail>
+      <DetailDrawerTemplate
         title={`采购退货单详情${returnDetail?.return_code ? ` - ${returnDetail.return_code}` : ''}`}
         open={detailDrawerVisible}
         onClose={() => {

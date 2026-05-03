@@ -769,7 +769,7 @@ export const OutsourceOrdersTable: React.FC = () => {
         </FormModalTemplate>
       )}
 
-      <DetailDrawerTemplate<OutsourceOrder>
+      <DetailDrawerTemplate
         title={`工序委外详情${outsourceOrderDetail?.code ? ` - ${outsourceOrderDetail.code}` : ''}`}
         open={detailDrawerVisible}
         onClose={() => {

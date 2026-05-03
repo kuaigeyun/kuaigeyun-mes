@@ -36,6 +36,7 @@ export type { FormModalTemplateProps } from './FormModalTemplate'
 // 详情 Drawer 模板
 export { DetailDrawerTemplate } from './DetailDrawerTemplate'
 export type { DetailDrawerTemplateProps } from './DetailDrawerTemplate'
+export { detailDrawerDescriptionItems } from './detailDrawerDescriptionItems'
 export { DetailDrawerSection } from './DetailDrawerSection'
 export type { DetailDrawerSectionProps } from './DetailDrawerSection'
 export { DetailDrawerActions } from './DetailDrawerActions'
@@ -100,4 +101,6 @@ export type { IframePageTemplateProps } from './IframePageTemplate'
 
 // 布局常量配置
 export * from './constants'
+export { getDrawerFloatingWrapperStyle } from './drawerFloatingChrome'
+export type { DrawerFloatingChromeToken } from './drawerFloatingChrome'
 export { WAREHOUSE_DETAIL_TABLE_STYLES } from './warehouse-detail-table-styles'

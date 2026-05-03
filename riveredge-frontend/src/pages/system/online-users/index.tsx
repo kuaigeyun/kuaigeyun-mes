@@ -8,10 +8,10 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Card, Avatar, Tag, Space, Popconfirm, Button, Badge, Typography, Tooltip, theme } from 'antd';
+import { App, Avatar, Badge, Button, Card, Descriptions, Popconfirm, Space, Tag, Tooltip, Typography, theme } from 'antd';
 import { EyeOutlined, BarChartOutlined, LogoutOutlined, UserOutlined, ClockCircleOutlined, GlobalOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../components/layout-templates';
+import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../components/layout-templates';
 import {
   getOnlineUsers,
   getOnlineUserStats,
@@ -471,7 +471,7 @@ const OnlineUsersPage: React.FC = () => {
       </ListPageTemplate>
 
       {/* 用户详情 Drawer */}
-      <DetailDrawerTemplate<OnlineUser>
+      <DetailDrawerTemplate
         title={t('pages.system.onlineUsers.detailTitle')}
         open={detailDrawerVisible}
         onClose={() => {
@@ -480,7 +480,9 @@ const OnlineUsersPage: React.FC = () => {
         }}
         width={DRAWER_CONFIG.LARGE_WIDTH}
         dataSource={currentUserInfo || {}}
-        columns={detailColumns}
+        basic={currentUserInfo ? (
+            <Descriptions column={2} items={detailDrawerDescriptionItems(detailColumns, currentUserInfo)} />
+          ) : undefined}
       />
     </>
   );

@@ -7,13 +7,13 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
+import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography } from 'antd';
 import { downloadFile } from '../../../../../utils';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
 import { workstationApi, productionLineApi } from '../../../services/factory';
 import { WorkstationFormModal } from '../../../components/WorkstationFormModal';
 import { QRCodeGenerator } from '../../../../../components/qrcode';
@@ -787,14 +787,11 @@ const WorkstationsPage: React.FC = () => {
       </ListPageTemplate>
 
       {/* 详情 Drawer */}
-      <DetailDrawerTemplate<Workstation>
+      <DetailDrawerTemplate
         title={t('app.master-data.workstations.detailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
-        dataSource={workstationDetail || undefined}
-        columns={detailColumns}
         loading={detailLoading}
-        column={1}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
         styles={{ body: { position: 'relative' } }}
       >
@@ -824,7 +821,10 @@ const WorkstationsPage: React.FC = () => {
               qrcodeType="EQ"
               size={8}
               noCard={true}
-            />
+        basic={workstationDetail ? (
+            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, workstationDetail)} />
+          ) : undefined}
+      />
           </div>
         )}
       </DetailDrawerTemplate>

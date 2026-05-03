@@ -682,7 +682,7 @@ const SOPPage: React.FC = () => {
         onExport={handleExport}
       />
 
-      <DetailDrawerTemplate<SOP>
+      <DetailDrawerTemplate
         title="SOP详情"
         open={drawerVisible}
         onClose={handleCloseDetail}

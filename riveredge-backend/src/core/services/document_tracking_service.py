@@ -177,6 +177,126 @@ class DocumentTrackingService:
             return flags
         return flags
 
+    async def _append_relations_from_rel_data(
+        self,
+        tenant_id: int,
+        relations: Dict[str, List[Dict]],
+        rel_data: Dict[str, Any],
+        *,
+        include_upstream: bool = True,
+        include_downstream: bool = True,
+    ) -> None:
+        """
+        将 DocumentRelationService.get_document_relations 返回的上/下游列表合并进 relations，
+        按 (type, id) 去重并补齐 flags。
+        """
+        if include_upstream:
+            existing_u = {(r["type"], r["id"]) for r in relations["upstream"]}
+            for u in rel_data.get("upstream_documents") or []:
+                dt = u.get("document_type")
+                did = u.get("document_id")
+                if not dt or did is None:
+                    continue
+                key = (dt, did)
+                if key in existing_u:
+                    continue
+                rel_flags = await self._resolve_relation_flags(
+                    tenant_id=tenant_id,
+                    relation_type=dt,
+                    relation_id=did,
+                    relation_created_at=None,
+                    relation_code=u.get("document_code"),
+                )
+                relations["upstream"].append({
+                    "type": dt,
+                    "id": did,
+                    "code": u.get("document_code"),
+                    "name": u.get("document_name"),
+                    "mode": None,
+                    "is_auto_created": False,
+                    "is_deleted": rel_flags["is_deleted"],
+                    "is_changed_after_link": rel_flags["is_changed_after_link"],
+                })
+                existing_u.add(key)
+        if include_downstream:
+            existing_d = {(r["type"], r["id"]) for r in relations["downstream"]}
+            for d in rel_data.get("downstream_documents") or []:
+                dt = d.get("document_type")
+                did = d.get("document_id")
+                if not dt or did is None:
+                    continue
+                key = (dt, did)
+                if key in existing_d:
+                    continue
+                rel_flags = await self._resolve_relation_flags(
+                    tenant_id=tenant_id,
+                    relation_type=dt,
+                    relation_id=did,
+                    relation_created_at=None,
+                    relation_code=d.get("document_code"),
+                )
+                relations["downstream"].append({
+                    "type": dt,
+                    "id": did,
+                    "code": d.get("document_code"),
+                    "name": d.get("document_name"),
+                    "mode": None,
+                    "is_auto_created": False,
+                    "is_deleted": rel_flags["is_deleted"],
+                    "is_changed_after_link": rel_flags["is_changed_after_link"],
+                })
+                existing_d.add(key)
+
+    @staticmethod
+    def _build_relations_graph(
+        document_type: str,
+        document_id: int,
+        document_code: Optional[str],
+        relations: Dict[str, List[Dict]],
+    ) -> Dict[str, Any]:
+        """
+        由扁平 upstream/downstream 生成 nodes/edges，便于前端桑基或 DAG 可视化；
+        边语义：upstream 为「来源单据 → 当前单」，downstream 为「当前单 → 下游单据」。
+        """
+        cur_key = f"{document_type}-{document_id}"
+        nodes: Dict[str, Dict[str, Any]] = {}
+
+        def upsert_node(key: str, dt: str, did: int, code: Optional[str], name: Optional[str], role: str) -> None:
+            if key not in nodes:
+                nodes[key] = {
+                    "id": key,
+                    "document_type": dt,
+                    "document_id": did,
+                    "code": code,
+                    "name": name,
+                    "role": role,
+                }
+                return
+            prev_role = nodes[key]["role"]
+            if prev_role != role:
+                nodes[key]["role"] = "related"
+            if code and not nodes[key].get("code"):
+                nodes[key]["code"] = code
+            if name and not nodes[key].get("name"):
+                nodes[key]["name"] = name
+
+        upsert_node(cur_key, document_type, document_id, document_code, None, "current")
+        for r in relations["upstream"]:
+            k = f"{r['type']}-{r['id']}"
+            upsert_node(k, r["type"], r["id"], r.get("code"), r.get("name"), "upstream")
+        for r in relations["downstream"]:
+            k = f"{r['type']}-{r['id']}"
+            upsert_node(k, r["type"], r["id"], r.get("code"), r.get("name"), "downstream")
+
+        edges: List[Dict[str, str]] = []
+        for r in relations["upstream"]:
+            k = f"{r['type']}-{r['id']}"
+            edges.append({"from": k, "to": cur_key, "direction": "upstream"})
+        for r in relations["downstream"]:
+            k = f"{r['type']}-{r['id']}"
+            edges.append({"from": cur_key, "to": k, "direction": "downstream"})
+        return {"nodes": list(nodes.values()), "edges": edges}
+
     async def get_document_tracking(
         self,
         tenant_id: int,
@@ -192,7 +312,7 @@ class DocumentTrackingService:
             document_id: 单据ID
 
         Returns:
-            Dict: { document_type, document_id, document_code, timeline, relations }
+            Dict: { document_type, document_id, document_code, timeline, relations, relations_graph }
         """
         document_code, doc_meta = await self._resolve_document_meta(tenant_id, document_type, document_id)
 
@@ -411,33 +531,11 @@ class DocumentTrackingService:
                 rel_data = await rel_svc.get_document_relations(
                     tenant_id, document_type, document_id
                 )
-                existing = {(r["type"], r["id"]) for r in relations["upstream"]}
-                for u in rel_data.get("upstream_documents") or []:
-                    dt = u.get("document_type")
-                    did = u.get("document_id")
-                    if not dt or did is None:
-                        continue
-                    key = (dt, did)
-                    if key in existing:
-                        continue
-                    rel_flags = await self._resolve_relation_flags(
-                        tenant_id=tenant_id,
-                        relation_type=dt,
-                        relation_id=did,
-                        relation_created_at=None,
-                        relation_code=u.get("document_code"),
-                    )
-                    relations["upstream"].append({
-                        "type": dt,
-                        "id": did,
-                        "code": u.get("document_code"),
-                        "name": u.get("document_name"),
-                        "mode": None,
-                        "is_auto_created": False,
-                        "is_deleted": rel_flags["is_deleted"],
-                        "is_changed_after_link": rel_flags["is_changed_after_link"],
-                    })
-                    existing.add(key)
+                await self._append_relations_from_rel_data(
+                    tenant_id, relations, rel_data,
+                    include_upstream=True,
+                    include_downstream=False,
+                )
             except Exception:
                 pass
 
@@ -458,60 +556,11 @@ class DocumentTrackingService:
                 rel_data = await rel_svc.get_document_relations(
                     tenant_id, document_type, document_id
                 )
-                existing_u = {(r["type"], r["id"]) for r in relations["upstream"]}
-                for u in rel_data.get("upstream_documents") or []:
-                    dt = u.get("document_type")
-                    did = u.get("document_id")
-                    if not dt or did is None:
-                        continue
-                    key = (dt, did)
-                    if key in existing_u:
-                        continue
-                    rel_flags = await self._resolve_relation_flags(
-                        tenant_id=tenant_id,
-                        relation_type=dt,
-                        relation_id=did,
-                        relation_created_at=None,
-                        relation_code=u.get("document_code"),
-                    )
-                    relations["upstream"].append({
-                        "type": dt,
-                        "id": did,
-                        "code": u.get("document_code"),
-                        "name": u.get("document_name"),
-                        "mode": None,
-                        "is_auto_created": False,
-                        "is_deleted": rel_flags["is_deleted"],
-                        "is_changed_after_link": rel_flags["is_changed_after_link"],
-                    })
-                    existing_u.add(key)
-                existing_d = {(r["type"], r["id"]) for r in relations["downstream"]}
-                for d in rel_data.get("downstream_documents") or []:
-                    dt = d.get("document_type")
-                    did = d.get("document_id")
-                    if not dt or did is None:
-                        continue
-                    key = (dt, did)
-                    if key in existing_d:
-                        continue
-                    rel_flags = await self._resolve_relation_flags(
-                        tenant_id=tenant_id,
-                        relation_type=dt,
-                        relation_id=did,
-                        relation_created_at=None,
-                        relation_code=d.get("document_code"),
-                    )
-                    relations["downstream"].append({
-                        "type": dt,
-                        "id": did,
-                        "code": d.get("document_code"),
-                        "name": d.get("document_name"),
-                        "mode": None,
-                        "is_auto_created": False,
-                        "is_deleted": rel_flags["is_deleted"],
-                        "is_changed_after_link": rel_flags["is_changed_after_link"],
-                    })
-                    existing_d.add(key)
+                await self._append_relations_from_rel_data(
+                    tenant_id, relations, rel_data,
+                    include_upstream=True,
+                    include_downstream=True,
+                )
             except Exception:
                 pass
 
@@ -524,33 +573,11 @@ class DocumentTrackingService:
                 rel_data = await rel_svc.get_document_relations(
                     tenant_id, document_type, document_id
                 )
-                existing = {(r["type"], r["id"]) for r in relations["upstream"]}
-                for u in rel_data.get("upstream_documents") or []:
-                    dt = u.get("document_type")
-                    did = u.get("document_id")
-                    if not dt or did is None:
-                        continue
-                    key = (dt, did)
-                    if key in existing:
-                        continue
-                    rel_flags = await self._resolve_relation_flags(
-                        tenant_id=tenant_id,
-                        relation_type=dt,
-                        relation_id=did,
-                        relation_created_at=None,
-                        relation_code=u.get("document_code"),
-                    )
-                    relations["upstream"].append({
-                        "type": dt,
-                        "id": did,
-                        "code": u.get("document_code"),
-                        "name": u.get("document_name"),
-                        "mode": None,
-                        "is_auto_created": False,
-                        "is_deleted": rel_flags["is_deleted"],
-                        "is_changed_after_link": rel_flags["is_changed_after_link"],
-                    })
-                    existing.add(key)
+                await self._append_relations_from_rel_data(
+                    tenant_id, relations, rel_data,
+                    include_upstream=True,
+                    include_downstream=False,
+                )
             except Exception:
                 pass
 
@@ -563,60 +590,11 @@ class DocumentTrackingService:
                 rel_data = await rel_svc.get_document_relations(
                     tenant_id, document_type, document_id
                 )
-                existing = {(r["type"], r["id"]) for r in relations["upstream"]}
-                for u in rel_data.get("upstream_documents") or []:
-                    dt = u.get("document_type")
-                    did = u.get("document_id")
-                    if not dt or did is None:
-                        continue
-                    key = (dt, did)
-                    if key in existing:
-                        continue
-                    rel_flags = await self._resolve_relation_flags(
-                        tenant_id=tenant_id,
-                        relation_type=dt,
-                        relation_id=did,
-                        relation_created_at=None,
-                        relation_code=u.get("document_code"),
-                    )
-                    relations["upstream"].append({
-                        "type": dt,
-                        "id": did,
-                        "code": u.get("document_code"),
-                        "name": u.get("document_name"),
-                        "mode": None,
-                        "is_auto_created": False,
-                        "is_deleted": rel_flags["is_deleted"],
-                        "is_changed_after_link": rel_flags["is_changed_after_link"],
-                    })
-                    existing.add(key)
-                existing_d = {(r["type"], r["id"]) for r in relations["downstream"]}
-                for d in rel_data.get("downstream_documents") or []:
-                    dt = d.get("document_type")
-                    did = d.get("document_id")
-                    if not dt or did is None:
-                        continue
-                    key = (dt, did)
-                    if key in existing_d:
-                        continue
-                    rel_flags = await self._resolve_relation_flags(
-                        tenant_id=tenant_id,
-                        relation_type=dt,
-                        relation_id=did,
-                        relation_created_at=None,
-                        relation_code=d.get("document_code"),
-                    )
-                    relations["downstream"].append({
-                        "type": dt,
-                        "id": did,
-                        "code": d.get("document_code"),
-                        "name": d.get("document_name"),
-                        "mode": None,
-                        "is_auto_created": False,
-                        "is_deleted": rel_flags["is_deleted"],
-                        "is_changed_after_link": rel_flags["is_changed_after_link"],
-                    })
-                    existing_d.add(key)
+                await self._append_relations_from_rel_data(
+                    tenant_id, relations, rel_data,
+                    include_upstream=True,
+                    include_downstream=True,
+                )
             except Exception:
                 pass
 
@@ -629,33 +607,11 @@ class DocumentTrackingService:
                 rel_data = await rel_svc.get_document_relations(
                     tenant_id, document_type, document_id
                 )
-                existing = {(r["type"], r["id"]) for r in relations["upstream"]}
-                for u in rel_data.get("upstream_documents") or []:
-                    dt = u.get("document_type")
-                    did = u.get("document_id")
-                    if not dt or did is None:
-                        continue
-                    key = (dt, did)
-                    if key in existing:
-                        continue
-                    rel_flags = await self._resolve_relation_flags(
-                        tenant_id=tenant_id,
-                        relation_type=dt,
-                        relation_id=did,
-                        relation_created_at=None,
-                        relation_code=u.get("document_code"),
-                    )
-                    relations["upstream"].append({
-                        "type": dt,
-                        "id": did,
-                        "code": u.get("document_code"),
-                        "name": u.get("document_name"),
-                        "mode": None,
-                        "is_auto_created": False,
-                        "is_deleted": rel_flags["is_deleted"],
-                        "is_changed_after_link": rel_flags["is_changed_after_link"],
-                    })
-                    existing.add(key)
+                await self._append_relations_from_rel_data(
+                    tenant_id, relations, rel_data,
+                    include_upstream=True,
+                    include_downstream=False,
+                )
             except Exception:
                 pass
 
@@ -666,12 +622,17 @@ class DocumentTrackingService:
 
         timeline.sort(key=sort_key)
 
+        relations_graph = self._build_relations_graph(
+            document_type, document_id, document_code, relations
+        )
+
         return {
             "document_type": document_type,
             "document_id": document_id,
             "document_code": document_code,
             "timeline": timeline,
             "relations": relations,
+            "relations_graph": relations_graph,
         }
 
     async def _resolve_document_meta(

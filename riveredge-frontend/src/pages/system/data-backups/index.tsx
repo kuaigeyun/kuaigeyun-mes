@@ -743,7 +743,7 @@ const DataBackupsPage: React.FC = () => {
       </Modal>
 
       {/* 备份详情 Drawer */}
-      <DetailDrawerTemplate<DataBackup>
+      <DetailDrawerTemplate
         title={t('pages.system.dataBackups.detailTitle')}
         open={detailDrawerVisible}
         onClose={() => {
@@ -751,9 +751,10 @@ const DataBackupsPage: React.FC = () => {
           setCurrentBackup(null);
         }}
         dataSource={currentBackup || {}}
-        columns={detailColumns}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        column={1}
+        basic={currentBackup ? (
+            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, currentBackup)} />
+          ) : undefined}
       />
     </>
   );

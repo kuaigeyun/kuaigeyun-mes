@@ -201,7 +201,7 @@ const SkillsPage: React.FC = () => {
           deleteButtonText="批量删除"
         />
       </ListPageTemplate>
-      <DetailDrawerTemplate<Skill>
+      <DetailDrawerTemplate
         title="技能详情"
         open={drawerVisible}
         onClose={handleCloseDetail}

@@ -921,7 +921,7 @@ const PrintTemplateListPage: React.FC = () => {
       </Modal>
 
       {/* 详情 Drawer */}
-      <DetailDrawerTemplate<PrintTemplate>
+      <DetailDrawerTemplate
         title={t('pages.system.printTemplates.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}

@@ -463,7 +463,7 @@ const UserMessagesPage: React.FC = () => {
       </ListPageTemplate>
 
       {/* 详情 Drawer */}
-      <DetailDrawerTemplate<UserMessage>
+      <DetailDrawerTemplate
         title={t('pages.personal.messages.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}

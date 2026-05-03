@@ -55,6 +55,28 @@ export interface DocumentTrackingRelation {
   is_changed_after_link?: boolean;
 }
 
+export interface DocumentTrackingGraphNode {
+  /** 稳定图节点键，与 relationNodeKey / `{document_type}-{document_id}` 一致 */
+  id: string;
+  document_type: string;
+  document_id: number;
+  code?: string;
+  name?: string;
+  /** 在当前视图中的角色；同一单据既在上游又在下游列表时出现 related */
+  role: 'current' | 'upstream' | 'downstream' | 'related';
+}
+
+export interface DocumentTrackingGraphEdge {
+  from: string;
+  to: string;
+  direction: 'upstream' | 'downstream';
+}
+
+export interface DocumentTrackingRelationsGraph {
+  nodes: DocumentTrackingGraphNode[];
+  edges: DocumentTrackingGraphEdge[];
+}
+
 export interface DocumentTrackingResponse {
   document_type: string;
   document_id: number;
@@ -64,6 +86,8 @@ export interface DocumentTrackingResponse {
     upstream: DocumentTrackingRelation[];
     downstream: DocumentTrackingRelation[];
   };
+  /** 由 relations 推导的一步关联图；扁平列表仍为权威数据源 */
+  relations_graph?: DocumentTrackingRelationsGraph;
 }
 
 export async function getDocumentTracking(

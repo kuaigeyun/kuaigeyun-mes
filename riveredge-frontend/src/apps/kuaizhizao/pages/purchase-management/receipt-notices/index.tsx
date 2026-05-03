@@ -988,7 +988,7 @@ const ReceiptNoticesPage: React.FC = () => {
         />
       </ListPageTemplate>
 
-      <DetailDrawerTemplate<ReceiptNoticeDetail>
+      <DetailDrawerTemplate
         title={`收货通知单详情${noticeDetail?.notice_code ? ` - ${noticeDetail.notice_code}` : ''}`}
         open={detailDrawerVisible}
         onClose={() => {

@@ -13,6 +13,7 @@ import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
 import { getToken } from '../../utils/auth';
 import { useThemeStore } from '../../stores/themeStore';
 import { clearTabsData } from '../../stores/tabsStorage';
+import { getDrawerFloatingWrapperStyle } from '../layout-templates/drawerFloatingChrome';
 
 const { Text } = Typography;
 
@@ -103,6 +104,10 @@ interface ThemeEditorProps {
 
 const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate }) => {
   const { token } = theme.useToken(); // 获取当前实际使用的主题 token
+  const themeDrawerFloatingWrapper = useMemo(
+    () => getDrawerFloatingWrapperStyle('right', token),
+    [token.borderRadiusLG, token.boxShadowSecondary]
+  );
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -711,7 +716,11 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
   return (
     <Drawer
       className="theme-editor-drawer"
-      styles={{ body: { overflowY: 'scroll' } }}
+      placement="right"
+      styles={{
+        body: { overflowY: 'scroll' },
+        wrapper: themeDrawerFloatingWrapper,
+      }}
       title={
         <div>
           <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 4 }}>个性化主题</div>

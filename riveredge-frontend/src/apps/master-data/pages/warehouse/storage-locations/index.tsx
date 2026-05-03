@@ -7,11 +7,11 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
+import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography } from 'antd';
 import { downloadFile } from '../../../../../utils';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
 import { storageLocationApi, storageAreaApi } from '../../../services/warehouse';
 import { StorageLocationFormModal } from '../../../components/StorageLocationFormModal';
 import { BatchCreateStorageLocationModal } from '../../../components/BatchCreateStorageLocationModal';
@@ -788,14 +788,11 @@ const StorageLocationsPage: React.FC = () => {
       </ListPageTemplate>
 
       {/* 详情 Drawer */}
-      <DetailDrawerTemplate<StorageLocation>
+      <DetailDrawerTemplate
         title={t('app.master-data.storageLocations.detailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
-        dataSource={storageLocationDetail || undefined}
-        columns={detailColumns}
         loading={detailLoading}
-        column={1}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
         styles={{ body: { position: 'relative' } }}
       >
@@ -825,7 +822,10 @@ const StorageLocationsPage: React.FC = () => {
               qrcodeType="TRACE"
               size={8}
               noCard={true}
-            />
+        basic={storageLocationDetail ? (
+            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, storageLocationDetail)} />
+          ) : undefined}
+      />
           </div>
         )}
       </DetailDrawerTemplate>

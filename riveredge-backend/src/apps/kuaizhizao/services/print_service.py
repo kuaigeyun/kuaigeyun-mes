@@ -1360,7 +1360,8 @@ class DocumentPrintService:
             "code": quotation.quotation_code,
             "quotation_series_code": series,
             "version_no": vn,
-            "revision_label": f"Rev.{vn}",
+            # 与前端列表一致，避免 Rev.n 对中文用户不直观（模板仅用 revision_label 时可单独引用）
+            "revision_label": f"第{vn}版",
             "is_latest_in_series": getattr(quotation, "is_latest_in_series", True),
             "formal_document_generated_at": (
                 quotation.formal_document_generated_at.isoformat()

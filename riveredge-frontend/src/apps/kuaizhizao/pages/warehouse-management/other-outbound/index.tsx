@@ -11,7 +11,7 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form as AntForm, InputNumber, Input, Row, Col, Typography } from 'antd';
+import { App, Button, Tag, Space, Modal, Table, Form as AntForm, InputNumber, Input, Row, Col, Typography, Descriptions } from 'antd';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, ShoppingOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
@@ -23,7 +23,7 @@ import { UniDropdown } from '../../../../../components/uni-dropdown';
 import CodeField from '../../../../../components/code-field';
 import { DictionaryLabel } from '../../../../../components/dictionary-label';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
-import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
+import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { getOtherOutboundLifecycle } from '../../../utils/otherOutboundLifecycle';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
@@ -381,32 +381,41 @@ const OtherOutboundPage: React.FC = () => {
         open={detailDrawerVisible}
         onClose={() => { setDetailDrawerVisible(false); setOutboundDetail(null); }}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={detailColumns}
-        dataSource={outboundDetail || {}}
-      >
-        {outboundDetail?.items && outboundDetail.items.length > 0 && (
-          <>
-            <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
-            <Table
-              className="warehouse-detail-table"
-              size="small"
-              rowKey="id"
-            columns={[
-              { title: '物料编号', dataIndex: 'material_code', width: 120 },
-              { title: '物料名称', dataIndex: 'material_name', width: 150 },
-              { title: '单位', dataIndex: 'material_unit', width: 60, render: (val) => <DictionaryLabel dictionaryCode="unit" value={val} /> },
-              { title: '出库数量', dataIndex: 'outbound_quantity', width: 100, align: 'right' },
-              { title: '单价', dataIndex: 'unit_price', width: 100, align: 'right' },
-              { title: '金额', dataIndex: 'total_amount', width: 100, align: 'right' },
-              { title: '批次号', dataIndex: 'batch_number', width: 100 },
-              { title: '备注', dataIndex: 'notes' },
-            ]}
-            dataSource={outboundDetail.items}
-            pagination={false}
-          />
-          </>
-        )}
-      </DetailDrawerTemplate>
+        basic={
+          outboundDetail ? (
+            <Descriptions column={2} items={detailDrawerDescriptionItems(detailColumns, outboundDetail)} />
+          ) : undefined
+        }
+        lines={
+          outboundDetail?.items && outboundDetail.items.length > 0 ? (
+            <>
+              <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
+              <Table
+                className="warehouse-detail-table"
+                size="small"
+                rowKey="id"
+                columns={[
+                  { title: '物料编号', dataIndex: 'material_code', width: 120 },
+                  { title: '物料名称', dataIndex: 'material_name', width: 150 },
+                  {
+                    title: '单位',
+                    dataIndex: 'material_unit',
+                    width: 60,
+                    render: (val) => <DictionaryLabel dictionaryCode="unit" value={val} />,
+                  },
+                  { title: '出库数量', dataIndex: 'outbound_quantity', width: 100, align: 'right' },
+                  { title: '单价', dataIndex: 'unit_price', width: 100, align: 'right' },
+                  { title: '金额', dataIndex: 'total_amount', width: 100, align: 'right' },
+                  { title: '批次号', dataIndex: 'batch_number', width: 100 },
+                  { title: '备注', dataIndex: 'notes' },
+                ]}
+                dataSource={outboundDetail.items}
+                pagination={false}
+              />
+            </>
+          ) : undefined
+        }
+      />
 
       <FormModalTemplate
         title="新建其他出库单"

@@ -10,13 +10,13 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Space, Modal, Table, Form, InputNumber, Input, Row, Col, Typography, Dropdown } from 'antd';
+import { App, Button, Col, Descriptions, Dropdown, Form, Input, InputNumber, Modal, Row, Space, Table, Typography } from 'antd';
 import { EyeOutlined, CheckCircleOutlined, DeleteOutlined, PrinterOutlined, MoreOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import CodeField from '../../../../../components/code-field';
-import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
+import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { getMaterialReturnLifecycle } from '../../../utils/materialReturnLifecycle';
@@ -455,29 +455,33 @@ const MaterialReturnsPage: React.FC = () => {
         open={detailDrawerVisible}
         onClose={() => { setDetailDrawerVisible(false); setReturnDetail(null); }}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={detailColumns}
-        dataSource={returnDetail || {}}
-      >
-        {returnDetail?.items && returnDetail.items.length > 0 && (
-          <>
-            <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
-            <Table
-              className="warehouse-detail-table"
-              size="small"
-              rowKey="id"
-            columns={[
-              { title: '物料编号', dataIndex: 'material_code', width: 120 },
-              { title: '物料名称', dataIndex: 'material_name', width: 150 },
-              { title: '单位', dataIndex: 'material_unit', width: 60 },
-              { title: '归还数量', dataIndex: 'return_quantity', width: 100, align: 'right' },
-              { title: '状态', dataIndex: 'status', width: 80 },
-            ]}
-            dataSource={returnDetail.items}
-            pagination={false}
-          />
-          </>
-        )}
-      </DetailDrawerTemplate>
+        basic={
+          returnDetail ? (
+            <Descriptions column={2} items={detailDrawerDescriptionItems(detailColumns, returnDetail)} />
+          ) : undefined
+        }
+        lines={
+          returnDetail?.items && returnDetail.items.length > 0 ? (
+            <>
+              <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
+              <Table
+                className="warehouse-detail-table"
+                size="small"
+                rowKey="id"
+                columns={[
+                  { title: '物料编号', dataIndex: 'material_code', width: 120 },
+                  { title: '物料名称', dataIndex: 'material_name', width: 150 },
+                  { title: '单位', dataIndex: 'material_unit', width: 60 },
+                  { title: '归还数量', dataIndex: 'return_quantity', width: 100, align: 'right' },
+                  { title: '状态', dataIndex: 'status', width: 80 },
+                ]}
+                dataSource={returnDetail.items}
+                pagination={false}
+              />
+            </>
+          ) : undefined
+        }
+      />
 
       <FormModalTemplate
         title="新建还料单"

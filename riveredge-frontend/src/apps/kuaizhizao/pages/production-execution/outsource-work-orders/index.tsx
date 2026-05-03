@@ -1385,7 +1385,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         />
       </FormModalTemplate >
 
-      <DetailDrawerTemplate<OutsourceWorkOrder>
+      <DetailDrawerTemplate
         title={`工单委外详情${workOrderDetail?.code ? ` - ${workOrderDetail.code}` : ''}`}
         open={drawerVisible}
         onClose={() => {

@@ -2222,7 +2222,7 @@ const PurchaseOrdersPage: React.FC = () => {
       />
 
       {/* 采购订单详情 Drawer */}
-      <DetailDrawerTemplate<PurchaseOrderDetail>
+      <DetailDrawerTemplate
         title={`采购订单详情 - ${orderDetail?.order_code || ''}`}
         open={detailDrawerVisible}
         onClose={() => {

@@ -45,6 +45,10 @@ export const DRAWER_CONFIG = {
   SMALL_WIDTH: 500,
   /** 50% 宽度（统一详情抽屉） */
   HALF_WIDTH: '50%',
+  /**
+   * 抽屉与视口边缘的外间距（悬浮卡片效果，与全链路等左侧浮层一致）
+   */
+  FLOAT_MARGIN: 16,
 } as const;
 
 /**

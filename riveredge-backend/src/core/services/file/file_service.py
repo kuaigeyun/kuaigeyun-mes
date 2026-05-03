@@ -32,6 +32,19 @@ class FileService:
     # 最大文件大小（默认 100MB）
     MAX_FILE_SIZE = getattr(settings, "MAX_FILE_SIZE", 100 * 1024 * 1024)
     
+    # 安全白名单：只允许常见的非执行类文件
+    ALLOWED_EXTENSIONS = {
+        "jpg", "jpeg", "png", "gif", "svg", "webp",  # 图片
+        "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv", "json", # 文档
+        "zip", "rar", "7z", "tar", "gz", # 压缩包
+        "mp3", "wav", "mp4", "mov", "avi" # 多媒体
+    }
+
+    # 危险黑名单：绝对禁止上传的后缀
+    FORBIDDEN_EXTENSIONS = {
+        "php", "phtml", "php3", "php4", "php5", "phps", "phar", "asp", "aspx", "jsp", "jspx", "cgi", "sh", "py", "exe", "bat"
+    }
+    
     @staticmethod
     def _get_file_storage_path(tenant_id: int, filename: str) -> str:
         """
@@ -281,7 +294,8 @@ class FileService:
         file.deleted_at = datetime.now()
         await file.save()
         
-        # TODO: 可选：物理删除文件（需要确认是否要删除物理文件）
+        # 物理删除文件（安全增强：防止已删除记录的文件通过 URL 被执行或访问）
+        await FileService.destroy_physical_file(file.file_path)
     
     @staticmethod
     async def batch_delete_files(
@@ -298,12 +312,27 @@ class FileService:
         Returns:
             int: 删除的文件数量
         """
+        # 先获取文件路径，用于物理删除
+        files_to_delete = await File.filter(
+            tenant_id=tenant_id,
+            uuid__in=uuids,
+            deleted_at__isnull=True
+        ).values_list("file_path", flat=True)
+
+        if not files_to_delete:
+            return 0
+
+        # 执行数据库软删除
         count = await File.filter(
             tenant_id=tenant_id,
             uuid__in=uuids,
             deleted_at__isnull=True
         ).update(deleted_at=datetime.now())
         
+        # 执行物理删除
+        for path in files_to_delete:
+            await FileService.destroy_physical_file(path)
+
         return count
     
     @staticmethod
@@ -337,9 +366,17 @@ class FileService:
         if file_size > FileService.MAX_FILE_SIZE:
             raise ValidationError(f"文件大小超过限制（最大 {FileService.MAX_FILE_SIZE / 1024 / 1024}MB）")
         
+        # 检查文件后缀安全性
+        file_extension = FileService._get_file_extension(original_name).lower()
+        
+        if file_extension in FileService.FORBIDDEN_EXTENSIONS:
+            raise ValidationError(f"由于安全原因，禁止上传 {file_extension} 格式的文件")
+            
+        if file_extension and file_extension not in FileService.ALLOWED_EXTENSIONS:
+            raise ValidationError(f"暂不支持上传 {file_extension} 格式的文件，请联系管理员")
+
         # 生成文件名（使用UUID）
         file_uuid = str(uuid.uuid4())
-        file_extension = FileService._get_file_extension(original_name)
         storage_filename = f"{file_uuid}.{file_extension}" if file_extension else file_uuid
         
         # 生成存储路径
@@ -402,4 +439,25 @@ class FileService:
             content = await f.read()
         
         return content
+
+    @staticmethod
+    async def destroy_physical_file(file_path: str) -> bool:
+        """
+        从磁盘物理删除文件
+        
+        Args:
+            file_path: 相对存储路径
+            
+        Returns:
+            bool: 是否删除成功
+        """
+        try:
+            full_path = os.path.join(FileService.UPLOAD_DIR, file_path)
+            if os.path.exists(full_path):
+                os.remove(full_path)
+                return True
+        except Exception as e:
+            # 记录日志但不阻塞业务
+            print(f"Failed to delete physical file {file_path}: {e}")
+        return False
 

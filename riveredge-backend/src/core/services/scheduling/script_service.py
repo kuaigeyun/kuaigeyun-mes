@@ -20,6 +20,7 @@ from core.schemas.script import (
     ScriptExecuteRequest,
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.config.infra_config import infra_settings as settings
 
 
 class ScriptService:
@@ -192,6 +193,10 @@ class ScriptService:
             NotFoundError: 当脚本不存在时抛出
             ValidationError: 当脚本未启用或正在运行时抛出
         """
+        # 检查是否允许脚本执行
+        if not settings.ENABLE_SCRIPT_EXECUTION:
+            raise ValidationError("系统已禁用自定义脚本执行功能。请在配置文件中开启 ENABLE_SCRIPT_EXECUTION。")
+
         script = await ScriptService.get_script_by_uuid(tenant_id, uuid)
         
         if not script.is_active:
@@ -203,16 +208,6 @@ class ScriptService:
         # 如果选择异步执行，应通过 Taskiq（dispatch_event 等）执行
         if data.async_execution:
             # TODO: 集成 Taskiq 异步执行
-            # from core.tasks.dispatcher import dispatch_event, TaskEvent
-            # await dispatch_event(TaskEvent(
-            #     name="script/execute",
-            #     data={
-            #         "tenant_id": tenant_id,
-            #         "script_id": str(script.uuid),
-            #         "parameters": data.parameters or {},
-            #     },
-            # ))
-            # return {"success": True, "async": True, "message": "脚本已提交异步执行"}
             raise ValidationError("异步执行功能待实现")
         
         # 同步执行脚本

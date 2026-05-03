@@ -1176,7 +1176,7 @@ const SuperAdminTenantList: React.FC = () => {
       </ListPageTemplate>
     
     {/* 组织详情 Drawer */}
-    <DetailDrawerTemplate<Tenant>
+    <DetailDrawerTemplate
       title={t('pages.infra.tenant.detailTitle')}
       width={DRAWER_CONFIG.STANDARD_WIDTH}
       open={drawerVisible}

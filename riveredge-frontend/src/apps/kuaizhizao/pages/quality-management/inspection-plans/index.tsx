@@ -586,7 +586,7 @@ const InspectionPlansPage: React.FC = () => {
         </Row>
       </FormModalTemplate>
 
-      <DetailDrawerTemplate<InspectionPlan>
+      <DetailDrawerTemplate
         title="质检方案详情"
         open={drawerVisible}
         onClose={() => {

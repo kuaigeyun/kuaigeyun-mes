@@ -10,12 +10,12 @@
 import React, { useRef, useState } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProDescriptionsItemType } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Table, Input, Typography } from 'antd';
+import { App, Button, Tag, Space, Modal, Card, Table, Input, Typography, Descriptions } from 'antd';
 import dayjs from 'dayjs';
 import { ProForm, ProFormRadio, ProFormTextArea } from '@ant-design/pro-components';
 import { EyeOutlined, ReloadOutlined, CheckCircleOutlined, CloseCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { warehouseApi } from '../../../services/production';
 import { getReplenishmentSuggestionLifecycle } from '../../../utils/replenishmentSuggestionLifecycle';
@@ -451,8 +451,11 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
           setSuggestionDetail(null);
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={detailColumns}
-        dataSource={suggestionDetail}
+        basic={
+          suggestionDetail ? (
+            <Descriptions column={2} items={detailDrawerDescriptionItems(detailColumns, suggestionDetail)} />
+          ) : undefined
+        }
       />
 
       {/* 处理Modal */}

@@ -9,10 +9,10 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormSwitch, ProDescriptionsItemProps, ProFormInstance } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
+import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, ReloadOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
 import {
   getUserList,
   getUserByUuid,
@@ -927,15 +927,12 @@ const UserListPage: React.FC = () => {
       </FormModalTemplate>
 
       {/* 详情 Drawer */}
-      <DetailDrawerTemplate<User>
+      <DetailDrawerTemplate
         title={t('field.user.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        dataSource={detailData || undefined}
-        columns={detailColumns}
-        column={1}
         styles={{ body: { position: 'relative' } }}
       >
         {detailData && (
@@ -967,7 +964,10 @@ const UserListPage: React.FC = () => {
               showCardTitle={false}
               size={8}
               noCard={true}
-            />
+        basic={detailData ? (
+            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, detailData)} />
+          ) : undefined}
+      />
           </div>
         )}
       </DetailDrawerTemplate>

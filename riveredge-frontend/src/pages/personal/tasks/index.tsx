@@ -593,7 +593,7 @@ const UserTasksPage: React.FC = () => {
       </FormModalTemplate>
 
       {/* 详情 Drawer */}
-      <DetailDrawerTemplate<UserTask>
+      <DetailDrawerTemplate
         title={t('pages.personal.tasks.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}

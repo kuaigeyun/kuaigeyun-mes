@@ -9,7 +9,7 @@ import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProFormDependency, ProFormDigit, ProFormGroup } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Modal, Input } from 'antd';
+import { App, Button, Descriptions, Input, Modal, Popconfirm, Space, Tag } from 'antd';
 import {
   EditOutlined,
   DeleteOutlined,
@@ -19,7 +19,7 @@ import {
   CheckCircleOutlined,
 } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
 import {
   getMessageConfigList,
   getMessageConfigByUuid,
@@ -759,15 +759,15 @@ const MessageConfigListPage: React.FC = () => {
       </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
-      <DetailDrawerTemplate<MessageConfig>
+      <DetailDrawerTemplate
         title={t('pages.system.messageConfig.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        dataSource={detailData || undefined}
-        columns={detailColumns}
-        column={1}
+        basic={detailData ? (
+            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, detailData)} />
+          ) : undefined}
       />
     </>
   );

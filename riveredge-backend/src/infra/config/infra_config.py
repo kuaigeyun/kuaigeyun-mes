@@ -229,6 +229,10 @@ class InfraSettings(BaseSettings):
     # 文件管理配置（第三阶段）
     FILE_UPLOAD_DIR: str = Field(default="./uploads", description="文件上传目录")
     MAX_FILE_SIZE: int = Field(default=100 * 1024 * 1024, description="最大文件大小（字节）")
+    
+    # 安全增强配置
+    SECURITY_STRICT_MODE: bool = Field(default=True, description="是否启用严格安全模式")
+    ENABLE_SCRIPT_EXECUTION: bool = Field(default=False, description="是否允许执行自定义脚本（Python/Shell），建议在生产环境禁用")
     # 基础URL配置：显式设置 BASE_URL 时使用该值；不设置则使用相对路径，便于局域网/反向代理部署
     base_url_override: str = Field(default="", alias="BASE_URL", description="文件/图片链接基础URL，不设置则使用相对路径")
     @property

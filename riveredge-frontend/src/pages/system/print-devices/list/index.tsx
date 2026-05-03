@@ -9,10 +9,10 @@ import React, { useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProForm } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Modal, Form, Space, Badge, Typography, Tooltip, Card, theme } from 'antd';
+import { App, Badge, Button, Card, Descriptions, Form, Modal, Popconfirm, Space, Tag, Tooltip, Typography, theme } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PrinterOutlined, CheckCircleOutlined, PrinterFilled } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
 import {
   getPrintDeviceList,
   getPrintDeviceByUuid,
@@ -986,15 +986,15 @@ const PrintDeviceListPage: React.FC = () => {
       </Modal>
 
       {/* 详情 Drawer */}
-      <DetailDrawerTemplate<PrintDevice>
+      <DetailDrawerTemplate
         title={t('pages.system.printDevices.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        column={1}
-        dataSource={detailData || undefined}
-        columns={detailColumns}
+        basic={detailData ? (
+            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, detailData)} />
+          ) : undefined}
       />
     </>
   );

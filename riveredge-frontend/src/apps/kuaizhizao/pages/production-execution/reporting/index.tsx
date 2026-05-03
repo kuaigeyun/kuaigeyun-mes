@@ -3094,7 +3094,7 @@ const ReportingPage: React.FC = () => {
         )}
       </Modal>
 
-      <DetailDrawerTemplate<ReportingRecord>
+      <DetailDrawerTemplate
         title={`报工记录详情${reportingDetail?.work_order_code ? ` - ${reportingDetail.work_order_code}` : ''}`}
         open={detailDrawerVisible}
         onClose={() => {

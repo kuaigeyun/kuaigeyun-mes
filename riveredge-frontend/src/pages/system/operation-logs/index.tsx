@@ -11,11 +11,11 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { Tag, Space, Modal, Typography, App, Button } from 'antd';
+import { App, Button, Descriptions, Modal, Space, Tag, Typography } from 'antd';
 import { EyeOutlined, BarChartOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
 import { StatCardTrendArea } from '../../../components/common/StatCardTrendArea';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../components/layout-templates';
+import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../components/layout-templates';
 import {
   getOperationLogs,
   getOperationLogStats,
@@ -340,7 +340,7 @@ const OperationLogsPage: React.FC = () => {
         />
       </ListPageTemplate>
 
-      <DetailDrawerTemplate<OperationLog>
+      <DetailDrawerTemplate
         title={t('pages.system.operationLogs.detailTitle')}
         open={detailDrawerVisible}
         onClose={() => {
@@ -349,7 +349,9 @@ const OperationLogsPage: React.FC = () => {
         }}
         width={DRAWER_CONFIG.LARGE_WIDTH}
         dataSource={currentLog || {}}
-        columns={detailColumns}
+        basic={currentLog ? (
+            <Descriptions column={2} items={detailDrawerDescriptionItems(detailColumns, currentLog)} />
+          ) : undefined}
       />
     </>
   );

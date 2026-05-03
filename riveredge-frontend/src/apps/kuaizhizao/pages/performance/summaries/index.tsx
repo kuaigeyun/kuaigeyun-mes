@@ -4,12 +4,12 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Space, DatePicker, Select, Typography } from 'antd';
+import { App, Button, DatePicker, Descriptions, Select, Space, Typography } from 'antd';
 import { CalculatorOutlined, EyeOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
 import { employeePerformanceApi } from '../../../services/performance';
 import type { PerformanceSummary, PerformanceDetail } from '../../../types/performance';
 import type { ProDescriptionsItemType } from '@ant-design/pro-components';
@@ -194,17 +194,18 @@ const SummariesPage: React.FC = () => {
         />
       </ListPageTemplate>
 
-      <DetailDrawerTemplate<PerformanceDetail>
+      <DetailDrawerTemplate
         title={`绩效明细 - ${detail?.employee_name || ''} ${detail?.period || ''}`}
         open={drawerVisible}
         onClose={() => {
           setDrawerVisible(false);
           setDetail(null);
         }}
-        dataSource={detail || undefined}
-        columns={detailColumns}
         loading={detailLoading}
         width={DRAWER_CONFIG.HALF_WIDTH}
+        basic={detail ? (
+            <Descriptions column={2} items={detailDrawerDescriptionItems(detailColumns, detail)} />
+          ) : undefined}
       />
     </>
   );

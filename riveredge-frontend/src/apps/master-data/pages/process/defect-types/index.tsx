@@ -539,7 +539,7 @@ const DefectTypesPage: React.FC = () => {
         onExport={handleExport}
       />
 
-      <DetailDrawerTemplate<DefectType>
+      <DetailDrawerTemplate
         title="不良品详情"
         open={drawerVisible}
         onClose={handleCloseDetail}

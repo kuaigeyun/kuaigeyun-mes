@@ -1248,7 +1248,7 @@ const DataSourceListPage: React.FC = () => {
       />
 
       {/* 查看详情 Drawer */}
-      <DetailDrawerTemplate<DataSource>
+      <DetailDrawerTemplate
         title={t('pages.system.dataSources.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}

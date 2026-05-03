@@ -7,12 +7,12 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
+import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
 
 import { plantApi } from '../../../services/factory';
 import { PlantFormModal } from '../../../components/PlantFormModal';
@@ -692,17 +692,18 @@ const PlantsPage: React.FC = () => {
       </ListPageTemplate>
 
       {/* 详情 Drawer */}
-      <DetailDrawerTemplate<Plant>
+      <DetailDrawerTemplate
         title={t('app.master-data.plants.detailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
-        dataSource={plantDetail || undefined}
-        columns={detailColumns}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        column={1}
       >
-        <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
+        <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues}
+        basic={plantDetail ? (
+            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, plantDetail)} />
+          ) : undefined}
+      />
       </DetailDrawerTemplate>
 
       {/* 创建/编辑厂区 Modal */}

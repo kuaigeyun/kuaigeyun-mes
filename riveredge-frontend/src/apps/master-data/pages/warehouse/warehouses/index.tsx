@@ -7,13 +7,13 @@
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography, Table } from 'antd';
+import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Table, Tag, Typography } from 'antd';
 import { downloadFile } from '../../../../../utils';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
 import { warehouseApi, type PresetWarehouseItem } from '../../../services/warehouse';
 import { workshopApi, workCenterApi } from '../../../services/factory';
 import { WarehouseFormModal } from '../../../components/WarehouseFormModal';
@@ -828,14 +828,11 @@ const WarehousesPage: React.FC = () => {
       </ListPageTemplate>
 
       {/* 详情 Drawer */}
-      <DetailDrawerTemplate<Warehouse>
+      <DetailDrawerTemplate
         title={t('app.master-data.warehouses.detailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
-        dataSource={warehouseDetail || undefined}
-        columns={detailColumns}
         loading={detailLoading}
-        column={1}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
         styles={{ body: { position: 'relative' } }}
       >
@@ -865,7 +862,10 @@ const WarehousesPage: React.FC = () => {
               qrcodeType="TRACE"
               size={8}
               noCard={true}
-            />
+        basic={warehouseDetail ? (
+            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, warehouseDetail)} />
+          ) : undefined}
+      />
           </div>
         )}
       </DetailDrawerTemplate>

@@ -540,7 +540,7 @@ const ProcessRoutesPage: React.FC = () => {
         onExport={handleExport}
       />
 
-      <DetailDrawerTemplate<ProcessRoute>
+      <DetailDrawerTemplate
         title="工艺路线详情"
         open={drawerVisible}
         onClose={handleCloseDetail}

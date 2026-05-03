@@ -603,7 +603,7 @@ const OperationsPage: React.FC = () => {
         onExport={handleExport}
       />
 
-      <DetailDrawerTemplate<Operation>
+      <DetailDrawerTemplate
         title="工序详情"
         open={drawerVisible}
         onClose={handleCloseDetail}

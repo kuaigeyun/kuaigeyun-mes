@@ -107,150 +107,11 @@ class DocumentRelationService:
         if document_type not in self.DOCUMENT_TYPES:
             raise ValidationError(f"不支持的单据类型: {document_type}")
 
-        upstream_documents = []
-        downstream_documents = []
+        strategy = DOCUMENT_RELATION_STRATEGIES.get(document_type)
+        if strategy is None:
+            raise ValidationError(f"未配置关联策略的单据类型: {document_type}")
 
-        # 根据单据类型查询关联关系
-        if document_type == "demand":
-            # 统一需求的下游：需求计算、工单、销售出库单
-            upstream_documents = []
-            downstream_documents = await self._get_demand_downstream(tenant_id, document_id)
-        
-        elif document_type == "sales_forecast":
-            # 销售预测的下游：MRP运算结果、工单、销售出库单
-            upstream_documents = []
-            downstream_documents = await self._get_sales_forecast_downstream(tenant_id, document_id)
-
-        elif document_type == "sales_order":
-            # 销售订单的下游：LRP运算结果、工单、销售出库单
-            upstream_documents = []
-            downstream_documents = await self._get_sales_order_downstream(tenant_id, document_id)
-
-        elif document_type == "quotation":
-            # 报价单的下游：销售订单（转订单后）
-            upstream_documents = []
-            downstream_documents = await self._get_quotation_downstream(tenant_id, document_id)
-
-        elif document_type == "material_borrow":
-            # 借料单的下游：还料单
-            upstream_documents = []
-            downstream_documents = await self._get_material_borrow_downstream(tenant_id, document_id)
-
-        elif document_type == "material_return":
-            # 还料单的上游：借料单
-            upstream_documents = await self._get_material_return_upstream(tenant_id, document_id)
-            downstream_documents = []
-
-        elif document_type == "demand_computation":
-            # 需求计算的上游：需求/销售预测/销售订单，下游：工单、采购单
-            upstream_documents = await self._get_demand_computation_upstream(tenant_id, document_id)
-            downstream_documents = await self._get_demand_computation_downstream(tenant_id, document_id)
-
-        elif document_type == "work_order":
-            # 工单的上游：销售预测/销售订单、MRP/LRP运算，下游：生产领料、报工记录、成品入库、销售出库
-            upstream_documents = await self._get_work_order_upstream(tenant_id, document_id)
-            downstream_documents = await self._get_work_order_downstream(tenant_id, document_id)
-
-        elif document_type == "production_picking":
-            # 生产领料的上游：工单，下游：报工记录、生产退料
-            upstream_documents = await self._get_production_picking_upstream(tenant_id, document_id)
-            downstream_documents = await self._get_production_picking_downstream(tenant_id, document_id)
-
-        elif document_type == "production_return":
-            # 生产退料的上游：工单、生产领料，下游：无
-            upstream_documents = await self._get_production_return_upstream(tenant_id, document_id)
-            downstream_documents = []
-
-        elif document_type == "finished_goods_receipt":
-            # 成品入库的上游：工单、报工记录，下游：销售出库单
-            upstream_documents = await self._get_finished_goods_receipt_upstream(tenant_id, document_id)
-            downstream_documents = await self._get_finished_goods_receipt_downstream(tenant_id, document_id)
-
-        elif document_type == "semi_finished_goods_receipt":
-            upstream_documents = await self._get_semi_finished_goods_receipt_upstream(tenant_id, document_id)
-            downstream_documents = await self._get_semi_finished_goods_receipt_downstream(tenant_id, document_id)
-
-        elif document_type == "purchase_order":
-            # 采购单的上游：MRP/LRP运算，下游：采购入库单
-            upstream_documents = await self._get_purchase_order_upstream(tenant_id, document_id)
-            downstream_documents = await self._get_purchase_order_downstream(tenant_id, document_id)
-
-        elif document_type == "purchase_receipt":
-            # 采购入库单的上游：采购单，下游：应付单
-            upstream_documents = await self._get_purchase_receipt_upstream(tenant_id, document_id)
-            downstream_documents = await self._get_purchase_receipt_downstream(tenant_id, document_id)
-
-        elif document_type == "purchase_return":
-            # 采购退货单的上游：采购入库单、采购订单；下游：无
-            upstream_documents = await self._get_purchase_return_upstream(tenant_id, document_id)
-            downstream_documents = []
-
-        elif document_type == "reporting_record":
-            # 报工记录的上游：工单；下游：由领域后续扩展（检验/入库等）
-            upstream_documents = await self._get_reporting_record_upstream(tenant_id, document_id)
-            downstream_documents = []
-
-        elif document_type == "outsource_order":
-            # 工序委外单的上游：工单；下游：采购入库单（若已关联）
-            upstream_documents = await self._get_outsource_order_upstream(tenant_id, document_id)
-            downstream_documents = await self._get_outsource_order_downstream(tenant_id, document_id)
-
-        elif document_type == "outsource_work_order":
-            # 工单委外：独立单据，上下游由 DocumentRelation 表扩展；此处保持空
-            upstream_documents = []
-            downstream_documents = []
-
-        elif document_type == "packing_binding":
-            # 装箱绑定：上游为成品入库单或销售出库单
-            upstream_documents = await self._get_packing_binding_upstream(tenant_id, document_id)
-            downstream_documents = []
-
-        elif document_type == "receipt_notice":
-            upstream_documents = await self._get_receipt_notice_upstream(tenant_id, document_id)
-            downstream_documents = await self._get_receipt_notice_downstream(tenant_id, document_id)
-
-        elif document_type == "sales_return":
-            upstream_documents = await self._get_sales_return_upstream(tenant_id, document_id)
-            downstream_documents = []
-
-        elif document_type == "payable":
-            # 应付单的上游：采购入库单
-            upstream_documents = await self._get_payable_upstream(tenant_id, document_id)
-            downstream_documents = []
-
-        elif document_type == "receivable":
-            # 应收单的上游：销售出库单
-            upstream_documents = await self._get_receivable_upstream(tenant_id, document_id)
-            downstream_documents = []
-
-        elif document_type == "incoming_inspection":
-            # 来料检验单的上游：采购入库单
-            upstream_documents = await self._get_incoming_inspection_upstream(tenant_id, document_id)
-            downstream_documents = []
-
-        elif document_type == "process_inspection":
-            # 过程检验单的上游：工单、报工记录
-            upstream_documents = await self._get_process_inspection_upstream(tenant_id, document_id)
-            downstream_documents = []
-
-        elif document_type == "finished_goods_inspection":
-            # 成品检验单的上游：工单、成品入库单
-            upstream_documents = await self._get_finished_goods_inspection_upstream(tenant_id, document_id)
-            downstream_documents = []
-
-        elif document_type == "sales_delivery":
-            # 销售出库单的上游：销售订单/销售预测、工单、成品入库单，下游：应收单、送货单
-            upstream_documents = await self._get_sales_delivery_upstream(tenant_id, document_id)
-            downstream_documents = await self._get_sales_delivery_downstream(tenant_id, document_id)
-
-        elif document_type == "delivery_notice":
-            # 送货单的上游：销售出库单、销售订单
-            upstream_documents = await self._get_delivery_notice_upstream(tenant_id, document_id)
-            downstream_documents = []
-
-        elif document_type == "shipment_notice":
-            upstream_documents = await self._get_shipment_notice_upstream(tenant_id, document_id)
-            downstream_documents = await self._get_shipment_notice_downstream(tenant_id, document_id)
+        upstream_documents, downstream_documents = await strategy(self, tenant_id, document_id)
 
         return {
             "document_type": document_type,
@@ -2381,3 +2242,165 @@ class DocumentRelationService:
 
         return chain
 
+
+def _build_document_relation_strategies() -> Dict[str, Any]:
+    """
+    document_type -> 异步解析器，返回 (upstream_documents, downstream_documents)。
+    新增单据类型时在 DOCUMENT_TYPES 与本 registry 同步登记。
+    """
+
+    async def strat_demand(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        return [], await svc._get_demand_downstream(tenant_id, document_id)
+
+    async def strat_sales_forecast(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        return [], await svc._get_sales_forecast_downstream(tenant_id, document_id)
+
+    async def strat_sales_order(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        return [], await svc._get_sales_order_downstream(tenant_id, document_id)
+
+    async def strat_quotation(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        return [], await svc._get_quotation_downstream(tenant_id, document_id)
+
+    async def strat_material_borrow(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        return [], await svc._get_material_borrow_downstream(tenant_id, document_id)
+
+    async def strat_material_return(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        upstream_documents = await svc._get_material_return_upstream(tenant_id, document_id)
+        return upstream_documents, []
+
+    async def strat_demand_computation(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        upstream_documents = await svc._get_demand_computation_upstream(tenant_id, document_id)
+        downstream_documents = await svc._get_demand_computation_downstream(tenant_id, document_id)
+        return upstream_documents, downstream_documents
+
+    async def strat_work_order(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        upstream_documents = await svc._get_work_order_upstream(tenant_id, document_id)
+        downstream_documents = await svc._get_work_order_downstream(tenant_id, document_id)
+        return upstream_documents, downstream_documents
+
+    async def strat_production_picking(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        upstream_documents = await svc._get_production_picking_upstream(tenant_id, document_id)
+        downstream_documents = await svc._get_production_picking_downstream(tenant_id, document_id)
+        return upstream_documents, downstream_documents
+
+    async def strat_production_return(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        upstream_documents = await svc._get_production_return_upstream(tenant_id, document_id)
+        return upstream_documents, []
+
+    async def strat_finished_goods_receipt(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        upstream_documents = await svc._get_finished_goods_receipt_upstream(tenant_id, document_id)
+        downstream_documents = await svc._get_finished_goods_receipt_downstream(tenant_id, document_id)
+        return upstream_documents, downstream_documents
+
+    async def strat_semi_finished_goods_receipt(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        upstream_documents = await svc._get_semi_finished_goods_receipt_upstream(tenant_id, document_id)
+        downstream_documents = await svc._get_semi_finished_goods_receipt_downstream(tenant_id, document_id)
+        return upstream_documents, downstream_documents
+
+    async def strat_purchase_order(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        upstream_documents = await svc._get_purchase_order_upstream(tenant_id, document_id)
+        downstream_documents = await svc._get_purchase_order_downstream(tenant_id, document_id)
+        return upstream_documents, downstream_documents
+
+    async def strat_purchase_receipt(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        upstream_documents = await svc._get_purchase_receipt_upstream(tenant_id, document_id)
+        downstream_documents = await svc._get_purchase_receipt_downstream(tenant_id, document_id)
+        return upstream_documents, downstream_documents
+
+    async def strat_purchase_return(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        upstream_documents = await svc._get_purchase_return_upstream(tenant_id, document_id)
+        return upstream_documents, []
+
+    async def strat_reporting_record(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        upstream_documents = await svc._get_reporting_record_upstream(tenant_id, document_id)
+        return upstream_documents, []
+
+    async def strat_outsource_order(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        upstream_documents = await svc._get_outsource_order_upstream(tenant_id, document_id)
+        downstream_documents = await svc._get_outsource_order_downstream(tenant_id, document_id)
+        return upstream_documents, downstream_documents
+
+    async def strat_outsource_work_order(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        return [], []
+
+    async def strat_packing_binding(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        upstream_documents = await svc._get_packing_binding_upstream(tenant_id, document_id)
+        return upstream_documents, []
+
+    async def strat_receipt_notice(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        upstream_documents = await svc._get_receipt_notice_upstream(tenant_id, document_id)
+        downstream_documents = await svc._get_receipt_notice_downstream(tenant_id, document_id)
+        return upstream_documents, downstream_documents
+
+    async def strat_sales_return(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        upstream_documents = await svc._get_sales_return_upstream(tenant_id, document_id)
+        return upstream_documents, []
+
+    async def strat_payable(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        upstream_documents = await svc._get_payable_upstream(tenant_id, document_id)
+        return upstream_documents, []
+
+    async def strat_receivable(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        upstream_documents = await svc._get_receivable_upstream(tenant_id, document_id)
+        return upstream_documents, []
+
+    async def strat_incoming_inspection(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        upstream_documents = await svc._get_incoming_inspection_upstream(tenant_id, document_id)
+        return upstream_documents, []
+
+    async def strat_process_inspection(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        upstream_documents = await svc._get_process_inspection_upstream(tenant_id, document_id)
+        return upstream_documents, []
+
+    async def strat_finished_goods_inspection(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        upstream_documents = await svc._get_finished_goods_inspection_upstream(tenant_id, document_id)
+        return upstream_documents, []
+
+    async def strat_sales_delivery(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        upstream_documents = await svc._get_sales_delivery_upstream(tenant_id, document_id)
+        downstream_documents = await svc._get_sales_delivery_downstream(tenant_id, document_id)
+        return upstream_documents, downstream_documents
+
+    async def strat_delivery_notice(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        upstream_documents = await svc._get_delivery_notice_upstream(tenant_id, document_id)
+        return upstream_documents, []
+
+    async def strat_shipment_notice(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        upstream_documents = await svc._get_shipment_notice_upstream(tenant_id, document_id)
+        downstream_documents = await svc._get_shipment_notice_downstream(tenant_id, document_id)
+        return upstream_documents, downstream_documents
+
+    return {
+        "demand": strat_demand,
+        "sales_forecast": strat_sales_forecast,
+        "sales_order": strat_sales_order,
+        "quotation": strat_quotation,
+        "material_borrow": strat_material_borrow,
+        "material_return": strat_material_return,
+        "demand_computation": strat_demand_computation,
+        "work_order": strat_work_order,
+        "production_picking": strat_production_picking,
+        "production_return": strat_production_return,
+        "finished_goods_receipt": strat_finished_goods_receipt,
+        "semi_finished_goods_receipt": strat_semi_finished_goods_receipt,
+        "purchase_order": strat_purchase_order,
+        "purchase_receipt": strat_purchase_receipt,
+        "purchase_return": strat_purchase_return,
+        "reporting_record": strat_reporting_record,
+        "outsource_order": strat_outsource_order,
+        "outsource_work_order": strat_outsource_work_order,
+        "packing_binding": strat_packing_binding,
+        "receipt_notice": strat_receipt_notice,
+        "sales_return": strat_sales_return,
+        "payable": strat_payable,
+        "receivable": strat_receivable,
+        "incoming_inspection": strat_incoming_inspection,
+        "process_inspection": strat_process_inspection,
+        "finished_goods_inspection": strat_finished_goods_inspection,
+        "sales_delivery": strat_sales_delivery,
+        "delivery_notice": strat_delivery_notice,
+        "shipment_notice": strat_shipment_notice,
+    }
+
+
+DOCUMENT_RELATION_STRATEGIES: Dict[str, Any] = _build_document_relation_strategies()

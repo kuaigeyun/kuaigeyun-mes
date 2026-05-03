@@ -2221,7 +2221,7 @@ const BOMPage: React.FC = () => {
       </ListPageTemplate>
 
       {/* 详情 Drawer */}
-      <DetailDrawerTemplate<BOM>
+      <DetailDrawerTemplate
         title={t('app.master-data.bom.bomDetailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}

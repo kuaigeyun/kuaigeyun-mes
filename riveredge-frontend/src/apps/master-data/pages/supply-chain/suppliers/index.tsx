@@ -7,12 +7,12 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
+import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
 
 import { supplierApi, getUserOptions, getDictionaryOptions } from '../../../services/supply-chain';
 import { SupplierFormModal } from '../../../components/SupplierFormModal';
@@ -842,15 +842,15 @@ const SuppliersPage: React.FC = () => {
       </ListPageTemplate>
 
       {/* 详情 Drawer */}
-      <DetailDrawerTemplate<Supplier>
+      <DetailDrawerTemplate
         title={t('app.master-data.suppliers.detailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
-        dataSource={supplierDetail || undefined}
-        columns={detailColumns}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        column={1}
+        basic={supplierDetail ? (
+            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, supplierDetail)} />
+          ) : undefined}
       />
 
       {/* 创建/编辑供应商 Modal */}

@@ -7,12 +7,12 @@
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space } from 'antd';
+import { App, Button, Descriptions, Popconfirm, Space, Tag } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
 import { workGroupApi } from '../../../services/factory';
 import { WorkGroupFormModal } from '../../../components/WorkGroupFormModal';
 import type { WorkGroup } from '../../../types/factory';
@@ -310,15 +310,15 @@ const WorkGroupsPage: React.FC = () => {
         />
       </ListPageTemplate>
 
-      <DetailDrawerTemplate<WorkGroup>
+      <DetailDrawerTemplate
         title={t('field.workGroup.detailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
-        dataSource={workGroupDetail || undefined}
-        columns={detailColumns}
         loading={detailLoading}
-        column={1}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
+        basic={workGroupDetail ? (
+            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, workGroupDetail)} />
+          ) : undefined}
       />
 
       <WorkGroupFormModal

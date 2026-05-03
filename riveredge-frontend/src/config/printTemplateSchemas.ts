@@ -171,7 +171,7 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
       { key: 'code', label: '报价单号', type: 'string' },
       { key: 'quotation_series_code', label: '报价系列号', type: 'string' },
       { key: 'version_no', label: '版本号', type: 'number' },
-      { key: 'revision_label', label: '版本标签（如 Rev.1）', type: 'string' },
+      { key: 'revision_label', label: '版本标签（如 第1版 / Revision 1）', type: 'string' },
       { key: 'is_latest_in_series', label: '是否系列内最新版', type: 'boolean' },
       { key: 'currency_code', label: '币别', type: 'string' },
       { key: 'review_status', label: '审核状态', type: 'string' },

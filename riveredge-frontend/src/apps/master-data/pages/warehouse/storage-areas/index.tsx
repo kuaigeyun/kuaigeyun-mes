@@ -7,13 +7,13 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
+import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography } from 'antd';
 import { downloadFile } from '../../../../../utils';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
 import { storageAreaApi, warehouseApi } from '../../../services/warehouse';
 import { StorageAreaFormModal } from '../../../components/StorageAreaFormModal';
 import { QRCodeGenerator } from '../../../../../components/qrcode';
@@ -788,14 +788,11 @@ const StorageAreasPage: React.FC = () => {
       </ListPageTemplate>
 
       {/* 详情 Drawer */}
-      <DetailDrawerTemplate<StorageArea>
+      <DetailDrawerTemplate
         title={t('app.master-data.storageAreas.detailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
-        dataSource={storageAreaDetail || undefined}
-        columns={detailColumns}
         loading={detailLoading}
-        column={1}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
         styles={{ body: { position: 'relative' } }}
       >
@@ -825,7 +822,10 @@ const StorageAreasPage: React.FC = () => {
               qrcodeType="TRACE"
               size={8}
               noCard={true}
-            />
+        basic={storageAreaDetail ? (
+            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, storageAreaDetail)} />
+          ) : undefined}
+      />
           </div>
         )}
       </DetailDrawerTemplate>

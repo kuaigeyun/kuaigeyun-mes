@@ -216,7 +216,7 @@ const HolidaysPage: React.FC = () => {
           deleteButtonText="批量删除"
         />
       </ListPageTemplate>
-      <DetailDrawerTemplate<Holiday>
+      <DetailDrawerTemplate
         title="假期详情"
         open={drawerVisible}
         onClose={handleCloseDetail}

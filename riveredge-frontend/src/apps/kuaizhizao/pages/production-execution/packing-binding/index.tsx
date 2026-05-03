@@ -657,7 +657,7 @@ const PackingBindingPage: React.FC = () => {
         />
       </FormModalTemplate>
 
-      <DetailDrawerTemplate<PackingBinding>
+      <DetailDrawerTemplate
         title={`装箱绑定详情${currentBinding?.box_no ? ` - ${currentBinding.box_no}` : ''}`}
         open={detailDrawerVisible}
         width={DRAWER_CONFIG.HALF_WIDTH}

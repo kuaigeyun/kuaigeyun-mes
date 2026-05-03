@@ -7,13 +7,13 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
+import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography } from 'antd';
 import { downloadFile } from '../../../../../utils';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
 import { productionLineApi, workshopApi } from '../../../services/factory';
 import { ProductionLineFormModal } from '../../../components/ProductionLineFormModal';
 import type { ProductionLine, ProductionLineCreate, Workshop } from '../../../types/factory';
@@ -790,15 +790,15 @@ const ProductionLinesPage: React.FC = () => {
       </ListPageTemplate>
 
       {/* 详情 Drawer */}
-      <DetailDrawerTemplate<ProductionLine>
+      <DetailDrawerTemplate
         title={t('app.master-data.productionLines.detailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
-        dataSource={productionLineDetail || undefined}
-        columns={detailColumns}
         loading={detailLoading}
-        column={1}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
+        basic={productionLineDetail ? (
+            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, productionLineDetail)} />
+          ) : undefined}
       />
 
       {/* 创建/编辑产线 Modal */}

@@ -9,10 +9,10 @@ import React, { useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Badge, Typography, Tooltip, Card, theme } from 'antd';
+import { App, Badge, Button, Card, Descriptions, Drawer, Input, Modal, Popconfirm, Space, Tag, Tooltip, Typography, message, theme } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, ApiOutlined, LinkOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
 import {
   getIntegrationConfigList,
   getIntegrationConfigByUuid,
@@ -829,15 +829,16 @@ const IntegrationConfigListPage: React.FC = () => {
       />
 
       {/* 查看详情 Drawer */}
-      <DetailDrawerTemplate<IntegrationConfig>
+      <DetailDrawerTemplate
         title={t('pages.system.integrationConfigs.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
         dataSource={detailData || {}}
-        columns={detailColumns}
-        column={1}
+        basic={detailData ? (
+            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, detailData)} />
+          ) : undefined}
       />
     </>
   );

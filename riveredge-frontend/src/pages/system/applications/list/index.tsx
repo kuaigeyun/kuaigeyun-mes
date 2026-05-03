@@ -9,8 +9,8 @@ import React, { useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { ActionType, ProColumns, ProFormInstance, ProFormText, ProFormTextArea, ProFormDigit, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Switch, Card, Dropdown, Modal, Popconfirm } from 'antd';
-import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { App, Button, Card, Descriptions, Dropdown, Modal, Popconfirm, Space, Switch, Tag } from 'antd';
+import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
 import { UniTable } from '../../../../components/uni-table';
 import { theme } from 'antd';
 import {
@@ -172,39 +172,65 @@ const ApplicationListPage: React.FC = () => {
         messageApi.info(t('pages.system.applications.syncAllNoApps', { defaultValue: '暂无已安装的应用' }));
         return;
       }
-      messageApi.loading({ content: t('pages.system.applications.syncAllLoading', { defaultValue: '正在同步菜单...' }), key: 'sync-all' });
+      messageApi.loading({
+        content: t('pages.system.applications.syncAllLoading', {
+          defaultValue: '正在执行：① 各应用清单同步 ② 菜单全量写入数据库…',
+        }),
+        key: 'sync-all',
+      });
       let successCount = 0;
       const errors: string[] = [];
+      const unknown = () => t('pages.system.applications.syncAllErrUnknown', { defaultValue: '未知错误' });
       for (const code of codes) {
         try {
           const result = await syncApplicationManifest(code);
           if (result.success) successCount += 1;
-          else errors.push(`${code}: ${result.message || ''}`);
+          else {
+            errors.push(
+              t('pages.system.applications.syncAllErrManifest', {
+                code,
+                detail: (result.message || '').trim() || unknown(),
+              })
+            );
+          }
         } catch (e: any) {
-          errors.push(`${code}: ${e?.message || String(e)}`);
+          errors.push(
+            t('pages.system.applications.syncAllErrManifest', {
+              code,
+              detail: (e?.message || String(e)).trim() || unknown(),
+            })
+          );
         }
       }
       // 再执行一次「同步全部菜单」，确保菜单与数据库完全一致（解决 manifest 更新后菜单未显示的问题）
       try {
         await syncAllMenus();
       } catch (e: any) {
-        errors.push(`sync-all: ${e?.message || String(e)}`);
+        errors.push(
+          t('pages.system.applications.syncAllErrMenusDb', {
+            detail: (e?.message || String(e)).trim() || unknown(),
+          })
+        );
       }
       if (errors.length > 0) {
         messageApi.warning({
-          content: t('pages.system.applications.syncAllPartial', {
-            success: successCount,
-            total: codes.length,
-            errors: errors.slice(0, 3).join('; '),
-            defaultValue: `已同步 ${successCount}/${codes.length} 个应用，部分失败: ${errors.slice(0, 3).join('; ')}`,
-          }),
+          content: (
+            <span style={{ whiteSpace: 'pre-line' }}>
+              {t('pages.system.applications.syncAllPartial', {
+                success: successCount,
+                total: codes.length,
+                errors: errors.slice(0, 3).join('\n'),
+              })}
+            </span>
+          ),
           key: 'sync-all',
+          duration: 10,
         });
       } else {
         messageApi.success({
           content: t('pages.system.applications.syncAllSuccess', {
             count: successCount,
-            defaultValue: `已同步 ${successCount} 个应用菜单`,
+            defaultValue: `第 1 步「应用清单」${successCount} 个已全部同步；第 2 步「菜单入库」已成功。`,
           }),
           key: 'sync-all',
         });
@@ -1175,15 +1201,15 @@ const ApplicationListPage: React.FC = () => {
       </Modal>
 
       {/* 查看详情 Drawer */}
-      <DetailDrawerTemplate<Application>
+      <DetailDrawerTemplate
         title={t('pages.system.applications.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        dataSource={detailData || undefined}
-        columns={detailColumns}
-        column={1}
+        basic={detailData ? (
+            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, detailData)} />
+          ) : undefined}
       />
 
       {/* 应用设置 Modal - 使用 FormModalTemplate */}

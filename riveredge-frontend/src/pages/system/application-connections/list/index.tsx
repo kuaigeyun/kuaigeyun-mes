@@ -961,7 +961,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
         onSelect={handleConnectorSelect}
       />
 
-      <DetailDrawerTemplate<ApplicationConnection>
+      <DetailDrawerTemplate
         title="应用连接器详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}

@@ -5188,7 +5188,7 @@ const WorkOrdersPage: React.FC = () => {
       </Modal>
 
       {/* 工单详情 Drawer */}
-      <DetailDrawerTemplate<WorkOrder>
+      <DetailDrawerTemplate
         title={`工单详情 - ${workOrderDetail?.code || ''}`}
         open={drawerVisible}
         onClose={() => {

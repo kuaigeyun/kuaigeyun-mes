@@ -13,7 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, List, Typography, Alert, theme as AntdTheme, Descriptions, Empty, Spin, Dropdown, Tooltip, Select } from 'antd';
 import type { DescriptionsProps } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, AppstoreAddOutlined, SendOutlined, CommentOutlined, RollbackOutlined, CheckOutlined, CloseCircleOutlined, UndoOutlined, ArrowDownOutlined, BranchesOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, AppstoreAddOutlined, SendOutlined, CommentOutlined, RollbackOutlined, CheckOutlined, CloseCircleOutlined, UndoOutlined, ArrowDownOutlined, BranchesOutlined, ReloadOutlined } from '@ant-design/icons';
 import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
@@ -24,7 +24,7 @@ import { MaterialBatchPickerModal } from '../../../../../components/material-bat
 import type { Material } from '../../../../master-data/types/material';
 import { CustomerFormModal } from '../../../../master-data/components/CustomerFormModal';
 import { customerApi } from '../../../../master-data/services/supply-chain';
-import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DRAWER_CONFIG, FormModalTemplate } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate } from '../../../../../components/layout-templates';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { AmountDisplay } from '../../../../../components/permission';
 import { DictionaryLabel } from '../../../../../components/dictionary-label';
@@ -54,8 +54,9 @@ import { SalesOrderDetailBody } from '../sales-orders/components/SalesOrderDetai
 import { getQuotationLifecycle } from '../../../utils/quotationLifecycle';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import {
-  DocumentTrackingRelationsBody,
+  DocumentTrackingRelationsTabsBody,
   DocumentTrackingTimelineBody,
+  TraceLinkedDocumentBrief,
   useDocumentTracking,
 } from '../../../../../components/document-tracking-panel';
 import { apiRequest } from '../../../../../services/api';
@@ -168,7 +169,7 @@ function toApiDateString(v: unknown): string | undefined {
   return d.isValid() ? d.format('YYYY-MM-DD') : undefined;
 }
 
-/** 将 ProDescriptions 列配置转为 Ant Design Descriptions items（与 DetailDrawerTemplate 逻辑一致） */
+/** 将 ProDescriptions 列配置转为 Ant Design Descriptions items（与 detailDrawerDescriptionItems 一致） */
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
   cols: ProDescriptionsItemProps<T>[]
@@ -200,6 +201,26 @@ const QUOTATION_DETAIL_ITEMS_SCROLL_X = 1060;
 /** 报价单详情内打开下游销售订单时：二层抽屉宽度与 zIndex（叠在报价单抽屉之上） */
 const LINKED_DOCUMENT_DRAWER_WIDTH = '45%';
 const LINKED_DOCUMENT_DRAWER_Z_INDEX = 1050;
+
+/** 抽屉外左上角全链路浮层：高于默认抽屉遮罩，低于二层抽屉避免挡住下游单据 */
+const QUOTATION_FULL_CHAIN_OVERLAY_Z_INDEX = 1030;
+
+/** 全链路悬浮层外边距：左/上与视口留白；宽度方向仍与中线各收一侧（左半屏）；高度方向为视口上下留白 */
+const QUOTATION_FULL_CHAIN_FLOAT_MARGIN = 16;
+
+/** 左半屏「全链路」与「关联单据简览」两块悬浮窗之间的垂直间距（与全局 16px 间距体系一致） */
+const QUOTATION_LEFT_CHAIN_GAP = 16;
+
+/** 左侧「全链路 + 关联简览」悬浮窗与右侧报价单抽屉之间的水平间距（避免两块视觉贴死） */
+const QUOTATION_CHAIN_DRAWER_GAP = 16;
+
+/** 左半屏上下两块悬浮窗参与高度平分的纵向扣除：上外边距 + 下外边距 + 中间间隙 */
+const QUOTATION_CHAIN_VERTICAL_TRIM =
+  QUOTATION_FULL_CHAIN_FLOAT_MARGIN * 2 + QUOTATION_LEFT_CHAIN_GAP;
+
+const quotationChainHalfHeightCss = `calc((100vh - ${QUOTATION_CHAIN_VERTICAL_TRIM}px) / 2)`;
+const quotationChainPanelWidthCss = `calc(50vw - ${QUOTATION_FULL_CHAIN_FLOAT_MARGIN * 2 + QUOTATION_CHAIN_DRAWER_GAP}px)`;
+const quotationBriefPanelTopCss = `calc(${QUOTATION_FULL_CHAIN_FLOAT_MARGIN}px + (100vh - ${QUOTATION_CHAIN_VERTICAL_TRIM}px) / 2 + ${QUOTATION_LEFT_CHAIN_GAP}px)`;
 
 function renderQuotationRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
   return renderRowActionsOverflow(nodes, keyPrefix);
@@ -289,6 +310,7 @@ const QuotationFormSummary: React.FC = () => {
 
 const QuotationsPage: React.FC = () => {
   const { t } = useTranslation();
+  const { token } = AntdTheme.useToken();
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
@@ -298,6 +320,13 @@ const QuotationsPage: React.FC = () => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [quotationDetail, setQuotationDetail] = useState<Quotation | null>(null);
+  /** 抽屉外全链路悬浮窗：刷新追溯图（驱动 DocumentTraceFlowGraph refreshKey） */
+  const [fullChainRefreshKey, setFullChainRefreshKey] = useState(0);
+  const [fullChainTraceLoading, setFullChainTraceLoading] = useState(false);
+  /** 抽屉外全链路浮层：点击关联节点后下半区展示该单据简览（默认不展示当前报价单本身） */
+  const [fullChainBriefDoc, setFullChainBriefDoc] = useState<{ document_type: string; document_id: number } | null>(
+    null
+  );
   const quotationTracking = useDocumentTracking(
     detailDrawerVisible && quotationDetail ? 'quotation' : undefined,
     quotationDetail?.id
@@ -426,7 +455,7 @@ const QuotationsPage: React.FC = () => {
       width: 88,
       hideInSearch: true,
       order: 13,
-      render: (_, r) => `Rev.${r.version_no ?? 1}`,
+      render: (_, r) => t('app.kuaizhizao.quotation.versionDisplay', { n: r.version_no ?? 1 }),
     },
     {
       title: '客户',
@@ -1500,7 +1529,8 @@ const QuotationsPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.quotation.colVersion'),
       dataIndex: 'version_no',
-      render: (_: unknown, r: Quotation) => `Rev.${r.version_no ?? 1}`,
+      render: (_: unknown, r: Quotation) =>
+        t('app.kuaizhizao.quotation.versionDisplay', { n: r.version_no ?? 1 }),
     },
     {
       title: t('app.kuaizhizao.quotation.colVersionState'),
@@ -1601,6 +1631,24 @@ const QuotationsPage: React.FC = () => {
     },
     [openLinkedSalesOrderDrawer]
   );
+
+  const onFullChainGraphNodeClick = useCallback(
+    (type: string, id: number) => {
+      if (!id) return;
+      if (type === 'quotation' && quotationDetail?.id != null && id === quotationDetail.id) {
+        setFullChainBriefDoc(null);
+        return;
+      }
+      setFullChainBriefDoc({ document_type: type, document_id: id });
+    },
+    [quotationDetail?.id]
+  );
+
+  useEffect(() => {
+    if (detailDrawerVisible && quotationDetail?.id != null) {
+      setFullChainBriefDoc(null);
+    }
+  }, [detailDrawerVisible, quotationDetail?.id]);
 
   const closeLinkedSalesOrderDrawer = useCallback(() => {
     setLinkedSalesOrderDrawerOpen(false);
@@ -2211,17 +2259,167 @@ const QuotationsPage: React.FC = () => {
         />
       </ListPageTemplate>
 
+      {detailDrawerVisible && quotationDetail ? (
+        <>
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.relationsFullChainTitle')}
+            style={{
+              position: 'fixed',
+              left: QUOTATION_FULL_CHAIN_FLOAT_MARGIN,
+              top: QUOTATION_FULL_CHAIN_FLOAT_MARGIN,
+              width: quotationChainPanelWidthCss,
+              height: quotationChainHalfHeightCss,
+              zIndex: QUOTATION_FULL_CHAIN_OVERLAY_Z_INDEX,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div style={{ flexShrink: 0, marginBottom: 8 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'flex-start',
+                  gap: 12,
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontWeight: 600,
+                      fontSize: 13,
+                      color: 'var(--ant-color-text)',
+                    }}
+                  >
+                    {t('components.documentTrackingPanel.relationsFullChainTitle')}
+                  </div>
+                  <Typography.Text type="secondary" style={{ fontSize: 12, marginTop: 4, display: 'block' }}>
+                    {t('components.documentTrackingPanel.traceBriefClickHint')}
+                  </Typography.Text>
+                </div>
+                <Button
+                  type="default"
+                  size="small"
+                  icon={<ReloadOutlined />}
+                  loading={fullChainTraceLoading}
+                  style={{ flexShrink: 0 }}
+                  onClick={() => setFullChainRefreshKey((k) => k + 1)}
+                >
+                  {t('components.documentRelationGraph.refresh')}
+                </Button>
+              </div>
+            </div>
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <DocumentTrackingRelationsTabsBody
+                documentType="quotation"
+                documentId={quotationDetail.id}
+                refreshKey={fullChainRefreshKey}
+                onDocumentClick={onFullChainGraphNodeClick}
+                compact
+                hideInlineRefresh
+                onTraceLoadingChange={setFullChainTraceLoading}
+              />
+            </div>
+          </div>
+
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.traceBriefTitle')}
+            style={{
+              position: 'fixed',
+              left: QUOTATION_FULL_CHAIN_FLOAT_MARGIN,
+              top: quotationBriefPanelTopCss,
+              width: quotationChainPanelWidthCss,
+              height: quotationChainHalfHeightCss,
+              zIndex: QUOTATION_FULL_CHAIN_OVERLAY_Z_INDEX,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 600,
+                fontSize: 13,
+                marginBottom: fullChainBriefDoc ? 4 : 8,
+                flexShrink: 0,
+                color: 'var(--ant-color-text)',
+              }}
+            >
+              {t('components.documentTrackingPanel.traceBriefTitle')}
+            </div>
+            {fullChainBriefDoc ? (
+              <Typography.Text type="secondary" style={{ fontSize: 12, marginBottom: 8, flexShrink: 0, display: 'block' }}>
+                {t(`components.documentTrackingPanel.docType.${fullChainBriefDoc.document_type}`, {
+                  defaultValue: fullChainBriefDoc.document_type,
+                })}
+                {' · '}
+                #{fullChainBriefDoc.document_id}
+              </Typography.Text>
+            ) : null}
+            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+              <TraceLinkedDocumentBrief
+                documentType={fullChainBriefDoc?.document_type}
+                documentId={fullChainBriefDoc?.document_id}
+                compactChrome
+              />
+            </div>
+            {fullChainBriefDoc ? (
+              <div
+                style={{
+                  flexShrink: 0,
+                  marginTop: 8,
+                  paddingTop: 10,
+                  borderTop: '1px solid var(--ant-color-border)',
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                }}
+              >
+                <Space wrap>
+                  <Button onClick={() => setFullChainBriefDoc(null)}>
+                    {t('components.documentTrackingPanel.traceBriefDismiss')}
+                  </Button>
+                  {fullChainBriefDoc.document_type === 'sales_order' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => openLinkedSalesOrderDrawer(fullChainBriefDoc.document_id)}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenSalesOrder')}
+                    </Button>
+                  ) : null}
+                </Space>
+              </div>
+            ) : null}
+          </div>
+        </>
+      ) : null}
+
       <DetailDrawerTemplate
         title={`报价单详情${quotationDetail?.quotation_code ? ` - ${quotationDetail.quotation_code}` : ''}`}
         open={detailDrawerVisible}
         onClose={() => {
           setDetailDrawerVisible(false);
           setQuotationDetail(null);
+          setFullChainBriefDoc(null);
           closeLinkedSalesOrderDrawer();
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={[]}
-        dataSource={quotationDetail || {}}
         extra={
           quotationDetail && (
             <Space wrap>
@@ -2280,80 +2478,63 @@ const QuotationsPage: React.FC = () => {
             </Space>
           )
         }
-      >
-        {quotationDetail && (
-          <>
-            <DetailDrawerSection title="基本信息">
-              <Descriptions
-                column={3}
-                size="small"
-                items={buildDescriptionItemsFromColumns(quotationDetail, detailBasicColumns)}
+        basic={
+          quotationDetail ? (
+            <Descriptions
+              column={3}
+              size="small"
+              items={buildDescriptionItemsFromColumns(quotationDetail, detailBasicColumns)}
+            />
+          ) : undefined
+        }
+        collaborationMetrics={
+          quotationDetail &&
+          quotationDetail.conversion_downstream_missing &&
+          (() => {
+            const lc = getQuotationLifecycle(quotationDetail);
+            return lc.nextStepSuggestions?.length ? (
+              <Alert
+                type="warning"
+                showIcon
+                message="下游销售订单已不存在"
+                description={lc.nextStepSuggestions.join('；')}
               />
-            </DetailDrawerSection>
-
-            <DetailDrawerSection title="生命周期">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {(() => {
-                  const lifecycle = getQuotationLifecycle(quotationDetail);
-                  const mainStages = lifecycle.mainStages ?? [];
-                  const subStages = lifecycle.subStages ?? [];
-                  return (
-                    <>
-                      {quotationDetail.conversion_downstream_missing && lifecycle.nextStepSuggestions?.length ? (
-                        <Alert
-                          type="warning"
-                          showIcon
-                          message="下游销售订单已不存在"
-                          description={lifecycle.nextStepSuggestions.join('；')}
-                        />
-                      ) : null}
-                      {mainStages.length > 0 && (
-                        <UniLifecycleStepper
-                          steps={mainStages}
-                          status={lifecycle.status}
-                          showLabels
-                          nextStepSuggestions={lifecycle.nextStepSuggestions}
-                        />
-                      )}
-                      {subStages.length > 0 && (
-                        <div>
-                          <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
-                            执行中 · 全链路
-                          </div>
-                          <UniLifecycleStepper steps={subStages} showLabels />
+            ) : undefined;
+          })()
+        }
+        collaborationLifecycle={
+          quotationDetail
+            ? (() => {
+                const lifecycle = getQuotationLifecycle(quotationDetail);
+                const mainStages = lifecycle.mainStages ?? [];
+                const subStages = lifecycle.subStages ?? [];
+                if (mainStages.length === 0 && subStages.length === 0) return undefined;
+                return (
+                  <>
+                    {mainStages.length > 0 && (
+                      <UniLifecycleStepper
+                        steps={mainStages}
+                        status={lifecycle.status}
+                        showLabels
+                        nextStepSuggestions={lifecycle.nextStepSuggestions}
+                      />
+                    )}
+                    {subStages.length > 0 && (
+                      <div>
+                        <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
+                          执行中 · 全链路
                         </div>
-                      )}
-                    </>
-                  );
-                })()}
-                <div
-                  style={{
-                    paddingTop: 12,
-                    borderTop: '1px solid var(--ant-color-border-secondary)',
-                  }}
-                >
-                  <div style={{ marginBottom: 8, fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
-                    上下游单据
-                  </div>
-                  {quotationTracking.loading && (
-                    <div style={{ padding: '8px 0' }}>
-                      <Spin size="small" />
-                    </div>
-                  )}
-                  {quotationTracking.error && (
-                    <Typography.Text type="danger">{quotationTracking.error}</Typography.Text>
-                  )}
-                  {quotationTracking.data && (
-                    <DocumentTrackingRelationsBody
-                      data={quotationTracking.data}
-                      onDocumentClick={onQuotationTrackingDocClick}
-                    />
-                  )}
-                </div>
-              </div>
-            </DetailDrawerSection>
-
-            <DetailDrawerSection title="明细信息">
+                        <UniLifecycleStepper steps={subStages} showLabels />
+                      </div>
+                    )}
+                  </>
+                );
+              })()
+            : undefined
+        }
+        lines={
+          quotationDetail ? (
+            <>
               {/*
                 横滚仅在外层；内层表体覆盖 global.less 的 overflow-x:auto 以免出现竖向滚动条。
                 外层 overflow-x:auto + overflow-y:hidden，避免同元素 visible/auto 配对问题。
@@ -2410,26 +2591,27 @@ const QuotationsPage: React.FC = () => {
               ) : (
                 <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无明细" />
               )}
-            </DetailDrawerSection>
-
-            {quotationDetail.id != null && (
-              <DetailDrawerSection title="操作记录">
-                {quotationTracking.loading && (
-                  <div style={{ textAlign: 'center', padding: 24 }}>
-                    <Spin />
-                  </div>
-                )}
-                {quotationTracking.error && !quotationTracking.loading && (
-                  <Typography.Text type="danger">{quotationTracking.error}</Typography.Text>
-                )}
-                {quotationTracking.data && !quotationTracking.loading && (
-                  <DocumentTrackingTimelineBody data={quotationTracking.data} />
-                )}
-              </DetailDrawerSection>
-            )}
-          </>
-        )}
-      </DetailDrawerTemplate>
+            </>
+          ) : undefined
+        }
+        timeline={
+          quotationDetail?.id != null ? (
+            <>
+              {quotationTracking.loading && (
+                <div style={{ textAlign: 'center', padding: 24 }}>
+                  <Spin />
+                </div>
+              )}
+              {quotationTracking.error && !quotationTracking.loading && (
+                <Typography.Text type="danger">{quotationTracking.error}</Typography.Text>
+              )}
+              {quotationTracking.data && !quotationTracking.loading && (
+                <DocumentTrackingTimelineBody data={quotationTracking.data} />
+              )}
+            </>
+          ) : undefined
+        }
+      />
 
       <DetailDrawerTemplate
         title={`销售订单详情${linkedSalesOrder?.order_code ? ` - ${linkedSalesOrder.order_code}` : ''}`}
@@ -2437,8 +2619,6 @@ const QuotationsPage: React.FC = () => {
         onClose={closeLinkedSalesOrderDrawer}
         width={LINKED_DOCUMENT_DRAWER_WIDTH}
         zIndex={LINKED_DOCUMENT_DRAWER_Z_INDEX}
-        columns={[]}
-        dataSource={{}}
         extra={
           <Button
             type="link"
@@ -2451,7 +2631,7 @@ const QuotationsPage: React.FC = () => {
             前往销售订单管理
           </Button>
         }
-        customContent={
+        plainBody={
           linkedSalesOrder ? (
             <SalesOrderDetailBody order={linkedSalesOrder} onTrackingDocumentClick={onQuotationTrackingDocClick} />
           ) : linkedSalesOrderLoading ? (

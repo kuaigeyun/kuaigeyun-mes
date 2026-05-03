@@ -12,12 +12,12 @@ import React, { useRef, useState, useEffect } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormItem, ProFormDependency } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, message, Row, Col } from 'antd';
+import { App, Button, Col, Descriptions, Modal, Row, Space, Tag, message } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerActions, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { DetailDrawerActions, detailDrawerDescriptionItems, DetailDrawerSection, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import CodeField from '../../../../../components/code-field';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { reworkOrderApi, workOrderApi } from '../../../services/production';
@@ -797,8 +797,6 @@ const ReworkOrdersPage: React.FC = () => {
         title="返工单详情"
         open={detailDrawerVisible}
         onClose={() => setDetailDrawerVisible(false)}
-        dataSource={reworkOrderDetail}
-        columns={detailColumns}
         width={DRAWER_CONFIG.HALF_WIDTH}
         extra={
           reworkOrderDetail && (() => {
@@ -807,7 +805,9 @@ const ReworkOrdersPage: React.FC = () => {
             return (
               <DetailDrawerActions
                 items={[
-                  { key: 'edit', visible: canEdit, render: () => <Button type="link" size="small" icon={<EditOutlined />} onClick={() => { setDetailDrawerVisible(false); handleEdit(reworkOrderDetail); }}>编辑</Button> },
+                  { key: 'edit', visible: canEdit, render: () => <Button type="link" size="small" icon={<EditOutlined
+        basic={<Descriptions column={2} items={detailDrawerDescriptionItems(detailColumns, reworkOrderDetail)} />}
+      />} onClick={() => { setDetailDrawerVisible(false); handleEdit(reworkOrderDetail); }}>编辑</Button> },
                   { key: 'delete', visible: canEdit, render: () => <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(reworkOrderDetail)}>删除</Button> },
                 ]}
               />

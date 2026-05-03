@@ -364,7 +364,7 @@ const LoginLogsPage: React.FC = () => {
       </ListPageTemplate>
 
       {/* 日志详情 Drawer */}
-      <DetailDrawerTemplate<LoginLog>
+      <DetailDrawerTemplate
         title={t('pages.system.loginLogs.detailTitle')}
         open={detailDrawerVisible}
         onClose={() => {
@@ -373,7 +373,9 @@ const LoginLogsPage: React.FC = () => {
         }}
         width={DRAWER_CONFIG.LARGE_WIDTH}
         dataSource={currentLog || {}}
-        columns={detailColumns}
+        basic={currentLog ? (
+            <Descriptions column={2} items={detailDrawerDescriptionItems(detailColumns, currentLog)} />
+          ) : undefined}
       />
     </>
   );

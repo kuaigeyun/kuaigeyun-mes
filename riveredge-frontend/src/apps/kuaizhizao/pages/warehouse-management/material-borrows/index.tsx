@@ -10,7 +10,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form as AntForm, InputNumber, Input, DatePicker, Row, Col, Typography, Dropdown } from 'antd';
+import { App, Button, Col, DatePicker, Descriptions, Dropdown, Form as AntForm, Input, InputNumber, Modal, Row, Space, Table, Tag, Typography } from 'antd';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, PrinterOutlined, ShoppingOutlined, MoreOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
@@ -20,7 +20,7 @@ import type { Material } from '../../../../master-data/types/material';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import CodeField from '../../../../../components/code-field';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
-import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
+import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { getMaterialBorrowLifecycle } from '../../../utils/materialBorrowLifecycle';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
@@ -463,30 +463,34 @@ const MaterialBorrowsPage: React.FC = () => {
         open={detailDrawerVisible}
         onClose={() => { setDetailDrawerVisible(false); setBorrowDetail(null); }}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={detailColumns}
-        dataSource={borrowDetail || {}}
-      >
-        {borrowDetail?.items && borrowDetail.items.length > 0 && (
-          <>
-            <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
-            <Table
-              className="warehouse-detail-table"
-              size="small"
-              rowKey="id"
-            columns={[
-              { title: '物料编号', dataIndex: 'material_code', width: 120 },
-              { title: '物料名称', dataIndex: 'material_name', width: 150 },
-              { title: '单位', dataIndex: 'material_unit', width: 60 },
-              { title: '借出数量', dataIndex: 'borrow_quantity', width: 100, align: 'right' },
-              { title: '已归还数量', dataIndex: 'returned_quantity', width: 100, align: 'right' },
-              { title: '状态', dataIndex: 'status', width: 80 },
-            ]}
-            dataSource={borrowDetail.items}
-            pagination={false}
-          />
-          </>
-        )}
-      </DetailDrawerTemplate>
+        basic={
+          borrowDetail ? (
+            <Descriptions column={2} items={detailDrawerDescriptionItems(detailColumns, borrowDetail)} />
+          ) : undefined
+        }
+        lines={
+          borrowDetail?.items && borrowDetail.items.length > 0 ? (
+            <>
+              <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
+              <Table
+                className="warehouse-detail-table"
+                size="small"
+                rowKey="id"
+                columns={[
+                  { title: '物料编号', dataIndex: 'material_code', width: 120 },
+                  { title: '物料名称', dataIndex: 'material_name', width: 150 },
+                  { title: '单位', dataIndex: 'material_unit', width: 60 },
+                  { title: '借出数量', dataIndex: 'borrow_quantity', width: 100, align: 'right' },
+                  { title: '已归还数量', dataIndex: 'returned_quantity', width: 100, align: 'right' },
+                  { title: '状态', dataIndex: 'status', width: 80 },
+                ]}
+                dataSource={borrowDetail.items}
+                pagination={false}
+              />
+            </>
+          ) : undefined
+        }
+      />
 
       <FormModalTemplate
         title="新建借料单"

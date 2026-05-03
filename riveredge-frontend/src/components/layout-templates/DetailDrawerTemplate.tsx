@@ -1,154 +1,243 @@
 /**
- * 详情 Drawer 布局模板
- *
- * 提供统一的详情 Drawer 布局，使用 ProDescriptions 展示详情信息
- * 遵循 Ant Design 设计规范
- *
- * Author: Luigi Lu
- * Date: 2025-12-26
+ * 详情 Drawer：优先使用结构化插槽（basic / collaboration / lines / timeline）。
+ * 未使用插槽时兼容原有 columns + dataSource、customContent / plainBody、children。
  */
 
 import type { CSSProperties } from 'react';
-import { ReactNode } from 'react';
-import { Drawer, Descriptions } from 'antd';
-import { ProDescriptionsItemProps } from '@ant-design/pro-components';
-import dayjs from 'dayjs';
+import React, { useMemo } from 'react';
+import { Drawer, Descriptions, theme } from 'antd';
+import type { DrawerProps } from 'antd';
+import type { ReactNode } from 'react';
+import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { useTranslation } from 'react-i18next';
 import { DRAWER_CONFIG } from './constants';
+import { getDrawerFloatingWrapperStyle } from './drawerFloatingChrome';
+import { DetailDrawerSection } from './DetailDrawerSection';
+import { detailDrawerDescriptionItems } from './detailDrawerDescriptionItems';
 
-/**
- * 详情 Drawer 模板属性
- */
-export interface DetailDrawerTemplateProps<T = any> {
-  /** Drawer 标题 */
+export interface DetailDrawerTemplateProps<T = Record<string, unknown>> {
   title: ReactNode;
-  /** 是否显示 */
   open?: boolean;
-  /** 是否显示 (兼容旧版本) */
   visible?: boolean;
-  /** 关闭回调 */
   onClose: () => void;
-  /** 数据源 */
-  dataSource?: T;
-  /** ProDescriptions 列配置 */
-  columns?: ProDescriptionsItemProps<T>[];
-  /** Drawer 宽度（默认：标准宽度），Ant Design 5+ 使用 size 替代 width */
   width?: number | string;
-  /** Drawer 尺寸（Ant Design 5+ 推荐），支持 'default' | 'large' 或自定义 number/string */
   size?: number | string;
-  /** 加载状态 */
   loading?: boolean;
-  /** 列数（默认：2） */
-  column?: number;
-  /** 自定义内容（可选，如果提供则覆盖默认的 ProDescriptions） */
-  customContent?: ReactNode;
-  /** Drawer 头部额外内容（如操作按钮） */
   extra?: ReactNode;
-  /** Drawer 底部额外内容（如操作按钮或其他组件） */
-  children?: ReactNode;
-  /** 自定义样式类名 */
   className?: string;
-  /** Drawer 语义化结构的样式（如 styles.wrapper 用于百分比宽度） */
-  styles?: Partial<Record<'root' | 'mask' | 'header' | 'title' | 'extra' | 'section' | 'body' | 'footer' | 'wrapper' | 'dragger' | 'close', CSSProperties>>;
-  /** 堆叠在其它 Drawer 之上时使用（如关联单据二层抽屉），默认不传 */
+  styles?: Partial<
+    Record<
+      'root' | 'mask' | 'header' | 'title' | 'extra' | 'section' | 'body' | 'footer' | 'wrapper' | 'dragger' | 'close',
+      CSSProperties
+    >
+  >;
   zIndex?: number;
+
+  banner?: ReactNode;
+
+  /** 无分区整块正文（不参与结构化插槽） */
+  plainBody?: ReactNode;
+
+  basic?: ReactNode;
+  basicTitle?: ReactNode;
+  basicVisible?: boolean;
+
+  collaboration?: ReactNode;
+  collaborationMetrics?: ReactNode;
+  collaborationLifecycle?: ReactNode;
+  collaborationRelations?: ReactNode;
+  collaborationTitle?: ReactNode;
+  collaborationVisible?: boolean;
+
+  lines?: ReactNode;
+  linesTitle?: ReactNode;
+  linesVisible?: boolean;
+
+  timeline?: ReactNode;
+  timelineTitle?: ReactNode;
+  timelineVisible?: boolean;
+
+  /** 兼容：仅标题区 + Descriptions（请逐步改为 basic + detailDrawerDescriptionItems） */
+  dataSource?: T;
+  columns?: ProDescriptionsItemProps<T>[];
+  column?: number;
+
+  /** @deprecated 请改用 plainBody */
+  customContent?: ReactNode;
+
+  /** 兼容：任意自定义片段（请逐步改为插槽） */
+  children?: ReactNode;
+
+  /** 抽屉停靠侧（默认 right）；影响悬浮外边距施加在哪一侧 */
+  placement?: DrawerProps['placement'];
+  /** 为 true 时不施加悬浮外边距与圆角（仅占满贴边抽屉） */
+  disableFloatingChrome?: boolean;
 }
 
-/**
- * 详情 Drawer 布局模板
- *
- * @example
- * ```tsx
- * <DetailDrawerTemplate
- *   title="客户详情"
- *   open={drawerVisible}
- *   onClose={() => setDrawerVisible(false)}
- *   dataSource={customerDetail}
- *   columns={[
- *     { title: '客户编号', dataIndex: 'code' },
- *     { title: '客户名称', dataIndex: 'name' },
- *   ]}
- * />
- * ```
- */
-export const DetailDrawerTemplate = <T extends Record<string, any> = Record<string, any>>({
+function stackCollaborationParts(
+  metrics?: ReactNode,
+  lifecycle?: ReactNode,
+  relations?: ReactNode
+): ReactNode {
+  const parts = [metrics, lifecycle, relations].filter((p) => p != null && p !== false);
+  if (parts.length === 0) return null;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {parts.map((node, index) => (
+        <React.Fragment key={index}>{node}</React.Fragment>
+      ))}
+    </div>
+  );
+}
+
+export const DetailDrawerTemplate = <T extends Record<string, unknown> = Record<string, unknown>,>({
   title,
   open,
   visible,
   onClose,
-  dataSource,
-  columns = [],
   width = DRAWER_CONFIG.HALF_WIDTH,
   size,
   loading = false,
-  column = 2,
-  customContent,
   extra,
   className,
   styles,
-  children,
   zIndex,
+  banner,
+  plainBody,
+  basic,
+  basicTitle,
+  basicVisible,
+  collaboration,
+  collaborationMetrics,
+  collaborationLifecycle,
+  collaborationRelations,
+  collaborationTitle,
+  collaborationVisible,
+  lines,
+  linesTitle,
+  linesVisible,
+  timeline,
+  timelineTitle,
+  timelineVisible,
+  dataSource,
+  columns = [],
+  column = 2,
+  customContent,
+  children,
+  placement,
+  disableFloatingChrome = false,
 }: DetailDrawerTemplateProps<T>) => {
-  // Ant Design 5+ 推荐使用 size，width 已废弃
+  const { t } = useTranslation();
+  const { token } = theme.useToken();
   const drawerSize = size ?? width;
+  const resolvedPlacement = placement ?? 'right';
+
+  const drawerFloatingWrapperStyle = useMemo(
+    (): CSSProperties =>
+      getDrawerFloatingWrapperStyle(resolvedPlacement, token, { disabled: disableFloatingChrome }),
+    [disableFloatingChrome, resolvedPlacement, token.borderRadiusLG, token.boxShadowSecondary]
+  );
+
+  const resolvedBasicTitle = basicTitle ?? t('app.uniDetail.sectionBasic');
+  const resolvedCollaborationTitle = collaborationTitle ?? t('app.uniDetail.sectionCollaboration');
+  const resolvedLinesTitle = linesTitle ?? t('app.uniDetail.sectionLines');
+  const resolvedTimelineTitle = timelineTitle ?? t('app.uniDetail.sectionTimeline');
+
+  const hasBasicContent = basic != null && basic !== false;
+  const showBasic = basicVisible !== false && (basicVisible === true || hasBasicContent);
+
+  const stackedCollaboration = useMemo(
+    () =>
+      collaboration ??
+      stackCollaborationParts(collaborationMetrics, collaborationLifecycle, collaborationRelations),
+    [collaboration, collaborationMetrics, collaborationLifecycle, collaborationRelations]
+  );
+  const hasCollaborationContent = stackedCollaboration != null && stackedCollaboration !== false;
+  const showCollaboration =
+    collaborationVisible !== false &&
+    (collaborationVisible === true || hasCollaborationContent);
+
+  const hasLinesContent = lines != null && lines !== false;
+  const showLines = linesVisible !== false && (linesVisible === true || hasLinesContent);
+
+  const hasTimelineContent = timeline != null && timeline !== false;
+  const showTimeline =
+    timelineVisible !== false && (timelineVisible === true || hasTimelineContent);
+
+  const usesStructuredSections =
+    showBasic ||
+    showCollaboration ||
+    showLines ||
+    showTimeline;
+
+  const hasLegacyColumns = Array.isArray(columns) && columns.length > 0;
+
+  const legacyDescriptions =
+    hasLegacyColumns ? (
+      <Descriptions
+        column={column}
+        items={detailDrawerDescriptionItems(columns, dataSource ?? undefined)}
+      />
+    ) : null;
+
+  const overlay = plainBody ?? customContent;
+  const legacyBody = (
+    <>
+      {overlay ?? legacyDescriptions}
+      {children}
+    </>
+  );
+
+  const sectionedBody = (
+    <>
+      {showBasic ? (
+        <DetailDrawerSection title={resolvedBasicTitle}>{basic}</DetailDrawerSection>
+      ) : null}
+      {showCollaboration ? (
+        <DetailDrawerSection title={resolvedCollaborationTitle}>{stackedCollaboration}</DetailDrawerSection>
+      ) : null}
+      {showLines ? (
+        <DetailDrawerSection title={resolvedLinesTitle}>{lines}</DetailDrawerSection>
+      ) : null}
+      {showTimeline ? (
+        <DetailDrawerSection title={resolvedTimelineTitle}>{timeline}</DetailDrawerSection>
+      ) : null}
+    </>
+  );
+
+  const drawerBody = usesStructuredSections ? sectionedBody : legacyBody;
 
   return (
     <Drawer
       title={title}
       open={open ?? visible}
       onClose={onClose}
-      size={(drawerSize === 'default' || drawerSize === 'large') ? (drawerSize as 'default' | 'large') : undefined}
+      placement={resolvedPlacement}
+      size={
+        drawerSize === 'default' || drawerSize === 'large'
+          ? (drawerSize as 'default' | 'large')
+          : undefined
+      }
       styles={{
         ...styles,
         wrapper: {
-          width: (typeof drawerSize === 'number' || (typeof drawerSize === 'string' && !['default', 'large'].includes(drawerSize))) ? drawerSize : undefined,
+          ...drawerFloatingWrapperStyle,
+          ...(typeof drawerSize === 'number' ||
+          (typeof drawerSize === 'string' && !['default', 'large'].includes(drawerSize))
+            ? { width: drawerSize }
+            : {}),
           ...styles?.wrapper,
-        }
+        },
       }}
       loading={loading}
       className={className}
       extra={extra}
       zIndex={zIndex}
     >
-      {customContent || (columns && columns.length > 0 && (
-        <Descriptions
-          column={column}
-          items={columns.map((col: any, index) => {
-            const value = dataSource ? (col.dataIndex ? (dataSource as any)[col.dataIndex as string] : undefined) : undefined;
-            
-            let content: ReactNode = value;
-            
-            
-            // 处理 valueType
-            if (col.valueType === 'dateTime' && value) {
-              content = dayjs(value).format('YYYY-MM-DD HH:mm:ss');
-            } else if (col.valueType === 'date' && value) {
-              content = dayjs(value).format('YYYY-MM-DD');
-            } else if (col.valueEnum && value) {
-              const enumItem = col.valueEnum[value as string];
-              content = enumItem?.text || enumItem || value;
-            }
-
-            // 处理 render（dataSource 为 null 时不调用，避免 render 内访问 entity 属性报错）
-            if (col.render && dataSource != null) {
-              // ProDescriptions render signature: (dom, entity, index, action, schema)
-              // 这里简化处理，传入 content 作为 dom，dataSource 作为 entity
-              // 注意：ProDescriptions 的 render 第一个参数 is dom (即已经格式化过的值)，第二个 is entity
-              content = col.render(content, dataSource, index, {}, col);
-            }
-
-            return {
-              key: col.key || col.dataIndex || index,
-              label: col.title,
-              children: content !== undefined && content !== null ? content : '-',
-              span: col.span || 1,
-            };
-          })}
-        />
-      ))}
-      {children}
+      {banner}
+      {drawerBody}
     </Drawer>
   );
 };
 
 export default DetailDrawerTemplate;
-
