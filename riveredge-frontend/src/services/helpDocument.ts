@@ -21,6 +21,10 @@ export interface HelpDocument {
   key: string;
   title: string;
   sections: HelpSection[];
+  /** 列表/筛选用分类（可选） */
+  category?: string;
+  /** 列表摘要（可选） */
+  description?: string;
 }
 
 /**

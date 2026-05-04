@@ -320,15 +320,20 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
     };
     return (
       <tr ref={setNodeRef} style={style} {...props}>
-        {React.Children.map(children, (child: any, idx: number) => {
+        {React.Children.map(children, (child, idx: number) => {
           if (idx === 0 && React.isValidElement(child)) {
-            return React.cloneElement(child, {
-              children: React.Children.map(child.props.children, (cellContent: any) => {
+            const rowEl = child as React.ReactElement<{ children?: React.ReactNode }>;
+            return React.cloneElement(rowEl, {
+              children: React.Children.map(rowEl.props.children, (cellContent) => {
                 if (React.isValidElement(cellContent) && cellContent.type === Space) {
-                  return React.cloneElement(cellContent, {
-                    children: React.Children.map(cellContent.props.children, (item: any) => {
-                      if (React.isValidElement(item) && item.props?.className === 'drag-handle') {
-                        return React.cloneElement(item, { ...attributes, ...listeners });
+                  const spaceEl = cellContent as React.ReactElement<{ children?: React.ReactNode }>;
+                  return React.cloneElement(spaceEl, {
+                    children: React.Children.map(spaceEl.props.children, (item) => {
+                      const itemProps = React.isValidElement(item)
+                        ? (item.props as { className?: string })
+                        : undefined;
+                      if (React.isValidElement(item) && itemProps?.className === 'drag-handle') {
+                        return React.cloneElement(item, { ...attributes, ...listeners } as never);
                       }
                       return item;
                     }),
@@ -339,7 +344,12 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
             });
           }
           if (idx === actionTdIndex && React.isValidElement(child)) {
-            return React.cloneElement(child, { onClick: (e: React.MouseEvent) => e.stopPropagation() });
+            return React.cloneElement(
+              child as React.ReactElement<{ onClick?: (e: React.MouseEvent) => void }>,
+              {
+                onClick: (e: React.MouseEvent) => e.stopPropagation(),
+              },
+            );
           }
           return child;
         })}

@@ -29,6 +29,11 @@ import { downloadFile } from '../../../../../utils';
 import { getUserList, User } from '../../../../../services/user';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 
+/** ProTable 操作列可传 UniTable 扩展：控制溢出菜单 directMax 等 */
+type MaterialBOMProColumn = ProColumns<MaterialBOMRow> & {
+  uniActionRenderOptions?: { directMax?: number };
+};
+
 /**
  * 单位列展示：接收 Form 的 value（单位 code），渲染字典标签，表格渲染前已映射
  */
@@ -41,6 +46,14 @@ const UnitDisplayCell: React.FC<{
 );
 
 /** 同一 BOM 编号（bomCode + materialId + version）分组后的行，用于树形表格展示 */
+type BOMTableTreeNode = BOM & {
+  key: string;
+  _bomVersion?: string;
+  _bomCode?: string;
+  _bomApprovalStatus?: BOM['approvalStatus'];
+  children?: BOMTableTreeNode[];
+};
+
 interface BOMGroupRow {
   groupKey: string;
   bomCode: string;
@@ -49,7 +62,7 @@ interface BOMGroupRow {
   approvalStatus: BOM['approvalStatus'];
   firstItem: BOM;
   items: BOM[];
-  children?: BOM[]; // 树形数据的子节点
+  children?: BOMTableTreeNode[]; // 树形数据的子节点
 }
 
 /** 按物料分组的行：一物料一行，版本通过下拉切换，默认显示默认版本或最新版本 */
@@ -1183,9 +1196,9 @@ const BOMPage: React.FC = () => {
       parentKey: string,
       depth: number,
       visitedIds: Set<number>
-    ): Record<string, any> => {
+    ): BOMTableTreeNode => {
       const bomInfo = materialIdToBomInfo.get(item.componentId);
-      const base = {
+      const base: BOMTableTreeNode = {
         ...item,
         key: `${parentKey}-${item.uuid}-${idx}`,
         ...(bomInfo && {
@@ -1623,7 +1636,7 @@ const BOMPage: React.FC = () => {
   const isRootRow = (r: any) => 'versions' in r && Array.isArray(r.versions);
   const isBomItemRow = (r: any) => !isRootRow(r);
 
-  const groupColumns: ProColumns<MaterialBOMRow>[] = [
+  const groupColumns: MaterialBOMProColumn[] = [
     { 
       title: t('app.master-data.bom.materialTitle'), 
       dataIndex: 'materialId', 
@@ -2897,7 +2910,10 @@ const BOMPage: React.FC = () => {
                   ];
 
                   // 计算表格总宽度
-                  const totalWidth = tableColumns.reduce((sum, col) => sum + (col.width || 0), 0);
+                  const totalWidth = tableColumns.reduce(
+                    (sum, col) => sum + (typeof col.width === 'number' ? col.width : Number(col.width) || 0),
+                    0
+                  );
 
                   return (
                     <div 

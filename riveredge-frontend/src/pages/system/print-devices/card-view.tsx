@@ -442,7 +442,7 @@ const CardView: React.FC = () => {
           setCurrentDevice(null);
         }}
         footer={null}
-        size={800}
+        width={800}
       >
         {currentDevice && (
           <Descriptions column={1} bordered>
@@ -530,7 +530,7 @@ const CardView: React.FC = () => {
             {t('pages.system.printDevices.close')}
           </Button>,
         ]}
-        size={600}
+        width={600}
       >
         {testLoading && !testResult && (
           <div style={{ textAlign: 'center', padding: '40px 0' }}>

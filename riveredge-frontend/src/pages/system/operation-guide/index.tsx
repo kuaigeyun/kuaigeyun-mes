@@ -14,7 +14,8 @@ import { PlusOutlined, EditOutlined, EyeOutlined, QuestionCircleOutlined, BookOu
 import { App } from 'antd';
 import { listOperationGuides, getOperationGuide, createOrUpdateOperationGuide, OperationGuide, OperationGuideStep } from '../../../services/operationGuide';
 import { listHelpDocuments, HelpDocument } from '../../../services/helpDocument';
-import { OnboardingGuide, GuideStep } from '../../../components/onboarding-guide';
+import type { GuideStep } from '../../../components/onboarding-guide';
+import { Joyride, STATUS } from 'react-joyride';
 import HelpCenter from '../../../components/help-center';
 
 const { Title, Paragraph, Text } = Typography;
@@ -122,7 +123,7 @@ const OperationGuidePage: React.FC = () => {
     const steps: GuideStep[] = guide.steps.map((step) => ({
       target: step.target,
       title: step.title,
-      description: step.description,
+      content: step.description,
       placement: (step.placement as any) || 'bottom',
     }));
     setPreviewSteps(steps);
@@ -273,7 +274,7 @@ const OperationGuidePage: React.FC = () => {
                           {
                             target: '.ant-btn-primary',
                             title: t('pages.system.operationGuide.exampleButton'),
-                            description: t('pages.system.operationGuide.exampleDesc'),
+                            content: t('pages.system.operationGuide.exampleDesc'),
                             placement: 'bottom',
                           },
                         ];
@@ -380,14 +381,32 @@ const OperationGuidePage: React.FC = () => {
         </Form>
       </Modal>
 
-      {/* 操作引导预览 */}
-      <OnboardingGuide
-        steps={previewSteps}
-        guideKey="preview"
-        autoStart={previewGuideVisible}
-        onClose={() => setPreviewGuideVisible(false)}
-        onComplete={() => setPreviewGuideVisible(false)}
-      />
+      {/* 操作引导预览（独立 Joyride，不走全局 OnboardingGuide store） */}
+      {previewGuideVisible && previewSteps.length > 0 ? (
+        <Joyride
+          steps={previewSteps}
+          run
+          continuous
+          scrollToFirstStep
+          options={{
+            showProgress: true,
+            buttons: ['back', 'close', 'primary', 'skip'],
+            scrollOffset: 100,
+          }}
+          locale={{
+            back: '上一步',
+            close: '关闭',
+            last: '完成',
+            next: '下一步',
+            skip: '跳过',
+          }}
+          onEvent={(data) => {
+            if (data.status === STATUS.FINISHED || data.status === STATUS.SKIPPED) {
+              setPreviewGuideVisible(false);
+            }
+          }}
+        />
+      ) : null}
     </div>
   );
 };

@@ -15,6 +15,7 @@ import { App } from 'antd';
 import { reportingApi } from '../../../../services/production';
 import type { ReportingDetailedStatistics } from '../../../../services/reporting';
 import dayjs, { Dayjs } from 'dayjs';
+import type { NoUndefinedRangeValueType } from 'rc-picker/lib/PickerInput/RangePicker';
 
 const { RangePicker } = DatePicker;
 
@@ -53,9 +54,12 @@ const ReportingStatisticsPage: React.FC = () => {
   /**
    * 处理日期范围变化
    */
-  const handleDateRangeChange = (dates: [Dayjs, Dayjs] | null) => {
-    if (dates) {
-      setDateRange(dates);
+  const handleDateRangeChange = (
+    dates: NoUndefinedRangeValueType<Dayjs> | null,
+    _dateStrings: [string, string]
+  ) => {
+    if (dates?.[0] && dates[1]) {
+      setDateRange([dates[0], dates[1]]);
     }
   };
 

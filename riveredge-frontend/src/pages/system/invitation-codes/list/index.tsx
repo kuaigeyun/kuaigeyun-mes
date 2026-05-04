@@ -143,10 +143,10 @@ const InvitationCodeListPage: React.FC = () => {
       {
         title: t('field.invitationCode.code'),
         dataIndex: 'code',
-        render: (value: string) => (
+        render: (_, record) => (
           <Space>
-            <span style={{ fontFamily: CODE_FONT_FAMILY, fontSize: '16px', fontWeight: 'bold' }}>{value}</span>
-            <Button type="link" size="small" icon={<CopyOutlined />} onClick={() => handleCopy(value)}>
+            <span style={{ fontFamily: CODE_FONT_FAMILY, fontSize: '16px', fontWeight: 'bold' }}>{record.code}</span>
+            <Button type="link" size="small" icon={<CopyOutlined />} onClick={() => handleCopy(record.code || '')}>
               {t('field.invitationCode.copy')}
             </Button>
           </Space>
@@ -155,12 +155,12 @@ const InvitationCodeListPage: React.FC = () => {
       {
         title: t('field.invitationCode.email'),
         dataIndex: 'email',
-        render: (value: string) => value || '-',
+        render: (_, record) => record.email || '-',
       },
       {
         title: t('field.invitationCode.roleId'),
         dataIndex: 'role_id',
-        render: (value: number) => value ?? '-',
+        render: (_, record) => record.role_id ?? '-',
       },
       {
         title: t('field.invitationCode.usedCount'),
@@ -170,12 +170,13 @@ const InvitationCodeListPage: React.FC = () => {
       {
         title: t('field.invitationCode.expiresAt'),
         dataIndex: 'expires_at',
-        render: (value: string) => value || t('field.invitationCode.neverExpires'),
+        render: (_, record) => record.expires_at || t('field.invitationCode.neverExpires'),
       },
       {
         title: t('field.role.status'),
         dataIndex: 'is_active',
-        render: (value: boolean, record: InvitationCode) => {
+        render: (_, record) => {
+          const value = !!record.is_active;
           const valid = isCodeValid(record);
           return (
             <Space>

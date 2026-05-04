@@ -7,7 +7,17 @@
 
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProFormList, ProFormGroup } from '@ant-design/pro-components';
+import {
+  ActionType,
+  ProColumns,
+  ProFormText,
+  ProFormTextArea,
+  ProFormSwitch,
+  ProFormInstance,
+  ProFormList,
+  ProFormGroup,
+  type ProDescriptionsItemProps,
+} from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Button, Descriptions, Modal, Popconfirm, Tag } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
@@ -322,27 +332,27 @@ const MessageTemplateListPage: React.FC = () => {
   /**
    * 详情列定义
    */
-  const detailColumns = [
+  const detailColumns: ProDescriptionsItemProps<MessageTemplate>[] = [
     { title: t('pages.system.messageTemplate.templateName'), dataIndex: 'name' },
     { title: t('pages.system.messageTemplate.templateCode'), dataIndex: 'code' },
     {
       title: t('pages.system.messageConfig.type'),
       dataIndex: 'type',
-      render: (value: string) => {
+      render: (_, r) => {
         const typeMap: Record<string, string> = {
           email: t('pages.system.messageConfig.typeEmail'),
           sms: t('pages.system.messageConfig.typeSms'),
           internal: t('pages.system.messageConfig.typeInternal'),
           push: t('pages.system.messageConfig.typePush'),
         };
-        return typeMap[value] || value;
+        return typeMap[r.type] || r.type;
       },
     },
     { title: t('pages.system.messageTemplate.subject'), dataIndex: 'subject' },
     {
       title: t('pages.system.messageTemplate.templateContent'),
       dataIndex: 'content',
-      render: (value: string) => (
+      render: (_, r) => (
         <pre style={{
           margin: 0,
           padding: '8px',
@@ -353,14 +363,14 @@ const MessageTemplateListPage: React.FC = () => {
           fontSize: 12,
           whiteSpace: 'pre-wrap',
         }}>
-          {value}
+          {r.content}
         </pre>
       ),
     },
     {
       title: t('pages.system.messageTemplate.templateVars'),
       dataIndex: 'variables',
-      render: (value: Record<string, any>) => value ? (
+      render: (_, r) => r.variables ? (
         <pre style={{
           margin: 0,
           padding: '8px',
@@ -370,7 +380,7 @@ const MessageTemplateListPage: React.FC = () => {
           maxHeight: '200px',
           fontSize: 12,
         }}>
-          {JSON.stringify(value, null, 2)}
+          {JSON.stringify(r.variables, null, 2)}
         </pre>
       ) : '-',
     },
@@ -378,9 +388,9 @@ const MessageTemplateListPage: React.FC = () => {
     {
       title: t('pages.system.messageConfig.activeStatus'),
       dataIndex: 'is_active',
-      render: (value: boolean) => (
-        <Tag color={value ? 'success' : 'default'}>
-          {value ? t('pages.system.applications.enabled') : t('pages.system.applications.disabled')}
+      render: (_, r) => (
+        <Tag color={r.is_active ? 'success' : 'default'}>
+          {r.is_active ? t('pages.system.applications.enabled') : t('pages.system.applications.disabled')}
         </Tag>
       ),
     },

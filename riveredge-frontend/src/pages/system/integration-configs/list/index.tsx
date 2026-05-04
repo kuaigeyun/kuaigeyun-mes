@@ -7,7 +7,16 @@
 
 import React, { useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
+import {
+  ActionType,
+  ProColumns,
+  ProFormText,
+  ProFormTextArea,
+  ProFormSwitch,
+  ProFormSelect,
+  ProFormInstance,
+  type ProDescriptionsItemProps,
+} from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Badge, Button, Card, Descriptions, Drawer, Input, Modal, Popconfirm, Space, Tag, Tooltip, Typography, message, theme } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, ApiOutlined, LinkOutlined, ThunderboltOutlined } from '@ant-design/icons';
@@ -541,7 +550,7 @@ const IntegrationConfigListPage: React.FC = () => {
   /**
    * 详情列定义
    */
-  const detailColumns = [
+  const detailColumns: ProDescriptionsItemProps<IntegrationConfig>[] = [
     {
       title: t('pages.system.integrationConfigs.name'),
       dataIndex: 'name',
@@ -553,14 +562,14 @@ const IntegrationConfigListPage: React.FC = () => {
     {
       title: t('pages.system.integrationConfigs.type'),
       dataIndex: 'type',
-      render: (value: string) => {
+      render: (_, r) => {
         const typeMap: Record<string, string> = {
           OAuth: 'OAuth',
           API: 'API',
           Webhook: 'Webhook',
           Database: 'Database',
         };
-        return typeMap[value] || value;
+        return typeMap[r.type] || r.type;
       },
     },
     {
@@ -570,7 +579,7 @@ const IntegrationConfigListPage: React.FC = () => {
     {
       title: t('pages.system.integrationConfigs.configInfo'),
       dataIndex: 'config',
-      render: (value: Record<string, any>) => (
+      render: (_, r) => (
         <pre style={{
           margin: 0,
           padding: '8px',
@@ -580,16 +589,16 @@ const IntegrationConfigListPage: React.FC = () => {
           maxHeight: '300px',
           fontSize: 12,
         }}>
-          {JSON.stringify(value, null, 2)}
+          {JSON.stringify(r.config, null, 2)}
         </pre>
       ),
     },
     {
       title: t('pages.system.integrationConfigs.connectionStatusLabel'),
       dataIndex: 'is_connected',
-      render: (value: boolean) => (
+      render: (_, r) => (
         <Space>
-          {value ? (
+          {r.is_connected ? (
             <Badge status="success" text={t('pages.system.integrationConfigs.statusConnected')} />
           ) : (
             <Badge status="default" text={t('pages.system.integrationConfigs.statusDisconnected')} />
@@ -600,9 +609,9 @@ const IntegrationConfigListPage: React.FC = () => {
     {
       title: t('pages.system.integrationConfigs.enableStatusLabel'),
       dataIndex: 'is_active',
-      render: (value: boolean) => (
-        <Tag color={value ? 'success' : 'default'}>
-          {value ? t('pages.system.integrationConfigs.enabled') : t('pages.system.integrationConfigs.disabled')}
+      render: (_, r) => (
+        <Tag color={r.is_active ? 'success' : 'default'}>
+          {r.is_active ? t('pages.system.integrationConfigs.enabled') : t('pages.system.integrationConfigs.disabled')}
         </Tag>
       ),
     },
@@ -614,8 +623,8 @@ const IntegrationConfigListPage: React.FC = () => {
     {
       title: t('pages.system.integrationConfigs.lastError'),
       dataIndex: 'last_error',
-      render: (value: string) => value ? (
-        <Tag color="error">{value}</Tag>
+      render: (_, r) => r.last_error ? (
+        <Tag color="error">{r.last_error}</Tag>
       ) : '-',
     },
     {

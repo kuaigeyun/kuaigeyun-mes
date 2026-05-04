@@ -119,7 +119,7 @@ const DeliveryNotesPage: React.FC = () => {
     const load = async () => {
       try {
         const cust = await customerApi.list({ limit: 1000, isActive: true });
-        setCustomerList(Array.isArray(cust) ? cust : cust?.data ?? cust?.items ?? []);
+        setCustomerList(Array.isArray(cust) ? cust : cust?.data ?? []);
       } catch (e) {
         console.error('加载客户失败', e);
       }
@@ -858,7 +858,7 @@ const DeliveryNotesPage: React.FC = () => {
                       content = dayjs(value as string).format('YYYY-MM-DD');
                     }
                     if (col.render && noticeDetail != null) {
-                      content = col.render(content, noticeDetail, index, {}, col);
+                      content = col.render(content, noticeDetail, index, undefined as any, col as any) as React.ReactNode;
                     }
                     return {
                       key: String(col.key ?? col.dataIndex ?? index),

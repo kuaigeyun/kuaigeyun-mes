@@ -104,9 +104,13 @@ const SiteSettingsPage: React.FC = () => {
   const [cropModalVisible, setCropModalVisible] = useState(false);
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
   const [activeTabKey, setActiveTabKey] = useState('basic');
-  const [currencyOptions, setCurrencyOptions] = useState<DictionaryItem[]>(() => getSiteSettingsDictCache()?.currency ?? []);
+  const [currencyOptions, setCurrencyOptions] = useState<DictionaryItem[]>(
+    () => (getSiteSettingsDictCache()?.currency ?? []) as DictionaryItem[]
+  );
   const systemSettingsRef = React.useRef<Record<string, any>>({});
-  const [timezoneOptions, setTimezoneOptions] = useState<DictionaryItem[]>(() => getSiteSettingsDictCache()?.timezone ?? []);
+  const [timezoneOptions, setTimezoneOptions] = useState<DictionaryItem[]>(
+    () => (getSiteSettingsDictCache()?.timezone ?? []) as DictionaryItem[]
+  );
 
   /**
    * 判断字符串是否是UUID格式
@@ -154,7 +158,10 @@ const SiteSettingsPage: React.FC = () => {
     }
   };
 
-  const [languageOptions, setLanguageOptions] = useState<{ label: string; value: string; key: string }[]>(() => getSiteSettingsDictCache()?.language ?? []);
+  const [languageOptions, setLanguageOptions] = useState<{ label: string; value: string; key: string }[]>(() => {
+    const cached = getSiteSettingsDictCache()?.language;
+    return Array.isArray(cached) ? (cached as { label: string; value: string; key: string }[]) : [];
+  });
 
   /**
    * 加载站点设置和字典数据
@@ -176,7 +183,7 @@ const SiteSettingsPage: React.FC = () => {
           const options = langResponse.items.map(lang => ({
              label: lang.native_name || lang.name,
              value: lang.code,
-             key: lang.uuid
+             key: lang.uuid || lang.code
           }));
           setLanguageOptions(options);
           setSiteSettingsDictCache({ language: options });

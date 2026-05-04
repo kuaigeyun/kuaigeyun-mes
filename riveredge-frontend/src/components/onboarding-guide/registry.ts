@@ -18,7 +18,6 @@ export const GUIDE_REGISTRY: Record<string, GuideConfig> = {
         title: '侧边导航',
         content: '这里可以访问系统的所有功能模块，支持收起以获得更大视野。',
         placement: 'right',
-        disableBeacon: true, // 第一个步骤通常直接显示
       },
       {
         target: '.ant-pro-global-header',

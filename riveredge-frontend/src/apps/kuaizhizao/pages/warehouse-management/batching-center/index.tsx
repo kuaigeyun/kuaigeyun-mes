@@ -12,7 +12,7 @@ import React, { useRef, useState, useCallback } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormSelect, ProFormTextArea, ProFormDatePicker, ProFormRadio, ProFormDependency, ProFormItem } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, message, Card, Table, Form as AntForm, InputNumber, Row, Col } from 'antd';
-import { PlusOutlined, DeleteOutlined, EyeOutlined, CheckCircleOutlined, BellOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, EyeOutlined, CheckCircleOutlined, BellOutlined, ShoppingOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { warehouseApi } from '../../../services/warehouse-execution';
 import { List, Typography, Progress } from 'antd';
@@ -570,7 +570,7 @@ const BatchingCenterPage: React.FC = () => {
       >
         <DetailDrawerSection title="生命周期">
           {(() => {
-            const lifecycle = getBatchingOrderLifecycle(currentOrder ?? undefined);
+            const lifecycle = getBatchingOrderLifecycle(currentOrder as unknown as Record<string, unknown>);
             const mainStages = lifecycle.mainStages ?? [];
             if (mainStages.length === 0) return null;
             return (

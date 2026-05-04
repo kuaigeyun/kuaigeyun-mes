@@ -302,7 +302,7 @@ const SOPDesignerPage: React.FC = () => {
             {t('app.master-data.sop.formSchemaTitle')}
           </AntdTypography.Text>
           <FormSchemaEditor
-            value={formSchema}
+            value={formSchema ?? undefined}
             onChange={(newSchema) => {
               setFormSchema(newSchema);
               if (selectedNode) {

@@ -8,7 +8,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Card, Form, Input, Select, InputNumber, Switch, Space, message, Modal } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
-import type { ISchema } from '@formily/core';
+import type { ISchema } from '@formily/json-schema';
 
 const { TextArea } = Input;
 

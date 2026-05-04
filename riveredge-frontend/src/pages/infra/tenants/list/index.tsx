@@ -1182,7 +1182,7 @@ const SuperAdminTenantList: React.FC = () => {
       open={drawerVisible}
       onClose={handleCloseDetail}
       loading={detailLoading}
-      dataSource={tenantDetail || {}}
+      dataSource={(tenantDetail ?? {}) as Tenant}
       columns={[
             {
               title: t('pages.infra.tenant.name'),

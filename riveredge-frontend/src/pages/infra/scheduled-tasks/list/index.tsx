@@ -702,7 +702,8 @@ const ScheduledTaskListPage: React.FC = () => {
           {
             title: t('field.scheduledTask.type'),
             dataIndex: 'type',
-            render: (value: string) => {
+            render: (_, record) => {
+              const value = String(record.type ?? '');
               const typeMap: Record<string, string> = {
                 python_script: t('field.scheduledTask.typePython'),
                 api_call: t('field.scheduledTask.typeApi'),
@@ -713,7 +714,8 @@ const ScheduledTaskListPage: React.FC = () => {
           {
             title: t('field.scheduledTask.triggerType'),
             dataIndex: 'trigger_type',
-            render: (value: string) => {
+            render: (_, record) => {
+              const value = String(record.trigger_type ?? '');
               const triggerMap: Record<string, string> = {
                 cron: t('field.scheduledTask.triggerCron'),
                 interval: t('field.scheduledTask.triggerInterval'),
@@ -729,7 +731,9 @@ const ScheduledTaskListPage: React.FC = () => {
           {
             title: t('field.scheduledTask.triggerConfig'),
             dataIndex: 'trigger_config',
-            render: (value: Record<string, any>) => (
+            render: (_, record) => {
+              const value = record.trigger_config as Record<string, unknown> | undefined;
+              return (
               <pre style={{
                 margin: 0,
                 padding: '8px',
@@ -739,14 +743,17 @@ const ScheduledTaskListPage: React.FC = () => {
                 maxHeight: '200px',
                 fontSize: 12,
               }}>
-                {JSON.stringify(value, null, 2)}
+                {JSON.stringify(value ?? {}, null, 2)}
               </pre>
-            ),
+            );
+            },
           },
           {
             title: t('field.scheduledTask.taskConfig'),
             dataIndex: 'task_config',
-            render: (value: Record<string, any>) => (
+            render: (_, record) => {
+              const value = record.task_config as Record<string, unknown> | undefined;
+              return (
               <pre style={{
                 margin: 0,
                 padding: '8px',
@@ -756,30 +763,37 @@ const ScheduledTaskListPage: React.FC = () => {
                 maxHeight: '200px',
                 fontSize: 12,
               }}>
-                {JSON.stringify(value, null, 2)}
+                {JSON.stringify(value ?? {}, null, 2)}
               </pre>
-            ),
+            );
+            },
           },
           {
             title: t('field.scheduledTask.inngestFunctionId'),
             dataIndex: 'inngest_function_id',
-            render: (value: string) => value || '-',
+            render: (_, record) => String(record.inngest_function_id ?? '') || '-',
           },
           {
             title: t('field.scheduledTask.runStatus'),
             dataIndex: 'is_running',
-            render: (value: boolean) => (
+            render: (_, record) => {
+              const value = !!record.is_running;
+              return (
               <Badge status={value ? 'processing' : 'default'} text={value ? t('field.scheduledTask.running') : t('field.scheduledTask.notRunning')} />
-            ),
+            );
+            },
           },
           {
             title: t('field.scheduledTask.activeStatus'),
             dataIndex: 'is_active',
-            render: (value: boolean) => (
+            render: (_, record) => {
+              const value = !!record.is_active;
+              return (
               <Tag color={value ? 'success' : 'default'}>
                 {value ? t('field.systemParameter.enabled') : t('field.systemParameter.disabled')}
               </Tag>
-            ),
+            );
+            },
           },
           {
             title: t('field.scheduledTask.lastRunAt'),
@@ -789,7 +803,8 @@ const ScheduledTaskListPage: React.FC = () => {
           {
             title: t('field.scheduledTask.lastRunStatus'),
             dataIndex: 'last_run_status',
-            render: (value: string) => {
+            render: (_: React.ReactNode, record: ScheduledTask) => {
+              const value = record.last_run_status;
               if (!value) return '-';
               const statusMap: Record<string, { color: string; textKey: string }> = {
                 success: { color: 'success', textKey: 'field.scheduledTask.success' },
@@ -802,9 +817,12 @@ const ScheduledTaskListPage: React.FC = () => {
           {
             title: t('field.scheduledTask.lastError'),
             dataIndex: 'last_error',
-            render: (value: string) => value ? (
+            render: (_: React.ReactNode, record: ScheduledTask) => {
+              const value = record.last_error;
+              return value ? (
               <Tag color="error">{value}</Tag>
-            ) : '-',
+            ) : '-';
+            },
           },
           {
             title: t('field.scheduledTask.createdAt'),

@@ -317,7 +317,7 @@ const SalesReturnsPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <UniLifecycle
-          value={getSalesReturnLifecycle(record as any)}
+          {...getSalesReturnLifecycle(record as any)}
           showLabel
           showCircleTooltip={false}
           size="small"
@@ -493,7 +493,7 @@ const SalesReturnsPage: React.FC = () => {
         const detail = editingDetail;
         if (!detail || (detail.status !== '待退货' && detail.status !== '草稿')) {
           messageApi.warning('当前状态不允许编辑');
-          return false;
+          return;
         }
         await warehouseApi.salesReturn.update(editingId.toString(), {
           customer_id: values.customer_id,
@@ -529,10 +529,8 @@ const SalesReturnsPage: React.FC = () => {
       invalidateMenuBadgeCounts();
 
       actionRef.current?.reload();
-      return true;
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
-      return false;
     }
   };
 
@@ -546,7 +544,7 @@ const SalesReturnsPage: React.FC = () => {
       material_spec: m.specification,
       material_unit: m.baseUnit,
       return_quantity: 1,
-      unit_price: m.defaultPrice || 0,
+      unit_price: m.defaults?.defaultSalePrice ?? 0,
     }));
     formRef.current?.setFieldsValue({
       items: [...currentItems, ...newItems]

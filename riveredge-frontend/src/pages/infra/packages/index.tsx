@@ -13,7 +13,7 @@ import { UniTable } from '../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../components/layout-templates';
 import { useTranslation } from 'react-i18next';
 import PackageForm from './form';
-import type { ActionType } from '@ant-design/pro-components';
+import type { ActionType, ProColumns } from '@ant-design/pro-components';
 
 /**
  * 套餐管理页面组件
@@ -173,7 +173,7 @@ export default function PackageManagementPage() {
     [TenantPlan.ENTERPRISE]: { text: t('pages.infra.package.planEnterprise'), color: 'red' },
   };
 
-  const columns = [
+  const columns: ProColumns<Package>[] = [
     {
       title: t('pages.infra.admin.id'),
       dataIndex: 'id',
@@ -186,7 +186,6 @@ export default function PackageManagementPage() {
       dataIndex: 'name',
       key: 'name',
       sorter: true,
-      filterable: true,
     },
     {
       title: t('pages.infra.package.plan'),
@@ -203,22 +202,22 @@ export default function PackageManagementPage() {
       dataIndex: 'max_users',
       key: 'max_users',
       sorter: true,
-      render: (value: number) => value?.toLocaleString() || '-',
+      render: (_, record) => record.max_users?.toLocaleString() || '-',
     },
     {
       title: t('pages.infra.package.maxStorage'),
       dataIndex: 'max_storage_mb',
       key: 'max_storage_mb',
       sorter: true,
-      render: (value: number) => value?.toLocaleString() || '-',
+      render: (_, record) => record.max_storage_mb?.toLocaleString() || '-',
     },
     {
       title: t('pages.infra.package.allowProApps'),
       dataIndex: 'allow_pro_apps',
       key: 'allow_pro_apps',
-      render: (value: boolean) => (
-        <Tag color={value ? 'success' : 'default'}>
-          {value ? t('pages.infra.package.yes') : t('pages.infra.package.no')}
+      render: (_, record) => (
+        <Tag color={record.allow_pro_apps ? 'success' : 'default'}>
+          {record.allow_pro_apps ? t('pages.infra.package.yes') : t('pages.infra.package.no')}
         </Tag>
       ),
     },
@@ -226,9 +225,9 @@ export default function PackageManagementPage() {
       title: t('pages.infra.package.status'),
       dataIndex: 'is_active',
       key: 'is_active',
-      render: (value: boolean) => (
-        <Tag color={value ? 'success' : 'default'}>
-          {value ? t('pages.infra.package.statusActive') : t('pages.infra.package.statusInactive')}
+      render: (_, record) => (
+        <Tag color={record.is_active ? 'success' : 'default'}>
+          {record.is_active ? t('pages.infra.package.statusActive') : t('pages.infra.package.statusInactive')}
         </Tag>
       ),
     },

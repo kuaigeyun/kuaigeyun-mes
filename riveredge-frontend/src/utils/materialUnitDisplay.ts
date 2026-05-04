@@ -50,10 +50,7 @@ export function getMaterialUnitDisplayMapShared(): Promise<Record<string, string
   return materialUnitDisplayMapPromise;
 }
 
-export function resolveMaterialUnitLabel(
-  raw: string | number | null | undefined,
-  map: Record<string, string>,
-): string {
+export function resolveMaterialUnitLabel(raw: unknown, map: Record<string, string>): string {
   const t = String(raw ?? '').trim();
   if (!t) return '';
   return map[t] ?? map[normUnitKey(t)] ?? t;

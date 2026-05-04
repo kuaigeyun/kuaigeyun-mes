@@ -65,7 +65,7 @@ const ReportingParameterForm: React.FC<ReportingParameterFormProps> = ({
                   placeholder="请输入数值"
                 />
               ) : param.type === 'boolean' ? (
-                <Switch size="large" />
+                <Switch />
               ) : (
                 <Input
                   style={{ height: 50, fontSize: 20, background: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.2)', color: '#fff' }}

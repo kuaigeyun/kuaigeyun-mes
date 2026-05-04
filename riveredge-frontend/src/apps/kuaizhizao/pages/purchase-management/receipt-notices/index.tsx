@@ -297,7 +297,7 @@ const ReceiptNoticesPage: React.FC = () => {
       align: 'left',
       hideInSearch: true,
       render: (_, record) => {
-        const lifecycle = getReceiptNoticeLifecycle(record);
+        const lifecycle = getReceiptNoticeLifecycle(record as unknown as Record<string, unknown>);
         return (
           <UniLifecycle
             percent={lifecycle.percent}
@@ -1246,7 +1246,7 @@ const ReceiptNoticesPage: React.FC = () => {
               <DetailDrawerSection title="生命周期">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {(() => {
-                    const lifecycle = getReceiptNoticeLifecycle(noticeDetail);
+                    const lifecycle = getReceiptNoticeLifecycle(noticeDetail as unknown as Record<string, unknown>);
                     const mainStages = lifecycle.mainStages ?? [];
                     if (mainStages.length === 0) return null;
                     return (

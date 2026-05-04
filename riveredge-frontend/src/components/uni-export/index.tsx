@@ -80,6 +80,16 @@ export interface UniExportProps {
   headers?: string[];
 }
 
+/** Univer 运行时可用的工作表 API（包内 FWorksheet 类型声明不完整） */
+type UniverActiveSheet = {
+  setCellValue: (row: number, col: number, value: unknown) => void;
+  setCellStyle?: (row: number, col: number, style: unknown) => void;
+  setColumnWidth: (index: number, width: number) => void;
+  getRowCount: () => number;
+  getColumnCount: () => number;
+  getCellValue: (row: number, col: number) => unknown;
+};
+
 /**
  * Univer Export 导出弹窗组件
  */
@@ -214,14 +224,15 @@ export const UniExport: React.FC<UniExportProps> = ({
           }
 
           // 设置工作表数据
-          const worksheet = univerAPI.getActiveWorkbook().getActiveSheet();
+          const workbook = univerAPI.getActiveWorkbook();
+          const worksheet = (workbook?.getActiveSheet() ?? null) as UniverActiveSheet | null;
           if (worksheet) {
             // 设置单元格数据
             Object.keys(cellData).forEach((rowKey) => {
               Object.keys(cellData[rowKey]).forEach((colKey) => {
                 const cell = cellData[rowKey][colKey];
                 worksheet.setCellValue(Number(rowKey), Number(colKey), cell.v);
-                if (cell.s) {
+                if (cell.s && worksheet.setCellStyle) {
                   worksheet.setCellStyle(Number(rowKey), Number(colKey), styles[cell.s]);
                 }
               });
@@ -268,7 +279,8 @@ export const UniExport: React.FC<UniExportProps> = ({
       }
 
       const univerAPI = univerInstanceRef.current.univerAPI;
-      const worksheet = univerAPI.getActiveWorkbook().getActiveSheet();
+      const workbook = univerAPI.getActiveWorkbook();
+      const worksheet = (workbook?.getActiveSheet() ?? null) as UniverActiveSheet | null;
 
       if (!worksheet) {
         message.warning('无法获取工作表');

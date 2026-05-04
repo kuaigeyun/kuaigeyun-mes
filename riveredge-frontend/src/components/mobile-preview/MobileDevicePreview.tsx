@@ -10,6 +10,8 @@ interface DeviceConfig {
     frameColor?: string;
 }
 
+type ScaleModeKey = 'auto' | '1' | '0.85' | '0.75' | '0.5';
+
 const DEVICES: DeviceConfig[] = [
     { name: 'iPhone SE', width: 375, height: 667, type: 'phone' },
     { name: 'iPhone 14/15', width: 390, height: 844, type: 'phone' },
@@ -27,7 +29,7 @@ export interface MobileDevicePreviewProps {
 
 export const MobileDevicePreview: React.FC<MobileDevicePreviewProps> = ({ open, onClose, url }) => {
     const [currentDevice, setCurrentDevice] = useState<DeviceConfig>(DEVICES[1]); // Default to iPhone 14
-    const [scaleMode, setScaleMode] = useState<'auto' | number>(0.85); // Default to 85%
+    const [scaleMode, setScaleMode] = useState<ScaleModeKey>('0.85');
     const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
     const [iframeKey, setIframeKey] = useState(0); // For reloading
     const [windowSize, setWindowSize] = useState({ width: window.innerWidth, height: window.innerHeight });
@@ -47,7 +49,10 @@ export const MobileDevicePreview: React.FC<MobileDevicePreviewProps> = ({ open, 
 
     // Calculate Auto Scale
     const calculateScale = () => {
-        if (typeof scaleMode === 'number') return scaleMode;
+        if (scaleMode !== 'auto') {
+            const n = Number(scaleMode);
+            if (Number.isFinite(n)) return n;
+        }
 
         // Available space calculation
         // Modal Header: ~55px
@@ -206,16 +211,16 @@ export const MobileDevicePreview: React.FC<MobileDevicePreviewProps> = ({ open, 
                     content={
                         <Space>
                             <span style={{ color: '#888', fontSize: 12 }}>缩放:</span>
-                            <Segmented
+                            <Segmented<ScaleModeKey>
                                 value={scaleMode}
-                                onChange={val => setScaleMode(val as number | 'auto')}
+                                onChange={(val) => setScaleMode(val)}
                                 size="small"
                                 options={[
                                     { label: '自动', value: 'auto' },
-                                    { label: '100%', value: 1 },
-                                    { label: '85%', value: 0.85 },
-                                    { label: '75%', value: 0.75 },
-                                    { label: '50%', value: 0.5 },
+                                    { label: '100%', value: '1' },
+                                    { label: '85%', value: '0.85' },
+                                    { label: '75%', value: '0.75' },
+                                    { label: '50%', value: '0.5' },
                                 ]}
                             />
                         </Space>

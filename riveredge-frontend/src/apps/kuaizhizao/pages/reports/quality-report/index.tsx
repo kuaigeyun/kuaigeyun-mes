@@ -233,7 +233,8 @@ const QualityReportPage: React.FC = () => {
       title: '检验类型',
       dataIndex: 'inspectionType',
       width: 100,
-      render: (type) => {
+      render: (_, record) => {
+        const type = record.inspectionType;
         const typeMap = {
           incoming: { text: '来料检验', color: 'blue' },
           process: { text: '过程检验', color: 'green' },
@@ -269,24 +270,31 @@ const QualityReportPage: React.FC = () => {
       dataIndex: 'unqualifiedQuantity',
       width: 100,
       align: 'right',
-      render: (text) => <span style={{ color: text > 0 ? '#f5222d' : '#52c41a' }}>{text}</span>,
+      render: (_, record) => {
+        const text = Number(record.unqualifiedQuantity ?? 0);
+        return <span style={{ color: text > 0 ? '#f5222d' : '#52c41a' }}>{text}</span>;
+      },
     },
     {
       title: '合格率',
       dataIndex: 'qualifiedRate',
       width: 100,
       align: 'center',
-      render: (rate) => (
-        <span style={{ color: rate >= 95 ? '#52c41a' : rate >= 90 ? '#faad14' : '#f5222d' }}>
-          {rate}%
-        </span>
-      ),
+      render: (_, record) => {
+        const rate = Number(record.qualifiedRate ?? 0);
+        return (
+          <span style={{ color: rate >= 95 ? '#52c41a' : rate >= 90 ? '#faad14' : '#f5222d' }}>
+            {rate}%
+          </span>
+        );
+      },
     },
     {
       title: '检验状态',
       dataIndex: 'status',
       width: 100,
-      render: (status) => {
+      render: (_, record) => {
+        const status = record.status;
         const statusMap = {
           qualified: { text: '合格', color: 'success' },
           unqualified: { text: '不合格', color: 'error' },
@@ -311,19 +319,21 @@ const QualityReportPage: React.FC = () => {
       title: '缺陷类型',
       dataIndex: 'defectTypes',
       width: 150,
-      render: (types) => (
-        types && types.length > 0 ? (
+      render: (_, record) => {
+        const raw = record.defectTypes;
+        const types = Array.isArray(raw) ? raw : raw != null && raw !== '' ? [raw] : [];
+        return types.length > 0 ? (
           <div>
             {types.map((type, index) => (
-              <Tag key={index} size="small" color="orange" style={{ marginBottom: '2px' }}>
-                {type}
+              <Tag key={index} color="orange" style={{ marginBottom: '2px', fontSize: 12 }}>
+                {String(type)}
               </Tag>
             ))}
           </div>
         ) : (
           <span style={{ color: '#999' }}>无</span>
-        )
-      ),
+        );
+      },
     },
   ];
 

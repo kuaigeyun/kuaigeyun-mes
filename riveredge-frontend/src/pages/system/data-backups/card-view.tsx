@@ -427,7 +427,7 @@ const CardView: React.FC = () => {
           setCurrentBackup(null);
         }}
         footer={null}
-        size={800}
+        width={800}
       >
         {currentBackup && (
           <Descriptions column={1} bordered>

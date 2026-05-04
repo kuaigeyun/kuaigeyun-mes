@@ -193,6 +193,7 @@ export default function LoginPage() {
   // 社交图标延后加载，减小登录 chunk 体积；空闲时再拉，避免抢首屏主线程
   const [socialIcons, setSocialIcons] = useState<Record<string, string>>({});
   useEffect(() => {
+    if (typeof window === 'undefined') return () => {};
     let cancelled = false;
     const loadIcons = () => {
       Promise.all([
@@ -212,17 +213,18 @@ export default function LoginPage() {
         (window as any).cancelIdleCallback?.(id);
       };
     }
-    const t = window.setTimeout(loadIcons, 300);
+    const t = globalThis.setTimeout(loadIcons, 300);
     return () => {
       cancelled = true;
-      window.clearTimeout(t);
+      globalThis.clearTimeout(t);
     };
   }, []);
 
   // Lottie：空闲加载；小屏不加载动效，优先表单可交互
   const [animationData, setAnimationData] = useState<object | null>(null);
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 992px)').matches) {
+    if (typeof window === 'undefined') return () => {};
+    if (window.matchMedia('(max-width: 992px)').matches) {
       return;
     }
     let cancelled = false;
@@ -238,10 +240,10 @@ export default function LoginPage() {
         (window as any).cancelIdleCallback?.(id);
       };
     }
-    const t = window.setTimeout(loadAnimation, 600);
+    const t = globalThis.setTimeout(loadAnimation, 600);
     return () => {
       cancelled = true;
-      window.clearTimeout(t);
+      globalThis.clearTimeout(t);
     };
   }, []);
 

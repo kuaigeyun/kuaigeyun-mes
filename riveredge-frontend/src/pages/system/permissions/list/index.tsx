@@ -37,12 +37,13 @@ const PermissionListPage: React.FC = () => {
       {
         title: t('field.permission.type'),
         dataIndex: 'permission_type',
-        render: (value: string) => {
+        render: (_: unknown, entity: Permission) => {
           const typeMap: Record<string, string> = {
             function: t('field.permission.typeFunction'),
             data: t('field.permission.typeData'),
             field: t('field.permission.typeField'),
           };
+          const value = entity.permission_type;
           return typeMap[value] || value;
         },
       },

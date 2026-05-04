@@ -10,14 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { ProForm, ProFormTextArea, ProFormText, ProFormInstance } from '@ant-design/pro-components';
 import { App, Card, message, Upload, Avatar, Space, Button, Row, Col, Divider, Typography, theme, Form, Tabs, Descriptions } from 'antd';
 import { ThemedSegmented } from '../../../components/themed-segmented';
-import { 
-  UserOutlined, 
-  UploadOutlined, 
-  DeleteOutlined,
-  FingerprintOutlined,
-  PlusOutlined,
-  SecurityScanOutlined
-} from '@ant-design/icons';
+import { UserOutlined, UploadOutlined, DeleteOutlined } from '@ant-design/icons';
 
 // ... (other imports)
 import { 
@@ -33,7 +26,7 @@ import {
   UserProfile,
   UpdateUserProfileData,
 } from '../../../services/userProfile';
-import { uploadFile, getFileByUuid, getFilePreview, getFileDownloadUrl, FileUploadResponse, File } from '../../../services/file';
+import { uploadFile, getFileByUuid, getFilePreview, getFileDownloadUrl, FileUploadResponse } from '../../../services/file';
 import { getAvatarUrl, getAvatarText, getAvatarFontSize } from '../../../utils/avatar';
 import { getUserInfo, getTenantId, setTenantId, setUserInfo } from '../../../utils/auth';
 import { apiRequest } from '../../../services/api';
@@ -160,13 +153,14 @@ const UserProfilePage: React.FC = () => {
    */
   const handleAvatarUpload: UploadProps['customRequest'] = async (options) => {
     const { file, onSuccess, onError } = options;
-    
+    const uploadBlob = file as unknown as Blob;
+
     try {
       // 先使用本地文件创建预览 URL（立即显示）
-      const localPreviewUrl = URL.createObjectURL(file as File);
+      const localPreviewUrl = URL.createObjectURL(uploadBlob);
       setAvatarUrl(localPreviewUrl);
-      
-      const response: FileUploadResponse = await uploadFile(file as File, {
+
+      const response: FileUploadResponse = await uploadFile(uploadBlob, {
         category: 'avatar',
       });
       
@@ -178,7 +172,7 @@ const UserProfilePage: React.FC = () => {
         
         // 获取服务器预览 URL（如果是图片）
         let previewUrl: string | undefined = undefined;
-        const fileType = response.file_type || (file as File).type;
+        const fileType = response.file_type || uploadBlob.type;
         
         if (fileType?.startsWith('image/')) {
           try {
@@ -323,7 +317,7 @@ const UserProfilePage: React.FC = () => {
         phone: values.phone !== undefined && values.phone !== null ? (values.phone.trim() || null) : undefined,
         bio: values.bio !== undefined && values.bio !== null ? (values.bio.trim() || null) : undefined,
         gender: values.gender !== undefined && values.gender !== null ? values.gender : undefined,
-        contact_info: Object.keys(contact_info).length > 0 ? contact_info : null,
+        contact_info: Object.keys(contact_info).length > 0 ? contact_info : undefined,
       };
       
       

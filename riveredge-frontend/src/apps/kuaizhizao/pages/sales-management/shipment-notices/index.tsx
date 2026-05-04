@@ -212,7 +212,7 @@ const ShipmentNoticesPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <UniLifecycle
-          value={getShipmentNoticeLifecycle(record as any)}
+          {...getShipmentNoticeLifecycle(record as any)}
           showLabel
           showCircleTooltip={false}
           size="small"
@@ -1104,7 +1104,7 @@ const ShipmentNoticesPage: React.FC = () => {
                       content = dayjs(value as string).format('YYYY-MM-DD');
                     }
                     if (col.render && noticeDetail != null) {
-                      content = col.render(content, noticeDetail, index, {}, col);
+                      content = col.render(content, noticeDetail, index, undefined as any, col as any) as React.ReactNode;
                     }
                     return {
                       key: String(col.key ?? col.dataIndex ?? index),

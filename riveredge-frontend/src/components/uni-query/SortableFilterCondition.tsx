@@ -6,7 +6,8 @@ import React from 'react';
 import { HolderOutlined } from '@ant-design/icons';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type { FilterCondition, ProColumns } from './types';
+import type { ProColumns } from '@ant-design/pro-components';
+import type { FilterCondition } from './types';
 import { FilterConditionItem } from './FilterCondition';
 
 /**

@@ -236,12 +236,14 @@ const EquipmentFaultListPage: React.FC = () => {
       {
         title: t('pages.system.equipmentFaults.columnFaultType'),
         dataIndex: 'fault_type',
-        render: (v: string) => (faultTypeTextKey[v] ? t(faultTypeTextKey[v]) : v),
+        render: (_: unknown, record: EquipmentFault) =>
+          faultTypeTextKey[record.fault_type] ? t(faultTypeTextKey[record.fault_type]) : record.fault_type,
       },
       {
         title: t('pages.system.equipmentFaults.columnFaultLevel'),
         dataIndex: 'fault_level',
-        render: (v: string) => (faultLevelTextKey[v] ? t(faultLevelTextKey[v]) : v),
+        render: (_: unknown, record: EquipmentFault) =>
+          faultLevelTextKey[record.fault_level] ? t(faultLevelTextKey[record.fault_level]) : record.fault_level,
       },
       { title: t('pages.system.equipmentFaults.columnFaultDesc'), dataIndex: 'fault_description', span: 2 },
       { title: t('pages.system.equipmentFaults.columnReporter'), dataIndex: 'reporter_name' },

@@ -187,7 +187,7 @@ export function normalizeActionTree(node: React.ReactNode, ctx: NormalizeActionC
         onClick={typeof props.onClick === 'function' ? (props.onClick as React.MouseEventHandler) : undefined}
         disabled={!!props.disabled}
       >
-        {text || props.children}
+        {text != null ? String(text) : (props.children as React.ReactNode)}
       </Button>
     )
   }

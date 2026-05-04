@@ -66,7 +66,7 @@ const SerialRulesPage: React.FC = () => {
       });
       setRuleComponents(
         detail.ruleComponents && Array.isArray(detail.ruleComponents) && detail.ruleComponents.length > 0
-          ? (detail.ruleComponents as CodeRuleComponent[])
+          ? (detail.ruleComponents as unknown as CodeRuleComponent[])
           : [...DEFAULT_SERIAL_RULE_COMPONENTS]
       );
     } catch (e: any) {
@@ -86,7 +86,7 @@ const SerialRulesPage: React.FC = () => {
         isActive: (values.isActive as boolean) ?? true,
       };
       const payload = ruleComponents.length > 0
-        ? { ...basePayload, ruleComponents: ruleComponents as Record<string, unknown>[] }
+        ? { ...basePayload, ruleComponents: ruleComponents as unknown as Record<string, unknown>[] }
         : basePayload;
 
       if (isEdit && currentUuid) {

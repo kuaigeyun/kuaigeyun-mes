@@ -135,10 +135,16 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         hasMaterial: !!material,
         materialUuid: (material as any)?.uuid ?? null,
       });
-      const vm = material?.variantManaged ?? (material as any)?.variant_managed ?? initialValues?.variantManaged ?? initialValues?.variant_managed ?? false;
+      const iv = initialValues as { variantManaged?: boolean; variant_managed?: boolean } | undefined;
+      const vm =
+        material?.variantManaged ??
+        (material as { variant_managed?: boolean })?.variant_managed ??
+        iv?.variantManaged ??
+        iv?.variant_managed ??
+        false;
       setVariantManaged(!!vm);
     }
-  }, [open, isEdit, material, material?.variantManaged, (material as any)?.variant_managed, initialValues?.variantManaged, initialValues?.variant_managed, emitAgentDebugLog]);
+  }, [open, isEdit, material, material?.variantManaged, (material as any)?.variant_managed, initialValues, emitAgentDebugLog]);
   
   // 客户和供应商列表
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -287,7 +293,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
     const context: Record<string, any> = {};
     
     // 如果提供了物料分组ID，获取分组信息（兼容 id 为 number/string 的类型）
-    if (groupId != null && groupId !== '') {
+    if (groupId != null && !(typeof groupId === 'string' && groupId === '')) {
       const group = materialGroups.find(g => Number(g.id) === Number(groupId));
       if (group) {
         context.group_code = group.code;
@@ -1168,7 +1174,8 @@ const MaterialInspectionTab: React.FC<MaterialInspectionTabProps> = ({
       ? `/apps/kuaizhizao/quality-management/inspection-plans?materialId=${materialId}`
       : '/apps/kuaizhizao/quality-management/inspection-plans';
     if (suspendedModalReturnPath) {
-      saveSuspendedModal({ returnPath: suspendedModalReturnPath, formRef });
+      const formData = formRef.current?.getFieldsValue?.(true) ?? {};
+      saveSuspendedModal(suspendedModalReturnPath, formData as Record<string, any>);
     }
     navigate(path);
   };

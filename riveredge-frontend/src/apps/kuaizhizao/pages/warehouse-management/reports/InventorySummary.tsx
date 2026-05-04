@@ -3,6 +3,7 @@ import { ProColumns } from '@ant-design/pro-components';
 import ReportBase from '../../../components/ReportBase';
 import { useTranslation } from 'react-i18next';
 import { copyableCodeColumn } from '../../../utils/reportCopyableColumn';
+import { getWarehouseReport } from '../../../services/reports';
 
 const InventorySummary: React.FC = () => {
   const { t } = useTranslation();

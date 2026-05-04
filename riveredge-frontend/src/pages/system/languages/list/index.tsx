@@ -578,7 +578,7 @@ const LanguageListPage: React.FC = () => {
       },
       body: {
         display: 'flex',
-        flexDirection: 'column',
+        flexDirection: 'column' as const,
         height: `calc(100vh - ${110 + floatPad}px)`,
         overflow: 'hidden',
         paddingBottom: 24,

@@ -94,57 +94,57 @@ const LoginLogsPage: React.FC = () => {
     {
       title: 'UUID',
       dataIndex: 'uuid',
-      render: (value: string) => value,
+      render: (_: unknown, record: LoginLog) => record.uuid,
     },
     {
       title: t('pages.system.loginLogs.username'),
       dataIndex: 'username',
-      render: (value: string) => value || '-',
+      render: (_: unknown, record: LoginLog) => record.username || '-',
     },
     {
       title: t('pages.system.loginLogs.userId'),
       dataIndex: 'user_id',
-      render: (value: number) => value || '-',
+      render: (_: unknown, record: LoginLog) => record.user_id || '-',
     },
     {
       title: t('pages.system.loginLogs.tenantId'),
       dataIndex: 'tenant_id',
-      render: (value: number) => value || '-',
+      render: (_: unknown, record: LoginLog) => record.tenant_id || '-',
     },
     {
       title: t('pages.system.loginLogs.loginIp'),
       dataIndex: 'login_ip',
-      render: (value: string) => value || '-',
+      render: (_: unknown, record: LoginLog) => record.login_ip || '-',
     },
     {
       title: t('pages.system.loginLogs.loginLocation'),
       dataIndex: 'login_location',
-      render: (value: string) => value || '-',
+      render: (_: unknown, record: LoginLog) => record.login_location || '-',
     },
     {
       title: t('pages.system.loginLogs.loginDevice'),
       dataIndex: 'login_device',
-      render: (value: string) => value || '-',
+      render: (_: unknown, record: LoginLog) => record.login_device || '-',
     },
     {
       title: t('pages.system.loginLogs.loginBrowser'),
       dataIndex: 'login_browser',
-      render: (value: string) => value || '-',
+      render: (_: unknown, record: LoginLog) => record.login_browser || '-',
     },
     {
       title: t('pages.system.loginLogs.loginStatus'),
       dataIndex: 'login_status',
-      render: (value: string) => getLoginStatusTag(value),
+      render: (_: unknown, record: LoginLog) => getLoginStatusTag(record.login_status),
     },
     {
       title: t('pages.system.loginLogs.failureReason'),
       dataIndex: 'failure_reason',
-      render: (value: string) => value || '-',
+      render: (_: unknown, record: LoginLog) => record.failure_reason || '-',
     },
     {
       title: t('pages.system.loginLogs.loginTime'),
       dataIndex: 'created_at',
-      render: (value: string) => dayjs(value).format('YYYY-MM-DD HH:mm:ss'),
+      render: (_: unknown, record: LoginLog) => dayjs(record.created_at).format('YYYY-MM-DD HH:mm:ss'),
     },
   ];
 
@@ -249,7 +249,7 @@ const LoginLogsPage: React.FC = () => {
       ellipsis: true,
       search: false,
       width: 200,
-      render: (value: string) => value || '-',
+      render: (_: unknown, record: LoginLog) => record.failure_reason || '-',
     },
     {
       title: t('pages.system.loginLogs.loginTime'),

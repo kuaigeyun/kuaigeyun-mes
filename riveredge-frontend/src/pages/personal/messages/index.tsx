@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Badge, Tag, Button, Space, message, Card, Typography } from 'antd';
 import { CheckOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
@@ -219,13 +219,13 @@ const UserMessagesPage: React.FC = () => {
       dataIndex: 'subject',
       key: 'subject',
       ellipsis: true,
-      render: (text: string, record: UserMessage) => {
+      render: (_, record: UserMessage) => {
         const isUnread = record.status === 'pending' || record.status === 'sending' || record.status === 'success';
         return (
           <Space>
             {isUnread && <Badge dot />}
             <span style={{ fontWeight: isUnread ? 'bold' : 'normal' }}>
-              {text || t('common.noSubject')}
+              {record.subject || t('common.noSubject')}
             </span>
           </Space>
         );
@@ -326,18 +326,18 @@ const UserMessagesPage: React.FC = () => {
   /**
    * 详情列定义
    */
-  const detailColumns = [
+  const detailColumns: ProDescriptionsItemProps<UserMessage>[] = [
     { title: t('pages.personal.messages.subject'), dataIndex: 'subject' },
     { title: t('pages.personal.messages.content'), dataIndex: 'content', span: 2 },
     {
       title: t('pages.personal.messages.channel'),
       dataIndex: 'type',
-      render: (value: string) => getChannelTag(value),
+      render: (_, record: UserMessage) => getChannelTag(record.type),
     },
     {
       title: t('pages.personal.messages.status'),
       dataIndex: 'status',
-      render: (value: string) => getStatusTag(value),
+      render: (_, record: UserMessage) => getStatusTag(record.status),
     },
     { title: t('pages.personal.messages.sentAt'), dataIndex: 'sent_at', valueType: 'dateTime' },
     { title: t('pages.personal.messages.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
@@ -345,9 +345,12 @@ const UserMessagesPage: React.FC = () => {
       title: t('pages.personal.messages.errorInfo'),
       dataIndex: 'error_message',
       span: 2,
-      render: (value: string) => value ? (
-        <Typography.Text type="danger">{value}</Typography.Text>
-      ) : '-',
+      render: (_, record: UserMessage) =>
+        record.error_message ? (
+          <Typography.Text type="danger">{record.error_message}</Typography.Text>
+        ) : (
+          '-'
+        ),
     },
   ];
 
@@ -469,7 +472,7 @@ const UserMessagesPage: React.FC = () => {
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        dataSource={detailData || {}}
+        dataSource={detailData ?? undefined}
         columns={detailColumns}
         column={1}
         customContent={

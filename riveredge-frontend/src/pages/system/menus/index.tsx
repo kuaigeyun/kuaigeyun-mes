@@ -33,7 +33,7 @@ import { renderRowActionsOverflow } from '../../../utils/renderRowActionsOverflo
 // 动态图标组件
 const IconItem = ({ icon }: { icon?: string }) => {
   if (!icon) return null;
-  const AntdIcons = Icons as Record<string, React.ComponentType>;
+  const AntdIcons = Icons as unknown as Record<string, React.ComponentType>;
   const Icon = AntdIcons[icon];
   return Icon ? <Icon /> : null;
 };

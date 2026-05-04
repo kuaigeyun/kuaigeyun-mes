@@ -656,7 +656,7 @@ const DataDictionaryListPage: React.FC = () => {
         onOk={handleSubmitItem}
         onCancel={() => setItemModalVisible(false)}
         confirmLoading={itemFormLoading}
-        size={600}
+        width={600}
       >
         <ProForm formRef={itemFormRef} submitter={false} layout="vertical">
           <ProFormText

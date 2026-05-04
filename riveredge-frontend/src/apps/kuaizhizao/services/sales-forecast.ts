@@ -31,8 +31,8 @@ export interface SalesForecast {
   created_at?: string;
   updated_at?: string;
   forecast_items?: SalesForecastItem[];
-  /** 创建时可选；更新时提供则覆盖全部明细 */
-  items?: SalesForecastItemCreatePayload[];
+  /** 创建/更新提交的明细；详情/列表带行时也可能是读模型明细 */
+  items?: SalesForecastItemCreatePayload[] | SalesForecastItem[];
   /** 本次操作是否已同步至关联需求（更新/审核接口返回） */
   demand_synced?: boolean;
   /** 与关联需求下推需求计算同进同退（列表/详情接口） */

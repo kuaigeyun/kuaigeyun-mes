@@ -21,10 +21,9 @@ import {
 } from '@formily/antd-v5';
 import { sopExecutionApi, sopApi } from '../../../services/process';
 import type { SOPExecution, SOP, SOPNodeCompleteRequest } from '../../../types/process';
-import type { ISchema } from '@formily/core';
+import type { ISchema } from '@formily/json-schema';
 
 const { Title, Text } = Typography;
-const { Step } = Steps;
 
 const SchemaField = createSchemaField({
   components: {
@@ -295,16 +294,17 @@ const SOPExecutionPage: React.FC = () => {
           title="流程步骤"
           style={{ width: 300, flexShrink: 0 }}
         >
-          <Steps direction="vertical" current={currentStepIndex} size="small">
-            {flowSteps.map((step, index) => (
-              <Step
-                key={step.id}
-                title={step.title}
-                description={step.description}
-                status={getStepStatus(index)}
-              />
-            ))}
-          </Steps>
+          <Steps
+            direction="vertical"
+            current={currentStepIndex}
+            size="small"
+            items={flowSteps.map((step, index) => ({
+              key: step.id,
+              title: step.title,
+              description: step.description,
+              status: getStepStatus(index),
+            }))}
+          />
         </Card>
         
         {/* 右侧：当前节点表单 */}

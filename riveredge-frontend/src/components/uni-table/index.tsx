@@ -16,6 +16,7 @@ import {
   ProFormInstance,
   ProTableProps,
 } from '@ant-design/pro-components'
+import type { ColumnsState } from '@ant-design/pro-table'
 import { Button, Space, Radio, Input, theme, Empty, ConfigProvider, Dropdown, Popconfirm, Grid, Descriptions, Card, Tag } from 'antd'
 import type { MenuProps } from 'antd'
 import {
@@ -1133,12 +1134,13 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         ...(user.defaultValue || {}),
       },
       onChange: (map: Record<string, any> | undefined) => {
-        user.onChange?.(map)
+        if (map) user.onChange?.(map as Record<string, ColumnsState>)
         if (!tableId || !map) return
+        const columnsSnapshot = map
         if (columnsSyncDebounceRef.current) clearTimeout(columnsSyncDebounceRef.current)
         columnsSyncDebounceRef.current = setTimeout(() => {
           columnsSyncDebounceRef.current = null
-          syncTablePreference(tableId, { columns: map }).catch(() => {})
+          syncTablePreference(tableId, { columns: columnsSnapshot }).catch(() => {})
         }, 800)
       },
     }

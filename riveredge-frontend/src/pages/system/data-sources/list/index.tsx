@@ -29,6 +29,20 @@ import {
   CreateDataSourceData,
   UpdateDataSourceData,
 } from '../../../../services/dataSource';
+
+type DataSourceDetail = DataSource & { related_datasets?: unknown[] };
+
+function coerceImportedDataSourceType(raw: string): CreateDataSourceData['type'] {
+  const lower = String(raw).trim().toLowerCase();
+  if (lower === 'postgresql' || lower === 'postgres') return 'postgresql';
+  if (lower === 'mysql') return 'mysql';
+  if (lower === 'mongodb' || lower === 'mongo') return 'mongodb';
+  if (lower === 'api') return 'API';
+  if (lower === 'oauth') return 'OAuth';
+  if (lower === 'webhook') return 'Webhook';
+  if (lower === 'database') return 'Database';
+  return 'postgresql';
+}
 import { getDatasetList } from '../../../../services/dataset';
 import { updateIntegrationConfig } from '../../../../services/integrationConfig';
 import dayjs from 'dayjs';
@@ -129,7 +143,7 @@ const DataSourceListPage: React.FC = () => {
   
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
-  const [detailData, setDetailData] = useState<DataSource | null>(null);
+  const [detailData, setDetailData] = useState<DataSourceDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   
   const [testingConnection, setTestingConnection] = useState(false);
@@ -199,7 +213,7 @@ const DataSourceListPage: React.FC = () => {
         getDatasetList({ data_source_uuid: record.uuid, page_size: 50 }),
       ]);
       if (dataSourceDetailReqRef.current !== req) return;
-      setDetailData({ ...detail, related_datasets: dsList.items });
+      setDetailData({ ...detail, related_datasets: dsList.items } as DataSourceDetail);
     } catch (error: any) {
       if (dataSourceDetailReqRef.current === req) {
         messageApi.error(error.message || t('pages.system.dataSources.getDetailFailed'));
@@ -548,9 +562,9 @@ const DataSourceListPage: React.FC = () => {
       dataIndex: 'name',
       width: 200,
       fixed: 'left',
-      render: (name: string, record: DataSource) => (
+      render: (_, record) => (
         <Space size="small">
-          <span>{name}</span>
+          <span>{record.name}</span>
           {record.is_system_default && (
             <Tag color="blue">{t('pages.system.dataSources.systemDefault', '系统默认')}</Tag>
           )}
@@ -717,9 +731,9 @@ const DataSourceListPage: React.FC = () => {
     {
       title: t('pages.system.dataSources.detailColumnName'),
       dataIndex: 'name',
-      render: (name: string, record: DataSource) => (
+      render: (_, record: DataSource) => (
         <Space size="small">
-          <span>{name}</span>
+          <span>{record.name}</span>
           {record.is_system_default && (
             <Tag color="blue">{t('pages.system.dataSources.systemDefault', '系统默认')}</Tag>
           )}
@@ -730,7 +744,8 @@ const DataSourceListPage: React.FC = () => {
     {
       title: t('pages.system.dataSources.detailColumnType'),
       dataIndex: 'type',
-      render: (value: string) => {
+      render: (_, record: DataSource) => {
+        const value = record.type;
         const typeInfo = getTypeInfo(value);
         return <Tag color={typeInfo.color}>{typeInfo.text}</Tag>;
       },
@@ -739,8 +754,8 @@ const DataSourceListPage: React.FC = () => {
     {
       title: t('pages.system.dataSources.detailColumnRelatedDatasets'),
       dataIndex: 'related_datasets',
-      render: (value: any) => {
-        const list = value || [];
+      render: (_, record: DataSourceDetail) => {
+        const list = (record.related_datasets || []) as unknown[];
         if (list.length === 0) return <span style={{ color: '#999' }}>{t('pages.system.dataSources.noDatasets')}</span>;
         return (
           <Space direction="vertical" size={4}>
@@ -927,7 +942,7 @@ const DataSourceListPage: React.FC = () => {
                 await createDataSource({
                   name: String(obj.name),
                   code: `${String(obj.code).replace(/[^a-z0-9_]/g, '_').slice(0, 30)}_${ts}${i}`,
-                  type: String(obj.type),
+                  type: coerceImportedDataSourceType(String(obj.type)),
                   config,
                   description: obj.description ? String(obj.description) : undefined,
                   is_active: obj.is_active !== 'false' && obj.is_active !== '0' && obj.is_active !== '',

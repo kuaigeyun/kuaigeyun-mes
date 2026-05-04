@@ -295,7 +295,7 @@ const SOPPage: React.FC = () => {
         messageApi.success(t('common.updateSuccess'));
       } else {
         // 创建SOP
-        await sopApi.create(payload as SOPCreate);
+        await sopApi.create(payload as unknown as SOPCreate);
         messageApi.success(t('common.createSuccess'));
       }
       
@@ -539,7 +539,7 @@ const SOPPage: React.FC = () => {
         const ma = record.material_uuids ?? record.materialUuids ?? [];
         const mg = record.material_group_uuids ?? record.materialGroupUuids ?? [];
         const rt = record.route_uuids ?? record.routeUuids ?? [];
-        const parts = [];
+        const parts: string[] = [];
         if (ma?.length) parts.push(`物料×${ma.length}`);
         if (mg?.length) parts.push(`物料组×${mg.length}`);
         if (rt?.length) parts.push(`路线×${rt.length}`);

@@ -7,7 +7,15 @@
 
 import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProForm, ProFormText, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
+import {
+  ActionType,
+  ProColumns,
+  ProForm,
+  ProFormText,
+  ProFormSelect,
+  ProFormInstance,
+  type ProDescriptionsItemProps,
+} from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../components/safe-pro-form-select';
 import { App, Card, Tag, Space, message, Modal, Descriptions, Popconfirm, Button, Badge, Typography, Alert, Progress, Tooltip, theme, Upload, InputNumber, Form } from 'antd';
 import { StatCardTrendArea } from '../../../components/common/StatCardTrendArea';
@@ -211,12 +219,16 @@ const DataBackupsPage: React.FC = () => {
     return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
   };
 
-  const getBackupTypeTag = (type: string) => {
+  const getBackupTypeInfo = (backupType: string) => {
     const typeMap: Record<string, { color: string; text: string }> = {
       full: { color: 'blue', text: t('pages.system.dataBackups.typeFull') },
       incremental: { color: 'green', text: t('pages.system.dataBackups.typeIncremental') },
     };
-    const typeInfo = typeMap[type] || { color: 'default', text: type };
+    return typeMap[backupType] || { color: 'default', text: backupType };
+  };
+
+  const getBackupTypeTag = (backupType: string) => {
+    const typeInfo = getBackupTypeInfo(backupType);
     return <Tag color={typeInfo.color}>{typeInfo.text}</Tag>;
   };
 
@@ -240,7 +252,7 @@ const DataBackupsPage: React.FC = () => {
     const yesterdayStr = dayjs().subtract(1, 'day').format('YYYY-MM-DD');
     let today_backups = 0;
     let yesterday_backups = 0;
-    const trend_data = [];
+    const trend_data = [] as Array<{ date: string; value: number }>;
 
     // 计算最近7天的备份数据趋势
     for (let i = 6; i >= 0; i--) {
@@ -283,7 +295,7 @@ const DataBackupsPage: React.FC = () => {
    * 卡片渲染函数
    */
   const renderCard = (backup: DataBackup, index: number) => {
-    const typeInfo = getBackupTypeTag(backup.backup_type);
+    const typeInfo = getBackupTypeInfo(backup.backup_type);
     const statusInfo = getStatusInfo(backup.status);
     
     return (
@@ -480,6 +492,8 @@ const DataBackupsPage: React.FC = () => {
             <Button key="download" type="link" size="small" icon={<DownloadOutlined />} onClick={() => handleDownload(record)}>
               {t('pages.system.dataBackups.downloadBackup')}
             </Button>,
+          );
+          actions.push(
             <Button key="restore" type="link" size="small" icon={<ReloadOutlined />} onClick={() => handleRestore(record)}>
               {t('pages.system.dataBackups.restore')}
             </Button>,
@@ -513,17 +527,17 @@ const DataBackupsPage: React.FC = () => {
     return <Tag color="blue">{t('pages.system.dataBackups.sourceGenerated')}</Tag>;
   };
 
-  const detailColumns = [
+  const detailColumns: ProDescriptionsItemProps<DataBackup>[] = [
     { title: t('pages.system.dataBackups.columnName'), dataIndex: 'name' },
-    { title: t('pages.system.dataBackups.columnSource'), dataIndex: 'source_type', render: (v: string) => getSourceTypeTag(v) },
-    { title: t('pages.system.dataBackups.columnType'), dataIndex: 'backup_type', render: (value: string) => getBackupTypeTag(value) },
-    { title: t('pages.system.dataBackups.columnScope'), dataIndex: 'backup_scope', render: (value: string) => getBackupScopeText(value) },
-    { title: t('pages.system.dataBackups.columnStatus'), dataIndex: 'status', render: (value: string) => getStatusTag(value) },
-    { title: t('pages.system.dataBackups.columnFilePath'), dataIndex: 'file_path', render: (value: string) => value || '-' },
-    { title: t('pages.system.dataBackups.columnFileSize'), dataIndex: 'file_size', render: (value: number) => formatFileSize(value) },
+    { title: t('pages.system.dataBackups.columnSource'), dataIndex: 'source_type', render: (_, r) => getSourceTypeTag(r.source_type) },
+    { title: t('pages.system.dataBackups.columnType'), dataIndex: 'backup_type', render: (_, r) => getBackupTypeTag(r.backup_type) },
+    { title: t('pages.system.dataBackups.columnScope'), dataIndex: 'backup_scope', render: (_, r) => getBackupScopeText(r.backup_scope) },
+    { title: t('pages.system.dataBackups.columnStatus'), dataIndex: 'status', render: (_, r) => getStatusTag(r.status) },
+    { title: t('pages.system.dataBackups.columnFilePath'), dataIndex: 'file_path', render: (_, r) => r.file_path || '-' },
+    { title: t('pages.system.dataBackups.columnFileSize'), dataIndex: 'file_size', render: (_, r) => formatFileSize(r.file_size) },
     { title: t('pages.system.dataBackups.columnStartedAt'), dataIndex: 'started_at', valueType: 'dateTime' },
     { title: t('pages.system.dataBackups.columnCompletedAt'), dataIndex: 'completed_at', valueType: 'dateTime' },
-    { title: t('pages.system.dataBackups.columnError'), dataIndex: 'error_message', render: (value: string) => value || '-' },
+    { title: t('pages.system.dataBackups.columnError'), dataIndex: 'error_message', render: (_, r) => r.error_message || '-' },
     {
       title: t('pages.system.dataBackups.columnCreatedAt'),
       dataIndex: 'created_at',

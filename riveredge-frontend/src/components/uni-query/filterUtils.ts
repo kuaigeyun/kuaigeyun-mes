@@ -12,30 +12,32 @@ import { FIELD_OPERATOR_MAP } from './types';
  * 根据 valueType 推断筛选器类型
  */
 export function inferFilterType(column: ProColumns<any>): FilterType {
-  const { valueType, filterConfig } = column;
-  
+  const ext = column as ExtendedProColumns;
+  const { valueType, filterConfig } = ext;
+  const vt = String(valueType ?? '');
+
   // 如果手动指定了 filterType，直接使用
   if (filterConfig?.filterType) {
     return filterConfig.filterType;
   }
-  
-  // 根据 valueType 自动推断
-  if (!valueType || valueType === 'text' || valueType === 'textarea') {
+
+  // 根据 valueType 自动推断（union 不完全包含 digit/boolean 等，按字符串比对）
+  if (!vt || vt === 'text' || vt === 'textarea') {
     return 'text';
   }
-  if (valueType === 'number' || valueType === 'money') {
+  if (vt === 'digit' || vt === 'money' || vt === 'number') {
     return 'number';
   }
-  if (valueType === 'date') {
+  if (vt === 'date') {
     return 'date';
   }
-  if (valueType === 'dateRange') {
+  if (vt === 'dateRange') {
     return 'dateRange';
   }
-  if (valueType === 'select') {
+  if (vt === 'select') {
     return 'select';
   }
-  if (valueType === 'switch' || valueType === 'boolean') {
+  if (vt === 'switch' || vt === 'boolean') {
     return 'boolean';
   }
   
@@ -88,7 +90,9 @@ export function getDefaultOperator(column: ProColumns<any>): FilterOperator {
  * 检查字段是否可筛选
  */
 export function isFilterable(column: ProColumns<any>): boolean {
-  const { hideInSearch, valueType, filterConfig } = column;
+  const ext = column as ExtendedProColumns;
+  const { hideInSearch, filterConfig } = ext;
+  const valueType = ext.valueType;
   
   // 如果明确禁用了筛选，返回 false
   if (filterConfig?.enableFilter === false) {

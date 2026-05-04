@@ -47,7 +47,7 @@ export function useWebSocket(
 ): UseWebSocketReturn {
   const [client, setClient] = useState<WebSocketClient | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [readyState, setReadyState] = useState(WebSocket.CLOSED);
+  const [readyState, setReadyState] = useState<number>(WebSocket.CLOSED);
   const clientRef = useRef<WebSocketClient | null>(null);
 
   /**

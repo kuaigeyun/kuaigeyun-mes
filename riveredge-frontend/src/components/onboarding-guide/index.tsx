@@ -1,5 +1,8 @@
-import React, { useEffect } from 'react';
-import { Joyride, ACTIONS, EVENTS, STATUS, type Step } from 'react-joyride';
+import React from 'react';
+import { Joyride, EVENTS, STATUS, type Step } from 'react-joyride';
+
+/** 与历史代码中的 `GuideStep` 命名兼容 */
+export type GuideStep = Step;
 import { useGuideStore } from './store';
 import { GUIDE_REGISTRY } from './registry';
 import GuideTooltip from './Tooltip';
@@ -13,22 +16,21 @@ const { useToken } = theme;
  */
 export const OnboardingGuide: React.FC = () => {
   const { token } = useToken();
-  const { isRunning, activeGuideId, stopGuide, completeGuide } = useGuideStore();
+  const { isRunning, activeGuideId, completeGuide } = useGuideStore();
 
   // 获取当前引导配置
   const guideConfig = activeGuideId ? GUIDE_REGISTRY[activeGuideId] : null;
   const steps = guideConfig?.steps || [];
 
-  const handleJoyrideCallback = (data: any) => {
-    const { status, type, action } = data;
+  const handleJoyrideEvent: React.ComponentProps<typeof Joyride>['onEvent'] = (data) => {
+    const { status, type } = data;
 
-    // 当引导完成或跳过时
-    if ([STATUS.FINISHED, STATUS.SKIPPED].includes(status)) {
+    if (status === STATUS.FINISHED || status === STATUS.SKIPPED) {
       if (activeGuideId) {
         completeGuide(activeGuideId);
       }
     } else if (type === EVENTS.STEP_AFTER || type === EVENTS.TARGET_NOT_FOUND) {
-      // 可以在这里处理步骤跳转逻辑
+      // 可在此处处理步骤跳转逻辑
     }
   };
 
@@ -41,27 +43,23 @@ export const OnboardingGuide: React.FC = () => {
       steps={steps}
       run={isRunning}
       continuous
-      showProgress
-      showSkipButton
       scrollToFirstStep
-      disableScrolling={false}
-      scrollOffset={100}
-      callback={handleJoyrideCallback}
       tooltipComponent={GuideTooltip}
-      styles={{
-        options: {
-          zIndex: 10000,
-          primaryColor: token.colorPrimary,
-          overlayColor: 'rgba(0, 0, 0, 0.45)',
-          backgroundColor: token.colorBgContainer,
-        },
-        overlay: {
-          backgroundColor: 'rgba(0, 0, 0, 0.45)',
-        },
-        spotlight: {
-          borderRadius: token.borderRadius,
-        },
+      options={{
+        scrollOffset: 100,
+        showProgress: true,
+        buttons: ['back', 'close', 'primary', 'skip'],
       }}
+      onEvent={handleJoyrideEvent}
+      styles={
+        {
+          overlay: { backgroundColor: 'rgba(0, 0, 0, 0.45)', zIndex: 10000 },
+          spotlight: { borderRadius: token.borderRadius },
+          floater: { zIndex: 10000 },
+          tooltip: { backgroundColor: token.colorBgContainer },
+          buttonPrimary: { backgroundColor: token.colorPrimary },
+        } as any
+      }
       locale={{
         back: '上一步',
         close: '关闭',

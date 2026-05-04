@@ -182,10 +182,13 @@ const CardView: React.FC = () => {
     try {
       setLoading(true);
       await createPrintTemplate({
-        ...values,
+        name: String(values.name ?? '').trim(),
         code: DOCUMENT_TYPE_TO_CODE[values.document_type] || values.code,
+        type: String(values.type ?? 'pdf'),
+        description: values.description ? String(values.description) : undefined,
         content: EMPTY_HTML_TEMPLATE,
         config: { document_type: values.document_type },
+        is_active: true,
       });
       handleSuccess(t('pages.system.printTemplates.createSuccess'));
       setCreateModalVisible(false);

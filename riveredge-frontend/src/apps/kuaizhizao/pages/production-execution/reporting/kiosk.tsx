@@ -9,7 +9,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { App, Card, Button, Space, Input, Alert, Spin, Form, Radio, InputNumber, Row, Col, Tag, Divider } from 'antd';
+import { App, Card, Button, Space, Input, Alert, Spin, Form, Radio, InputNumber, Row, Col, Tag, Divider, Modal } from 'antd';
 import { QrcodeOutlined, ScanOutlined, CheckCircleOutlined, CloseCircleOutlined, ReloadOutlined } from '@ant-design/icons';
 import { TouchScreenTemplate, TOUCH_SCREEN_CONFIG } from '../../../../../components/layout-templates';
 import { reportingApi, workOrderApi } from '../../../services/production';
@@ -572,10 +572,7 @@ const ReportingKioskPage: React.FC = () => {
           width="90%"
           style={{ maxWidth: 800 }}
         >
-          <QRCodeScanner
-            onScanSuccess={handleQRCodeScanned}
-            onCancel={() => setScanning(false)}
-          />
+          <QRCodeScanner onScanSuccess={handleQRCodeScanned} />
         </Modal>
       )}
     </TouchScreenTemplate>

@@ -13,8 +13,11 @@ export interface PlatformSettings {
   platform_contact_phone?: string;
   platform_website?: string;
   login_title?: string;
+  login_title_en?: string;
   login_content?: string;
+  login_content_en?: string;
   icp_license?: string;
+  icp_license_en?: string;
   theme_color?: string;
   tenant_auto_approve?: boolean;
   float_button_enabled?: boolean;

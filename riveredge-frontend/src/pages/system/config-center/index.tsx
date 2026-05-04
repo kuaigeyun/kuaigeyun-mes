@@ -633,7 +633,7 @@ const ConfigCenterPage: React.FC = () => {
                   { title: '触发动作', dataIndex: 'action', width: 140 },
                   { title: '通知渠道', dataIndex: 'channels', width: 180 },
                   { title: '通知对象', dataIndex: 'recipients', width: 220 },
-                  { title: '状态', dataIndex: 'enabled', width: 90, render: (v: boolean) => (v ? '启用' : '停用') },
+                  { title: '状态', dataIndex: 'enabled', width: 90, render: (_: unknown, row: any) => (row.enabled ? '启用' : '停用') },
                   {
                     title: '操作',
                     width: 220,
@@ -647,7 +647,11 @@ const ConfigCenterPage: React.FC = () => {
                     },
                   },
                 ]}
-                dataSource={notificationRuleRows}
+                request={async () => ({
+                  data: notificationRuleRows,
+                  success: true,
+                  total: notificationRuleRows.length,
+                })}
               />
             </div>
           </Spin>

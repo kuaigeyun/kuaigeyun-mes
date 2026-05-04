@@ -34,11 +34,11 @@ function formatMaterialCallTypeZh(code: unknown): string {
 }
 
 /** 主 Modal body：不设 maxHeight/overflow，避免内容未溢出时仍出现内层滚动条；超长内容由 .ant-modal-wrap 整体滚动 */
-const READINESS_MAIN_MODAL_BODY_STYLE: NonNullable<React.ComponentProps<typeof Modal>['styles']>['body'] = {
+const READINESS_MAIN_MODAL_BODY_STYLE = {
   paddingTop: 12,
   overflow: 'visible',
   maxHeight: 'none',
-}
+} satisfies React.CSSProperties
 
 const FALLBACK_CALL_REASON_OPTIONS = [
   { label: '线边仓缺料', value: 'LINE_SIDE_SHORTAGE' },
@@ -361,7 +361,6 @@ const WorkOrderMaterialCallModal: React.FC<{
                         label={index === 0 ? '物料' : ' '}
                         required
                         showQuickCreate={false}
-                        getPopupContainer={getPopupContainerInModal}
                         fillMapping={{
                           material_code: 'mainCode',
                           material_name: 'name',
@@ -384,9 +383,9 @@ const WorkOrderMaterialCallModal: React.FC<{
                       <Form.Item
                         name={[field.name, 'requested_quantity']}
                         label={index === 0 ? '数量' : ' '}
+                        colon={index > 0 ? false : undefined}
                         rules={[{ required: true, message: '必填' }]}
                         style={{ marginBottom: 0 }}
-                        {...(index > 0 ? { label: ' ', colon: false } : {})}
                       >
                         <InputNumber min={0.0001} style={{ width: 128 }} placeholder="数量" />
                       </Form.Item>
@@ -771,7 +770,7 @@ export const WorkOrderReadinessPopover: React.FC<WorkOrderReadinessPopoverProps>
         width={760}
         destroyOnHidden
         zIndex={1100}
-        styles={{ body: READINESS_MAIN_MODAL_BODY_STYLE }}
+        styles={{ body: { ...READINESS_MAIN_MODAL_BODY_STYLE } }}
         getContainer={() => document.body}
       >
         {mainModalOpen ? (

@@ -123,8 +123,17 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
     try {
       setUploading(true);
       
+      const uploadFileCandidate = Array.isArray(file) ? file[0] : file;
+      const fileSize =
+        uploadFileCandidate != null &&
+        typeof uploadFileCandidate === 'object' &&
+        'size' in uploadFileCandidate &&
+        typeof (uploadFileCandidate as Blob).size === 'number'
+          ? (uploadFileCandidate as Blob).size
+          : undefined;
+
       // 检查文件大小
-      if (maxSize && file.size > maxSize) {
+      if (maxSize != null && fileSize != null && fileSize > maxSize) {
         throw new Error(t('components.fileUpload.sizeExceeded', { size: (maxSize / 1024 / 1024).toFixed(2) }));
       }
       
@@ -151,7 +160,7 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
         messageApi.success(t('components.fileUpload.uploadMultiSuccess', { count: response.length }));
       } else {
         // 单文件上传
-        const response = await uploadFile(file as File, {
+        const response = await uploadFile(uploadFileCandidate as File, {
           category,
           tags,
           description,

@@ -7,7 +7,18 @@
 
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProFormDependency, ProFormDigit, ProFormGroup } from '@ant-design/pro-components';
+import {
+  ActionType,
+  ProColumns,
+  ProFormText,
+  ProFormTextArea,
+  ProFormSwitch,
+  ProFormInstance,
+  ProFormDependency,
+  ProFormDigit,
+  ProFormGroup,
+  type ProDescriptionsItemProps,
+} from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Button, Descriptions, Input, Modal, Popconfirm, Tag } from 'antd';
 import {
@@ -467,21 +478,21 @@ const MessageConfigListPage: React.FC = () => {
     {
       title: t('pages.system.messageConfig.type'),
       dataIndex: 'type',
-      render: (value: string) => {
+      render: (_, r) => {
         const typeMap: Record<string, string> = {
           email: t('pages.system.messageConfig.typeEmail'),
           sms: t('pages.system.messageConfig.typeSms'),
           internal: t('pages.system.messageConfig.typeInternal'),
           push: t('pages.system.messageConfig.typePush'),
         };
-        return typeMap[value] || value;
+        return typeMap[r.type] || r.type;
       },
     },
     { title: t('pages.system.messageConfig.remark'), dataIndex: 'description' },
     {
       title: t('pages.system.messageConfig.configInfo'),
       dataIndex: 'config',
-      render: (value: Record<string, any>) => (
+      render: (_, r) => (
         <pre style={{
           margin: 0,
           padding: '8px',
@@ -491,25 +502,25 @@ const MessageConfigListPage: React.FC = () => {
           maxHeight: '300px',
           fontSize: 12,
         }}>
-          {JSON.stringify(value, null, 2)}
+          {JSON.stringify(r.config, null, 2)}
         </pre>
       ),
     },
     {
       title: t('pages.system.messageConfig.activeStatus'),
       dataIndex: 'is_active',
-      render: (value: boolean) => (
-        <Tag color={value ? 'success' : 'default'}>
-          {value ? t('pages.system.applications.enabled') : t('pages.system.applications.disabled')}
+      render: (_, r) => (
+        <Tag color={r.is_active ? 'success' : 'default'}>
+          {r.is_active ? t('pages.system.applications.enabled') : t('pages.system.applications.disabled')}
         </Tag>
       ),
     },
     {
       title: t('pages.system.messageConfig.defaultConfig'),
       dataIndex: 'is_default',
-      render: (value: boolean) => (
-        <Tag color={value ? 'success' : 'default'}>
-          {value ? t('field.customField.yes') : t('field.customField.no')}
+      render: (_, r) => (
+        <Tag color={r.is_default ? 'success' : 'default'}>
+          {r.is_default ? t('field.customField.yes') : t('field.customField.no')}
         </Tag>
       ),
     },
@@ -777,7 +788,7 @@ const MessageConfigListPage: React.FC = () => {
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
         basic={detailData ? (
-            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, detailData)} />
+            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns as ProDescriptionsItemProps<MessageConfig>[], detailData)} />
           ) : null}
       />
     </>

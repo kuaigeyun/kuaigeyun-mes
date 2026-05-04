@@ -185,9 +185,11 @@ export const DashboardTemplate: React.FC<DashboardTemplateProps> = ({
                 xxl={3}
               >
                 <Card
-                  hoverable
-                  onClick={action.onClick}
-                  disabled={action.disabled}
+                  hoverable={!action.disabled}
+                  onClick={() => {
+                    if (action.disabled) return;
+                    action.onClick?.();
+                  }}
                   style={{
                     cursor: action.disabled ? 'not-allowed' : 'pointer',
                     textAlign: 'center',

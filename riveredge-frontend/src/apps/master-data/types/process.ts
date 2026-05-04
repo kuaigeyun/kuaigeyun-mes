@@ -50,11 +50,11 @@ export interface DefectTypeListResponse {
   total: number;
 }
 
-/** 不良品项简要（工序绑定用） */
+/** 不良品项简要（工序绑定用）；仅 UUID 占位时用于补齐下拉选项 */
 export interface DefectTypeMinimal {
   uuid: string;
-  code: string;
-  name: string;
+  code?: string;
+  name?: string;
 }
 
 export interface Operation {

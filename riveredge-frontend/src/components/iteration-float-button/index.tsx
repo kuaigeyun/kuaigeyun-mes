@@ -15,7 +15,7 @@ import { getPlatformSettingsPublic, getPlatformVersion, type PlatformVersion } f
 import { useConfigStore } from '../../stores/configStore';
 import { formatTimeInTimezone } from '../../utils/formatTimeInTimezone';
 
-const { Paragraph, Text } = Typography;
+const { Paragraph, Link } = Typography;
 
 const GIT_REPO_URL = 'https://gitee.com/kuaigeyun/kuaigeyun';
 
@@ -83,13 +83,12 @@ export default function IterationFloatButton() {
             <Paragraph type="secondary" style={{ marginBottom: 4, fontSize: 13 }}>
               {t('components.iterationFloatButton.gitLatestTime')}: {gitTimeDisplay}
             </Paragraph>
-            <Text
-              type="link"
+            <Link
               style={{ fontSize: 13 }}
               onClick={() => window.open(version?.git_repo_url || GIT_REPO_URL, '_blank')}
             >
               {t('components.iterationFloatButton.viewRepo')}
-            </Text>
+            </Link>
           </div>
 
           <div style={{ borderTop: '1px solid var(--river-divider-color)', paddingTop: 16 }}>

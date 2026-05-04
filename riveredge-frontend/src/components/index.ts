@@ -23,7 +23,7 @@ export type { FileUploadComponentProps } from './file-upload';
 export { default as VirtualList } from './virtual-list';
 export type { VirtualListProps } from './virtual-list';
 export { default as OnboardingGuide } from './onboarding-guide';
-export type { OnboardingGuideProps, GuideStep } from './onboarding-guide';
+export type { GuideStep } from './onboarding-guide';
 export { default as HelpTooltip, FieldHelp } from './help-tooltip';
 export type { HelpTooltipProps, FieldHelpProps } from './help-tooltip';
 export { default as HelpDocument, createHelpContent } from './help-document';

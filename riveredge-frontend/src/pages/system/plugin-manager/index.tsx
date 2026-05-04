@@ -45,12 +45,14 @@ const PluginManagerPage: React.FC = () => {
   const actionRef = React.useRef<ActionType>();
 
   // 获取插件列表
-  const fetchPlugins = async (): Promise<{ data: PluginInfo[]; success: boolean }> => {
+  const fetchPlugins = async (): Promise<{ data: PluginInfo[]; success: boolean; total: number }> => {
     try {
       const response = await api.get('/api/v1/core/plugin-manager/plugins');
+      const data = Array.isArray(response) ? response : [];
       return {
-        data: response,
+        data,
         success: true,
+        total: data.length,
       };
     } catch (error) {
       console.error('获取插件列表失败:', error);
@@ -58,6 +60,7 @@ const PluginManagerPage: React.FC = () => {
       return {
         data: [],
         success: false,
+        total: 0,
       };
     }
   };

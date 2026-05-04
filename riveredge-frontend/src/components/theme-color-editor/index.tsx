@@ -27,6 +27,19 @@ interface ThemeColorEditorProps {
  */
 const THEME_COLOR_STORAGE_KEY = 'riveredge_theme_color_preview';
 
+function themeColorToHex(value: unknown, fallback: string): string {
+  if (typeof value === 'string' && value.trim()) return value.trim();
+  if (
+    value &&
+    typeof value === 'object' &&
+    'toHexString' in value &&
+    typeof (value as { toHexString: unknown }).toHexString === 'function'
+  ) {
+    return (value as { toHexString: () => string }).toHexString();
+  }
+  return fallback;
+}
+
 /**
  * 简化版主题颜色编辑器组件
  */
@@ -57,44 +70,29 @@ const ThemeColorEditor: React.FC<ThemeColorEditorProps> = ({ children, onThemeUp
       // 检查是否有 token（是否已登录）
       const hasToken = !!getToken();
       
-      let colorPrimaryValue: string | null = null;
-      
+      let raw: unknown = null;
+
       if (hasToken) {
-        // 已登录：从后端加载
         try {
           const siteSetting = await getSiteSetting();
           const themeConfig = siteSetting?.settings?.theme_config || {};
           const legacyThemeColor = siteSetting?.settings?.theme_color;
-          colorPrimaryValue = legacyThemeColor || themeConfig.colorPrimary || null;
-        } catch (error) {
+          raw = legacyThemeColor ?? themeConfig.colorPrimary ?? null;
+        } catch {
           // 如果后端加载失败，忽略错误，继续使用 localStorage 或默认值
         }
       }
-      
-      // 如果后端没有颜色，尝试从 localStorage 读取（未登录时的预览颜色）
-      if (!colorPrimaryValue) {
-        const storedColor = localStorage.getItem(THEME_COLOR_STORAGE_KEY);
-        if (storedColor) {
-          colorPrimaryValue = storedColor;
-        }
+
+      if (raw == null || raw === '') {
+        raw = localStorage.getItem(THEME_COLOR_STORAGE_KEY);
       }
-      
-      // 如果都没有，使用当前实际使用的主题颜色或默认值
-      if (!colorPrimaryValue) {
-        colorPrimaryValue = token.colorPrimary || '#1890ff';
+
+      if (raw == null || raw === '') {
+        raw = token.colorPrimary;
       }
-      
-      // 确保 colorPrimary 是字符串格式
-      if (typeof colorPrimaryValue !== 'string') {
-        // 如果是对象，尝试转换为字符串
-        if (colorPrimaryValue && typeof colorPrimaryValue.toHexString === 'function') {
-          colorPrimaryValue = colorPrimaryValue.toHexString();
-        } else {
-          colorPrimaryValue = token.colorPrimary || '#1890ff';
-        }
-      }
-      
-      setSelectedColor(colorPrimaryValue);
+
+      const hex = themeColorToHex(raw, token.colorPrimary || '#1890ff');
+      setSelectedColor(hex);
     } catch (error: any) {
       // 如果加载失败，使用默认颜色
       setSelectedColor(token.colorPrimary || '#1890ff');
@@ -110,16 +108,8 @@ const ThemeColorEditor: React.FC<ThemeColorEditorProps> = ({ children, onThemeUp
     try {
       setSaving(true);
       
-      // 确保 colorPrimary 是字符串格式
-      let colorPrimaryValue = color || '#1890ff';
-      if (typeof colorPrimaryValue !== 'string') {
-        if (colorPrimaryValue && typeof colorPrimaryValue.toHexString === 'function') {
-          colorPrimaryValue = colorPrimaryValue.toHexString();
-        } else {
-          colorPrimaryValue = '#1890ff';
-        }
-      }
-      
+      const colorPrimaryValue = themeColorToHex(color, '#1890ff');
+
       // 检查是否有 token（是否已登录）
       const hasToken = !!getToken();
       

@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { Form, App } from 'antd';
+import type { SelectProps } from 'antd';
 import { useDebounceFn } from 'ahooks';
 import { Material } from '../../apps/master-data/types/material';
 import { materialApi } from '../../apps/master-data/services/material';
@@ -45,7 +46,8 @@ interface UniMaterialSelectProps {
   /** 是否只读模式 */
   readonly?: boolean;
   /** 指定要回填的字段映射配置，配置键为当前上下文下的相对字段名（如在 List 内为兄弟字段），值为 Material 对象上的属性名 */
-  fillMapping?: Record<string, keyof Material>;
+  fillMapping?: Record<string, string>;
+  getPopupContainer?: SelectProps['getPopupContainer'];
   /** 只展示启用的物料，默认为 true */
   activeOnly?: boolean;
   /** 初始绑定的表单实例（通常可以从外层 ProForm / Form 自动获取，也可手动传入） */
@@ -87,7 +89,8 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
     name: 'name',
     specification: 'specification',
     baseUnit: 'baseUnit',
-  },
+  } as Record<string, string>,
+  getPopupContainer,
   activeOnly = true,
   listFieldKey,
   listFieldName,
@@ -147,7 +150,7 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
 
   const handleChange = (val: number | undefined, _option: any) => {
     const selectedMaterial =
-      val != null && val !== ''
+      val != null
         ? data.find((m) => Number((m as any).id) === Number(val))
         : undefined;
 
@@ -220,6 +223,7 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
       filterOption={false}
       onSearch={debounceFetch}
       onChange={mergedOnChange}
+      getPopupContainer={getPopupContainer}
       quickCreate={effectiveQuickCreate}
       advancedSearch={
         showAdvancedSearch

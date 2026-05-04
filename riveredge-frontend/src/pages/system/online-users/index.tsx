@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns } from '@ant-design/pro-components';
+import { ActionType, ProColumns, type ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Avatar, Badge, Button, Card, Descriptions, Popconfirm, Space, Tag, Tooltip, Typography, theme } from 'antd';
 import { EyeOutlined, BarChartOutlined, LogoutOutlined, UserOutlined, ClockCircleOutlined, GlobalOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
@@ -90,7 +90,7 @@ const OnlineUsersPage: React.FC = () => {
     if (!user.login_time) return '-';
     const loginTime = dayjs(user.login_time);
     const now = dayjs();
-    return dayjs.duration(now.diff(loginTime)).humanize();
+    return now.from(loginTime, true);
   };
 
   useEffect(() => {
@@ -345,36 +345,36 @@ const OnlineUsersPage: React.FC = () => {
   /**
    * 详情列定义
    */
-  const detailColumns = [
+  const detailColumns: ProDescriptionsItemProps<OnlineUser>[] = [
     {
       title: t('pages.system.onlineUsers.userId'),
       dataIndex: 'user_id',
-      render: (value: number) => value,
+      render: (_, r) => r.user_id,
     },
     {
       title: t('pages.system.onlineUsers.username'),
       dataIndex: 'username',
-      render: (value: string) => value,
+      render: (_, r) => r.username,
     },
     {
       title: t('pages.system.onlineUsers.fullName'),
       dataIndex: 'full_name',
-      render: (value: string) => value || '-',
+      render: (_, r) => r.full_name || '-',
     },
     {
       title: t('pages.system.onlineUsers.email'),
       dataIndex: 'email',
-      render: (value: string) => value || '-',
+      render: (_, r) => r.email || '-',
     },
     {
       title: t('pages.system.onlineUsers.tenantId'),
       dataIndex: 'tenant_id',
-      render: (value: number) => value,
+      render: (_, r) => r.tenant_id,
     },
     {
       title: t('pages.system.onlineUsers.loginIp'),
       dataIndex: 'login_ip',
-      render: (value: string) => value || '-',
+      render: (_, r) => r.login_ip || '-',
     },
     {
       title: t('pages.system.onlineUsers.loginTime'),

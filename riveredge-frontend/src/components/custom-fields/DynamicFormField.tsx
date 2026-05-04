@@ -5,7 +5,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { createForm } from '@formily/core';
+import { createForm, onFormValuesChange } from '@formily/core';
 import { FormProvider, FormConsumer, createSchemaField } from '@formily/react';
 import {
   FormItem,
@@ -88,19 +88,18 @@ const DynamicFormField: React.FC<DynamicFormFieldProps> = ({
   }, [tableName, recordId, onlyActive, form, messageApi]);
 
   /**
-   * 处理表单值变化
+   * 处理表单值变化（Formily Form 使用 effects / onFormValuesChange）
    */
   useEffect(() => {
-    const dispose = form.onValuesChange((values) => {
-      if (onChange) {
-        const fieldValues = formilyValuesToFieldValues(fields, values);
+    const effectId = 'dynamicFieldParentOnChange';
+    form.addEffects(effectId, () => {
+      onFormValuesChange((f) => {
+        if (!onChange) return;
+        const fieldValues = formilyValuesToFieldValues(fields, f.values);
         onChange(fieldValues);
-      }
+      });
     });
-    
-    return () => {
-      dispose();
-    };
+    return () => form.removeEffects(effectId);
   }, [form, fields, onChange]);
 
   if (loading) {

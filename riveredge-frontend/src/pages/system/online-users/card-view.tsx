@@ -158,7 +158,7 @@ const CardView: React.FC = () => {
     
     const loginTime = dayjs(user.login_time);
     const now = dayjs();
-    return dayjs.duration(now.diff(loginTime)).humanize();
+    return now.from(loginTime, true);
   };
 
   /**
@@ -357,7 +357,7 @@ const CardView: React.FC = () => {
           setCurrentUserInfo(null);
         }}
         footer={null}
-        size={800}
+        width={800}
       >
         {currentUserInfo && (
           <Descriptions column={1} bordered>

@@ -188,7 +188,7 @@ export default function LicenseCenterTab() {
             messageApi.success(t('pages.infra.licenseCenter.createSuccess', { defaultValue: '许可证创建成功' }));
             setModalOpen(false);
             actionRef.current?.reload();
-            return true;
+            return;
           } finally {
             setSubmitting(false);
           }

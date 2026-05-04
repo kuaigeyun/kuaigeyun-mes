@@ -328,7 +328,7 @@ const ExceptionProcessPage: React.FC = () => {
       dataIndex: 'lifecycle',
       width: 100,
       render: (_, record) => {
-        const lifecycle = getExceptionProcessLifecycle(record);
+        const lifecycle = getExceptionProcessLifecycle(record as unknown as Record<string, unknown>);
         const stageName = lifecycle.stageName ?? record.process_status ?? '待处理';
         return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>;
       },
@@ -348,13 +348,15 @@ const ExceptionProcessPage: React.FC = () => {
       title: '开始时间',
       dataIndex: 'started_at',
       width: 180,
-      render: (text) => (text ? dayjs(text).format('YYYY-MM-DD HH:mm:ss') : '-'),
+      render: (_, record) =>
+        record.started_at ? dayjs(record.started_at).format('YYYY-MM-DD HH:mm:ss') : '-',
     },
     {
       title: '完成时间',
       dataIndex: 'completed_at',
       width: 180,
-      render: (text) => (text ? dayjs(text).format('YYYY-MM-DD HH:mm:ss') : '-'),
+      render: (_, record) =>
+        record.completed_at ? dayjs(record.completed_at).format('YYYY-MM-DD HH:mm:ss') : '-',
     },
     {
       title: '操作',

@@ -116,7 +116,7 @@ const HelpDocument: React.FC<HelpDocumentProps> = ({
             关闭
           </Button>,
         ]}
-        size={800}
+        width={800}
         style={{ top: 20 }}
       >
         <Tabs
@@ -164,13 +164,13 @@ export const createHelpContent = {
    * 创建列表内容
    */
   list: (items: string[], ordered: boolean = false) => {
-    const ListComponent = ordered ? Typography.Ol : Typography.Ul;
+    const ListTag = ordered ? 'ol' : 'ul';
     return (
-      <ListComponent>
+      <ListTag>
         {items.map((item, index) => (
           <li key={index}>{item}</li>
         ))}
-      </ListComponent>
+      </ListTag>
     );
   },
   

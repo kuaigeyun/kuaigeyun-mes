@@ -10,7 +10,7 @@ import { Select, Spin, message, theme } from 'antd';
 import { SwapOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { getTenantList } from '../../services/tenant';
+import { getTenantList, TenantStatus } from '../../services/tenant';
 import { getUserInfo, setTenantId, getTenantId } from '../../utils/auth';
 
 const { Option } = Select;
@@ -33,7 +33,7 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
   // 获取组织列表（仅平台超级管理员需要）
   const { data: tenantData, isLoading } = useQuery({
     queryKey: ['tenants'],
-    queryFn: () => getTenantList({ page: 1, page_size: 100, status: 'active' }, true), // 传递isSuperAdmin=true
+    queryFn: () => getTenantList({ page: 1, page_size: 100, status: TenantStatus.ACTIVE }, true), // 传递isSuperAdmin=true
     enabled: isInfraSuperAdmin, // 只有平台超级管理员才获取组织列表
   });
 
@@ -47,8 +47,8 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
 
   // 如果是平台超级管理员且没有选择组织，自动选择第一个可用的组织
   React.useEffect(() => {
-    if (isInfraSuperAdmin && !currentTenantId && tenantData?.items?.length > 0) {
-      const firstTenant = tenantData.items[0];
+    if (isInfraSuperAdmin && !currentTenantId && (tenantData?.items?.length ?? 0) > 0) {
+      const firstTenant = tenantData!.items[0];
       setTenantId(firstTenant.id);
       message.info(t('ui.message.autoSelectedTenant', { name: firstTenant.name }));
     }
@@ -65,7 +65,7 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
           <Spin size="small" />
         ) : (
           <Select
-            value={currentTenantId || undefined}
+            value={currentTenantId != null ? String(currentTenantId) : undefined}
             placeholder={tenantData?.items?.length ? t('ui.placeholder.selectTenant') : t('ui.placeholder.loading')}
             style={{
               minWidth: 120,
@@ -79,7 +79,7 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
             disabled={isLoading}
           >
             {tenantData?.items?.map((tenant: any) => (
-              <Option key={tenant.id} value={tenant.id}>
+              <Option key={tenant.id} value={String(tenant.id)}>
                 {tenant.name}
               </Option>
             ))}

@@ -33,6 +33,27 @@ import type {
   SOPNodeCompleteRequest,
 } from '../types/process';
 
+/** 创建工艺路线新版本（请求体，与后端对齐） */
+export interface ProcessRouteVersionCreate {
+  summary?: string;
+  change_notes?: string;
+  [key: string]: unknown;
+}
+
+/** 对比两个工艺路线版本 */
+export interface ProcessRouteVersionCompare {
+  from_version: string;
+  to_version: string;
+  [key: string]: unknown;
+}
+
+export interface ProcessRouteVersionCompareResult {
+  from_version?: string;
+  to_version?: string;
+  changes?: unknown;
+  [key: string]: unknown;
+}
+
 /** 工序/工艺路线/SOP 列表统一为 { data, total }，旧代码取数组时用 */
 export function unwrapProcessPagedList<T>(res: { data?: T[]; total?: number } | T[] | null | undefined): T[] {
   if (res == null) return []

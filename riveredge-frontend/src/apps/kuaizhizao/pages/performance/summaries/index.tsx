@@ -175,7 +175,7 @@ const SummariesPage: React.FC = () => {
       align: 'left',
       hideInSearch: true,
       render: (_, record) => {
-        const lifecycle = getPerformanceSummaryLifecycle(record as Record<string, unknown>);
+        const lifecycle = getPerformanceSummaryLifecycle(record as unknown as Record<string, unknown>);
         return (
           <UniLifecycle
             percent={lifecycle.percent}

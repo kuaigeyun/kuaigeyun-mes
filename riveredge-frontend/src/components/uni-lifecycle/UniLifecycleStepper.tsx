@@ -243,7 +243,7 @@ function NodeCircle({
       {showLabelBelow && (
         <span
           style={{
-            ...stepLabelInlineStyle(step, isException),
+            ...stepLabelInlineStyle(step, !!isException),
             width: '100%',
             minWidth: 0,
           }}
@@ -362,7 +362,7 @@ export const UniLifecycleStepper: React.FC<UniLifecycleStepperProps> = ({
           {steps.map((step, idx) => {
             const tooltipTitle =
               step.percent != null ? `${step.label} ${Math.round(step.percent)}%` : step.label;
-            const stepIsException = isException && step.status === 'active';
+            const stepIsException = Boolean(isException && step.status === 'active');
             return (
               <React.Fragment key={step.key}>
                 {idx > 0 && (
@@ -417,7 +417,7 @@ export const UniLifecycleStepper: React.FC<UniLifecycleStepperProps> = ({
             }}
           >
             {steps.map((step, idx) => {
-              const stepIsException = isException && step.status === 'active';
+              const stepIsException = Boolean(isException && step.status === 'active');
               return (
                 <React.Fragment key={`${step.key}-lbl`}>
                   {idx > 0 && (

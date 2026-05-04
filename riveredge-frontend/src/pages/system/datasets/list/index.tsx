@@ -167,7 +167,8 @@ const DatasetListPage: React.FC = () => {
       {
         title: t('pages.system.datasets.columnDataConnection'),
         dataIndex: 'data_source_uuid',
-        render: (value: string) => {
+        render: (_, record) => {
+          const value = String(record.data_source_uuid ?? '');
           const conn = dataConnectionsFlat.find((c) => c.uuid === value);
           return conn ? `${conn.name} (${conn.type})` : value;
         },
@@ -175,7 +176,8 @@ const DatasetListPage: React.FC = () => {
       {
         title: t('pages.system.datasets.columnQueryType'),
         dataIndex: 'query_type',
-        render: (value: string) => {
+        render: (_, record) => {
+          const value = String(record.query_type ?? '');
           const typeMap: Record<string, string> = {
             sql: t('pages.system.datasets.queryTypeSql'),
             api: t('pages.system.datasets.queryTypeApi'),
@@ -190,7 +192,7 @@ const DatasetListPage: React.FC = () => {
       {
         title: t('pages.system.datasets.columnQueryConfig'),
         dataIndex: 'query_config',
-        render: (value: Record<string, unknown>) => (
+        render: (_, record) => (
           <pre
             style={{
               margin: 0,
@@ -202,16 +204,16 @@ const DatasetListPage: React.FC = () => {
               fontSize: 12,
             }}
           >
-            {JSON.stringify(value, null, 2)}
+            {JSON.stringify(record.query_config ?? {}, null, 2)}
           </pre>
         ),
       },
       {
         title: t('pages.system.datasets.columnEnabled'),
         dataIndex: 'is_active',
-        render: (value: boolean) => (
-          <Tag color={value ? 'success' : 'default'}>
-            {value ? t('pages.system.datasets.enabled') : t('pages.system.datasets.disabled')}
+        render: (_, record) => (
+          <Tag color={record.is_active ? 'success' : 'default'}>
+            {record.is_active ? t('pages.system.datasets.enabled') : t('pages.system.datasets.disabled')}
           </Tag>
         ),
       },
@@ -223,7 +225,7 @@ const DatasetListPage: React.FC = () => {
       {
         title: t('pages.system.datasets.columnLastError'),
         dataIndex: 'last_error',
-        render: (value: string) => (value ? <Tag color="error">{value}</Tag> : '-'),
+        render: (_, record) => (record.last_error ? <Tag color="error">{record.last_error}</Tag> : '-'),
       },
       {
         title: t('pages.system.datasets.columnCreatedAt'),

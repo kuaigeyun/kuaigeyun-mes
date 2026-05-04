@@ -22,7 +22,7 @@ export interface UserProfile {
 export interface UpdateUserProfileData {
   avatar?: string | null;
   bio?: string;
-  contact_info?: Record<string, any>;
+  contact_info?: Record<string, any> | null;
   gender?: string;
   email?: string;
   full_name?: string;

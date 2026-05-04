@@ -240,22 +240,28 @@ const MaintenancePlanListPage: React.FC = () => {
       {
         title: t('pages.system.maintenancePlans.columnPlanType'),
         dataIndex: 'plan_type',
-        render: (v: string) => (planTypeKey[v] ? t(planTypeKey[v]) : v),
+        render: (_: unknown, record: MaintenancePlan) =>
+          planTypeKey[record.plan_type] ? t(planTypeKey[record.plan_type]) : record.plan_type,
       },
       {
         title: t('pages.system.maintenancePlans.columnMaintenanceType'),
         dataIndex: 'maintenance_type',
-        render: (v: string) => (maintenanceTypeKey[v] ? t(maintenanceTypeKey[v]) : v),
+        render: (_: unknown, record: MaintenancePlan) =>
+          maintenanceTypeKey[record.maintenance_type]
+            ? t(maintenanceTypeKey[record.maintenance_type])
+            : record.maintenance_type,
       },
       {
         title: t('pages.system.maintenancePlans.columnCycleType'),
         dataIndex: 'cycle_type',
-        render: (v: string) => (cycleTypeKey[v] ? t(cycleTypeKey[v]) : v),
+        render: (_: unknown, record: MaintenancePlan) =>
+          cycleTypeKey[record.cycle_type] ? t(cycleTypeKey[record.cycle_type]) : record.cycle_type,
       },
       {
         title: t('pages.system.maintenancePlans.columnCycleValue'),
         dataIndex: 'cycle_value',
-        render: (value: number, record: MaintenancePlan) => {
+        render: (_: unknown, record: MaintenancePlan) => {
+          const value = record.cycle_value;
           if (value && record.cycle_unit) {
             return `${value} ${record.cycle_unit}`;
           }

@@ -1769,7 +1769,7 @@ const QuotationsPage: React.FC = () => {
     setQuotationChainOverlayVisible(false);
     setFullChainBriefDoc(null);
     closeLinkedSalesOrderDrawer();
-    quotationDrawerCloseTimerRef.current = window.setTimeout(() => {
+    quotationDrawerCloseTimerRef.current = setTimeout(() => {
       quotationDrawerCloseTimerRef.current = null;
       setDetailDrawerVisible(false);
       setQuotationDetail(null);
@@ -2467,7 +2467,7 @@ const QuotationsPage: React.FC = () => {
             <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
               <DocumentTrackingRelationsTabsBody
                 documentType="quotation"
-                documentId={quotationDetail.id}
+                documentId={quotationDetail.id as number}
                 refreshKey={fullChainRefreshKey}
                 onDocumentClick={onFullChainGraphNodeClick}
                 compact

@@ -91,9 +91,8 @@ export function getWorkOrderLifecycle(
   if (!record) {
     return { percent: 0, stageName: '-', mainStages: [] };
   }
-  const backend = (record?.lifecycle ?? (record as Record<string, unknown>).lifecycle) as
-    | BackendLifecycle
-    | undefined;
+  const rec = record as WorkOrder & { lifecycle?: unknown } & Record<string, unknown>;
+  const backend = (rec.lifecycle ?? rec['lifecycle']) as BackendLifecycle | undefined;
   if (backend?.main_stages?.length && isWorkOrderLifecycle(backend)) {
     return parseBackendLifecycle(backend);
   }

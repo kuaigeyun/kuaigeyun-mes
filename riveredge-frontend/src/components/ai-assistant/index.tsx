@@ -92,13 +92,13 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ open = false, onClose, design
       })
 
       BODY_STYLE_KEYS.forEach(key => {
-        const value = bodyStyleSnapshot.get(key)
-        if (value === null || value === '') body.style.removeProperty(key)
+        const value = bodyStyleSnapshot.get(key) ?? null
+        if (value == null || value === '') body.style.removeProperty(key)
         else body.style.setProperty(key, value)
       })
       HTML_STYLE_KEYS.forEach(key => {
-        const value = htmlStyleSnapshot.get(key)
-        if (value === null || value === '') html.style.removeProperty(key)
+        const value = htmlStyleSnapshot.get(key) ?? null
+        if (value == null || value === '') html.style.removeProperty(key)
         else html.style.setProperty(key, value)
       })
     }

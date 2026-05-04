@@ -188,24 +188,28 @@ const InventoryReportPage: React.FC = () => {
     },
     {
       title: '周转率',
-      dataIndex: 'turnoverRate',
+      dataIndex: 'turnover_rate',
       width: 80,
       align: 'right',
-      render: (rate) => `${rate?.toFixed(1) || 0}次`,
+      render: (_, record) => {
+        const rate = record.turnover_rate;
+        const n = typeof rate === 'number' ? rate : Number(rate);
+        return `${Number.isFinite(n) ? n.toFixed(1) : '0'}次`;
+      },
     },
     {
       title: '周转天数',
-      dataIndex: 'turnoverDays',
+      dataIndex: 'turnover_days',
       width: 90,
       align: 'right',
-      render: (days) => `${days || 0}天`,
+      render: (_, record) => `${record.turnover_days ?? 0}天`,
     },
     {
       title: '总价值',
-      dataIndex: 'totalValue',
+      dataIndex: 'total_value',
       width: 120,
       align: 'right',
-      render: (value) => `¥${value?.toLocaleString() || 0}`,
+      render: (_, record) => `¥${(record.total_value ?? 0).toLocaleString()}`,
     },
   ];
 

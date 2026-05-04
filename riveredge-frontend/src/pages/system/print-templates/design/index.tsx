@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { App, Button, Input, Space, Typography, Card, Select, InputNumber, Divider, ColorPicker, Radio, Checkbox, theme } from 'antd';
 import { ArrowLeftOutlined, SaveOutlined, EyeOutlined, QrcodeOutlined, DashOutlined, FontSizeOutlined, BoldOutlined, AlignCenterOutlined, AlignLeftOutlined, AlignRightOutlined, AppstoreOutlined, FunctionOutlined, OrderedListOutlined, SettingOutlined, ZoomInOutlined, ZoomOutOutlined, DeleteOutlined, VerticalAlignTopOutlined, VerticalAlignBottomOutlined, AppstoreAddOutlined, PlusOutlined, TableOutlined, BarcodeOutlined, PictureOutlined, HolderOutlined, UploadOutlined, DownloadOutlined } from '@ant-design/icons';
 import { compilePrintTemplate, compilePreviewPrintTemplate, getPrintTemplateByUuid, updatePrintTemplate } from '../../../../services/printTemplate';
-import { getArrayTableTemplates, getTemplateVariableItems } from '../../../../config/printTemplateSchemas';
+import { getArrayTableTemplates, getTemplateVariableItems, type TemplateVariableItem } from '../../../../config/printTemplateSchemas';
 import { useSiteLogoUrl } from '../../../../hooks/useSiteLogoUrl';
 import { QRCodeSVG } from 'qrcode.react';
 import {
@@ -558,7 +558,7 @@ const DragOverlayBlock: React.FC<{ type: string; label?: string }> = ({ type, la
 const SortableBlockWrapper: React.FC<{ 
   id: string; 
   type?: string;
-  marginBottom?: number;
+  marginBottom?: number | string;
   children: React.ReactNode;
 }> = ({ id, type, marginBottom = 8, children }) => {
   const { t } = useTranslation();
@@ -885,7 +885,7 @@ const OrientationSelector: React.FC<{
 };
 
 const PaperRuler: React.FC<{ orientation: 'horizontal' | 'vertical'; size: number }> = ({ orientation, size }) => {
-  const ticks = [];
+  const ticks: React.ReactNode[] = [];
   // Render labels every 20mm to avoid overlap
   for (let i = 0; i <= size; i += 20) {
     ticks.push(
@@ -1703,7 +1703,7 @@ const PrintTemplateDesignPage: React.FC = () => {
   }, [pageSize, orientation, margins, itemSpacing, tableRowLimit, schemaBlocks]);
 
   const applyPortableDesign = useCallback((data: PrintTemplateDesignPortableV1) => {
-    const schema = data.template.designer_schema as DesignerSchema;
+    const schema = data.template.designer_schema as unknown as DesignerSchema;
     setTemplateName(data.template.name);
     setTemplateCode(data.template.code ?? '');
     setTemplateDescription(data.template.description ?? '');
@@ -3535,7 +3535,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                         </div>
                       ))}
                       <Button block type="dashed" icon={<AppstoreAddOutlined />} onClick={() => {
-                        const newCol = { id: `col-${Date.now()}`, width: '1', horizontalAlign: 'start', verticalAlign: 'top', blocks: [] };
+                        const newCol = { id: `col-${Date.now()}`, width: '1', horizontalAlign: 'start' as const, verticalAlign: 'top' as const, blocks: [] };
                         updateSelectedBlock({ cols: [...selectedBlock.cols, newCol] });
                       }}>{t('pages.system.printTemplatesDesign.addColumn')}</Button>
                     </Space>

@@ -342,7 +342,7 @@ const BOMDesignerPage: React.FC = () => {
       const node: MindMapNode = {
         id: `material_${item.componentId}_${pathKey}`,
         value: `${code} - ${material.name}`,
-        material,
+        material: material as Material,
         quantity: item.quantity,
         unit: item.unit,
         wasteRate: item.wasteRate,
@@ -397,7 +397,7 @@ const BOMDesignerPage: React.FC = () => {
       const node: MindMapNode = {
         id: `material_${item.componentId}_${pathKey}`,
         value: `${code} - ${material.name}`,
-        material,
+        material: material as Material,
         quantity: item.quantity,
         unit: item.unit,
         wasteRate: item.wasteRate,
@@ -1843,7 +1843,7 @@ const BOMDesignerPage: React.FC = () => {
   /** 当前选中物料的单位选项：基础单位 + 辅助单位，label 使用字典标签（显示名） */
   const unitOptionsFromMaterial = useMemo(() => {
     if (!selectedMaterial) return [];
-    const raw = selectedMaterial as Record<string, unknown>;
+    const raw = selectedMaterial as unknown as Record<string, unknown>;
     const base = (selectedMaterial.baseUnit ?? raw.base_unit) as string ?? '';
     const unitsData = (selectedMaterial.units ?? raw.units) as MaterialUnits | undefined;
     const alternates = unitsData?.units?.map((u) => u.unit).filter(Boolean) ?? [];
@@ -2004,7 +2004,7 @@ const BOMDesignerPage: React.FC = () => {
         getWidth: (data: any) => {
           const label = (data?.data?.value ?? data?.data?.label ?? data?.value ?? data?.label ?? data?.id ?? data?.data?.id ?? '').toString();
           const charWidth = (char: string) => (/[^\x00-\xff]/.test(char) ? 14 : 7.5);
-          const textWidth = Array.from(label).reduce((sum: number, char: string) => sum + charWidth(char), 0);
+          const textWidth = [...label].reduce<number>((sum, char) => sum + charWidth(char), 0);
           return Math.max(textWidth + 50, 140);
         },
         getHGap: (data: any) => {
@@ -2012,7 +2012,7 @@ const BOMDesignerPage: React.FC = () => {
           const base = depth >= 3 ? NODE_H_GAP_DEEP : NODE_H_GAP;
           const label = (data?.data?.value ?? data?.data?.label ?? data?.value ?? data?.label ?? data?.id ?? data?.data?.id ?? '').toString();
           const charWidth = (char: string) => (/[^\x00-\xff]/.test(char) ? 14 : 7.5);
-          const textWidth = Array.from(label).reduce((sum: number, char: string) => sum + charWidth(char), 0);
+          const textWidth = [...label].reduce<number>((sum, char) => sum + charWidth(char), 0);
           const nodeWidth = Math.max(textWidth + 50, 140);
           const minWidth = 140;
           const extraByWidth = nodeWidth > minWidth ? Math.min((nodeWidth - minWidth) * 0.2, 36) : 0;
@@ -2045,7 +2045,7 @@ const BOMDesignerPage: React.FC = () => {
             const material = data.data?.material;
             const processRouteName = material?.processRouteName ?? (material as any)?.process_route_name;
             const charWidth = (char: string) => (/[^\x00-\xff]/.test(char) ? 14 : 7.5);
-            const textWidth = Array.from(label).reduce((sum: number, char: string) => sum + charWidth(char), 0);
+            const textWidth = [...label].reduce<number>((sum, char) => sum + charWidth(char), 0);
             const width = Math.max(textWidth + 50, 140);
             const height = processRouteName ? NODE_HEIGHT_DOUBLE : NODE_HEIGHT_SINGLE;
             return [width, height];
@@ -2659,7 +2659,7 @@ const BOMDesignerPage: React.FC = () => {
           </div>
 
           {mindMapConfig ? (
-            <MindMap key={`bom-mindmap-${mindMapDataSafe?.id || 'empty'}`} {...mindMapConfig} />
+            <MindMap key={`bom-mindmap-${mindMapDataSafe?.id || 'empty'}`} {...(mindMapConfig as any)} />
           ) : (
             <div style={{
               width: '100%',
@@ -3027,7 +3027,9 @@ const BOMDesignerPage: React.FC = () => {
                       <List
                         size="small"
                         dataSource={effectiveAlternativeOptions}
-                        rowKey={(item: any, idx: number) => (item?.node?.id ?? `current-${idx}`)}
+                        rowKey={(item: { material?: Material | null; node?: MindMapNode; isCurrent?: boolean }) =>
+                          item?.node?.id ?? `alt-${item?.material?.id ?? 'row'}`
+                        }
                         style={{ marginBottom: 8, maxHeight: 160, overflow: 'auto' }}
                         className="bom-alternative-list"
                         renderItem={(item: { material?: Material | null; node?: MindMapNode; isCurrent?: boolean }, idx: number) => {

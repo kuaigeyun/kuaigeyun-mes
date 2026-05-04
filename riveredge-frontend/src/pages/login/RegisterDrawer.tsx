@@ -222,7 +222,9 @@ export default function RegisterDrawer({
                               tenant,
                             }))}
                             onSearch={handleSearchTenant}
-                            onSelect={(value, option) => handleSelectTenant(value, option)}
+                            onSelect={(value, option) =>
+                              handleSelectTenant(value, (option as { tenant: TenantSearchOption }).tenant)
+                            }
                             filterOption={false}
                             notFoundContent={searchingTenant ? t('pages.login.searching') : t('pages.login.noOrgMatch')}
                           >

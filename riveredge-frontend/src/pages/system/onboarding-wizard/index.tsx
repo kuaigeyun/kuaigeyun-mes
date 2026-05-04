@@ -2439,7 +2439,7 @@ const OnboardingWizardPage: React.FC = () => {
                 key: 'name',
                 width: 160,
                 fixed: 'left',
-                render: (text, record: { check_key?: string; id?: string; name?: string }) => (
+                render: (text, record: any) => (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     {((record.check_key ? (realCounts[record.check_key] ?? 0) : (record.id ? (realCounts[record.id] ?? 0) : 0)) > 0 ||
                       (!!record.id && completedItems.has(record.id))) && (

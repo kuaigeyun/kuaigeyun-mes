@@ -91,7 +91,7 @@ export default function TenantSelectionModal({
       open={open}
       onCancel={onCancel}
       footer={null}
-      size={500}
+      width={500}
       closable={false}
       maskClosable={false}
     >

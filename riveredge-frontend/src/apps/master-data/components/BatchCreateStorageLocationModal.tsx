@@ -223,11 +223,12 @@ export const BatchCreateStorageLocationModal: React.FC<BatchCreateStorageLocatio
       className="batch-create-storage-location-modal"
       styles={{ body: { maxHeight: 'none', overflow: 'visible' } }}
     >
-      <Steps current={step} size="small" style={{ marginBottom: 24 }}>
-        {steps.map((s, i) => (
-          <Steps.Step key={i} title={s.title} />
-        ))}
-      </Steps>
+      <Steps
+        current={step}
+        size="small"
+        style={{ marginBottom: 24 }}
+        items={steps.map((s, i) => ({ key: i, title: s.title }))}
+      />
 
       {step === STEP_FORM && (
         <Form

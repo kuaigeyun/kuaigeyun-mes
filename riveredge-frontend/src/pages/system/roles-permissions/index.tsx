@@ -443,7 +443,7 @@ function buildMenuPermissionTreeData(
       className: actionItems.length > 0 ? 'permission-menu-with-actions' : undefined,
       actionKeys,
       children,
-    });
+    } as DataNode);
   }
   return nodes;
 }

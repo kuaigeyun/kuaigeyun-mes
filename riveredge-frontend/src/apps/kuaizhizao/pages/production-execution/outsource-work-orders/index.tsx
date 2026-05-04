@@ -993,7 +993,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       width: 100,
       render: (_, record) => {
         const price = record.unitPrice || record.unit_price;
-        return price != null && price !== '' ? (
+        return price != null && !(typeof price === 'string' && price === '') ? (
           <AmountDisplay resource="outsource_order" value={Number(price)} />
         ) : (
           '-'
@@ -1006,7 +1006,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       width: 120,
       render: (_, record) => {
         const amount = record.totalAmount || record.total_amount;
-        return amount != null && amount !== '' ? (
+        return amount != null && !(typeof amount === 'string' && amount === '') ? (
           <AmountDisplay resource="outsource_order" value={Number(amount)} />
         ) : (
           '-'
@@ -1244,7 +1244,6 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           name="productId"
           label="产品选择"
           rules={[{ required: true, message: '请选择产品' }]}
-          colProps={{ span: 12 }}
         >
           <UniDropdown
             placeholder="请选择产品（委外件）"
@@ -1333,7 +1332,6 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           name="supplierId"
           label="委外供应商"
           rules={[{ required: true, message: '请选择委外供应商' }]}
-          colProps={{ span: 12 }}
         >
           <UniDropdown
             placeholder="请选择委外供应商"
@@ -1391,7 +1389,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
 
         {/* 优先级和时间组 */}
         <Divider>优先级和时间</Divider>
-        <ProFormItem name="priority" label="优先级" initialValue="normal" colProps={{ span: 12 }}>
+        <ProFormItem name="priority" label="优先级" initialValue="normal">
           <UniDropdown
             placeholder="请选择优先级"
             showSearch
