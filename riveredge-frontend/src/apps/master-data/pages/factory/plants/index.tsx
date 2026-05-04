@@ -26,7 +26,10 @@ import type { Plant, PlantCreate } from '../../../types/factory';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { downloadFile } from '../../../../../utils';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
-import { CustomFieldsDetailSection } from '../../../../../components/custom-fields';
+import {
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
 
 /**
  * 厂区管理列表页面组件
@@ -724,8 +727,9 @@ const PlantsPage: React.FC = () => {
             <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, plantDetail)} />
           ) : null
         }
+        linesTitle={t('app.master-data.customFields')}
         lines={
-          customFields.length > 0 ? (
+          hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
             <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
           ) : null
         }

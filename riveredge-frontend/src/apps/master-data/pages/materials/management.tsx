@@ -13,7 +13,7 @@ import {
   Button,
   Space,
   Modal,
-  Drawer,
+  Descriptions,
   Popconfirm,
   Tag,
   theme,
@@ -34,7 +34,8 @@ import {
   EditOutlined,
   DeleteOutlined,
   PlusOutlined,
-  FolderOutlined,
+  FolderFilled,
+  FolderOpenFilled,
   QrcodeOutlined,
   ExpandOutlined,
   CompressOutlined,
@@ -51,15 +52,36 @@ import {
   ProFormTextArea,
   ProFormSwitch,
   ProFormInstance,
-  ProDescriptions,
 } from '@ant-design/pro-components'
+import type { ProDescriptionsItemType } from '@ant-design/pro-components'
 import type { DataNode, TreeProps } from 'antd/es/tree'
+
+/** 经典 Windows 资源管理器式实心文件夹（黄褐色） */
+const MATERIAL_GROUP_FOLDER_ICON_STYLE = { fontSize: 16, verticalAlign: 'middle' } as const
+const MATERIAL_GROUP_FOLDER_COLOR_CLOSED = '#e8b347'
+const MATERIAL_GROUP_FOLDER_COLOR_OPEN = '#d4a028'
+
+function renderMaterialGroupFolderIcon(props: { expanded: boolean; isLeaf: boolean }) {
+  if (!props.isLeaf && props.expanded) {
+    return (
+      <FolderOpenFilled
+        style={{ ...MATERIAL_GROUP_FOLDER_ICON_STYLE, color: MATERIAL_GROUP_FOLDER_COLOR_OPEN }}
+      />
+    )
+  }
+  return (
+    <FolderFilled
+      style={{ ...MATERIAL_GROUP_FOLDER_ICON_STYLE, color: MATERIAL_GROUP_FOLDER_COLOR_CLOSED }}
+    />
+  )
+}
 
 // 导入现有组件
 import SafeProFormSelect from '../../../../components/safe-pro-form-select'
 import { UniTable } from '../../../../components/uni-table'
-import { TwoColumnLayout, FormModalTemplate } from '../../../../components/layout-templates'
-import { MODAL_CONFIG } from '../../../../components/layout-templates/constants'
+import { TwoColumnLayout, FormModalTemplate, flushDrawerOpen } from '../../../../components/layout-templates'
+import { MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates/constants'
+import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail'
 import { MaterialForm } from '../../components/MaterialForm'
 import { QRCodeGenerator } from '../../../../components/qrcode'
 import { qrcodeApi } from '../../../../services/qrcode'
@@ -246,14 +268,18 @@ const MaterialsManagementPage: React.FC = () => {
 
   const handleViewMaterial = useCallback(
     async (record: Material) => {
-      try {
+      flushDrawerOpen(() => {
+        setMaterialDrawerVisible(true)
         setMaterialDetailLoading(true)
-        // 获取物料详情
+        setCurrentMaterial(null)
+      })
+      try {
         const detail = await materialApi.get(record.uuid)
         setCurrentMaterial(detail)
-        setMaterialDrawerVisible(true)
       } catch (error: any) {
         messageApi.error(error.message || t('app.master-data.materials.getDetailFailed'))
+        setMaterialDrawerVisible(false)
+        setCurrentMaterial(null)
       } finally {
         setMaterialDetailLoading(false)
       }
@@ -269,7 +295,6 @@ const MaterialsManagementPage: React.FC = () => {
       return {
         title: `${node.code} - ${node.name}`,
         key: node.id.toString(),
-        icon: <FolderOutlined />,
         isLeaf: !node.children || node.children.length === 0,
         children: node.children ? node.children.map(convertNode) : undefined,
       }
@@ -279,7 +304,6 @@ const MaterialsManagementPage: React.FC = () => {
       {
         title: t('app.master-data.materials.allMaterials'),
         key: 'all',
-        icon: <FolderOutlined />,
         isLeaf: false,
         children: treeResponse.map(convertNode),
       },
@@ -970,6 +994,103 @@ const MaterialsManagementPage: React.FC = () => {
     return group ? `${group.code} - ${group.name}` : `${t('app.master-data.materials.materialGroup')} ID: ${groupId}`
   }, [materialGroups, t])
 
+  /** 详情抽屉「基本信息」字段顺序（uni-detail + detailDrawerDescriptionItems） */
+  const materialDetailBasicColumns = useMemo<ProDescriptionsItemType<Material>[]>(
+    () => [
+      {
+        title: t('app.master-data.materials.materialCode'),
+        dataIndex: 'mainCode',
+        render: (_, record) => {
+          const val =
+            (record as any).mainCode ?? (record as any).main_code ?? (record as any).code ?? '-'
+          if (val === '-') return '-'
+          return (
+            <Typography.Text copyable={{ text: String(val) }} style={{ marginRight: 0 }}>
+              {val}
+            </Typography.Text>
+          )
+        },
+      },
+      {
+        title: t('app.master-data.materials.materialName'),
+        dataIndex: 'name',
+      },
+      {
+        title: t('app.master-data.materials.materialGroup'),
+        dataIndex: 'groupId',
+        render: (_, record) => getMaterialGroupName(record.groupId),
+      },
+      {
+        title: t('app.master-data.materials.processRoute'),
+        dataIndex: 'processRouteName',
+        render: (_, record) =>
+          (record as any).processRouteName ?? (record as any).process_route_name ?? '-',
+      },
+      {
+        title: t('app.master-data.materials.specification'),
+        dataIndex: 'specification',
+      },
+      {
+        title: t('app.master-data.materials.baseUnit'),
+        dataIndex: 'baseUnit',
+      },
+      {
+        title: t('app.master-data.materials.brand'),
+        dataIndex: 'brand',
+      },
+      {
+        title: t('app.master-data.materials.model'),
+        dataIndex: 'model',
+      },
+      {
+        title: t('app.master-data.materials.texture'),
+        dataIndex: 'texture',
+      },
+      {
+        title: t('app.master-data.materials.batchManaged'),
+        dataIndex: 'batchManaged',
+        render: (_, record) => (
+          <Tag color={record.batchManaged ? 'blue' : 'default'}>
+            {record.batchManaged ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
+          </Tag>
+        ),
+      },
+      {
+        title: t('app.master-data.materials.variantManaged'),
+        dataIndex: 'variantManaged',
+        render: (_, record) => (
+          <Tag color={record.variantManaged ? 'purple' : 'default'}>
+            {record.variantManaged ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
+          </Tag>
+        ),
+      },
+      {
+        title: t('app.master-data.materials.description'),
+        dataIndex: 'description',
+      },
+      {
+        title: t('app.master-data.materials.enabledStatusLabel'),
+        dataIndex: 'isActive',
+        render: (_, record) => (
+          <Tag color={record.isActive ? 'success' : 'default'}>
+            {record.isActive ? t('app.master-data.materials.enabled') : t('app.master-data.materials.disabled')}
+          </Tag>
+        ),
+      },
+      {
+        title: t('app.master-data.materials.createTime'),
+        dataIndex: 'createdAt',
+        valueType: 'dateTime',
+      },
+      {
+        title: t('app.master-data.materials.updateTime'),
+        dataIndex: 'updatedAt',
+        valueType: 'dateTime',
+      },
+    ],
+    [t, getMaterialGroupName]
+  )
+
   /**
    * 表格列定义
    */
@@ -1230,6 +1351,8 @@ const MaterialsManagementPage: React.FC = () => {
           ],
           tree: {
             className: 'material-group-tree',
+            showLine: true,
+            icon: renderMaterialGroupFolderIcon,
             treeData:
               filteredGroupTreeData.length > 0 || !groupSearchValue.trim()
                 ? filteredGroupTreeData
@@ -1773,137 +1896,57 @@ const MaterialsManagementPage: React.FC = () => {
         }
       />
 
-      {/* 物料详情 Drawer */}
-      <Drawer
+      <UniDetail
         title={t('app.master-data.materials.materialDetail')}
-        size={720}
         open={materialDrawerVisible}
-        onClose={() => setMaterialDrawerVisible(false)}
+        onClose={() => {
+          setMaterialDrawerVisible(false)
+          setCurrentMaterial(null)
+        }}
         loading={materialDetailLoading}
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
         styles={{ body: { position: 'relative' } }}
-      >
-        {currentMaterial && (
-          <>
-            <ProDescriptions<Material>
-              dataSource={currentMaterial}
-              column={1}
-              columns={[
-                {
-                  title: t('app.master-data.materials.materialCode'),
-                  dataIndex: 'code',
-                copyable: true,},
-                {
-                  title: t('app.master-data.materials.materialName'),
-                  dataIndex: 'name',
-                },
-                {
-                  title: t('app.master-data.materials.materialGroup'),
-                  dataIndex: 'groupId',
-                  render: (_, record) => getMaterialGroupName(record.groupId),
-                },
-                {
-                  title: t('app.master-data.materials.processRoute'),
-                  dataIndex: ['processRouteName', 'process_route_name'],
-                  render: (_, record) =>
-                    (record as any).processRouteName ?? (record as any).process_route_name ?? '-',
-                },
-                {
-                  title: t('app.master-data.materials.specification'),
-                  dataIndex: 'specification',
-                },
-                {
-                  title: t('app.master-data.materials.baseUnit'),
-                  dataIndex: 'baseUnit',
-                },
-                {
-                  title: t('app.master-data.materials.brand'),
-                  dataIndex: 'brand',
-                },
-                {
-                  title: t('app.master-data.materials.model'),
-                  dataIndex: 'model',
-                },
-                {
-                  title: t('app.master-data.materials.texture'),
-                  dataIndex: 'texture',
-                },
-                {
-                  title: t('app.master-data.materials.batchManaged'),
-                  dataIndex: 'batchManaged',
-                  render: (_, record) => (
-                    <Tag color={record.batchManaged ? 'blue' : 'default'}>
-                      {record.batchManaged ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
-                    </Tag>
-                  ),
-                },
-                {
-                  title: t('app.master-data.materials.variantManaged'),
-                  dataIndex: 'variantManaged',
-                  render: (_, record) => (
-                    <Tag color={record.variantManaged ? 'purple' : 'default'}>
-                      {record.variantManaged ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
-                    </Tag>
-                  ),
-                },
-                {
-                  title: t('app.master-data.materials.description'),
-                  dataIndex: 'description',
-                  span: 2,
-                },
-                {
-                  title: t('app.master-data.materials.enabledStatusLabel'),
-                  dataIndex: 'isActive',
-                  render: (_, record) => (
-                    <Tag color={record.isActive ? 'success' : 'default'}>
-                      {record.isActive ? t('app.master-data.materials.enabled') : t('app.master-data.materials.disabled')}
-                    </Tag>
-                  ),
-                },
-                {
-                  title: t('app.master-data.materials.createTime'),
-                  dataIndex: 'createdAt',
-                  valueType: 'dateTime',
-                },
-                {
-                  title: t('app.master-data.materials.updateTime'),
-                  dataIndex: 'updatedAt',
-                  valueType: 'dateTime',
-                },
-              ]}
-            />
-
-            {/* 物料二维码 */}
-            <div style={{ 
-              position: 'absolute', 
-              top: 24, 
-              right: 24, 
-              width: 152, 
-              zIndex: 10,
-              background: '#fff',
-              padding: '12px',
-              borderRadius: token.borderRadiusLG,
-              border: '1px solid rgba(0, 0, 0, 0.06)',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <QRCodeGenerator
-                qrcodeType="MAT"
-                data={{
-                  material_uuid: currentMaterial.uuid,
-                  material_code: currentMaterial.mainCode || currentMaterial.code || '',
-                  material_name: currentMaterial.name,
-                }}
-                autoGenerate={true}
-                showCardTitle={false}
-                size={6}
-                noCard={true}
+        basic={
+          currentMaterial ? (
+            <div style={{ position: 'relative', paddingRight: 168 }}>
+              <Descriptions
+                column={1}
+                items={detailDrawerDescriptionItems(materialDetailBasicColumns as any, currentMaterial)}
               />
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  right: 0,
+                  width: 152,
+                  padding: 12,
+                  background: '#fff',
+                  borderRadius: token.borderRadiusLG,
+                  border: '1px solid rgba(0, 0, 0, 0.06)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 10,
+                }}
+              >
+                <QRCodeGenerator
+                  qrcodeType="MAT"
+                  data={{
+                    material_uuid: currentMaterial.uuid,
+                    material_code: currentMaterial.mainCode || currentMaterial.code || '',
+                    material_name: currentMaterial.name,
+                  }}
+                  autoGenerate={true}
+                  showCardTitle={false}
+                  size={6}
+                  noCard={true}
+                />
+              </div>
             </div>
-          </>
-        )}
-      </Drawer>
+          ) : null
+        }
+      />
 
       {/* 分组右键菜单 */}
       {contextMenuVisible && (

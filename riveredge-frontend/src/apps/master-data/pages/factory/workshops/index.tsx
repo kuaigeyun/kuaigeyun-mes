@@ -26,7 +26,10 @@ import {
 import type { Workshop, WorkshopCreate, Plant } from '../../../types/factory';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
-import { CustomFieldsDetailSection } from '../../../../../components/custom-fields';
+import {
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
 
 /**
  * 车间管理列表页面组件
@@ -862,8 +865,9 @@ const WorkshopsPage: React.FC = () => {
             <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, workshopDetail)} />
           ) : null
         }
+        linesTitle={t('app.master-data.customFields')}
         lines={
-          customFields.length > 0 ? (
+          hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
             <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
           ) : null
         }

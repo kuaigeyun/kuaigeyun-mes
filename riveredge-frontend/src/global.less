@@ -546,84 +546,119 @@ code {
   }
 }
 
-/* 左侧面板树组件统一 padding - 所有在 left-panel-scroll-container 内的树组件 */
-.left-panel-scroll-container .ant-tree {
+/* 左侧面板树组件统一 padding（TwoColumnLayout 左栏 / 角色权限等） */
+.left-panel-scroll-container .ant-tree,
+.two-column-layout-left-tree .ant-tree {
   padding: 10px !important;
 }
 
-/* 树节点上下间距优化 - 仅应用于左侧面板的树，排除弹窗中的树 */
-.left-panel-scroll-container .ant-tree .ant-tree-treenode {
+/* 树节点上下间距优化 - 左侧面板非 showLine 的树（showLine 依赖 antd 默认行高与 marginBottom，不可压成 32px 固定行） */
+.left-panel-scroll-container .ant-tree:not(.ant-tree-show-line) .ant-tree-treenode,
+.two-column-layout-left-tree .ant-tree:not(.ant-tree-show-line) .ant-tree-treenode {
   height: 32px !important;
   line-height: 32px !important;
   margin: calc(var(--ant-padding-xs) / 2) !important;
 }
 
-/* 物料数据-分组树：减小每层缩进（默认约 24px），为深层子节点留出更多横向空间，减少标题换行 */
-.left-panel-scroll-container .material-group-tree.ant-tree .ant-tree-indent-unit {
-  width: 16px !important;
+/* 物料数据-分组树（无目录线时）：紧凑缩进与行高 */
+.left-panel-scroll-container .material-group-tree.ant-tree:not(.ant-tree-show-line) .ant-tree-indent-unit,
+.two-column-layout-left-tree .material-group-tree.ant-tree:not(.ant-tree-show-line) .ant-tree-indent-unit {
+  width: 10px !important;
 }
 
-/* 树节点强制垂直居中对齐，并收紧间距 */
-.left-panel-scroll-container .material-group-tree.ant-tree .ant-tree-treenode {
+.left-panel-scroll-container .material-group-tree.ant-tree:not(.ant-tree-show-line) .ant-tree-treenode,
+.two-column-layout-left-tree .material-group-tree.ant-tree:not(.ant-tree-show-line) .ant-tree-treenode {
   height: auto !important;
-  min-height: 28px !important; // 稍微减小最小高度
+  min-height: 28px !important;
   display: flex !important;
   align-items: center !important;
-  padding: 2px 0 !important; // 减小内边距
-  margin: 2px 4px !important; // 减小垂直外边距
+  padding: 2px 0 !important;
+  margin: 2px 4px !important;
 }
 
-/* 修复 Switcher (小三角) 容器：确保背景大小合适且三角完美居中 */
-.left-panel-scroll-container .material-group-tree.ant-tree .ant-tree-switcher {
+.left-panel-scroll-container .material-group-tree.ant-tree:not(.ant-tree-show-line) .ant-tree-switcher,
+.two-column-layout-left-tree .material-group-tree.ant-tree:not(.ant-tree-show-line) .ant-tree-switcher {
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   align-self: center !important;
-  width: 24px !important;
-  height: 24px !important;
-  margin-right: 4px !important;
+  width: 18px !important;
+  height: 18px !important;
+  margin-right: 0 !important;
   line-height: 1 !important;
   border-radius: 4px !important;
   transition: all 0.2s;
   cursor: pointer;
-  
+
   &:hover {
     background-color: rgba(0, 0, 0, 0.06) !important;
   }
 }
 
-/* 确保内部三角图标没有额外的偏移 */
-.left-panel-scroll-container .material-group-tree.ant-tree .ant-tree-switcher .ant-tree-switcher-icon {
+.left-panel-scroll-container .material-group-tree.ant-tree:not(.ant-tree-show-line) .ant-tree-switcher .ant-tree-switcher-icon,
+.two-column-layout-left-tree .material-group-tree.ant-tree:not(.ant-tree-show-line) .ant-tree-switcher .ant-tree-switcher-icon {
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  font-size: 10px !important; // 稍微调小一点，更精致
+  font-size: 10px !important;
 }
 
-/* 修复内容区垂直居中及其内部布局 */
-.left-panel-scroll-container .material-group-tree.ant-tree .ant-tree-node-content-wrapper {
+/* 图标与标题均在 node-content-wrapper 内：须横向 flex + nowrap，否则标题 display:block 会独占一行掉到图标下方 */
+.left-panel-scroll-container .material-group-tree.ant-tree .ant-tree-node-content-wrapper,
+.two-column-layout-left-tree .material-group-tree.ant-tree .ant-tree-node-content-wrapper {
   display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
   align-items: center !important;
   flex: 1;
-  white-space: normal;
-  word-break: break-word;
+  min-width: 0 !important;
+  overflow: hidden !important;
+}
+
+.left-panel-scroll-container .material-group-tree.ant-tree:not(.ant-tree-show-line) .ant-tree-node-content-wrapper,
+.two-column-layout-left-tree .material-group-tree.ant-tree:not(.ant-tree-show-line) .ant-tree-node-content-wrapper {
   line-height: 1.5 !important;
   min-height: 24px !important;
 }
 
-/* 确保图标对齐 */
-.left-panel-scroll-container .material-group-tree.ant-tree .ant-tree-iconEle {
+.left-panel-scroll-container .material-group-tree.ant-tree .ant-tree-node-content-wrapper > .ant-tree-iconEle,
+.two-column-layout-left-tree .material-group-tree.ant-tree .ant-tree-node-content-wrapper > .ant-tree-iconEle {
+  flex-shrink: 0 !important;
+}
+
+.left-panel-scroll-container .material-group-tree.ant-tree:not(.ant-tree-show-line) .ant-tree-iconEle,
+.two-column-layout-left-tree .material-group-tree.ant-tree:not(.ant-tree-show-line) .ant-tree-iconEle {
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   align-self: center !important;
 }
 
-/* 修复标题文字对齐 */
-.left-panel-scroll-container .material-group-tree.ant-tree .ant-tree-title {
-  display: flex !important;
-  align-items: center !important;
-  vertical-align: middle !important;
+/* 物料分组树标题：单行省略；flex 子项须 flex:1 + min-width:0 才能在图标右侧正确截断 */
+.left-panel-scroll-container .material-group-tree.ant-tree .ant-tree-title,
+.two-column-layout-left-tree .material-group-tree.ant-tree .ant-tree-title {
+  flex: 1 !important;
+  min-width: 0 !important;
+  display: block !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+/* 目录辅助线：略深于默认 border，深浅色主题随 token 混合 */
+.left-panel-scroll-container .material-group-tree.ant-tree.ant-tree-show-line .ant-tree-indent-unit::before,
+.two-column-layout-left-tree .material-group-tree.ant-tree.ant-tree-show-line .ant-tree-indent-unit::before {
+  border-inline-end-color: color-mix(in srgb, var(--ant-color-border) 72%, var(--ant-color-text) 28%) !important;
+}
+
+.left-panel-scroll-container .material-group-tree.ant-tree.ant-tree-show-line .ant-tree-switcher-leaf-line::before,
+.two-column-layout-left-tree .material-group-tree.ant-tree.ant-tree-show-line .ant-tree-switcher-leaf-line::before {
+  border-inline-end-color: color-mix(in srgb, var(--ant-color-border) 72%, var(--ant-color-text) 28%) !important;
+}
+
+.left-panel-scroll-container .material-group-tree.ant-tree.ant-tree-show-line .ant-tree-switcher-leaf-line::after,
+.two-column-layout-left-tree .material-group-tree.ant-tree.ant-tree-show-line .ant-tree-switcher-leaf-line::after {
+  border-bottom-color: color-mix(in srgb, var(--ant-color-border) 72%, var(--ant-color-text) 28%) !important;
 }
 
 /* 排除弹窗中的树组件 */

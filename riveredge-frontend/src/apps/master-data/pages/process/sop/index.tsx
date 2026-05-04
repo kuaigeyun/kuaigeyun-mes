@@ -13,6 +13,7 @@ import { EditOutlined, DeleteOutlined, PlusOutlined, ApartmentOutlined } from '@
 import SOPBatchCreateSteps from './SOPBatchCreateSteps';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
+import { ROW_ACTIONS_INLINE_GAP } from '../../../../../components/uni-action';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { downloadFile } from '../../../../../utils';
@@ -629,7 +630,7 @@ const SOPPage: React.FC = () => {
           navigate(`/apps/master-data/process/sop/designer?uuid=${record.uuid}&from=edit`);
         };
         return (
-          <Space wrap size="small">
+          <Space size={ROW_ACTIONS_INLINE_GAP} wrap={false} style={{ whiteSpace: 'nowrap' }}>
             <Button type="link" size="small" onClick={() => handleOpenDetail(record)}>
               详情
             </Button>

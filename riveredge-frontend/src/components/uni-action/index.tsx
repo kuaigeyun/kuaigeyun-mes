@@ -8,6 +8,7 @@ export type {
 } from './types'
 export {
   ROW_ACTIONS_DIRECT_MAX,
+  ROW_ACTIONS_INLINE_GAP,
   ROW_ACTIONS_MIN_PRIMARY_VISIBLE,
   renderRowActionsOverflow,
 } from './overflow'

@@ -4,7 +4,7 @@
  * 提供物料清单BOM的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance, ProDescriptionsItemType, ProFormList, ProFormDateTimePicker, ProFormSelect, ProForm } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
@@ -13,7 +13,7 @@ import { App, Button, Tag, Space, Modal, Input, Tree, Spin, Table, Form as AntFo
 import type { MenuProps } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import type { ColumnsType } from 'antd/es/table';
-import { EditOutlined, DeleteOutlined, PlusOutlined, MinusCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, UploadOutlined, DiffOutlined, HistoryOutlined, CalculatorOutlined, ApartmentOutlined, EllipsisOutlined, UndoOutlined, StarOutlined, ProductOutlined, UnorderedListOutlined, ClusterOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, PlusOutlined, MinusCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, UploadOutlined, DiffOutlined, HistoryOutlined, CalculatorOutlined, ApartmentOutlined, MoreOutlined, UndoOutlined, StarOutlined, ProductOutlined, UnorderedListOutlined, ClusterOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -136,6 +136,66 @@ function pageMaterialBomRows(
     success: true as const,
     total: rows.length,
   };
+}
+
+/** 详情抽屉「基本信息」不包含的子件行字段（仅在「子物料列表」表格展示） */
+const BOM_DETAIL_LINE_ONLY_DATA_INDEX = new Set<string>([
+  'componentId',
+  'quantity',
+  'unit',
+  'wasteRate',
+  'isRequired',
+  'level',
+  'path',
+  'isAlternative',
+  'priority',
+  'remark',
+]);
+
+/**
+ * 基本信息字段顺序：标识与主物料 → 审核状态 → 有效期与启用 → 配置/替代摘要 → 说明 → 审核痕迹 → 时间戳
+ */
+const BOM_DETAIL_BASIC_FIELD_ORDER: string[] = [
+  'bomCode',
+  'version',
+  'materialId',
+  'approvalStatus',
+  'effectiveDate',
+  'expiryDate',
+  'isActive',
+  'isConfigurable',
+  'alternativeGroupId',
+  'description',
+  'approvedBy',
+  'approvedAt',
+  'approvalComment',
+  'createdAt',
+  'updatedAt',
+];
+
+function orderBomDetailBasicColumns(cols: ProDescriptionsItemType<BOM>[]): ProDescriptionsItemType<BOM>[] {
+  const filtered = cols.filter(
+    (c) => c.dataIndex != null && !BOM_DETAIL_LINE_ONLY_DATA_INDEX.has(String(c.dataIndex)),
+  );
+  const map = new Map(filtered.map((c) => [String(c.dataIndex), c]));
+  const ordered: ProDescriptionsItemType<BOM>[] = [];
+  for (const key of BOM_DETAIL_BASIC_FIELD_ORDER) {
+    const col = map.get(key);
+    if (col) {
+      ordered.push(col);
+      map.delete(key);
+    }
+  }
+  for (const col of map.values()) {
+    ordered.push(col);
+  }
+  return ordered.map((col) => {
+    const di = String(col.dataIndex ?? '');
+    if (di === 'description' || di === 'approvalComment') {
+      return { ...col, span: 3 };
+    }
+    return col;
+  });
 }
 
 /**
@@ -1756,6 +1816,8 @@ const BOMPage: React.FC = () => {
       valueType: 'option',
       width: 300,
       fixed: 'right',
+      /** 主行含「详情 + 编辑 + 设计 + 审核 + 分组更多」共 5 项，提高 directMax 避免自定义 Dropdown 被塞进二级溢出 */
+      uniActionRenderOptions: { directMax: 6 },
       render: (_, record: any) => {
         if (isBomItemRow(record)) return null;
         const r = record.selectedVersion?.firstItem ?? record.firstItem;
@@ -1772,7 +1834,6 @@ const BOMPage: React.FC = () => {
             type: 'group',
             label: t('app.master-data.bom.view'),
             children: [
-              { key: 'detail', icon: <DiffOutlined />, label: t('app.master-data.bom.detail'), onClick: () => handleOpenDetail(r) },
               { key: 'calculateQuantity', icon: <CalculatorOutlined />, label: t('app.master-data.bom.calculateQuantity'), onClick: () => handleCalculateQuantity(r) },
             ],
           },
@@ -1796,49 +1857,73 @@ const BOMPage: React.FC = () => {
             disabled: isApproved,
           },
         ];
-        return (
-          <Space wrap size="small">
+        /** 返回数组，交给 UniTable → renderUniTableOperationCell → normalizeActionTree + renderRowActionsOverflow；顺序：详情 → 编辑 → …（与 uni-action 详情优先一致） */
+        return [
+          <Button
+            key="detail"
+            type="link"
+            size="small"
+            onClick={() => handleOpenDetail(r)}
+            title={t('app.master-data.bom.detail')}
+            data-action-priority={0}
+          >
+            {t('app.master-data.bom.detail')}
+          </Button>,
+          <Button
+            key="edit"
+            type="link"
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => handleEdit(r)}
+            disabled={isApproved}
+            title={isApproved ? t('app.master-data.bom.approvedCannotEditTitle') : t('app.master-data.bom.editTitle')}
+            data-action-priority={1}
+            {...(isApproved ? { 'data-row-action-visible-when-disabled': true } : {})}
+          >
+            {t('app.master-data.bom.editTitle')}
+          </Button>,
+          <Button
+            key="design"
+            type="link"
+            size="small"
+            icon={<ApartmentOutlined />}
+            onClick={goDesigner}
+            title={t('app.master-data.bom.designerTitle')}
+            data-action-priority={2}
+          >
+            {t('app.master-data.bom.design')}
+          </Button>,
+          r.approvalStatus !== 'approved' ? (
             <Button
+              key="approve"
               type="link"
               size="small"
-              icon={<EditOutlined />}
-              onClick={() => handleEdit(r)}
-              disabled={isApproved}
-              title={isApproved ? t('app.master-data.bom.approvedCannotEditTitle') : t('app.master-data.bom.editTitle')}
+              icon={<CheckCircleOutlined />}
+              onClick={() => handleOpenApproval(record)}
+              title={t('app.master-data.bom.approvePassTitle')}
+              data-action-priority={3}
             >
-              {t('app.master-data.bom.editTitle')}
+              {t('app.master-data.bom.approve')}
             </Button>
-            <Button type="link" size="small" icon={<ApartmentOutlined />} onClick={goDesigner} title={t('app.master-data.bom.designerTitle')}>
-              {t('app.master-data.bom.design')}
+          ) : (
+            <Button
+              key="unapprove"
+              type="link"
+              size="small"
+              icon={<UndoOutlined />}
+              onClick={() => handleUnapproveGroup(record)}
+              title={t('app.master-data.bom.unapproveTitle')}
+              data-action-priority={3}
+            >
+              {t('app.master-data.bom.unapprove')}
             </Button>
-            {r.approvalStatus !== 'approved' ? (
-              <Button
-                type="link"
-                size="small"
-                icon={<CheckCircleOutlined />}
-                onClick={() => handleOpenApproval(record)}
-                title={t('app.master-data.bom.approvePassTitle')}
-              >
-                {t('app.master-data.bom.approve')}
-              </Button>
-            ) : (
-              <Button
-                type="link"
-                size="small"
-                icon={<UndoOutlined />}
-                onClick={() => handleUnapproveGroup(record)}
-                title={t('app.master-data.bom.unapproveTitle')}
-              >
-                {t('app.master-data.bom.unapprove')}
-              </Button>
-            )}
-            <Dropdown menu={{ items: moreItems }} trigger={['click']}>
-              <Button type="link" size="small" icon={<EllipsisOutlined />}>
-                {t('app.master-data.bom.more')}
-              </Button>
-            </Dropdown>
-          </Space>
-        );
+          ),
+          <Dropdown key="more" menu={{ items: moreItems }} trigger={['click']} data-action-priority={4}>
+            <Button type="text" size="small" className="ant-btn-row-action" icon={<MoreOutlined />} style={{ padding: '4px 4px' }}>
+              {t('app.master-data.bom.more')}
+            </Button>
+          </Dropdown>,
+        ];
 
       },
     },
@@ -1958,7 +2043,7 @@ const BOMPage: React.FC = () => {
     {
       title: t('app.master-data.bom.descTitle'),
       dataIndex: 'description',
-      span: 2,
+      span: 3,
     },
     {
       title: t('app.master-data.bom.remarkTitle'),
@@ -1982,7 +2067,7 @@ const BOMPage: React.FC = () => {
     {
       title: t('app.master-data.bom.approvalCommentTitle'),
       dataIndex: 'approvalComment',
-      span: 2,
+      span: 3,
     },
     {
       title: t('app.master-data.bom.enabledStatusTitle'),
@@ -2004,6 +2089,116 @@ const BOMPage: React.FC = () => {
       valueType: 'dateTime',
     },
   ];
+
+  const bomDetailChildItemsColumns = useMemo<ColumnsType<BOM>>(
+    () => [
+      {
+        title: t('app.master-data.bom.serialNo'),
+        key: 'index',
+        width: 50,
+        align: 'center',
+        render: (_, __, index) => index + 1,
+      },
+      {
+        title: t('app.master-data.bom.childMaterialTitle'),
+        dataIndex: 'componentId',
+        minWidth: 200,
+        render: (_, record) => getMaterialName(record.componentId),
+      },
+      {
+        title: t('app.master-data.bom.quantityTitle'),
+        dataIndex: 'quantity',
+        width: 80,
+        align: 'right',
+      },
+      {
+        title: t('app.master-data.bom.unitTitle'),
+        dataIndex: 'unit',
+        width: 60,
+        align: 'center',
+        render: (_, record) => {
+          const unitValue = record.unit;
+          return unitValueToLabel[unitValue || ''] || unitValue || '-';
+        },
+      },
+      {
+        title: t('app.master-data.bom.wasteRateTitle'),
+        dataIndex: 'wasteRate',
+        width: 80,
+        align: 'right',
+        render: (_, record) => (record.wasteRate ? `${record.wasteRate}%` : '0%'),
+      },
+      {
+        title: t('app.master-data.bom.isRequiredTitle'),
+        dataIndex: 'isRequired',
+        width: 70,
+        align: 'center',
+        render: (_, record) => (
+          <Tag color={record.isRequired !== false ? 'success' : 'default'} style={{ marginRight: 0 }}>
+            {record.isRequired !== false ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
+          </Tag>
+        ),
+      },
+      {
+        title: t('app.master-data.bom.levelTitle'),
+        dataIndex: 'level',
+        width: 50,
+        align: 'center',
+        render: (_, record) => record.level ?? 0,
+      },
+      {
+        title: t('app.master-data.bom.alternativeTitle'),
+        dataIndex: 'isAlternative',
+        width: 70,
+        align: 'center',
+        render: (_, record) => (
+          <Tag color={record.isAlternative ? 'orange' : 'default'} style={{ marginRight: 0 }}>
+            {record.isAlternative ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
+          </Tag>
+        ),
+      },
+      {
+        title: t('app.master-data.bom.isConfigurableColumn'),
+        dataIndex: 'isConfigurable',
+        width: 70,
+        align: 'center',
+        render: (_, record) => {
+          const manualCfg = record.isConfigurable === true;
+          const componentMaterial = materials.find((m) => m.id === record.componentId);
+          const autoCfg = !!componentMaterial?.variantManaged;
+          const isConfigurableItem = manualCfg || autoCfg;
+          return (
+            <Tag color={isConfigurableItem ? 'cyan' : 'default'} style={{ marginRight: 0 }}>
+              {isConfigurableItem ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
+            </Tag>
+          );
+        },
+      },
+      {
+        title: t('app.master-data.bom.alternativeGroupIdLabel'),
+        dataIndex: 'alternativeGroupId',
+        width: 80,
+        align: 'center',
+        render: (_, record) =>
+          record.isAlternative && record.alternativeGroupId != null ? record.alternativeGroupId : '-',
+      },
+      {
+        title: t('app.master-data.bom.priorityTitle'),
+        dataIndex: 'priority',
+        width: 60,
+        align: 'center',
+        render: (_, record) => record.priority ?? 0,
+      },
+      {
+        title: t('app.master-data.bom.descTitle'),
+        dataIndex: 'description',
+        width: 150,
+        ellipsis: true,
+        render: (_, record) => record.description || '-',
+      },
+    ],
+    [t, materials, unitValueToLabel],
+  );
 
   return (
     <>
@@ -2299,157 +2494,33 @@ const BOMPage: React.FC = () => {
       />
       </ListPageTemplate>
 
-      {/* 详情 Drawer（uni-detail：基本信息区 + 层级结构区，与工厂管理等页面一致） */}
+      {/* 详情 Drawer：基本信息（三列）→ 子物料列表 → 层级结构 */}
       <UniDetail
         title={t('app.master-data.bom.bomDetailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
         loading={detailLoading}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         basic={
           bomDetail ? (
-            <div>
-              <Descriptions
-                column={2}
-                items={detailDrawerDescriptionItems(
-                  detailColumns.filter(
-                    (col) =>
-                      col.dataIndex !== 'componentId' &&
-                      col.dataIndex !== 'quantity' &&
-                      col.dataIndex !== 'unit' &&
-                      col.dataIndex !== 'wasteRate' &&
-                      col.dataIndex !== 'isRequired' &&
-                      col.dataIndex !== 'level' &&
-                      col.dataIndex !== 'path' &&
-                      col.dataIndex !== 'isAlternative' &&
-                      col.dataIndex !== 'priority' &&
-                      col.dataIndex !== 'remark'
-                  ) as any,
-                  bomDetail
-                )}
-              />
-              {bomItems.length > 0 && (
-                <div style={{ marginTop: 24 }}>
-                  <h4 style={{ marginBottom: 16, fontWeight: 500 }}>
-                    {t('app.master-data.bom.childMaterialListWithCount', { count: bomItems.length })}
-                  </h4>
-                  <Table<BOM>
-                    dataSource={bomItems}
-                    rowKey="uuid"
-                    pagination={false}
-                    size="small"
-                    scroll={{ x: 'max-content' }}
-                    columns={[
-                      {
-                        title: t('app.master-data.bom.serialNo'),
-                        key: 'index',
-                        width: 50,
-                        align: 'center',
-                        render: (_, __, index) => index + 1,
-                      },
-                      {
-                        title: t('app.master-data.bom.childMaterialTitle'),
-                        dataIndex: 'componentId',
-                        minWidth: 200,
-                        render: (_, record) => getMaterialName(record.componentId),
-                      },
-                      {
-                        title: t('app.master-data.bom.quantityTitle'),
-                        dataIndex: 'quantity',
-                        width: 80,
-                        align: 'right',
-                      },
-                      {
-                        title: t('app.master-data.bom.unitTitle'),
-                        dataIndex: 'unit',
-                        width: 60,
-                        align: 'center',
-                        render: (_, record) => {
-                          const unitValue = record.unit;
-                          const unitLabel = unitValueToLabel[unitValue || ''] || unitValue || '-';
-                          return unitLabel;
-                        },
-                      },
-                      {
-                        title: t('app.master-data.bom.wasteRateTitle'),
-                        dataIndex: 'wasteRate',
-                        width: 80,
-                        align: 'right',
-                        render: (_, record) => (record.wasteRate ? `${record.wasteRate}%` : '0%'),
-                      },
-                      {
-                        title: t('app.master-data.bom.isRequiredTitle'),
-                        dataIndex: 'isRequired',
-                        width: 70,
-                        align: 'center',
-                        render: (_, record) => (
-                          <Tag color={record.isRequired !== false ? 'success' : 'default'} style={{ marginRight: 0 }}>
-                            {record.isRequired !== false ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
-                          </Tag>
-                        ),
-                      },
-                      {
-                        title: t('app.master-data.bom.levelTitle'),
-                        dataIndex: 'level',
-                        width: 50,
-                        align: 'center',
-                        render: (_, record) => record.level ?? 0,
-                      },
-                      {
-                        title: t('app.master-data.bom.alternativeTitle'),
-                        dataIndex: 'isAlternative',
-                        width: 70,
-                        align: 'center',
-                        render: (_, record) => (
-                          <Tag color={record.isAlternative ? 'orange' : 'default'} style={{ marginRight: 0 }}>
-                            {record.isAlternative ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
-                          </Tag>
-                        ),
-                      },
-                      {
-                        title: t('app.master-data.bom.isConfigurableColumn'),
-                        dataIndex: 'isConfigurable',
-                        width: 70,
-                        align: 'center',
-                        render: (_, record) => {
-                          const manualCfg = record.isConfigurable === true;
-                          const componentMaterial = materials.find((m) => m.id === record.componentId);
-                          const autoCfg = !!componentMaterial?.variantManaged;
-                          const isConfigurableItem = manualCfg || autoCfg;
-                          return (
-                            <Tag color={isConfigurableItem ? 'cyan' : 'default'} style={{ marginRight: 0 }}>
-                              {isConfigurableItem ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
-                            </Tag>
-                          );
-                        },
-                      },
-                      {
-                        title: t('app.master-data.bom.alternativeGroupIdLabel'),
-                        dataIndex: 'alternativeGroupId',
-                        width: 80,
-                        align: 'center',
-                        render: (_, record) =>
-                          record.isAlternative && record.alternativeGroupId != null ? record.alternativeGroupId : '-',
-                      },
-                      {
-                        title: t('app.master-data.bom.priorityTitle'),
-                        dataIndex: 'priority',
-                        width: 60,
-                        align: 'center',
-                        render: (_, record) => record.priority ?? 0,
-                      },
-                      {
-                        title: t('app.master-data.bom.descTitle'),
-                        dataIndex: 'description',
-                        width: 150,
-                        ellipsis: true,
-                        render: (_, record) => record.description || '-',
-                      },
-                    ]}
-                  />
-                </div>
-              )}
-            </div>
+            <Descriptions
+              column={3}
+              items={detailDrawerDescriptionItems(orderBomDetailBasicColumns(detailColumns) as any, bomDetail)}
+            />
+          ) : null
+        }
+        collaborationTitle={t('app.master-data.bom.childMaterialListWithCount', { count: bomItems.length })}
+        collaborationVisible={bomItems.length > 0}
+        collaboration={
+          bomDetail && bomItems.length > 0 ? (
+            <Table<BOM>
+              dataSource={bomItems}
+              rowKey="uuid"
+              pagination={false}
+              size="small"
+              scroll={{ x: 'max-content' }}
+              columns={bomDetailChildItemsColumns}
+            />
           ) : null
         }
         linesTitle={t('app.master-data.bom.hierarchyStructure')}

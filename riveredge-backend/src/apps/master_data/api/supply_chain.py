@@ -80,6 +80,11 @@ async def create_customer(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
+def _is_missing_db_column_error(exc: BaseException) -> bool:
+    msg = str(exc).lower()
+    return "column" in msg and "does not exist" in msg
+
+
 @router.get("/customers", response_model=CustomerListResponse, summary="获取客户列表")
 async def list_customers(
     current_user: Annotated[User, Depends(get_current_user)],
@@ -102,19 +107,34 @@ async def list_customers(
     - **is_active**: 是否启用（可选）
     - **keyword**: 搜索关键词（可选）
     """
-    items, total = await SupplyChainService.list_customers(
-        tenant_id,
-        skip,
-        limit,
-        category,
-        is_active,
-        keyword,
-        salesman_id,
-        sort_by,
-        sort_order,
-        current_user,
-    )
-    return CustomerListResponse(data=items, total=total)
+    try:
+        items, total = await SupplyChainService.list_customers(
+            tenant_id,
+            skip,
+            limit,
+            category,
+            is_active,
+            keyword,
+            salesman_id,
+            sort_by,
+            sort_order,
+            current_user,
+        )
+        return CustomerListResponse(data=items, total=total)
+    except Exception as e:
+        if _is_missing_db_column_error(e):
+            logger.exception(
+                "master_data list_customers DB schema mismatch tenant_id={} error={}",
+                tenant_id,
+                e,
+            )
+            raise _http_exception_with_trace(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                "客户表缺少数据库字段（常与未执行迁移有关）。请在 riveredge-backend 目录执行：aerich upgrade，并重启 API 服务。",
+                route="/supply-chain/customers",
+                tenant_id=tenant_id,
+            )
+        raise
 
 
 @router.get("/customers/{customer_uuid}", response_model=CustomerResponse, summary="获取客户详情")

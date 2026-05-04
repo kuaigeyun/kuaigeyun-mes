@@ -948,7 +948,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         }
       }
       if (isOperationColumn(col)) {
-        const { width, ...rest } = col
+        const { width, uniActionRenderOptions, ...rest } = col
         const baseRender = col.render
         // 操作列统一规范：内容不换行、宽度自适应（width: auto + scroll.x: max-content 由浏览器根据内容计算）
         return {
@@ -969,6 +969,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                 const rowKey = String(record?.id ?? record?.uuid ?? args[2] ?? 'row')
                 return renderUniTableOperationCell(rendered, `uni-op-${rowKey}`, {
                   suppressAuditSemanticActions: !hasAnyAuditEnabled,
+                  ...(uniActionRenderOptions && typeof uniActionRenderOptions === 'object'
+                    ? uniActionRenderOptions
+                    : {}),
                 })
               }
             : undefined,
