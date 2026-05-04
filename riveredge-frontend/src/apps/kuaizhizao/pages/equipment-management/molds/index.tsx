@@ -8,19 +8,37 @@
  * Date: 2026-01-05
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormSwitch } from '@ant-design/pro-components';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
-import { App, Button, Tag, Space, message, Modal, Tabs, Table, Form, Input, InputNumber, Descriptions, DatePicker, Select, Row, Col, Typography } from 'antd';
+import { App, Button, Tag, Space, message, Modal, Tabs, Table, Form, Input, InputNumber, Descriptions, DatePicker, Select, Row, Col, Typography, Spin, theme as AntdTheme, Empty } from 'antd';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { getMoldAssetLifecycle } from '../../../utils/equipmentLifecycle';
-import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, ReloadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import CodeField from '../../../../../components/code-field';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { moldApi } from '../../../services/equipment';
 import { batchImport } from '../../../../../utils/batchOperations';
 import dayjs from 'dayjs';
+import {
+  DocumentTrackingRelationsTabsBody,
+  DocumentTrackingTimelineBody,
+  TraceLinkedDocumentBrief,
+  useDocumentTracking,
+} from '../../../../../components/document-tracking-panel';
+import { EquipmentTraceBriefFooter } from '../EquipmentTraceBriefFooter';
+
+/** 详情 Drawer 外左侧全链路浮层（Uni-detail） */
+const MD_DETAIL_CHAIN_FLOAT_MARGIN = 16;
+const MD_DETAIL_LEFT_CHAIN_GAP = 16;
+const MD_DETAIL_CHAIN_DRAWER_GAP = 16;
+const MD_DETAIL_CHAIN_VERTICAL_TRIM = MD_DETAIL_CHAIN_FLOAT_MARGIN * 2 + MD_DETAIL_LEFT_CHAIN_GAP;
+const mdDetailChainHalfHeightCss = `calc((100vh - ${MD_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2)`;
+const mdDetailChainPanelWidthCss = `calc(50vw - ${MD_DETAIL_CHAIN_FLOAT_MARGIN * 2 + MD_DETAIL_CHAIN_DRAWER_GAP}px)`;
+const mdDetailBriefPanelTopCss = `calc(${MD_DETAIL_CHAIN_FLOAT_MARGIN}px + (100vh - ${MD_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2 + ${MD_DETAIL_LEFT_CHAIN_GAP}px)`;
 
 interface Mold {
   id?: number;
@@ -76,7 +94,12 @@ interface MoldCalibration {
 }
 
 const MoldsPage: React.FC = () => {
+  const navigate = useNavigate();
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const { token } = AntdTheme.useToken();
+  const moldDetailDrawerZIndex = token.zIndexPopupBase;
+  const moldChainOverlayZIndex = token.zIndexPopupBase + 1;
   const actionRef = useRef<ActionType>(null);
 
   // Modal 相关状态（创建/编辑模具）
@@ -89,6 +112,31 @@ const MoldsPage: React.FC = () => {
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [moldDetail, setMoldDetail] = useState<Mold | null>(null);
+
+  const [moldTrackingRefreshKey, setMoldTrackingRefreshKey] = useState(0);
+  const [fullChainRefreshKey, setFullChainRefreshKey] = useState(0);
+  const [fullChainTraceLoading, setFullChainTraceLoading] = useState(false);
+  const [fullChainBriefDoc, setFullChainBriefDoc] = useState<{ document_type: string; document_id: number } | null>(
+    null,
+  );
+
+  const onFullChainGraphNodeClick = useCallback(
+    (type: string, id: number) => {
+      if (!id) return;
+      if (type === 'mold' && moldDetail?.id != null && id === moldDetail.id) {
+        setFullChainBriefDoc(null);
+        return;
+      }
+      setFullChainBriefDoc({ document_type: type, document_id: id });
+    },
+    [moldDetail],
+  );
+
+  const moldTracking = useDocumentTracking(
+    drawerVisible && moldDetail?.id ? 'mold' : undefined,
+    moldDetail?.id,
+    moldTrackingRefreshKey,
+  );
 
   // 使用记录相关状态
   const [usages, setUsages] = useState<MoldUsage[]>([]);
@@ -187,6 +235,7 @@ const MoldsPage: React.FC = () => {
    */
   const handleDetail = async (record: Mold) => {
     try {
+      setFullChainBriefDoc(null);
       if (!record.uuid) {
         messageApi.error('模具UUID不存在');
         return;
@@ -196,6 +245,8 @@ const MoldsPage: React.FC = () => {
       setDrawerVisible(true);
       loadUsages(record.uuid);
       loadCalibrations(record.uuid);
+      setMoldTrackingRefreshKey((k) => k + 1);
+      setFullChainRefreshKey((k) => k + 1);
     } catch (error) {
       messageApi.error('获取模具详情失败');
     }
@@ -247,6 +298,8 @@ const MoldsPage: React.FC = () => {
         loadCalibrations(moldDetail.uuid);
         const detail = await moldApi.get(moldDetail.uuid);
         setMoldDetail(detail);
+        setMoldTrackingRefreshKey((k) => k + 1);
+        setFullChainRefreshKey((k) => k + 1);
       }
     } catch (e: any) {
       if (e?.errorFields) return;
@@ -272,7 +325,11 @@ const MoldsPage: React.FC = () => {
       await moldApi.createUsage(data);
       messageApi.success('使用记录创建成功');
       setUsageModalVisible(false);
-      if (moldDetail?.uuid) loadUsages(moldDetail.uuid);
+      if (moldDetail?.uuid) {
+        loadUsages(moldDetail.uuid);
+        setMoldTrackingRefreshKey((k) => k + 1);
+        setFullChainRefreshKey((k) => k + 1);
+      }
     } catch (e: any) {
       if (e?.errorFields) return;
       messageApi.error(e?.message || '创建失败');
@@ -295,6 +352,7 @@ const MoldsPage: React.FC = () => {
           if (moldDetail?.uuid && keys.map(String).includes(String(moldDetail.uuid))) {
             setDrawerVisible(false);
             setMoldDetail(null);
+            setFullChainBriefDoc(null);
           }
           actionRef.current?.reload();
         } catch (error: any) {
@@ -317,8 +375,9 @@ const MoldsPage: React.FC = () => {
         design_lifetime: values.design_lifetime ?? null,
       };
 
-      if (isEdit && currentMold?.uuid) {
-        await moldApi.update(currentMold.uuid, submitData);
+      const editedUuid = isEdit ? currentMold?.uuid : undefined;
+      if (isEdit && editedUuid) {
+        await moldApi.update(editedUuid, submitData);
         messageApi.success('模具更新成功');
       } else {
         await moldApi.create(submitData);
@@ -328,6 +387,18 @@ const MoldsPage: React.FC = () => {
       setCurrentMold(null);
       formRef.current?.resetFields();
       actionRef.current?.reload();
+      if (editedUuid && moldDetail?.uuid === editedUuid) {
+        try {
+          const fresh = await moldApi.get(editedUuid);
+          setMoldDetail(fresh);
+          loadUsages(editedUuid);
+          loadCalibrations(editedUuid);
+          setMoldTrackingRefreshKey((k) => k + 1);
+          setFullChainRefreshKey((k) => k + 1);
+        } catch {
+          /* ignore */
+        }
+      }
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
       throw error;
@@ -876,15 +947,130 @@ const MoldsPage: React.FC = () => {
         </Row>
       </FormModalTemplate>
 
+      {drawerVisible && moldDetail?.id != null ? (
+        <>
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.relationsFullChainTitle')}
+            style={{
+              position: 'fixed',
+              left: MD_DETAIL_CHAIN_FLOAT_MARGIN,
+              top: MD_DETAIL_CHAIN_FLOAT_MARGIN,
+              width: mdDetailChainPanelWidthCss,
+              height: mdDetailChainHalfHeightCss,
+              zIndex: moldChainOverlayZIndex,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div style={{ flexShrink: 0, marginBottom: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
+                    {t('components.documentTrackingPanel.relationsFullChainTitle')}
+                  </div>
+                </div>
+                <Button
+                  type="default"
+                  size="small"
+                  icon={<ReloadOutlined />}
+                  loading={fullChainTraceLoading}
+                  style={{ flexShrink: 0 }}
+                  onClick={() => setFullChainRefreshKey((k) => k + 1)}
+                >
+                  {t('components.documentRelationGraph.refresh')}
+                </Button>
+              </div>
+            </div>
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <DocumentTrackingRelationsTabsBody
+                documentType="mold"
+                documentId={moldDetail.id}
+                refreshKey={fullChainRefreshKey}
+                onDocumentClick={onFullChainGraphNodeClick}
+                compact
+                hideInlineRefresh
+                onTraceLoadingChange={setFullChainTraceLoading}
+              />
+            </div>
+          </div>
+
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.traceBriefTitle')}
+            style={{
+              position: 'fixed',
+              left: MD_DETAIL_CHAIN_FLOAT_MARGIN,
+              top: mdDetailBriefPanelTopCss,
+              width: mdDetailChainPanelWidthCss,
+              height: mdDetailChainHalfHeightCss,
+              zIndex: moldChainOverlayZIndex,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 600,
+                fontSize: 13,
+                marginBottom: 8,
+                flexShrink: 0,
+                color: 'var(--ant-color-text)',
+              }}
+            >
+              {t('components.documentTrackingPanel.traceBriefTitle')}
+            </div>
+            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+              <TraceLinkedDocumentBrief
+                documentType={fullChainBriefDoc?.document_type}
+                documentId={fullChainBriefDoc?.document_id}
+                compactChrome
+              />
+            </div>
+            <EquipmentTraceBriefFooter
+              brief={fullChainBriefDoc}
+              t={t}
+              navigate={navigate}
+              closeDrawer={() => {
+                setDrawerVisible(false);
+                setMoldDetail(null);
+                setUsages([]);
+                setCalibrations([]);
+                setFullChainBriefDoc(null);
+              }}
+              onDismissBrief={() => setFullChainBriefDoc(null)}
+            />
+          </div>
+        </>
+      ) : null}
+
       {/* 模具详情 Drawer */}
       <DetailDrawerTemplate
         title="模具详情"
         open={drawerVisible}
+        zIndex={moldDetailDrawerZIndex}
         onClose={() => {
           setDrawerVisible(false);
           setMoldDetail(null);
           setUsages([]);
           setCalibrations([]);
+          setFullChainBriefDoc(null);
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         dataSource={moldDetail}
@@ -1033,6 +1219,28 @@ const MoldsPage: React.FC = () => {
                           { title: '备注', dataIndex: 'remark', ellipsis: true },
                         ]}
                       />
+                    </>
+                  ),
+                },
+                {
+                  key: 'tracking_timeline',
+                  label: '操作记录',
+                  children: (
+                    <>
+                      {moldTracking.loading && (
+                        <div style={{ textAlign: 'center', padding: 24 }}>
+                          <Spin />
+                        </div>
+                      )}
+                      {moldTracking.error && !moldTracking.loading && (
+                        <Typography.Text type="danger">{moldTracking.error}</Typography.Text>
+                      )}
+                      {moldTracking.data && !moldTracking.loading && (
+                        <DocumentTrackingTimelineBody data={moldTracking.data} />
+                      )}
+                      {!moldTracking.loading && !moldTracking.data && !moldTracking.error && (
+                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+                      )}
                     </>
                   ),
                 },

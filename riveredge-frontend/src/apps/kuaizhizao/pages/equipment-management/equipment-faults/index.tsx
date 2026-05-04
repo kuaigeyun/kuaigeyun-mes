@@ -8,7 +8,9 @@
  * Date: 2026-01-05
  */
 
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import type { DescriptionsProps } from 'antd';
 import {
   ActionType,
@@ -20,8 +22,8 @@ import {
   ProFormDigit,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, message, Modal, Row, Col, Descriptions, Typography, Dropdown, Empty } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, message, Modal, Row, Col, Descriptions, Typography, Dropdown, Empty, Spin, theme as AntdTheme } from 'antd';
+import { EditOutlined, DeleteOutlined, EyeOutlined, ReloadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   ListPageTemplate,
@@ -36,6 +38,22 @@ import { getEquipmentFaultLifecycle } from '../../../utils/equipmentLifecycle';
 import { equipmentFaultApi, equipmentApi } from '../../../services/equipment';
 import dayjs from 'dayjs';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
+import {
+  DocumentTrackingRelationsTabsBody,
+  DocumentTrackingTimelineBody,
+  TraceLinkedDocumentBrief,
+  useDocumentTracking,
+} from '../../../../../components/document-tracking-panel';
+import { EquipmentTraceBriefFooter } from '../EquipmentTraceBriefFooter';
+
+/** 详情 Drawer 外左侧全链路浮层（Uni-detail） */
+const EF_DETAIL_CHAIN_FLOAT_MARGIN = 16;
+const EF_DETAIL_LEFT_CHAIN_GAP = 16;
+const EF_DETAIL_CHAIN_DRAWER_GAP = 16;
+const EF_DETAIL_CHAIN_VERTICAL_TRIM = EF_DETAIL_CHAIN_FLOAT_MARGIN * 2 + EF_DETAIL_LEFT_CHAIN_GAP;
+const efDetailChainHalfHeightCss = `calc((100vh - ${EF_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2)`;
+const efDetailChainPanelWidthCss = `calc(50vw - ${EF_DETAIL_CHAIN_FLOAT_MARGIN * 2 + EF_DETAIL_CHAIN_DRAWER_GAP}px)`;
+const efDetailBriefPanelTopCss = `calc(${EF_DETAIL_CHAIN_FLOAT_MARGIN}px + (100vh - ${EF_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2 + ${EF_DETAIL_LEFT_CHAIN_GAP}px)`;
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
@@ -86,7 +104,12 @@ interface EquipmentFault {
 }
 
 const EquipmentFaultsPage: React.FC = () => {
+  const navigate = useNavigate();
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const { token } = AntdTheme.useToken();
+  const faultDetailDrawerZIndex = token.zIndexPopupBase;
+  const faultChainOverlayZIndex = token.zIndexPopupBase + 1;
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
@@ -99,6 +122,31 @@ const EquipmentFaultsPage: React.FC = () => {
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [faultDetail, setFaultDetail] = useState<EquipmentFault | null>(null);
+
+  const [faultTrackingRefreshKey, setFaultTrackingRefreshKey] = useState(0);
+  const [fullChainRefreshKey, setFullChainRefreshKey] = useState(0);
+  const [fullChainTraceLoading, setFullChainTraceLoading] = useState(false);
+  const [fullChainBriefDoc, setFullChainBriefDoc] = useState<{ document_type: string; document_id: number } | null>(
+    null,
+  );
+
+  const onFullChainGraphNodeClick = useCallback(
+    (type: string, id: number) => {
+      if (!id) return;
+      if (type === 'equipment_fault' && faultDetail?.id != null && id === faultDetail.id) {
+        setFullChainBriefDoc(null);
+        return;
+      }
+      setFullChainBriefDoc({ document_type: type, document_id: id });
+    },
+    [faultDetail],
+  );
+
+  const faultTracking = useDocumentTracking(
+    drawerVisible && faultDetail?.id ? 'equipment_fault' : undefined,
+    faultDetail?.id,
+    faultTrackingRefreshKey,
+  );
 
   // 创建维修记录 Modal 状态
   const [repairModalVisible, setRepairModalVisible] = useState(false);
@@ -149,6 +197,7 @@ const EquipmentFaultsPage: React.FC = () => {
    */
   const handleDetail = async (record: EquipmentFault) => {
     try {
+      setFullChainBriefDoc(null);
       if (!record.uuid) {
         messageApi.error('故障记录UUID不存在');
         return;
@@ -156,6 +205,8 @@ const EquipmentFaultsPage: React.FC = () => {
       const detail = await equipmentFaultApi.get(record.uuid);
       setFaultDetail(detail);
       setDrawerVisible(true);
+      setFaultTrackingRefreshKey((k) => k + 1);
+      setFullChainRefreshKey((k) => k + 1);
     } catch (error) {
       messageApi.error('获取故障记录详情失败');
     }
@@ -178,6 +229,7 @@ const EquipmentFaultsPage: React.FC = () => {
           if (faultDetail?.uuid && keys.map(String).includes(String(faultDetail.uuid))) {
             setDrawerVisible(false);
             setFaultDetail(null);
+            setFullChainBriefDoc(null);
           }
           actionRef.current?.reload();
         } catch (error: any) {
@@ -197,8 +249,9 @@ const EquipmentFaultsPage: React.FC = () => {
         fault_date: values.fault_date ? values.fault_date.format('YYYY-MM-DD') : null,
       };
 
-      if (isEdit && currentFault?.uuid) {
-        await equipmentFaultApi.update(currentFault.uuid, submitData);
+      const editedUuid = isEdit ? currentFault?.uuid : undefined;
+      if (isEdit && editedUuid) {
+        await equipmentFaultApi.update(editedUuid, submitData);
         messageApi.success('故障记录更新成功');
       } else {
         await equipmentFaultApi.create(submitData);
@@ -208,6 +261,16 @@ const EquipmentFaultsPage: React.FC = () => {
       setCurrentFault(null);
       formRef.current?.resetFields();
       actionRef.current?.reload();
+      if (editedUuid && faultDetail?.uuid === editedUuid) {
+        try {
+          const fresh = await equipmentFaultApi.get(editedUuid);
+          setFaultDetail(fresh);
+          setFaultTrackingRefreshKey((k) => k + 1);
+          setFullChainRefreshKey((k) => k + 1);
+        } catch {
+          /* ignore */
+        }
+      }
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
       throw error;
@@ -737,13 +800,126 @@ const EquipmentFaultsPage: React.FC = () => {
         </Row>
       </FormModalTemplate>
 
+      {drawerVisible && faultDetail?.id != null ? (
+        <>
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.relationsFullChainTitle')}
+            style={{
+              position: 'fixed',
+              left: EF_DETAIL_CHAIN_FLOAT_MARGIN,
+              top: EF_DETAIL_CHAIN_FLOAT_MARGIN,
+              width: efDetailChainPanelWidthCss,
+              height: efDetailChainHalfHeightCss,
+              zIndex: faultChainOverlayZIndex,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div style={{ flexShrink: 0, marginBottom: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
+                    {t('components.documentTrackingPanel.relationsFullChainTitle')}
+                  </div>
+                </div>
+                <Button
+                  type="default"
+                  size="small"
+                  icon={<ReloadOutlined />}
+                  loading={fullChainTraceLoading}
+                  style={{ flexShrink: 0 }}
+                  onClick={() => setFullChainRefreshKey((k) => k + 1)}
+                >
+                  {t('components.documentRelationGraph.refresh')}
+                </Button>
+              </div>
+            </div>
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <DocumentTrackingRelationsTabsBody
+                documentType="equipment_fault"
+                documentId={faultDetail.id}
+                refreshKey={fullChainRefreshKey}
+                onDocumentClick={onFullChainGraphNodeClick}
+                compact
+                hideInlineRefresh
+                onTraceLoadingChange={setFullChainTraceLoading}
+              />
+            </div>
+          </div>
+
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.traceBriefTitle')}
+            style={{
+              position: 'fixed',
+              left: EF_DETAIL_CHAIN_FLOAT_MARGIN,
+              top: efDetailBriefPanelTopCss,
+              width: efDetailChainPanelWidthCss,
+              height: efDetailChainHalfHeightCss,
+              zIndex: faultChainOverlayZIndex,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 600,
+                fontSize: 13,
+                marginBottom: 8,
+                flexShrink: 0,
+                color: 'var(--ant-color-text)',
+              }}
+            >
+              {t('components.documentTrackingPanel.traceBriefTitle')}
+            </div>
+            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+              <TraceLinkedDocumentBrief
+                documentType={fullChainBriefDoc?.document_type}
+                documentId={fullChainBriefDoc?.document_id}
+                compactChrome
+              />
+            </div>
+            <EquipmentTraceBriefFooter
+              brief={fullChainBriefDoc}
+              t={t}
+              navigate={navigate}
+              closeDrawer={() => {
+                setDrawerVisible(false);
+                setFaultDetail(null);
+                setFullChainBriefDoc(null);
+              }}
+              onDismissBrief={() => setFullChainBriefDoc(null)}
+            />
+          </div>
+        </>
+      ) : null}
+
       {/* 故障记录详情 Drawer */}
       <DetailDrawerTemplate
         title="故障记录详情"
         open={drawerVisible}
+        zIndex={faultDetailDrawerZIndex}
         onClose={() => {
           setDrawerVisible(false);
           setFaultDetail(null);
+          setFullChainBriefDoc(null);
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
@@ -770,17 +946,30 @@ const EquipmentFaultsPage: React.FC = () => {
                         showLabels
                         status={lc.status}
                         nextStepSuggestions={lc.nextStepSuggestions}
+                        hideNextStepSuggestions
                       />
                     );
                   })()}
-                  <Typography.Text type="secondary">设备故障单未接入单据跟踪中心</Typography.Text>
                 </div>
               </DetailDrawerSection>
               <DetailDrawerSection title="明细信息">
                 <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="故障单无明细行表" />
               </DetailDrawerSection>
               <DetailDrawerSection title="操作记录">
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+                {faultTracking.loading && (
+                  <div style={{ textAlign: 'center', padding: 24 }}>
+                    <Spin />
+                  </div>
+                )}
+                {faultTracking.error && !faultTracking.loading && (
+                  <Typography.Text type="danger">{faultTracking.error}</Typography.Text>
+                )}
+                {faultTracking.data && !faultTracking.loading && (
+                  <DocumentTrackingTimelineBody data={faultTracking.data} />
+                )}
+                {!faultTracking.loading && !faultTracking.data && !faultTracking.error && (
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+                )}
               </DetailDrawerSection>
             </>
           ) : null

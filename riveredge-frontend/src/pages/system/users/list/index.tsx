@@ -9,7 +9,7 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormSwitch, ProDescriptionsItemProps, ProFormInstance } from '@ant-design/pro-components';
-import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography } from 'antd';
+import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography, theme } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, ReloadOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
@@ -39,6 +39,7 @@ import { getRoleList } from '../../../../services/role';
 const UserListPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const { token } = theme.useToken();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -934,43 +935,44 @@ const UserListPage: React.FC = () => {
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
         styles={{ body: { position: 'relative' } }}
-      >
-        {detailData && (
-          <div style={{ 
-            position: 'absolute', 
-            top: 24, 
-            right: 24, 
-            width: 220, 
-            zIndex: 10,
-            background: 'rgba(255, 255, 255, 0.8)',
-            backdropFilter: 'blur(8px)',
-            padding: '16px',
-            borderRadius: '12px',
-            border: '1px solid rgba(0, 0, 0, 0.05)',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
-            <QRCodeGenerator
-              qrcodeType="EMP"
-              data={{
-                employee_uuid: detailData.uuid,
-                employee_code: detailData.username,
-                employee_name: detailData.full_name || detailData.username,
-              }}
-              autoGenerate={true}
-              showCardTitle={false}
-              size={8}
-              noCard={true}
-        basic={detailData ? (
-            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, detailData)} />
-          ) : undefined}
+        basic={
+          detailData ? (
+            <div style={{ position: 'relative', paddingRight: 8 }}>
+              <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, detailData)} />
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  right: 0,
+                  width: 152,
+                  zIndex: 10,
+                  background: '#fff',
+                  padding: '12px',
+                  borderRadius: token.borderRadiusLG,
+                  border: '1px solid rgba(0, 0, 0, 0.06)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <QRCodeGenerator
+                  qrcodeType="EMP"
+                  data={{
+                    employee_uuid: detailData.uuid,
+                    employee_code: detailData.username,
+                    employee_name: detailData.full_name || detailData.username,
+                  }}
+                  autoGenerate={true}
+                  showCardTitle={false}
+                  size={6}
+                  noCard={true}
+                />
+              </div>
+            </div>
+          ) : null
+        }
       />
-          </div>
-        )}
-      </DetailDrawerTemplate>
     </>
   );
 };

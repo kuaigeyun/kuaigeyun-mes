@@ -9,7 +9,7 @@ import { App } from 'antd';
 import { FormModalTemplate } from '../../../components/layout-templates';
 import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
 import { warehouseApi } from '../services/warehouse';
-import { workshopApi, workCenterApi, workstationApi } from '../services/factory';
+import { workshopApi, workCenterApi, workstationApi, factoryListItems } from '../services/factory';
 import { testGenerateCode, generateCode, getCodeRulePageConfig } from '../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../utils/codeRulePage';
 import type { Warehouse, WarehouseCreate, WarehouseUpdate } from '../types/warehouse';
@@ -48,13 +48,13 @@ export const WarehouseFormModal: React.FC<WarehouseFormModalProps> = ({
     const loadOptions = async () => {
       try {
         const [wsList, wstList, wcList] = await Promise.all([
-          workshopApi.list({ limit: 1000, isActive: true }),
-          workstationApi.list({ limit: 1000, isActive: true }),
-          workCenterApi.list({ limit: 1000, isActive: true }),
+          workshopApi.list({ limit: 1000, is_active: true }),
+          workstationApi.list({ limit: 1000, is_active: true }),
+          workCenterApi.list({ limit: 1000, is_active: true }),
         ]);
-        setWorkshops(wsList || []);
-        setWorkstations(wstList || []);
-        setWorkCenters(wcList || []);
+        setWorkshops(factoryListItems(wsList));
+        setWorkstations(factoryListItems(wstList));
+        setWorkCenters(factoryListItems(wcList));
       } catch (e) {
         console.error('加载车间/工位/工作中心列表失败:', e);
       }

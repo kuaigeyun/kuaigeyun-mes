@@ -5,7 +5,9 @@
  * 详情抽屉包含领用记录、维保记录、校验记录 Tab。
  */
 
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import type { DescriptionsProps } from 'antd';
 import {
   ActionType,
@@ -19,8 +21,8 @@ import {
   ProDescriptionsItemProps,
 } from '@ant-design/pro-components';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
-import { App, Button, Tag, Table, Form, Input, InputNumber, Descriptions, DatePicker, Select, Modal, Row, Col, Typography, Empty } from 'antd';
-import { PlusOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Table, Form, Input, InputNumber, Descriptions, DatePicker, Select, Modal, Row, Col, Typography, Empty, Spin, theme as AntdTheme } from 'antd';
+import { PlusOutlined, EditOutlined, EyeOutlined, ReloadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import CodeField from '../../../../../components/code-field';
@@ -31,6 +33,22 @@ import { SUBMIT_SHORTCUT_HINT } from '../../../../../utils/globalSubmitShortcut'
 import { toolApi } from '../../../services/equipment';
 import { batchImport } from '../../../../../utils/batchOperations';
 import dayjs from 'dayjs';
+import {
+  DocumentTrackingRelationsTabsBody,
+  DocumentTrackingTimelineBody,
+  TraceLinkedDocumentBrief,
+  useDocumentTracking,
+} from '../../../../../components/document-tracking-panel';
+import { EquipmentTraceBriefFooter } from '../EquipmentTraceBriefFooter';
+
+/** 详情 Drawer 外左侧全链路浮层（Uni-detail） */
+const TL_DETAIL_CHAIN_FLOAT_MARGIN = 16;
+const TL_DETAIL_LEFT_CHAIN_GAP = 16;
+const TL_DETAIL_CHAIN_DRAWER_GAP = 16;
+const TL_DETAIL_CHAIN_VERTICAL_TRIM = TL_DETAIL_CHAIN_FLOAT_MARGIN * 2 + TL_DETAIL_LEFT_CHAIN_GAP;
+const tlDetailChainHalfHeightCss = `calc((100vh - ${TL_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2)`;
+const tlDetailChainPanelWidthCss = `calc(50vw - ${TL_DETAIL_CHAIN_FLOAT_MARGIN * 2 + TL_DETAIL_CHAIN_DRAWER_GAP}px)`;
+const tlDetailBriefPanelTopCss = `calc(${TL_DETAIL_CHAIN_FLOAT_MARGIN}px + (100vh - ${TL_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2 + ${TL_DETAIL_LEFT_CHAIN_GAP}px)`;
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
@@ -111,7 +129,12 @@ interface ToolCalibration {
 }
 
 const ToolLedgerPage: React.FC = () => {
+  const navigate = useNavigate();
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const { token } = AntdTheme.useToken();
+  const toolDetailDrawerZIndex = token.zIndexPopupBase;
+  const toolChainOverlayZIndex = token.zIndexPopupBase + 1;
   const actionRef = useRef<ActionType>(null);
 
   const [modalVisible, setModalVisible] = useState(false);
@@ -122,6 +145,31 @@ const ToolLedgerPage: React.FC = () => {
 
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [toolDetail, setToolDetail] = useState<Tool | null>(null);
+
+  const [toolTrackingRefreshKey, setToolTrackingRefreshKey] = useState(0);
+  const [fullChainRefreshKey, setFullChainRefreshKey] = useState(0);
+  const [fullChainTraceLoading, setFullChainTraceLoading] = useState(false);
+  const [fullChainBriefDoc, setFullChainBriefDoc] = useState<{ document_type: string; document_id: number } | null>(
+    null,
+  );
+
+  const onFullChainGraphNodeClick = useCallback(
+    (type: string, id: number) => {
+      if (!id) return;
+      if (type === 'tool' && toolDetail?.id != null && id === toolDetail.id) {
+        setFullChainBriefDoc(null);
+        return;
+      }
+      setFullChainBriefDoc({ document_type: type, document_id: id });
+    },
+    [toolDetail],
+  );
+
+  const toolTracking = useDocumentTracking(
+    drawerVisible && toolDetail?.id ? 'tool' : undefined,
+    toolDetail?.id,
+    toolTrackingRefreshKey,
+  );
 
   const [usages, setUsages] = useState<ToolUsage[]>([]);
   const [maintenances, setMaintenances] = useState<ToolMaintenance[]>([]);
@@ -212,6 +260,7 @@ const ToolLedgerPage: React.FC = () => {
 
   const handleDetail = async (record: Tool) => {
     try {
+      setFullChainBriefDoc(null);
       if (!record.uuid) {
         messageApi.error('工装UUID不存在');
         return;
@@ -222,6 +271,8 @@ const ToolLedgerPage: React.FC = () => {
       loadUsages(record.uuid);
       loadMaintenances(record.uuid);
       loadCalibrations(record.uuid);
+      setToolTrackingRefreshKey((k) => k + 1);
+      setFullChainRefreshKey((k) => k + 1);
     } catch (error) {
       messageApi.error('获取工装详情失败');
     }
@@ -243,6 +294,8 @@ const ToolLedgerPage: React.FC = () => {
         loadUsages(toolDetail.uuid);
         const detail = await toolApi.get(toolDetail.uuid);
         setToolDetail(detail);
+        setToolTrackingRefreshKey((k) => k + 1);
+        setFullChainRefreshKey((k) => k + 1);
       }
     } catch (e: any) {
       if (e?.errorFields) return;
@@ -258,6 +311,8 @@ const ToolLedgerPage: React.FC = () => {
         loadUsages(toolDetail.uuid);
         const detail = await toolApi.get(toolDetail.uuid);
         setToolDetail(detail);
+        setToolTrackingRefreshKey((k) => k + 1);
+        setFullChainRefreshKey((k) => k + 1);
       }
     } catch (e: any) {
       messageApi.error(e?.message || '归还失败');
@@ -281,7 +336,11 @@ const ToolLedgerPage: React.FC = () => {
       await toolApi.recordMaintenance(data);
       messageApi.success('维保记录已保存');
       setMaintModalVisible(false);
-      if (toolDetail?.uuid) loadMaintenances(toolDetail.uuid);
+      if (toolDetail?.uuid) {
+        loadMaintenances(toolDetail.uuid);
+        setToolTrackingRefreshKey((k) => k + 1);
+        setFullChainRefreshKey((k) => k + 1);
+      }
     } catch (e: any) {
       if (e?.errorFields) return;
       messageApi.error(e?.message || '保存失败');
@@ -309,6 +368,8 @@ const ToolLedgerPage: React.FC = () => {
         loadCalibrations(toolDetail.uuid);
         const detail = await toolApi.get(toolDetail.uuid);
         setToolDetail(detail);
+        setToolTrackingRefreshKey((k) => k + 1);
+        setFullChainRefreshKey((k) => k + 1);
       }
     } catch (e: any) {
       if (e?.errorFields) return;
@@ -328,8 +389,9 @@ const ToolLedgerPage: React.FC = () => {
         purchase_date: values.purchase_date?.format?.('YYYY-MM-DD') || values.purchase_date,
         warranty_expiry: values.warranty_expiry?.format?.('YYYY-MM-DD') || values.warranty_expiry,
       };
-      if (isEdit && currentTool?.uuid) {
-        await toolApi.update(currentTool.uuid, data);
+      const editedUuid = isEdit ? currentTool?.uuid : undefined;
+      if (isEdit && editedUuid) {
+        await toolApi.update(editedUuid, data);
         messageApi.success('工装更新成功');
       } else {
         await toolApi.create(data);
@@ -337,6 +399,19 @@ const ToolLedgerPage: React.FC = () => {
       }
       setModalVisible(false);
       actionRef.current?.reload();
+      if (editedUuid && toolDetail?.uuid === editedUuid) {
+        try {
+          const fresh = await toolApi.get(editedUuid);
+          setToolDetail(fresh);
+          loadCalibrations(editedUuid);
+          loadMaintenances(editedUuid);
+          loadUsages(editedUuid);
+          setToolTrackingRefreshKey((k) => k + 1);
+          setFullChainRefreshKey((k) => k + 1);
+        } catch {
+          /* ignore */
+        }
+      }
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
       throw error;
@@ -515,6 +590,7 @@ const ToolLedgerPage: React.FC = () => {
                     setUsages([]);
                     setMaintenances([]);
                     setCalibrations([]);
+                    setFullChainBriefDoc(null);
                   }
                   actionRef.current?.reload();
                 } catch (error: any) {
@@ -699,14 +775,130 @@ const ToolLedgerPage: React.FC = () => {
         </Row>
       </FormModalTemplate>
 
+      {drawerVisible && toolDetail?.id != null ? (
+        <>
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.relationsFullChainTitle')}
+            style={{
+              position: 'fixed',
+              left: TL_DETAIL_CHAIN_FLOAT_MARGIN,
+              top: TL_DETAIL_CHAIN_FLOAT_MARGIN,
+              width: tlDetailChainPanelWidthCss,
+              height: tlDetailChainHalfHeightCss,
+              zIndex: toolChainOverlayZIndex,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div style={{ flexShrink: 0, marginBottom: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
+                    {t('components.documentTrackingPanel.relationsFullChainTitle')}
+                  </div>
+                </div>
+                <Button
+                  type="default"
+                  size="small"
+                  icon={<ReloadOutlined />}
+                  loading={fullChainTraceLoading}
+                  style={{ flexShrink: 0 }}
+                  onClick={() => setFullChainRefreshKey((k) => k + 1)}
+                >
+                  {t('components.documentRelationGraph.refresh')}
+                </Button>
+              </div>
+            </div>
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <DocumentTrackingRelationsTabsBody
+                documentType="tool"
+                documentId={toolDetail.id}
+                refreshKey={fullChainRefreshKey}
+                onDocumentClick={onFullChainGraphNodeClick}
+                compact
+                hideInlineRefresh
+                onTraceLoadingChange={setFullChainTraceLoading}
+              />
+            </div>
+          </div>
+
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.traceBriefTitle')}
+            style={{
+              position: 'fixed',
+              left: TL_DETAIL_CHAIN_FLOAT_MARGIN,
+              top: tlDetailBriefPanelTopCss,
+              width: tlDetailChainPanelWidthCss,
+              height: tlDetailChainHalfHeightCss,
+              zIndex: toolChainOverlayZIndex,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 600,
+                fontSize: 13,
+                marginBottom: 8,
+                flexShrink: 0,
+                color: 'var(--ant-color-text)',
+              }}
+            >
+              {t('components.documentTrackingPanel.traceBriefTitle')}
+            </div>
+            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+              <TraceLinkedDocumentBrief
+                documentType={fullChainBriefDoc?.document_type}
+                documentId={fullChainBriefDoc?.document_id}
+                compactChrome
+              />
+            </div>
+            <EquipmentTraceBriefFooter
+              brief={fullChainBriefDoc}
+              t={t}
+              navigate={navigate}
+              closeDrawer={() => {
+                setDrawerVisible(false);
+                setToolDetail(null);
+                setUsages([]);
+                setMaintenances([]);
+                setCalibrations([]);
+                setFullChainBriefDoc(null);
+              }}
+              onDismissBrief={() => setFullChainBriefDoc(null)}
+            />
+          </div>
+        </>
+      ) : null}
+
       <DetailDrawerTemplate
         open={drawerVisible}
+        zIndex={toolDetailDrawerZIndex}
         onClose={() => {
           setDrawerVisible(false);
           setToolDetail(null);
           setUsages([]);
           setMaintenances([]);
           setCalibrations([]);
+          setFullChainBriefDoc(null);
         }}
         title={`工装详情 - ${toolDetail?.code || ''}`}
         columns={[]}
@@ -734,10 +926,10 @@ const ToolLedgerPage: React.FC = () => {
                         showLabels
                         status={lc.status}
                         nextStepSuggestions={lc.nextStepSuggestions}
+                        hideNextStepSuggestions
                       />
                     );
                   })()}
-                  <Typography.Text type="secondary">工装台账未接入单据跟踪中心；领用/维保/校验见下方明细</Typography.Text>
                 </div>
               </DetailDrawerSection>
               <DetailDrawerSection title="明细信息">
@@ -859,7 +1051,20 @@ const ToolLedgerPage: React.FC = () => {
                 </div>
               </DetailDrawerSection>
               <DetailDrawerSection title="操作记录">
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+                {toolTracking.loading && (
+                  <div style={{ textAlign: 'center', padding: 24 }}>
+                    <Spin />
+                  </div>
+                )}
+                {toolTracking.error && !toolTracking.loading && (
+                  <Typography.Text type="danger">{toolTracking.error}</Typography.Text>
+                )}
+                {toolTracking.data && !toolTracking.loading && (
+                  <DocumentTrackingTimelineBody data={toolTracking.data} />
+                )}
+                {!toolTracking.loading && !toolTracking.data && !toolTracking.error && (
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+                )}
               </DetailDrawerSection>
             </>
           ) : null

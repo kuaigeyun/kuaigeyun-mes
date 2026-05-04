@@ -7,7 +7,7 @@
  * @date 2025-12-29
  */
 
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import type { DescriptionsProps } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -20,17 +20,33 @@ import {
   ProFormDependency,
   ProDescriptionsItemProps,
 } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Card, Row, Col, Modal, Descriptions, Typography, Dropdown, Spin, Empty } from 'antd';
+import {
+  App,
+  Button,
+  Tag,
+  Space,
+  Card,
+  Row,
+  Col,
+  Modal,
+  Descriptions,
+  Typography,
+  Dropdown,
+  Spin,
+  Empty,
+  theme as AntdTheme,
+} from 'antd';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
-import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, ScanOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, ScanOutlined, ReloadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import {
-  DocumentTrackingRelationsBody,
+  DocumentTrackingRelationsTabsBody,
   DocumentTrackingTimelineBody,
+  TraceLinkedDocumentBrief,
   useDocumentTracking,
 } from '../../../../../components/document-tracking-panel';
 import { getIncomingInspectionLifecycle } from '../../../utils/incomingInspectionLifecycle';
@@ -41,6 +57,17 @@ import { downloadFile } from '../../../services/common';
 import { countWithPagedRequests } from '../../../../../utils/pagedCount';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import dayjs from 'dayjs';
+import { useTranslation } from 'react-i18next';
+import { ROUTES } from '../../../constants/routes';
+
+/** 详情 Drawer 外左侧全链路浮层（Uni-detail） */
+const PI_DETAIL_CHAIN_FLOAT_MARGIN = 16;
+const PI_DETAIL_LEFT_CHAIN_GAP = 16;
+const PI_DETAIL_CHAIN_DRAWER_GAP = 16;
+const PI_DETAIL_CHAIN_VERTICAL_TRIM = PI_DETAIL_CHAIN_FLOAT_MARGIN * 2 + PI_DETAIL_LEFT_CHAIN_GAP;
+const piDetailChainHalfHeightCss = `calc((100vh - ${PI_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2)`;
+const piDetailChainPanelWidthCss = `calc(50vw - ${PI_DETAIL_CHAIN_FLOAT_MARGIN * 2 + PI_DETAIL_CHAIN_DRAWER_GAP}px)`;
+const piDetailBriefPanelTopCss = `calc(${PI_DETAIL_CHAIN_FLOAT_MARGIN}px + (100vh - ${PI_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2 + ${PI_DETAIL_LEFT_CHAIN_GAP}px)`;
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
@@ -163,8 +190,12 @@ const DISPOSAL_METHOD_FALLBACK = [
 
 const ProcessInspectionPage: React.FC = () => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { message: messageApi } = App.useApp();
+  const { token } = AntdTheme.useToken();
+  const processInspectionDetailDrawerZIndex = token.zIndexPopupBase;
+  const processInspectionChainOverlayZIndex = token.zIndexPopupBase + 1;
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
@@ -196,9 +227,29 @@ const ProcessInspectionPage: React.FC = () => {
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [inspectionDetail, setInspectionDetail] = useState<ProcessInspection | null>(null);
 
+  const [piTrackingRefreshKey, setPiTrackingRefreshKey] = useState(0);
+  const [fullChainRefreshKey, setFullChainRefreshKey] = useState(0);
+  const [fullChainTraceLoading, setFullChainTraceLoading] = useState(false);
+  const [fullChainBriefDoc, setFullChainBriefDoc] = useState<{ document_type: string; document_id: number } | null>(
+    null,
+  );
+
+  const onFullChainGraphNodeClick = useCallback(
+    (type: string, id: number) => {
+      if (!id) return;
+      if (type === 'process_inspection' && inspectionDetail?.id != null && id === inspectionDetail.id) {
+        setFullChainBriefDoc(null);
+        return;
+      }
+      setFullChainBriefDoc({ document_type: type, document_id: id });
+    },
+    [inspectionDetail],
+  );
+
   const processTracking = useDocumentTracking(
     detailDrawerVisible && inspectionDetail?.id ? 'process_inspection' : undefined,
-    inspectionDetail?.id
+    inspectionDetail?.id,
+    piTrackingRefreshKey,
   );
 
   // 从工单创建Modal状态
@@ -229,9 +280,12 @@ const ProcessInspectionPage: React.FC = () => {
   // 处理详情查看
   const handleDetail = async (record: ProcessInspection) => {
     try {
+      setFullChainBriefDoc(null);
       const detail = await qualityApi.processInspection.get(record.id!.toString());
       setInspectionDetail(detail);
       setDetailDrawerVisible(true);
+      setPiTrackingRefreshKey((k) => k + 1);
+      setFullChainRefreshKey((k) => k + 1);
     } catch (error) {
       messageApi.error('获取过程检验详情失败');
     }
@@ -509,7 +563,14 @@ const ProcessInspectionPage: React.FC = () => {
         onSuccess={() => {
           actionRef.current?.reload();
           if (inspectionDetail?.id === record.id) {
-            qualityApi.processInspection.get(record.id!.toString()).then(setInspectionDetail).catch(() => {});
+            qualityApi.processInspection
+              .get(record.id!.toString())
+              .then((d) => {
+                setInspectionDetail(d);
+                setPiTrackingRefreshKey((k) => k + 1);
+                setFullChainRefreshKey((k) => k + 1);
+              })
+              .catch(() => {});
           }
         }}
       />,
@@ -927,13 +988,292 @@ const ProcessInspectionPage: React.FC = () => {
         </ProFormDependency>
       </FormModalTemplate>
 
+      {detailDrawerVisible && inspectionDetail?.id != null ? (
+        <>
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.relationsFullChainTitle')}
+            style={{
+              position: 'fixed',
+              left: PI_DETAIL_CHAIN_FLOAT_MARGIN,
+              top: PI_DETAIL_CHAIN_FLOAT_MARGIN,
+              width: piDetailChainPanelWidthCss,
+              height: piDetailChainHalfHeightCss,
+              zIndex: processInspectionChainOverlayZIndex,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div style={{ flexShrink: 0, marginBottom: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
+                    {t('components.documentTrackingPanel.relationsFullChainTitle')}
+                  </div>
+                </div>
+                <Button
+                  type="default"
+                  size="small"
+                  icon={<ReloadOutlined />}
+                  loading={fullChainTraceLoading}
+                  style={{ flexShrink: 0 }}
+                  onClick={() => setFullChainRefreshKey((k) => k + 1)}
+                >
+                  {t('components.documentRelationGraph.refresh')}
+                </Button>
+              </div>
+            </div>
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <DocumentTrackingRelationsTabsBody
+                documentType="process_inspection"
+                documentId={inspectionDetail.id}
+                refreshKey={fullChainRefreshKey}
+                onDocumentClick={onFullChainGraphNodeClick}
+                compact
+                hideInlineRefresh
+                onTraceLoadingChange={setFullChainTraceLoading}
+              />
+            </div>
+          </div>
+
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.traceBriefTitle')}
+            style={{
+              position: 'fixed',
+              left: PI_DETAIL_CHAIN_FLOAT_MARGIN,
+              top: piDetailBriefPanelTopCss,
+              width: piDetailChainPanelWidthCss,
+              height: piDetailChainHalfHeightCss,
+              zIndex: processInspectionChainOverlayZIndex,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 600,
+                fontSize: 13,
+                marginBottom: 8,
+                flexShrink: 0,
+                color: 'var(--ant-color-text)',
+              }}
+            >
+              {t('components.documentTrackingPanel.traceBriefTitle')}
+            </div>
+            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+              <TraceLinkedDocumentBrief
+                documentType={fullChainBriefDoc?.document_type}
+                documentId={fullChainBriefDoc?.document_id}
+                compactChrome
+              />
+            </div>
+            {fullChainBriefDoc ? (
+              <div
+                style={{
+                  flexShrink: 0,
+                  marginTop: 8,
+                  paddingTop: 10,
+                  borderTop: '1px solid var(--ant-color-border)',
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                }}
+              >
+                <Space wrap>
+                  <Button onClick={() => setFullChainBriefDoc(null)}>
+                    {t('components.documentTrackingPanel.traceBriefDismiss')}
+                  </Button>
+                  {fullChainBriefDoc.document_type === 'purchase_order' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDetailDrawerVisible(false);
+                        navigate(ROUTES.PURCHASE_ORDERS);
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenPurchaseOrder', {
+                        defaultValue: '前往采购订单',
+                      })}
+                    </Button>
+                  ) : null}
+                  {fullChainBriefDoc.document_type === 'sales_order' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDetailDrawerVisible(false);
+                        navigate(ROUTES.SALES_ORDERS);
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenSalesOrder')}
+                    </Button>
+                  ) : null}
+                  {fullChainBriefDoc.document_type === 'demand' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDetailDrawerVisible(false);
+                        navigate(ROUTES.DEMAND_MANAGEMENT);
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenDemand', { defaultValue: '前往需求管理' })}
+                    </Button>
+                  ) : null}
+                  {fullChainBriefDoc.document_type === 'purchase_requisition' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDetailDrawerVisible(false);
+                        navigate(ROUTES.PURCHASE_REQUISITIONS);
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenPurchaseRequisition', {
+                        defaultValue: '前往采购申请',
+                      })}
+                    </Button>
+                  ) : null}
+                  {fullChainBriefDoc.document_type === 'outsource_order' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDetailDrawerVisible(false);
+                        navigate(ROUTES.OUTSOURCE_ORDERS);
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenOutsourceOrder', {
+                        defaultValue: '前往工序委外',
+                      })}
+                    </Button>
+                  ) : null}
+                  {fullChainBriefDoc.document_type === 'outsource_work_order' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDetailDrawerVisible(false);
+                        navigate(ROUTES.OUTSOURCE_WORK_ORDERS);
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenOutsourceWorkOrder', {
+                        defaultValue: '前往工单委外',
+                      })}
+                    </Button>
+                  ) : null}
+                  {fullChainBriefDoc.document_type === 'rework_order' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDetailDrawerVisible(false);
+                        navigate(ROUTES.REWORK_ORDERS);
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenReworkOrder', { defaultValue: '前往返工单' })}
+                    </Button>
+                  ) : null}
+                  {fullChainBriefDoc.document_type === 'work_order' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDetailDrawerVisible(false);
+                        navigate(ROUTES.WORK_ORDERS);
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenWorkOrder', { defaultValue: '前往工单' })}
+                    </Button>
+                  ) : null}
+                  {fullChainBriefDoc.document_type === 'reporting_record' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDetailDrawerVisible(false);
+                        navigate(ROUTES.REPORTING);
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenReporting', { defaultValue: '前往报工' })}
+                    </Button>
+                  ) : null}
+                  {fullChainBriefDoc.document_type === 'packing_binding' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDetailDrawerVisible(false);
+                        navigate(ROUTES.PACKING_BINDING);
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenPackingBinding', {
+                        defaultValue: '前往装箱绑定',
+                      })}
+                    </Button>
+                  ) : null}
+                  {fullChainBriefDoc.document_type === 'incoming_inspection' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDetailDrawerVisible(false);
+                        navigate(ROUTES.INCOMING_INSPECTION);
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenIncomingInspection', {
+                        defaultValue: '前往来料检验',
+                      })}
+                    </Button>
+                  ) : null}
+                  {fullChainBriefDoc.document_type === 'process_inspection' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDetailDrawerVisible(false);
+                        navigate(ROUTES.PROCESS_INSPECTION);
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenProcessInspection', {
+                        defaultValue: '前往过程检验',
+                      })}
+                    </Button>
+                  ) : null}
+                  {fullChainBriefDoc.document_type === 'finished_goods_inspection' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDetailDrawerVisible(false);
+                        navigate(ROUTES.FINISHED_GOODS_INSPECTION);
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenFinishedGoodsInspection', {
+                        defaultValue: '前往成品检验',
+                      })}
+                    </Button>
+                  ) : null}
+                </Space>
+              </div>
+            ) : null}
+          </div>
+        </>
+      ) : null}
+
       {/* 过程检验详情 Drawer */}
       <DetailDrawerTemplate
         title={`过程检验详情 - ${inspectionDetail?.inspection_code || ''}`}
         open={detailDrawerVisible}
+        zIndex={processInspectionDetailDrawerZIndex}
         onClose={() => {
           setDetailDrawerVisible(false);
           setInspectionDetail(null);
+          setFullChainBriefDoc(null);
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
@@ -962,7 +1302,14 @@ const ProcessInspectionPage: React.FC = () => {
               onSuccess={() => {
                 actionRef.current?.reload();
                 if (inspectionDetail?.id) {
-                  qualityApi.processInspection.get(inspectionDetail.id.toString()).then(setInspectionDetail).catch(() => {});
+                  qualityApi.processInspection
+                    .get(inspectionDetail.id.toString())
+                    .then((d) => {
+                      setInspectionDetail(d);
+                      setPiTrackingRefreshKey((k) => k + 1);
+                      setFullChainRefreshKey((k) => k + 1);
+                    })
+                    .catch(() => {});
                 }
               }}
             />
@@ -991,33 +1338,10 @@ const ProcessInspectionPage: React.FC = () => {
                         showLabels
                         status={lc.status}
                         nextStepSuggestions={lc.nextStepSuggestions}
+                        hideNextStepSuggestions
                       />
                     );
                   })()}
-                  <div
-                    style={{
-                      paddingTop: 12,
-                      borderTop: '1px solid var(--ant-color-border-secondary)',
-                    }}
-                  >
-                    <div style={{ marginBottom: 8, fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
-                      上下游单据
-                    </div>
-                    {processTracking.loading && (
-                      <div style={{ padding: '8px 0' }}>
-                        <Spin size="small" />
-                      </div>
-                    )}
-                    {processTracking.error && (
-                      <Typography.Text type="danger">{processTracking.error}</Typography.Text>
-                    )}
-                    {processTracking.data && (
-                      <DocumentTrackingRelationsBody
-                        data={processTracking.data}
-                        onDocumentClick={(type, id) => messageApi.info(`跳转到${type}#${id}`)}
-                      />
-                    )}
-                  </div>
                 </div>
               </DetailDrawerSection>
 

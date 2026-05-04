@@ -8,7 +8,7 @@ import { ProFormInstance } from '@ant-design/pro-components';
 import { App } from 'antd';
 import { FormModalTemplate } from '../../../components/layout-templates';
 import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
-import { workshopApi, plantApi } from '../services/factory';
+import { workshopApi, plantApi, factoryListItems } from '../services/factory';
 import { testGenerateCode, generateCode, getCodeRulePageConfig } from '../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../utils/codeRulePage';
 import type { Workshop, WorkshopCreate, WorkshopUpdate } from '../types/factory';
@@ -56,8 +56,8 @@ export const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({
     if (!open) return;
     const loadPlants = async () => {
       try {
-        const list = await plantApi.list({ isActive: true });
-        setPlantOptions(list.map((p) => ({ label: `${p.code} - ${p.name}`, value: p.id })));
+        const list = await plantApi.list({ limit: 1000, is_active: true });
+        setPlantOptions(factoryListItems(list).map((p) => ({ label: `${p.code} - ${p.name}`, value: p.id })));
       } catch (e) {
         console.error('加载厂区列表失败:', e);
       }

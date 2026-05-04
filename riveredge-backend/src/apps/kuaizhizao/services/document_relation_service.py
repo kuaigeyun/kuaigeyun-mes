@@ -42,6 +42,14 @@ from apps.kuaizhizao.models.outsource_order import OutsourceOrder
 from apps.kuaizhizao.models.outsource_work_order import OutsourceWorkOrder
 from apps.kuaizhizao.models.packing_binding import PackingBinding
 from apps.kuaizhizao.models.receipt_notice import ReceiptNotice
+from apps.kuaizhizao.models.equipment import Equipment
+from apps.kuaizhizao.models.equipment_fault import EquipmentFault
+from apps.kuaizhizao.models.maintenance_plan import MaintenancePlan
+from apps.kuaizhizao.models.maintenance_reminder import MaintenanceReminder
+from apps.kuaizhizao.models.mold import Mold
+from apps.kuaizhizao.models.tool import Tool
+from apps.master_data.models.performance import Holiday, Skill
+from apps.master_data.models.employee_performance import PerformanceSummary
 from apps.kuaizhizao.models.document_relation import DocumentRelation
 
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -85,6 +93,15 @@ class DocumentRelationService:
         "receipt_notice": {"model": ReceiptNotice, "code_field": "notice_code", "name_field": None},
         "sales_return": {"model": SalesReturn, "code_field": "return_code", "name_field": None},
         "shipment_notice": {"model": ShipmentNotice, "code_field": "notice_code", "name_field": None},
+        "equipment": {"model": Equipment, "code_field": "code", "name_field": "name"},
+        "equipment_fault": {"model": EquipmentFault, "code_field": "fault_no", "name_field": None},
+        "maintenance_plan": {"model": MaintenancePlan, "code_field": "plan_no", "name_field": "plan_name"},
+        "maintenance_reminder": {"model": MaintenanceReminder, "code_field": "uuid", "name_field": None},
+        "mold": {"model": Mold, "code_field": "code", "name_field": "name"},
+        "tool": {"model": Tool, "code_field": "code", "name_field": "name"},
+        "performance_skill": {"model": Skill, "code_field": "code", "name_field": "name"},
+        "performance_holiday": {"model": Holiday, "code_field": "name", "name_field": None},
+        "performance_summary": {"model": PerformanceSummary, "code_field": "period", "name_field": "employee_name"},
     }
 
     async def get_document_relations(
@@ -167,7 +184,12 @@ class DocumentRelationService:
         return []
 
     async def _get_demand_computation_upstream(self, tenant_id: int, computation_id: int) -> List[Dict[str, Any]]:
-        """获取需求计算的上游单据（MTO 销售订单场景直连订单；预测场景仍经 Demand→Forecast）"""
+        """获取需求计算的上游单据。
+
+        - MTO 销售订单：上游直连销售订单，不插入「需求」节点。
+        - MTS 销售预测直推需求计算：上游直连销售预测，不插入「需求」节点（与销售订单一致）。
+        - 其它来源：保留「需求」节点并解析其上游。
+        """
         computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
         if not computation:
             return []
@@ -192,15 +214,7 @@ class DocumentRelationService:
                 })
                 return upstream
 
-        upstream.append({
-            "document_type": "demand",
-            "document_id": demand.id,
-            "document_code": demand.demand_code,
-            "document_name": getattr(demand, "demand_name", None) or demand.demand_code,
-            "status": getattr(demand, "status", None),
-            "created_at": demand.created_at.isoformat() if demand.created_at else None
-        })
-
+        # 销售预测直推需求计算：不再插入「需求」节点，上游即为销售预测
         if demand.source_type == "sales_forecast" and demand.source_id:
             forecast = await SalesForecast.get_or_none(tenant_id=tenant_id, id=demand.source_id)
             if forecast:
@@ -212,6 +226,16 @@ class DocumentRelationService:
                     "status": forecast.status,
                     "created_at": forecast.created_at.isoformat() if forecast.created_at else None
                 })
+            return upstream
+
+        upstream.append({
+            "document_type": "demand",
+            "document_id": demand.id,
+            "document_code": demand.demand_code,
+            "document_name": getattr(demand, "demand_name", None) or demand.demand_code,
+            "status": getattr(demand, "status", None),
+            "created_at": demand.created_at.isoformat() if demand.created_at else None
+        })
 
         return upstream
 
@@ -2175,6 +2199,121 @@ class DocumentRelationService:
 
         return downstream
 
+    async def _get_equipment_downstream(
+        self,
+        tenant_id: int,
+        equipment_id: int,
+    ) -> List[Dict[str, Any]]:
+        """设备台账下游：故障记录、保养计划"""
+        from apps.kuaizhizao.models.equipment_fault import EquipmentFault
+        from apps.kuaizhizao.models.maintenance_plan import MaintenancePlan
+
+        downstream: List[Dict[str, Any]] = []
+        faults = await EquipmentFault.filter(
+            tenant_id=tenant_id, equipment_id=equipment_id, deleted_at__isnull=True
+        ).all()
+        for f in faults:
+            downstream.append({
+                "document_type": "equipment_fault",
+                "document_id": f.id,
+                "document_code": f.fault_no,
+                "document_name": None,
+                "status": f.status,
+                "created_at": f.created_at.isoformat() if f.created_at else None,
+            })
+        plans = await MaintenancePlan.filter(
+            tenant_id=tenant_id, equipment_id=equipment_id, deleted_at__isnull=True
+        ).all()
+        for p in plans:
+            downstream.append({
+                "document_type": "maintenance_plan",
+                "document_id": p.id,
+                "document_code": p.plan_no,
+                "document_name": p.plan_name,
+                "status": p.status,
+                "created_at": p.created_at.isoformat() if p.created_at else None,
+            })
+        return downstream
+
+    async def _get_equipment_fault_upstream(
+        self,
+        tenant_id: int,
+        fault_id: int,
+    ) -> List[Dict[str, Any]]:
+        from apps.kuaizhizao.models.equipment_fault import EquipmentFault
+        from apps.kuaizhizao.models.equipment import Equipment
+
+        fault = await EquipmentFault.get_or_none(tenant_id=tenant_id, id=fault_id)
+        if not fault:
+            return []
+        eq = await Equipment.get_or_none(tenant_id=tenant_id, id=fault.equipment_id)
+        if not eq:
+            return []
+        return [{
+            "document_type": "equipment",
+            "document_id": eq.id,
+            "document_code": eq.code,
+            "document_name": eq.name,
+            "status": eq.status,
+            "created_at": eq.created_at.isoformat() if eq.created_at else None,
+        }]
+
+    async def _get_maintenance_plan_upstream(
+        self,
+        tenant_id: int,
+        plan_id: int,
+    ) -> List[Dict[str, Any]]:
+        from apps.kuaizhizao.models.maintenance_plan import MaintenancePlan
+        from apps.kuaizhizao.models.equipment import Equipment
+
+        plan = await MaintenancePlan.get_or_none(tenant_id=tenant_id, id=plan_id)
+        if not plan:
+            return []
+        eq = await Equipment.get_or_none(tenant_id=tenant_id, id=plan.equipment_id)
+        if not eq:
+            return []
+        return [{
+            "document_type": "equipment",
+            "document_id": eq.id,
+            "document_code": eq.code,
+            "document_name": eq.name,
+            "status": eq.status,
+            "created_at": eq.created_at.isoformat() if eq.created_at else None,
+        }]
+
+    async def _get_maintenance_reminder_upstream(
+        self,
+        tenant_id: int,
+        reminder_id: int,
+    ) -> List[Dict[str, Any]]:
+        """维护提醒的上游：关联设备、保养计划（若有）。"""
+        reminder = await MaintenanceReminder.get_or_none(tenant_id=tenant_id, id=reminder_id)
+        if not reminder:
+            return []
+        upstream: List[Dict[str, Any]] = []
+        eq = await Equipment.get_or_none(tenant_id=tenant_id, id=reminder.equipment_id)
+        if eq:
+            upstream.append({
+                "document_type": "equipment",
+                "document_id": eq.id,
+                "document_code": eq.code,
+                "document_name": eq.name,
+                "status": eq.status,
+                "created_at": eq.created_at.isoformat() if eq.created_at else None,
+            })
+        if reminder.maintenance_plan_id:
+            plan = await MaintenancePlan.get_or_none(tenant_id=tenant_id, id=reminder.maintenance_plan_id)
+            if plan:
+                upstream.append({
+                    "document_type": "maintenance_plan",
+                    "document_id": plan.id,
+                    "document_code": plan.plan_no,
+                    "document_name": plan.plan_name,
+                    "status": plan.status,
+                    "created_at": plan.created_at.isoformat() if plan.created_at else None,
+                })
+        return upstream
+
     # ============ 追溯方法 ============
 
     async def _trace_upstream(
@@ -2373,6 +2512,37 @@ def _build_document_relation_strategies() -> Dict[str, Any]:
         downstream_documents = await svc._get_shipment_notice_downstream(tenant_id, document_id)
         return upstream_documents, downstream_documents
 
+    async def strat_equipment(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        downstream_documents = await svc._get_equipment_downstream(tenant_id, document_id)
+        return [], downstream_documents
+
+    async def strat_equipment_fault(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        upstream_documents = await svc._get_equipment_fault_upstream(tenant_id, document_id)
+        return upstream_documents, []
+
+    async def strat_maintenance_plan(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        upstream_documents = await svc._get_maintenance_plan_upstream(tenant_id, document_id)
+        return upstream_documents, []
+
+    async def strat_maintenance_reminder(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        upstream_documents = await svc._get_maintenance_reminder_upstream(tenant_id, document_id)
+        return upstream_documents, []
+
+    async def strat_mold(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        return [], []
+
+    async def strat_tool(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        return [], []
+
+    async def strat_performance_skill(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        return [], []
+
+    async def strat_performance_holiday(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        return [], []
+
+    async def strat_performance_summary(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        return [], []
+
     return {
         "demand": strat_demand,
         "sales_forecast": strat_sales_forecast,
@@ -2403,6 +2573,15 @@ def _build_document_relation_strategies() -> Dict[str, Any]:
         "sales_delivery": strat_sales_delivery,
         "delivery_notice": strat_delivery_notice,
         "shipment_notice": strat_shipment_notice,
+        "equipment": strat_equipment,
+        "equipment_fault": strat_equipment_fault,
+        "maintenance_plan": strat_maintenance_plan,
+        "maintenance_reminder": strat_maintenance_reminder,
+        "mold": strat_mold,
+        "tool": strat_tool,
+        "performance_skill": strat_performance_skill,
+        "performance_holiday": strat_performance_holiday,
+        "performance_summary": strat_performance_summary,
     }
 
 

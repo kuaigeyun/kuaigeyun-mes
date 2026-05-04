@@ -7,10 +7,12 @@
  * Date: 2026-01-16
  */
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import type { DescriptionsProps } from 'antd';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Space, message, Badge, Tag, Modal, notification, Descriptions, Typography, Empty } from 'antd';
+import { App, Button, Space, message, Badge, Tag, Modal, notification, Descriptions, Typography, Empty, Spin, theme as AntdTheme } from 'antd';
 import { CheckOutlined, EyeOutlined, CheckCircleOutlined, ReloadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
@@ -19,6 +21,22 @@ import { maintenanceReminderApi } from '../../../services/equipment';
 import { ProFormTextArea } from '@ant-design/pro-components';
 import { getMaintenanceReminderLifecycle } from '../../../utils/equipmentLifecycle';
 import dayjs from 'dayjs';
+import {
+  DocumentTrackingRelationsTabsBody,
+  DocumentTrackingTimelineBody,
+  TraceLinkedDocumentBrief,
+  useDocumentTracking,
+} from '../../../../../components/document-tracking-panel';
+import { EquipmentTraceBriefFooter } from '../EquipmentTraceBriefFooter';
+
+/** 详情 Drawer 外左侧全链路浮层（Uni-detail） */
+const MR_DETAIL_CHAIN_FLOAT_MARGIN = 16;
+const MR_DETAIL_LEFT_CHAIN_GAP = 16;
+const MR_DETAIL_CHAIN_DRAWER_GAP = 16;
+const MR_DETAIL_CHAIN_VERTICAL_TRIM = MR_DETAIL_CHAIN_FLOAT_MARGIN * 2 + MR_DETAIL_LEFT_CHAIN_GAP;
+const mrDetailChainHalfHeightCss = `calc((100vh - ${MR_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2)`;
+const mrDetailChainPanelWidthCss = `calc(50vw - ${MR_DETAIL_CHAIN_FLOAT_MARGIN * 2 + MR_DETAIL_CHAIN_DRAWER_GAP}px)`;
+const mrDetailBriefPanelTopCss = `calc(${MR_DETAIL_CHAIN_FLOAT_MARGIN}px + (100vh - ${MR_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2 + ${MR_DETAIL_LEFT_CHAIN_GAP}px)`;
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
@@ -73,6 +91,11 @@ interface MaintenanceReminder {
 }
 
 const MaintenanceRemindersPage: React.FC = () => {
+  const navigate = useNavigate();
+  const { t } = useTranslation();
+  const { token } = AntdTheme.useToken();
+  const reminderDetailDrawerZIndex = token.zIndexPopupBase;
+  const reminderChainOverlayZIndex = token.zIndexPopupBase + 1;
   const { message: messageApi, notification: notificationApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -82,6 +105,31 @@ const MaintenanceRemindersPage: React.FC = () => {
   // 详情相关状态
   const [detailVisible, setDetailVisible] = useState(false);
   const [currentReminder, setCurrentReminder] = useState<MaintenanceReminder | null>(null);
+
+  const [reminderTrackingRefreshKey, setReminderTrackingRefreshKey] = useState(0);
+  const [fullChainRefreshKey, setFullChainRefreshKey] = useState(0);
+  const [fullChainTraceLoading, setFullChainTraceLoading] = useState(false);
+  const [fullChainBriefDoc, setFullChainBriefDoc] = useState<{ document_type: string; document_id: number } | null>(
+    null,
+  );
+
+  const onFullChainGraphNodeClick = useCallback(
+    (type: string, id: number) => {
+      if (!id) return;
+      if (type === 'maintenance_reminder' && currentReminder?.id != null && id === currentReminder.id) {
+        setFullChainBriefDoc(null);
+        return;
+      }
+      setFullChainBriefDoc({ document_type: type, document_id: id });
+    },
+    [currentReminder],
+  );
+
+  const reminderTracking = useDocumentTracking(
+    detailVisible && currentReminder?.id ? 'maintenance_reminder' : undefined,
+    currentReminder?.id,
+    reminderTrackingRefreshKey,
+  );
 
   // 处理Modal
   const [handleModalVisible, setHandleModalVisible] = useState(false);
@@ -151,6 +199,11 @@ const MaintenanceRemindersPage: React.FC = () => {
       messageApi.success('已标记为已读');
       actionRef.current?.reload();
       fetchUnreadCount();
+      if (detailVisible && currentReminder?.uuid === record.uuid) {
+        setCurrentReminder((prev) => (prev ? { ...prev, is_read: true } : null));
+        setReminderTrackingRefreshKey((k) => k + 1);
+        setFullChainRefreshKey((k) => k + 1);
+      }
     } catch (error: any) {
       messageApi.error(`标记已读失败: ${error.message || '未知错误'}`);
     }
@@ -177,15 +230,21 @@ const MaintenanceRemindersPage: React.FC = () => {
         return;
       }
 
-      await maintenanceReminderApi.markAsHandled({
+      const drawerUuid = currentReminder.uuid;
+      const updated = (await maintenanceReminderApi.markAsHandled({
         reminder_uuid: currentReminder.uuid,
         remark: values.remark,
-      });
+      })) as MaintenanceReminder;
 
       messageApi.success('已标记为已处理');
       setHandleModalVisible(false);
       actionRef.current?.reload();
       fetchUnreadCount();
+      if (detailVisible && updated?.uuid === drawerUuid) {
+        setCurrentReminder(updated);
+        setReminderTrackingRefreshKey((k) => k + 1);
+        setFullChainRefreshKey((k) => k + 1);
+      }
     } catch (error: any) {
       messageApi.error(`标记已处理失败: ${error.message || '未知错误'}`);
     }
@@ -220,8 +279,11 @@ const MaintenanceRemindersPage: React.FC = () => {
    * 处理查看详情
    */
   const handleViewDetail = async (record: MaintenanceReminder) => {
+    setFullChainBriefDoc(null);
     setCurrentReminder(record);
     setDetailVisible(true);
+    setReminderTrackingRefreshKey((k) => k + 1);
+    setFullChainRefreshKey((k) => k + 1);
   };
 
   /**
@@ -480,11 +542,127 @@ const MaintenanceRemindersPage: React.FC = () => {
         scroll={{ x: 1600 }}
       />
 
+      {detailVisible && currentReminder?.id != null ? (
+        <>
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.relationsFullChainTitle')}
+            style={{
+              position: 'fixed',
+              left: MR_DETAIL_CHAIN_FLOAT_MARGIN,
+              top: MR_DETAIL_CHAIN_FLOAT_MARGIN,
+              width: mrDetailChainPanelWidthCss,
+              height: mrDetailChainHalfHeightCss,
+              zIndex: reminderChainOverlayZIndex,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div style={{ flexShrink: 0, marginBottom: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
+                    {t('components.documentTrackingPanel.relationsFullChainTitle')}
+                  </div>
+                </div>
+                <Button
+                  type="default"
+                  size="small"
+                  icon={<ReloadOutlined />}
+                  loading={fullChainTraceLoading}
+                  style={{ flexShrink: 0 }}
+                  onClick={() => setFullChainRefreshKey((k) => k + 1)}
+                >
+                  {t('components.documentRelationGraph.refresh')}
+                </Button>
+              </div>
+            </div>
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <DocumentTrackingRelationsTabsBody
+                documentType="maintenance_reminder"
+                documentId={currentReminder.id}
+                refreshKey={fullChainRefreshKey}
+                onDocumentClick={onFullChainGraphNodeClick}
+                compact
+                hideInlineRefresh
+                onTraceLoadingChange={setFullChainTraceLoading}
+              />
+            </div>
+          </div>
+
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.traceBriefTitle')}
+            style={{
+              position: 'fixed',
+              left: MR_DETAIL_CHAIN_FLOAT_MARGIN,
+              top: mrDetailBriefPanelTopCss,
+              width: mrDetailChainPanelWidthCss,
+              height: mrDetailChainHalfHeightCss,
+              zIndex: reminderChainOverlayZIndex,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 600,
+                fontSize: 13,
+                marginBottom: 8,
+                flexShrink: 0,
+                color: 'var(--ant-color-text)',
+              }}
+            >
+              {t('components.documentTrackingPanel.traceBriefTitle')}
+            </div>
+            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+              <TraceLinkedDocumentBrief
+                documentType={fullChainBriefDoc?.document_type}
+                documentId={fullChainBriefDoc?.document_id}
+                compactChrome
+              />
+            </div>
+            <EquipmentTraceBriefFooter
+              brief={fullChainBriefDoc}
+              t={t}
+              navigate={navigate}
+              closeDrawer={() => {
+                setDetailVisible(false);
+                setCurrentReminder(null);
+                setFullChainBriefDoc(null);
+              }}
+              onDismissBrief={() => setFullChainBriefDoc(null)}
+            />
+          </div>
+        </>
+      ) : null}
+
       {/* 详情抽屉 */}
       <DetailDrawerTemplate
         title="维护提醒详情"
         open={detailVisible}
-        onClose={() => setDetailVisible(false)}
+        zIndex={reminderDetailDrawerZIndex}
+        onClose={() => {
+          setDetailVisible(false);
+          setCurrentReminder(null);
+          setFullChainBriefDoc(null);
+        }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
         column={2}
@@ -510,6 +688,7 @@ const MaintenanceRemindersPage: React.FC = () => {
                         showLabels
                         status={lc.status}
                         nextStepSuggestions={lc.nextStepSuggestions}
+                        hideNextStepSuggestions
                       />
                     );
                   })()}
@@ -527,7 +706,20 @@ const MaintenanceRemindersPage: React.FC = () => {
                 <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="维护提醒无明细行" />
               </DetailDrawerSection>
               <DetailDrawerSection title="操作记录">
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+                {reminderTracking.loading && (
+                  <div style={{ textAlign: 'center', padding: 24 }}>
+                    <Spin />
+                  </div>
+                )}
+                {reminderTracking.error && !reminderTracking.loading && (
+                  <Typography.Text type="danger">{reminderTracking.error}</Typography.Text>
+                )}
+                {reminderTracking.data && !reminderTracking.loading && (
+                  <DocumentTrackingTimelineBody data={reminderTracking.data} />
+                )}
+                {!reminderTracking.loading && !reminderTracking.data && !reminderTracking.error && (
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+                )}
               </DetailDrawerSection>
             </>
           ) : null

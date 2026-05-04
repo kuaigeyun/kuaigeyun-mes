@@ -7,7 +7,7 @@
  * @date 2025-12-30
  */
 
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -15,13 +15,13 @@ import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText,
 import type { DescriptionsProps } from 'antd';
 import { App, Button, Tag, Space, Modal, Row, Col, Table, Empty, Timeline, Divider, Form as AntForm, Input, InputNumber, DatePicker, Switch, List, Typography, theme, Dropdown, Descriptions, Spin } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, ClockCircleOutlined, CheckCircleTwoTone, CloseCircleTwoTone, SendOutlined, DownOutlined, FileTextOutlined, InboxOutlined, DollarOutlined, RollbackOutlined, ShoppingOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, ClockCircleOutlined, CheckCircleTwoTone, CloseCircleTwoTone, SendOutlined, DownOutlined, FileTextOutlined, InboxOutlined, DollarOutlined, RollbackOutlined, ShoppingOutlined, ReloadOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { getFileDownloadUrl, uploadMultipleFiles } from '../../../../../services/file';
 import { UniTable } from '../../../../../components/uni-table';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerActions, MODAL_CONFIG, DRAWER_CONFIG, type StatCard } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerActions, MODAL_CONFIG, DRAWER_CONFIG, type StatCard } from '../../../../../components/layout-templates';
 import { SimpleSparkline } from '../../../../../components';
 import CodeField from '../../../../../components/code-field';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
@@ -39,15 +39,16 @@ import {
   getPurchaseOrderStatistics, expeditePurchaseOrder,
   PurchaseOrder, PurchaseOrderItem
 } from '../../../services/purchase';
-import { FulfillmentTrackingTimeline, PriceHistoryInsight, SupplierPerformanceTag, OrderChangeHistoryTable } from './ProcurementEmpowermentComponents';
+import { FulfillmentTrackingTimeline, PriceHistoryInsight } from './ProcurementEmpowermentComponents';
 import LandingCostAllocationModal from './LandingCostAllocationModal';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
 import { getApprovalStatus, ApprovalStatusResponse } from '../../../../../services/approvalInstance';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import {
-  DocumentTrackingRelationsBody,
+  DocumentTrackingRelationsTabsBody,
   DocumentTrackingTimelineBody,
+  TraceLinkedDocumentBrief,
   useDocumentTracking,
 } from '../../../../../components/document-tracking-panel';
 import { getUserList, type User } from '../../../../../services/user';
@@ -64,6 +65,16 @@ import { getPurchaseOrderLifecycle } from '../../../utils/purchaseOrderLifecycle
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { SupplierFormModal } from '../../../../master-data/components/SupplierFormModal';
 import { batchImport } from '../../../../../utils/batchOperations';
+import { ROUTES } from '../../../constants/routes';
+
+/** 详情 Drawer 外左侧全链路浮层（Uni-detail） */
+const PO_DETAIL_CHAIN_FLOAT_MARGIN = 16;
+const PO_DETAIL_LEFT_CHAIN_GAP = 16;
+const PO_DETAIL_CHAIN_DRAWER_GAP = 16;
+const PO_DETAIL_CHAIN_VERTICAL_TRIM = PO_DETAIL_CHAIN_FLOAT_MARGIN * 2 + PO_DETAIL_LEFT_CHAIN_GAP;
+const poDetailChainHalfHeightCss = `calc((100vh - ${PO_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2)`;
+const poDetailChainPanelWidthCss = `calc(50vw - ${PO_DETAIL_CHAIN_FLOAT_MARGIN * 2 + PO_DETAIL_CHAIN_DRAWER_GAP}px)`;
+const poDetailBriefPanelTopCss = `calc(${PO_DETAIL_CHAIN_FLOAT_MARGIN}px + (100vh - ${PO_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2 + ${PO_DETAIL_LEFT_CHAIN_GAP}px)`;
 
 /** 与后端 DocumentStatus / ReviewStatus 及中文存量值对齐，供 UniWorkflowActions 识别 */
 const PO_WORKFLOW_DRAFT_STATUSES = ['草稿', 'draft', 'DRAFT', DocumentStatus.DRAFT];
@@ -99,6 +110,21 @@ const PO_STAT_SPARKLINE_OVERDUE = [5, 8, 3, 12, 7, 15, 10];
 
 /** 详情只读明细表最小宽度（外层横滚） */
 const PO_DETAIL_ITEMS_MIN_WIDTH = 1200;
+
+/** 与销售订单 Uni-detail 一致：生命周期（协作）区块标题旁展示「下一步」建议 */
+const PurchaseOrderCollaborationTitleSuffix: React.FC<{
+  lifecycle: ReturnType<typeof getPurchaseOrderLifecycle> | null;
+}> = ({ lifecycle }) => {
+  const { t } = useTranslation();
+  const next = lifecycle?.nextStepSuggestions;
+  if (!next?.length) return null;
+  return (
+    <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
+      {t('components.uniLifecycle.nextStep')}：
+      {next.join(t('components.uniLifecycle.nextStepSeparator'))}
+    </Typography.Text>
+  );
+};
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
@@ -318,6 +344,8 @@ const PurchaseOrderFeeTotalsSummary: React.FC<{
 const PurchaseOrdersPage: React.FC = () => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
+  const purchaseOrderDetailDrawerZIndex = token.zIndexPopupBase;
+  const purchaseOrderChainOverlayZIndex = token.zIndexPopupBase + 1;
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const queryClient = useQueryClient();
@@ -338,10 +366,40 @@ const PurchaseOrdersPage: React.FC = () => {
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [orderDetail, setOrderDetail] = useState<PurchaseOrderDetail | null>(null);
+  const [poTrackingRefreshKey, setPoTrackingRefreshKey] = useState(0);
+  const [fullChainRefreshKey, setFullChainRefreshKey] = useState(0);
+  const [fullChainTraceLoading, setFullChainTraceLoading] = useState(false);
+  const [fullChainBriefDoc, setFullChainBriefDoc] = useState<{ document_type: string; document_id: number } | null>(
+    null,
+  );
   const purchaseOrderTracking = useDocumentTracking(
     detailDrawerVisible && orderDetail?.id ? 'purchase_order' : undefined,
-    orderDetail?.id
+    orderDetail?.id,
+    poTrackingRefreshKey,
   );
+
+  const purchaseOrderLifecycle = useMemo(
+    () => (orderDetail ? getPurchaseOrderLifecycle(orderDetail) : null),
+    [orderDetail],
+  );
+
+  const onFullChainGraphNodeClick = useCallback(
+    (type: string, id: number) => {
+      if (!id) return;
+      if (type === 'purchase_order' && orderDetail?.id != null && id === orderDetail.id) {
+        setFullChainBriefDoc(null);
+        return;
+      }
+      setFullChainBriefDoc({ document_type: type, document_id: id });
+    },
+    [orderDetail?.id],
+  );
+
+  useEffect(() => {
+    if (detailDrawerVisible && orderDetail?.id != null) {
+      setFullChainBriefDoc(null);
+    }
+  }, [detailDrawerVisible, orderDetail?.id]);
 
   // 供应商列表、订单类型、币种
   const [supplierList, setSupplierList] = useState<any[]>([]);
@@ -574,7 +632,6 @@ const PurchaseOrdersPage: React.FC = () => {
             percent={lifecycle.percent}
             stageName={lifecycle.stageName}
             status={lifecycle.status}
-            subStages={lifecycle.subStages}
             showLabel
             size="small"
             showCircleTooltip={false}
@@ -682,6 +739,8 @@ const PurchaseOrdersPage: React.FC = () => {
       await loadApprovalData(record.id!);
 
       setDetailDrawerVisible(true);
+      setPoTrackingRefreshKey((k) => k + 1);
+      setFullChainRefreshKey((k) => k + 1);
     } catch (error) {
       messageApi.error('获取采购订单详情失败');
     }
@@ -1342,12 +1401,7 @@ const PurchaseOrdersPage: React.FC = () => {
     {
       title: '供应商',
       dataIndex: 'supplier_name',
-      render: (_: unknown, entity: PurchaseOrderDetail) => (
-        <Space>
-          {entity.supplier_name}
-          {entity.supplier_id != null ? <SupplierPerformanceTag supplierId={entity.supplier_id} /> : null}
-        </Space>
-      ),
+      render: (_: unknown, entity: PurchaseOrderDetail) => entity.supplier_name ?? '—',
     },
     {
       title: '订单类型',
@@ -2221,19 +2275,174 @@ const PurchaseOrdersPage: React.FC = () => {
         orderCode={landingCostOrder?.order_code || ''}
       />
 
+      {detailDrawerVisible && orderDetail?.id != null ? (
+        <>
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.relationsFullChainTitle')}
+            style={{
+              position: 'fixed',
+              left: PO_DETAIL_CHAIN_FLOAT_MARGIN,
+              top: PO_DETAIL_CHAIN_FLOAT_MARGIN,
+              width: poDetailChainPanelWidthCss,
+              height: poDetailChainHalfHeightCss,
+              zIndex: purchaseOrderChainOverlayZIndex,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div style={{ flexShrink: 0, marginBottom: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
+                    {t('components.documentTrackingPanel.relationsFullChainTitle')}
+                  </div>
+                </div>
+                <Button
+                  type="default"
+                  size="small"
+                  icon={<ReloadOutlined />}
+                  loading={fullChainTraceLoading}
+                  style={{ flexShrink: 0 }}
+                  onClick={() => setFullChainRefreshKey((k) => k + 1)}
+                >
+                  {t('components.documentRelationGraph.refresh')}
+                </Button>
+              </div>
+            </div>
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <DocumentTrackingRelationsTabsBody
+                documentType="purchase_order"
+                documentId={orderDetail.id}
+                refreshKey={fullChainRefreshKey}
+                onDocumentClick={onFullChainGraphNodeClick}
+                compact
+                hideInlineRefresh
+                onTraceLoadingChange={setFullChainTraceLoading}
+              />
+            </div>
+          </div>
+
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.traceBriefTitle')}
+            style={{
+              position: 'fixed',
+              left: PO_DETAIL_CHAIN_FLOAT_MARGIN,
+              top: poDetailBriefPanelTopCss,
+              width: poDetailChainPanelWidthCss,
+              height: poDetailChainHalfHeightCss,
+              zIndex: purchaseOrderChainOverlayZIndex,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 600,
+                fontSize: 13,
+                marginBottom: 8,
+                flexShrink: 0,
+                color: 'var(--ant-color-text)',
+              }}
+            >
+              {t('components.documentTrackingPanel.traceBriefTitle')}
+            </div>
+            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+              <TraceLinkedDocumentBrief
+                documentType={fullChainBriefDoc?.document_type}
+                documentId={fullChainBriefDoc?.document_id}
+                compactChrome
+              />
+            </div>
+            {fullChainBriefDoc ? (
+              <div
+                style={{
+                  flexShrink: 0,
+                  marginTop: 8,
+                  paddingTop: 10,
+                  borderTop: '1px solid var(--ant-color-border)',
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                }}
+              >
+                <Space wrap>
+                  <Button onClick={() => setFullChainBriefDoc(null)}>
+                    {t('components.documentTrackingPanel.traceBriefDismiss')}
+                  </Button>
+                  {fullChainBriefDoc.document_type === 'purchase_requisition' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDetailDrawerVisible(false);
+                        navigate(ROUTES.PURCHASE_REQUISITIONS);
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenPurchaseRequisition', {
+                        defaultValue: '前往采购申请',
+                      })}
+                    </Button>
+                  ) : null}
+                  {fullChainBriefDoc.document_type === 'receipt_notice' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDetailDrawerVisible(false);
+                        navigate(ROUTES.RECEIPT_NOTICES);
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenReceiptNotice', { defaultValue: '前往收货通知' })}
+                    </Button>
+                  ) : null}
+                  {fullChainBriefDoc.document_type === 'purchase_return' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDetailDrawerVisible(false);
+                        navigate(ROUTES.PURCHASE_RETURNS);
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenPurchaseReturn', { defaultValue: '前往采购退货' })}
+                    </Button>
+                  ) : null}
+                </Space>
+              </div>
+            ) : null}
+          </div>
+        </>
+      ) : null}
+
       {/* 采购订单详情 Drawer */}
       <DetailDrawerTemplate
         title={`采购订单详情 - ${orderDetail?.order_code || ''}`}
         open={detailDrawerVisible}
+        zIndex={purchaseOrderDetailDrawerZIndex}
         onClose={() => {
           setDetailDrawerVisible(false);
           setOrderDetail(null);
           setApprovalStatus(null);
+          setFullChainBriefDoc(null);
         }}
-        dataSource={orderDetail || undefined}
-        columns={[]}
-        column={3}
         width={DRAWER_CONFIG.HALF_WIDTH}
+        collaborationTitleSuffix={
+          orderDetail ? <PurchaseOrderCollaborationTitleSuffix lifecycle={purchaseOrderLifecycle} /> : null
+        }
         extra={
           orderDetail && (
             <DetailDrawerActions
@@ -2267,7 +2476,14 @@ const PurchaseOrdersPage: React.FC = () => {
                         approve: (id) => approvePurchaseOrder(id, { approved: true, review_remarks: '' }),
                         reject: (id, reason) => approvePurchaseOrder(id, { approved: false, review_remarks: reason || '' }),
                       }}
-                      onSuccess={() => { invalidateStatistics(); actionRef.current?.reload(); loadApprovalData(orderDetail.id!); getPurchaseOrder(orderDetail.id!).then(setOrderDetail); }}
+                      onSuccess={() => {
+                        invalidateStatistics();
+                        actionRef.current?.reload();
+                        loadApprovalData(orderDetail.id!);
+                        getPurchaseOrder(orderDetail.id!).then(setOrderDetail);
+                        setPoTrackingRefreshKey((k) => k + 1);
+                        setFullChainRefreshKey((k) => k + 1);
+                      }}
                     />
                   ),
                 },
@@ -2326,294 +2542,243 @@ const PurchaseOrdersPage: React.FC = () => {
             />
           )
         }
-        customContent={
-          orderDetail && (
+        basic={
+          orderDetail ? (
             <>
-              <DetailDrawerSection title="基本信息">
-                <Descriptions
-                  column={3}
-                  size="small"
-                  items={buildDescriptionItemsFromColumns(orderDetail, detailColumns)}
-                />
-                {orderDetail.fee_details && orderDetail.fee_details.length > 0 && (
-                  <>
-                    <Divider style={{ margin: '16px 0' }} />
-                    <Typography.Title level={5} style={{ margin: '0 0 8px' }}>
-                      费用明细
-                    </Typography.Title>
-                    <div style={{ marginBottom: 12 }}>
-                      <Typography.Text type="secondary">
-                        总费用金额：<strong>¥{formatAmount(orderDetail.total_fee_amount)}</strong>
-                      </Typography.Text>
-                    </div>
-                    <Table
-                      size="small"
-                      columns={[
-                        {
-                          title: '费用类型',
-                          dataIndex: 'type',
-                          width: 120,
-                          render: (val) => {
-                            const opt = feeTypeOptions.find((o: any) => o.value === val);
-                            return opt?.label || val;
-                          },
-                        },
-                        {
-                          title: '金额',
-                          dataIndex: 'amount',
-                          width: 120,
-                          align: 'right',
-                          render: (val) => `¥${formatAmount(val)}`,
-                        },
-                        {
-                          title: '承担方',
-                          dataIndex: 'bearer',
-                          width: 100,
-                          render: (val) => (val === 'our_side' ? '我方' : '对方'),
-                        },
-                        { title: '备注', dataIndex: 'notes' },
-                      ]}
-                      dataSource={orderDetail.fee_details}
-                      rowKey={(_: any, i?: number) => i ?? 0}
-                      pagination={false}
-                      bordered
-                    />
-                  </>
-                )}
-              </DetailDrawerSection>
-
-              <DetailDrawerSection title="生命周期">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {(() => {
-                    const lifecycle = getPurchaseOrderLifecycle(orderDetail);
-                    const mainStages = lifecycle.mainStages ?? [];
-                    const subStages = lifecycle.subStages ?? [];
-                    return (
-                      <>
-                        {mainStages.length > 0 && (
-                          <UniLifecycleStepper
-                            steps={mainStages}
-                            status={lifecycle.status}
-                            showLabels
-                            nextStepSuggestions={lifecycle.nextStepSuggestions}
-                          />
-                        )}
-                        {subStages.length > 0 && (
-                          <div>
-                            <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
-                              执行中 · 全链路
-                            </div>
-                            <UniLifecycleStepper steps={subStages} showLabels />
-                          </div>
-                        )}
-                      </>
-                    );
-                  })()}
-                  <div
-                    style={{
-                      paddingTop: 12,
-                      borderTop: '1px solid var(--ant-color-border-secondary)',
-                    }}
-                  >
-                    <div style={{ marginBottom: 8, fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
-                      上下游单据
-                    </div>
-                    {purchaseOrderTracking.loading && (
-                      <div style={{ padding: '8px 0' }}>
-                        <Spin size="small" />
-                      </div>
-                    )}
-                    {purchaseOrderTracking.error && (
-                      <Typography.Text type="danger">{purchaseOrderTracking.error}</Typography.Text>
-                    )}
-                    {purchaseOrderTracking.data && (
-                      <DocumentTrackingRelationsBody
-                        data={purchaseOrderTracking.data}
-                        onDocumentClick={(type, id) => messageApi.info(`跳转到${type}#${id}`)}
-                      />
-                    )}
-                  </div>
-                  {orderDetail.status !== '草稿' && (
-                    <>
-                      <Divider style={{ margin: 0 }} />
-                      <div style={{ marginBottom: 8, fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
-                        履约全链路追踪
-                      </div>
-                      <FulfillmentTrackingTimeline orderId={orderDetail.id!} />
-                    </>
-                  )}
-                </div>
-              </DetailDrawerSection>
-
-              <DetailDrawerSection title="明细信息">
-                <style>{`
-                  .purchase-order-detail-drawer-items .ant-table-wrapper .ant-table-body,
-                  .purchase-order-detail-drawer-items .ant-table-wrapper .ant-table-content {
-                    overflow: visible !important;
-                  }
-                `}</style>
-                {orderDetail.items && orderDetail.items.length > 0 ? (
-                  <div
-                    className="purchase-order-detail-drawer-items"
-                    style={{ width: '100%', maxWidth: '100%', overflowX: 'auto', overflowY: 'hidden' }}
-                  >
-                    <Table
-                      size="small"
-                      tableLayout="fixed"
-                      style={{ minWidth: PO_DETAIL_ITEMS_MIN_WIDTH }}
-                      columns={[
-                        { title: '物料编号', dataIndex: 'material_code', width: 120, ellipsis: true },
-                        { title: '物料名称', dataIndex: 'material_name', width: 150, ellipsis: true },
-                        { title: '采购数量', dataIndex: 'ordered_quantity', width: 100, align: 'right' },
-                        { title: '单位', dataIndex: 'unit', width: 60 },
-                        {
-                          title: '单价',
-                          dataIndex: 'unit_price',
-                          width: 100,
-                          align: 'right',
-                          render: (text) => `¥${text}`,
-                        },
-                        {
-                          title: '总价',
-                          dataIndex: 'total_price',
-                          width: 120,
-                          align: 'right',
-                          render: (text) => `¥${text?.toLocaleString()}`,
-                        },
-                        { title: '已到货', dataIndex: 'received_quantity', width: 100, align: 'right' },
-                        { title: '未到货', dataIndex: 'outstanding_quantity', width: 100, align: 'right' },
-                        { title: '要求到货日期', dataIndex: 'required_date', width: 120 },
-                        {
-                          title: '是否检验',
-                          dataIndex: 'inspection_required',
-                          width: 100,
-                          render: (val) => (val ? '是' : '否'),
-                        },
-                      ]}
-                      dataSource={orderDetail.items}
-                      pagination={false}
-                      rowKey="id"
-                      bordered
-                    />
-                  </div>
-                ) : (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无明细" />
-                )}
-              </DetailDrawerSection>
-
-              {orderDetail?.id && (
-                <DetailDrawerSection title="操作记录">
-                  {purchaseOrderTracking.loading && (
-                    <div style={{ textAlign: 'center', padding: 24 }}>
-                      <Spin />
-                    </div>
-                  )}
-                  {purchaseOrderTracking.error && !purchaseOrderTracking.loading && (
-                    <Typography.Text type="danger">{purchaseOrderTracking.error}</Typography.Text>
-                  )}
-                  {purchaseOrderTracking.data && !purchaseOrderTracking.loading && (
-                    <DocumentTrackingTimelineBody data={purchaseOrderTracking.data} />
-                  )}
-
-                  {approvalStatus && approvalStatus.has_flow && (
-                    <Spin spinning={approvalLoading}>
-                      <>
-                        <Divider style={{ margin: '16px 0' }} />
-                        <div
-                          style={{
-                            marginBottom: 8,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            flexWrap: 'wrap',
-                            gap: 8,
-                          }}
-                        >
-                          <Typography.Title level={5} style={{ margin: 0 }}>
-                            审批流程
-                          </Typography.Title>
-                          <Tag
-                            color={
-                              approvalStatus.status === 'approved'
-                                ? 'success'
-                                : approvalStatus.status === 'rejected'
-                                  ? 'error'
-                                  : 'processing'
-                            }
-                          >
-                            {approvalStatus.status === 'approved'
-                              ? '已通过'
-                              : approvalStatus.status === 'rejected'
-                                ? '已驳回'
-                                : '进行中'}
-                          </Tag>
-                        </div>
-                        <div style={{ marginBottom: 16 }}>
-                          {approvalStatus.current_node && (
-                            <div>
-                              <strong>当前节点：</strong>
-                              <Tag color="blue">{approvalStatus.current_node}</Tag>
-                            </div>
-                          )}
-                        </div>
-                        {approvalStatus?.history && approvalStatus.history.length > 0 && (
-                          <div>
-                            <Divider titlePlacement="left">审批记录</Divider>
-                            <Timeline
-                              items={approvalStatus.history.map((h) => {
-                                const isPassed = h.action === 'approve';
-                                const isRejected = h.action === 'reject';
-                                return {
-                                  dot: isPassed ? (
-                                    <CheckCircleTwoTone twoToneColor="#52c41a" />
-                                  ) : isRejected ? (
-                                    <CloseCircleTwoTone twoToneColor="#ff4d4f" />
-                                  ) : (
-                                    <ClockCircleOutlined style={{ color: '#1890ff' }} />
-                                  ),
-                                  color: isPassed ? 'green' : isRejected ? 'red' : 'blue',
-                                  children: (
-                                    <div>
-                                      <div style={{ marginBottom: 4 }}>
-                                        <Tag color={isPassed ? 'success' : isRejected ? 'error' : 'processing'}>
-                                          {isPassed ? '通过' : isRejected ? '驳回' : h.action || '-'}
-                                        </Tag>
-                                      </div>
-                                      <div style={{ color: '#666', fontSize: '12px', marginBottom: 4 }}>
-                                        {h.action_at && `审核时间：${h.action_at}`}
-                                      </div>
-                                      {h.comment && (
-                                        <div style={{ color: '#999', fontSize: '12px', marginTop: 4 }}>
-                                          审核意见：{h.comment}
-                                        </div>
-                                      )}
-                                    </div>
-                                  ),
-                                };
-                              })}
-                            />
-                          </div>
-                        )}
-                        {(!approvalStatus?.history || approvalStatus.history.length === 0) && approvalStatus?.has_flow && (
-                          <Empty
-                            description="暂无审批记录"
-                            image={Empty.PRESENTED_IMAGE_SIMPLE}
-                            style={{ margin: '20px 0' }}
-                          />
-                        )}
-                      </>
-                    </Spin>
-                  )}
-
+              <Descriptions
+                column={3}
+                size="small"
+                items={buildDescriptionItemsFromColumns(orderDetail, detailColumns)}
+              />
+              {orderDetail.fee_details && orderDetail.fee_details.length > 0 && (
+                <>
                   <Divider style={{ margin: '16px 0' }} />
                   <Typography.Title level={5} style={{ margin: '0 0 8px' }}>
-                    变更审计
+                    费用明细
                   </Typography.Title>
-                  <OrderChangeHistoryTable orderId={orderDetail.id} />
-                </DetailDrawerSection>
+                  <div style={{ marginBottom: 12 }}>
+                    <Typography.Text type="secondary">
+                      总费用金额：<strong>¥{formatAmount(orderDetail.total_fee_amount)}</strong>
+                    </Typography.Text>
+                  </div>
+                  <Table
+                    size="small"
+                    columns={[
+                      {
+                        title: '费用类型',
+                        dataIndex: 'type',
+                        width: 120,
+                        render: (val) => {
+                          const opt = feeTypeOptions.find((o: any) => o.value === val);
+                          return opt?.label || val;
+                        },
+                      },
+                      {
+                        title: '金额',
+                        dataIndex: 'amount',
+                        width: 120,
+                        align: 'right',
+                        render: (val) => `¥${formatAmount(val)}`,
+                      },
+                      {
+                        title: '承担方',
+                        dataIndex: 'bearer',
+                        width: 100,
+                        render: (val) => (val === 'our_side' ? '我方' : '对方'),
+                      },
+                      { title: '备注', dataIndex: 'notes' },
+                    ]}
+                    dataSource={orderDetail.fee_details}
+                    rowKey={(_: any, i?: number) => i ?? 0}
+                    pagination={false}
+                    bordered
+                  />
+                </>
               )}
             </>
-          )
+          ) : null
+        }
+        collaboration={
+          orderDetail ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {orderDetail.status !== '草稿' ? <FulfillmentTrackingTimeline orderId={orderDetail.id!} /> : null}
+              {purchaseOrderLifecycle && (purchaseOrderLifecycle.mainStages ?? []).length > 0 ? (
+                <UniLifecycleStepper
+                  steps={purchaseOrderLifecycle.mainStages ?? []}
+                  status={purchaseOrderLifecycle.status}
+                  showLabels
+                  nextStepSuggestions={purchaseOrderLifecycle.nextStepSuggestions}
+                  hideNextStepSuggestions={Boolean(purchaseOrderLifecycle.nextStepSuggestions?.length)}
+                />
+              ) : null}
+            </div>
+          ) : null
+        }
+        lines={
+          orderDetail ? (
+            <>
+              <style>{`
+                .purchase-order-detail-drawer-items .ant-table-wrapper .ant-table-body,
+                .purchase-order-detail-drawer-items .ant-table-wrapper .ant-table-content {
+                  overflow: visible !important;
+                }
+              `}</style>
+              {orderDetail.items && orderDetail.items.length > 0 ? (
+                <div
+                  className="purchase-order-detail-drawer-items"
+                  style={{ width: '100%', maxWidth: '100%', overflowX: 'auto', overflowY: 'hidden' }}
+                >
+                  <Table
+                    size="small"
+                    tableLayout="fixed"
+                    style={{ minWidth: PO_DETAIL_ITEMS_MIN_WIDTH }}
+                    columns={[
+                      { title: '物料编号', dataIndex: 'material_code', width: 120, ellipsis: true },
+                      { title: '物料名称', dataIndex: 'material_name', width: 150, ellipsis: true },
+                      { title: '采购数量', dataIndex: 'ordered_quantity', width: 100, align: 'right' },
+                      { title: '单位', dataIndex: 'unit', width: 60 },
+                      {
+                        title: '单价',
+                        dataIndex: 'unit_price',
+                        width: 100,
+                        align: 'right',
+                        render: (text) => `¥${text}`,
+                      },
+                      {
+                        title: '总价',
+                        dataIndex: 'total_price',
+                        width: 120,
+                        align: 'right',
+                        render: (text) => `¥${text?.toLocaleString()}`,
+                      },
+                      { title: '已到货', dataIndex: 'received_quantity', width: 100, align: 'right' },
+                      { title: '未到货', dataIndex: 'outstanding_quantity', width: 100, align: 'right' },
+                      { title: '要求到货日期', dataIndex: 'required_date', width: 120 },
+                      {
+                        title: '是否检验',
+                        dataIndex: 'inspection_required',
+                        width: 100,
+                        render: (val) => (val ? '是' : '否'),
+                      },
+                    ]}
+                    dataSource={orderDetail.items}
+                    pagination={false}
+                    rowKey="id"
+                    bordered
+                  />
+                </div>
+              ) : (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无明细" />
+              )}
+            </>
+          ) : null
+        }
+        timeline={
+          orderDetail?.id ? (
+            <>
+              {purchaseOrderTracking.loading && (
+                <div style={{ textAlign: 'center', padding: 24 }}>
+                  <Spin />
+                </div>
+              )}
+              {purchaseOrderTracking.error && !purchaseOrderTracking.loading && (
+                <Typography.Text type="danger">{purchaseOrderTracking.error}</Typography.Text>
+              )}
+              {purchaseOrderTracking.data && !purchaseOrderTracking.loading && (
+                <DocumentTrackingTimelineBody data={purchaseOrderTracking.data} />
+              )}
+
+              {approvalStatus && approvalStatus.has_flow && (
+                <Spin spinning={approvalLoading}>
+                  <>
+                    <Divider style={{ margin: '16px 0' }} />
+                    <div
+                      style={{
+                        marginBottom: 8,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        flexWrap: 'wrap',
+                        gap: 8,
+                      }}
+                    >
+                      <Typography.Title level={5} style={{ margin: 0 }}>
+                        审批流程
+                      </Typography.Title>
+                      <Tag
+                        color={
+                          approvalStatus.status === 'approved'
+                            ? 'success'
+                            : approvalStatus.status === 'rejected'
+                              ? 'error'
+                              : 'processing'
+                        }
+                      >
+                        {approvalStatus.status === 'approved'
+                          ? '已通过'
+                          : approvalStatus.status === 'rejected'
+                            ? '已驳回'
+                            : '进行中'}
+                      </Tag>
+                    </div>
+                    <div style={{ marginBottom: 16 }}>
+                      {approvalStatus.current_node && (
+                        <div>
+                          <strong>当前节点：</strong>
+                          <Tag color="blue">{approvalStatus.current_node}</Tag>
+                        </div>
+                      )}
+                    </div>
+                    {approvalStatus?.history && approvalStatus.history.length > 0 && (
+                      <div>
+                        <Divider titlePlacement="left">审批记录</Divider>
+                        <Timeline
+                          items={approvalStatus.history.map((h) => {
+                            const isPassed = h.action === 'approve';
+                            const isRejected = h.action === 'reject';
+                            return {
+                              dot: isPassed ? (
+                                <CheckCircleTwoTone twoToneColor="#52c41a" />
+                              ) : isRejected ? (
+                                <CloseCircleTwoTone twoToneColor="#ff4d4f" />
+                              ) : (
+                                <ClockCircleOutlined style={{ color: '#1890ff' }} />
+                              ),
+                              color: isPassed ? 'green' : isRejected ? 'red' : 'blue',
+                              children: (
+                                <div>
+                                  <div style={{ marginBottom: 4 }}>
+                                    <Tag color={isPassed ? 'success' : isRejected ? 'error' : 'processing'}>
+                                      {isPassed ? '通过' : isRejected ? '驳回' : h.action || '-'}
+                                    </Tag>
+                                  </div>
+                                  <div style={{ color: '#666', fontSize: '12px', marginBottom: 4 }}>
+                                    {h.action_at && `审核时间：${h.action_at}`}
+                                  </div>
+                                  {h.comment && (
+                                    <div style={{ color: '#999', fontSize: '12px', marginTop: 4 }}>
+                                      审核意见：{h.comment}
+                                    </div>
+                                  )}
+                                </div>
+                              ),
+                            };
+                          })}
+                        />
+                      </div>
+                    )}
+                    {(!approvalStatus?.history || approvalStatus.history.length === 0) && approvalStatus?.has_flow && (
+                      <Empty
+                        description="暂无审批记录"
+                        image={Empty.PRESENTED_IMAGE_SIMPLE}
+                        style={{ margin: '20px 0' }}
+                      />
+                    )}
+                  </>
+                </Spin>
+              )}
+            </>
+          ) : null
         }
       />
 

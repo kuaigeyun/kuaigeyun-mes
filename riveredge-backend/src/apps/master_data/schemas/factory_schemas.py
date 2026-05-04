@@ -151,6 +151,12 @@ class WorkshopResponse(WorkshopBase):
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
     is_active: bool = Field(True, alias="isActive", description="是否启用")
+    plant_code: Optional[str] = Field(
+        None, alias="plantCode", description="所属厂区编码（列表/详情展示，避免前端二次请求）"
+    )
+    plant_name: Optional[str] = Field(
+        None, alias="plantName", description="所属厂区名称（列表/详情展示）"
+    )
     
     model_config = ConfigDict(
         from_attributes=True,
@@ -223,6 +229,12 @@ class ProductionLineResponse(ProductionLineBase):
     uuid: str = Field(..., description="UUID")
     tenant_id: int = Field(..., alias="tenantId", description="租户ID")
     workshop_id: int = Field(..., alias="workshopId", description="所属车间ID")
+    workshop_code: Optional[str] = Field(
+        None, alias="workshopCode", description="所属车间编码（列表/详情展示，避免前端二次请求）"
+    )
+    workshop_name: Optional[str] = Field(
+        None, alias="workshopName", description="所属车间名称（列表/详情展示）"
+    )
     created_at: datetime = Field(..., alias="createdAt", description="创建时间")
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
@@ -307,6 +319,12 @@ class WorkstationResponse(WorkstationBase):
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
     is_active: bool = Field(True, alias="isActive", description="是否启用")
+    production_line_code: Optional[str] = Field(
+        None, alias="productionLineCode", description="所属产线编码（列表/详情展示，避免前端二次请求）"
+    )
+    production_line_name: Optional[str] = Field(
+        None, alias="productionLineName", description="所属产线名称（列表/详情展示）"
+    )
     
     model_config = ConfigDict(
         from_attributes=True,
@@ -422,6 +440,54 @@ class WorkshopTreeResponse(WorkshopResponse):
         populate_by_name=True,
         by_alias=True
     )
+
+
+# ==================== 分页列表响应 ====================
+
+
+class PlantListResult(BaseModel):
+    """厂区分页列表"""
+
+    items: List[PlantResponse]
+    total: int
+
+    model_config = ConfigDict(populate_by_name=True, by_alias=True)
+
+
+class WorkshopListResult(BaseModel):
+    """车间分页列表"""
+
+    items: List[WorkshopResponse]
+    total: int
+
+    model_config = ConfigDict(populate_by_name=True, by_alias=True)
+
+
+class ProductionLineListResult(BaseModel):
+    """产线分页列表"""
+
+    items: List[ProductionLineResponse]
+    total: int
+
+    model_config = ConfigDict(populate_by_name=True, by_alias=True)
+
+
+class WorkstationListResult(BaseModel):
+    """工位分页列表"""
+
+    items: List[WorkstationResponse]
+    total: int
+
+    model_config = ConfigDict(populate_by_name=True, by_alias=True)
+
+
+class WorkCenterListResult(BaseModel):
+    """工作中心分页列表"""
+
+    items: List[WorkCenterResponse]
+    total: int
+
+    model_config = ConfigDict(populate_by_name=True, by_alias=True)
 
 
 # ==================== 批量操作 Schema ====================

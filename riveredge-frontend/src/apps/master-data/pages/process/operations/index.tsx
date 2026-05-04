@@ -7,7 +7,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptions } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal, Table } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Modal, Table, theme } from 'antd';
 import { useSearchParams } from 'react-router-dom';
 import { EditOutlined, DeleteOutlined, PlusOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -29,6 +29,7 @@ import dayjs from 'dayjs';
 const OperationsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const { token } = theme.useToken();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -690,14 +691,12 @@ const OperationsPage: React.FC = () => {
                 position: 'absolute', 
                 top: 24, 
                 right: 24, 
-                width: 220, 
+                width: 152, 
                 zIndex: 10,
-                background: 'rgba(255, 255, 255, 0.8)',
-                backdropFilter: 'blur(8px)',
-                padding: '16px',
-                borderRadius: '12px',
-                border: '1px solid rgba(0, 0, 0, 0.05)',
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
+                background: '#fff',
+                padding: '12px',
+                borderRadius: token.borderRadiusLG,
+                border: '1px solid rgba(0, 0, 0, 0.06)',
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
@@ -712,7 +711,7 @@ const OperationsPage: React.FC = () => {
                   }}
                   autoGenerate={true}
                   showCardTitle={false}
-                  size={8}
+                  size={6}
                   noCard={true}
                 />
               </div>

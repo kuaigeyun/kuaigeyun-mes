@@ -58,6 +58,28 @@ class WarehouseService:
                 work_center_name = wc.name
         return workshop_name, workstation_name, work_center_name
 
+    @staticmethod
+    async def _storage_area_to_response(sa: StorageArea) -> StorageAreaResponse:
+        """组装库区响应（带出仓库编码/名称，避免前端异步字典闪烁）"""
+        await sa.fetch_related("warehouse")
+        resp = StorageAreaResponse.model_validate(sa)
+        wh = sa.warehouse
+        if wh:
+            return resp.model_copy(update={"warehouse_code": wh.code, "warehouse_name": wh.name})
+        return resp
+
+    @staticmethod
+    async def _storage_location_to_response(sl: StorageLocation) -> StorageLocationResponse:
+        """组装库位响应（带出库区编码/名称，避免前端异步字典闪烁）"""
+        await sl.fetch_related("storage_area")
+        resp = StorageLocationResponse.model_validate(sl)
+        area = sl.storage_area
+        if area:
+            return resp.model_copy(
+                update={"storage_area_code": area.code, "storage_area_name": area.name}
+            )
+        return resp
+
     # ==================== 仓库相关方法 ====================
 
     @staticmethod
@@ -463,7 +485,7 @@ class WarehouseService:
             existing_deleted.warehouse_id = data.warehouse_id
             existing_deleted.is_active = data.is_active if hasattr(data, 'is_active') else True
             await existing_deleted.save()
-            return StorageAreaResponse.model_validate(existing_deleted)
+            return await WarehouseService._storage_area_to_response(existing_deleted)
         
         # 创建新库区
         try:
@@ -490,12 +512,12 @@ class WarehouseService:
                     existing_deleted_retry.warehouse_id = data.warehouse_id
                     existing_deleted_retry.is_active = data.is_active if hasattr(data, 'is_active') else True
                     await existing_deleted_retry.save()
-                    return StorageAreaResponse.model_validate(existing_deleted_retry)
+                    return await WarehouseService._storage_area_to_response(existing_deleted_retry)
                 
                 raise ValidationError(f"库区编码 {data.code} 已存在（可能已被软删除，请检查）")
             raise
         
-        return StorageAreaResponse.model_validate(storage_area)
+        return await WarehouseService._storage_area_to_response(storage_area)
     
     @staticmethod
     async def get_storage_area_by_uuid(
@@ -524,7 +546,7 @@ class WarehouseService:
         if not storage_area:
             raise NotFoundError(f"库区 {storage_area_uuid} 不存在")
         
-        return StorageAreaResponse.model_validate(storage_area)
+        return await WarehouseService._storage_area_to_response(storage_area)
     
     @staticmethod
     async def list_storage_areas(
@@ -560,9 +582,13 @@ class WarehouseService:
         
         total = await query.count()
         storage_areas = await query.offset(skip).limit(limit).order_by("code").all()
-        
+
+        items: List[StorageAreaResponse] = []
+        for sa in storage_areas:
+            items.append(await WarehouseService._storage_area_to_response(sa))
+
         return {
-            "items": [StorageAreaResponse.model_validate(sa) for sa in storage_areas],
+            "items": items,
             "total": total
         }
     
@@ -631,7 +657,7 @@ class WarehouseService:
                 raise ValidationError(f"库区编码 {data.code or storage_area.code} 已存在（可能已被软删除，请检查）")
             raise
         
-        return StorageAreaResponse.model_validate(storage_area)
+        return await WarehouseService._storage_area_to_response(storage_area)
     
     @staticmethod
     async def delete_storage_area(
@@ -803,7 +829,7 @@ class WarehouseService:
             existing_deleted.storage_area_id = data.storage_area_id
             existing_deleted.is_active = data.is_active if hasattr(data, 'is_active') else True
             await existing_deleted.save()
-            return StorageLocationResponse.model_validate(existing_deleted)
+            return await WarehouseService._storage_location_to_response(existing_deleted)
         
         # 创建新库位
         try:
@@ -830,12 +856,12 @@ class WarehouseService:
                     existing_deleted_retry.storage_area_id = data.storage_area_id
                     existing_deleted_retry.is_active = data.is_active if hasattr(data, 'is_active') else True
                     await existing_deleted_retry.save()
-                    return StorageLocationResponse.model_validate(existing_deleted_retry)
+                    return await WarehouseService._storage_location_to_response(existing_deleted_retry)
                 
                 raise ValidationError(f"库位编码 {data.code} 已存在（可能已被软删除，请检查）")
             raise
         
-        return StorageLocationResponse.model_validate(storage_location)
+        return await WarehouseService._storage_location_to_response(storage_location)
     
     @staticmethod
     async def get_storage_location_by_uuid(
@@ -864,7 +890,7 @@ class WarehouseService:
         if not storage_location:
             raise NotFoundError(f"库位 {storage_location_uuid} 不存在")
         
-        return StorageLocationResponse.model_validate(storage_location)
+        return await WarehouseService._storage_location_to_response(storage_location)
     
     @staticmethod
     async def list_storage_locations(
@@ -900,9 +926,13 @@ class WarehouseService:
         
         total = await query.count()
         storage_locations = await query.offset(skip).limit(limit).order_by("code").all()
-        
+
+        loc_items: List[StorageLocationResponse] = []
+        for sl in storage_locations:
+            loc_items.append(await WarehouseService._storage_location_to_response(sl))
+
         return {
-            "items": [StorageLocationResponse.model_validate(sl) for sl in storage_locations],
+            "items": loc_items,
             "total": total
         }
     
@@ -971,7 +1001,7 @@ class WarehouseService:
                 raise ValidationError(f"库位编码 {data.code or storage_location.code} 已存在（可能已被软删除，请检查）")
             raise
         
-        return StorageLocationResponse.model_validate(storage_location)
+        return await WarehouseService._storage_location_to_response(storage_location)
     
     @staticmethod
     async def delete_storage_location(
@@ -1123,7 +1153,10 @@ class WarehouseService:
             area_id = storage_location.storage_area_id
             if area_id not in storage_location_map:
                 storage_location_map[area_id] = []
-            storage_location_map[area_id].append(StorageLocationTreeResponse.model_validate(storage_location))
+            sl_full = await WarehouseService._storage_location_to_response(storage_location)
+            storage_location_map[area_id].append(
+                StorageLocationTreeResponse.model_validate(sl_full.model_dump(mode="python"))
+            )
         
         # 构建库区映射（按仓库ID分组）
         storage_area_map: dict[int, List[StorageAreaTreeResponse]] = {}
@@ -1136,7 +1169,8 @@ class WarehouseService:
             area_storage_locations = storage_location_map.get(storage_area.id, [])
             
             # 创建库区响应对象（包含库位列表）
-            area_response = StorageAreaTreeResponse.model_validate(storage_area)
+            sa_full = await WarehouseService._storage_area_to_response(storage_area)
+            area_response = StorageAreaTreeResponse.model_validate(sa_full.model_dump(mode="python"))
             area_response.storage_locations = area_storage_locations
             storage_area_map[warehouse_id].append(area_response)
         

@@ -5,9 +5,10 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProFormItem } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Row, Col, Form as AntForm, InputNumber, Input, Typography, Select, Spin, Descriptions, Dropdown, Empty } from 'antd';
+import { App, Button, Tag, Space, Modal, Table, Row, Col, Form as AntForm, InputNumber, Input, Typography, Select, Spin, Descriptions, Empty, theme as AntdTheme } from 'antd';
 import {
   PlusOutlined,
   EyeOutlined,
@@ -16,6 +17,7 @@ import {
   InboxOutlined,
   ShoppingOutlined,
   RollbackOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
@@ -27,10 +29,12 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import {
-  DocumentTrackingRelationsBody,
+  DocumentTrackingRelationsTabsBody,
   DocumentTrackingTimelineBody,
+  TraceLinkedDocumentBrief,
   useDocumentTracking,
 } from '../../../../../components/document-tracking-panel';
+import { WarehouseTraceBriefFooter } from '../WarehouseTraceBriefFooter';
 import CodeField from '../../../../../components/code-field';
 import dayjs from 'dayjs';
 import { warehouseApi, workOrderApi } from '../../../services/production';
@@ -244,6 +248,15 @@ async function fetchStorageLocationsForWarehouse(
 
 const INBOUND_DETAIL_ITEMS_MIN_WIDTH = 1100;
 
+/** 详情 Drawer 外左侧全链路浮层（Uni-detail） */
+const WM_DETAIL_CHAIN_FLOAT_MARGIN = 16;
+const WM_DETAIL_LEFT_CHAIN_GAP = 16;
+const WM_DETAIL_CHAIN_DRAWER_GAP = 16;
+const WM_DETAIL_CHAIN_VERTICAL_TRIM = WM_DETAIL_CHAIN_FLOAT_MARGIN * 2 + WM_DETAIL_LEFT_CHAIN_GAP;
+const wmDetailChainHalfHeightCss = `calc((100vh - ${WM_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2)`;
+const wmDetailChainPanelWidthCss = `calc(50vw - ${WM_DETAIL_CHAIN_FLOAT_MARGIN * 2 + WM_DETAIL_CHAIN_DRAWER_GAP}px)`;
+const wmDetailBriefPanelTopCss = `calc(${WM_DETAIL_CHAIN_FLOAT_MARGIN}px + (100vh - ${WM_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2 + ${WM_DETAIL_LEFT_CHAIN_GAP}px)`;
+
 function inboundDocumentTrackingType(
   order: InboundOrder
 ):
@@ -285,6 +298,10 @@ function renderInboundRowActions(nodes: React.ReactNode[], keyPrefix: string): R
 const InboundPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const navigate = useNavigate();
+  const { token } = AntdTheme.useToken();
+  const inboundDetailDrawerZIndex = token.zIndexPopupBase;
+  const inboundChainOverlayZIndex = token.zIndexPopupBase + 1;
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   // Modal 相关状态（创建入库单）
@@ -295,6 +312,12 @@ const InboundPage: React.FC = () => {
   // Drawer 相关状态（详情查看）
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<InboundOrder | null>(null);
+  const [inboundTrackingRefreshKey, setInboundTrackingRefreshKey] = useState(0);
+  const [fullChainRefreshKey, setFullChainRefreshKey] = useState(0);
+  const [fullChainTraceLoading, setFullChainTraceLoading] = useState(false);
+  const [fullChainBriefDoc, setFullChainBriefDoc] = useState<{ document_type: string; document_id: number } | null>(
+    null,
+  );
   const [editableReceiptQuantities, setEditableReceiptQuantities] = useState<Record<number, number>>({});
   const [savingPurchaseReceipt, setSavingPurchaseReceipt] = useState(false);
 
@@ -335,7 +358,20 @@ const InboundPage: React.FC = () => {
   const inboundDocTrackingType = currentOrder
     ? inboundDocumentTrackingType(currentOrder)
     : undefined;
-  const inboundTracking = useDocumentTracking(inboundDocTrackingType, currentOrder?.id);
+  const inboundTracking = useDocumentTracking(inboundDocTrackingType, currentOrder?.id, inboundTrackingRefreshKey);
+
+  const onFullChainGraphNodeClick = useCallback(
+    (type: string, id: number) => {
+      if (!id) return;
+      const selfType = currentOrder ? inboundDocumentTrackingType(currentOrder) : undefined;
+      if (selfType && type === selfType && currentOrder?.id != null && id === currentOrder.id) {
+        setFullChainBriefDoc(null);
+        return;
+      }
+      setFullChainBriefDoc({ document_type: type, document_id: id });
+    },
+    [currentOrder],
+  );
 
   const defaultPurchaseItem = {
     purchase_order_item_id: 0,
@@ -627,6 +663,7 @@ const InboundPage: React.FC = () => {
    */
   const handleDetail = async (record: InboundOrder) => {
     try {
+      setFullChainBriefDoc(null);
       let detailData: any;
       if (record.receipt_type === 'purchase') {
         detailData = await warehouseApi.purchaseReceipt.get(record.id!.toString());
@@ -650,8 +687,10 @@ const InboundPage: React.FC = () => {
         }
         setCurrentOrder({ ...detailData, receipt_type: record.receipt_type });
         setDetailDrawerVisible(true);
+        setInboundTrackingRefreshKey((k) => k + 1);
+        setFullChainRefreshKey((k) => k + 1);
       }
-    } catch (error) {
+    } catch {
       messageApi.error('获取入库单详情失败');
     }
   };
@@ -718,6 +757,8 @@ const InboundPage: React.FC = () => {
       setEditableReceiptQuantities(quantities);
       messageApi.success('实际数量已保存');
       invalidateMenuBadgeCounts();
+      setInboundTrackingRefreshKey((k) => k + 1);
+      setFullChainRefreshKey((k) => k + 1);
 
       actionRef.current?.reload();
     } catch (error: any) {
@@ -913,7 +954,7 @@ const InboundPage: React.FC = () => {
         const orderedSource = items.filter((it) => it.material_id != null);
         if (refItems.length !== orderedSource.length) {
           // #region agent log
-          fetch('http://127.0.0.1:7807/ingest/b117966e-dad0-4d01-bd6a-e3ba9296abb4', {
+          globalThis.fetch('http://127.0.0.1:7807/ingest/b117966e-dad0-4d01-bd6a-e3ba9296abb4', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '2f32a1' },
             body: JSON.stringify({
@@ -932,7 +973,7 @@ const InboundPage: React.FC = () => {
         }
         if (refItems.some((it: any) => it?.id == null || !(Number(it.id) > 0))) {
           // #region agent log
-          fetch('http://127.0.0.1:7807/ingest/b117966e-dad0-4d01-bd6a-e3ba9296abb4', {
+          globalThis.fetch('http://127.0.0.1:7807/ingest/b117966e-dad0-4d01-bd6a-e3ba9296abb4', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '2f32a1' },
             body: JSON.stringify({
@@ -967,7 +1008,7 @@ const InboundPage: React.FC = () => {
           };
         });
         // #region agent log
-        fetch('http://127.0.0.1:7807/ingest/b117966e-dad0-4d01-bd6a-e3ba9296abb4', {
+        globalThis.fetch('http://127.0.0.1:7807/ingest/b117966e-dad0-4d01-bd6a-e3ba9296abb4', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '2f32a1' },
           body: JSON.stringify({
@@ -1035,12 +1076,14 @@ const InboundPage: React.FC = () => {
           /* ignore */
         }
       }
+      setInboundTrackingRefreshKey((k) => k + 1);
+      setFullChainRefreshKey((k) => k + 1);
     } catch (error: any) {
       // #region agent log
       const det = error?.response?.data?.detail;
       const detailStr =
         typeof det === 'string' ? det : Array.isArray(det) ? JSON.stringify(det).slice(0, 500) : det != null ? JSON.stringify(det).slice(0, 500) : '';
-      fetch('http://127.0.0.1:7807/ingest/b117966e-dad0-4d01-bd6a-e3ba9296abb4', {
+      globalThis.fetch('http://127.0.0.1:7807/ingest/b117966e-dad0-4d01-bd6a-e3ba9296abb4', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '2f32a1' },
         body: JSON.stringify({
@@ -1117,6 +1160,8 @@ const InboundPage: React.FC = () => {
               /* ignore */
             }
           }
+          setInboundTrackingRefreshKey((k) => k + 1);
+          setFullChainRefreshKey((k) => k + 1);
         } catch (error: any) {
           messageApi.error(error?.message || error?.response?.data?.detail || '撤回失败');
         }
@@ -1385,8 +1430,8 @@ const InboundPage: React.FC = () => {
             material_unit: it.material_unit || '个',
             receipt_quantity: Number(it.receipt_quantity) || 0,
             unit_price: Number(it.unit_price) || 0,
-            qualified_quantity: Number(it.qualified_quantity) ?? Number(it.receipt_quantity) ?? 0,
-            unqualified_quantity: Number(it.unqualified_quantity) ?? 0,
+            qualified_quantity: Number(it.qualified_quantity ?? it.receipt_quantity ?? 0) || 0,
+            unqualified_quantity: Number(it.unqualified_quantity ?? 0) || 0,
           })),
         };
         await warehouseApi.purchaseReceipt.create(payload);
@@ -1462,7 +1507,7 @@ const InboundPage: React.FC = () => {
               success: true,
               total,
             };
-          } catch (error) {
+          } catch {
             messageApi.error('获取入库单列表失败');
             return { data: [], success: false, total: 0 };
           }
@@ -2053,11 +2098,126 @@ const InboundPage: React.FC = () => {
         </Spin>
       </Modal>
 
+      {detailDrawerVisible && currentOrder?.id != null ? (
+        <>
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.relationsFullChainTitle')}
+            style={{
+              position: 'fixed',
+              left: WM_DETAIL_CHAIN_FLOAT_MARGIN,
+              top: WM_DETAIL_CHAIN_FLOAT_MARGIN,
+              width: wmDetailChainPanelWidthCss,
+              height: wmDetailChainHalfHeightCss,
+              zIndex: inboundChainOverlayZIndex,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div style={{ flexShrink: 0, marginBottom: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
+                    {t('components.documentTrackingPanel.relationsFullChainTitle')}
+                  </div>
+                </div>
+                <Button
+                  type="default"
+                  size="small"
+                  icon={<ReloadOutlined />}
+                  loading={fullChainTraceLoading}
+                  style={{ flexShrink: 0 }}
+                  onClick={() => setFullChainRefreshKey((k) => k + 1)}
+                >
+                  {t('components.documentRelationGraph.refresh')}
+                </Button>
+              </div>
+            </div>
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <DocumentTrackingRelationsTabsBody
+                documentType={inboundDocumentTrackingType(currentOrder)}
+                documentId={currentOrder.id}
+                refreshKey={fullChainRefreshKey}
+                onDocumentClick={onFullChainGraphNodeClick}
+                compact
+                hideInlineRefresh
+                onTraceLoadingChange={setFullChainTraceLoading}
+              />
+            </div>
+          </div>
+
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.traceBriefTitle')}
+            style={{
+              position: 'fixed',
+              left: WM_DETAIL_CHAIN_FLOAT_MARGIN,
+              top: wmDetailBriefPanelTopCss,
+              width: wmDetailChainPanelWidthCss,
+              height: wmDetailChainHalfHeightCss,
+              zIndex: inboundChainOverlayZIndex,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 600,
+                fontSize: 13,
+                marginBottom: 8,
+                flexShrink: 0,
+                color: 'var(--ant-color-text)',
+              }}
+            >
+              {t('components.documentTrackingPanel.traceBriefTitle')}
+            </div>
+            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+              <TraceLinkedDocumentBrief
+                documentType={fullChainBriefDoc?.document_type}
+                documentId={fullChainBriefDoc?.document_id}
+                compactChrome
+              />
+            </div>
+            <WarehouseTraceBriefFooter
+              brief={fullChainBriefDoc}
+              t={t}
+              navigate={navigate}
+              closeDrawer={() => {
+                setDetailDrawerVisible(false);
+                setCurrentOrder(null);
+                setFullChainBriefDoc(null);
+                setEditableReceiptQuantities({});
+              }}
+              onDismissBrief={() => setFullChainBriefDoc(null)}
+            />
+          </div>
+        </>
+      ) : null}
+
       <DetailDrawerTemplate
         title={`${currentOrder?.receipt_type === 'production_return' ? '生产退料单' : '入库单'}详情 - ${currentOrder?.receipt_code || currentOrder?.return_code || ''}`}
         open={detailDrawerVisible}
+        zIndex={inboundDetailDrawerZIndex}
         onClose={() => {
           setDetailDrawerVisible(false);
+          setCurrentOrder(null);
+          setFullChainBriefDoc(null);
           setEditableReceiptQuantities({});
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
@@ -2208,42 +2368,10 @@ const InboundPage: React.FC = () => {
                         status={lifecycle.status}
                         showLabels
                         nextStepSuggestions={lifecycle.nextStepSuggestions}
+                        hideNextStepSuggestions
                       />
                     );
                   })()}
-                  <div
-                    style={{
-                      paddingTop: 12,
-                      borderTop: '1px solid var(--ant-color-border-secondary)',
-                    }}
-                  >
-                    <div
-                      style={{
-                        marginBottom: 8,
-                        fontWeight: 600,
-                        fontSize: 13,
-                        color: 'var(--ant-color-text)',
-                      }}
-                    >
-                      上下游单据
-                    </div>
-                    {inboundTracking.loading && (
-                      <div style={{ padding: '8px 0' }}>
-                        <Spin size="small" />
-                      </div>
-                    )}
-                    {inboundTracking.error && (
-                      <Typography.Text type="danger">{inboundTracking.error}</Typography.Text>
-                    )}
-                    {inboundTracking.data && (
-                      <DocumentTrackingRelationsBody
-                        data={inboundTracking.data}
-                        onDocumentClick={(type, id) =>
-                          messageApi.info(`跳转到${type}#${id}`)
-                        }
-                      />
-                    )}
-                  </div>
                 </div>
               </DetailDrawerSection>
 

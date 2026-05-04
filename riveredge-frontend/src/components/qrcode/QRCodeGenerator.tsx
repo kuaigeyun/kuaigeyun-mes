@@ -8,7 +8,7 @@
  */
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Card, Button, Space, App, Spin } from 'antd';
+import { Card, Button, Space, App, Spin, theme } from 'antd';
 import { DownloadOutlined, ReloadOutlined } from '@ant-design/icons';
 import { qrcodeApi, type QRCodeGenerateRequest, type QRCodeGenerateResponse } from '../../services/qrcode';
 
@@ -48,6 +48,7 @@ export const QRCodeGenerator: React.FC<QRCodeGeneratorProps> = ({
   noCard = false,
 }) => {
   const { message } = App.useApp();
+  const { token } = theme.useToken();
   const [loading, setLoading] = useState(false);
   const [qrcodeResponse, setQrcodeResponse] = useState<QRCodeGenerateResponse | null>(null);
   const isMountedRef = useRef(true);
@@ -170,17 +171,18 @@ export const QRCodeGenerator: React.FC<QRCodeGeneratorProps> = ({
       {qrcodeResponse?.qrcode_image ? (
         <div style={{ textAlign: 'center' }}>
           {noCard && (
-            <div style={{ marginBottom: 16 }}>
-              <Space>
+            <div style={{ marginBottom: 8 }}>
+              <Space size={4}>
                 <Button
+                  type="default"
                   size="small"
-                  icon={<ReloadOutlined />}
+                  icon={<ReloadOutlined style={{ color: token.colorSuccess }} />}
+                  title="重新生成"
+                  aria-label="重新生成"
                   onClick={() => generateQRCode(false)}
                   loading={loading}
                   disabled={!data || Object.keys(data).length === 0}
-                >
-                  重新生成
-                </Button>
+                />
                 {qrcodeResponse && (
                   <Button
                     size="small"
@@ -196,9 +198,9 @@ export const QRCodeGenerator: React.FC<QRCodeGeneratorProps> = ({
           <img
             src={qrcodeResponse.qrcode_image}
             alt="二维码"
-            style={{ maxWidth: '100%', height: 'auto' }}
+            style={{ maxWidth: noCard ? 132 : '100%', height: 'auto' }}
           />
-          <div style={{ marginTop: 16, color: '#666', fontSize: 12 }}>
+          <div style={{ marginTop: noCard ? 8 : 16, color: '#666', fontSize: noCard ? 11 : 12 }}>
             类型: {qrcodeResponse.qrcode_type}
           </div>
         </div>

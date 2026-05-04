@@ -11,7 +11,13 @@ import { App, Button, Space } from 'antd';
 import { FormModalTemplate } from '../../../components/layout-templates';
 import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
 import { operationApi, defectTypeApi } from '../services/process';
-import { workshopApi, workCenterApi, workGroupApi, workstationApi } from '../services/factory';
+import {
+  workshopApi,
+  workCenterApi,
+  workGroupApi,
+  workstationApi,
+  factoryListItems,
+} from '../services/factory';
 import { equipmentApi } from '../../kuaizhizao/services/equipment';
 import { inspectionPlanApi } from '../../kuaizhizao/services/production';
 import { getUserList } from '../../../services/user';
@@ -108,16 +114,16 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
         // 不传 isActive：与列表/详情展示一致；再通过 boundDefectTypes 补齐未出现在列表中的绑定项
         defectTypeApi.list({ limit: 500 }),
         getUserList({ is_active: true, page_size: 100 }),
-        workGroupApi.list({ isActive: true, limit: 500 }),
-        workshopApi.list({ isActive: true, limit: 500 }),
-        workCenterApi.list({ isActive: true, limit: 500 }),
-        workstationApi.list({ isActive: true, limit: 500 }),
+        workGroupApi.list({ is_active: true, limit: 500 }),
+        workshopApi.list({ is_active: true, limit: 500 }),
+        workCenterApi.list({ is_active: true, limit: 500 }),
+        workstationApi.list({ is_active: true, limit: 500 }),
         equipmentApi.list({ is_active: true, limit: 500 }),
         inspectionPlanApi.list({ limit: 200, plan_type: 'process', operation_id: operationId, is_active: true }),
       ]);
       const defects = Array.isArray(defectsRes) ? defectsRes : (defectsRes?.data ?? []);
       const defectOpts = buildDefectTypeOptions(defects, boundDefectTypes);
-      const workshopOpts = (Array.isArray(workshopsRes) ? workshopsRes : []).map((w: any) => ({
+      const workshopOpts = factoryListItems(workshopsRes as any).map((w: any) => ({
         label: `${w.code || ''} ${w.name || ''}`.trim() || String(w.id),
         value: w.id,
       }));
@@ -126,15 +132,15 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
       (Array.isArray(usersRes?.items) ? usersRes.items : []).forEach((u: any) => {
         pOpts.push({ label: `[人员] ${u.full_name || u.username}`, value: `U_${u.uuid}` });
       });
-      (Array.isArray(teamsRes) ? teamsRes : []).forEach((t: any) => {
+      factoryListItems(teamsRes as any).forEach((t: any) => {
         pOpts.push({ label: `[小组] ${t.name}`, value: `T_${t.id}` });
       });
 
       const rOpts: { label: string; value: string }[] = [];
-      (Array.isArray(workCentersRes) ? workCentersRes : []).forEach((wc: any) => {
+      factoryListItems(workCentersRes as any).forEach((wc: any) => {
         rOpts.push({ label: `[工作中心] ${wc.code || ''} ${wc.name || ''}`.trim(), value: `WC_${wc.id}` });
       });
-      (Array.isArray(stationsRes) ? stationsRes : []).forEach((s: any) => {
+      factoryListItems(stationsRes as any).forEach((s: any) => {
         rOpts.push({ label: `[工位] ${s.code || ''} ${s.name || ''}`.trim(), value: `S_${s.id}` });
       });
       const eqItems = equipmentRes?.items ?? (Array.isArray(equipmentRes) ? equipmentRes : []);
@@ -149,7 +155,7 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
       }));
       if (
         fallbackInspectionPlan?.id != null &&
-        !planOpts.some((o) => o.value === fallbackInspectionPlan.id)
+        !planOpts.some((o: { value: number }) => o.value === fallbackInspectionPlan.id)
       ) {
         planOpts = [
           ...planOpts,

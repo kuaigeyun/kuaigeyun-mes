@@ -11,7 +11,12 @@
 import React, { useState, useEffect } from 'react';
 import { Select, message, Typography, Space, Form, Button } from 'antd';
 import { LoginOutlined, EnvironmentOutlined, ThunderboltOutlined } from '@ant-design/icons';
-import { workshopApi, productionLineApi, workstationApi } from '../../master-data/services/factory';
+import {
+    workshopApi,
+    productionLineApi,
+    workstationApi,
+    factoryListItems,
+} from '../../master-data/services/factory';
 import { getTenantId } from '../../../utils/auth';
 
 const { Title, Text } = Typography;
@@ -86,12 +91,8 @@ const StationBinder: React.FC<StationBinderProps> = ({ onBindSuccess, onCancel, 
             // Ah, the previous file login used `../../../../master-data/services/factory`.
             // That means `src/apps/master-data/services/factory`.
             
-            const res = await workshopApi.list({ isActive: true });
-            if (res && Array.isArray(res)) {
-                setWorkshops(res);
-            } else if (res && (res as any).items) {
-                setWorkshops((res as any).items);
-            }
+            const res = await workshopApi.list({ is_active: true });
+            setWorkshops(factoryListItems(res as any));
         } catch (error) {
             console.error('加载车间失败', error);
             // message.error('加载车间数据失败'); // Be silent to avoid noise
@@ -109,12 +110,8 @@ const StationBinder: React.FC<StationBinderProps> = ({ onBindSuccess, onCancel, 
 
         if (val) {
             try {
-                const res = await productionLineApi.list({ workshopId: val, isActive: true });
-                if (res && Array.isArray(res)) {
-                    setLines(res);
-                } else if (res && (res as any).items) {
-                    setLines((res as any).items);
-                }
+                const res = await productionLineApi.list({ workshop_id: val, is_active: true });
+                setLines(factoryListItems(res as any));
             } catch (error) {
                 console.error('加载产线失败', error);
             }
@@ -124,21 +121,16 @@ const StationBinder: React.FC<StationBinderProps> = ({ onBindSuccess, onCancel, 
     const handleLineChange = async (val: number) => {
         setSelectedLine(val);
         setSelectedStation(undefined);
-        loadStations(selectedWorkshop, val);
+        loadStations(val);
     };
 
-    const loadStations = async (workshopId?: number, lineId?: number) => {
+    const loadStations = async (lineId?: number) => {
          try {
-            const params: any = { isActive: true };
-            if (workshopId) params.workshopId = workshopId;
-            if (lineId) params.productionLineId = lineId; 
+            const params: any = { is_active: true };
+            if (lineId) params.production_line_id = lineId;
 
             const res = await workstationApi.list(params);
-            if (res && Array.isArray(res)) {
-                setStations(res);
-            } else if (res && (res as any).items) {
-                setStations((res as any).items);
-            }
+            setStations(factoryListItems(res as any));
         } catch (error) {
             console.error('加载工位失败', error);
         }

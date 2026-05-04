@@ -659,6 +659,7 @@ const EquipmentListPage: React.FC = () => {
                       equipment_name: detailData.name || '',
                     }}
                     autoGenerate={true}
+                    size={6}
                   />
                 </Card>
               </div>

@@ -33,7 +33,7 @@ import {
   Spin,
   theme,
 } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, ShoppingOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, ShoppingOutlined, ReloadOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
@@ -54,8 +54,9 @@ import { SimpleSparkline } from '../../../../../components';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import {
-  DocumentTrackingRelationsBody,
+  DocumentTrackingRelationsTabsBody,
   DocumentTrackingTimelineBody,
+  TraceLinkedDocumentBrief,
   useDocumentTracking,
 } from '../../../../../components/document-tracking-panel';
 import { receiptNoticeApi } from '../../../services/receipt-notice';
@@ -64,6 +65,16 @@ import { listPurchaseOrders, getPurchaseOrder } from '../../../services/purchase
 import { testGenerateCode, generateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { useTranslation } from 'react-i18next';
+import { ROUTES } from '../../../constants/routes';
+
+/** 详情 Drawer 外左侧全链路浮层（Uni-detail） */
+const RN_DETAIL_CHAIN_FLOAT_MARGIN = 16;
+const RN_DETAIL_LEFT_CHAIN_GAP = 16;
+const RN_DETAIL_CHAIN_DRAWER_GAP = 16;
+const RN_DETAIL_CHAIN_VERTICAL_TRIM = RN_DETAIL_CHAIN_FLOAT_MARGIN * 2 + RN_DETAIL_LEFT_CHAIN_GAP;
+const rnDetailChainHalfHeightCss = `calc((100vh - ${RN_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2)`;
+const rnDetailChainPanelWidthCss = `calc(50vw - ${RN_DETAIL_CHAIN_FLOAT_MARGIN * 2 + RN_DETAIL_CHAIN_DRAWER_GAP}px)`;
+const rnDetailBriefPanelTopCss = `calc(${RN_DETAIL_CHAIN_FLOAT_MARGIN}px + (100vh - ${RN_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2 + ${RN_DETAIL_LEFT_CHAIN_GAP}px)`;
 
 interface ReceiptNotice {
   id?: number;
@@ -140,6 +151,8 @@ const ReceiptNoticesPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { token } = theme.useToken();
+  const receiptNoticeDetailDrawerZIndex = token.zIndexPopupBase;
+  const receiptNoticeChainOverlayZIndex = token.zIndexPopupBase + 1;
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
@@ -167,10 +180,35 @@ const ReceiptNoticesPage: React.FC = () => {
   }, [statsVersion, refreshLocalStats]);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [noticeDetail, setNoticeDetail] = useState<ReceiptNoticeDetail | null>(null);
+  const [rnTrackingRefreshKey, setRnTrackingRefreshKey] = useState(0);
+  const [fullChainRefreshKey, setFullChainRefreshKey] = useState(0);
+  const [fullChainTraceLoading, setFullChainTraceLoading] = useState(false);
+  const [fullChainBriefDoc, setFullChainBriefDoc] = useState<{ document_type: string; document_id: number } | null>(
+    null,
+  );
   const receiptNoticeTracking = useDocumentTracking(
     detailDrawerVisible && noticeDetail?.id ? 'receipt_notice' : undefined,
-    noticeDetail?.id
+    noticeDetail?.id,
+    rnTrackingRefreshKey,
   );
+
+  const onFullChainGraphNodeClick = useCallback(
+    (type: string, id: number) => {
+      if (!id) return;
+      if (type === 'receipt_notice' && noticeDetail?.id != null && id === noticeDetail.id) {
+        setFullChainBriefDoc(null);
+        return;
+      }
+      setFullChainBriefDoc({ document_type: type, document_id: id });
+    },
+    [noticeDetail?.id],
+  );
+
+  useEffect(() => {
+    if (detailDrawerVisible && noticeDetail?.id != null) {
+      setFullChainBriefDoc(null);
+    }
+  }, [detailDrawerVisible, noticeDetail?.id]);
 
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -360,6 +398,8 @@ const ReceiptNoticesPage: React.FC = () => {
       const detail = await receiptNoticeApi.get(record.id!.toString());
       setNoticeDetail(detail as ReceiptNoticeDetail);
       setDetailDrawerVisible(true);
+      setRnTrackingRefreshKey((k) => k + 1);
+      setFullChainRefreshKey((k) => k + 1);
     } catch {
       messageApi.error('获取收货通知单详情失败');
     }
@@ -988,12 +1028,143 @@ const ReceiptNoticesPage: React.FC = () => {
         />
       </ListPageTemplate>
 
+      {detailDrawerVisible && noticeDetail?.id != null ? (
+        <>
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.relationsFullChainTitle')}
+            style={{
+              position: 'fixed',
+              left: RN_DETAIL_CHAIN_FLOAT_MARGIN,
+              top: RN_DETAIL_CHAIN_FLOAT_MARGIN,
+              width: rnDetailChainPanelWidthCss,
+              height: rnDetailChainHalfHeightCss,
+              zIndex: receiptNoticeChainOverlayZIndex,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div style={{ flexShrink: 0, marginBottom: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
+                    {t('components.documentTrackingPanel.relationsFullChainTitle')}
+                  </div>
+                </div>
+                <Button
+                  type="default"
+                  size="small"
+                  icon={<ReloadOutlined />}
+                  loading={fullChainTraceLoading}
+                  style={{ flexShrink: 0 }}
+                  onClick={() => setFullChainRefreshKey((k) => k + 1)}
+                >
+                  {t('components.documentRelationGraph.refresh')}
+                </Button>
+              </div>
+            </div>
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <DocumentTrackingRelationsTabsBody
+                documentType="receipt_notice"
+                documentId={noticeDetail.id}
+                refreshKey={fullChainRefreshKey}
+                onDocumentClick={onFullChainGraphNodeClick}
+                compact
+                hideInlineRefresh
+                onTraceLoadingChange={setFullChainTraceLoading}
+              />
+            </div>
+          </div>
+
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.traceBriefTitle')}
+            style={{
+              position: 'fixed',
+              left: RN_DETAIL_CHAIN_FLOAT_MARGIN,
+              top: rnDetailBriefPanelTopCss,
+              width: rnDetailChainPanelWidthCss,
+              height: rnDetailChainHalfHeightCss,
+              zIndex: receiptNoticeChainOverlayZIndex,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 600,
+                fontSize: 13,
+                marginBottom: 8,
+                flexShrink: 0,
+                color: 'var(--ant-color-text)',
+              }}
+            >
+              {t('components.documentTrackingPanel.traceBriefTitle')}
+            </div>
+            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+              <TraceLinkedDocumentBrief
+                documentType={fullChainBriefDoc?.document_type}
+                documentId={fullChainBriefDoc?.document_id}
+                compactChrome
+              />
+            </div>
+            {fullChainBriefDoc ? (
+              <div
+                style={{
+                  flexShrink: 0,
+                  marginTop: 8,
+                  paddingTop: 10,
+                  borderTop: '1px solid var(--ant-color-border)',
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                }}
+              >
+                <Space wrap>
+                  <Button onClick={() => setFullChainBriefDoc(null)}>
+                    {t('components.documentTrackingPanel.traceBriefDismiss')}
+                  </Button>
+                  {fullChainBriefDoc.document_type === 'purchase_order' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDetailDrawerVisible(false);
+                        navigate(ROUTES.PURCHASE_ORDERS);
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenPurchaseOrder', { defaultValue: '前往采购订单' })}
+                    </Button>
+                  ) : null}
+                </Space>
+              </div>
+            ) : null}
+          </div>
+        </>
+      ) : null}
+
       <DetailDrawerTemplate
         title={`收货通知单详情${noticeDetail?.notice_code ? ` - ${noticeDetail.notice_code}` : ''}`}
         open={detailDrawerVisible}
+        zIndex={receiptNoticeDetailDrawerZIndex}
         onClose={() => {
           setDetailDrawerVisible(false);
           setNoticeDetail(null);
+          setFullChainBriefDoc(null);
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
@@ -1080,33 +1251,10 @@ const ReceiptNoticesPage: React.FC = () => {
                         status={lifecycle.status}
                         showLabels
                         nextStepSuggestions={lifecycle.nextStepSuggestions}
+                        hideNextStepSuggestions
                       />
                     );
                   })()}
-                  <div
-                    style={{
-                      paddingTop: 12,
-                      borderTop: '1px solid var(--ant-color-border-secondary)',
-                    }}
-                  >
-                    <div style={{ marginBottom: 8, fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
-                      上下游单据
-                    </div>
-                    {receiptNoticeTracking.loading && (
-                      <div style={{ padding: '8px 0' }}>
-                        <Spin size="small" />
-                      </div>
-                    )}
-                    {receiptNoticeTracking.error && (
-                      <Typography.Text type="danger">{receiptNoticeTracking.error}</Typography.Text>
-                    )}
-                    {receiptNoticeTracking.data && (
-                      <DocumentTrackingRelationsBody
-                        data={receiptNoticeTracking.data}
-                        onDocumentClick={(type, id) => messageApi.info(`跳转到${type}#${id}`)}
-                      />
-                    )}
-                  </div>
                 </div>
               </DetailDrawerSection>
 

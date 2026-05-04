@@ -15,10 +15,15 @@ from infra.models.user import User
 from apps.master_data.services.factory_service import FactoryService
 from apps.master_data.schemas.factory_schemas import (
     PlantCreate, PlantUpdate, PlantResponse,
+    PlantListResult,
     WorkshopCreate, WorkshopUpdate, WorkshopResponse,
+    WorkshopListResult,
     ProductionLineCreate, ProductionLineUpdate, ProductionLineResponse,
+    ProductionLineListResult,
     WorkstationCreate, WorkstationUpdate, WorkstationResponse,
+    WorkstationListResult,
     WorkCenterCreate, WorkCenterUpdate, WorkCenterResponse,
+    WorkCenterListResult,
     WorkshopTreeResponse,
     BatchDeletePlantsRequest, BatchDeleteWorkshopsRequest,
     BatchDeleteProductionLinesRequest, BatchDeleteWorkstationsRequest,
@@ -26,6 +31,7 @@ from apps.master_data.schemas.factory_schemas import (
 )
 from apps.master_data.schemas.work_group_schemas import (
     WorkGroupCreate, WorkGroupUpdate, WorkGroupResponse,
+    WorkGroupListResult,
     BatchDeleteWorkGroupsRequest
 )
 from apps.master_data.services.work_group_service import WorkGroupService
@@ -83,7 +89,7 @@ async def create_plant(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/plants", response_model=List[PlantResponse], response_model_by_alias=True, summary="获取厂区列表")
+@router.get("/plants", response_model=PlantListResult, response_model_by_alias=True, summary="获取厂区列表")
 async def list_plants(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -92,7 +98,9 @@ async def list_plants(
     is_active: Optional[bool] = Query(None, description="是否启用"),
     keyword: Optional[str] = Query(None, description="搜索关键词（厂区编码或名称）"),
     code: Optional[str] = Query(None, description="厂区编码（精确匹配）"),
-    name: Optional[str] = Query(None, description="厂区名称（模糊匹配）")
+    name: Optional[str] = Query(None, description="厂区名称（模糊匹配）"),
+    sort_field: Optional[str] = Query(None, description="排序字段（code/name/createdAt/updatedAt/isActive）"),
+    sort_order: Optional[str] = Query(None, description="排序方向：asc 或 desc"),
 ):
     """
     获取厂区列表
@@ -105,7 +113,9 @@ async def list_plants(
     - **name**: 厂区名称（模糊匹配）
     """
     try:
-        return await FactoryService.list_plants(tenant_id, skip, limit, is_active, keyword, code, name)
+        return await FactoryService.list_plants(
+            tenant_id, skip, limit, is_active, keyword, code, name, sort_field, sort_order
+        )
     except Exception as e:
         from loguru import logger
         logger.exception(f"获取厂区列表失败: {str(e)}")
@@ -230,7 +240,7 @@ async def create_workshop(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/workshops", response_model=List[WorkshopResponse], response_model_by_alias=True, summary="获取车间列表")
+@router.get("/workshops", response_model=WorkshopListResult, response_model_by_alias=True, summary="获取车间列表")
 async def list_workshops(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -239,7 +249,10 @@ async def list_workshops(
     is_active: Optional[bool] = Query(None, description="是否启用"),
     keyword: Optional[str] = Query(None, description="搜索关键词（车间编码或名称）"),
     code: Optional[str] = Query(None, description="车间编码（精确匹配）"),
-    name: Optional[str] = Query(None, description="车间名称（模糊匹配）")
+    name: Optional[str] = Query(None, description="车间名称（模糊匹配）"),
+    plant_id: Optional[int] = Query(None, description="所属厂区ID（过滤）"),
+    sort_field: Optional[str] = Query(None, description="排序字段（含 code/name/plantId/createdAt 等）"),
+    sort_order: Optional[str] = Query(None, description="排序方向：asc 或 desc"),
 ):
     """
     获取车间列表
@@ -252,7 +265,9 @@ async def list_workshops(
     - **name**: 车间名称（模糊匹配）
     """
     try:
-        return await FactoryService.list_workshops(tenant_id, skip, limit, is_active, keyword, code, name)
+        return await FactoryService.list_workshops(
+            tenant_id, skip, limit, is_active, keyword, code, name, plant_id, sort_field, sort_order
+        )
     except Exception as e:
         from loguru import logger
         logger.exception(f"获取车间列表失败: {str(e)}")
@@ -377,14 +392,17 @@ async def create_production_line(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/production-lines", response_model=List[ProductionLineResponse], response_model_by_alias=True, summary="获取产线列表")
+@router.get("/production-lines", response_model=ProductionLineListResult, response_model_by_alias=True, summary="获取产线列表")
 async def list_production_lines(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     workshop_id: Optional[int] = Query(None, description="车间ID（过滤）"),
-    is_active: Optional[bool] = Query(None, description="是否启用")
+    is_active: Optional[bool] = Query(None, description="是否启用"),
+    keyword: Optional[str] = Query(None, description="搜索关键词（产线编码或名称）"),
+    sort_field: Optional[str] = Query(None, description="排序字段"),
+    sort_order: Optional[str] = Query(None, description="排序方向：asc 或 desc"),
 ):
     """
     获取产线列表
@@ -394,7 +412,9 @@ async def list_production_lines(
     - **workshop_id**: 车间ID（可选，用于过滤）
     - **is_active**: 是否启用（可选）
     """
-    return await FactoryService.list_production_lines(tenant_id, skip, limit, workshop_id, is_active)
+    return await FactoryService.list_production_lines(
+        tenant_id, skip, limit, workshop_id, is_active, keyword, sort_field, sort_order
+    )
 
 
 @router.get("/production-lines/{production_line_uuid}", response_model=ProductionLineResponse, response_model_by_alias=True, summary="获取产线详情")
@@ -513,14 +533,17 @@ async def create_workstation(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/workstations", response_model=List[WorkstationResponse], response_model_by_alias=True, summary="获取工位列表")
+@router.get("/workstations", response_model=WorkstationListResult, response_model_by_alias=True, summary="获取工位列表")
 async def list_workstations(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     production_line_id: Optional[int] = Query(None, description="产线ID（过滤）"),
-    is_active: Optional[bool] = Query(None, description="是否启用")
+    is_active: Optional[bool] = Query(None, description="是否启用"),
+    keyword: Optional[str] = Query(None, description="搜索关键词（工位编码或名称）"),
+    sort_field: Optional[str] = Query(None, description="排序字段"),
+    sort_order: Optional[str] = Query(None, description="排序方向：asc 或 desc"),
 ):
     """
     获取工位列表
@@ -530,7 +553,9 @@ async def list_workstations(
     - **production_line_id**: 产线ID（可选，用于过滤）
     - **is_active**: 是否启用（可选）
     """
-    return await FactoryService.list_workstations(tenant_id, skip, limit, production_line_id, is_active)
+    return await FactoryService.list_workstations(
+        tenant_id, skip, limit, production_line_id, is_active, keyword, sort_field, sort_order
+    )
 
 
 @router.get("/workstations/{workstation_uuid}", response_model=WorkstationResponse, response_model_by_alias=True, summary="获取工位详情")
@@ -642,7 +667,7 @@ async def create_work_center(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/work-centers", response_model=List[WorkCenterResponse], response_model_by_alias=True, summary="获取工作中心列表")
+@router.get("/work-centers", response_model=WorkCenterListResult, response_model_by_alias=True, summary="获取工作中心列表")
 async def list_work_centers(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -651,7 +676,9 @@ async def list_work_centers(
     is_active: Optional[bool] = Query(None, description="是否启用"),
     keyword: Optional[str] = Query(None, description="搜索关键词（工作中心编码或名称）"),
     code: Optional[str] = Query(None, description="工作中心编码（精确匹配）"),
-    name: Optional[str] = Query(None, description="工作中心名称（模糊匹配）")
+    name: Optional[str] = Query(None, description="工作中心名称（模糊匹配）"),
+    sort_field: Optional[str] = Query(None, description="排序字段"),
+    sort_order: Optional[str] = Query(None, description="排序方向：asc 或 desc"),
 ):
     """
     获取工作中心列表
@@ -664,7 +691,9 @@ async def list_work_centers(
     - **name**: 工作中心名称（模糊匹配）
     """
     try:
-        return await FactoryService.list_work_centers(tenant_id, skip, limit, is_active, keyword, code, name)
+        return await FactoryService.list_work_centers(
+            tenant_id, skip, limit, is_active, keyword, code, name, sort_field, sort_order
+        )
     except Exception as e:
         from loguru import logger
         logger.exception(f"获取工作中心列表失败: {str(e)}")
@@ -783,7 +812,7 @@ async def create_work_group(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/work-groups", response_model=List[WorkGroupResponse], response_model_by_alias=True, summary="获取工作小组列表")
+@router.get("/work-groups", response_model=WorkGroupListResult, response_model_by_alias=True, summary="获取工作小组列表")
 async def list_work_groups(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -792,7 +821,9 @@ async def list_work_groups(
     is_active: Optional[bool] = Query(None, description="是否启用"),
     keyword: Optional[str] = Query(None, description="搜索关键词（工作小组编码或名称）"),
     code: Optional[str] = Query(None, description="工作小组编码（精确匹配）"),
-    name: Optional[str] = Query(None, description="工作小组名称（模糊匹配）")
+    name: Optional[str] = Query(None, description="工作小组名称（模糊匹配）"),
+    sort_field: Optional[str] = Query(None, description="排序字段"),
+    sort_order: Optional[str] = Query(None, description="排序方向：asc 或 desc"),
 ):
     """
     获取工作小组列表
@@ -805,7 +836,9 @@ async def list_work_groups(
     - **name**: 工作小组名称（模糊匹配）
     """
     try:
-        return await WorkGroupService.list_work_groups(tenant_id, skip, limit, is_active, keyword, code, name)
+        return await WorkGroupService.list_work_groups(
+            tenant_id, skip, limit, is_active, keyword, code, name, sort_field, sort_order
+        )
     except Exception as e:
         from loguru import logger
         logger.exception(f"获取工作小组列表失败: {str(e)}")

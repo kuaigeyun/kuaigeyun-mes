@@ -172,16 +172,6 @@ class PurchaseTrackingResponse(BaseModel):
     nodes: List[PurchaseTrackingNode] = Field(default_factory=list)
 
 
-class SupplierPerformanceResponse(BaseModel):
-    """供应商绩效响应"""
-    supplier_id: int
-    supplier_name: str
-    on_time_delivery_rate: float = 0.0
-    quality_pass_rate: float = 0.0
-    average_lead_time_days: float = 0.0
-    reliability_rating: str = "N/A"  # S/A/B/C 或 N/A
-
-
 # === V2 增强：比价与分摊 ===
 class PriceComparisonItem(BaseModel):
     """比价条目"""
@@ -189,7 +179,6 @@ class PriceComparisonItem(BaseModel):
     supplier_name: str
     last_price: Decimal
     last_order_date: Optional[date]
-    reliability_rating: str
     delivery_lead_time: int  # Days
 
 

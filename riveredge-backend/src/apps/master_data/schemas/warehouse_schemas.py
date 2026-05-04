@@ -194,6 +194,12 @@ class StorageAreaResponse(StorageAreaBase):
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
     is_active: bool = Field(True, alias="isActive", description="是否启用")
+    warehouse_code: Optional[str] = Field(
+        None, alias="warehouseCode", description="所属仓库编码（列表/详情展示，避免前端二次请求）"
+    )
+    warehouse_name: Optional[str] = Field(
+        None, alias="warehouseName", description="所属仓库名称（列表/详情展示）"
+    )
     
     model_config = ConfigDict(
         from_attributes=True,
@@ -270,6 +276,12 @@ class StorageLocationResponse(StorageLocationBase):
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
     is_active: bool = Field(True, alias="isActive", description="是否启用")
+    storage_area_code: Optional[str] = Field(
+        None, alias="storageAreaCode", description="所属库区编码（列表/详情展示，避免前端二次请求）"
+    )
+    storage_area_name: Optional[str] = Field(
+        None, alias="storageAreaName", description="所属库区名称（列表/详情展示）"
+    )
     
     model_config = ConfigDict(
         from_attributes=True,

@@ -30,7 +30,38 @@ import type {
   WorkGroupCreate,
   WorkGroupUpdate,
   WorkGroupListParams,
+  FactoryPaginatedList,
 } from '../types/factory';
+
+/** 列表行数据（兼容旧调用方仍传入数组的情况） */
+export function factoryListItems<T>(res: FactoryPaginatedList<T> | T[]): T[] {
+  return Array.isArray(res) ? res : res.items;
+}
+
+/** UniTable 工具栏关键词 → 查询参数 keyword */
+export function applyFactoryKeyword(
+  apiParams: Record<string, unknown>,
+  searchFormValues?: Record<string, unknown>
+): void {
+  const kw = searchFormValues?.keyword;
+  if (kw !== undefined && kw !== null && String(kw).trim() !== '') {
+    apiParams.keyword = String(kw).trim();
+  }
+}
+
+/** ProTable 列排序 → 后端 sort_field / sort_order */
+export function applyFactoryTableSort(
+  apiParams: Record<string, unknown>,
+  sort: Record<string, 'ascend' | 'descend' | null | undefined>
+): void {
+  const entries = Object.entries(sort || {}).filter(
+    ([, order]) => order === 'ascend' || order === 'descend'
+  );
+  if (entries.length === 0) return;
+  const [sortKey, order] = entries[0];
+  apiParams.sort_field = sortKey;
+  apiParams.sort_order = order === 'descend' ? 'desc' : 'asc';
+}
 
 /**
  * 厂区 API 服务
@@ -46,7 +77,7 @@ export const plantApi = {
   /**
    * 获取厂区列表
    */
-  list: async (params?: PlantListParams): Promise<Plant[]> => {
+  list: async (params?: PlantListParams): Promise<FactoryPaginatedList<Plant>> => {
     return api.get('/apps/master-data/factory/plants', { params });
   },
 
@@ -105,7 +136,7 @@ export const workshopApi = {
   /**
    * 获取车间列表
    */
-  list: async (params?: WorkshopListParams): Promise<Workshop[]> => {
+  list: async (params?: WorkshopListParams): Promise<FactoryPaginatedList<Workshop>> => {
     return api.get('/apps/master-data/factory/workshops', { params });
   },
 
@@ -164,7 +195,7 @@ export const productionLineApi = {
   /**
    * 获取产线列表
    */
-  list: async (params?: ProductionLineListParams): Promise<ProductionLine[]> => {
+  list: async (params?: ProductionLineListParams): Promise<FactoryPaginatedList<ProductionLine>> => {
     return api.get('/apps/master-data/factory/production-lines', { params });
   },
 
@@ -223,7 +254,7 @@ export const workstationApi = {
   /**
    * 获取工位列表
    */
-  list: async (params?: WorkstationListParams): Promise<Workstation[]> => {
+  list: async (params?: WorkstationListParams): Promise<FactoryPaginatedList<Workstation>> => {
     return api.get('/apps/master-data/factory/workstations', { params });
   },
 
@@ -276,7 +307,7 @@ export const workCenterApi = {
     return api.post('/apps/master-data/factory/work-centers', data);
   },
 
-  list: async (params?: WorkCenterListParams): Promise<WorkCenter[]> => {
+  list: async (params?: WorkCenterListParams): Promise<FactoryPaginatedList<WorkCenter>> => {
     return api.get('/apps/master-data/factory/work-centers', { params });
   },
 
@@ -317,7 +348,7 @@ export const workGroupApi = {
     return api.post('/apps/master-data/factory/work-groups', data);
   },
 
-  list: async (params?: WorkGroupListParams): Promise<WorkGroup[]> => {
+  list: async (params?: WorkGroupListParams): Promise<FactoryPaginatedList<WorkGroup>> => {
     return api.get('/apps/master-data/factory/work-groups', { params });
   },
 

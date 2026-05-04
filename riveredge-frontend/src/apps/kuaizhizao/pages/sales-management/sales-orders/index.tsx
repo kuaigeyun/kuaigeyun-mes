@@ -26,7 +26,6 @@ import { CustomerFormModal } from '../../../../master-data/components/CustomerFo
 import { MaterialInventoryIndicator } from '../../../components/MaterialInventoryIndicator';
 import { MaterialBomIndicator } from '../../../components/MaterialBomIndicator';
 import { SalesOrderIndicatorsProvider } from '../../../components/SalesOrderIndicatorsProvider';
-import SalesOrderGanttChart from '../../../components/SalesOrderGanttChart';
 import {
   SalesOrderDetailProvider,
   SalesOrderDetailBasicPane,
@@ -425,8 +424,8 @@ const SalesOrdersPage: React.FC = () => {
     shipment_notice: true,
     invoice: true,
   };
-  // 与 UniTable viewTypes 同步：table=订单，detailTable/card/gantt=销售明细
-  const [viewTypeState, setViewTypeState] = useState<'table' | 'detailTable' | 'card' | 'gantt' | 'help'>('table');
+  // 与 UniTable viewTypes 同步：table=订单维度；其余视图键（明细表格、帮助）走明细数据维度
+  const [viewTypeState, setViewTypeState] = useState<'table' | 'detailTable' | 'help'>('table');
   const dataViewMode = viewTypeState === 'table' ? 'order' : 'detail';
   /** 视图模式 ref：切换时同步更新，确保 reload 时 request 使用正确模式（避免 setState 异步导致返回订单级数据） */
   const dataViewModeRef = useRef(dataViewMode);
@@ -2151,51 +2150,20 @@ const SalesOrdersPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           formRef={tableSearchFormRef}
           headerTitle={t('app.kuaizhizao.salesOrder.title')}
-          viewTypes={['table', 'detailTable', 'card', 'gantt', 'help']}
+          viewTypes={['table', 'detailTable', 'help']}
           defaultViewType="table"
           onViewTypeChange={(v) => {
             const nextMode = v === 'table' ? 'order' : 'detail';
             dataViewModeRef.current = nextMode;
-            setViewTypeState(v as 'table' | 'detailTable' | 'card' | 'gantt' | 'help');
+            setViewTypeState(v as 'table' | 'detailTable' | 'help');
             setTimeout(() => actionRef.current?.reload(), 0);
           }}
           detailTableColumns={detailColumns}
-          cardViewConfig={{
-            groupByField: '_lifecycleStage',
-            layout: 'waterfall',
-            renderCard: (item: SalesOrderItemRow) => (
-              <div
-                key={item._rowKey}
-                style={{
-                  padding: 12,
-                  border: '1px solid #f0f0f0',
-                  borderRadius: 6,
-                  background: '#fff',
-                }}
-              >
-                <div style={{ marginBottom: 8, fontWeight: 500 }}>
-                  {item.order_code} · {item.customer_name}
-                </div>
-                <div style={{ fontSize: 13, color: '#666' }}>
-                  {item.material_code} {item.material_name} × {item.required_quantity ?? 0}{' '}
-                  <DictionaryLabel dictionaryCode="MATERIAL_UNIT" value={item.material_unit} />
-                </div>
-                <div style={{ marginTop: 4, fontSize: 12, color: '#999' }}>
-                  {t('app.kuaizhizao.salesOrder.deliveryDate')}: {item.delivery_date ?? '-'}
-                </div>
-              </div>
-            ),
-          }}
-          ganttViewConfig={{
-            renderGantt: (data) => <SalesOrderGanttChart items={data as SalesOrderItemRow[]} />,
-          }}
           helpViewConfig={{
             content: (
               <div style={{ lineHeight: 1.8 }}>
                 <p><strong>表格视图</strong>：按订单维度展示。</p>
                 <p><strong>明细表格</strong>：以每行订单明细为展示维度，纯查看用途，支持库存/BOM 检查。</p>
-                <p><strong>卡片视图</strong>：按生命周期分组，瀑布流展示。</p>
-                <p><strong>甘特图</strong>：按交货日期展示时间轴。</p>
               </div>
             ),
           }}

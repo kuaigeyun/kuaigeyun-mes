@@ -1863,14 +1863,12 @@ const MaterialsManagementPage: React.FC = () => {
               position: 'absolute', 
               top: 24, 
               right: 24, 
-              width: 220, 
+              width: 152, 
               zIndex: 10,
-              background: 'rgba(255, 255, 255, 0.8)',
-              backdropFilter: 'blur(8px)',
-              padding: '16px',
-              borderRadius: '12px',
-              border: '1px solid rgba(0, 0, 0, 0.05)',
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
+              background: '#fff',
+              padding: '12px',
+              borderRadius: token.borderRadiusLG,
+              border: '1px solid rgba(0, 0, 0, 0.06)',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
@@ -1885,7 +1883,7 @@ const MaterialsManagementPage: React.FC = () => {
                 }}
                 autoGenerate={true}
                 showCardTitle={false}
-                size={8}
+                size={6}
                 noCard={true}
               />
             </div>

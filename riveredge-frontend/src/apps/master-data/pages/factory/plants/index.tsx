@@ -14,7 +14,7 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
 
-import { plantApi } from '../../../services/factory';
+import { plantApi, applyFactoryKeyword, applyFactoryTableSort } from '../../../services/factory';
 import { PlantFormModal } from '../../../components/PlantFormModal';
 import type { Plant, PlantCreate } from '../../../types/factory';
 import { batchImport } from '../../../../../utils/batchOperations';
@@ -409,7 +409,7 @@ const PlantsPage: React.FC = () => {
       } else {
         // 导出全部数据
         const allData = await plantApi.list({ skip: 0, limit: 10000 });
-        exportData = allData;
+        exportData = allData.items;
         filename = `${t('app.master-data.plants.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       }
 
@@ -466,16 +466,18 @@ const PlantsPage: React.FC = () => {
       {
         title: t('app.master-data.plants.code'),
         dataIndex: 'code',
-        copyable: true,width: 150,
+        width: 150,
         fixed: 'left' as const,
         ellipsis: true,
         copyable: true,
+        sorter: true,
       },
       {
         title: t('app.master-data.plants.name'),
         dataIndex: 'name',
         width: 200,
         ellipsis: true,
+        sorter: true,
       },
       {
         title: t('app.master-data.plants.address'),
@@ -591,7 +593,7 @@ const PlantsPage: React.FC = () => {
           viewTypes={['table', 'help']}
           defaultViewType="table"
           loadingDelay={200}
-          request={async (params, _sort, _filter, searchFormValues) => {
+          request={async (params, sort, _filter, searchFormValues) => {
             // 处理搜索参数
             const apiParams: any = {
               skip: ((params.current || 1) - 1) * (params.pageSize || 20),
@@ -600,16 +602,19 @@ const PlantsPage: React.FC = () => {
 
             // 启用状态筛选
             if (searchFormValues?.isActive !== undefined && searchFormValues.isActive !== '' && searchFormValues.isActive !== null) {
-              apiParams.isActive = searchFormValues.isActive;
+              apiParams.is_active = searchFormValues.isActive;
             }
+
+            applyFactoryKeyword(apiParams, searchFormValues);
+            applyFactoryTableSort(apiParams, sort);
 
             try {
               const result = await plantApi.list(apiParams);
-              const enrichedData = await enrichRecordsWithCustomFields(result);
+              const enrichedData = await enrichRecordsWithCustomFields(result.items);
               return {
                 data: enrichedData,
                 success: true,
-                total: result.length,
+                total: result.total,
               };
             } catch (error: any) {
               console.error('Failed to fetch plant list:', error);
@@ -698,13 +703,17 @@ const PlantsPage: React.FC = () => {
         onClose={handleCloseDetail}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-      >
-        <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues}
-        basic={plantDetail ? (
+        basic={
+          plantDetail ? (
             <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, plantDetail)} />
-          ) : undefined}
+          ) : null
+        }
+        lines={
+          customFields.length > 0 ? (
+            <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
+          ) : null
+        }
       />
-      </DetailDrawerTemplate>
 
       {/* 创建/编辑厂区 Modal */}
       <PlantFormModal

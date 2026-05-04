@@ -11,7 +11,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import type { DescriptionsProps } from 'antd';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   ActionType,
   ProColumns,
@@ -35,7 +35,7 @@ import {
   theme as AntdTheme,
   Tag,
 } from 'antd';
-import { EyeOutlined, EditOutlined, DeleteOutlined, QrcodeOutlined } from '@ant-design/icons';
+import { EyeOutlined, EditOutlined, DeleteOutlined, QrcodeOutlined, ReloadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   ListPageTemplate,
@@ -52,13 +52,25 @@ import { packingBindingApi } from '../../../services/packing-binding';
 import { qrcodeApi } from '../../../../../services/qrcode';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import {
-  DocumentTrackingRelationsBody,
+  DocumentTrackingRelationsTabsBody,
   DocumentTrackingTimelineBody,
+  TraceLinkedDocumentBrief,
   useDocumentTracking,
 } from '../../../../../components/document-tracking-panel';
 import { getPackingBindingLifecycle } from '../../../utils/packingBindingLifecycle';
 import dayjs from 'dayjs';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
+import { useTranslation } from 'react-i18next';
+import { ROUTES } from '../../../constants/routes';
+
+/** 详情 Drawer 外左侧全链路浮层（Uni-detail） */
+const PB_DETAIL_CHAIN_FLOAT_MARGIN = 16;
+const PB_DETAIL_LEFT_CHAIN_GAP = 16;
+const PB_DETAIL_CHAIN_DRAWER_GAP = 16;
+const PB_DETAIL_CHAIN_VERTICAL_TRIM = PB_DETAIL_CHAIN_FLOAT_MARGIN * 2 + PB_DETAIL_LEFT_CHAIN_GAP;
+const pbDetailChainHalfHeightCss = `calc((100vh - ${PB_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2)`;
+const pbDetailChainPanelWidthCss = `calc(50vw - ${PB_DETAIL_CHAIN_FLOAT_MARGIN * 2 + PB_DETAIL_CHAIN_DRAWER_GAP}px)`;
+const pbDetailBriefPanelTopCss = `calc(${PB_DETAIL_CHAIN_FLOAT_MARGIN}px + (100vh - ${PB_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2 + ${PB_DETAIL_LEFT_CHAIN_GAP}px)`;
 
 interface PackingBinding {
   id?: number;
@@ -118,8 +130,12 @@ const PB_STAT_SPARK_2 = [2, 3, 2, 4, 3, 5, 4];
 const PB_STAT_SPARK_3 = [1, 2, 1, 2, 1, 2, 2];
 
 const PackingBindingPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token } = AntdTheme.useToken();
+  const packingBindingDetailDrawerZIndex = token.zIndexPopupBase;
+  const packingBindingChainOverlayZIndex = token.zIndexPopupBase + 1;
+  const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -132,15 +148,37 @@ const PackingBindingPage: React.FC = () => {
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentBinding, setCurrentBinding] = useState<PackingBinding | null>(null);
 
+  const [pbTrackingRefreshKey, setPbTrackingRefreshKey] = useState(0);
+  const [fullChainRefreshKey, setFullChainRefreshKey] = useState(0);
+  const [fullChainTraceLoading, setFullChainTraceLoading] = useState(false);
+  const [fullChainBriefDoc, setFullChainBriefDoc] = useState<{ document_type: string; document_id: number } | null>(
+    null,
+  );
+
+  const onFullChainGraphNodeClick = useCallback(
+    (type: string, id: number) => {
+      if (!id) return;
+      if (type === 'packing_binding' && currentBinding?.id != null && id === currentBinding.id) {
+        setFullChainBriefDoc(null);
+        return;
+      }
+      setFullChainBriefDoc({ document_type: type, document_id: id });
+    },
+    [currentBinding],
+  );
+
   const handleDetail = useCallback(async (record: PackingBinding) => {
     try {
+      setFullChainBriefDoc(null);
       const detail = await packingBindingApi.get(record.id!.toString());
       setCurrentBinding(detail);
       setDetailDrawerVisible(true);
+      setPbTrackingRefreshKey((k) => k + 1);
+      setFullChainRefreshKey((k) => k + 1);
     } catch (error: any) {
       messageApi.error(error.message || '获取装箱绑定记录详情失败');
     }
-  }, [messageApi, setCurrentBinding, setDetailDrawerVisible]);
+  }, [messageApi]);
 
   const [localStats, setLocalStats] = useState({ total: 0, scan: 0, manual: 0 });
 
@@ -165,7 +203,8 @@ const PackingBindingPage: React.FC = () => {
 
   const packingTracking = useDocumentTracking(
     detailDrawerVisible && currentBinding?.id ? 'packing_binding' : undefined,
-    currentBinding?.id
+    currentBinding?.id,
+    pbTrackingRefreshKey,
   );
 
   const [currentBindingId, setCurrentBindingId] = useState<number | null>(null);
@@ -657,13 +696,144 @@ const PackingBindingPage: React.FC = () => {
         />
       </FormModalTemplate>
 
+      {detailDrawerVisible && currentBinding?.id != null ? (
+        <>
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.relationsFullChainTitle')}
+            style={{
+              position: 'fixed',
+              left: PB_DETAIL_CHAIN_FLOAT_MARGIN,
+              top: PB_DETAIL_CHAIN_FLOAT_MARGIN,
+              width: pbDetailChainPanelWidthCss,
+              height: pbDetailChainHalfHeightCss,
+              zIndex: packingBindingChainOverlayZIndex,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div style={{ flexShrink: 0, marginBottom: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
+                    {t('components.documentTrackingPanel.relationsFullChainTitle')}
+                  </div>
+                </div>
+                <Button
+                  type="default"
+                  size="small"
+                  icon={<ReloadOutlined />}
+                  loading={fullChainTraceLoading}
+                  style={{ flexShrink: 0 }}
+                  onClick={() => setFullChainRefreshKey((k) => k + 1)}
+                >
+                  {t('components.documentRelationGraph.refresh')}
+                </Button>
+              </div>
+            </div>
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <DocumentTrackingRelationsTabsBody
+                documentType="packing_binding"
+                documentId={currentBinding.id}
+                refreshKey={fullChainRefreshKey}
+                onDocumentClick={onFullChainGraphNodeClick}
+                compact
+                hideInlineRefresh
+                onTraceLoadingChange={setFullChainTraceLoading}
+              />
+            </div>
+          </div>
+
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.traceBriefTitle')}
+            style={{
+              position: 'fixed',
+              left: PB_DETAIL_CHAIN_FLOAT_MARGIN,
+              top: pbDetailBriefPanelTopCss,
+              width: pbDetailChainPanelWidthCss,
+              height: pbDetailChainHalfHeightCss,
+              zIndex: packingBindingChainOverlayZIndex,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 600,
+                fontSize: 13,
+                marginBottom: 8,
+                flexShrink: 0,
+                color: 'var(--ant-color-text)',
+              }}
+            >
+              {t('components.documentTrackingPanel.traceBriefTitle')}
+            </div>
+            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+              <TraceLinkedDocumentBrief
+                documentType={fullChainBriefDoc?.document_type}
+                documentId={fullChainBriefDoc?.document_id}
+                compactChrome
+              />
+            </div>
+            {fullChainBriefDoc ? (
+              <div
+                style={{
+                  flexShrink: 0,
+                  marginTop: 8,
+                  paddingTop: 10,
+                  borderTop: '1px solid var(--ant-color-border)',
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                }}
+              >
+                <Space wrap>
+                  <Button onClick={() => setFullChainBriefDoc(null)}>
+                    {t('components.documentTrackingPanel.traceBriefDismiss')}
+                  </Button>
+                  {fullChainBriefDoc.document_type === 'work_order' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDetailDrawerVisible(false);
+                        navigate(ROUTES.WORK_ORDERS);
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenWorkOrder', { defaultValue: '前往工单' })}
+                    </Button>
+                  ) : null}
+                </Space>
+              </div>
+            ) : null}
+          </div>
+        </>
+      ) : null}
+
       <DetailDrawerTemplate
         title={`装箱绑定详情${currentBinding?.box_no ? ` - ${currentBinding.box_no}` : ''}`}
         open={detailDrawerVisible}
+        zIndex={packingBindingDetailDrawerZIndex}
         width={DRAWER_CONFIG.HALF_WIDTH}
         onClose={() => {
           setDetailDrawerVisible(false);
           setCurrentBinding(null);
+          setFullChainBriefDoc(null);
         }}
         columns={[]}
         column={3}
@@ -695,33 +865,10 @@ const PackingBindingPage: React.FC = () => {
                         status={lifecycle.status}
                         showLabels
                         nextStepSuggestions={lifecycle.nextStepSuggestions}
+                        hideNextStepSuggestions
                       />
                     );
                   })()}
-                  <div
-                    style={{
-                      paddingTop: 12,
-                      borderTop: '1px solid var(--ant-color-border-secondary)',
-                    }}
-                  >
-                    <div style={{ marginBottom: 8, fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
-                      上下游单据
-                    </div>
-                    {packingTracking.loading && (
-                      <div style={{ padding: '8px 0' }}>
-                        <Spin size="small" />
-                      </div>
-                    )}
-                    {packingTracking.error && (
-                      <Typography.Text type="danger">{packingTracking.error}</Typography.Text>
-                    )}
-                    {packingTracking.data && (
-                      <DocumentTrackingRelationsBody
-                        data={packingTracking.data}
-                        onDocumentClick={(type, id) => messageApi.info(`跳转到${type}#${id}`)}
-                      />
-                    )}
-                  </div>
                 </div>
               </DetailDrawerSection>
 

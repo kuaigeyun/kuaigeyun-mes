@@ -7,7 +7,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography } from 'antd';
+import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography, theme } from 'antd';
 import { downloadFile } from '../../../../../utils';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -26,6 +26,7 @@ import { batchImport } from '../../../../../utils/batchOperations';
 const StorageAreasPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const { token } = theme.useToken();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
@@ -524,6 +525,15 @@ const StorageAreasPage: React.FC = () => {
     return warehouse ? `${warehouse.code} - ${warehouse.name}` : `${t('app.master-data.storageAreas.warehouseIdPrefix')}: ${warehouseId}`;
   };
 
+  const formatWarehouseDisplay = (record: StorageArea): string => {
+    const code = record.warehouseCode ?? (record as any).warehouse_code;
+    const name = record.warehouseName ?? (record as any).warehouse_name;
+    if (code != null && String(code) !== '' && name != null && String(name) !== '') {
+      return `${code} - ${name}`;
+    }
+    return getWarehouseName(record?.warehouseId);
+  };
+
   /**
    * 表格列定义
    */
@@ -546,7 +556,7 @@ const StorageAreasPage: React.FC = () => {
       dataIndex: 'warehouseId',
       width: 200,
       hideInSearch: true,
-      render: (_, record) => getWarehouseName(record?.warehouseId),
+      render: (_, record) => formatWarehouseDisplay(record),
     },
     {
       title: t('app.master-data.warehouses.description'),
@@ -635,7 +645,7 @@ const StorageAreasPage: React.FC = () => {
     {
       title: t('app.master-data.storageAreas.warehouse'),
       dataIndex: 'warehouseId',
-      render: (_, record) => getWarehouseName(record?.warehouseId),
+      render: (_, record) => formatWarehouseDisplay(record),
     },
     {
       title: t('app.master-data.warehouses.description'),
@@ -795,40 +805,41 @@ const StorageAreasPage: React.FC = () => {
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
         styles={{ body: { position: 'relative' } }}
-      >
-        {storageAreaDetail && (
-          <div style={{
-            position: 'absolute',
-            top: 24,
-            right: 24,
-            width: 220,
-            padding: 24,
-            background: 'rgba(255, 255, 255, 0.6)',
-            backdropFilter: 'blur(10px)',
-            borderRadius: 16,
-            boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.15)',
-            border: '1px solid rgba(255, 255, 255, 0.18)',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 10
-          }}>
-            <QRCodeGenerator
-              data={{
-                area_uuid: storageAreaDetail.uuid,
-                area_code: storageAreaDetail.code,
-                area_name: storageAreaDetail.name
-              }}
-              qrcodeType="TRACE"
-              size={8}
-              noCard={true}
-        basic={storageAreaDetail ? (
-            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, storageAreaDetail)} />
-          ) : undefined}
+        basic={
+          storageAreaDetail ? (
+            <div style={{ position: 'relative', paddingRight: 8 }}>
+              <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, storageAreaDetail)} />
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  right: 0,
+                  width: 152,
+                  padding: 12,
+                  background: '#fff',
+                  borderRadius: token.borderRadiusLG,
+                  border: '1px solid rgba(0, 0, 0, 0.06)',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  zIndex: 10,
+                }}
+              >
+                <QRCodeGenerator
+                  data={{
+                    area_uuid: storageAreaDetail.uuid,
+                    area_code: storageAreaDetail.code,
+                    area_name: storageAreaDetail.name,
+                  }}
+                  qrcodeType="TRACE"
+                  size={6}
+                  noCard={true}
+                />
+              </div>
+            </div>
+          ) : null
+        }
       />
-          </div>
-        )}
-      </DetailDrawerTemplate>
 
       {/* 创建/编辑库区 Modal */}
       <StorageAreaFormModal

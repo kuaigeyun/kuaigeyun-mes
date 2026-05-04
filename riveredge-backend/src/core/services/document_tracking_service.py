@@ -45,6 +45,14 @@ def _get_model_registry() -> Dict[str, tuple]:
     from apps.kuaizhizao.models.delivery_notice import DeliveryNotice
     from apps.kuaicaiwu.models.receivable import Receivable
     from apps.kuaicaiwu.models.payable import Payable
+    from apps.kuaizhizao.models.equipment import Equipment
+    from apps.kuaizhizao.models.equipment_fault import EquipmentFault
+    from apps.kuaizhizao.models.maintenance_plan import MaintenancePlan
+    from apps.kuaizhizao.models.maintenance_reminder import MaintenanceReminder
+    from apps.kuaizhizao.models.mold import Mold
+    from apps.kuaizhizao.models.tool import Tool
+    from apps.master_data.models.performance import Holiday, Skill
+    from apps.master_data.models.employee_performance import PerformanceSummary
     return {
         "demand": (Demand, "demand_code"),
         "sales_order": (SalesOrder, "order_code"),
@@ -78,6 +86,15 @@ def _get_model_registry() -> Dict[str, tuple]:
         "sales_return": (SalesReturn, "return_code"),
         "receivable": (Receivable, "receivable_code"),
         "payable": (Payable, "payable_code"),
+        "equipment": (Equipment, "code"),
+        "equipment_fault": (EquipmentFault, "fault_no"),
+        "maintenance_plan": (MaintenancePlan, "plan_no"),
+        "maintenance_reminder": (MaintenanceReminder, "uuid"),
+        "mold": (Mold, "code"),
+        "tool": (Tool, "code"),
+        "performance_skill": (Skill, "code"),
+        "performance_holiday": (Holiday, "name"),
+        "performance_summary": (PerformanceSummary, "period"),
     }
 
 DOCUMENT_MODEL_REGISTRY = _get_model_registry
@@ -116,6 +133,15 @@ DOCUMENT_TYPE_LABEL_ZH: Dict[str, str] = {
     "sales_return": "销售退货单",
     "receivable": "应收单",
     "payable": "应付单",
+    "equipment": "设备",
+    "equipment_fault": "设备故障",
+    "maintenance_plan": "保养计划",
+    "maintenance_reminder": "维护提醒",
+    "mold": "模具",
+    "tool": "工装",
+    "performance_skill": "技能",
+    "performance_holiday": "假期",
+    "performance_summary": "绩效汇总",
 }
 
 

@@ -29,7 +29,7 @@ from apps.kuaizhizao.schemas.purchase import (
     PurchaseOrderApprove, PurchaseOrderConfirm, PurchaseOrderListParams,
     MaterialPriceHistoryResponse, MaterialPriceHistoryItem,
     PurchaseTrackingResponse, PurchaseTrackingNode,
-    SupplierPerformanceResponse, ExpediteResponse,
+    ExpediteResponse,
     PriceComparisonResponse, MaterialPriceComparison, PriceComparisonItem
 )
 from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, LEGACY_AUDITED_VALUES, is_draft_status
@@ -1091,92 +1091,6 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             nodes=nodes
         )
 
-    async def get_supplier_performance_metrics(self, tenant_id: int, supplier_id: int) -> SupplierPerformanceResponse:
-        """获取供应商表现指标"""
-        from apps.kuaizhizao.models.purchase_order import PurchaseOrder
-        from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
-        from apps.master_data.models.supplier import Supplier
-        from datetime import datetime, timedelta
-
-        supplier = await Supplier.get_or_none(tenant_id=tenant_id, id=supplier_id)
-        if not supplier:
-            raise NotFoundError(f"供应商不存在: {supplier_id}")
-
-        # 近半年订单
-        six_months_ago = datetime.now() - timedelta(days=180)
-        orders = await PurchaseOrder.filter(
-            tenant_id=tenant_id,
-            supplier_id=supplier_id,
-            order_date__gte=six_months_ago.date(),
-            status__in=["AUDITED", "CONFIRMED", "已审核", "已确认", "已通过"]
-        ).all()
-
-        if not orders:
-            return SupplierPerformanceResponse(
-                supplier_id=supplier_id,
-                supplier_name=supplier.name,
-                reliability_rating="N/A",
-            )
-
-        # 1. 计算 OTIF (到货及时率)
-        # 简化：如果有入库记录且入库时间 <= 要求到货时间
-        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
-        on_time_count = 0
-        for o in orders:
-            receipt = (
-                await PurchaseReceipt.filter(tenant_id=tenant_id, purchase_order_id=o.id)
-                .order_by("receipt_time")
-                .first()
-            )
-            due = o.delivery_date
-            if (
-                receipt
-                and receipt.receipt_time
-                and due is not None
-                and receipt.receipt_time.date() <= due
-            ):
-                on_time_count += 1
-
-        on_time_delivery_rate = (on_time_count / len(orders)) * 100
-
-        # 2. 质量合格率
-        inspections = await IncomingInspection.filter(
-            tenant_id=tenant_id,
-            supplier_id=supplier_id,
-            created_at__gte=six_months_ago
-        ).all()
-        
-        total_inspected = sum(i.inspection_quantity for i in inspections) or 1
-        total_qualified = sum(i.qualified_quantity for i in inspections)
-        quality_pass_rate = (float(total_qualified) / float(total_inspected)) * 100
-
-        # 3. 平均提前期
-        lead_times = []
-        for o in orders:
-            receipt = (
-                await PurchaseReceipt.filter(tenant_id=tenant_id, purchase_order_id=o.id)
-                .order_by("receipt_time")
-                .first()
-            )
-            if receipt and receipt.receipt_time and o.order_date:
-                delta = (receipt.receipt_time.date() - o.order_date).days
-                lead_times.append(max(0, delta))
-
-        average_lead_time_days = sum(lead_times) / len(lead_times) if lead_times else 0.0
-
-        # 4. 综合评分
-        score = int(on_time_delivery_rate * 0.5 + quality_pass_rate * 0.5)
-        rating = "S" if score >= 95 else "A" if score >= 85 else "B" if score >= 70 else "C"
-
-        return SupplierPerformanceResponse(
-            supplier_id=supplier_id,
-            supplier_name=supplier.name,
-            on_time_delivery_rate=round(on_time_delivery_rate, 1),
-            quality_pass_rate=round(quality_pass_rate, 1),
-            average_lead_time_days=round(average_lead_time_days, 1),
-            reliability_rating=rating,
-        )
-
     async def expedite_purchase_order(self, tenant_id: int, order_id: int, remarks: Optional[str] = None) -> ExpediteResponse:
         """一键催单"""
         order = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=order_id)
@@ -1205,10 +1119,11 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
     async def get_price_comparison(self, tenant_id: int, material_ids: List[int]) -> PriceComparisonResponse:
         """
         获取物料的多供应商价格对比（比价助手）
-        
-        从历史成交记录中提取不同供应商的最近成交价，并结合供应商评级。
+
+        从历史成交记录中提取不同供应商的最近成交价。
         """
         from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
         from apps.master_data.models.material import Material
         from apps.kuaizhizao.constants import LEGACY_AUDITED_VALUES
         
@@ -1236,12 +1151,20 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             
             comparisons = []
             for sid, item in supplier_latest.items():
-                rating = "N/A"
                 delivery_lead_days = 0
                 try:
-                    perf = await self.get_supplier_performance_metrics(tenant_id, sid)
-                    rating = perf.reliability_rating
-                    delivery_lead_days = int(round(float(perf.average_lead_time_days or 0)))
+                    rec = (
+                        await PurchaseReceipt.filter(
+                            tenant_id=tenant_id, purchase_order_id=item.order.id
+                        )
+                        .order_by("receipt_time")
+                        .first()
+                    )
+                    if rec and rec.receipt_time and item.order.order_date:
+                        delivery_lead_days = max(
+                            0,
+                            (rec.receipt_time.date() - item.order.order_date).days,
+                        )
                 except Exception:
                     pass
 
@@ -1251,7 +1174,6 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                         supplier_name=item.order.supplier_name,
                         last_price=item.unit_price,
                         last_order_date=item.order.order_date,
-                        reliability_rating=rating,
                         delivery_lead_time=max(0, delivery_lead_days),
                     )
                 )

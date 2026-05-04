@@ -8,7 +8,9 @@
  * Date: 2026-01-05
  */
 
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import type { DescriptionsProps } from 'antd';
 import {
   ActionType,
@@ -21,9 +23,31 @@ import {
   ProFormTextArea,
   ProFormSwitch,
 } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, message, Modal, Tabs, Table, Card, Form, Input, DatePicker, Select, Row, Col, Descriptions, Typography, Dropdown, Empty } from 'antd';
+import {
+  App,
+  Button,
+  Tag,
+  Space,
+  message,
+  Modal,
+  Tabs,
+  Table,
+  Card,
+  Form,
+  Input,
+  DatePicker,
+  Select,
+  Row,
+  Col,
+  Descriptions,
+  Typography,
+  Dropdown,
+  Empty,
+  Spin,
+  theme as AntdTheme,
+} from 'antd';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
-import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, HistoryOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, HistoryOutlined, ReloadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import CodeField from '../../../../../components/code-field';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
@@ -36,6 +60,22 @@ import { workshopApi } from '../../../../master-data/services/factory';
 import { batchImport } from '../../../../../utils/batchOperations';
 import dayjs from 'dayjs';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
+import {
+  DocumentTrackingRelationsTabsBody,
+  DocumentTrackingTimelineBody,
+  TraceLinkedDocumentBrief,
+  useDocumentTracking,
+} from '../../../../../components/document-tracking-panel';
+import { EquipmentTraceBriefFooter } from '../EquipmentTraceBriefFooter';
+
+/** 详情 Drawer 外左侧全链路浮层（Uni-detail） */
+const EQ_DETAIL_CHAIN_FLOAT_MARGIN = 16;
+const EQ_DETAIL_LEFT_CHAIN_GAP = 16;
+const EQ_DETAIL_CHAIN_DRAWER_GAP = 16;
+const EQ_DETAIL_CHAIN_VERTICAL_TRIM = EQ_DETAIL_CHAIN_FLOAT_MARGIN * 2 + EQ_DETAIL_LEFT_CHAIN_GAP;
+const eqDetailChainHalfHeightCss = `calc((100vh - ${EQ_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2)`;
+const eqDetailChainPanelWidthCss = `calc(50vw - ${EQ_DETAIL_CHAIN_FLOAT_MARGIN * 2 + EQ_DETAIL_CHAIN_DRAWER_GAP}px)`;
+const eqDetailBriefPanelTopCss = `calc(${EQ_DETAIL_CHAIN_FLOAT_MARGIN}px + (100vh - ${EQ_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2 + ${EQ_DETAIL_LEFT_CHAIN_GAP}px)`;
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
@@ -99,7 +139,12 @@ interface Equipment {
 }
 
 const EquipmentPage: React.FC = () => {
+  const navigate = useNavigate();
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const { token } = AntdTheme.useToken();
+  const equipmentDetailDrawerZIndex = token.zIndexPopupBase;
+  const equipmentChainOverlayZIndex = token.zIndexPopupBase + 1;
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
@@ -113,6 +158,31 @@ const EquipmentPage: React.FC = () => {
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [equipmentDetail, setEquipmentDetail] = useState<Equipment | null>(null);
+
+  const [eqTrackingRefreshKey, setEqTrackingRefreshKey] = useState(0);
+  const [fullChainRefreshKey, setFullChainRefreshKey] = useState(0);
+  const [fullChainTraceLoading, setFullChainTraceLoading] = useState(false);
+  const [fullChainBriefDoc, setFullChainBriefDoc] = useState<{ document_type: string; document_id: number } | null>(
+    null,
+  );
+
+  const onFullChainGraphNodeClick = useCallback(
+    (type: string, id: number) => {
+      if (!id) return;
+      if (type === 'equipment' && equipmentDetail?.id != null && id === equipmentDetail.id) {
+        setFullChainBriefDoc(null);
+        return;
+      }
+      setFullChainBriefDoc({ document_type: type, document_id: id });
+    },
+    [equipmentDetail],
+  );
+
+  const equipmentTracking = useDocumentTracking(
+    drawerVisible && equipmentDetail?.id ? 'equipment' : undefined,
+    equipmentDetail?.id,
+    eqTrackingRefreshKey,
+  );
 
   // 追溯相关状态
   const [traceVisible, setTraceVisible] = useState(false);
@@ -174,6 +244,7 @@ const EquipmentPage: React.FC = () => {
    */
   const handleDetail = async (record: Equipment) => {
     try {
+      setFullChainBriefDoc(null);
       if (!record.uuid) {
         messageApi.error('设备UUID不存在');
         return;
@@ -181,6 +252,8 @@ const EquipmentPage: React.FC = () => {
       const detail = await equipmentApi.get(record.uuid);
       setEquipmentDetail(detail);
       setDrawerVisible(true);
+      setEqTrackingRefreshKey((k) => k + 1);
+      setFullChainRefreshKey((k) => k + 1);
     } catch (error) {
       messageApi.error('获取设备详情失败');
     }
@@ -203,6 +276,7 @@ const EquipmentPage: React.FC = () => {
           if (equipmentDetail?.uuid && keys.map(String).includes(String(equipmentDetail.uuid))) {
             setDrawerVisible(false);
             setEquipmentDetail(null);
+            setFullChainBriefDoc(null);
           }
           actionRef.current?.reload();
         } catch (error: any) {
@@ -271,8 +345,9 @@ const EquipmentPage: React.FC = () => {
         installation_date: values.installation_date ? values.installation_date.format('YYYY-MM-DD') : null,
       };
 
-      if (isEdit && currentEquipment?.uuid) {
-        await equipmentApi.update(currentEquipment.uuid, submitData);
+      const editedUuid = isEdit ? currentEquipment?.uuid : undefined;
+      if (isEdit && editedUuid) {
+        await equipmentApi.update(editedUuid, submitData);
         messageApi.success('设备更新成功');
       } else {
         await equipmentApi.create(submitData);
@@ -282,6 +357,16 @@ const EquipmentPage: React.FC = () => {
       setCurrentEquipment(null);
       formRef.current?.resetFields();
       actionRef.current?.reload();
+      if (editedUuid && equipmentDetail?.uuid === editedUuid) {
+        try {
+          const fresh = await equipmentApi.get(editedUuid);
+          setEquipmentDetail(fresh);
+          setEqTrackingRefreshKey((k) => k + 1);
+          setFullChainRefreshKey((k) => k + 1);
+        } catch {
+          /* ignore */
+        }
+      }
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
       throw error;
@@ -830,13 +915,126 @@ const EquipmentPage: React.FC = () => {
         </Row>
       </FormModalTemplate>
 
+      {drawerVisible && equipmentDetail?.id != null ? (
+        <>
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.relationsFullChainTitle')}
+            style={{
+              position: 'fixed',
+              left: EQ_DETAIL_CHAIN_FLOAT_MARGIN,
+              top: EQ_DETAIL_CHAIN_FLOAT_MARGIN,
+              width: eqDetailChainPanelWidthCss,
+              height: eqDetailChainHalfHeightCss,
+              zIndex: equipmentChainOverlayZIndex,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div style={{ flexShrink: 0, marginBottom: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
+                    {t('components.documentTrackingPanel.relationsFullChainTitle')}
+                  </div>
+                </div>
+                <Button
+                  type="default"
+                  size="small"
+                  icon={<ReloadOutlined />}
+                  loading={fullChainTraceLoading}
+                  style={{ flexShrink: 0 }}
+                  onClick={() => setFullChainRefreshKey((k) => k + 1)}
+                >
+                  {t('components.documentRelationGraph.refresh')}
+                </Button>
+              </div>
+            </div>
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <DocumentTrackingRelationsTabsBody
+                documentType="equipment"
+                documentId={equipmentDetail.id}
+                refreshKey={fullChainRefreshKey}
+                onDocumentClick={onFullChainGraphNodeClick}
+                compact
+                hideInlineRefresh
+                onTraceLoadingChange={setFullChainTraceLoading}
+              />
+            </div>
+          </div>
+
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.traceBriefTitle')}
+            style={{
+              position: 'fixed',
+              left: EQ_DETAIL_CHAIN_FLOAT_MARGIN,
+              top: eqDetailBriefPanelTopCss,
+              width: eqDetailChainPanelWidthCss,
+              height: eqDetailChainHalfHeightCss,
+              zIndex: equipmentChainOverlayZIndex,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 600,
+                fontSize: 13,
+                marginBottom: 8,
+                flexShrink: 0,
+                color: 'var(--ant-color-text)',
+              }}
+            >
+              {t('components.documentTrackingPanel.traceBriefTitle')}
+            </div>
+            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+              <TraceLinkedDocumentBrief
+                documentType={fullChainBriefDoc?.document_type}
+                documentId={fullChainBriefDoc?.document_id}
+                compactChrome
+              />
+            </div>
+            <EquipmentTraceBriefFooter
+              brief={fullChainBriefDoc}
+              t={t}
+              navigate={navigate}
+              closeDrawer={() => {
+                setDrawerVisible(false);
+                setEquipmentDetail(null);
+                setFullChainBriefDoc(null);
+              }}
+              onDismissBrief={() => setFullChainBriefDoc(null)}
+            />
+          </div>
+        </>
+      ) : null}
+
       {/* 设备详情 Drawer */}
       <DetailDrawerTemplate
         title="设备详情"
         open={drawerVisible}
+        zIndex={equipmentDetailDrawerZIndex}
         onClose={() => {
           setDrawerVisible(false);
           setEquipmentDetail(null);
+          setFullChainBriefDoc(null);
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
@@ -863,19 +1061,30 @@ const EquipmentPage: React.FC = () => {
                         showLabels
                         status={lc.status}
                         nextStepSuggestions={lc.nextStepSuggestions}
+                        hideNextStepSuggestions
                       />
                     );
                   })()}
-                  <Typography.Text type="secondary">
-                    设备台账未接入单据跟踪中心；关联维护/故障请使用列表「追溯」
-                  </Typography.Text>
                 </div>
               </DetailDrawerSection>
               <DetailDrawerSection title="明细信息">
                 <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="设备台账无明细行表" />
               </DetailDrawerSection>
               <DetailDrawerSection title="操作记录">
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+                {equipmentTracking.loading && (
+                  <div style={{ textAlign: 'center', padding: 24 }}>
+                    <Spin />
+                  </div>
+                )}
+                {equipmentTracking.error && !equipmentTracking.loading && (
+                  <Typography.Text type="danger">{equipmentTracking.error}</Typography.Text>
+                )}
+                {equipmentTracking.data && !equipmentTracking.loading && (
+                  <DocumentTrackingTimelineBody data={equipmentTracking.data} />
+                )}
+                {!equipmentTracking.loading && !equipmentTracking.data && !equipmentTracking.error && (
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+                )}
               </DetailDrawerSection>
             </>
           ) : null

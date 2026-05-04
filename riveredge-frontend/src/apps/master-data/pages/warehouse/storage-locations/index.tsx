@@ -7,7 +7,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography } from 'antd';
+import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography, theme } from 'antd';
 import { downloadFile } from '../../../../../utils';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -524,6 +524,15 @@ const StorageLocationsPage: React.FC = () => {
     return storageArea ? `${storageArea.code} - ${storageArea.name}` : `${t('app.master-data.storageLocations.storageAreaIdPrefix')}: ${storageAreaId}`;
   };
 
+  const formatStorageAreaDisplay = (record: StorageLocation): string => {
+    const code = record.storageAreaCode ?? (record as any).storage_area_code;
+    const name = record.storageAreaName ?? (record as any).storage_area_name;
+    if (code != null && String(code) !== '' && name != null && String(name) !== '') {
+      return `${code} - ${name}`;
+    }
+    return getStorageAreaName(record?.storageAreaId);
+  };
+
   /**
    * 表格列定义
    */
@@ -546,7 +555,7 @@ const StorageLocationsPage: React.FC = () => {
       dataIndex: 'storageAreaId',
       width: 200,
       hideInSearch: true,
-      render: (_, record) => getStorageAreaName(record?.storageAreaId),
+      render: (_, record) => formatStorageAreaDisplay(record),
     },
     {
       title: t('app.master-data.warehouses.description'),
@@ -634,7 +643,7 @@ const StorageLocationsPage: React.FC = () => {
     {
       title: t('app.master-data.storageLocations.storageArea'),
       dataIndex: 'storageAreaId',
-      render: (_, record) => getStorageAreaName(record?.storageAreaId),
+      render: (_, record) => formatStorageAreaDisplay(record),
     },
     {
       title: t('app.master-data.warehouses.description'),
@@ -795,40 +804,41 @@ const StorageLocationsPage: React.FC = () => {
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
         styles={{ body: { position: 'relative' } }}
-      >
-        {storageLocationDetail && (
-          <div style={{
-            position: 'absolute',
-            top: 24,
-            right: 24,
-            width: 220,
-            padding: 24,
-            background: 'rgba(255, 255, 255, 0.6)',
-            backdropFilter: 'blur(10px)',
-            borderRadius: 16,
-            boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.15)',
-            border: '1px solid rgba(255, 255, 255, 0.18)',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 10
-          }}>
-            <QRCodeGenerator
-              data={{
-                location_uuid: storageLocationDetail.uuid,
-                location_code: storageLocationDetail.code,
-                location_name: storageLocationDetail.name
-              }}
-              qrcodeType="TRACE"
-              size={8}
-              noCard={true}
-        basic={storageLocationDetail ? (
-            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, storageLocationDetail)} />
-          ) : undefined}
+        basic={
+          storageLocationDetail ? (
+            <div style={{ position: 'relative', paddingRight: 8 }}>
+              <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, storageLocationDetail)} />
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  right: 0,
+                  width: 152,
+                  padding: 12,
+                  background: '#fff',
+                  borderRadius: token.borderRadiusLG,
+                  border: '1px solid rgba(0, 0, 0, 0.06)',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  zIndex: 10,
+                }}
+              >
+                <QRCodeGenerator
+                  data={{
+                    location_uuid: storageLocationDetail.uuid,
+                    location_code: storageLocationDetail.code,
+                    location_name: storageLocationDetail.name,
+                  }}
+                  qrcodeType="TRACE"
+                  size={6}
+                  noCard={true}
+                />
+              </div>
+            </div>
+          ) : null
+        }
       />
-          </div>
-        )}
-      </DetailDrawerTemplate>
 
       {/* 创建/编辑库位 Modal */}
       <StorageLocationFormModal

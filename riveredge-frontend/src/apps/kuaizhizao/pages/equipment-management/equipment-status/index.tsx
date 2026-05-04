@@ -7,18 +7,36 @@
  * Date: 2026-01-16
  */
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Card, Badge, Button, Space, message, Modal, Timeline, Tag, Row, Col, Select, Input, App } from 'antd';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { Card, Badge, Button, Space, message, Modal, Timeline, Tag, Row, Col, Select, Input, App, Typography, Spin, Empty, theme as AntdTheme } from 'antd';
 import { ProDescriptions } from '@ant-design/pro-components';
 import { ReloadOutlined, HistoryOutlined, EditOutlined, PlayCircleOutlined, PauseCircleOutlined, WarningOutlined } from '@ant-design/icons';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
-import { equipmentStatusApi, equipmentApi } from '../../../services/equipment';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { equipmentStatusApi } from '../../../services/equipment';
 import { ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
+import {
+  DocumentTrackingRelationsTabsBody,
+  DocumentTrackingTimelineBody,
+  TraceLinkedDocumentBrief,
+  useDocumentTracking,
+} from '../../../../../components/document-tracking-panel';
+import { EquipmentTraceBriefFooter } from '../EquipmentTraceBriefFooter';
 
 const { Meta } = Card;
 const { Option } = Select;
 const { Search } = Input;
+
+/** 详情 Drawer 外左侧全链路浮层（Uni-detail）；此页跟踪主体为设备台账单据 */
+const ES_DETAIL_CHAIN_FLOAT_MARGIN = 16;
+const ES_DETAIL_LEFT_CHAIN_GAP = 16;
+const ES_DETAIL_CHAIN_DRAWER_GAP = 16;
+const ES_DETAIL_CHAIN_VERTICAL_TRIM = ES_DETAIL_CHAIN_FLOAT_MARGIN * 2 + ES_DETAIL_LEFT_CHAIN_GAP;
+const esDetailChainHalfHeightCss = `calc((100vh - ${ES_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2)`;
+const esDetailChainPanelWidthCss = `calc(50vw - ${ES_DETAIL_CHAIN_FLOAT_MARGIN * 2 + ES_DETAIL_CHAIN_DRAWER_GAP}px)`;
+const esDetailBriefPanelTopCss = `calc(${ES_DETAIL_CHAIN_FLOAT_MARGIN}px + (100vh - ${ES_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2 + ${ES_DETAIL_LEFT_CHAIN_GAP}px)`;
 
 interface EquipmentStatus {
   equipment: {
@@ -52,6 +70,11 @@ interface StatusHistoryItem {
 }
 
 const EquipmentStatusPage: React.FC = () => {
+  const navigate = useNavigate();
+  const { t } = useTranslation();
+  const { token } = AntdTheme.useToken();
+  const equipmentStatusDrawerZIndex = token.zIndexPopupBase;
+  const equipmentStatusChainOverlayZIndex = token.zIndexPopupBase + 1;
   const { message: messageApi } = App.useApp();
   const [statusList, setStatusList] = useState<EquipmentStatus[]>([]);
   const [loading, setLoading] = useState(false);
@@ -68,6 +91,31 @@ const EquipmentStatusPage: React.FC = () => {
   const [currentEquipment, setCurrentEquipment] = useState<EquipmentStatus | null>(null);
   const [historyList, setHistoryList] = useState<StatusHistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  const [eqStatusTrackingRefreshKey, setEqStatusTrackingRefreshKey] = useState(0);
+  const [fullChainRefreshKey, setFullChainRefreshKey] = useState(0);
+  const [fullChainTraceLoading, setFullChainTraceLoading] = useState(false);
+  const [fullChainBriefDoc, setFullChainBriefDoc] = useState<{ document_type: string; document_id: number } | null>(
+    null,
+  );
+
+  const onFullChainGraphNodeClick = useCallback(
+    (type: string, id: number) => {
+      if (!id) return;
+      if (type === 'equipment' && currentEquipment?.equipment?.id != null && id === currentEquipment.equipment.id) {
+        setFullChainBriefDoc(null);
+        return;
+      }
+      setFullChainBriefDoc({ document_type: type, document_id: id });
+    },
+    [currentEquipment],
+  );
+
+  const equipmentDocTracking = useDocumentTracking(
+    detailVisible && currentEquipment?.equipment?.id ? 'equipment' : undefined,
+    currentEquipment?.equipment?.id,
+    eqStatusTrackingRefreshKey,
+  );
 
   // 状态更新Modal
   const [updateModalVisible, setUpdateModalVisible] = useState(false);
@@ -135,9 +183,12 @@ const EquipmentStatusPage: React.FC = () => {
    */
   const handleViewDetail = async (equipment: EquipmentStatus) => {
     try {
+      setFullChainBriefDoc(null);
       setCurrentEquipment(equipment);
       setDetailVisible(true);
-      
+      setEqStatusTrackingRefreshKey((k) => k + 1);
+      setFullChainRefreshKey((k) => k + 1);
+
       // 加载状态历史
       setHistoryLoading(true);
       const historyData = await equipmentStatusApi.getStatusHistory(equipment.equipment.uuid);
@@ -169,10 +220,24 @@ const EquipmentStatusPage: React.FC = () => {
    */
   const handleUpdateStatusSubmit = async (values: any) => {
     try {
+      const targetUuid = values.equipment_uuid as string;
       await equipmentStatusApi.updateStatus(values);
       messageApi.success('设备状态更新成功');
       setUpdateModalVisible(false);
-      fetchStatusList();
+      await fetchStatusList();
+      if (detailVisible && currentEquipment?.equipment?.uuid === targetUuid) {
+        try {
+          const data = await equipmentStatusApi.getRealtimeStatus();
+          const found = (data || []).find((s: EquipmentStatus) => s.equipment.uuid === targetUuid);
+          if (found) {
+            setCurrentEquipment(found);
+          }
+          setEqStatusTrackingRefreshKey((k) => k + 1);
+          setFullChainRefreshKey((k) => k + 1);
+        } catch {
+          /* ignore */
+        }
+      }
     } catch (error: any) {
       messageApi.error(`更新设备状态失败: ${error.message || '未知错误'}`);
     }
@@ -409,91 +474,255 @@ const EquipmentStatusPage: React.FC = () => {
         </Card>
       )}
 
+      {detailVisible && currentEquipment?.equipment?.id != null ? (
+        <>
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.relationsFullChainTitle')}
+            style={{
+              position: 'fixed',
+              left: ES_DETAIL_CHAIN_FLOAT_MARGIN,
+              top: ES_DETAIL_CHAIN_FLOAT_MARGIN,
+              width: esDetailChainPanelWidthCss,
+              height: esDetailChainHalfHeightCss,
+              zIndex: equipmentStatusChainOverlayZIndex,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div style={{ flexShrink: 0, marginBottom: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
+                    {t('components.documentTrackingPanel.relationsFullChainTitle')}
+                  </div>
+                </div>
+                <Button
+                  type="default"
+                  size="small"
+                  icon={<ReloadOutlined />}
+                  loading={fullChainTraceLoading}
+                  style={{ flexShrink: 0 }}
+                  onClick={() => setFullChainRefreshKey((k) => k + 1)}
+                >
+                  {t('components.documentRelationGraph.refresh')}
+                </Button>
+              </div>
+            </div>
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <DocumentTrackingRelationsTabsBody
+                documentType="equipment"
+                documentId={currentEquipment.equipment.id}
+                refreshKey={fullChainRefreshKey}
+                onDocumentClick={onFullChainGraphNodeClick}
+                compact
+                hideInlineRefresh
+                onTraceLoadingChange={setFullChainTraceLoading}
+              />
+            </div>
+          </div>
+
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.traceBriefTitle')}
+            style={{
+              position: 'fixed',
+              left: ES_DETAIL_CHAIN_FLOAT_MARGIN,
+              top: esDetailBriefPanelTopCss,
+              width: esDetailChainPanelWidthCss,
+              height: esDetailChainHalfHeightCss,
+              zIndex: equipmentStatusChainOverlayZIndex,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 600,
+                fontSize: 13,
+                marginBottom: 8,
+                flexShrink: 0,
+                color: 'var(--ant-color-text)',
+              }}
+            >
+              {t('components.documentTrackingPanel.traceBriefTitle')}
+            </div>
+            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+              <TraceLinkedDocumentBrief
+                documentType={fullChainBriefDoc?.document_type}
+                documentId={fullChainBriefDoc?.document_id}
+                compactChrome
+              />
+            </div>
+            <EquipmentTraceBriefFooter
+              brief={fullChainBriefDoc}
+              t={t}
+              navigate={navigate}
+              closeDrawer={() => {
+                setDetailVisible(false);
+                setCurrentEquipment(null);
+                setHistoryList([]);
+                setFullChainBriefDoc(null);
+              }}
+              onDismissBrief={() => setFullChainBriefDoc(null)}
+            />
+          </div>
+        </>
+      ) : null}
+
       {/* 详情抽屉 */}
       <DetailDrawerTemplate
         title="设备状态详情"
         open={detailVisible}
-        onClose={() => setDetailVisible(false)}
+        zIndex={equipmentStatusDrawerZIndex}
+        onClose={() => {
+          setDetailVisible(false);
+          setCurrentEquipment(null);
+          setHistoryList([]);
+          setFullChainBriefDoc(null);
+        }}
         width={DRAWER_CONFIG.HALF_WIDTH}
-      >
-        {currentEquipment && (
-          <>
-            <ProDescriptions
-              title="设备基本信息"
-              bordered
-              column={2}
-              dataSource={{
-                code: currentEquipment.equipment.code,
-                name: currentEquipment.equipment.name,
-                type: currentEquipment.equipment.type || '-',
-                category: currentEquipment.equipment.category || '-',
-                status: getStatusTag(currentEquipment.status),
-                is_online: (
-                  <Badge
-                    status={currentEquipment.is_online ? 'success' : 'error'}
-                    text={currentEquipment.is_online ? '在线' : '离线'}
-                  />
-                ),
-                runtime_hours: currentEquipment.runtime_hours !== undefined ? `${currentEquipment.runtime_hours.toFixed(2)} 小时` : undefined,
-                temperature: currentEquipment.temperature !== undefined ? `${currentEquipment.temperature.toFixed(1)}°C` : undefined,
-                pressure: currentEquipment.pressure !== undefined ? currentEquipment.pressure.toFixed(2) : undefined,
-                vibration: currentEquipment.vibration !== undefined ? currentEquipment.vibration.toFixed(2) : undefined,
-                last_maintenance_date: currentEquipment.last_maintenance_date ? dayjs(currentEquipment.last_maintenance_date).format('YYYY-MM-DD') : undefined,
-                next_maintenance_date: currentEquipment.next_maintenance_date ? dayjs(currentEquipment.next_maintenance_date).format('YYYY-MM-DD') : undefined,
-                monitored_at: currentEquipment.monitored_at ? dayjs(currentEquipment.monitored_at).format('YYYY-MM-DD HH:mm:ss') : undefined,
-              }}
-              columns={[
-                { title: '设备编号', dataIndex: 'code' },
-                { title: '设备名称', dataIndex: 'name' },
-                { title: '设备类型', dataIndex: 'type' },
-                { title: '设备分类', dataIndex: 'category' },
-                { title: '当前状态', dataIndex: 'status' },
-                { title: '在线状态', dataIndex: 'is_online' },
-                { title: '运行时长', dataIndex: 'runtime_hours', hide: currentEquipment.runtime_hours === undefined },
-                { title: '温度', dataIndex: 'temperature', hide: currentEquipment.temperature === undefined },
-                { title: '压力', dataIndex: 'pressure', hide: currentEquipment.pressure === undefined },
-                { title: '振动值', dataIndex: 'vibration', hide: currentEquipment.vibration === undefined },
-                { title: '上次维护日期', dataIndex: 'last_maintenance_date', hide: !currentEquipment.last_maintenance_date },
-                { title: '下次维护日期', dataIndex: 'next_maintenance_date', hide: !currentEquipment.next_maintenance_date },
-                { title: '最后更新时间', dataIndex: 'monitored_at', hide: !currentEquipment.monitored_at },
-              ]}
-            />
+        customContent={
+          currentEquipment ? (
+            <>
+              <DetailDrawerSection title="实时监控">
+                <ProDescriptions
+                  title={false}
+                  bordered
+                  column={2}
+                  dataSource={{
+                    code: currentEquipment.equipment.code,
+                    name: currentEquipment.equipment.name,
+                    type: currentEquipment.equipment.type || '-',
+                    category: currentEquipment.equipment.category || '-',
+                    status: getStatusTag(currentEquipment.status),
+                    is_online: (
+                      <Badge
+                        status={currentEquipment.is_online ? 'success' : 'error'}
+                        text={currentEquipment.is_online ? '在线' : '离线'}
+                      />
+                    ),
+                    runtime_hours:
+                      currentEquipment.runtime_hours !== undefined
+                        ? `${currentEquipment.runtime_hours.toFixed(2)} 小时`
+                        : undefined,
+                    temperature:
+                      currentEquipment.temperature !== undefined
+                        ? `${currentEquipment.temperature.toFixed(1)}°C`
+                        : undefined,
+                    pressure: currentEquipment.pressure !== undefined ? currentEquipment.pressure.toFixed(2) : undefined,
+                    vibration:
+                      currentEquipment.vibration !== undefined ? currentEquipment.vibration.toFixed(2) : undefined,
+                    last_maintenance_date: currentEquipment.last_maintenance_date
+                      ? dayjs(currentEquipment.last_maintenance_date).format('YYYY-MM-DD')
+                      : undefined,
+                    next_maintenance_date: currentEquipment.next_maintenance_date
+                      ? dayjs(currentEquipment.next_maintenance_date).format('YYYY-MM-DD')
+                      : undefined,
+                    monitored_at: currentEquipment.monitored_at
+                      ? dayjs(currentEquipment.monitored_at).format('YYYY-MM-DD HH:mm:ss')
+                      : undefined,
+                  }}
+                  columns={[
+                    { title: '设备编号', dataIndex: 'code' },
+                    { title: '设备名称', dataIndex: 'name' },
+                    { title: '设备类型', dataIndex: 'type' },
+                    { title: '设备分类', dataIndex: 'category' },
+                    { title: '当前状态', dataIndex: 'status' },
+                    { title: '在线状态', dataIndex: 'is_online' },
+                    { title: '运行时长', dataIndex: 'runtime_hours', hide: currentEquipment.runtime_hours === undefined },
+                    { title: '温度', dataIndex: 'temperature', hide: currentEquipment.temperature === undefined },
+                    { title: '压力', dataIndex: 'pressure', hide: currentEquipment.pressure === undefined },
+                    { title: '振动值', dataIndex: 'vibration', hide: currentEquipment.vibration === undefined },
+                    {
+                      title: '上次维护日期',
+                      dataIndex: 'last_maintenance_date',
+                      hide: !currentEquipment.last_maintenance_date,
+                    },
+                    {
+                      title: '下次维护日期',
+                      dataIndex: 'next_maintenance_date',
+                      hide: !currentEquipment.next_maintenance_date,
+                    },
+                    { title: '最后更新时间', dataIndex: 'monitored_at', hide: !currentEquipment.monitored_at },
+                  ]}
+                />
+              </DetailDrawerSection>
 
-            <div style={{ marginTop: 24 }}>
-              <h3>状态变更历史</h3>
-              <Timeline
-                items={historyList.map((history) => ({
-                  color: history.to_status === '故障' ? 'red' : history.to_status === '维修中' ? 'orange' : 'blue',
-                  children: (
-                    <div>
-                      <div>
-                        <Tag color={getStatusColor(history.to_status)}>{history.to_status}</Tag>
-                        {history.from_status && (
-                          <>
-                            <span style={{ margin: '0 8px' }}>←</span>
-                            <Tag>{history.from_status}</Tag>
-                          </>
-                        )}
-                      </div>
-                      <div style={{ color: '#999', fontSize: 12, marginTop: 4 }}>
-                        {dayjs(history.status_changed_at).format('YYYY-MM-DD HH:mm:ss')}
-                        {history.changed_by_name && ` · ${history.changed_by_name}`}
-                      </div>
-                      {history.reason && (
-                        <div style={{ marginTop: 4, color: '#666' }}>原因: {history.reason}</div>
-                      )}
-                      {history.remark && (
-                        <div style={{ marginTop: 4, color: '#999', fontSize: 12 }}>备注: {history.remark}</div>
-                      )}
-                    </div>
-                  ),
-                }))}
-                loading={historyLoading}
-              />
-            </div>
-          </>
-        )}
-      </DetailDrawerTemplate>
+              <DetailDrawerSection title="状态变更历史">
+                {historyLoading ? (
+                  <div style={{ textAlign: 'center', padding: 24 }}>
+                    <Spin />
+                  </div>
+                ) : (
+                  <Timeline
+                    items={historyList.map((history) => ({
+                      color:
+                        history.to_status === '故障' ? 'red' : history.to_status === '维修中' ? 'orange' : 'blue',
+                      children: (
+                        <div>
+                          <div>
+                            <Tag color={getStatusColor(history.to_status)}>{history.to_status}</Tag>
+                            {history.from_status && (
+                              <>
+                                <span style={{ margin: '0 8px' }}>←</span>
+                                <Tag>{history.from_status}</Tag>
+                              </>
+                            )}
+                          </div>
+                          <div style={{ color: '#999', fontSize: 12, marginTop: 4 }}>
+                            {dayjs(history.status_changed_at).format('YYYY-MM-DD HH:mm:ss')}
+                            {history.changed_by_name && ` · ${history.changed_by_name}`}
+                          </div>
+                          {history.reason && (
+                            <div style={{ marginTop: 4, color: '#666' }}>原因: {history.reason}</div>
+                          )}
+                          {history.remark && (
+                            <div style={{ marginTop: 4, color: '#999', fontSize: 12 }}>备注: {history.remark}</div>
+                          )}
+                        </div>
+                      ),
+                    }))}
+                  />
+                )}
+              </DetailDrawerSection>
+
+              <DetailDrawerSection title="操作记录">
+                {equipmentDocTracking.loading && (
+                  <div style={{ textAlign: 'center', padding: 24 }}>
+                    <Spin />
+                  </div>
+                )}
+                {equipmentDocTracking.error && !equipmentDocTracking.loading && (
+                  <Typography.Text type="danger">{equipmentDocTracking.error}</Typography.Text>
+                )}
+                {equipmentDocTracking.data && !equipmentDocTracking.loading && (
+                  <DocumentTrackingTimelineBody data={equipmentDocTracking.data} />
+                )}
+                {!equipmentDocTracking.loading && !equipmentDocTracking.data && !equipmentDocTracking.error && (
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+                )}
+              </DetailDrawerSection>
+            </>
+          ) : null
+        }
+      />
 
       {/* 状态更新Modal */}
       <FormModalTemplate

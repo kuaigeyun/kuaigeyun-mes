@@ -1,6 +1,15 @@
 import React from 'react'
 import { Button, Dropdown, Space, Popconfirm, Tooltip } from 'antd'
-import { MoreOutlined } from '@ant-design/icons'
+import {
+  ApartmentOutlined,
+  FileTextOutlined,
+  FormOutlined,
+  MoreOutlined,
+  SettingOutlined,
+  TagsOutlined,
+  ThunderboltOutlined,
+  ToolOutlined,
+} from '@ant-design/icons'
 import type { NormalizeActionContext, RenderRowActionsOverflowOptions } from './types'
 import {
   readNodeText,
@@ -67,11 +76,98 @@ function findInteractiveElement(node: React.ReactNode): React.ReactElement | nul
   return null
 }
 
-/** 不可点（disabled 或无按钮/链接）的操作不展示 */
+/**
+ * 并列主行上出现相同图标组件时，按序换成备选图标（不改变文案与点击）。
+ */
+const FALLBACK_ICON_TYPES = [
+  FormOutlined,
+  FileTextOutlined,
+  ToolOutlined,
+  ThunderboltOutlined,
+  ApartmentOutlined,
+  TagsOutlined,
+  SettingOutlined,
+] as const
+
+function pickDistinctFallbackIcon(usedTypes: Set<unknown>): React.ReactElement {
+  for (const Comp of FALLBACK_ICON_TYPES) {
+    if (!usedTypes.has(Comp)) {
+      usedTypes.add(Comp)
+      return React.createElement(Comp)
+    }
+  }
+  const fallback = FALLBACK_ICON_TYPES[FALLBACK_ICON_TYPES.length - 1]
+  return React.createElement(fallback)
+}
+
+function replaceDeepButtonIcon(node: React.ReactNode, newIcon: React.ReactElement): React.ReactNode {
+  if (!React.isValidElement(node)) return node
+  const t = node.type
+  if (t === Button) {
+    return React.cloneElement(node as React.ReactElement<Record<string, unknown>>, {
+      icon: newIcon,
+    })
+  }
+  if (t === Popconfirm || t === Tooltip) {
+    const props = node.props as { children?: React.ReactNode }
+    const nextChild = replaceDeepButtonIcon(props.children, newIcon)
+    return React.cloneElement(node as React.ReactElement<Record<string, unknown>>, {
+      children: nextChild,
+    })
+  }
+  const props = node.props as { children?: React.ReactNode }
+  const rawChildren = props?.children
+  if (rawChildren != null && React.Children.count(rawChildren) === 1) {
+    const only = React.Children.only(rawChildren)
+    const replaced = replaceDeepButtonIcon(only, newIcon)
+    if (replaced !== only) {
+      return React.cloneElement(node as React.ReactElement<Record<string, unknown>>, {
+        children: replaced,
+      })
+    }
+  }
+  return node
+}
+
+function dedupeInlineRowIcons(nodes: React.ReactNode[]): React.ReactNode[] {
+  const seenIconTypes = new Set<unknown>()
+  return nodes.map((node) => {
+    const interactive = findInteractiveElement(node)
+    if (!interactive || interactive.type !== Button) return node
+    const rawIcon = (interactive.props as { icon?: React.ReactNode }).icon
+    if (!React.isValidElement(rawIcon)) return node
+    const ty = rawIcon.type
+    if (!seenIconTypes.has(ty)) {
+      seenIconTypes.add(ty)
+      return node
+    }
+    const replacement = pickDistinctFallbackIcon(seenIconTypes)
+    return replaceDeepButtonIcon(node, replacement)
+  })
+}
+
+/** 业务可在 Tooltip 等外层节点设 data-row-action-visible-when-disabled，禁用时仍露出操作（配合 Tooltip 说明原因） */
+function isVisibleWhenDisabledRowAction(node: React.ReactNode): boolean {
+  if (!React.isValidElement(node)) return false
+  const p = node.props as Record<string, unknown>
+  if (p['data-row-action-visible-when-disabled'] === true) return true
+  const ch = p.children as React.ReactNode
+  if (ch != null && React.Children.count(ch) === 1) {
+    try {
+      return isVisibleWhenDisabledRowAction(React.Children.only(ch))
+    } catch {
+      return false
+    }
+  }
+  return false
+}
+
+/** 不可点（disabled 或无按钮/链接）的操作默认不展示；带显式标记的可保留展示 */
 function isClickableVisibleAction(node: React.ReactNode): boolean {
   const interactive = findInteractiveElement(node)
   if (!interactive) return false
   const p = (interactive.props || {}) as { disabled?: boolean }
+  if (p.disabled && isVisibleWhenDisabledRowAction(node)) return true
   return !p.disabled
 }
 
@@ -122,7 +218,7 @@ export function renderRowActionsOverflow(
 ): React.ReactNode {
   const { directMax, ctx } = parseOverflowArgs(directMaxOrOptions)
   const sorted = normalizeAndSortActions(nodes, ctx)
-  const enabled = sorted.filter(isClickableVisibleAction)
+  const enabled = dedupeInlineRowIcons(sorted.filter(isClickableVisibleAction))
   /** 原先为 directMax-1 留「更多」一格；抬高下限为 4，避免禁项隐藏后主行过空 */
   const primarySlotsBeforeMore = Math.max(1, directMax - 1, ROW_ACTIONS_MIN_PRIMARY_VISIBLE)
 

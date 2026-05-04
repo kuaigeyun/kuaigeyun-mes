@@ -1110,6 +1110,26 @@ class DemandComputationService:
             for r in rows
         ]
 
+    async def get_computation_snapshot_by_id(
+        self, tenant_id: int, computation_id: int, snapshot_id: int
+    ) -> Dict[str, Any]:
+        """按 ID 获取单条需求计算快照（须属于当前计算）。"""
+        computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
+        if not computation:
+            raise NotFoundError(f"需求计算不存在: {computation_id}")
+        row = await DemandComputationSnapshot.get_or_none(
+            tenant_id=tenant_id, id=snapshot_id, computation_id=computation_id
+        )
+        if not row:
+            raise NotFoundError(f"快照不存在或不属于该计算: {snapshot_id}")
+        return {
+            "id": row.id,
+            "snapshot_at": row.snapshot_at.isoformat() if row.snapshot_at else None,
+            "trigger": row.trigger,
+            "computation_summary_snapshot": row.computation_summary_snapshot,
+            "items_snapshot": row.items_snapshot,
+        }
+
     async def compare_computations(
         self,
         tenant_id: int,

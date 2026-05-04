@@ -142,7 +142,6 @@ export interface PriceComparisonItem {
   supplier_name: string;
   last_price: number;
   last_order_date?: string;
-  reliability_rating: string;
   delivery_lead_time: number;
 }
 

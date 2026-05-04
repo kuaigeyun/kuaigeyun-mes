@@ -7,7 +7,7 @@
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Table, Tag, Typography } from 'antd';
+import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Table, Tag, Typography, theme } from 'antd';
 import { downloadFile } from '../../../../../utils';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -15,7 +15,7 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
 import { warehouseApi, type PresetWarehouseItem } from '../../../services/warehouse';
-import { workshopApi, workCenterApi } from '../../../services/factory';
+import { workshopApi, workCenterApi, factoryListItems } from '../../../services/factory';
 import { WarehouseFormModal } from '../../../components/WarehouseFormModal';
 import { QRCodeGenerator } from '../../../../../components/qrcode';
 import type { Warehouse, WarehouseCreate } from '../../../types/warehouse';
@@ -27,6 +27,7 @@ import { batchImport } from '../../../../../utils/batchOperations';
 const WarehousesPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const { token } = theme.useToken();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
@@ -186,11 +187,11 @@ const WarehousesPage: React.FC = () => {
     let workCenters: Array<{ id: number; code: string; name: string }> = [];
     try {
       const [wsList, wcList] = await Promise.all([
-        workshopApi.list({ limit: 10000, isActive: true }),
-        workCenterApi.list({ limit: 10000, isActive: true }),
+        workshopApi.list({ limit: 10000, is_active: true }),
+        workCenterApi.list({ limit: 10000, is_active: true }),
       ]);
-      workshops = wsList || [];
-      workCenters = wcList || [];
+      workshops = factoryListItems(wsList);
+      workCenters = factoryListItems(wcList);
     } catch (e) {
       console.warn('加载车间/工作中心失败，线边仓关联将跳过', e);
     }
@@ -835,40 +836,41 @@ const WarehousesPage: React.FC = () => {
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
         styles={{ body: { position: 'relative' } }}
-      >
-        {warehouseDetail && (
-          <div style={{
-            position: 'absolute',
-            top: 24,
-            right: 24,
-            width: 220,
-            padding: 24,
-            background: 'rgba(255, 255, 255, 0.6)',
-            backdropFilter: 'blur(10px)',
-            borderRadius: 16,
-            boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.15)',
-            border: '1px solid rgba(255, 255, 255, 0.18)',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 10
-          }}>
-            <QRCodeGenerator
-              data={{
-                warehouse_uuid: warehouseDetail.uuid,
-                warehouse_code: warehouseDetail.code,
-                warehouse_name: warehouseDetail.name
-              }}
-              qrcodeType="TRACE"
-              size={8}
-              noCard={true}
-        basic={warehouseDetail ? (
-            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, warehouseDetail)} />
-          ) : undefined}
+        basic={
+          warehouseDetail ? (
+            <div style={{ position: 'relative', paddingRight: 8 }}>
+              <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, warehouseDetail)} />
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  right: 0,
+                  width: 152,
+                  padding: 12,
+                  background: '#fff',
+                  borderRadius: token.borderRadiusLG,
+                  border: '1px solid rgba(0, 0, 0, 0.06)',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  zIndex: 10,
+                }}
+              >
+                <QRCodeGenerator
+                  data={{
+                    warehouse_uuid: warehouseDetail.uuid,
+                    warehouse_code: warehouseDetail.code,
+                    warehouse_name: warehouseDetail.name,
+                  }}
+                  qrcodeType="TRACE"
+                  size={6}
+                  noCard={true}
+                />
+              </div>
+            </div>
+          ) : null
+        }
       />
-          </div>
-        )}
-      </DetailDrawerTemplate>
 
       {/* 创建/编辑仓库 Modal */}
       <WarehouseFormModal

@@ -14,7 +14,13 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
 
-import { workCenterApi, workstationApi } from '../../../services/factory';
+import {
+  workCenterApi,
+  workstationApi,
+  factoryListItems,
+  applyFactoryKeyword,
+  applyFactoryTableSort,
+} from '../../../services/factory';
 import { WorkCenterFormModal } from '../../../components/WorkCenterFormModal';
 import type { WorkCenter, WorkCenterCreate, Workstation } from '../../../types/factory';
 import { batchImport } from '../../../../../utils/batchOperations';
@@ -41,7 +47,8 @@ const WorkCentersPage: React.FC = () => {
   useEffect(() => {
     const loadWorkstations = async () => {
       try {
-        const list = await workstationApi.list({ limit: 5000, isActive: true });
+        const listRes = await workstationApi.list({ limit: 5000, is_active: true });
+        const list = factoryListItems(listRes);
         const map: Record<number, Workstation> = {};
         list.forEach((ws) => { map[ws.id] = ws; });
         setWorkstationMap(map);
@@ -336,7 +343,7 @@ const WorkCentersPage: React.FC = () => {
         filename = `${t('app.master-data.workCenters.exportFilenameCurrentPage', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       } else {
         const allData = await workCenterApi.list({ skip: 0, limit: 10000 });
-        exportData = allData;
+        exportData = allData.items;
         filename = `${t('app.master-data.workCenters.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       }
 
@@ -385,16 +392,18 @@ const WorkCentersPage: React.FC = () => {
     {
       title: t('field.workCenter.code'),
       dataIndex: 'code',
-      copyable: true,width: 150,
+      width: 150,
       fixed: 'left',
       ellipsis: true,
       copyable: true,
+      sorter: true,
     },
     {
       title: t('field.workCenter.name'),
       dataIndex: 'name',
       width: 200,
       ellipsis: true,
+      sorter: true,
     },
     {
       title: t('field.workCenter.description'),
@@ -508,26 +517,25 @@ const WorkCentersPage: React.FC = () => {
           viewTypes={['table', 'help']}
           defaultViewType="table"
           loadingDelay={200}
-          request={async (params, _sort, _filter, searchFormValues) => {
+          request={async (params, sort, _filter, searchFormValues) => {
             const apiParams: any = {
               skip: ((params.current || 1) - 1) * (params.pageSize || 20),
               limit: params.pageSize || 20,
             };
 
             if (searchFormValues?.isActive !== undefined && searchFormValues.isActive !== '' && searchFormValues.isActive !== null) {
-              apiParams.isActive = searchFormValues.isActive;
+              apiParams.is_active = searchFormValues.isActive;
             }
-            if (searchFormValues?.keyword) {
-              apiParams.keyword = searchFormValues.keyword;
-            }
+            applyFactoryKeyword(apiParams, searchFormValues);
+            applyFactoryTableSort(apiParams, sort);
 
             try {
               const result = await workCenterApi.list(apiParams);
 
               return {
-                data: result,
+                data: result.items,
                 success: true,
-                total: result.length,
+                total: result.total,
               };
             } catch (error: any) {
               console.error('获取工作中心列表失败:', error);

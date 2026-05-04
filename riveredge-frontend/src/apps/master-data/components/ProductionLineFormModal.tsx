@@ -8,7 +8,7 @@ import { ProFormInstance } from '@ant-design/pro-components';
 import { App } from 'antd';
 import { FormModalTemplate } from '../../../components/layout-templates';
 import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
-import { productionLineApi, workshopApi } from '../services/factory';
+import { productionLineApi, workshopApi, factoryListItems } from '../services/factory';
 import { testGenerateCode, generateCode, getCodeRulePageConfig } from '../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../utils/codeRulePage';
 import type { ProductionLine, ProductionLineCreate, ProductionLineUpdate, Workshop } from '../types/factory';
@@ -43,8 +43,8 @@ export const ProductionLineFormModal: React.FC<ProductionLineFormModalProps> = (
   useEffect(() => {
     const loadWorkshops = async () => {
       try {
-        const result = await workshopApi.list({ limit: 1000, isActive: true });
-        setWorkshops(result);
+        const result = await workshopApi.list({ limit: 1000, is_active: true });
+        setWorkshops(factoryListItems(result));
       } catch (error) {
         console.error('加载车间列表失败:', error);
       }

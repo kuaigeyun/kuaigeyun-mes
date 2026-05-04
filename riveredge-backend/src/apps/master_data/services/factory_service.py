@@ -14,9 +14,35 @@ from apps.master_data.schemas.factory_schemas import (
     WorkshopCreate, WorkshopUpdate, WorkshopResponse,
     ProductionLineCreate, ProductionLineUpdate, ProductionLineResponse,
     WorkstationCreate, WorkstationUpdate, WorkstationResponse,
-    WorkCenterCreate, WorkCenterUpdate, WorkCenterResponse
+    WorkCenterCreate, WorkCenterUpdate, WorkCenterResponse,
+    PlantListResult,
+    WorkshopListResult,
+    ProductionLineListResult,
+    WorkstationListResult,
+    WorkCenterListResult,
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+
+_FACTORY_SORT_FIELDS = {
+    "code": "code",
+    "name": "name",
+    "createdAt": "created_at",
+    "updatedAt": "updated_at",
+    "isActive": "is_active",
+    "workshopId": "workshop_id",
+    "plantId": "plant_id",
+    "productionLineId": "production_line_id",
+}
+
+
+def _factory_order_clause(sort_field: Optional[str], sort_order: Optional[str], default_col: str = "code") -> str:
+    """表格列排序 → Tortoise order_by 片段（默认按编码升序）"""
+    key = (sort_field or "").strip()
+    col = _FACTORY_SORT_FIELDS.get(key, default_col)
+    if (sort_order or "asc").lower() == "desc":
+        return f"-{col}"
+    return col
+
 
 if TYPE_CHECKING:
     from apps.master_data.schemas.factory_schemas import (
@@ -28,6 +54,38 @@ if TYPE_CHECKING:
 
 class FactoryService:
     """工厂数据服务"""
+
+    @staticmethod
+    async def _workshop_to_response(workshop: Workshop) -> WorkshopResponse:
+        """组装车间响应（带出厂区编码/名称，避免前端异步字典闪烁）"""
+        await workshop.fetch_related("plant")
+        resp = WorkshopResponse.model_validate(workshop)
+        plant = workshop.plant
+        if plant:
+            return resp.model_copy(update={"plant_code": plant.code, "plant_name": plant.name})
+        return resp
+
+    @staticmethod
+    async def _workstation_to_response(ws: Workstation) -> WorkstationResponse:
+        """组装工位响应（带出产线编码/名称，避免前端异步字典闪烁）"""
+        await ws.fetch_related("production_line")
+        resp = WorkstationResponse.model_validate(ws)
+        pl = ws.production_line
+        if pl:
+            return resp.model_copy(
+                update={"production_line_code": pl.code, "production_line_name": pl.name}
+            )
+        return resp
+
+    @staticmethod
+    async def _production_line_to_response(pl: ProductionLine) -> ProductionLineResponse:
+        """组装产线响应（带出车间编码/名称，避免前端异步字典闪烁）"""
+        await pl.fetch_related("workshop")
+        resp = ProductionLineResponse.model_validate(pl)
+        ws = pl.workshop
+        if ws:
+            return resp.model_copy(update={"workshop_code": ws.code, "workshop_name": ws.name})
+        return resp
     
     # ==================== 厂区相关方法 ====================
     
@@ -145,8 +203,10 @@ class FactoryService:
         is_active: Optional[bool] = None,
         keyword: Optional[str] = None,
         code: Optional[str] = None,
-        name: Optional[str] = None
-    ) -> List[PlantResponse]:
+        name: Optional[str] = None,
+        sort_field: Optional[str] = None,
+        sort_order: Optional[str] = None,
+    ) -> PlantListResult:
         """
         获取厂区列表
 
@@ -158,9 +218,11 @@ class FactoryService:
             keyword: 搜索关键词（厂区编码或名称）
             code: 厂区编码（精确匹配）
             name: 厂区名称（模糊匹配）
+            sort_field: 排序字段（code/name/createdAt/updatedAt）
+            sort_order: asc 或 desc
 
         Returns:
-            List[PlantResponse]: 厂区列表
+            PlantListResult: items + total
         """
         try:
             query = Plant.filter(
@@ -185,25 +247,25 @@ class FactoryService:
             if name:
                 # 模糊匹配厂区名称
                 query = query.filter(name__icontains=name)
-            
-            plants = await query.offset(skip).limit(limit).order_by("code").all()
-            
+
+            total = await query.count()
+            order_expr = _factory_order_clause(sort_field, sort_order, "code")
+            plants = await query.offset(skip).limit(limit).order_by(order_expr).all()
+
             # 转换为响应格式
-            result = []
+            result: List[PlantResponse] = []
             for p in plants:
                 try:
                     result.append(PlantResponse.model_validate(p))
                 except Exception as e:
                     from loguru import logger
                     logger.error(f"转换厂区数据失败 (ID: {p.id}, UUID: {p.uuid}): {str(e)}")
-                    # 跳过有问题的记录，继续处理其他记录
                     continue
-            
-            return result
+
+            return PlantListResult(items=result, total=total)
         except Exception as e:
             from loguru import logger
             logger.exception(f"获取厂区列表失败 (tenant_id: {tenant_id}): {str(e)}")
-            # 重新抛出异常，让 API 层处理
             raise
     
     @staticmethod
@@ -430,7 +492,7 @@ class FactoryService:
             existing_deleted.plant_id = data.plant_id if hasattr(data, 'plant_id') else None
             existing_deleted.is_active = data.is_active if hasattr(data, 'is_active') else True
             await existing_deleted.save()
-            return WorkshopResponse.model_validate(existing_deleted)
+            return await FactoryService._workshop_to_response(existing_deleted)
         
         # 如果不区分大小写的匹配（防止编码大小写不一致的问题）
         code_upper = data.code.upper() if data.code else None
@@ -457,7 +519,7 @@ class FactoryService:
                         # 统一使用新传入的编码
                         existing_deleted.code = data.code
                         await existing_deleted.save()
-                        return WorkshopResponse.model_validate(existing_deleted)
+                        return await FactoryService._workshop_to_response(existing_deleted)
         
         # 创建新车间
         try:
@@ -485,7 +547,7 @@ class FactoryService:
                     existing_deleted_retry.plant_id = data.plant_id if hasattr(data, 'plant_id') else None
                     existing_deleted_retry.is_active = data.is_active if hasattr(data, 'is_active') else True
                     await existing_deleted_retry.save()
-                    return WorkshopResponse.model_validate(existing_deleted_retry)
+                    return await FactoryService._workshop_to_response(existing_deleted_retry)
                 
                 # 如果不区分大小写的匹配
                 if code_upper:
@@ -506,14 +568,14 @@ class FactoryService:
                                 # 统一使用新传入的编码
                                 record.code = data.code
                                 await record.save()
-                                return WorkshopResponse.model_validate(record)
+                                return await FactoryService._workshop_to_response(record)
                             else:
                                 raise ValidationError(f"车间编码 {data.code} 已存在")
                 
                 raise ValidationError(f"车间编码 {data.code} 已存在（可能已被软删除，请检查）")
             raise
         
-        return WorkshopResponse.model_validate(workshop)
+        return await FactoryService._workshop_to_response(workshop)
     
     @staticmethod
     async def get_workshop_by_uuid(
@@ -542,7 +604,7 @@ class FactoryService:
         if not workshop:
             raise NotFoundError(f"车间 {workshop_uuid} 不存在")
         
-        return WorkshopResponse.model_validate(workshop)
+        return await FactoryService._workshop_to_response(workshop)
     
     @staticmethod
     async def list_workshops(
@@ -552,8 +614,11 @@ class FactoryService:
         is_active: Optional[bool] = None,
         keyword: Optional[str] = None,
         code: Optional[str] = None,
-        name: Optional[str] = None
-    ) -> List[WorkshopResponse]:
+        name: Optional[str] = None,
+        plant_id: Optional[int] = None,
+        sort_field: Optional[str] = None,
+        sort_order: Optional[str] = None,
+    ) -> WorkshopListResult:
         """
         获取车间列表
 
@@ -565,9 +630,11 @@ class FactoryService:
             keyword: 搜索关键词（车间编码或名称）
             code: 车间编码（精确匹配）
             name: 车间名称（模糊匹配）
+            sort_field: 排序字段（code/name/createdAt/updatedAt）
+            sort_order: asc 或 desc
 
         Returns:
-            List[WorkshopResponse]: 车间列表
+            WorkshopListResult: items + total
         """
         try:
             query = Workshop.filter(
@@ -592,25 +659,27 @@ class FactoryService:
             if name:
                 # 模糊匹配车间名称
                 query = query.filter(name__icontains=name)
-            
-            workshops = await query.offset(skip).limit(limit).order_by("code").all()
-            
-            # 转换为响应格式
-            result = []
+
+            if plant_id is not None:
+                query = query.filter(plant_id=plant_id)
+
+            total = await query.count()
+            order_expr = _factory_order_clause(sort_field, sort_order, "code")
+            workshops = await query.offset(skip).limit(limit).order_by(order_expr).all()
+
+            result: List[WorkshopResponse] = []
             for w in workshops:
                 try:
-                    result.append(WorkshopResponse.model_validate(w))
+                    result.append(await FactoryService._workshop_to_response(w))
                 except Exception as e:
                     from loguru import logger
                     logger.error(f"转换车间数据失败 (ID: {w.id}, UUID: {w.uuid}): {str(e)}")
-                    # 跳过有问题的记录，继续处理其他记录
                     continue
-            
-            return result
+
+            return WorkshopListResult(items=result, total=total)
         except Exception as e:
             from loguru import logger
             logger.exception(f"获取车间列表失败 (tenant_id: {tenant_id}): {str(e)}")
-            # 重新抛出异常，让 API 层处理
             raise
     
     @staticmethod
@@ -667,7 +736,7 @@ class FactoryService:
                 raise ValidationError(f"车间编码 {data.code} 已存在（可能已被软删除，请检查）")
             raise
         
-        return WorkshopResponse.model_validate(workshop)
+        return await FactoryService._workshop_to_response(workshop)
     
     @staticmethod
     async def delete_workshop(
@@ -849,7 +918,7 @@ class FactoryService:
             existing_deleted.workshop_id = data.workshop_id
             existing_deleted.is_active = data.is_active if hasattr(data, 'is_active') else True
             await existing_deleted.save()
-            return ProductionLineResponse.model_validate(existing_deleted)
+            return await FactoryService._production_line_to_response(existing_deleted)
         
         # 如果不区分大小写的匹配（防止编码大小写不一致的问题）
         # 注意：即使 code 已经是大写，也要检查，因为数据库中可能有不同大小写的记录
@@ -876,7 +945,7 @@ class FactoryService:
                         # 统一使用新传入的编码
                         existing_deleted.code = data.code
                         await existing_deleted.save()
-                        return ProductionLineResponse.model_validate(existing_deleted)
+                        return await FactoryService._production_line_to_response(existing_deleted)
         
         # 创建新产线
         try:
@@ -908,7 +977,7 @@ class FactoryService:
                     existing_deleted_retry.workshop_id = data.workshop_id
                     existing_deleted_retry.is_active = data.is_active if hasattr(data, 'is_active') else True
                     await existing_deleted_retry.save()
-                    return ProductionLineResponse.model_validate(existing_deleted_retry)
+                    return await FactoryService._production_line_to_response(existing_deleted_retry)
                 
                 # 如果不区分大小写的匹配（更全面的搜索）
                 # 直接查询所有记录（包括软删除的），然后手动过滤，确保不遗漏
@@ -933,7 +1002,7 @@ class FactoryService:
                                 # 统一使用新传入的编码
                                 record.code = data.code
                                 await record.save()
-                                return ProductionLineResponse.model_validate(record)
+                                return await FactoryService._production_line_to_response(record)
                             else:
                                 # 如果找到活跃记录，说明有并发问题
                                 logger.warning(f"发现活跃的产线记录（大小写不一致）: {record.code}，但之前检查未找到")
@@ -955,7 +1024,7 @@ class FactoryService:
                 raise ValidationError(f"产线编码 {data.code} 已存在（可能已被软删除，请检查）")
             raise
         
-        return ProductionLineResponse.model_validate(production_line)
+        return await FactoryService._production_line_to_response(production_line)
     
     @staticmethod
     async def get_production_line_by_uuid(
@@ -984,7 +1053,7 @@ class FactoryService:
         if not production_line:
             raise NotFoundError(f"产线 {production_line_uuid} 不存在")
         
-        return ProductionLineResponse.model_validate(production_line)
+        return await FactoryService._production_line_to_response(production_line)
     
     @staticmethod
     async def list_production_lines(
@@ -992,8 +1061,11 @@ class FactoryService:
         skip: int = 0,
         limit: int = 100,
         workshop_id: Optional[int] = None,
-        is_active: Optional[bool] = None
-    ) -> List[ProductionLineResponse]:
+        is_active: Optional[bool] = None,
+        keyword: Optional[str] = None,
+        sort_field: Optional[str] = None,
+        sort_order: Optional[str] = None,
+    ) -> ProductionLineListResult:
         """
         获取产线列表
         
@@ -1003,9 +1075,12 @@ class FactoryService:
             limit: 限制数量
             workshop_id: 车间ID（可选，用于过滤）
             is_active: 是否启用（可选）
+            keyword: 关键词（产线编码或名称模糊匹配）
+            sort_field: 排序字段
+            sort_order: asc 或 desc
             
         Returns:
-            List[ProductionLineResponse]: 产线列表
+            ProductionLineListResult: items + total
         """
         query = ProductionLine.filter(
             tenant_id=tenant_id,
@@ -1017,10 +1092,21 @@ class FactoryService:
         
         if is_active is not None:
             query = query.filter(is_active=is_active)
-        
-        production_lines = await query.offset(skip).limit(limit).order_by("code").all()
-        
-        return [ProductionLineResponse.model_validate(pl) for pl in production_lines]
+
+        if keyword:
+            query = query.filter(
+                Q(code__icontains=keyword) | Q(name__icontains=keyword)
+            )
+
+        total = await query.count()
+        order_expr = _factory_order_clause(sort_field, sort_order, "code")
+        production_lines = await query.offset(skip).limit(limit).order_by(order_expr).prefetch_related("workshop").all()
+
+        items: List[ProductionLineResponse] = []
+        for pl in production_lines:
+            items.append(await FactoryService._production_line_to_response(pl))
+
+        return ProductionLineListResult(items=items, total=total)
     
     @staticmethod
     async def update_production_line(
@@ -1087,7 +1173,7 @@ class FactoryService:
                 raise ValidationError(f"产线编码 {data.code} 已存在（可能已被软删除，请检查）")
             raise
         
-        return ProductionLineResponse.model_validate(production_line)
+        return await FactoryService._production_line_to_response(production_line)
     
     @staticmethod
     async def delete_production_line(
@@ -1269,7 +1355,7 @@ class FactoryService:
             existing_deleted.production_line_id = data.production_line_id
             existing_deleted.is_active = data.is_active if hasattr(data, 'is_active') else True
             await existing_deleted.save()
-            return WorkstationResponse.model_validate(existing_deleted)
+            return await FactoryService._workstation_to_response(existing_deleted)
         
         # 如果不区分大小写的匹配（防止编码大小写不一致的问题）
         # 注意：即使 code 已经是大写，也要检查，因为数据库中可能有不同大小写的记录
@@ -1296,7 +1382,7 @@ class FactoryService:
                         # 统一使用新传入的编码
                         existing_deleted.code = data.code
                         await existing_deleted.save()
-                        return WorkstationResponse.model_validate(existing_deleted)
+                        return await FactoryService._workstation_to_response(existing_deleted)
         
         # 创建新工位
         try:
@@ -1328,7 +1414,7 @@ class FactoryService:
                     existing_deleted_retry.production_line_id = data.production_line_id
                     existing_deleted_retry.is_active = data.is_active if hasattr(data, 'is_active') else True
                     await existing_deleted_retry.save()
-                    return WorkstationResponse.model_validate(existing_deleted_retry)
+                    return await FactoryService._workstation_to_response(existing_deleted_retry)
                 
                 # 如果不区分大小写的匹配（更全面的搜索）
                 # 直接查询所有记录（包括软删除的），然后手动过滤，确保不遗漏
@@ -1353,7 +1439,7 @@ class FactoryService:
                                 # 统一使用新传入的编码
                                 record.code = data.code
                                 await record.save()
-                                return WorkstationResponse.model_validate(record)
+                                return await FactoryService._workstation_to_response(record)
                             else:
                                 # 如果找到活跃记录，说明有并发问题
                                 logger.warning(f"发现活跃的工位记录（大小写不一致）: {record.code}，但之前检查未找到")
@@ -1375,7 +1461,7 @@ class FactoryService:
                 raise ValidationError(f"工位编码 {data.code} 已存在（可能已被软删除，请检查）")
             raise
         
-        return WorkstationResponse.model_validate(workstation)
+        return await FactoryService._workstation_to_response(workstation)
     
     @staticmethod
     async def get_workstation_by_uuid(
@@ -1404,7 +1490,7 @@ class FactoryService:
         if not workstation:
             raise NotFoundError(f"工位 {workstation_uuid} 不存在")
         
-        return WorkstationResponse.model_validate(workstation)
+        return await FactoryService._workstation_to_response(workstation)
     
     @staticmethod
     async def list_workstations(
@@ -1412,8 +1498,11 @@ class FactoryService:
         skip: int = 0,
         limit: int = 100,
         production_line_id: Optional[int] = None,
-        is_active: Optional[bool] = None
-    ) -> List[WorkstationResponse]:
+        is_active: Optional[bool] = None,
+        keyword: Optional[str] = None,
+        sort_field: Optional[str] = None,
+        sort_order: Optional[str] = None,
+    ) -> WorkstationListResult:
         """
         获取工位列表
         
@@ -1423,9 +1512,12 @@ class FactoryService:
             limit: 限制数量
             production_line_id: 产线ID（可选，用于过滤）
             is_active: 是否启用（可选）
+            keyword: 关键词（工位编码或名称模糊匹配）
+            sort_field: 排序字段
+            sort_order: asc 或 desc
             
         Returns:
-            List[WorkstationResponse]: 工位列表
+            WorkstationListResult: items + total
         """
         query = Workstation.filter(
             tenant_id=tenant_id,
@@ -1437,10 +1529,20 @@ class FactoryService:
         
         if is_active is not None:
             query = query.filter(is_active=is_active)
-        
-        workstations = await query.offset(skip).limit(limit).order_by("code").all()
-        
-        return [WorkstationResponse.model_validate(ws) for ws in workstations]
+
+        if keyword:
+            query = query.filter(
+                Q(code__icontains=keyword) | Q(name__icontains=keyword)
+            )
+
+        total = await query.count()
+        order_expr = _factory_order_clause(sort_field, sort_order, "code")
+        workstations = await query.offset(skip).limit(limit).order_by(order_expr).all()
+
+        result_ws: List[WorkstationResponse] = []
+        for ws in workstations:
+            result_ws.append(await FactoryService._workstation_to_response(ws))
+        return WorkstationListResult(items=result_ws, total=total)
     
     @staticmethod
     async def update_workstation(
@@ -1507,7 +1609,7 @@ class FactoryService:
                 raise ValidationError(f"工位编码 {data.code} 已存在（可能已被软删除，请检查）")
             raise
         
-        return WorkstationResponse.model_validate(workstation)
+        return await FactoryService._workstation_to_response(workstation)
     
     @staticmethod
     async def delete_workstation(
@@ -1719,9 +1821,11 @@ class FactoryService:
         is_active: Optional[bool] = None,
         keyword: Optional[str] = None,
         code: Optional[str] = None,
-        name: Optional[str] = None
-    ) -> List[WorkCenterResponse]:
-        """获取工作中心列表"""
+        name: Optional[str] = None,
+        sort_field: Optional[str] = None,
+        sort_order: Optional[str] = None,
+    ) -> WorkCenterListResult:
+        """获取工作中心列表（分页 total + 排序）"""
         query = WorkCenter.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True
@@ -1741,8 +1845,13 @@ class FactoryService:
         if name:
             query = query.filter(name__icontains=name)
 
-        work_centers = await query.offset(skip).limit(limit).order_by("code").all()
-        return [WorkCenterResponse.model_validate(wc) for wc in work_centers]
+        total = await query.count()
+        order_expr = _factory_order_clause(sort_field, sort_order, "code")
+        work_centers = await query.offset(skip).limit(limit).order_by(order_expr).all()
+        return WorkCenterListResult(
+            items=[WorkCenterResponse.model_validate(wc) for wc in work_centers],
+            total=total,
+        )
 
     @staticmethod
     async def update_work_center(
@@ -1933,7 +2042,10 @@ class FactoryService:
             line_id = workstation.production_line_id
             if line_id not in workstation_map:
                 workstation_map[line_id] = []
-            workstation_map[line_id].append(WorkstationTreeResponse.model_validate(workstation))
+            ws_full = await FactoryService._workstation_to_response(workstation)
+            workstation_map[line_id].append(
+                WorkstationTreeResponse.model_validate(ws_full.model_dump(mode="python"))
+            )
         
         # 构建产线映射（按车间ID分组）
         production_line_map: dict[int, List[ProductionLineTreeResponse]] = {}
@@ -1957,7 +2069,8 @@ class FactoryService:
             workshop_production_lines = production_line_map.get(workshop.id, [])
             
             # 创建车间响应对象（包含产线列表）
-            workshop_response = WorkshopTreeResponse.model_validate(workshop)
+            wr = await FactoryService._workshop_to_response(workshop)
+            workshop_response = WorkshopTreeResponse.model_validate(wr.model_dump(mode="python"))
             workshop_response.production_lines = workshop_production_lines
             result.append(workshop_response)
         

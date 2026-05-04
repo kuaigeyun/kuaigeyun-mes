@@ -23,6 +23,8 @@ export interface DetailDrawerTemplateProps<T = Record<string, unknown>> {
   width?: number | string;
   size?: number | string;
   loading?: boolean;
+  /** Ant Design Drawer 底栏（固定在抽屉底部，适合放主操作如下推） */
+  footer?: ReactNode;
   extra?: ReactNode;
   className?: string;
   styles?: Partial<
@@ -100,6 +102,7 @@ export const DetailDrawerTemplate = <T extends Record<string, unknown> = Record<
   width = DRAWER_CONFIG.HALF_WIDTH,
   size,
   loading = false,
+  footer,
   extra,
   className,
   styles,
@@ -251,6 +254,7 @@ export const DetailDrawerTemplate = <T extends Record<string, unknown> = Record<
       }}
       loading={loading}
       className={className}
+      footer={footer}
       extra={extra}
       zIndex={zIndex}
     >

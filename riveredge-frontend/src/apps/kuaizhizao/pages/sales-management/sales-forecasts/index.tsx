@@ -9,12 +9,13 @@
 
 import React, { useRef, useState, useEffect, useCallback } from 'react'
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormInstance, ProFormSelect } from '@ant-design/pro-components'
-import { App, Button, Space, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Typography, Modal, Dropdown, Descriptions } from 'antd'
-import { PlusOutlined, DeleteOutlined, EyeOutlined, EditOutlined, ArrowDownOutlined, ImportOutlined, AppstoreAddOutlined } from '@ant-design/icons'
-import { useNavigate } from 'react-router-dom'
+import { App, Button, Space, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Typography, Modal, Dropdown, Descriptions, Tooltip } from 'antd'
+import { PlusOutlined, DeleteOutlined, EyeOutlined, EditOutlined, ArrowDownOutlined, ImportOutlined, AppstoreAddOutlined, ReloadOutlined } from '@ant-design/icons'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts'
+import { useDeferAfterPaint } from '../../../../../hooks/useDeferAfterPaint'
 import { theme as AntdTheme } from 'antd'
 import { StatCardTrendArea } from '../../../../../components/common/StatCardTrendArea'
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired'
@@ -40,6 +41,7 @@ import {
   getSalesForecastStatistics,
   type SalesForecast,
   type SalesForecastItem,
+  type SalesForecastListParams,
 } from '../../../services/sales-forecast'
 import dayjs from 'dayjs'
 import {
@@ -50,39 +52,98 @@ import {
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage'
 import { getSalesForecastLifecycle } from '../../../utils/salesForecastLifecycle'
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle'
+import type { SubStage } from '../../../../../components/uni-lifecycle/types'
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions'
-import { DocumentTrackingRelationsBody, DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel'
+import {
+  DocumentTrackingRelationsTabsBody,
+  DocumentTrackingTimelineBody,
+  TraceLinkedDocumentBrief,
+  useDocumentTracking,
+} from '../../../../../components/document-tracking-panel'
 import { downloadFile } from '../../../services/common'
-import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow'
+import { renderRowActionsOverflow } from '../../../../../components/uni-action'
 
+/** 销售预测详情抽屉外左侧「关联全链路」浮层（与销售订单详情一致） */
+const SALES_FORECAST_FULL_CHAIN_FLOAT_MARGIN = 16
+const SALES_FORECAST_LEFT_CHAIN_GAP = 16
+const SALES_FORECAST_CHAIN_DRAWER_GAP = 16
+const SALES_FORECAST_CHAIN_VERTICAL_TRIM =
+  SALES_FORECAST_FULL_CHAIN_FLOAT_MARGIN * 2 + SALES_FORECAST_LEFT_CHAIN_GAP
+const salesForecastChainHalfHeightCss = `calc((100vh - ${SALES_FORECAST_CHAIN_VERTICAL_TRIM}px) / 2)`
+const salesForecastChainPanelWidthCss = `calc(50vw - ${SALES_FORECAST_FULL_CHAIN_FLOAT_MARGIN * 2 + SALES_FORECAST_CHAIN_DRAWER_GAP}px)`
+const salesForecastBriefPanelTopCss = `calc(${SALES_FORECAST_FULL_CHAIN_FLOAT_MARGIN}px + (100vh - ${SALES_FORECAST_CHAIN_VERTICAL_TRIM}px) / 2 + ${SALES_FORECAST_LEFT_CHAIN_GAP}px)`
 
+/** 是否已下推需求计算（列表/按钮门禁） */
+function isForecastComputationPushed(record: Record<string, unknown>): boolean {
+  const p = record.planning_pushed_to_computation ?? record.pushed_to_computation
+  return p === true || p === 'true' || p === 1
+}
+
+/** 需求计算节点开启时列表/抽屉始终露出「下推」；禁用时配合 Tooltip（溢出列见 data-row-action-visible-when-disabled） */
+function getSalesForecastPushComputationUiState(
+  record: Record<string, unknown> | null | undefined,
+  opts: { demandComputationEnabled: boolean; auditEnabled: boolean; t: (key: string) => string },
+): { visible: boolean; clickable: boolean; disabledTip?: string } {
+  if (!opts.demandComputationEnabled || !record) return { visible: false, clickable: false }
+  const lifecycle = getSalesForecastLifecycle(record as SalesForecast, opts.auditEnabled)
+  const stage = lifecycle.stageName ?? ''
+  const blockedStages = ['草稿', '待审核', '已驳回', '已取消', '已完成']
+  if (isForecastComputationPushed(record)) {
+    return {
+      visible: true,
+      clickable: false,
+      disabledTip: opts.t('app.kuaizhizao.salesForecast.pushDisabledAlreadyPushed'),
+    }
+  }
+  if (blockedStages.includes(stage)) {
+    return {
+      visible: true,
+      clickable: false,
+      disabledTip: opts.t('app.kuaizhizao.salesForecast.pushDisabledLifecycle'),
+    }
+  }
+  return { visible: true, clickable: true }
+}
 
 export default function SalesForecastsPage() {
   const { t } = useTranslation();
   const { message: messageApi, modal: modalApi } = App.useApp()
   const navigate = useNavigate();
+  const location = useLocation();
   const formRef = useRef<ProFormInstance>();
   /** 表格搜索表单 ref，用于 statCard 点击时设置筛选并刷新 */
   const tableSearchFormRef = useRef<any>(null);
   const [modalVisible, setModalVisible] = useState(false)
-  const tableRef = useRef<ActionType>();
+  const actionRef = useRef<ActionType>();
   const queryClient = useQueryClient();
+
+  /** 视图切换缓存：始终请求 include_items=true，切换视图时从缓存转换，避免重复请求（与销售订单一致） */
+  const lastForecastsCacheRef = useRef<{ forecasts: SalesForecast[]; total: number; paramsKey: string } | null>(null)
+  const invalidateForecastCache = () => {
+    lastForecastsCacheRef.current = null
+  }
 
   const invalidateMenuBadge = useInvalidateMenuBadgeCounts();
   const invalidateStatistics = () => {
     queryClient.invalidateQueries({ queryKey: ['salesForecastStatistics'] });
   };
 
+  const secondaryStatsReady = useDeferAfterPaint();
   const { data: statistics } = useQuery({
-    queryKey: ['salesForecastStatistics'],
+    queryKey: ['salesForecastStatistics', location.pathname],
     queryFn: () => getSalesForecastStatistics(),
+    enabled: secondaryStatsReady,
   });
 
-  const { token } = AntdTheme.useToken();
+  const { token } = AntdTheme.useToken()
+  const forecastDetailDrawerZIndex = token.zIndexPopupBase
+  const forecastChainOverlayZIndex = token.zIndexPopupBase + 1
   const rowKeyToOrderIdRef = useRef<Map<string, number>>(new Map());
 
-  const [viewType, setViewType] = useState<'table' | 'detailTable'>('detailTable')
-  const viewMode = viewType === 'table' ? 'order' : 'item';
+  // 与 UniTable viewTypes 同步：table=单据维度；明细表格 / 帮助 走明细数据维度
+  const [viewTypeState, setViewTypeState] = useState<'table' | 'detailTable' | 'help'>('table');
+  const dataViewMode = viewTypeState === 'table' ? 'order' : 'detail';
+  const dataViewModeRef = useRef(dataViewMode);
 
   /**
    * 将含有 items 的预测单据拍平为明细行，用于“明细视图”
@@ -94,6 +155,13 @@ export default function SalesForecastsPage() {
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null)
   const [effectiveAutoGen, setEffectiveAutoGen] = useState<boolean | null>(null)
   const [drawerVisible, setDrawerVisible] = useState(false)
+  /** 抽屉外左侧关联全链路浮层（与销售订单详情一致） */
+  const [fullChainRefreshKey, setFullChainRefreshKey] = useState(0)
+  const [fullChainTraceLoading, setFullChainTraceLoading] = useState(false)
+  const [fullChainBriefDoc, setFullChainBriefDoc] = useState<{ document_type: string; document_id: number } | null>(
+    null,
+  )
+  const [trackingRefreshKey, setTrackingRefreshKey] = useState(0)
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false)
   const [importModalVisible, setImportModalVisible] = useState(false)
@@ -353,6 +421,24 @@ export default function SalesForecastsPage() {
     }
   }
 
+  const onFullChainGraphNodeClick = useCallback(
+    (type: string, id: number) => {
+      if (!id) return
+      if (type === 'sales_forecast' && currentForecast?.id != null && id === currentForecast.id) {
+        setFullChainBriefDoc(null)
+        return
+      }
+      setFullChainBriefDoc({ document_type: type, document_id: id })
+    },
+    [currentForecast?.id],
+  )
+
+  useEffect(() => {
+    if (drawerVisible && currentForecast?.id != null) {
+      setFullChainBriefDoc(null)
+    }
+  }, [drawerVisible, currentForecast?.id])
+
   // 处理批量导入（UniTable 内置）
   const handleImport = async (data: any[][]) => {
     try {
@@ -367,7 +453,8 @@ export default function SalesForecastsPage() {
       } else {
         messageApi.success(t('common.importSuccess', { count: result.success_count }))
       }
-      tableRef.current?.reload()
+      invalidateForecastCache()
+      actionRef.current?.reload()
     } catch (e: any) {
       messageApi.error(e?.message || t('common.importFailed'))
     }
@@ -426,8 +513,8 @@ export default function SalesForecastsPage() {
           .filter((id): id is number => id != null)
       ),
     ];
-    const deleteCount = viewMode === 'order' ? keys.length : orderIds.length;
-    const finalIds = viewMode === 'order' ? keys.map(k => Number(k)) : orderIds;
+    const deleteCount = dataViewMode === 'order' ? keys.length : orderIds.length;
+    const finalIds = dataViewMode === 'order' ? keys.map(k => Number(k)) : orderIds;
 
     if (finalIds.length === 0) {
       messageApi.warning(t('common.selectToDelete'));
@@ -446,9 +533,10 @@ export default function SalesForecastsPage() {
             await deleteSalesForecast(id);
           }
           messageApi.success(t('common.deleteSuccess', { count: deleteCount }))
-          tableRef.current?.reload()
+          invalidateForecastCache();
+          actionRef.current?.reload()
           setSelectedRowKeys([])
-          if (tableRef.current?.clearSelected) tableRef.current.clearSelected();
+          if (actionRef.current?.clearSelected) actionRef.current.clearSelected();
           if (drawerVisible && currentForecast?.id && finalIds.includes(currentForecast.id)) {
             setDrawerVisible(false);
             setCurrentForecast(null);
@@ -555,9 +643,12 @@ export default function SalesForecastsPage() {
       setModalVisible(false)
       setEffectiveRuleCode(null)
       setEffectiveAutoGen(null)
+      invalidateForecastCache();
       invalidateStatistics();
       invalidateMenuBadge();
-      tableRef.current?.reload()
+      setTrackingRefreshKey((k) => k + 1);
+      setFullChainRefreshKey((k) => k + 1);
+      actionRef.current?.reload()
     } catch (e: any) {
       messageApi.error(e?.message || t('common.saveFailed'))
       throw e
@@ -582,9 +673,12 @@ export default function SalesForecastsPage() {
         try {
           await pushSalesForecastToComputation(id)
           messageApi.success(t('app.kuaizhizao.salesForecast.pushSuccess'))
+          invalidateForecastCache();
           invalidateStatistics();
           invalidateMenuBadge();
-          tableRef.current?.reload()
+          setTrackingRefreshKey((k) => k + 1);
+          setFullChainRefreshKey((k) => k + 1);
+          actionRef.current?.reload()
         } catch (e: any) {
           messageApi.error(e?.message || t('app.kuaizhizao.salesForecast.pushFailed'))
         }
@@ -627,11 +721,11 @@ export default function SalesForecastsPage() {
       width: 160,
       render: (text, record) => {
         const isFirst = record.itemIndex === undefined || record.itemIndex === 0;
-        if (!isFirst && viewMode === 'item') return { children: null, props: { rowSpan: 0 } };
+        if (!isFirst && dataViewMode === 'detail') return { children: null, props: { rowSpan: 0 } };
         return text;
       },
       onCell: (record) => {
-        if (viewMode === 'order') return {};
+        if (dataViewMode === 'order') return {};
         const isFirst = record.itemIndex === undefined || record.itemIndex === 0;
         if (isFirst) {
           const rowCount = record.items?.length || 1;
@@ -648,11 +742,11 @@ export default function SalesForecastsPage() {
       hideInSearch: true,
       render: (text, record) => {
         const isFirst = record.itemIndex === undefined || record.itemIndex === 0;
-        if (!isFirst && viewMode === 'item') return { children: null, props: { rowSpan: 0 } };
+        if (!isFirst && dataViewMode === 'detail') return { children: null, props: { rowSpan: 0 } };
         return text;
       },
       onCell: (record) => {
-        if (viewMode === 'order') return {};
+        if (dataViewMode === 'order') return {};
         const isFirst = record.itemIndex === undefined || record.itemIndex === 0;
         if (isFirst) {
           const rowCount = record.items?.length || 1;
@@ -673,11 +767,11 @@ export default function SalesForecastsPage() {
       },
       render: (text, record) => {
         const isFirst = record.itemIndex === undefined || record.itemIndex === 0;
-        if (!isFirst && viewMode === 'item') return { children: null, props: { rowSpan: 0 } };
+        if (!isFirst && dataViewMode === 'detail') return { children: null, props: { rowSpan: 0 } };
         return text;
       },
       onCell: (record) => {
-        if (viewMode === 'order') return {};
+        if (dataViewMode === 'order') return {};
         const isFirst = record.itemIndex === undefined || record.itemIndex === 0;
         if (isFirst) {
           const rowCount = record.items?.length || 1;
@@ -706,11 +800,11 @@ export default function SalesForecastsPage() {
       hideInSearch: true,
       render: (text, record) => {
         const isFirst = record.itemIndex === undefined || record.itemIndex === 0;
-        if (!isFirst && viewMode === 'item') return { children: null, props: { rowSpan: 0 } };
+        if (!isFirst && dataViewMode === 'detail') return { children: null, props: { rowSpan: 0 } };
         return text;
       },
       onCell: (record) => {
-        if (viewMode === 'order') return {};
+        if (dataViewMode === 'order') return {};
         const isFirst = record.itemIndex === undefined || record.itemIndex === 0;
         if (isFirst) {
           const rowCount = record.items?.length || 1;
@@ -720,21 +814,35 @@ export default function SalesForecastsPage() {
       },
     },
     {
-      title: t('app.kuaizhizao.salesForecast.lifecycleStatus'),
+      title: t('app.kuaizhizao.salesForecast.lifecycleColumn'),
       dataIndex: 'lifecycle',
-      hideInSearch: true,
-      width: 132,
-      align: 'center',
-      fixed: 'right',
+      valueType: 'select',
+      width: 108,
+      align: 'left' as const,
+      fixed: 'right' as const,
+      valueEnum: {
+        草稿: { text: t('app.kuaizhizao.salesForecast.statusDraft') },
+        待审核: { text: t('app.kuaizhizao.salesForecast.statusPending') },
+        已审核: { text: t('app.kuaizhizao.salesForecast.statusApproved') },
+        已下推: { text: t('app.kuaizhizao.salesForecast.statusPushed') },
+        已生效: { text: t('app.kuaizhizao.salesForecast.lifecycleEffective') },
+        执行中: { text: t('app.kuaizhizao.salesForecast.lifecycleExecuting') },
+        已完成: { text: t('app.kuaizhizao.salesForecast.lifecycleCompleted') },
+        已驳回: { text: t('app.kuaizhizao.salesForecast.statusRejected') },
+        已取消: { text: t('documentStatus.cancelled') },
+      },
       render: (_, record) => {
         const isFirst = record.itemIndex === undefined || record.itemIndex === 0;
-        if (!isFirst && viewMode === 'item') return { children: null, props: { rowSpan: 0 } };
+        if (!isFirst && dataViewMode === 'detail') return { children: null, props: { rowSpan: 0 } };
         const lifecycle = getSalesForecastLifecycle(record, auditEnabled);
+        const activeStage = lifecycle.mainStages?.find((s: SubStage) => s.status === 'active');
+        const displayLabel = activeStage?.label ?? lifecycle.stageName;
         return (
           <UniLifecycle
             percent={lifecycle.percent}
-            stageName={lifecycle.stageName}
+            stageName={displayLabel}
             status={lifecycle.status}
+            subStages={lifecycle.subStages}
             showLabel
             size="small"
             showCircleTooltip={false}
@@ -742,7 +850,7 @@ export default function SalesForecastsPage() {
         );
       },
       onCell: (record) => {
-        if (viewMode === 'order') return {};
+        if (dataViewMode === 'order') return {};
         const isFirst = record.itemIndex === undefined || record.itemIndex === 0;
         if (isFirst) {
           const rowCount = record.items?.length || 1;
@@ -758,23 +866,40 @@ export default function SalesForecastsPage() {
       width: 200,
       render: (_, record) => {
         const isFirst = record.itemIndex === undefined || record.itemIndex === 0;
-        if (!isFirst && viewMode === 'item') return { children: null, props: { rowSpan: 0 } };
+        if (!isFirst && dataViewMode === 'detail') return { children: null, props: { rowSpan: 0 } };
         
         const lifecycle = getSalesForecastLifecycle(record, auditEnabled);
         const canEdit = ['草稿', '待审核', '已驳回'].includes(lifecycle.stageName ?? '');
         const canDelete = ['草稿', '待审核'].includes(lifecycle.stageName ?? '');
+        const recObj = record as Record<string, unknown>;
+        const pushUi = getSalesForecastPushComputationUiState(recObj, {
+          demandComputationEnabled: salesNodesEnabled.demand_computation,
+          auditEnabled,
+          t,
+        });
         const parts: React.ReactNode[] = [
           <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
             {t('common.detail')}
           </Button>,
         ];
-        if (canEdit) {
-          parts.push(
-            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record.id)}>
-              {t('common.edit')}
-            </Button>
-          );
-        }
+        parts.push(
+          <Tooltip
+            key="edit-tip"
+            title={!canEdit ? t('app.kuaizhizao.salesForecast.editDisabledTip') : undefined}
+          >
+            <span>
+              <Button
+                type="link"
+                size="small"
+                icon={<EditOutlined />}
+                disabled={!canEdit}
+                onClick={() => canEdit && record.id != null && handleEdit(record.id)}
+              >
+                {t('common.edit')}
+              </Button>
+            </span>
+          </Tooltip>,
+        );
         parts.push(
           <UniWorkflowActions
             key="workflow-actions"
@@ -796,36 +921,57 @@ export default function SalesForecastsPage() {
               revoke: withdrawSalesForecastApproval,
             }}
             onSuccess={() => {
+              invalidateForecastCache();
               invalidateStatistics();
               invalidateMenuBadge();
-              tableRef.current?.reload();
+              setTrackingRefreshKey((k) => k + 1);
+              setFullChainRefreshKey((k) => k + 1);
+              actionRef.current?.reload();
             }}
           />
         );
-        if (lifecycle.stageName === '已审核') {
+        if (pushUi.visible) {
           parts.push(
-            <Button
-              type="link"
-              size="small"
-              icon={<ArrowDownOutlined />}
-              disabled={!salesNodesEnabled.demand_computation}
-              onClick={() => handlePushToComputation(record.id)}
-            >
-              {t('app.kuaizhizao.salesForecast.pushToComputation')}
-            </Button>
+            <span key="push-tip" data-action-priority={1} data-row-action-visible-when-disabled>
+              <Tooltip title={pushUi.clickable ? undefined : pushUi.disabledTip}>
+                <span>
+                  <Button
+                    type="link"
+                    size="small"
+                    icon={<ArrowDownOutlined />}
+                    disabled={!pushUi.clickable}
+                    onClick={() => pushUi.clickable && record.id != null && handlePushToComputation(record.id)}
+                  >
+                    {t('app.kuaizhizao.salesForecast.pushToComputation')}
+                  </Button>
+                </span>
+              </Tooltip>
+            </span>,
           );
         }
-        if (canDelete) {
-          parts.push(
-            <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => handleDelete([record.id])}>
-              {t('common.delete')}
-            </Button>
-          );
-        }
+        parts.push(
+          <Tooltip
+            key="del-tip"
+            title={!canDelete ? t('app.kuaizhizao.salesForecast.deleteDisabledTip') : undefined}
+          >
+            <span>
+              <Button
+                type="link"
+                danger
+                size="small"
+                icon={<DeleteOutlined />}
+                disabled={!canDelete}
+                onClick={() => canDelete && record.id != null && handleDelete([record.id])}
+              >
+                {t('common.delete')}
+              </Button>
+            </span>
+          </Tooltip>,
+        );
         return renderSalesForecastRowActions(parts, `sales-forecast-${record.id ?? 'row'}`);
       },
       onCell: (record) => {
-        if (viewMode === 'order') return {};
+        if (dataViewMode === 'order') return {};
         const isFirst = record.itemIndex === undefined || record.itemIndex === 0;
         if (isFirst) {
           const rowCount = record.items?.length || 1;
@@ -875,8 +1021,8 @@ export default function SalesForecastsPage() {
               description: (statistics?.pending_review_count ?? 0) > 0 ? <div style={{ color: '#faad14' }}>需即时处理</div> : undefined,
               backgroundChart: renderTrendChart(statistics?.trend_pending_review ?? [], '#faad14'),
               onClick: (statistics?.pending_review_count ?? 0) > 0 ? () => {
-                tableSearchFormRef.current?.setFieldsValue?.({ status: '待审核' });
-                tableRef.current?.reload?.();
+                tableSearchFormRef.current?.setFieldsValue?.({ lifecycle: '待审核' });
+                actionRef.current?.reload?.();
               } : undefined,
             }]
           : []),
@@ -887,8 +1033,8 @@ export default function SalesForecastsPage() {
           valueStyle: { color: '#52c41a' },
           backgroundChart: renderTrendChart([], '#52c41a'),
           onClick: (statistics?.in_progress_count ?? 0) > 0 ? () => {
-            tableSearchFormRef.current?.setFieldsValue?.({ status: '已下推' });
-            tableRef.current?.reload?.();
+            tableSearchFormRef.current?.setFieldsValue?.({ lifecycle: '执行中' });
+            actionRef.current?.reload?.();
           } : undefined,
         },
         {
@@ -904,31 +1050,90 @@ export default function SalesForecastsPage() {
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<any>
-          actionRef={tableRef}
+          actionRef={actionRef}
           formRef={tableSearchFormRef}
-          rowKey={viewType === 'table' ? 'id' : '_rowKey'}
+          rowKey={viewTypeState === 'table' ? 'id' : '_rowKey'}
           columns={columns}
-          viewTypes={['table', 'detailTable']}
+          viewTypes={['table', 'detailTable', 'help']}
           defaultViewType="table"
-          onViewTypeChange={(v) => {
-            setViewType(v as 'table' | 'detailTable');
-            setTimeout(() => {
-              tableRef.current?.reload();
-            }, 0);
+          helpViewConfig={{
+            content: (
+              <div style={{ lineHeight: 1.8 }}>
+                <p><strong>表格视图</strong>：按预测单据维度展示。</p>
+                <p><strong>明细表格</strong>：按每条预测明细展开，便于核对物料、数量与预测日期。</p>
+              </div>
+            ),
           }}
-          request={async (params) => {
-            const currentMode = viewType === 'table' ? 'order' : 'item';
-            const res = await listSalesForecasts({
-              ...params,
-              include_items: currentMode === 'item' ? 1 : 0,
-            });
-            if (currentMode === 'item') {
-              return { data: toFlatRows(res.data), total: res.total, success: res.success };
+          onViewTypeChange={(v) => {
+            const nextMode = v === 'table' ? 'order' : 'detail';
+            dataViewModeRef.current = nextMode;
+            setViewTypeState(v as 'table' | 'detailTable' | 'help');
+            setTimeout(() => actionRef.current?.reload(), 0);
+          }}
+          request={async (params, _sort, _filter, searchFormValues) => {
+            const sf = searchFormValues ?? {};
+            const apiParams: SalesForecastListParams = {
+              skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
+              limit: params.pageSize ?? 20,
+              include_items: true,
+            };
+            if (sf.forecast_period) apiParams.forecast_period = sf.forecast_period as string;
+            const fc = sf.forecast_code != null ? String(sf.forecast_code).trim() : '';
+            if (fc) apiParams.keyword = fc;
+            if (sf.lifecycle) {
+              const lifecycleToStatus: Record<string, string> = {
+                草稿: 'DRAFT',
+                待审核: 'PENDING_REVIEW',
+                已审核: 'AUDITED',
+                已下推: 'PUSHED',
+                已生效: 'EFFECTIVE',
+                执行中: 'IN_PROGRESS',
+                已完成: 'COMPLETED',
+                已驳回: 'REJECTED',
+                已取消: 'CANCELLED',
+              };
+              apiParams.status = lifecycleToStatus[String(sf.lifecycle)] ?? String(sf.lifecycle);
+            } else if (sf.status) {
+              apiParams.status = sf.status as string;
             }
-            return res;
+            if (sf.start_date)
+              apiParams.start_date = dayjs(sf.start_date).format('YYYY-MM-DD');
+            if (sf.end_date) apiParams.end_date = dayjs(sf.end_date).format('YYYY-MM-DD');
+
+            const paramsKey = JSON.stringify(apiParams);
+
+            try {
+              const cache = lastForecastsCacheRef.current;
+              let forecasts: SalesForecast[];
+              let total: number;
+              if (cache?.paramsKey === paramsKey && Array.isArray(cache.forecasts)) {
+                forecasts = cache.forecasts;
+                total = cache.total;
+              } else {
+                const res = await listSalesForecasts(apiParams);
+                forecasts = Array.isArray(res.data) ? res.data : [];
+                total = res.total ?? forecasts.length;
+                lastForecastsCacheRef.current = { forecasts, total, paramsKey };
+              }
+
+              const mode = dataViewModeRef.current;
+              if (mode === 'order') {
+                const map = new Map<string, number>();
+                forecasts.forEach((f) => {
+                  if (f.id != null) map.set(String(f.id), f.id);
+                });
+                rowKeyToOrderIdRef.current = map;
+                return { data: forecasts, success: true, total };
+              }
+              return { data: toFlatRows(forecasts), success: true, total };
+            } catch (e: any) {
+              messageApi.error(e?.message || t('common.loadFailed'));
+              return { data: [], success: false, total: 0 };
+            }
           }}
           showAdvancedSearch={true}
-          enableRowSelection={true}
+          enableRowSelection={viewTypeState !== 'detailTable'}
+          toolBarButtonSize="middle"
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={(keys) => setSelectedRowKeys(keys)}
           showCreateButton={salesNodesEnabled.sales_forecast}
@@ -956,8 +1161,14 @@ export default function SalesForecastsPage() {
                         let success = 0;
                         let failed = 0;
                         for (const k of selectedRowKeys) {
+                          const raw = rowKeyToOrderIdRef.current.get(String(k));
+                          const id = raw ?? Number(k);
+                          if (!Number.isFinite(id) || id <= 0) {
+                            failed += 1;
+                            continue;
+                          }
                           try {
-                            await submitSalesForecast(Number(k));
+                            await submitSalesForecast(id);
                             success += 1;
                           } catch {
                             failed += 1;
@@ -966,7 +1177,8 @@ export default function SalesForecastsPage() {
                         if (success > 0) messageApi.success(`已提交 ${success} 条`);
                         if (failed > 0) messageApi.warning(`提交失败 ${failed} 条`);
                         setSelectedRowKeys([]);
-                        tableRef.current?.reload();
+                        invalidateForecastCache();
+                        actionRef.current?.reload();
                       },
                     },
                   ],
@@ -1294,13 +1506,189 @@ export default function SalesForecastsPage() {
         />
       </Modal>
 
+      {drawerVisible && currentForecast?.id != null ? (
+        <>
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.relationsFullChainTitle')}
+            style={{
+              position: 'fixed',
+              left: SALES_FORECAST_FULL_CHAIN_FLOAT_MARGIN,
+              top: SALES_FORECAST_FULL_CHAIN_FLOAT_MARGIN,
+              width: salesForecastChainPanelWidthCss,
+              height: salesForecastChainHalfHeightCss,
+              zIndex: forecastChainOverlayZIndex,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div style={{ flexShrink: 0, marginBottom: 8 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'flex-start',
+                  gap: 12,
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontWeight: 600,
+                      fontSize: 13,
+                      color: 'var(--ant-color-text)',
+                    }}
+                  >
+                    {t('components.documentTrackingPanel.relationsFullChainTitle')}
+                  </div>
+                </div>
+                <Button
+                  type="default"
+                  size="small"
+                  icon={<ReloadOutlined />}
+                  loading={fullChainTraceLoading}
+                  style={{ flexShrink: 0 }}
+                  onClick={() => setFullChainRefreshKey((k) => k + 1)}
+                >
+                  {t('components.documentRelationGraph.refresh')}
+                </Button>
+              </div>
+            </div>
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <DocumentTrackingRelationsTabsBody
+                documentType="sales_forecast"
+                documentId={currentForecast.id}
+                refreshKey={fullChainRefreshKey}
+                onDocumentClick={onFullChainGraphNodeClick}
+                compact
+                hideInlineRefresh
+                onTraceLoadingChange={setFullChainTraceLoading}
+              />
+            </div>
+          </div>
+
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.traceBriefTitle')}
+            style={{
+              position: 'fixed',
+              left: SALES_FORECAST_FULL_CHAIN_FLOAT_MARGIN,
+              top: salesForecastBriefPanelTopCss,
+              width: salesForecastChainPanelWidthCss,
+              height: salesForecastChainHalfHeightCss,
+              zIndex: forecastChainOverlayZIndex,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 600,
+                fontSize: 13,
+                marginBottom: 8,
+                flexShrink: 0,
+                color: 'var(--ant-color-text)',
+              }}
+            >
+              {t('components.documentTrackingPanel.traceBriefTitle')}
+            </div>
+            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+              <TraceLinkedDocumentBrief
+                documentType={fullChainBriefDoc?.document_type}
+                documentId={fullChainBriefDoc?.document_id}
+                compactChrome
+              />
+            </div>
+            {fullChainBriefDoc ? (
+              <div
+                style={{
+                  flexShrink: 0,
+                  marginTop: 8,
+                  paddingTop: 10,
+                  borderTop: '1px solid var(--ant-color-border)',
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                }}
+              >
+                <Space wrap>
+                  <Button onClick={() => setFullChainBriefDoc(null)}>
+                    {t('components.documentTrackingPanel.traceBriefDismiss')}
+                  </Button>
+                  {fullChainBriefDoc.document_type === 'quotation' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDrawerVisible(false)
+                        navigate('/apps/kuaizhizao/sales-management/quotations', {
+                          state: { openQuotationDetailId: fullChainBriefDoc.document_id },
+                        })
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenQuotation')}
+                    </Button>
+                  ) : null}
+                </Space>
+              </div>
+            ) : null}
+          </div>
+        </>
+      ) : null}
+
       <DetailDrawerTemplate
         title={`${t('app.kuaizhizao.salesForecast.detailTitle')}${currentForecast?.forecast_code ? ` - ${currentForecast.forecast_code}` : ''}`}
         open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
+        zIndex={forecastDetailDrawerZIndex}
+        onClose={() => {
+          setDrawerVisible(false)
+          setFullChainBriefDoc(null)
+        }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
         dataSource={currentForecast || {}}
+        footer={
+          currentForecast && salesNodesEnabled.demand_computation
+            ? (() => {
+                const pushSt = getSalesForecastPushComputationUiState(currentForecast as unknown as Record<string, unknown>, {
+                  demandComputationEnabled: salesNodesEnabled.demand_computation,
+                  auditEnabled,
+                  t,
+                });
+                const fid = currentForecast.id;
+                return (
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 8 }}>
+                    <Tooltip title={pushSt.clickable ? undefined : pushSt.disabledTip}>
+                      <span>
+                        <Button
+                          type="primary"
+                          icon={<ArrowDownOutlined />}
+                          disabled={!pushSt.clickable || fid == null}
+                          onClick={() => pushSt.clickable && fid != null && handlePushToComputation(fid)}
+                        >
+                          {t('app.kuaizhizao.salesForecast.pushToComputation')}
+                        </Button>
+                      </span>
+                    </Tooltip>
+                  </div>
+                );
+              })()
+            : undefined
+        }
         extra={
           currentForecast && (
             <Space size="small">
@@ -1308,18 +1696,36 @@ export default function SalesForecastsPage() {
                 const lifecycle = getSalesForecastLifecycle(currentForecast, auditEnabled);
                 const canEdit = ['草稿', '待审核', '已驳回'].includes(lifecycle.stageName ?? '');
                 const canDelete = ['草稿', '待审核'].includes(lifecycle.stageName ?? '');
+                const fid = currentForecast.id;
                 return (
                   <>
-                    {canEdit && (
-                      <Button icon={<EditOutlined />} onClick={() => { setDrawerVisible(false); handleEdit(currentForecast.id!); }}>
-                        {t('common.edit')}
-                      </Button>
-                    )}
-                    {canDelete && (
-                      <Button danger icon={<DeleteOutlined />} onClick={() => handleDelete([currentForecast.id!])}>
-                        {t('common.delete')}
-                      </Button>
-                    )}
+                    <Tooltip title={!canEdit ? t('app.kuaizhizao.salesForecast.editDisabledTip') : undefined}>
+                      <span>
+                        <Button
+                          icon={<EditOutlined />}
+                          disabled={!canEdit || fid == null}
+                          onClick={() => {
+                            if (!canEdit || fid == null) return;
+                            setDrawerVisible(false);
+                            handleEdit(fid);
+                          }}
+                        >
+                          {t('common.edit')}
+                        </Button>
+                      </span>
+                    </Tooltip>
+                    <Tooltip title={!canDelete ? t('app.kuaizhizao.salesForecast.deleteDisabledTip') : undefined}>
+                      <span>
+                        <Button
+                          danger
+                          icon={<DeleteOutlined />}
+                          disabled={!canDelete || fid == null}
+                          onClick={() => fid != null && canDelete && handleDelete([fid])}
+                        >
+                          {t('common.delete')}
+                        </Button>
+                      </span>
+                    </Tooltip>
                   </>
                 );
               })()}
@@ -1335,9 +1741,12 @@ export default function SalesForecastsPage() {
                 autoApproveWhenSubmit={!auditEnabled}
                 workflowAuditEnabled={auditEnabled}
                 onSuccess={() => {
+                  invalidateForecastCache();
                   invalidateStatistics();
                   invalidateMenuBadge();
-                  tableRef.current?.reload();
+                  setTrackingRefreshKey((k) => k + 1);
+                  setFullChainRefreshKey((k) => k + 1);
+                  actionRef.current?.reload();
                   setDrawerVisible(false);
                 }}
                 actions={{
@@ -1352,7 +1761,7 @@ export default function SalesForecastsPage() {
       >
         {currentForecast && (
           <>
-            <DetailDrawerSection title="基本信息">
+            <DetailDrawerSection title={t('app.uniDetail.sectionBasic')}>
               <Descriptions
                 column={3}
                 size="small"
@@ -1369,34 +1778,23 @@ export default function SalesForecastsPage() {
               />
             </DetailDrawerSection>
 
-            <DetailDrawerSection title="生命周期">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {(() => {
-                  const lifecycle = getSalesForecastLifecycle(currentForecast, auditEnabled);
-                  if (!lifecycle.mainStages?.length) return null;
-                  return (
-                    <UniLifecycleStepper
-                      steps={lifecycle.mainStages}
-                      status={lifecycle.status}
-                      showLabels
-                      nextStepSuggestions={lifecycle.nextStepSuggestions}
-                    />
-                  );
-                })()}
-                <div style={{ paddingTop: 12, borderTop: '1px solid var(--ant-color-border-secondary)' }}>
-                  <div style={{ marginBottom: 8, fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
-                    上下游单据
-                  </div>
-                  {forecastTracking.data ? (
-                    <DocumentTrackingRelationsBody data={forecastTracking.data} />
-                  ) : (
-                    <Typography.Text type="secondary">暂无上下游关联</Typography.Text>
-                  )}
-                </div>
-              </div>
-            </DetailDrawerSection>
+            {(() => {
+              const lifecycle = getSalesForecastLifecycle(currentForecast, auditEnabled);
+              if (!lifecycle.mainStages?.length) return null;
+              return (
+                <DetailDrawerSection title={t('app.uniDetail.sectionCollaboration')}>
+                  <UniLifecycleStepper
+                    steps={lifecycle.mainStages}
+                    status={lifecycle.status}
+                    showLabels
+                    nextStepSuggestions={lifecycle.nextStepSuggestions}
+                    hideNextStepSuggestions
+                  />
+                </DetailDrawerSection>
+              );
+            })()}
 
-            <DetailDrawerSection title="明细信息">
+            <DetailDrawerSection title={t('app.uniDetail.sectionLines')}>
               {(currentForecast.items || []).length > 0 ? (
                 <div style={{ width: '100%', overflowX: 'auto', overflowY: 'hidden' }}>
                   <Table
@@ -1419,7 +1817,7 @@ export default function SalesForecastsPage() {
               )}
             </DetailDrawerSection>
 
-            <DetailDrawerSection title="操作记录">
+            <DetailDrawerSection title={t('app.uniDetail.sectionTimeline')}>
               {forecastTracking.data ? (
                 <DocumentTrackingTimelineBody data={forecastTracking.data} />
               ) : (
@@ -1429,6 +1827,7 @@ export default function SalesForecastsPage() {
           </>
         )}
       </DetailDrawerTemplate>
+
     <UniImport
       visible={importModalVisible}
       onCancel={() => setImportModalVisible(false)}

@@ -298,6 +298,25 @@ async def get_computation_snapshots(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
+@router.get(
+    "/{computation_id}/snapshots/{snapshot_id}",
+    summary="获取单条需求计算快照",
+)
+async def get_computation_snapshot_one(
+    computation_id: int = Path(..., description="计算ID"),
+    snapshot_id: int = Path(..., description="快照ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取指定快照详情（用于重算历史按需查看）。"""
+    try:
+        return await computation_service.get_computation_snapshot_by_id(
+            tenant_id=tenant_id, computation_id=computation_id, snapshot_id=snapshot_id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
 @router.get("/{computation_id}/dynamic-monitor", summary="获取需求计算动态变动监控")
 async def get_dynamic_monitor(
     computation_id: int = Path(..., description="计算ID"),

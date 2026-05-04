@@ -13,7 +13,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
-import { workGroupApi } from '../../../services/factory';
+import { workGroupApi, applyFactoryKeyword, applyFactoryTableSort } from '../../../services/factory';
 import { WorkGroupFormModal } from '../../../components/WorkGroupFormModal';
 import type { WorkGroup } from '../../../types/factory';
 
@@ -104,16 +104,18 @@ const WorkGroupsPage: React.FC = () => {
     {
       title: t('field.workGroup.code'),
       dataIndex: 'code',
-      copyable: true,width: 150,
+      width: 150,
       fixed: 'left',
       ellipsis: true,
       copyable: true,
+      sorter: true,
     },
     {
       title: t('field.workGroup.name'),
       dataIndex: 'name',
       width: 200,
       ellipsis: true,
+      sorter: true,
     },
     {
       title: t('field.workGroup.members'),
@@ -237,7 +239,7 @@ const WorkGroupsPage: React.FC = () => {
           viewTypes={['table', 'help']}
           defaultViewType="table"
           loadingDelay={200}
-          request={async (params, _sort, _filter, searchFormValues) => {
+          request={async (params, sort, _filter, searchFormValues) => {
             const apiParams: any = {
               skip: ((params.current || 1) - 1) * (params.pageSize || 20),
               limit: params.pageSize || 20,
@@ -248,19 +250,18 @@ const WorkGroupsPage: React.FC = () => {
               searchFormValues.isActive !== '' &&
               searchFormValues.isActive !== null
             ) {
-              apiParams.isActive = searchFormValues.isActive;
+              apiParams.is_active = searchFormValues.isActive;
             }
-            if (searchFormValues?.keyword) {
-              apiParams.keyword = searchFormValues.keyword;
-            }
+            applyFactoryKeyword(apiParams, searchFormValues);
+            applyFactoryTableSort(apiParams, sort);
 
             try {
               const result = await workGroupApi.list(apiParams);
 
               return {
-                data: result,
+                data: result.items,
                 success: true,
-                total: result.length,
+                total: result.total,
               };
             } catch (error: any) {
               console.error('获取工作小组列表失败:', error);

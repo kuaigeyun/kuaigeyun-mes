@@ -14,7 +14,13 @@ import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
-import { productionLineApi, workshopApi } from '../../../services/factory';
+import {
+  productionLineApi,
+  workshopApi,
+  factoryListItems,
+  applyFactoryKeyword,
+  applyFactoryTableSort,
+} from '../../../services/factory';
 import { ProductionLineFormModal } from '../../../components/ProductionLineFormModal';
 import type { ProductionLine, ProductionLineCreate, Workshop } from '../../../types/factory';
 import { batchImport } from '../../../../../utils/batchOperations';
@@ -30,7 +36,7 @@ const ProductionLinesPage: React.FC = () => {
   
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
-  const [currentProductionLineUuid, setCurrentProductionLineUuid] = useState<string | null>(null);
+  const [, setCurrentProductionLineUuid] = useState<string | null>(null);
   const [productionLineDetail, setProductionLineDetail] = useState<ProductionLine | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   
@@ -44,8 +50,8 @@ const ProductionLinesPage: React.FC = () => {
   useEffect(() => {
     const loadWorkshops = async () => {
       try {
-        const result = await workshopApi.list({ limit: 1000, isActive: true });
-        setWorkshops(result);
+        const result = await workshopApi.list({ limit: 1000, is_active: true });
+        setWorkshops(factoryListItems(result));
       } catch (error: any) {
         console.error('加载车间列表失败:', error);
       }
@@ -451,7 +457,7 @@ const ProductionLinesPage: React.FC = () => {
       } else {
         // 导出全部数据
         const allData = await productionLineApi.list({ skip: 0, limit: 10000 });
-        exportData = allData;
+        exportData = allData.items;
         filename = `${t('app.master-data.productionLines.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       }
 
@@ -464,10 +470,16 @@ const ProductionLinesPage: React.FC = () => {
       const headers = [t('app.master-data.productionLines.code'), t('app.master-data.productionLines.name'), t('app.master-data.productionLines.workshopName'), t('app.master-data.productionLines.description'), t('app.master-data.productionLines.status'), t('common.createdAt')];
       const rows = exportData.map(item => {
         const workshop = workshops.find(w => w.id === item.workshopId);
+        const wsLabel =
+          item.workshopCode != null && item.workshopName != null
+            ? `${item.workshopCode}(${item.workshopName})`
+            : workshop
+              ? `${workshop.code}(${workshop.name})`
+              : '';
         return [
           item.code || '',
           item.name || '',
-          workshop ? `${workshop.code}(${workshop.name})` : '',
+          wsLabel,
           item.description || '',
           item.isActive ? t('common.enabled') : t('common.disabled'),
           item.createdAt ? new Date(item.createdAt).toLocaleString('zh-CN') : '',
@@ -515,6 +527,19 @@ const ProductionLinesPage: React.FC = () => {
     setProductionLineDetail(null);
   };
 
+  /** 优先使用接口带出的 workshopCode/workshopName，避免车间字典尚未加载时闪烁 */
+  const formatWorkshopDisplay = (record: ProductionLine): string => {
+    const c = record.workshopCode;
+    const n = record.workshopName;
+    if (c != null && String(c) !== '' && n != null && String(n) !== '') {
+      return `${c} - ${n}`;
+    }
+    const workshopId = record.workshopId ?? (record as any)?.workshop_id;
+    if (!workshopId) return '-';
+    const workshop = workshops.find(w => w.id === workshopId);
+    return workshop ? `${workshop.code} - ${workshop.name}` : '-';
+  };
+
   /**
    * 表格列定义
    */
@@ -522,22 +547,25 @@ const ProductionLinesPage: React.FC = () => {
     {
       title: t('app.master-data.productionLines.code'),
       dataIndex: 'code',
-      copyable: true,width: 150,
+      width: 150,
       fixed: 'left',
       ellipsis: true,
       copyable: true,
+      sorter: true,
     },
     {
       title: t('app.master-data.productionLines.name'),
       dataIndex: 'name',
       width: 200,
+      sorter: true,
     },
     {
       title: t('app.master-data.productionLines.workshopName'),
       dataIndex: 'workshopId',
       width: 200,
       hideInSearch: true,
-      render: (_, record) => getWorkshopName(record?.workshopId ?? (record as any)?.workshop_id),
+      sorter: true,
+      render: (_, record) => formatWorkshopDisplay(record),
     },
     {
       title: t('app.master-data.productionLines.description'),
@@ -613,15 +641,6 @@ const ProductionLinesPage: React.FC = () => {
   ];
 
   /**
-   * 获取车间名称
-   */
-  const getWorkshopName = (workshopId?: number): string => {
-    if (!workshopId) return '-';
-    const workshop = workshops.find(w => w.id === workshopId);
-    return workshop ? `${workshop.code} - ${workshop.name}` : '-';
-  };
-
-  /**
    * 详情 Drawer 的列定义
    */
   const detailColumns: ProDescriptionsItemProps<ProductionLine>[] = [
@@ -636,7 +655,7 @@ const ProductionLinesPage: React.FC = () => {
     {
       title: t('app.master-data.productionLines.workshopName'),
       dataIndex: 'workshopId',
-      render: (_, record) => getWorkshopName(record?.workshopId ?? (record as any)?.workshop_id),
+      render: (_, record) => formatWorkshopDisplay(record),
     },
     {
       title: t('app.master-data.productionLines.description'),
@@ -681,20 +700,23 @@ const ProductionLinesPage: React.FC = () => {
           
           // 启用状态筛选
           if (searchFormValues?.isActive !== undefined && searchFormValues.isActive !== '' && searchFormValues.isActive !== null) {
-            apiParams.isActive = searchFormValues.isActive;
+            apiParams.is_active = searchFormValues.isActive;
           }
           
           // 车间筛选
           if (searchFormValues?.workshopId !== undefined && searchFormValues.workshopId !== '' && searchFormValues.workshopId !== null) {
-            apiParams.workshopId = searchFormValues.workshopId;
+            apiParams.workshop_id = searchFormValues.workshopId;
           }
+
+          applyFactoryKeyword(apiParams, searchFormValues);
+          applyFactoryTableSort(apiParams, sort);
           
           try {
             const result = await productionLineApi.list(apiParams);
             return {
-              data: result,
+              data: result.items,
               success: true,
-              total: result.length, // 注意：后端需要返回总数，这里暂时使用数组长度
+              total: result.total,
             };
           } catch (error: any) {
             console.error('获取产线列表失败:', error);

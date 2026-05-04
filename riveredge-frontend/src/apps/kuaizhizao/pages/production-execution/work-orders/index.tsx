@@ -83,6 +83,7 @@ import {
   SplitCellsOutlined,
   LockOutlined,
   UnlockOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons'
 import { UniTable } from '../../../../../components/uni-table'
 import { useUserPreferenceStore } from '../../../../../stores/userPreferenceStore'
@@ -105,8 +106,9 @@ import {
   type StatCard,
 } from '../../../../../components/layout-templates'
 import {
-  DocumentTrackingRelationsBody,
+  DocumentTrackingRelationsTabsBody,
   DocumentTrackingTimelineBody,
+  TraceLinkedDocumentBrief,
   useDocumentTracking,
 } from '../../../../../components/document-tracking-panel'
 import { qrcodeApi } from '../../../../../services/qrcode'
@@ -128,7 +130,14 @@ import {
 } from '../../../services/sales-forecast'
 import { listDemands, getDemand } from '../../../services/demand'
 import { operationApi, processRouteApi } from '../../../../master-data/services/process'
-import { workshopApi, workCenterApi, workGroupApi, workstationApi } from '../../../../master-data/services/factory'
+import {
+  workshopApi,
+  workCenterApi,
+  workGroupApi,
+  workstationApi,
+  factoryListItems,
+} from '../../../../master-data/services/factory'
+import type { Workshop } from '../../../../master-data/types/factory'
 import { supplierApi } from '../../../../master-data/services/supply-chain'
 import { warehouseApi } from '../../../services/warehouse-execution'
 import { materialApi } from '../../../../master-data/services/material'
@@ -170,6 +179,16 @@ const WORK_ORDER_ROW_EXPAND_STALE_MS = 60_000
 import { getFileDownloadUrl, uploadMultipleFiles } from '../../../../../services/file'
 import { batchImport } from '../../../../../utils/batchOperations'
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow'
+import { ROUTES } from '../../../constants/routes'
+
+/** 工单详情 Drawer 外左侧全链路浮层（Uni-detail） */
+const WO_DETAIL_CHAIN_FLOAT_MARGIN = 16
+const WO_DETAIL_LEFT_CHAIN_GAP = 16
+const WO_DETAIL_CHAIN_DRAWER_GAP = 16
+const WO_DETAIL_CHAIN_VERTICAL_TRIM = WO_DETAIL_CHAIN_FLOAT_MARGIN * 2 + WO_DETAIL_LEFT_CHAIN_GAP
+const woDetailChainHalfHeightCss = `calc((100vh - ${WO_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2)`
+const woDetailChainPanelWidthCss = `calc(50vw - ${WO_DETAIL_CHAIN_FLOAT_MARGIN * 2 + WO_DETAIL_CHAIN_DRAWER_GAP}px)`
+const woDetailBriefPanelTopCss = `calc(${WO_DETAIL_CHAIN_FLOAT_MARGIN}px + (100vh - ${WO_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2 + ${WO_DETAIL_LEFT_CHAIN_GAP}px)`
 
 interface WorkOrder {
   id?: number
@@ -327,6 +346,8 @@ const WorkOrdersPage: React.FC = () => {
   const { t } = useTranslation()
   const { message: messageApi } = App.useApp()
   const { token } = theme.useToken()
+  const workOrderDetailDrawerZIndex = token.zIndexPopupBase
+  const workOrderChainOverlayZIndex = token.zIndexPopupBase + 1
   const queryClient = useQueryClient()
   const getPreference = useUserPreferenceStore((s) => s.getPreference)
   const getConfig = useConfigStore((s) => s.getConfig)
@@ -335,6 +356,7 @@ const WorkOrdersPage: React.FC = () => {
     getConfig('ui.default_page_size', 20)
   )
   const location = useLocation()
+  const navigate = useNavigate()
   const actionRef = useRef<ActionType>(null)
   const tableSearchFormRef = useRef<any>(null)
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
@@ -700,11 +722,36 @@ const WorkOrdersPage: React.FC = () => {
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false)
   const [workOrderDetail, setWorkOrderDetail] = useState<WorkOrder | null>(null)
-  /** 详情抽屉：单据跟踪（生命周期区块上下游 + 操作记录时间线共用一次请求） */
+  /** 详情抽屉：单据跟踪 refresh（生命周期时间线共用） */
+  const [woTrackingRefreshKey, setWoTrackingRefreshKey] = useState(0)
+  const [fullChainRefreshKey, setFullChainRefreshKey] = useState(0)
+  const [fullChainTraceLoading, setFullChainTraceLoading] = useState(false)
+  const [fullChainBriefDoc, setFullChainBriefDoc] = useState<{ document_type: string; document_id: number } | null>(
+    null,
+  )
   const workOrderTracking = useDocumentTracking(
     drawerVisible && workOrderDetail ? 'work_order' : undefined,
-    workOrderDetail?.id
+    workOrderDetail?.id,
+    woTrackingRefreshKey,
   )
+
+  const onFullChainGraphNodeClick = useCallback(
+    (type: string, id: number) => {
+      if (!id) return
+      if (type === 'work_order' && workOrderDetail?.id != null && id === workOrderDetail.id) {
+        setFullChainBriefDoc(null)
+        return
+      }
+      setFullChainBriefDoc({ document_type: type, document_id: id })
+    },
+    [workOrderDetail?.id],
+  )
+
+  useEffect(() => {
+    if (drawerVisible && workOrderDetail?.id != null) {
+      setFullChainBriefDoc(null)
+    }
+  }, [drawerVisible, workOrderDetail?.id])
   const [workOrderOperations, setWorkOrderOperations] = useState<any[]>([])
   const [operationsModalVisible, setOperationsModalVisible] = useState(false)
   const [currentOperation, setCurrentOperation] = useState<any>(null)
@@ -900,34 +947,34 @@ const WorkOrdersPage: React.FC = () => {
       try {
         const [users, teams, stations, equipment, molds, tools, workshops, workCenters] = await Promise.all([
           getUserList({ is_active: true, page_size: 200 }).catch(() => ({ items: [] })),
-          workGroupApi.list({ isActive: true, limit: 500 }).catch(() => []),
-          workstationApi.list({ isActive: true, limit: 1000 }).catch(() => []),
+          workGroupApi.list({ is_active: true, limit: 500 }).catch(() => ({ items: [], total: 0 })),
+          workstationApi.list({ is_active: true, limit: 1000 }).catch(() => ({ items: [], total: 0 })),
           getEquipmentList({ is_active: true, limit: 300 }).catch(() => ({ items: [] })),
           getMoldList({ is_active: true, limit: 300 }).catch(() => ({ items: [] })),
           toolApi.list({ limit: 300 }).catch(() => ({ items: [] })),
-          workshopApi.list({ isActive: true, limit: 500 }).catch(() => []),
-          workCenterApi.list({ isActive: true, limit: 500 }).catch(() => []),
+          workshopApi.list({ is_active: true, limit: 500 }).catch(() => ({ items: [], total: 0 })),
+          workCenterApi.list({ is_active: true, limit: 500 }).catch(() => ({ items: [], total: 0 })),
         ])
         if (cancelled) return
         setWorkerList((users as any)?.items ?? [])
-        setTeamList(Array.isArray(teams) ? teams : [])
-        setStationList(Array.isArray(stations) ? stations : [])
+        setTeamList(factoryListItems(teams as any))
+        setStationList(factoryListItems(stations as any))
         setEquipmentList(equipment?.items ?? [])
         setMoldList(molds?.items ?? [])
         setToolList(
           (tools as any)?.items ?? (Array.isArray(tools) ? tools : [])
         )
-        setWorkshopList(Array.isArray(workshops) ? workshops : [])
-        setWorkCenterList(Array.isArray(workCenters) ? workCenters : [])
+        setWorkshopList(factoryListItems(workshops as any))
+        setWorkCenterList(factoryListItems(workCenters as any))
 
         const pOpts: any[] = [];
         ((users as any)?.items || []).forEach((u: any) => pOpts.push({ label: `[人员] ${u.full_name || u.username}`, value: `U_${u.id}` }));
-        (Array.isArray(teams) ? teams : []).forEach((t: any) => pOpts.push({ label: `[小组] ${t.name}`, value: `T_${t.id}` }));
+        factoryListItems(teams as any).forEach((t: any) => pOpts.push({ label: `[小组] ${t.name}`, value: `T_${t.id}` }));
         setPersonnelOptions(pOpts);
 
         const rOpts: any[] = [];
-        (Array.isArray(workCenters) ? workCenters : []).forEach((wc: any) => rOpts.push({ label: `[中心] ${wc.code || ''} ${wc.name || ''}`.trim(), value: `WC_${wc.id}` }));
-        (Array.isArray(stations) ? stations : []).forEach((s: any) => rOpts.push({ label: `[工位] ${s.code || ''} ${s.name || ''}`.trim(), value: `S_${s.id}` }));
+        factoryListItems(workCenters as any).forEach((wc: any) => rOpts.push({ label: `[中心] ${wc.code || ''} ${wc.name || ''}`.trim(), value: `WC_${wc.id}` }));
+        factoryListItems(stations as any).forEach((s: any) => rOpts.push({ label: `[工位] ${s.code || ''} ${s.name || ''}`.trim(), value: `S_${s.id}` }));
         setResourceOptions(rOpts);
       } finally {
         if (!cancelled) setDispatchPickListsLoading(false)
@@ -2011,6 +2058,8 @@ const WorkOrdersPage: React.FC = () => {
       }
 
       setDrawerVisible(true)
+      setWoTrackingRefreshKey(k => k + 1)
+      setFullChainRefreshKey(k => k + 1)
     } catch (error) {
       messageApi.error('获取工单详情失败')
     }
@@ -2066,10 +2115,11 @@ const WorkOrdersPage: React.FC = () => {
       return
     }
 
-    const [materials, workshops] = await Promise.all([
+    const [materials, workshopsRes] = await Promise.all([
       materialApi.list({ limit: 5000, isActive: true }),
       workshopApi.list({ limit: 1000 }),
     ])
+    const workshops: Workshop[] = factoryListItems(workshopsRes as any)
 
     const errors: Array<{ row: number; message: string }> = []
     const toImport: any[] = []
@@ -2873,6 +2923,8 @@ const WorkOrdersPage: React.FC = () => {
           if (workOrderDetail?.id === record.id) {
             const detail = await workOrderApi.get(record.id!.toString())
             setWorkOrderDetail(detail)
+            setWoTrackingRefreshKey(k => k + 1)
+            setFullChainRefreshKey(k => k + 1)
           }
         } catch (error: any) {
           messageApi.error(error.message || '工单解冻失败')
@@ -2963,6 +3015,8 @@ const WorkOrdersPage: React.FC = () => {
       if (workOrderDetail?.id === currentWorkOrderForFreeze.id) {
         const detail = await workOrderApi.get(currentWorkOrderForFreeze.id.toString())
         setWorkOrderDetail(detail)
+        setWoTrackingRefreshKey(k => k + 1)
+        setFullChainRefreshKey(k => k + 1)
       }
     } catch (error: any) {
       messageApi.error(error.message || '工单冻结失败')
@@ -2982,6 +3036,8 @@ const WorkOrdersPage: React.FC = () => {
       if (workOrderDetail?.id === record.id) {
         const detail = await workOrderApi.get(record.id!.toString())
         setWorkOrderDetail(detail)
+        setWoTrackingRefreshKey(k => k + 1)
+        setFullChainRefreshKey(k => k + 1)
       }
     } catch (error: any) {
       messageApi.error(error.message || '优先级设置失败')
@@ -5187,13 +5243,212 @@ const WorkOrdersPage: React.FC = () => {
         />
       </Modal>
 
+      {drawerVisible && workOrderDetail?.id != null ? (
+        <>
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.relationsFullChainTitle')}
+            style={{
+              position: 'fixed',
+              left: WO_DETAIL_CHAIN_FLOAT_MARGIN,
+              top: WO_DETAIL_CHAIN_FLOAT_MARGIN,
+              width: woDetailChainPanelWidthCss,
+              height: woDetailChainHalfHeightCss,
+              zIndex: workOrderChainOverlayZIndex,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div style={{ flexShrink: 0, marginBottom: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
+                    {t('components.documentTrackingPanel.relationsFullChainTitle')}
+                  </div>
+                </div>
+                <Button
+                  type="default"
+                  size="small"
+                  icon={<ReloadOutlined />}
+                  loading={fullChainTraceLoading}
+                  style={{ flexShrink: 0 }}
+                  onClick={() => setFullChainRefreshKey(k => k + 1)}
+                >
+                  {t('components.documentRelationGraph.refresh')}
+                </Button>
+              </div>
+            </div>
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <DocumentTrackingRelationsTabsBody
+                documentType="work_order"
+                documentId={workOrderDetail.id}
+                refreshKey={fullChainRefreshKey}
+                onDocumentClick={onFullChainGraphNodeClick}
+                compact
+                hideInlineRefresh
+                onTraceLoadingChange={setFullChainTraceLoading}
+              />
+            </div>
+          </div>
+
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.traceBriefTitle')}
+            style={{
+              position: 'fixed',
+              left: WO_DETAIL_CHAIN_FLOAT_MARGIN,
+              top: woDetailBriefPanelTopCss,
+              width: woDetailChainPanelWidthCss,
+              height: woDetailChainHalfHeightCss,
+              zIndex: workOrderChainOverlayZIndex,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 600,
+                fontSize: 13,
+                marginBottom: 8,
+                flexShrink: 0,
+                color: 'var(--ant-color-text)',
+              }}
+            >
+              {t('components.documentTrackingPanel.traceBriefTitle')}
+            </div>
+            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+              <TraceLinkedDocumentBrief
+                documentType={fullChainBriefDoc?.document_type}
+                documentId={fullChainBriefDoc?.document_id}
+                compactChrome
+              />
+            </div>
+            {fullChainBriefDoc ? (
+              <div
+                style={{
+                  flexShrink: 0,
+                  marginTop: 8,
+                  paddingTop: 10,
+                  borderTop: '1px solid var(--ant-color-border)',
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                }}
+              >
+                <Space wrap>
+                  <Button onClick={() => setFullChainBriefDoc(null)}>
+                    {t('components.documentTrackingPanel.traceBriefDismiss')}
+                  </Button>
+                  {fullChainBriefDoc.document_type === 'purchase_order' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDrawerVisible(false)
+                        navigate(ROUTES.PURCHASE_ORDERS)
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenPurchaseOrder', { defaultValue: '前往采购订单' })}
+                    </Button>
+                  ) : null}
+                  {fullChainBriefDoc.document_type === 'sales_order' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDrawerVisible(false)
+                        navigate(ROUTES.SALES_ORDERS)
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenSalesOrder')}
+                    </Button>
+                  ) : null}
+                  {fullChainBriefDoc.document_type === 'demand' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDrawerVisible(false)
+                        navigate(ROUTES.DEMAND_MANAGEMENT)
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenDemand', { defaultValue: '前往需求管理' })}
+                    </Button>
+                  ) : null}
+                  {fullChainBriefDoc.document_type === 'purchase_requisition' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDrawerVisible(false)
+                        navigate(ROUTES.PURCHASE_REQUISITIONS)
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenPurchaseRequisition', {
+                        defaultValue: '前往采购申请',
+                      })}
+                    </Button>
+                  ) : null}
+                  {fullChainBriefDoc.document_type === 'outsource_order' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDrawerVisible(false)
+                        navigate(ROUTES.OUTSOURCE_ORDERS)
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenOutsourceOrder', { defaultValue: '前往工序委外' })}
+                    </Button>
+                  ) : null}
+                  {fullChainBriefDoc.document_type === 'outsource_work_order' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDrawerVisible(false)
+                        navigate(ROUTES.OUTSOURCE_WORK_ORDERS)
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenOutsourceWorkOrder', { defaultValue: '前往工单委外' })}
+                    </Button>
+                  ) : null}
+                  {fullChainBriefDoc.document_type === 'rework_order' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDrawerVisible(false)
+                        navigate(ROUTES.REWORK_ORDERS)
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenReworkOrder', { defaultValue: '前往返工单' })}
+                    </Button>
+                  ) : null}
+                </Space>
+              </div>
+            ) : null}
+          </div>
+        </>
+      ) : null}
+
       {/* 工单详情 Drawer */}
       <DetailDrawerTemplate
         title={`工单详情 - ${workOrderDetail?.code || ''}`}
         open={drawerVisible}
+        zIndex={workOrderDetailDrawerZIndex}
         onClose={() => {
           setDrawerVisible(false)
           setWorkOrderDetail(null)
+          setFullChainBriefDoc(null)
         }}
         dataSource={workOrderDetail || undefined}
         columns={detailColumns}
@@ -5272,64 +5527,20 @@ const WorkOrdersPage: React.FC = () => {
                   </Row>
                 </DetailDrawerSection>
 
-                {/* 2. 生命周期：步骤条 + 上下游单据（同区块，与 UI_Standard / 报价单详情一致） */}
+                {/* 2. 生命周期（上下游关联见左侧全链路浮层） */}
                 {(() => {
                   const lifecycle = getWorkOrderLifecycle(workOrderDetail)
                   const mainStages = lifecycle.mainStages ?? []
-                  const hasStepper = mainStages.length > 0
-                  const showTracking = workOrderDetail?.id != null
-                  if (!hasStepper && !showTracking) return null
+                  if (mainStages.length === 0) return null
                   return (
                     <DetailDrawerSection title="生命周期">
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                        {hasStepper ? (
-                          <LazyUniLifecycleStepper
-                            steps={mainStages}
-                            status={lifecycle.status}
-                            showLabels
-                            nextStepSuggestions={lifecycle.nextStepSuggestions}
-                          />
-                        ) : null}
-                        {showTracking ? (
-                          <div
-                            style={
-                              hasStepper
-                                ? {
-                                    paddingTop: 12,
-                                    borderTop: '1px solid var(--ant-color-border-secondary)',
-                                  }
-                                : {}
-                            }
-                          >
-                            <div
-                              style={{
-                                marginBottom: 8,
-                                fontWeight: 600,
-                                fontSize: 13,
-                                color: 'var(--ant-color-text)',
-                              }}
-                            >
-                              上下游单据
-                            </div>
-                            {workOrderTracking.loading && (
-                              <div style={{ padding: '8px 0' }}>
-                                <Spin size="small" />
-                              </div>
-                            )}
-                            {workOrderTracking.error && (
-                              <Typography.Text type="danger">{workOrderTracking.error}</Typography.Text>
-                            )}
-                            {workOrderTracking.data && (
-                              <DocumentTrackingRelationsBody
-                                data={workOrderTracking.data}
-                                onDocumentClick={(type, id) =>
-                                  messageApi.info(`跳转到${type}#${id}`)
-                                }
-                              />
-                            )}
-                          </div>
-                        ) : null}
-                      </div>
+                      <LazyUniLifecycleStepper
+                        steps={mainStages}
+                        status={lifecycle.status}
+                        showLabels
+                        nextStepSuggestions={lifecycle.nextStepSuggestions}
+                        hideNextStepSuggestions
+                      />
                     </DetailDrawerSection>
                   )
                 })()}
@@ -5359,7 +5570,7 @@ const WorkOrdersPage: React.FC = () => {
                   <LazyWorkOrderKittingPanel workOrderId={workOrderDetail?.id} />
                 </DetailDrawerSection>
 
-                {/* 5. 操作记录：仅时间线（上下游已在生命周期区块） */}
+                {/* 5. 操作记录：时间线 */}
                 {workOrderDetail?.id ? (
                   <DetailDrawerSection title="操作记录">
                     {workOrderTracking.loading && (
@@ -5607,8 +5818,11 @@ const WorkOrdersPage: React.FC = () => {
                         { name: 'name', label: '车间名称', type: 'text' },
                       ],
                       onSearch: async (params: Record<string, string>) => {
-                        const list = await workshopApi.list({ isActive: true, limit: 500 }).catch(() => [])
-                        const arr = Array.isArray(list) ? list : []
+                        const list = await workshopApi.list({ is_active: true, limit: 500 }).catch(() => ({
+                          items: [],
+                          total: 0,
+                        }))
+                        const arr = factoryListItems(list as any)
                         const codeQ = (params?.code || '').toString().trim().toLowerCase()
                         const nameQ = (params?.name || '').toString().trim().toLowerCase()
                         return arr
@@ -6062,7 +6276,7 @@ const WorkOrdersPage: React.FC = () => {
           placeholder="请选择车间"
           request={async () => {
             try {
-              const workshops = await workshopApi.list({ limit: 1000 })
+              const workshops = factoryListItems(await workshopApi.list({ limit: 1000 }))
               return workshops.map((ws: any) => ({
                 label: ws.name,
                 value: ws.id,

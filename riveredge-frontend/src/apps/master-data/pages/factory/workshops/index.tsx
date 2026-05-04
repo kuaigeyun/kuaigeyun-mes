@@ -4,7 +4,7 @@
  * 提供车间的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  */
 
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography } from 'antd';
@@ -16,7 +16,13 @@ import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
 
 import { WorkshopFormModal } from '../../../components/WorkshopFormModal';
-import { workshopApi, plantApi } from '../../../services/factory';
+import {
+  workshopApi,
+  plantApi,
+  factoryListItems,
+  applyFactoryKeyword,
+  applyFactoryTableSort,
+} from '../../../services/factory';
 import type { Workshop, WorkshopCreate, Plant } from '../../../types/factory';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
@@ -56,8 +62,8 @@ const WorkshopsPage: React.FC = () => {
   useEffect(() => {
     const loadPlants = async () => {
       try {
-        const plantList = await plantApi.list({ isActive: true });
-        setPlants(plantList);
+        const plantList = await plantApi.list({ limit: 1000, is_active: true });
+        setPlants(factoryListItems(plantList));
       } catch (error) {
         console.error('加载厂区列表失败:', error);
       }
@@ -511,7 +517,7 @@ const WorkshopsPage: React.FC = () => {
       } else {
         // 导出全部数据
         const allData = await workshopApi.list({ skip: 0, limit: 10000 });
-        exportData = allData;
+        exportData = allData.items;
         filename = `${t('app.master-data.workshops.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       }
 
@@ -554,6 +560,17 @@ const WorkshopsPage: React.FC = () => {
     }
   };
 
+  /** 优先使用接口带出的 plantCode/plantName，避免厂区字典尚未加载时闪烁 */
+  const formatPlantDisplay = useCallback((record: Workshop): React.ReactNode => {
+    const code = record.plantCode ?? (record as any).plant_code;
+    const name = record.plantName ?? (record as any).plant_name;
+    if (code != null && String(code) !== '' && name != null && String(name) !== '') {
+      return `${code} - ${name}`;
+    }
+    const plant = plants.find(p => p.id === (record?.plantId ?? (record as any)?.plant_id));
+    return plant ? `${plant.code} - ${plant.name}` : <Typography.Text type="secondary">-</Typography.Text>;
+  }, [plants]);
+
   /**
    * 表格列定义（使用 useMemo 确保 customFields 和 plants 变化时重新计算）
    */
@@ -563,15 +580,17 @@ const WorkshopsPage: React.FC = () => {
       {
         title: t('app.master-data.workshops.code'),
         dataIndex: 'code',
-        copyable: true,width: 150,
+        width: 150,
         fixed: 'left' as const,
         ellipsis: true,
         copyable: true,
+        sorter: true,
       },
       {
         title: t('app.master-data.workshops.name'),
         dataIndex: 'name',
         width: 200,
+        sorter: true,
       },
       {
         title: t('app.master-data.workshops.plantName'),
@@ -582,10 +601,7 @@ const WorkshopsPage: React.FC = () => {
           acc[plant.id] = { text: plant.name };
           return acc;
         }, {} as Record<number, { text: string }>),
-        render: (_text: any, record: Workshop) => {
-          const plant = plants.find(p => p.id === record.plantId);
-          return plant ? plant.name : <Typography.Text type="secondary">-</Typography.Text>;
-        },
+        render: (_text: any, record: Workshop) => formatPlantDisplay(record),
       },
       {
         title: t('app.master-data.workshops.description'),
@@ -662,8 +678,8 @@ const WorkshopsPage: React.FC = () => {
       },
     ];
 
-    return fixedColumns;
-  }, [customFields, plants, t]);
+    return fixedColumns as ProColumns<Workshop>[];
+  }, [customFields, plants, t, formatPlantDisplay]);
 
   /**
    * 详情 Drawer 的列定义
@@ -680,10 +696,7 @@ const WorkshopsPage: React.FC = () => {
     {
       title: t('app.master-data.workshops.plantName'),
       dataIndex: 'plantId',
-      render: (_, record) => {
-        const plant = plants.find(p => p.id === (record?.plantId ?? (record as any)?.plant_id));
-        return plant ? plant.name : <Typography.Text type="secondary">-</Typography.Text>;
-      },
+      render: (_, record) => formatPlantDisplay(record),
     },
     {
       title: t('app.master-data.workshops.description'),
@@ -759,7 +772,7 @@ const WorkshopsPage: React.FC = () => {
         }}
         showExportButton={true}
         onExport={handleExport}
-        request={async (params, _sort, _filter, searchFormValues) => {
+        request={async (params, sort, _filter, searchFormValues) => {
           // 处理搜索参数
           const apiParams: any = {
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
@@ -768,16 +781,23 @@ const WorkshopsPage: React.FC = () => {
 
           // 启用状态筛选
           if (searchFormValues?.isActive !== undefined && searchFormValues.isActive !== '' && searchFormValues.isActive !== null) {
-            apiParams.isActive = searchFormValues.isActive;
+            apiParams.is_active = searchFormValues.isActive;
           }
+
+          if (searchFormValues?.plantId !== undefined && searchFormValues.plantId !== '' && searchFormValues.plantId !== null) {
+            apiParams.plant_id = searchFormValues.plantId;
+          }
+
+          applyFactoryKeyword(apiParams, searchFormValues);
+          applyFactoryTableSort(apiParams, sort);
 
           try {
             const result = await workshopApi.list(apiParams);
-            const enrichedData = await enrichRecordsWithCustomFields(result);
+            const enrichedData = await enrichRecordsWithCustomFields(result.items);
             return {
               data: enrichedData,
               success: true,
-              total: result.length,
+              total: result.total,
             };
           } catch (error: any) {
             console.error('获取车间列表失败:', error);
@@ -837,13 +857,17 @@ const WorkshopsPage: React.FC = () => {
         onClose={handleCloseDetail}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-      >
-        <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues}
-        basic={workshopDetail ? (
+        basic={
+          workshopDetail ? (
             <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, workshopDetail)} />
-          ) : undefined}
+          ) : null
+        }
+        lines={
+          customFields.length > 0 ? (
+            <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
+          ) : null
+        }
       />
-      </DetailDrawerTemplate>
 
       <WorkshopFormModal
         open={modalVisible}

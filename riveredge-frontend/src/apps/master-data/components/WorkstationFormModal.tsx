@@ -8,7 +8,7 @@ import { ProFormInstance } from '@ant-design/pro-components';
 import { App } from 'antd';
 import { FormModalTemplate } from '../../../components/layout-templates';
 import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
-import { workstationApi, productionLineApi } from '../services/factory';
+import { workstationApi, productionLineApi, factoryListItems } from '../services/factory';
 import { testGenerateCode, generateCode, getCodeRulePageConfig } from '../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../utils/codeRulePage';
 import type { Workstation, WorkstationCreate, WorkstationUpdate, ProductionLine } from '../types/factory';
@@ -43,8 +43,8 @@ export const WorkstationFormModal: React.FC<WorkstationFormModalProps> = ({
   useEffect(() => {
     const loadProductionLines = async () => {
       try {
-        const result = await productionLineApi.list({ limit: 1000, isActive: true });
-        setProductionLines(result);
+        const result = await productionLineApi.list({ limit: 1000, is_active: true });
+        setProductionLines(factoryListItems(result));
       } catch (error) {
         console.error('加载产线列表失败:', error);
       }

@@ -305,16 +305,6 @@ export interface PurchaseTrackingResponse {
   }>;
 }
 
-/** 供应商表现评分响应接口（与后端 SupplierPerformanceResponse 一致） */
-export interface SupplierPerformanceResponse {
-  supplier_id: number;
-  supplier_name: string;
-  on_time_delivery_rate: number;
-  quality_pass_rate: number;
-  average_lead_time_days: number;
-  reliability_rating: string;
-}
-
 /** 获取物料历史成交价 */
 export async function getMaterialPriceHistory(materialId: number): Promise<MaterialPriceHistoryResponse> {
   return apiRequest<MaterialPriceHistoryResponse>(`/apps/kuaizhizao/material-price-history/${materialId}`, {
@@ -325,13 +315,6 @@ export async function getMaterialPriceHistory(materialId: number): Promise<Mater
 /** 获取采购订单履约追踪 */
 export async function getPurchaseOrderTracking(orderId: number): Promise<PurchaseTrackingResponse> {
   return apiRequest<PurchaseTrackingResponse>(`/apps/kuaizhizao/purchase-orders/${orderId}/tracking`, {
-    method: 'GET',
-  });
-}
-
-/** 获取供应商表现指标 */
-export async function getSupplierPerformance(supplierId: number): Promise<SupplierPerformanceResponse> {
-  return apiRequest<SupplierPerformanceResponse>(`/apps/kuaizhizao/suppliers/${supplierId}/performance`, {
     method: 'GET',
   });
 }
@@ -361,26 +344,5 @@ export async function allocatePurchaseCosts(orderId: number, data: LandingCostAl
   return apiRequest<any>(`/apps/kuaizhizao/purchase-orders/${orderId}/allocate-costs`, {
     method: 'POST',
     data,
-  });
-}
-
-/** 变更记录接口 (V2) */
-export interface PurchaseOrderChange {
-  id: number;
-  order_id: number;
-  change_type: string;
-  field_name: string;
-  old_value?: string;
-  new_value?: string;
-  reason?: string;
-  operator_id?: number;
-  operator_name?: string;
-  created_at: string;
-}
-
-/** 获取采购订单变更历史 (V2) */
-export async function getPurchaseOrderChanges(orderId: number): Promise<PurchaseOrderChange[]> {
-  return apiRequest<PurchaseOrderChange[]>(`/apps/kuaizhizao/purchase-orders/${orderId}/changes`, {
-    method: 'GET',
   });
 }

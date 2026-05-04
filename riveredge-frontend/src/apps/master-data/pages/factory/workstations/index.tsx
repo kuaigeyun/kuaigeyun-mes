@@ -7,14 +7,20 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography } from 'antd';
+import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography, theme } from 'antd';
 import { downloadFile } from '../../../../../utils';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
-import { workstationApi, productionLineApi } from '../../../services/factory';
+import {
+  workstationApi,
+  productionLineApi,
+  factoryListItems,
+  applyFactoryKeyword,
+  applyFactoryTableSort,
+} from '../../../services/factory';
 import { WorkstationFormModal } from '../../../components/WorkstationFormModal';
 import { QRCodeGenerator } from '../../../../../components/qrcode';
 import type { Workstation, WorkstationCreate, ProductionLine } from '../../../types/factory';
@@ -26,12 +32,13 @@ import { batchImport } from '../../../../../utils/batchOperations';
 const WorkstationsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const { token } = theme.useToken();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
-  const [currentWorkstationUuid, setCurrentWorkstationUuid] = useState<string | null>(null);
+  const [, setCurrentWorkstationUuid] = useState<string | null>(null);
   const [workstationDetail, setWorkstationDetail] = useState<Workstation | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   
@@ -45,8 +52,8 @@ const WorkstationsPage: React.FC = () => {
   useEffect(() => {
     const loadProductionLines = async () => {
       try {
-        const result = await productionLineApi.list({ limit: 1000, isActive: true });
-        setProductionLines(result);
+        const result = await productionLineApi.list({ limit: 1000, is_active: true });
+        setProductionLines(factoryListItems(result));
       } catch (error: any) {
         console.error('加载产线列表失败:', error);
       }
@@ -452,7 +459,7 @@ const WorkstationsPage: React.FC = () => {
       } else {
         // 导出全部数据
         const allData = await workstationApi.list({ skip: 0, limit: 10000 });
-        exportData = allData;
+        exportData = allData.items;
         filename = `${t('app.master-data.workstations.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       }
 
@@ -465,10 +472,16 @@ const WorkstationsPage: React.FC = () => {
       const headers = [t('app.master-data.workstations.code'), t('app.master-data.workstations.name'), t('app.master-data.workstations.productionLineName'), t('app.master-data.workstations.description'), t('app.master-data.workstations.status'), t('common.createdAt')];
       const rows = exportData.map(item => {
         const productionLine = productionLines.find(p => p.id === item.productionLineId);
+        const plLabel =
+          item.productionLineCode != null && item.productionLineName != null
+            ? `${item.productionLineCode}(${item.productionLineName})`
+            : productionLine
+              ? `${productionLine.code}(${productionLine.name})`
+              : '';
         return [
           item.code || '',
           item.name || '',
-          productionLine ? `${productionLine.code}(${productionLine.name})` : '',
+          plLabel,
           item.description || '',
           item.isActive ? t('common.enabled') : t('common.disabled'),
           item.createdAt ? new Date(item.createdAt).toLocaleString('zh-CN') : '',
@@ -517,11 +530,21 @@ const WorkstationsPage: React.FC = () => {
   };
 
   /**
-   * 获取产线名称
+   * 获取产线名称（字典异步加载后的兜底；列表接口已带 productionLineCode/Name 时应优先用 formatProductionLineDisplay）
    */
   const getProductionLineName = (productionLineId: number): string => {
     const productionLine = productionLines.find(p => p.id === productionLineId);
-    return productionLine ? `${productionLine.code} - ${productionLine.name}` : `产线ID: ${productionLineId}`;
+    return productionLine ? `${productionLine.code} - ${productionLine.name}` : '-';
+  };
+
+  const formatProductionLineDisplay = (record: Workstation): string => {
+    const code = record.productionLineCode ?? (record as any).production_line_code;
+    const name = record.productionLineName ?? (record as any).production_line_name;
+    if (code != null && String(code) !== '' && name != null && String(name) !== '') {
+      return `${code} - ${name}`;
+    }
+    const pid = record?.productionLineId ?? (record as any)?.production_line_id;
+    return getProductionLineName(typeof pid === 'number' ? pid : Number(pid));
   };
 
   /**
@@ -531,22 +554,25 @@ const WorkstationsPage: React.FC = () => {
     {
       title: t('app.master-data.workstations.code'),
       dataIndex: 'code',
-      copyable: true,width: 150,
+      width: 150,
       fixed: 'left',
       ellipsis: true,
       copyable: true,
+      sorter: true,
     },
     {
       title: t('app.master-data.workstations.name'),
       dataIndex: 'name',
       width: 200,
+      sorter: true,
     },
     {
       title: t('app.master-data.workstations.productionLineName'),
       dataIndex: 'productionLineId',
       width: 200,
       hideInSearch: true,
-      render: (_, record) => getProductionLineName(record?.productionLineId ?? (record as any)?.production_line_id),
+      sorter: true,
+      render: (_, record) => formatProductionLineDisplay(record),
     },
     {
       title: t('app.master-data.workstations.description'),
@@ -634,7 +660,7 @@ const WorkstationsPage: React.FC = () => {
     {
       title: t('app.master-data.workstations.productionLineName'),
       dataIndex: 'productionLineId',
-      render: (_, record) => getProductionLineName(record?.productionLineId ?? (record as any)?.production_line_id),
+      render: (_, record) => formatProductionLineDisplay(record),
     },
     {
       title: t('app.master-data.workstations.description'),
@@ -678,20 +704,23 @@ const WorkstationsPage: React.FC = () => {
           
           // 启用状态筛选
           if (searchFormValues?.isActive !== undefined && searchFormValues.isActive !== '' && searchFormValues.isActive !== null) {
-            apiParams.isActive = searchFormValues.isActive;
+            apiParams.is_active = searchFormValues.isActive;
           }
           
           // 产线筛选
           if (searchFormValues?.productionLineId !== undefined && searchFormValues.productionLineId !== '' && searchFormValues.productionLineId !== null) {
-            apiParams.productionLineId = searchFormValues.productionLineId;
+            apiParams.production_line_id = searchFormValues.productionLineId;
           }
+
+          applyFactoryKeyword(apiParams, searchFormValues);
+          applyFactoryTableSort(apiParams, sort);
           
           try {
             const result = await workstationApi.list(apiParams);
             return {
-              data: result,
+              data: result.items,
               success: true,
-              total: result.length, // 注意：后端需要返回总数，这里暂时使用数组长度
+              total: result.total,
             };
           } catch (error: any) {
             console.error('获取工位列表失败:', error);
@@ -794,40 +823,41 @@ const WorkstationsPage: React.FC = () => {
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
         styles={{ body: { position: 'relative' } }}
-      >
-        {workstationDetail && (
-          <div style={{
-            position: 'absolute',
-            top: 24,
-            right: 24,
-            width: 220,
-            padding: 24,
-            background: 'rgba(255, 255, 255, 0.6)',
-            backdropFilter: 'blur(10px)',
-            borderRadius: 16,
-            boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.15)',
-            border: '1px solid rgba(255, 255, 255, 0.18)',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 10
-          }}>
-            <QRCodeGenerator
-              data={{
-                equipment_uuid: workstationDetail.uuid,
-                equipment_code: workstationDetail.code,
-                equipment_name: workstationDetail.name
-              }}
-              qrcodeType="EQ"
-              size={8}
-              noCard={true}
-        basic={workstationDetail ? (
-            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, workstationDetail)} />
-          ) : undefined}
+        basic={
+          workstationDetail ? (
+            <div style={{ position: 'relative', paddingRight: 8 }}>
+              <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, workstationDetail)} />
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  right: 0,
+                  width: 152,
+                  padding: 12,
+                  background: '#fff',
+                  borderRadius: token.borderRadiusLG,
+                  border: '1px solid rgba(0, 0, 0, 0.06)',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  zIndex: 10,
+                }}
+              >
+                <QRCodeGenerator
+                  data={{
+                    equipment_uuid: workstationDetail.uuid,
+                    equipment_code: workstationDetail.code,
+                    equipment_name: workstationDetail.name,
+                  }}
+                  qrcodeType="EQ"
+                  size={6}
+                  noCard={true}
+                />
+              </div>
+            </div>
+          ) : null
+        }
       />
-          </div>
-        )}
-      </DetailDrawerTemplate>
 
       {/* 创建/编辑工位 Modal */}
       <WorkstationFormModal

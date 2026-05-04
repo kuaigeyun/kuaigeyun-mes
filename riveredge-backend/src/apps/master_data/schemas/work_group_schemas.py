@@ -108,6 +108,15 @@ class WorkGroupResponse(WorkGroupBase):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True, by_alias=True)
 
 
+class WorkGroupListResult(BaseModel):
+    """工作小组分页列表"""
+
+    items: List[WorkGroupResponse]
+    total: int
+
+    model_config = ConfigDict(populate_by_name=True, by_alias=True)
+
+
 class BatchDeleteWorkGroupsRequest(BaseModel):
     """批量删除工作小组请求"""
     uuids: List[str] = Field(..., description="要删除的工作小组UUID列表", min_items=1, max_items=100)

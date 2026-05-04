@@ -7,8 +7,9 @@
  * @date 2026-01-17
  */
 
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useEffect, useCallback } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
+import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import type { DescriptionsProps } from 'antd';
 import {
@@ -25,7 +26,7 @@ import {
   Spin,
   theme,
 } from 'antd';
-import { EyeOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { EyeOutlined, CheckCircleOutlined, ReloadOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import {
@@ -39,13 +40,16 @@ import {
 import { SimpleSparkline } from '../../../../../components';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import {
-  DocumentTrackingRelationsBody,
+  DocumentTrackingRelationsTabsBody,
   DocumentTrackingTimelineBody,
+  TraceLinkedDocumentBrief,
   useDocumentTracking,
 } from '../../../../../components/document-tracking-panel';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { warehouseApi } from '../../../services/production';
 import { getPurchaseReturnLifecycle } from '../../../utils/purchaseReturnLifecycle';
+import { ROUTES } from '../../../constants/routes';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 
 interface PurchaseReturn {
@@ -101,6 +105,15 @@ interface PurchaseReturnItem {
 
 const PR_DETAIL_ITEMS_MIN_WIDTH = 1000;
 
+/** 详情 Drawer 外左侧全链路浮层（Uni-detail） */
+const PR_RET_DETAIL_CHAIN_FLOAT_MARGIN = 16;
+const PR_RET_DETAIL_LEFT_CHAIN_GAP = 16;
+const PR_RET_DETAIL_CHAIN_DRAWER_GAP = 16;
+const PR_RET_DETAIL_CHAIN_VERTICAL_TRIM = PR_RET_DETAIL_CHAIN_FLOAT_MARGIN * 2 + PR_RET_DETAIL_LEFT_CHAIN_GAP;
+const prRetDetailChainHalfHeightCss = `calc((100vh - ${PR_RET_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2)`;
+const prRetDetailChainPanelWidthCss = `calc(50vw - ${PR_RET_DETAIL_CHAIN_FLOAT_MARGIN * 2 + PR_RET_DETAIL_CHAIN_DRAWER_GAP}px)`;
+const prRetDetailBriefPanelTopCss = `calc(${PR_RET_DETAIL_CHAIN_FLOAT_MARGIN}px + (100vh - ${PR_RET_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2 + ${PR_RET_DETAIL_LEFT_CHAIN_GAP}px)`;
+
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
   cols: ProDescriptionsItemProps<T>[]
@@ -131,8 +144,12 @@ function renderPurchaseReturnRowActions(nodes: React.ReactNode[], keyPrefix: str
 }
 
 const PurchaseReturnsPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const navigate = useNavigate();
   const { token } = theme.useToken();
+  const purchaseReturnDetailDrawerZIndex = token.zIndexPopupBase;
+  const purchaseReturnChainOverlayZIndex = token.zIndexPopupBase + 1;
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const queryClient = useQueryClient();
@@ -149,16 +166,43 @@ const PurchaseReturnsPage: React.FC = () => {
 
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [returnDetail, setReturnDetail] = useState<PurchaseReturnDetail | null>(null);
+  const [prRetTrackingRefreshKey, setPrRetTrackingRefreshKey] = useState(0);
+  const [fullChainRefreshKey, setFullChainRefreshKey] = useState(0);
+  const [fullChainTraceLoading, setFullChainTraceLoading] = useState(false);
+  const [fullChainBriefDoc, setFullChainBriefDoc] = useState<{ document_type: string; document_id: number } | null>(
+    null,
+  );
   const purchaseReturnTracking = useDocumentTracking(
     detailDrawerVisible && returnDetail?.id ? 'purchase_return' : undefined,
-    returnDetail?.id
+    returnDetail?.id,
+    prRetTrackingRefreshKey,
   );
+
+  const onFullChainGraphNodeClick = useCallback(
+    (type: string, id: number) => {
+      if (!id) return;
+      if (type === 'purchase_return' && returnDetail?.id != null && id === returnDetail.id) {
+        setFullChainBriefDoc(null);
+        return;
+      }
+      setFullChainBriefDoc({ document_type: type, document_id: id });
+    },
+    [returnDetail?.id],
+  );
+
+  useEffect(() => {
+    if (detailDrawerVisible && returnDetail?.id != null) {
+      setFullChainBriefDoc(null);
+    }
+  }, [detailDrawerVisible, returnDetail?.id]);
 
   const handleDetail = async (record: PurchaseReturn) => {
     try {
       const detail = await warehouseApi.purchaseReturn.get(record.id!.toString());
       setReturnDetail(detail as PurchaseReturnDetail);
       setDetailDrawerVisible(true);
+      setPrRetTrackingRefreshKey((k) => k + 1);
+      setFullChainRefreshKey((k) => k + 1);
     } catch {
       messageApi.error('获取采购退货单详情失败');
     }
@@ -176,6 +220,8 @@ const PurchaseReturnsPage: React.FC = () => {
           if (returnDetail?.id === record.id) {
             const fresh = await warehouseApi.purchaseReturn.get(record.id!.toString());
             setReturnDetail(fresh as PurchaseReturnDetail);
+            setPrRetTrackingRefreshKey((k) => k + 1);
+            setFullChainRefreshKey((k) => k + 1);
           }
           invalidateMenuBadgeCounts();
 
@@ -497,12 +543,154 @@ const PurchaseReturnsPage: React.FC = () => {
         />
       </ListPageTemplate>
 
+      {detailDrawerVisible && returnDetail?.id != null ? (
+        <>
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.relationsFullChainTitle')}
+            style={{
+              position: 'fixed',
+              left: PR_RET_DETAIL_CHAIN_FLOAT_MARGIN,
+              top: PR_RET_DETAIL_CHAIN_FLOAT_MARGIN,
+              width: prRetDetailChainPanelWidthCss,
+              height: prRetDetailChainHalfHeightCss,
+              zIndex: purchaseReturnChainOverlayZIndex,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div style={{ flexShrink: 0, marginBottom: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
+                    {t('components.documentTrackingPanel.relationsFullChainTitle')}
+                  </div>
+                </div>
+                <Button
+                  type="default"
+                  size="small"
+                  icon={<ReloadOutlined />}
+                  loading={fullChainTraceLoading}
+                  style={{ flexShrink: 0 }}
+                  onClick={() => setFullChainRefreshKey((k) => k + 1)}
+                >
+                  {t('components.documentRelationGraph.refresh')}
+                </Button>
+              </div>
+            </div>
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <DocumentTrackingRelationsTabsBody
+                documentType="purchase_return"
+                documentId={returnDetail.id}
+                refreshKey={fullChainRefreshKey}
+                onDocumentClick={onFullChainGraphNodeClick}
+                compact
+                hideInlineRefresh
+                onTraceLoadingChange={setFullChainTraceLoading}
+              />
+            </div>
+          </div>
+
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.traceBriefTitle')}
+            style={{
+              position: 'fixed',
+              left: PR_RET_DETAIL_CHAIN_FLOAT_MARGIN,
+              top: prRetDetailBriefPanelTopCss,
+              width: prRetDetailChainPanelWidthCss,
+              height: prRetDetailChainHalfHeightCss,
+              zIndex: purchaseReturnChainOverlayZIndex,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 600,
+                fontSize: 13,
+                marginBottom: 8,
+                flexShrink: 0,
+                color: 'var(--ant-color-text)',
+              }}
+            >
+              {t('components.documentTrackingPanel.traceBriefTitle')}
+            </div>
+            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+              <TraceLinkedDocumentBrief
+                documentType={fullChainBriefDoc?.document_type}
+                documentId={fullChainBriefDoc?.document_id}
+                compactChrome
+              />
+            </div>
+            {fullChainBriefDoc ? (
+              <div
+                style={{
+                  flexShrink: 0,
+                  marginTop: 8,
+                  paddingTop: 10,
+                  borderTop: '1px solid var(--ant-color-border)',
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                }}
+              >
+                <Space wrap>
+                  <Button onClick={() => setFullChainBriefDoc(null)}>
+                    {t('components.documentTrackingPanel.traceBriefDismiss')}
+                  </Button>
+                  {fullChainBriefDoc.document_type === 'purchase_order' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDetailDrawerVisible(false);
+                        navigate(ROUTES.PURCHASE_ORDERS);
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenPurchaseOrder', { defaultValue: '前往采购订单' })}
+                    </Button>
+                  ) : null}
+                  {fullChainBriefDoc.document_type === 'receipt_notice' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDetailDrawerVisible(false);
+                        navigate(ROUTES.RECEIPT_NOTICES);
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenReceiptNotice', { defaultValue: '前往收货通知' })}
+                    </Button>
+                  ) : null}
+                </Space>
+              </div>
+            ) : null}
+          </div>
+        </>
+      ) : null}
+
       <DetailDrawerTemplate
         title={`采购退货单详情${returnDetail?.return_code ? ` - ${returnDetail.return_code}` : ''}`}
         open={detailDrawerVisible}
+        zIndex={purchaseReturnDetailDrawerZIndex}
         onClose={() => {
           setDetailDrawerVisible(false);
           setReturnDetail(null);
+          setFullChainBriefDoc(null);
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
@@ -553,33 +741,10 @@ const PurchaseReturnsPage: React.FC = () => {
                         status={lifecycle.status}
                         showLabels
                         nextStepSuggestions={lifecycle.nextStepSuggestions}
+                        hideNextStepSuggestions
                       />
                     );
                   })()}
-                  <div
-                    style={{
-                      paddingTop: 12,
-                      borderTop: '1px solid var(--ant-color-border-secondary)',
-                    }}
-                  >
-                    <div style={{ marginBottom: 8, fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
-                      上下游单据
-                    </div>
-                    {purchaseReturnTracking.loading && (
-                      <div style={{ padding: '8px 0' }}>
-                        <Spin size="small" />
-                      </div>
-                    )}
-                    {purchaseReturnTracking.error && (
-                      <Typography.Text type="danger">{purchaseReturnTracking.error}</Typography.Text>
-                    )}
-                    {purchaseReturnTracking.data && (
-                      <DocumentTrackingRelationsBody
-                        data={purchaseReturnTracking.data}
-                        onDocumentClick={(type, id) => messageApi.info(`跳转到${type}#${id}`)}
-                      />
-                    )}
-                  </div>
                 </div>
               </DetailDrawerSection>
 

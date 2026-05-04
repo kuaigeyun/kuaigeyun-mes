@@ -13,7 +13,7 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions, ProFormInstance } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Row, Col, Table, Input, InputNumber, Alert, Spin, Form as AntForm, DatePicker, Typography, Tooltip, Dropdown, Empty, Tabs } from 'antd';
+import { App, Button, Tag, Space, Modal, Row, Col, Table, Input, InputNumber, Alert, Spin, Form as AntForm, DatePicker, Typography, Tooltip, Dropdown, Empty, Tabs, theme as AntdTheme } from 'antd';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG, type StatCard } from '../../../../../components/layout-templates';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
@@ -41,8 +41,9 @@ import {
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { createDemandComputation } from '../../../services/demand-computation';
 import {
-  DocumentTrackingRelationsBody,
+  DocumentTrackingRelationsTabsBody,
   DocumentTrackingTimelineBody,
+  TraceLinkedDocumentBrief,
   useDocumentTracking,
 } from '../../../../../components/document-tracking-panel';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
@@ -59,6 +60,7 @@ import {
   AppstoreAddOutlined,
   CopyOutlined,
   QuestionCircleOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { getDemandLifecycle } from '../../../utils/demandLifecycle';
@@ -132,12 +134,24 @@ function isDemandRejected(d: Demand): boolean {
   );
 }
 
+/** 详情抽屉外左侧全链路浮层（与销售订单一致） */
+const DEMAND_FULL_CHAIN_FLOAT_MARGIN = 16;
+const DEMAND_LEFT_CHAIN_GAP = 16;
+const DEMAND_CHAIN_DRAWER_GAP = 16;
+const DEMAND_CHAIN_VERTICAL_TRIM = DEMAND_FULL_CHAIN_FLOAT_MARGIN * 2 + DEMAND_LEFT_CHAIN_GAP;
+const demandChainHalfHeightCss = `calc((100vh - ${DEMAND_CHAIN_VERTICAL_TRIM}px) / 2)`;
+const demandChainPanelWidthCss = `calc(50vw - ${DEMAND_FULL_CHAIN_FLOAT_MARGIN * 2 + DEMAND_CHAIN_DRAWER_GAP}px)`;
+const demandBriefPanelTopCss = `calc(${DEMAND_FULL_CHAIN_FLOAT_MARGIN}px + (100vh - ${DEMAND_CHAIN_VERTICAL_TRIM}px) / 2 + ${DEMAND_LEFT_CHAIN_GAP}px)`;
+
 const DemandManagementPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
 
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { token } = AntdTheme.useToken();
+  const demandDetailDrawerZIndex = token.zIndexPopupBase;
+  const demandChainOverlayZIndex = token.zIndexPopupBase + 1;
   const actionRef = useRef<ActionType>(null);
   const demandRowsByIdRef = useRef<Map<number, Demand>>(new Map());
   const formRef = useRef<any>(null);
@@ -168,17 +182,40 @@ const DemandManagementPage: React.FC = () => {
   const [recalcHistoryLoading, setRecalcHistoryLoading] = useState(false);
   const [snapshotsLoading, setSnapshotsLoading] = useState(false);
   const [demandTrackingRefreshKey, setDemandTrackingRefreshKey] = useState(0);
+  const [fullChainRefreshKey, setFullChainRefreshKey] = useState(0);
+  const [fullChainTraceLoading, setFullChainTraceLoading] = useState(false);
+  const [fullChainBriefDoc, setFullChainBriefDoc] = useState<{ document_type: string; document_id: number } | null>(
+    null,
+  );
   const [dictLabelMap, setDictLabelMap] = useState<Record<string, Record<string, string>>>({});
-
-  // 需求计划页仅管理手工需求计划（demand_plan）
-  const demandType = 'demand_plan' as const;
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const demandTracking = useDocumentTracking(
     drawerVisible && currentDemand?.id != null ? 'demand' : undefined,
     drawerVisible ? currentDemand?.id ?? undefined : undefined,
     demandTrackingRefreshKey
   );
+
+  const onFullChainGraphNodeClick = useCallback(
+    (type: string, id: number) => {
+      if (!id) return;
+      if (type === 'demand' && currentDemand?.id != null && id === currentDemand.id) {
+        setFullChainBriefDoc(null);
+        return;
+      }
+      setFullChainBriefDoc({ document_type: type, document_id: id });
+    },
+    [currentDemand?.id],
+  );
+
+  useEffect(() => {
+    if (drawerVisible && currentDemand?.id != null) {
+      setFullChainBriefDoc(null);
+    }
+  }, [drawerVisible, currentDemand?.id]);
+
+  // 需求计划页仅管理手工需求计划（demand_plan）
+  const demandType = 'demand_plan' as const;
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   useEffect(() => {
     const loadDicts = async () => {
@@ -189,7 +226,9 @@ const DemandManagementPage: React.FC = () => {
           const dict = await getDataDictionaryByCode(code);
           const items = await getDictionaryItemList(dict.uuid, true);
           const map: Record<string, string> = {};
-          items.forEach((it) => { map[it.value] = it.label; });
+          items.forEach((it) => {
+            map[it.value] = it.label;
+          });
           result[code] = map;
         } catch {
           result[code] = {};
@@ -320,6 +359,8 @@ const DemandManagementPage: React.FC = () => {
         const data = await getDemand(id, true, false);
         setCurrentDemand(data);
         setDrawerVisible(true);
+        setDemandTrackingRefreshKey((k) => k + 1);
+        setFullChainRefreshKey((k) => k + 1);
       } catch (error: any) {
         messageApi.error('获取需求详情失败');
       }
@@ -422,6 +463,8 @@ const DemandManagementPage: React.FC = () => {
             void getDemand(id)
               .then((updated) => setCurrentDemand(updated))
               .catch(() => {});
+            setDemandTrackingRefreshKey((k) => k + 1);
+            setFullChainRefreshKey((k) => k + 1);
           }
         } catch (error: any) {
           messageApi.error(error.message || '下推失败');
@@ -445,6 +488,8 @@ const DemandManagementPage: React.FC = () => {
             void getDemand(id)
               .then((updated) => setCurrentDemand(updated))
               .catch(() => {});
+            setDemandTrackingRefreshKey((k) => k + 1);
+            setFullChainRefreshKey((k) => k + 1);
           }
         } catch (error: any) {
           messageApi.error(error.message || '撤回失败');
@@ -1199,6 +1244,137 @@ const DemandManagementPage: React.FC = () => {
         </ProForm>
       </Modal>
 
+      {drawerVisible && currentDemand?.id != null ? (
+        <>
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.relationsFullChainTitle')}
+            style={{
+              position: 'fixed',
+              left: DEMAND_FULL_CHAIN_FLOAT_MARGIN,
+              top: DEMAND_FULL_CHAIN_FLOAT_MARGIN,
+              width: demandChainPanelWidthCss,
+              height: demandChainHalfHeightCss,
+              zIndex: demandChainOverlayZIndex,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div style={{ flexShrink: 0, marginBottom: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
+                    {t('components.documentTrackingPanel.relationsFullChainTitle')}
+                  </div>
+                </div>
+                <Button
+                  type="default"
+                  size="small"
+                  icon={<ReloadOutlined />}
+                  loading={fullChainTraceLoading}
+                  style={{ flexShrink: 0 }}
+                  onClick={() => setFullChainRefreshKey((k) => k + 1)}
+                >
+                  {t('components.documentRelationGraph.refresh')}
+                </Button>
+              </div>
+            </div>
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <DocumentTrackingRelationsTabsBody
+                documentType="demand"
+                documentId={currentDemand.id}
+                refreshKey={fullChainRefreshKey}
+                onDocumentClick={onFullChainGraphNodeClick}
+                compact
+                hideInlineRefresh
+                onTraceLoadingChange={setFullChainTraceLoading}
+              />
+            </div>
+          </div>
+
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.traceBriefTitle')}
+            style={{
+              position: 'fixed',
+              left: DEMAND_FULL_CHAIN_FLOAT_MARGIN,
+              top: demandBriefPanelTopCss,
+              width: demandChainPanelWidthCss,
+              height: demandChainHalfHeightCss,
+              zIndex: demandChainOverlayZIndex,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 600,
+                fontSize: 13,
+                marginBottom: 8,
+                flexShrink: 0,
+                color: 'var(--ant-color-text)',
+              }}
+            >
+              {t('components.documentTrackingPanel.traceBriefTitle')}
+            </div>
+            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+              <TraceLinkedDocumentBrief
+                documentType={fullChainBriefDoc?.document_type}
+                documentId={fullChainBriefDoc?.document_id}
+                compactChrome
+              />
+            </div>
+            {fullChainBriefDoc ? (
+              <div
+                style={{
+                  flexShrink: 0,
+                  marginTop: 8,
+                  paddingTop: 10,
+                  borderTop: '1px solid var(--ant-color-border)',
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                }}
+              >
+                <Space wrap>
+                  <Button onClick={() => setFullChainBriefDoc(null)}>
+                    {t('components.documentTrackingPanel.traceBriefDismiss')}
+                  </Button>
+                  {fullChainBriefDoc.document_type === 'quotation' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDrawerVisible(false);
+                        navigate('/apps/kuaizhizao/sales-management/quotations', {
+                          state: { openQuotationDetailId: fullChainBriefDoc.document_id },
+                        });
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenQuotation')}
+                    </Button>
+                  ) : null}
+                </Space>
+              </div>
+            ) : null}
+          </div>
+        </>
+      ) : null}
+
       <DetailDrawerTemplate
         title={
           currentDemand?.demand_code ? (
@@ -1218,7 +1394,11 @@ const DemandManagementPage: React.FC = () => {
           )
         }
         open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
+        zIndex={demandDetailDrawerZIndex}
+        onClose={() => {
+          setDrawerVisible(false);
+          setFullChainBriefDoc(null);
+        }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         extra={
           currentDemand && (
@@ -1246,6 +1426,7 @@ const DemandManagementPage: React.FC = () => {
                   invalidateStatistics();
                   actionRef.current?.reload();
                   setDemandTrackingRefreshKey((k) => k + 1);
+                  setFullChainRefreshKey((k) => k + 1);
                   if (currentDemand?.id) {
                     const updated = await getDemand(currentDemand.id, true, false);
                     setCurrentDemand(updated);
@@ -1394,6 +1575,7 @@ const DemandManagementPage: React.FC = () => {
                           status={lifecycle.status}
                           showLabels
                           nextStepSuggestions={lifecycle.nextStepSuggestions}
+                          hideNextStepSuggestions
                         />
                       )}
                       {chainSub.length > 0 && (
@@ -1410,17 +1592,6 @@ const DemandManagementPage: React.FC = () => {
                     </>
                   );
                 })()}
-                <div style={{ paddingTop: 12, borderTop: '1px solid var(--ant-color-border-secondary)' }}>
-                  <div style={{ marginBottom: 8, fontWeight: 600, fontSize: 13 }}>上下游单据</div>
-                  {demandTracking.loading && <Spin size="small" />}
-                  {demandTracking.error && <Typography.Text type="danger">{demandTracking.error}</Typography.Text>}
-                  {demandTracking.data && (
-                    <DocumentTrackingRelationsBody
-                      data={demandTracking.data}
-                      onDocumentClick={(type: string, id: number) => messageApi.info(`跳转到${type}#${id}`)}
-                    />
-                  )}
-                </div>
               </div>
             </DetailDrawerSection>
 

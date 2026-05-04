@@ -8,7 +8,7 @@ import { ProFormInstance } from '@ant-design/pro-components';
 import { App } from 'antd';
 import { FormModalTemplate } from '../../../components/layout-templates';
 import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
-import { workCenterApi, workstationApi } from '../services/factory';
+import { workCenterApi, workstationApi, factoryListItems } from '../services/factory';
 import { testGenerateCode, generateCode, getCodeRulePageConfig } from '../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../utils/codeRulePage';
 import type { WorkCenter, WorkCenterCreate, WorkCenterUpdate, Workstation } from '../types/factory';
@@ -43,8 +43,8 @@ export const WorkCenterFormModal: React.FC<WorkCenterFormModalProps> = ({
   useEffect(() => {
     const loadWorkstations = async () => {
       try {
-        const result = await workstationApi.list({ limit: 1000, isActive: true });
-        setWorkstations(result);
+        const result = await workstationApi.list({ limit: 1000, is_active: true });
+        setWorkstations(factoryListItems(result));
       } catch (error) {
         console.error('加载工位列表失败:', error);
       }

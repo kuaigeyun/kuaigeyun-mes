@@ -602,6 +602,17 @@ export async function listComputationSnapshots(
   );
 }
 
+/** 按需获取单条需求计算快照（重算历史 entry 关联的 snapshot_id） */
+export async function getComputationSnapshot(
+  computationId: number,
+  snapshotId: number
+): Promise<ComputationSnapshotItem> {
+  return apiRequest<ComputationSnapshotItem>(
+    `/apps/kuaizhizao/demand-computations/${computationId}/snapshots/${snapshotId}`,
+    { method: 'GET' }
+  );
+}
+
 /** 下推记录项 */
 export interface PushRecordItem {
   target_type: string;

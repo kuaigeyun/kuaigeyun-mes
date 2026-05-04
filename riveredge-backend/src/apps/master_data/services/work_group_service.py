@@ -4,7 +4,7 @@
 提供工作小组的业务逻辑处理，支持多组织隔离。
 """
 
-from typing import List, Optional
+from typing import List, Optional, Dict
 from tortoise.exceptions import IntegrityError
 from tortoise.models import Q
 
@@ -15,8 +15,27 @@ from apps.master_data.schemas.work_group_schemas import (
     WorkGroupResponse,
     WorkGroupMemberItem,
     WorkGroupMemberResponse,
+    WorkGroupListResult,
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+
+_WORK_GROUP_SORT_FIELDS: Dict[str, str] = {
+    "code": "code",
+    "name": "name",
+    "createdAt": "created_at",
+    "updatedAt": "updated_at",
+    "isActive": "is_active",
+}
+
+
+def _work_group_order_clause(
+    sort_field: Optional[str], sort_order: Optional[str], default_col: str = "code"
+) -> str:
+    key = (sort_field or "").strip()
+    col = _WORK_GROUP_SORT_FIELDS.get(key, default_col)
+    if (sort_order or "asc").lower() == "desc":
+        return f"-{col}"
+    return col
 
 
 class WorkGroupService:
@@ -119,9 +138,11 @@ class WorkGroupService:
         is_active: Optional[bool] = None,
         keyword: Optional[str] = None,
         code: Optional[str] = None,
-        name: Optional[str] = None
-    ) -> List[WorkGroupResponse]:
-        """获取工作小组列表"""
+        name: Optional[str] = None,
+        sort_field: Optional[str] = None,
+        sort_order: Optional[str] = None,
+    ) -> WorkGroupListResult:
+        """获取工作小组列表（分页 total + 排序）"""
         query = WorkGroup.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True
@@ -141,8 +162,10 @@ class WorkGroupService:
         if name:
             query = query.filter(name__icontains=name)
 
-        work_groups = await query.offset(skip).limit(limit).prefetch_related("members").order_by("code").all()
-        result = []
+        total = await query.count()
+        order_expr = _work_group_order_clause(sort_field, sort_order, "code")
+        work_groups = await query.offset(skip).limit(limit).order_by(order_expr).prefetch_related("members").all()
+        result: List[WorkGroupResponse] = []
         for wg in work_groups:
             members_data = [
                 WorkGroupMemberResponse(
@@ -158,7 +181,7 @@ class WorkGroupService:
             members_data.sort(key=lambda x: x.sort_order)
             resp = WorkGroupResponse.model_validate(wg)
             result.append(resp.model_copy(update={"members": members_data}))
-        return result
+        return WorkGroupListResult(items=result, total=total)
 
     @staticmethod
     async def update_work_group(

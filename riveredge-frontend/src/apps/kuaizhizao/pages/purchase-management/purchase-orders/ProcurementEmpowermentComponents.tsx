@@ -1,15 +1,29 @@
 import React from 'react';
-import { Timeline, Tag, Popover, Table, Progress, Space, Typography, Empty, Spin } from 'antd';
+import { Card, Row, Col, Tag, Popover, Table, Progress, Space, Typography, Empty, Spin } from 'antd';
 import { useQuery } from '@tanstack/react-query';
-import { InfoCircleOutlined, ClockCircleOutlined, CheckCircleOutlined, WarningOutlined, ThunderboltOutlined } from '@ant-design/icons';
-import { 
-  getMaterialPriceHistory, getPurchaseOrderTracking, getSupplierPerformance,
-  getPurchaseOrderChanges, PurchaseOrderChange
+import {
+  InfoCircleOutlined,
+  ThunderboltOutlined,
+  SolutionOutlined,
+  SafetyOutlined,
+  InboxOutlined,
+} from '@ant-design/icons';
+import {
+  getMaterialPriceHistory,
+  getPurchaseOrderTracking,
+  type PurchaseTrackingResponse,
 } from '../../../services/purchase';
 import { getPriceComparison } from '../../../services/purchase-requisition';
 import dayjs from 'dayjs';
 
-const { Text } = Typography;
+const { Text, Title } = Typography;
+
+type PurchaseTrackingNode = PurchaseTrackingResponse['nodes'][number];
+
+function trackingGroupPercent(nodes: PurchaseTrackingNode[]): number {
+  if (!nodes.length) return 0;
+  return Math.round((nodes.filter((n) => n.is_completed).length / nodes.length) * 100);
+}
 
 /** 多供应商比价助手 */
 export const MultiSupplierPriceComparison: React.FC<{ materialId: number; onSelectSupplier?: (id: number) => void }> = ({ materialId, onSelectSupplier }) => {
@@ -44,16 +58,6 @@ export const MultiSupplierPriceComparison: React.FC<{ materialId: number; onSele
             rowKey="supplier_id"
             columns={[
               { title: '供应商', dataIndex: 'supplier_name', key: 'supplier', ellipsis: true },
-              { 
-                title: '绩效', 
-                dataIndex: 'reliability_rating', 
-                key: 'level',
-                width: 70,
-                render: (l) => {
-                  const colorMap: Record<string, string> = { 'S': '#fadb14', 'A': '#52c41a', 'B': '#1890ff', 'C': '#ff4d4f' };
-                  return <Tag color={colorMap[l] || 'default'} style={{ margin: 0, fontSize: 11 }}>{l}级</Tag>;
-                }
-              },
               { 
                 title: '成交价', 
                 dataIndex: 'last_price', 
@@ -100,43 +104,172 @@ export const MultiSupplierPriceComparison: React.FC<{ materialId: number; onSele
   );
 };
 
-/** 履约全链路追踪时间轴 */
+/**
+ * 履约全链路追踪（与销售订单 SalesOrderTrackingRadar 一致的卡片式进度 + 分组明细）
+ */
 export const FulfillmentTrackingTimeline: React.FC<{ orderId: number }> = ({ orderId }) => {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['purchaseTracking', orderId],
     queryFn: () => getPurchaseOrderTracking(orderId),
   });
 
-  if (isLoading) return <Spin size="small" />;
-  if (!data || !data.nodes) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />;
+  const renderProgressCard = (
+    title: string,
+    percent: number,
+    icon: React.ReactNode,
+    color: string,
+    details: React.ReactNode,
+  ) => (
+    <Card
+      size="small"
+      styles={{
+        header: { borderBottom: 'none', paddingBottom: 0 },
+        body: { paddingTop: 8 },
+      }}
+      style={{
+        height: '100%',
+        borderRadius: 8,
+        border: `1px solid ${color}40`,
+        background: `linear-gradient(to bottom right, ${color}05, ${color}15)`,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
+        <div
+          style={{
+            backgroundColor: color,
+            color: '#fff',
+            width: 32,
+            height: 32,
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginRight: 12,
+          }}
+        >
+          {icon}
+        </div>
+        <Title level={5} style={{ margin: 0 }}>
+          {title}
+        </Title>
+      </div>
+      <Progress
+        percent={percent}
+        strokeColor={{ '0%': `${color}80`, '100%': color }}
+        status={percent === 100 ? 'success' : 'active'}
+        size={{ height: 10 }}
+      />
+      <div style={{ marginTop: 16 }}>{details}</div>
+    </Card>
+  );
+
+  const renderNodeSummary = (nodes: PurchaseTrackingNode[]) => {
+    if (!nodes.length) {
+      return <Text type="secondary" style={{ fontSize: 13 }}>暂无环节数据。</Text>;
+    }
+    return (
+      <div style={{ maxHeight: 140, overflowY: 'auto' }}>
+        {nodes.map((node, idx) => (
+          <div
+            key={`${node.node_name}-${idx}`}
+            style={{
+              fontSize: 12,
+              marginBottom: 8,
+              padding: '6px 8px',
+              background: 'rgba(255,255,255,0.6)',
+              borderRadius: 4,
+              opacity: node.is_completed ? 1 : 0.85,
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, gap: 8 }}>
+              <Text strong ellipsis style={{ flex: 1 }}>
+                {node.node_name}
+              </Text>
+              {node.time ? (
+                <Text type="secondary" style={{ fontSize: 11, flexShrink: 0 }}>
+                  {dayjs(node.time).format('MM-DD HH:mm')}
+                </Text>
+              ) : null}
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+              <Tag
+                color={node.is_completed ? 'success' : node.is_warning ? 'error' : 'default'}
+                style={{ margin: 0, fontSize: 11 }}
+              >
+                {node.status}
+              </Tag>
+              {node.operator ? (
+                <Text type="secondary" style={{ fontSize: 11 }}>
+                  {node.operator}
+                </Text>
+              ) : null}
+            </div>
+            {node.detail ? (
+              <div style={{ fontSize: 11, color: 'rgba(0,0,0,0.45)', marginTop: 4 }}>{node.detail}</div>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  if (isLoading) {
+    return (
+      <div style={{ padding: '16px 0', textAlign: 'center' }}>
+        <Spin />
+      </div>
+    );
+  }
+
+  if (isError || !data?.nodes?.length) {
+    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={isError ? '加载履约追踪失败' : '暂无追踪数据'} />;
+  }
+
+  const nodes = data.nodes;
+  const orderAudit = nodes.slice(0, 2);
+  const supplierQc = nodes.slice(2, 4);
+  const warehousing = nodes.slice(4);
 
   return (
-    <div style={{ marginTop: 16 }}>
+    <div>
       <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
-        <Text strong>总体进度: </Text>
-        <Progress percent={data.overall_progress} size="small" style={{ flex: 1 }} />
+        <Text strong>总体进度</Text>
+        <Progress
+          percent={data.overall_progress}
+          size="small"
+          style={{ flex: 1 }}
+          strokeColor={{ '0%': '#108ee9', '100%': '#87d068' }}
+        />
       </div>
-      <Timeline
-        items={data.nodes.map((node) => ({
-          color: node.is_completed ? 'green' : node.is_warning ? 'red' : 'gray',
-          dot: node.is_completed ? <CheckCircleOutlined /> : node.is_warning ? <WarningOutlined /> : <ClockCircleOutlined />,
-          children: (
-            <div style={{ opacity: node.is_completed ? 1 : 0.6 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <Text strong>{node.node_name}</Text>
-                <Text type="secondary" style={{ fontSize: 12 }}>{node.time ? dayjs(node.time).format('YYYY-MM-DD HH:mm') : ''}</Text>
-              </div>
-              <div>
-                <Tag color={node.is_completed ? 'success' : node.is_warning ? 'error' : 'default'}>
-                  {node.status}
-                </Tag>
-                {node.operator && <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>执行人: {node.operator}</Text>}
-              </div>
-              {node.detail && <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)', marginTop: 4 }}>{node.detail}</div>}
-            </div>
-          ),
-        }))}
-      />
+      <Row gutter={[16, 16]}>
+        <Col xs={24} md={8}>
+          {renderProgressCard(
+            '订单与审核',
+            trackingGroupPercent(orderAudit),
+            <SolutionOutlined />,
+            '#1890ff',
+            renderNodeSummary(orderAudit),
+          )}
+        </Col>
+        <Col xs={24} md={8}>
+          {renderProgressCard(
+            '供应商与质检',
+            trackingGroupPercent(supplierQc),
+            <SafetyOutlined />,
+            '#fa8c16',
+            renderNodeSummary(supplierQc),
+          )}
+        </Col>
+        <Col xs={24} md={8}>
+          {renderProgressCard(
+            '仓库入库',
+            trackingGroupPercent(warehousing),
+            <InboxOutlined />,
+            '#52c41a',
+            renderNodeSummary(warehousing),
+          )}
+        </Col>
+      </Row>
     </div>
   );
 };
@@ -217,130 +350,5 @@ export const PriceHistoryInsight: React.FC<{ materialId: number; currentPrice?: 
     <Popover content={content} title="价格洞察 (最近10笔)" trigger="hover">
       <InfoCircleOutlined style={{ color: '#1890ff', cursor: 'pointer', marginLeft: 4 }} />
     </Popover>
-  );
-};
-
-/** 供应商表现评分卡 */
-export const SupplierPerformanceTag: React.FC<{ supplierId: number }> = ({ supplierId }) => {
-  const { data, isLoading } = useQuery({
-    queryKey: ['supplierPerformance', supplierId],
-    queryFn: () => getSupplierPerformance(supplierId),
-    enabled: !!supplierId,
-  });
-
-  if (isLoading) return <Tag icon={<ClockCircleOutlined spin />}>计算中</Tag>;
-  if (!data || data.reliability_rating === 'N/A') return null;
-
-  const colorMap: Record<string, string> = { 'S': '#fadb14', 'A': '#52c41a', 'B': '#1890ff', 'C': '#ff4d4f' };
-  const otif = data.on_time_delivery_rate ?? 0;
-  const quality = data.quality_pass_rate ?? 0;
-  const compositeScore = Math.round(otif * 0.5 + quality * 0.5);
-
-  const content = (
-    <div style={{ width: 280 }}>
-      <div style={{ textAlign: 'center', marginBottom: 16 }}>
-        <div style={{ fontSize: 36, fontWeight: 'bold', color: colorMap[data.reliability_rating] }}>{data.reliability_rating}</div>
-        <div style={{ fontSize: 14 }}>等级 (综合得分: {compositeScore})</div>
-      </div>
-      <Space direction="vertical" style={{ width: '100%' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span>到货及时率 (OTIF):</span>
-          <Text strong>{otif}%</Text>
-        </div>
-        <Progress percent={otif} size="small" strokeColor={otif >= 90 ? '#52c41a' : '#faad14'} />
-        
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span>一次合格率:</span>
-          <Text strong>{quality}%</Text>
-        </div>
-        <Progress percent={quality} size="small" strokeColor={quality >= 95 ? '#52c41a' : '#ff4d4f'} />
-        
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span>平均到货周期:</span>
-          <Text strong>{data.average_lead_time_days} 天</Text>
-        </div>
-      </Space>
-    </div>
-  );
-
-  return (
-    <Popover content={content} title="供应商绩效" trigger="hover">
-      <Tag color={colorMap[data.reliability_rating]} style={{ cursor: 'pointer' }}>
-        表现: {data.reliability_rating}级
-      </Tag>
-    </Popover>
-  );
-};
-
-/** 订单变更审计历史表格 (V2) */
-export const OrderChangeHistoryTable: React.FC<{ orderId: number }> = ({ orderId }) => {
-  const { data, isLoading } = useQuery({
-    queryKey: ['purchaseOrderChanges', orderId],
-    queryFn: () => getPurchaseOrderChanges(orderId),
-    enabled: !!orderId,
-  });
-
-  if (isLoading) return <div style={{ padding: 20, textAlign: 'center' }}><Spin size="small" /></div>;
-  if (!data || data.length === 0) return <Empty description="暂无变更记录" image={Empty.PRESENTED_IMAGE_SIMPLE} />;
-
-  const columns = [
-    { 
-      title: '变更时间', 
-      dataIndex: 'created_at', 
-      key: 'time', 
-      width: 170,
-      render: (t: string) => dayjs(t).format('YYYY-MM-DD HH:mm:ss')
-    },
-    { 
-      title: '操作人', 
-      dataIndex: 'operator_name', 
-      key: 'operator',
-      width: 100 
-    },
-    { 
-      title: '变更类型', 
-      dataIndex: 'change_type', 
-      key: 'type',
-      width: 100,
-      render: (t: string) => {
-        const colors: Record<string, string> = { 'UPDATE': 'blue', 'DELETE': 'red', 'CREATE': 'green' };
-        return <Tag color={colors[t] || 'default'}>{t}</Tag>;
-      }
-    },
-    { 
-      title: '详细信息', 
-      key: 'details',
-      render: (_: any, record: any) => (
-        <div style={{ fontSize: 12 }}>
-          {record.field_name && (
-            <>
-              <Text type="secondary">{record.field_name}: </Text>
-              <Text delete type="danger">{record.old_value || '(空)'}</Text>
-              <Text type="success" style={{ margin: '0 4px' }}>→</Text>
-              <Text strong type="success">{record.new_value || '(空)'}</Text>
-            </>
-          )}
-        </div>
-      )
-    },
-    { 
-      title: '变更原因', 
-      dataIndex: 'reason', 
-      key: 'reason',
-      width: 180,
-      ellipsis: true 
-    },
-  ];
-
-  return (
-    <Table
-      size="small"
-      dataSource={data}
-      columns={columns}
-      pagination={data.length > 5 ? { pageSize: 5 } : false}
-      rowKey="id"
-      bordered
-      style={{ marginTop: 8 }}
-    />
   );
 };

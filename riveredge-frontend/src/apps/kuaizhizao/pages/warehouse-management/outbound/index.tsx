@@ -4,16 +4,24 @@
  * 提供出库单的管理功能，支持多种出库类型：生产领料、销售出库、退货出库等。
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, message, Card, Table, Row, Col, Form, Tooltip, Typography } from 'antd';
-import { PlusOutlined, EyeOutlined, CheckCircleOutlined, InboxOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, Modal, Card, Table, Row, Col, Form, Tooltip, Typography, Spin, Empty, theme as AntdTheme } from 'antd';
+import { PlusOutlined, EyeOutlined, CheckCircleOutlined, InboxOutlined, ReloadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
-import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
+import {
+  DocumentTrackingRelationsTabsBody,
+  DocumentTrackingTimelineBody,
+  TraceLinkedDocumentBrief,
+  useDocumentTracking,
+} from '../../../../../components/document-tracking-panel';
+import { WarehouseTraceBriefFooter } from '../WarehouseTraceBriefFooter';
 import CodeField from '../../../../../components/code-field';
 import { warehouseApi, workOrderApi } from '../../../services/production';
 import { getOutboundLifecycle } from '../../../utils/outboundLifecycle';
@@ -59,7 +67,25 @@ interface OutboundOrderItem {
   notes?: string;
 }
 
+/** 详情 Drawer 外左侧全链路浮层（Uni-detail） */
+const WM_DETAIL_CHAIN_FLOAT_MARGIN = 16;
+const WM_DETAIL_LEFT_CHAIN_GAP = 16;
+const WM_DETAIL_CHAIN_DRAWER_GAP = 16;
+const WM_DETAIL_CHAIN_VERTICAL_TRIM = WM_DETAIL_CHAIN_FLOAT_MARGIN * 2 + WM_DETAIL_LEFT_CHAIN_GAP;
+const wmDetailChainHalfHeightCss = `calc((100vh - ${WM_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2)`;
+const wmDetailChainPanelWidthCss = `calc(50vw - ${WM_DETAIL_CHAIN_FLOAT_MARGIN * 2 + WM_DETAIL_CHAIN_DRAWER_GAP}px)`;
+const wmDetailBriefPanelTopCss = `calc(${WM_DETAIL_CHAIN_FLOAT_MARGIN}px + (100vh - ${WM_DETAIL_CHAIN_VERTICAL_TRIM}px) / 2 + ${WM_DETAIL_LEFT_CHAIN_GAP}px)`;
+
+function outboundDocumentTrackingType(order: OutboundOrder): 'production_picking' | 'sales_delivery' {
+  return order.outbound_type === 'sales_delivery' ? 'sales_delivery' : 'production_picking';
+}
+
 const OutboundPage: React.FC = () => {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { token } = AntdTheme.useToken();
+  const outboundDetailDrawerZIndex = token.zIndexPopupBase;
+  const outboundChainOverlayZIndex = token.zIndexPopupBase + 1;
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
@@ -71,6 +97,12 @@ const OutboundPage: React.FC = () => {
   // Drawer 相关状态（详情查看）
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<OutboundOrder | null>(null);
+  const [outboundTrackingRefreshKey, setOutboundTrackingRefreshKey] = useState(0);
+  const [fullChainRefreshKey, setFullChainRefreshKey] = useState(0);
+  const [fullChainTraceLoading, setFullChainTraceLoading] = useState(false);
+  const [fullChainBriefDoc, setFullChainBriefDoc] = useState<{ document_type: string; document_id: number } | null>(
+    null,
+  );
 
   // 批量出库 Modal
   const [batchModalVisible, setBatchModalVisible] = useState(false);
@@ -81,6 +113,22 @@ const OutboundPage: React.FC = () => {
   const [warehouseOptions, setWarehouseOptions] = useState<{ label: string; value: number; name: string }[]>([]);
   const [batchSubmitting, setBatchSubmitting] = useState(false);
   const [executionConfig, setExecutionConfig] = useState<any>(null);
+
+  const outboundDocTrackingType = currentOrder ? outboundDocumentTrackingType(currentOrder) : undefined;
+  const outboundTracking = useDocumentTracking(outboundDocTrackingType, currentOrder?.id, outboundTrackingRefreshKey);
+
+  const onFullChainGraphNodeClick = useCallback(
+    (type: string, id: number) => {
+      if (!id) return;
+      const selfType = currentOrder ? outboundDocumentTrackingType(currentOrder) : undefined;
+      if (selfType && type === selfType && currentOrder?.id != null && id === currentOrder.id) {
+        setFullChainBriefDoc(null);
+        return;
+      }
+      setFullChainBriefDoc({ document_type: type, document_id: id });
+    },
+    [currentOrder],
+  );
 
   useEffect(() => {
     const loadExecutionConfig = async () => {
@@ -219,15 +267,18 @@ const OutboundPage: React.FC = () => {
    */
   const handleDetail = async (record: OutboundOrder) => {
     try {
+      setFullChainBriefDoc(null);
       let detailData;
       if (record.outbound_type === 'production_picking') {
         detailData = await warehouseApi.productionPicking.get(record.id!.toString());
       } else if (record.outbound_type === 'sales_delivery') {
         detailData = await warehouseApi.salesDelivery.get(record.id!.toString());
       }
-      setCurrentOrder(detailData ? { ...detailData, outbound_type: record.outbound_type } : undefined);
+      setCurrentOrder(detailData ? { ...detailData, outbound_type: record.outbound_type } : null);
       setDetailDrawerVisible(true);
-    } catch (error) {
+      setOutboundTrackingRefreshKey((k) => k + 1);
+      setFullChainRefreshKey((k) => k + 1);
+    } catch {
       messageApi.error('获取出库单详情失败');
     }
   };
@@ -271,7 +322,9 @@ const OutboundPage: React.FC = () => {
               }
             } catch { /* ignore */ }
           }
-        } catch (error) {
+          setOutboundTrackingRefreshKey((k) => k + 1);
+          setFullChainRefreshKey((k) => k + 1);
+        } catch {
           messageApi.error('出库确认失败');
         }
       },
@@ -423,7 +476,7 @@ const OutboundPage: React.FC = () => {
     },
   ];
 
-  const handleFormFinish = async (values: any) => {
+  const handleFormFinish = async () => {
     try {
       messageApi.success('出库单创建成功');
       setCreateModalVisible(false);
@@ -491,7 +544,7 @@ const OutboundPage: React.FC = () => {
               success: true,
               total,
             };
-          } catch (error) {
+          } catch {
             messageApi.error('获取出库单列表失败');
             return {
               data: [],
@@ -731,10 +784,126 @@ const OutboundPage: React.FC = () => {
         </Form>
       </Modal>
 
+      {detailDrawerVisible && currentOrder?.id != null ? (
+        <>
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.relationsFullChainTitle')}
+            style={{
+              position: 'fixed',
+              left: WM_DETAIL_CHAIN_FLOAT_MARGIN,
+              top: WM_DETAIL_CHAIN_FLOAT_MARGIN,
+              width: wmDetailChainPanelWidthCss,
+              height: wmDetailChainHalfHeightCss,
+              zIndex: outboundChainOverlayZIndex,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div style={{ flexShrink: 0, marginBottom: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
+                    {t('components.documentTrackingPanel.relationsFullChainTitle')}
+                  </div>
+                </div>
+                <Button
+                  type="default"
+                  size="small"
+                  icon={<ReloadOutlined />}
+                  loading={fullChainTraceLoading}
+                  style={{ flexShrink: 0 }}
+                  onClick={() => setFullChainRefreshKey((k) => k + 1)}
+                >
+                  {t('components.documentRelationGraph.refresh')}
+                </Button>
+              </div>
+            </div>
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <DocumentTrackingRelationsTabsBody
+                documentType={outboundDocumentTrackingType(currentOrder)}
+                documentId={currentOrder.id}
+                refreshKey={fullChainRefreshKey}
+                onDocumentClick={onFullChainGraphNodeClick}
+                compact
+                hideInlineRefresh
+                onTraceLoadingChange={setFullChainTraceLoading}
+              />
+            </div>
+          </div>
+
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.traceBriefTitle')}
+            style={{
+              position: 'fixed',
+              left: WM_DETAIL_CHAIN_FLOAT_MARGIN,
+              top: wmDetailBriefPanelTopCss,
+              width: wmDetailChainPanelWidthCss,
+              height: wmDetailChainHalfHeightCss,
+              zIndex: outboundChainOverlayZIndex,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 600,
+                fontSize: 13,
+                marginBottom: 8,
+                flexShrink: 0,
+                color: 'var(--ant-color-text)',
+              }}
+            >
+              {t('components.documentTrackingPanel.traceBriefTitle')}
+            </div>
+            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+              <TraceLinkedDocumentBrief
+                documentType={fullChainBriefDoc?.document_type}
+                documentId={fullChainBriefDoc?.document_id}
+                compactChrome
+              />
+            </div>
+            <WarehouseTraceBriefFooter
+              brief={fullChainBriefDoc}
+              t={t}
+              navigate={navigate}
+              closeDrawer={() => {
+                setDetailDrawerVisible(false);
+                setCurrentOrder(null);
+                setFullChainBriefDoc(null);
+              }}
+              onDismissBrief={() => setFullChainBriefDoc(null)}
+            />
+          </div>
+        </>
+      ) : null}
+
       <DetailDrawerTemplate
         title={`出库单详情 - ${currentOrder?.delivery_code || currentOrder?.picking_code || ''}`}
         open={detailDrawerVisible}
-        onClose={() => setDetailDrawerVisible(false)}
+        zIndex={outboundDetailDrawerZIndex}
+        onClose={() => {
+          setDetailDrawerVisible(false);
+          setCurrentOrder(null);
+          setFullChainBriefDoc(null);
+        }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
         extra={
@@ -793,7 +962,7 @@ const OutboundPage: React.FC = () => {
               {/* 生命周期 */}
               <DetailDrawerSection title="生命周期">
                 {(() => {
-                  const lifecycle = getOutboundLifecycle(currentOrder);
+                  const lifecycle = getOutboundLifecycle(currentOrder as Record<string, unknown>);
                   const mainStages = lifecycle.mainStages ?? [];
                   if (mainStages.length === 0) return null;
                   return (
@@ -802,6 +971,7 @@ const OutboundPage: React.FC = () => {
                       status={lifecycle.status}
                       showLabels
                       nextStepSuggestions={lifecycle.nextStepSuggestions}
+                      hideNextStepSuggestions
                     />
                   );
                 })()}
@@ -814,7 +984,10 @@ const OutboundPage: React.FC = () => {
                   <Table
                     className="warehouse-detail-table"
                     size="small"
-                    rowKey={(_, idx) => (currentOrder?.items?.[idx] as any)?.id ?? idx}
+                    rowKey={(record, idx) => {
+                      const r = record as OutboundOrderItem;
+                      return r.id != null ? String(r.id) : `row-${idx ?? 0}`;
+                    }}
                     pagination={false}
                     columns={
                       currentOrder.outbound_type === 'production_picking'
@@ -843,14 +1016,20 @@ const OutboundPage: React.FC = () => {
               {/* 操作记录 */}
               {currentOrder?.id && (
                 <DetailDrawerSection title="操作记录">
-                  <DocumentTrackingPanel
-                    documentType={
-                      currentOrder.outbound_type === 'production_picking'
-                        ? 'production_picking'
-                        : 'sales_delivery'
-                    }
-                    documentId={currentOrder.id}
-                  />
+                  {outboundTracking.loading && (
+                    <div style={{ textAlign: 'center', padding: 24 }}>
+                      <Spin />
+                    </div>
+                  )}
+                  {outboundTracking.error && !outboundTracking.loading && (
+                    <Typography.Text type="danger">{outboundTracking.error}</Typography.Text>
+                  )}
+                  {outboundTracking.data && !outboundTracking.loading && (
+                    <DocumentTrackingTimelineBody data={outboundTracking.data} />
+                  )}
+                  {!outboundTracking.loading && !outboundTracking.data && !outboundTracking.error && (
+                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+                  )}
                 </DetailDrawerSection>
               )}
             </div>

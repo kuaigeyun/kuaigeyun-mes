@@ -9,9 +9,9 @@
  * @date 2025-01-14
  */
 
-import React, { useRef, useState, useEffect } from 'react'
+import React, { useRef, useState, useEffect, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import {
   ActionType,
   ProColumns,
@@ -28,20 +28,15 @@ import {
   Space,
   Modal,
   Popover,
-  Drawer,
   Table,
   Switch,
   Input,
   Select,
   Tabs,
   Radio,
-  Alert,
-  Timeline,
-  Badge,
   Empty,
   Row,
   Col,
-  Card,
   InputNumber,
   Dropdown,
   Typography,
@@ -58,8 +53,6 @@ import {
   ArrowDownOutlined,
   DeleteOutlined,
   WarningOutlined,
-  CheckCircleOutlined,
-  ClockCircleOutlined,
   CopyOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
@@ -68,13 +61,16 @@ import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni
 import {
   MultiTabListPageTemplate,
   DetailDrawerSection,
+  DetailDrawerTemplate,
+  DRAWER_CONFIG,
   MODAL_CONFIG,
   FormModalTemplate,
   type StatCard,
 } from '../../../../../components/layout-templates'
 import {
-  DocumentTrackingRelationsBody,
+  DocumentTrackingRelationsTabsBody,
   DocumentTrackingTimelineBody,
+  TraceLinkedDocumentBrief,
   useDocumentTracking,
 } from '../../../../../components/document-tracking-panel'
 import {
@@ -91,11 +87,10 @@ import {
   validateMaterialSources,
   getMaterialSources,
   getDemandComputationStatistics,
-  getComputationDynamicMonitor,
   type PushOptions,
   type PushPreview,
   listComputationRecalcHistory,
-  listComputationSnapshots,
+  getComputationSnapshot,
   getPushRecords,
   DemandComputation,
   DemandComputationItem,
@@ -117,6 +112,17 @@ import { MrpParametersCustomerGuideTrigger } from './MrpParametersCustomerGuide'
 import { formatDateBySiteSetting, formatDateTimeBySiteSetting } from '../../../../../utils/format'
 import { MaterialUnitSelect, prefetchMaterialsForUnitSelect } from '../../../../../components/material-unit-select'
 import { ThemedSegmented } from '../../../../../components/themed-segmented'
+import { useTranslation } from 'react-i18next'
+
+/** 详情 Drawer 外左侧全链路浮层（与销售/需求详情一致） */
+const DEMAND_COMPUTATION_FULL_CHAIN_FLOAT_MARGIN = 16
+const DEMAND_COMPUTATION_LEFT_CHAIN_GAP = 16
+const DEMAND_COMPUTATION_CHAIN_DRAWER_GAP = 16
+const DEMAND_COMPUTATION_CHAIN_VERTICAL_TRIM =
+  DEMAND_COMPUTATION_FULL_CHAIN_FLOAT_MARGIN * 2 + DEMAND_COMPUTATION_LEFT_CHAIN_GAP
+const demandComputationChainHalfHeightCss = `calc((100vh - ${DEMAND_COMPUTATION_CHAIN_VERTICAL_TRIM}px) / 2)`
+const demandComputationChainPanelWidthCss = `calc(50vw - ${DEMAND_COMPUTATION_FULL_CHAIN_FLOAT_MARGIN * 2 + DEMAND_COMPUTATION_CHAIN_DRAWER_GAP}px)`
+const demandComputationBriefPanelTopCss = `calc(${DEMAND_COMPUTATION_FULL_CHAIN_FLOAT_MARGIN}px + (100vh - ${DEMAND_COMPUTATION_CHAIN_VERTICAL_TRIM}px) / 2 + ${DEMAND_COMPUTATION_LEFT_CHAIN_GAP}px)`
 
 const MRP_SUGGESTION_SEGMENTED_OPTIONS = [
   { label: '净需求（推荐）', value: 'net' as const },
@@ -545,6 +551,10 @@ const InventoryParamsForm: React.FC<{
 
 const DemandComputationPage: React.FC = () => {
   const { token } = theme.useToken()
+  const computationDetailDrawerZIndex = token.zIndexPopupBase
+  const computationChainOverlayZIndex = token.zIndexPopupBase + 1
+  const { t } = useTranslation()
+  const navigate = useNavigate()
   const { message: messageApi, modal: modalApi } = App.useApp()
   const queryClient = useQueryClient()
   const location = useLocation()
@@ -622,29 +632,82 @@ const DemandComputationPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false)
   const [currentComputation, setCurrentComputation] = useState<DemandComputation | null>(null)
   const [computationRecalcHistory, setComputationRecalcHistory] = useState<ComputationRecalcHistoryItem[]>([])
-  const [computationSnapshots, setComputationSnapshots] = useState<ComputationSnapshotItem[]>([])
   const [pushRecords, setPushRecords] = useState<PushRecordItem[]>([])
   const [recalcHistoryLoading, setRecalcHistoryLoading] = useState(false)
-  const [snapshotsLoading, setSnapshotsLoading] = useState(false)
-  const [dynamicMonitorData, setDynamicMonitorData] = useState<any>(null)
-  const [dynamicMonitorLoading, setDynamicMonitorLoading] = useState(false)
   const [pushRecordsLoading, setPushRecordsLoading] = useState(false)
+  const [recalcSnapshotModalOpen, setRecalcSnapshotModalOpen] = useState(false)
+  const [recalcSnapshotModalLoading, setRecalcSnapshotModalLoading] = useState(false)
+  const [recalcSnapshotModalData, setRecalcSnapshotModalData] = useState<ComputationSnapshotItem | null>(null)
   const [detailTabKey, setDetailTabKey] = useState<string>('detail')
+  const [computationTrackingRefreshKey, setComputationTrackingRefreshKey] = useState(0)
+  const [fullChainRefreshKey, setFullChainRefreshKey] = useState(0)
+  const [fullChainTraceLoading, setFullChainTraceLoading] = useState(false)
+  const [fullChainBriefDoc, setFullChainBriefDoc] = useState<{ document_type: string; document_id: number } | null>(
+    null,
+  )
 
   const computationTracking = useDocumentTracking(
     drawerVisible && detailTabKey === 'detail' && currentComputation?.id != null ? 'demand_computation' : undefined,
-    drawerVisible && detailTabKey === 'detail' ? currentComputation?.id ?? undefined : undefined
+    drawerVisible && detailTabKey === 'detail' ? currentComputation?.id ?? undefined : undefined,
+    computationTrackingRefreshKey,
   )
 
-  /** 详情内生命周期区展示协同监控：进入「详情」Tab 时拉取 */
+  const onFullChainGraphNodeClick = useCallback(
+    (type: string, id: number) => {
+      if (!id) return
+      if (type === 'demand_computation' && currentComputation?.id != null && id === currentComputation.id) {
+        setFullChainBriefDoc(null)
+        return
+      }
+      setFullChainBriefDoc({ document_type: type, document_id: id })
+    },
+    [currentComputation?.id],
+  )
+
   useEffect(() => {
-    if (!drawerVisible || !currentComputation?.id || detailTabKey !== 'detail') return
-    setDynamicMonitorLoading(true)
-    getComputationDynamicMonitor(currentComputation.id)
-      .then(setDynamicMonitorData)
-      .catch(() => messageApi.error('获取协同监控失败'))
-      .finally(() => setDynamicMonitorLoading(false))
-  }, [drawerVisible, currentComputation?.id, detailTabKey])
+    if (drawerVisible && detailTabKey === 'detail' && currentComputation?.id != null) {
+      setFullChainBriefDoc(null)
+    }
+  }, [drawerVisible, detailTabKey, currentComputation?.id])
+
+  /** 详情抽屉「下推与历史」：并行加载下推记录、重算历史（快照按需从「重算历史」打开） */
+  const loadComputationRecordsTabData = useCallback(
+    (computationId: number) => {
+      setPushRecordsLoading(true)
+      setRecalcHistoryLoading(true)
+      void Promise.all([
+        getPushRecords(computationId)
+          .then((res) => setPushRecords(res.records || []))
+          .catch(() => messageApi.error('获取下推记录失败'))
+          .finally(() => setPushRecordsLoading(false)),
+        listComputationRecalcHistory(computationId, { limit: 50 })
+          .then(setComputationRecalcHistory)
+          .catch(() => messageApi.error('获取重算历史失败'))
+          .finally(() => setRecalcHistoryLoading(false)),
+      ])
+    },
+    [messageApi],
+  )
+
+  const openRecalcSnapshotPreview = useCallback(
+    async (snapshotId: number) => {
+      const cid = currentComputation?.id
+      if (!cid) return
+      setRecalcSnapshotModalOpen(true)
+      setRecalcSnapshotModalLoading(true)
+      setRecalcSnapshotModalData(null)
+      try {
+        const data = await getComputationSnapshot(cid, snapshotId)
+        setRecalcSnapshotModalData(data)
+      } catch {
+        messageApi.error('获取重算前快照失败')
+        setRecalcSnapshotModalOpen(false)
+      } finally {
+        setRecalcSnapshotModalLoading(false)
+      }
+    },
+    [currentComputation?.id, messageApi],
+  )
 
   // 物料来源信息状态
   const [validationResults, setValidationResults] = useState<any>(null)
@@ -814,7 +877,10 @@ const DemandComputationPage: React.FC = () => {
             }),
         ])
 
+        setDetailTabKey('detail')
         setDrawerVisible(true)
+        setComputationTrackingRefreshKey((k) => k + 1)
+        setFullChainRefreshKey((k) => k + 1)
       } catch (error: any) {
         messageApi.error('获取计算详情失败')
       }
@@ -959,8 +1025,20 @@ const DemandComputationPage: React.FC = () => {
       setPreviewTablePage(1)
       setPreviewTablePageSize(10)
       setExecuteModalVisible(false)
+      const executedId = executeRecord.id
       setExecuteRecord(null)
       invalidateStatistics(); actionRef.current?.reload()
+      if (drawerVisible && currentComputation?.id === executedId) {
+        void getDemandComputation(executedId, true)
+          .then(setCurrentComputation)
+          .catch(() => {})
+        if (detailTabKey === 'detail') {
+          setComputationTrackingRefreshKey((k) => k + 1)
+          setFullChainRefreshKey((k) => k + 1)
+        } else if (detailTabKey === 'records') {
+          loadComputationRecordsTabData(executedId)
+        }
+      }
     } catch (error: any) {
       messageApi.error(error?.response?.data?.detail || '计算执行失败')
     } finally {
@@ -980,8 +1058,16 @@ const DemandComputationPage: React.FC = () => {
           await recomputeDemandComputation(record.id!)
           messageApi.success('重新计算已提交，请稍后刷新查看结果')
           invalidateStatistics(); actionRef.current?.reload()
-          if (drawerVisible && detailTabKey === 'detail' && currentComputation?.id === record.id) {
-            getComputationDynamicMonitor(record.id!).then(setDynamicMonitorData).catch(() => {})
+          if (drawerVisible && currentComputation?.id === record.id) {
+            void getDemandComputation(record.id!, true)
+              .then(setCurrentComputation)
+              .catch(() => {})
+            if (detailTabKey === 'detail') {
+              setComputationTrackingRefreshKey((k) => k + 1)
+              setFullChainRefreshKey((k) => k + 1)
+            } else if (detailTabKey === 'records') {
+              loadComputationRecordsTabData(record.id!)
+            }
           }
         } catch (error: any) {
           messageApi.error(error?.response?.data?.detail || '重新计算失败')
@@ -1038,6 +1124,17 @@ const DemandComputationPage: React.FC = () => {
       }
       setPushPanelRecord(null)
       invalidateStatistics(); actionRef.current?.reload()
+      if (drawerVisible && currentComputation?.id === record.id) {
+        void getDemandComputation(record.id!, true)
+          .then(setCurrentComputation)
+          .catch(() => {})
+        if (detailTabKey === 'detail') {
+          setComputationTrackingRefreshKey((k) => k + 1)
+          setFullChainRefreshKey((k) => k + 1)
+        } else if (detailTabKey === 'records') {
+          loadComputationRecordsTabData(record.id!)
+        }
+      }
     } catch (e: any) {
       messageApi.error(e?.response?.data?.detail || '下推失败')
     } finally {
@@ -1795,63 +1892,258 @@ const DemandComputationPage: React.FC = () => {
         )}
       </Modal>
 
-      {/* 详情Drawer - 使用 styles.wrapper 设置宽度，因 antd 6 的 size 可能被全局样式覆盖 */}
-      <Drawer
+      <Modal
+        title="重算前快照"
+        open={recalcSnapshotModalOpen}
+        zIndex={token.zIndexPopupBase + 80}
+        onCancel={() => {
+          setRecalcSnapshotModalOpen(false)
+          setRecalcSnapshotModalData(null)
+        }}
+        footer={null}
+        width={720}
+        destroyOnClose
+      >
+        {recalcSnapshotModalLoading ? (
+          <div style={{ textAlign: 'center', padding: 24 }}>
+            <Spin />
+          </div>
+        ) : recalcSnapshotModalData ? (
+          <div style={{ maxHeight: '70vh', overflow: 'auto' }}>
+            {recalcSnapshotModalData.snapshot_at ? (
+              <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
+                快照时间：{recalcSnapshotModalData.snapshot_at}
+                {recalcSnapshotModalData.trigger ? ` · 触发：${recalcSnapshotModalData.trigger}` : null}
+              </Typography.Paragraph>
+            ) : null}
+            {recalcSnapshotModalData.computation_summary_snapshot ? (
+              <div style={{ marginBottom: 16 }}>
+                <Typography.Text strong>计算汇总</Typography.Text>
+                <pre
+                  style={{
+                    margin: '8px 0 0',
+                    padding: 12,
+                    fontSize: 12,
+                    background: 'var(--ant-color-fill-quaternary)',
+                    borderRadius: token.borderRadius,
+                    overflow: 'auto',
+                    maxHeight: 240,
+                  }}
+                >
+                  {JSON.stringify(recalcSnapshotModalData.computation_summary_snapshot, null, 2)}
+                </pre>
+              </div>
+            ) : null}
+            {recalcSnapshotModalData.items_snapshot && recalcSnapshotModalData.items_snapshot.length > 0 ? (
+              <div>
+                <Typography.Text strong>明细（重算前节选）</Typography.Text>
+                <pre
+                  style={{
+                    margin: '8px 0 0',
+                    padding: 12,
+                    fontSize: 12,
+                    background: 'var(--ant-color-fill-quaternary)',
+                    borderRadius: token.borderRadius,
+                    overflow: 'auto',
+                    maxHeight: 320,
+                  }}
+                >
+                  {JSON.stringify(recalcSnapshotModalData.items_snapshot, null, 2)}
+                </pre>
+              </div>
+            ) : null}
+            {!recalcSnapshotModalData.computation_summary_snapshot &&
+            (!recalcSnapshotModalData.items_snapshot ||
+              recalcSnapshotModalData.items_snapshot.length === 0) ? (
+              <Typography.Text type="secondary">无快照内容</Typography.Text>
+            ) : null}
+          </div>
+        ) : null}
+      </Modal>
+
+      {drawerVisible && detailTabKey === 'detail' && currentComputation?.id != null ? (
+        <>
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.relationsFullChainTitle')}
+            style={{
+              position: 'fixed',
+              left: DEMAND_COMPUTATION_FULL_CHAIN_FLOAT_MARGIN,
+              top: DEMAND_COMPUTATION_FULL_CHAIN_FLOAT_MARGIN,
+              width: demandComputationChainPanelWidthCss,
+              height: demandComputationChainHalfHeightCss,
+              zIndex: computationChainOverlayZIndex,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div style={{ flexShrink: 0, marginBottom: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
+                    {t('components.documentTrackingPanel.relationsFullChainTitle')}
+                  </div>
+                </div>
+                <Button
+                  type="default"
+                  size="small"
+                  icon={<ReloadOutlined />}
+                  loading={fullChainTraceLoading}
+                  style={{ flexShrink: 0 }}
+                  onClick={() => setFullChainRefreshKey((k) => k + 1)}
+                >
+                  {t('components.documentRelationGraph.refresh')}
+                </Button>
+              </div>
+            </div>
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <DocumentTrackingRelationsTabsBody
+                documentType="demand_computation"
+                documentId={currentComputation.id}
+                refreshKey={fullChainRefreshKey}
+                onDocumentClick={onFullChainGraphNodeClick}
+                compact
+                hideInlineRefresh
+                onTraceLoadingChange={setFullChainTraceLoading}
+              />
+            </div>
+          </div>
+
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.traceBriefTitle')}
+            style={{
+              position: 'fixed',
+              left: DEMAND_COMPUTATION_FULL_CHAIN_FLOAT_MARGIN,
+              top: demandComputationBriefPanelTopCss,
+              width: demandComputationChainPanelWidthCss,
+              height: demandComputationChainHalfHeightCss,
+              zIndex: computationChainOverlayZIndex,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 600,
+                fontSize: 13,
+                marginBottom: 8,
+                flexShrink: 0,
+                color: 'var(--ant-color-text)',
+              }}
+            >
+              {t('components.documentTrackingPanel.traceBriefTitle')}
+            </div>
+            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+              <TraceLinkedDocumentBrief
+                documentType={fullChainBriefDoc?.document_type}
+                documentId={fullChainBriefDoc?.document_id}
+                compactChrome
+              />
+            </div>
+            {fullChainBriefDoc ? (
+              <div
+                style={{
+                  flexShrink: 0,
+                  marginTop: 8,
+                  paddingTop: 10,
+                  borderTop: '1px solid var(--ant-color-border)',
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                }}
+              >
+                <Space wrap>
+                  <Button onClick={() => setFullChainBriefDoc(null)}>
+                    {t('components.documentTrackingPanel.traceBriefDismiss')}
+                  </Button>
+                  {fullChainBriefDoc.document_type === 'quotation' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDrawerVisible(false)
+                        navigate('/apps/kuaizhizao/sales-management/quotations', {
+                          state: { openQuotationDetailId: fullChainBriefDoc.document_id },
+                        })
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenQuotation')}
+                    </Button>
+                  ) : null}
+                </Space>
+              </div>
+            ) : null}
+          </div>
+        </>
+      ) : null}
+
+      <DetailDrawerTemplate
+        title={
+          currentComputation?.computation_code ? (
+            <Space align="center" size={8}>
+              <span>{`计算详情 - ${currentComputation.computation_code}`}</span>
+              <Tooltip title={t('field.invitationCode.copy', { defaultValue: '复制' })}>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<CopyOutlined />}
+                  onClick={() =>
+                    void navigator.clipboard
+                      .writeText(currentComputation.computation_code!)
+                      .then(() => messageApi.success('已复制'), () => messageApi.error('复制失败'))
+                  }
+                />
+              </Tooltip>
+            </Space>
+          ) : (
+            '计算详情'
+          )
+        }
         open={drawerVisible}
+        zIndex={computationDetailDrawerZIndex}
         onClose={() => {
           setDrawerVisible(false)
-          setDynamicMonitorData(null)
+          setFullChainBriefDoc(null)
+          setRecalcSnapshotModalOpen(false)
+          setRecalcSnapshotModalData(null)
         }}
-        title="计算详情"
-        rootClassName="demand-computation-drawer"
+        width={DRAWER_CONFIG.HALF_WIDTH}
+        className="demand-computation-drawer"
         styles={{
-          wrapper: { width: '50%' },
-          /** 仅本页详情抽屉：内容区去掉上下 padding，左右保持主题默认 */
           body: { paddingTop: 8, paddingBottom: 8 },
         }}
-      >
-        {currentComputation && (
+        plainBody={
+          currentComputation ? (
           <Tabs
             activeKey={detailTabKey}
             onChange={(key) => {
               setDetailTabKey(key)
-              if (key === 'recalc' && currentComputation.id) {
-                setRecalcHistoryLoading(true)
-                listComputationRecalcHistory(currentComputation.id, { limit: 50 })
-                  .then(setComputationRecalcHistory)
-                  .catch(() => messageApi.error('获取重算历史失败'))
-                  .finally(() => setRecalcHistoryLoading(false))
-              }
-              if (key === 'snapshots' && currentComputation.id) {
-                setSnapshotsLoading(true)
-                listComputationSnapshots(currentComputation.id, { limit: 20 })
-                  .then(setComputationSnapshots)
-                  .catch(() => messageApi.error('获取快照列表失败'))
-                  .finally(() => setSnapshotsLoading(false))
-              }
-              if (key === 'push-records' && currentComputation.id) {
-                setPushRecordsLoading(true)
-                getPushRecords(currentComputation.id)
-                  .then((res) => setPushRecords(res.records || []))
-                  .catch(() => messageApi.error('获取下推记录失败'))
-                  .finally(() => setPushRecordsLoading(false))
+              if (key === 'records' && currentComputation.id) {
+                loadComputationRecordsTabData(currentComputation.id)
               }
             }}
             items={[
               {
                 key: 'detail',
-                label: (
-                  <Badge
-                    dot={
-                      !!(dynamicMonitorData?.has_upstream_change || dynamicMonitorData?.has_downstream_risk)
-                    }
-                  >
-                    详情
-                  </Badge>
-                ),
+                label: '详情',
                 children: (
                   <>
-                    <DetailDrawerSection title="基本信息">
+                    <DetailDrawerSection title={t('app.uniDetail.sectionBasic', { defaultValue: '基本信息' })}>
                       <Descriptions
                         column={3}
                         size="small"
@@ -1990,193 +2282,25 @@ const DemandComputationPage: React.FC = () => {
                       )}
                     </DetailDrawerSection>
 
-                    <DetailDrawerSection title="生命周期">
+                    <DetailDrawerSection title={t('app.uniDetail.sectionCollaboration', { defaultValue: '生命周期' })}>
                       {(() => {
                         const lifecycle = getDemandComputationLifecycle(currentComputation)
                         const mainStages = lifecycle.mainStages ?? []
-                        return (
-                          <>
-                            {mainStages.length > 0 ? (
-                              <UniLifecycleStepper
-                                steps={mainStages}
-                                status={lifecycle.status}
-                                showLabels
-                                nextStepSuggestions={lifecycle.nextStepSuggestions}
-                              />
-                            ) : (
-                              <Typography.Text type="secondary">暂无阶段节点数据</Typography.Text>
-                            )}
-                            <Divider style={{ margin: '16px 0' }} />
-                            {dynamicMonitorLoading ? (
-                              <div style={{ textAlign: 'center', padding: 24 }}>
-                                <Spin />
-                                <div style={{ marginTop: 16, color: 'var(--ant-color-text-secondary)' }}>正在拉取监控数据...</div>
-                              </div>
-                            ) : dynamicMonitorData ? (
-                              <>
-                                <Row gutter={[16, 16]} align="stretch" wrap>
-                                  <Col xs={24} lg={12} style={{ display: 'flex' }}>
-                                    <Card
-                                      size="small"
-                                      title="上游需求变动"
-                                      variant="outlined"
-                                      style={{
-                                        flex: 1,
-                                        width: '100%',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        minHeight: 200,
-                                        backgroundColor: 'var(--ant-color-info-bg)',
-                                        borderColor: 'var(--ant-color-info-border)',
-                                      }}
-                                      styles={{
-                                        header: {
-                                          background: 'var(--ant-color-info-bg)',
-                                          borderBottomColor: 'var(--ant-color-info-border)',
-                                        },
-                                        body: {
-                                          flex: 1,
-                                          display: 'flex',
-                                          flexDirection: 'column',
-                                          justifyContent:
-                                            dynamicMonitorData.upstream_alerts.length > 0 ? 'flex-start' : 'center',
-                                        },
-                                      }}
-                                    >
-                                      {dynamicMonitorData.upstream_alerts.length > 0 ? (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                                          {dynamicMonitorData.upstream_alerts.map((alert: any, i: number) => (
-                                            <Alert
-                                              key={i}
-                                              message="原始需求已变更"
-                                              description={alert.message}
-                                              type="warning"
-                                              showIcon
-                                              action={
-                                                <Button
-                                                  size="small"
-                                                  type="primary"
-                                                  ghost
-                                                  onClick={() => handleRecompute(currentComputation)}
-                                                >
-                                                  重新计算
-                                                </Button>
-                                              }
-                                            />
-                                          ))}
-                                        </div>
-                                      ) : (
-                                        <Empty
-                                          description="源需求数据稳定，暂无变动"
-                                          image={Empty.PRESENTED_IMAGE_SIMPLE}
-                                        />
-                                      )}
-                                    </Card>
-                                  </Col>
-                                  <Col xs={24} lg={12} style={{ display: 'flex' }}>
-                                    <Card
-                                      size="small"
-                                      title="下游执行追踪"
-                                      variant="outlined"
-                                      style={{
-                                        flex: 1,
-                                        width: '100%',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        minHeight: 200,
-                                        backgroundColor: 'var(--ant-color-success-bg)',
-                                        borderColor: 'var(--ant-color-success-border)',
-                                      }}
-                                      styles={{
-                                        header: {
-                                          background: 'var(--ant-color-success-bg)',
-                                          borderBottomColor: 'var(--ant-color-success-border)',
-                                        },
-                                        body: {
-                                          flex: 1,
-                                          display: 'flex',
-                                          flexDirection: 'column',
-                                          justifyContent:
-                                            dynamicMonitorData.downstream_alerts.length > 0 ? 'flex-start' : 'center',
-                                        },
-                                      }}
-                                    >
-                                      {dynamicMonitorData.downstream_alerts.length > 0 ? (
-                                        <Timeline
-                                          mode="left"
-                                          items={dynamicMonitorData.downstream_alerts.map(
-                                            (alert: any, i: number) => ({
-                                              key: i,
-                                              label: alert.planned_end_date || alert.delivery_date,
-                                              content: (
-                                                <div>
-                                                  <div style={{ fontWeight: 'bold' }}>
-                                                    {alert.code} ({alert.name})
-                                                  </div>
-                                                  <div style={{ color: '#ff4d4f', fontSize: 13 }}>
-                                                    {alert.message}
-                                                  </div>
-                                                  <div style={{ fontSize: 12, color: '#999' }}>
-                                                    当前状态: {alert.status}
-                                                  </div>
-                                                </div>
-                                              ),
-                                              color: 'red',
-                                              dot: <ClockCircleOutlined style={{ fontSize: 16 }} />,
-                                            })
-                                          )}
-                                        />
-                                      ) : (
-                                        <div
-                                          style={{
-                                            textAlign: 'center',
-                                            padding: '20px 0',
-                                            color: 'var(--ant-color-success)',
-                                          }}
-                                        >
-                                          <CheckCircleOutlined style={{ fontSize: 24, marginBottom: 8 }} />
-                                          <div>所有下推单据均在计划时间内，执行正常</div>
-                                        </div>
-                                      )}
-                                    </Card>
-                                  </Col>
-                                </Row>
-                                {dynamicMonitorData.monitor_time ? (
-                                  <div
-                                    style={{
-                                      textAlign: 'right',
-                                      color: 'var(--ant-color-text-quaternary)',
-                                      fontSize: 12,
-                                      marginTop: 8,
-                                    }}
-                                  >
-                                    最近监控时间:{' '}
-                                    {dayjs(dynamicMonitorData.monitor_time).format('YYYY-MM-DD HH:mm:ss')}
-                                  </div>
-                                ) : null}
-                              </>
-                            ) : (
-                              <Typography.Text type="secondary">暂无协同监控数据</Typography.Text>
-                            )}
-                            <Divider style={{ margin: '16px 0' }} />
-                            <Typography.Title level={5} style={{ margin: '0 0 8px' }}>
-                              上下游关联
-                            </Typography.Title>
-                            {computationTracking.loading ? (
-                              <Spin />
-                            ) : computationTracking.error ? (
-                              <Typography.Text type="danger">{computationTracking.error}</Typography.Text>
-                            ) : computationTracking.data ? (
-                              <DocumentTrackingRelationsBody data={computationTracking.data} />
-                            ) : (
-                              <Typography.Text type="secondary">暂无关联数据</Typography.Text>
-                            )}
-                          </>
+                        return mainStages.length > 0 ? (
+                          <UniLifecycleStepper
+                            steps={mainStages}
+                            status={lifecycle.status}
+                            showLabels
+                            nextStepSuggestions={lifecycle.nextStepSuggestions}
+                            hideNextStepSuggestions
+                          />
+                        ) : (
+                          <Typography.Text type="secondary">暂无阶段节点数据</Typography.Text>
                         )
                       })()}
                     </DetailDrawerSection>
 
-                    <DetailDrawerSection title="明细信息">
+                    <DetailDrawerSection title={t('app.uniDetail.sectionLines', { defaultValue: '明细信息' })}>
                       {/*
                         横滚仅在外层；内层表体覆盖 global.less 的 overflow，避免只读明细双滚动（与 quotation-detail-drawer-items 同思路）。
                       */}
@@ -2417,7 +2541,7 @@ const DemandComputationPage: React.FC = () => {
                       )}
                     </DetailDrawerSection>
 
-                    <DetailDrawerSection title="操作记录">
+                    <DetailDrawerSection title={t('app.uniDetail.sectionTimeline', { defaultValue: '操作记录' })}>
                       {computationTracking.loading ? (
                         <Spin />
                       ) : computationTracking.error ? (
@@ -2432,133 +2556,121 @@ const DemandComputationPage: React.FC = () => {
                 ),
               },
               {
-                key: 'push-records',
-                label: '下推记录',
+                key: 'records',
+                label: '下推与历史',
                 children: (
-                  <Table<PushRecordItem>
-                    size="small"
-                    loading={pushRecordsLoading}
-                    dataSource={pushRecords}
-                    rowKey={(r) => `${r.target_type}-${r.target_id}`}
-                    scroll={{ x: 'max-content' }}
-                    tableLayout="fixed"
-                    style={{ minWidth: '100%' }}
-                    columns={[
-                      {
-                        title: '单据类型',
-                        dataIndex: 'target_type',
-                        width: 112,
-                        ellipsis: true,
-                        render: (t: string) => {
-                          const map: Record<string, string> = {
-                            work_order: '工单',
-                            outsource_work_order: '委外工单',
-                            purchase_order: '采购单',
-                            purchase_requisition: '采购申请',
-                          }
-                          return map[t] || t || '-'
-                        },
-                      },
-                      {
-                        title: '单据编号',
-                        dataIndex: 'target_code',
-                        width: 220,
-                        ellipsis: true,
-                      },
-                      {
-                        title: '单据名称',
-                        dataIndex: 'target_name',
-                        width: 280,
-                        ellipsis: true,
-                      },
-                      {
-                        title: '下推时间',
-                        dataIndex: 'created_at',
-                        width: 176,
-                        ellipsis: true,
-                        render: (t: string) => (t ? dayjs(t).format('YYYY-MM-DD HH:mm:ss') : '—'),
-                      },
-                      {
-                        title: '状态',
-                        dataIndex: 'target_exists',
-                        width: 88,
-                        render: (exists: boolean) =>
-                          exists ? (
-                            <Tag color="success">正常</Tag>
-                          ) : (
-                            <Tag color="default">已删除</Tag>
-                          ),
-                      },
-                    ]}
-                    pagination={false}
-                  />
-                ),
-              },
-              {
-                key: 'recalc',
-                label: '重算历史',
-                children: (
-                  <Table<ComputationRecalcHistoryItem>
-                    size="small"
-                    loading={recalcHistoryLoading}
-                    dataSource={computationRecalcHistory}
-                    rowKey="id"
-                    columns={[
-                      { title: '重算时间', dataIndex: 'recalc_at', width: 180, render: (t) => t || '-' },
-                      { title: '触发原因', dataIndex: 'trigger', width: 120 },
-                      { title: '结果', dataIndex: 'result', width: 80 },
-                      { title: '备注', dataIndex: 'message', ellipsis: true },
-                    ]}
-                    pagination={false}
-                  />
-                ),
-              },
-              {
-                key: 'snapshots',
-                label: '快照',
-                children: (
-                  <Table<ComputationSnapshotItem>
-                    size="small"
-                    loading={snapshotsLoading}
-                    dataSource={computationSnapshots}
-                    rowKey="id"
-                    expandable={{
-                      expandedRowRender: (record) => (
-                        <div style={{ padding: 8 }}>
-                          {record.computation_summary_snapshot && (
-                            <div style={{ marginBottom: 12 }}>
-                              <strong>计算汇总快照：</strong>
-                              <pre style={{ margin: '4px 0 0', fontSize: 12, maxHeight: 200, overflow: 'auto' }}>
-                                {JSON.stringify(record.computation_summary_snapshot, null, 2)}
-                              </pre>
-                            </div>
-                          )}
-                          {record.items_snapshot && record.items_snapshot.length > 0 && (
-                            <>
-                              <strong>明细快照：</strong>
-                              <pre style={{ margin: '4px 0 0', fontSize: 12, maxHeight: 200, overflow: 'auto' }}>
-                                {JSON.stringify(record.items_snapshot, null, 2)}
-                              </pre>
-                            </>
-                          )}
-                          {!record.computation_summary_snapshot && (!record.items_snapshot || record.items_snapshot.length === 0) && (
-                            <span style={{ color: '#999' }}>无快照内容</span>
-                          )}
-                        </div>
-                      ),
-                    }}
-                    columns={[
-                      { title: '快照时间', dataIndex: 'snapshot_at', width: 180, render: (t) => t || '-' },
-                      { title: '触发原因', dataIndex: 'trigger', ellipsis: true },
-                    ]}
-                    pagination={false}
-                  />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                    <div>
+                      <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
+                        下推记录
+                      </Typography.Text>
+                      <Table<PushRecordItem>
+                        size="small"
+                        loading={pushRecordsLoading}
+                        dataSource={pushRecords}
+                        rowKey={(r) => `${r.target_type}-${r.target_id}`}
+                        scroll={{ x: 'max-content' }}
+                        tableLayout="fixed"
+                        style={{ minWidth: '100%' }}
+                        columns={[
+                          {
+                            title: '单据类型',
+                            dataIndex: 'target_type',
+                            width: 112,
+                            ellipsis: true,
+                            render: (t: string) => {
+                              const map: Record<string, string> = {
+                                work_order: '工单',
+                                outsource_work_order: '委外工单',
+                                purchase_order: '采购单',
+                                purchase_requisition: '采购申请',
+                              }
+                              return map[t] || t || '-'
+                            },
+                          },
+                          {
+                            title: '单据编号',
+                            dataIndex: 'target_code',
+                            width: 220,
+                            ellipsis: true,
+                          },
+                          {
+                            title: '单据名称',
+                            dataIndex: 'target_name',
+                            width: 280,
+                            ellipsis: true,
+                          },
+                          {
+                            title: '下推时间',
+                            dataIndex: 'created_at',
+                            width: 176,
+                            ellipsis: true,
+                            render: (t: string) => (t ? dayjs(t).format('YYYY-MM-DD HH:mm:ss') : '—'),
+                          },
+                          {
+                            title: '状态',
+                            dataIndex: 'target_exists',
+                            width: 88,
+                            render: (exists: boolean) =>
+                              exists ? (
+                                <Tag color="success">正常</Tag>
+                              ) : (
+                                <Tag color="default">已删除</Tag>
+                              ),
+                          },
+                        ]}
+                        pagination={false}
+                      />
+                    </div>
+                    <Divider style={{ margin: 0 }} />
+                    <div>
+                      <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
+                        重算历史
+                      </Typography.Text>
+                      <Typography.Paragraph type="secondary" style={{ marginBottom: 8, fontSize: 12 }}>
+                        每次重算前会保存计算结果节选；有「重算前快照」时可点击查看详情。
+                      </Typography.Paragraph>
+                      <Table<ComputationRecalcHistoryItem>
+                        size="small"
+                        loading={recalcHistoryLoading}
+                        dataSource={computationRecalcHistory}
+                        rowKey="id"
+                        scroll={{ x: 'max-content' }}
+                        columns={[
+                          { title: '重算时间', dataIndex: 'recalc_at', width: 180, render: (t) => t || '-' },
+                          { title: '触发原因', dataIndex: 'trigger', width: 120 },
+                          { title: '结果', dataIndex: 'result', width: 80 },
+                          {
+                            title: '重算前快照',
+                            key: 'snapshot',
+                            width: 108,
+                            render: (_: unknown, r: ComputationRecalcHistoryItem) =>
+                              r.snapshot_id != null ? (
+                                <Button
+                                  type="link"
+                                  size="small"
+                                  style={{ padding: 0 }}
+                                  onClick={() => void openRecalcSnapshotPreview(r.snapshot_id!)}
+                                >
+                                  查看
+                                </Button>
+                              ) : (
+                                <span style={{ color: 'var(--ant-color-text-secondary)' }}>—</span>
+                              ),
+                          },
+                          { title: '备注', dataIndex: 'message', ellipsis: true },
+                        ]}
+                        pagination={false}
+                      />
+                    </div>
+                  </div>
                 ),
               },
             ]}
           />
-        )}
-      </Drawer>
+          ) : null
+        }
+      />
 
       </>
   )

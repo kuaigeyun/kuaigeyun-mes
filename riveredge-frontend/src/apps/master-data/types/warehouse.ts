@@ -60,6 +60,9 @@ export interface StorageArea {
   code: string;
   name: string;
   warehouseId: number;
+  /** 后端列表/详情顺带返回，避免前端异步拉仓库字典闪烁 */
+  warehouseCode?: string;
+  warehouseName?: string;
   description?: string;
   isActive: boolean;
   createdAt: string;
@@ -97,6 +100,9 @@ export interface StorageLocation {
   code: string;
   name: string;
   storageAreaId: number;
+  /** 后端列表/详情顺带返回，避免前端异步拉库区字典闪烁 */
+  storageAreaCode?: string;
+  storageAreaName?: string;
   description?: string;
   isActive: boolean;
   createdAt: string;

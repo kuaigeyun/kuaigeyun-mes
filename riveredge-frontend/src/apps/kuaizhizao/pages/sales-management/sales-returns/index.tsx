@@ -7,12 +7,14 @@
  * @date 2026-01-17
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Space, Modal, Table, Row, Col, Form as AntForm, InputNumber, Input, Dropdown, Tag, Card, Typography, Spin, Empty } from 'antd';
-import { EyeOutlined, CheckCircleOutlined, PlusOutlined, AppstoreAddOutlined, ImportOutlined, MoreOutlined, CopyOutlined } from '@ant-design/icons';
+import { EyeOutlined, CheckCircleOutlined, PlusOutlined, AppstoreAddOutlined, ImportOutlined, MoreOutlined, CopyOutlined, ReloadOutlined } from '@ant-design/icons';
+import { theme as AntdTheme } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, DetailDrawerSection } from '../../../../../components/layout-templates';
 import { UniImport } from '../../../../../components/uni-import';
@@ -28,7 +30,12 @@ import dayjs from 'dayjs';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { getSalesReturnLifecycle } from '../../../utils/salesReturnLifecycle';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
-import { DocumentTrackingRelationsBody, DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
+import {
+  DocumentTrackingRelationsTabsBody,
+  DocumentTrackingTimelineBody,
+  TraceLinkedDocumentBrief,
+  useDocumentTracking,
+} from '../../../../../components/document-tracking-panel';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 
 // 销售退货单接口定义
@@ -111,19 +118,57 @@ const FALLBACK_SHIPPING_METHOD: { label: string; value: string }[] = [
   { label: '海运', value: 'SEA' },
 ];
 
+/** 详情抽屉外左侧全链路浮层（与销售订单/销售预测一致） */
+const SALES_RETURN_FULL_CHAIN_FLOAT_MARGIN = 16;
+const SALES_RETURN_LEFT_CHAIN_GAP = 16;
+const SALES_RETURN_CHAIN_DRAWER_GAP = 16;
+const SALES_RETURN_CHAIN_VERTICAL_TRIM = SALES_RETURN_FULL_CHAIN_FLOAT_MARGIN * 2 + SALES_RETURN_LEFT_CHAIN_GAP;
+const salesReturnChainHalfHeightCss = `calc((100vh - ${SALES_RETURN_CHAIN_VERTICAL_TRIM}px) / 2)`;
+const salesReturnChainPanelWidthCss = `calc(50vw - ${SALES_RETURN_FULL_CHAIN_FLOAT_MARGIN * 2 + SALES_RETURN_CHAIN_DRAWER_GAP}px)`;
+const salesReturnBriefPanelTopCss = `calc(${SALES_RETURN_FULL_CHAIN_FLOAT_MARGIN}px + (100vh - ${SALES_RETURN_CHAIN_VERTICAL_TRIM}px) / 2 + ${SALES_RETURN_LEFT_CHAIN_GAP}px)`;
+
 const SalesReturnsPage: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const { token } = AntdTheme.useToken();
+  const returnDetailDrawerZIndex = token.zIndexPopupBase;
+  const returnChainOverlayZIndex = token.zIndexPopupBase + 1;
 
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [returnDetail, setReturnDetail] = useState<SalesReturnDetail | null>(null);
+  const [trackingRefreshKey, setTrackingRefreshKey] = useState(0);
+  const [fullChainRefreshKey, setFullChainRefreshKey] = useState(0);
+  const [fullChainTraceLoading, setFullChainTraceLoading] = useState(false);
+  const [fullChainBriefDoc, setFullChainBriefDoc] = useState<{ document_type: string; document_id: number } | null>(
+    null,
+  );
   const salesReturnTracking = useDocumentTracking(
     detailDrawerVisible && returnDetail?.id ? 'sales_return' : undefined,
-    returnDetail?.id
+    returnDetail?.id,
+    trackingRefreshKey,
   );
+
+  const onFullChainGraphNodeClick = useCallback(
+    (type: string, id: number) => {
+      if (!id) return;
+      if (type === 'sales_return' && returnDetail?.id != null && id === returnDetail.id) {
+        setFullChainBriefDoc(null);
+        return;
+      }
+      setFullChainBriefDoc({ document_type: type, document_id: id });
+    },
+    [returnDetail?.id],
+  );
+
+  useEffect(() => {
+    if (detailDrawerVisible && returnDetail?.id != null) {
+      setFullChainBriefDoc(null);
+    }
+  }, [detailDrawerVisible, returnDetail?.id]);
   const handleCopy = async (text?: string) => {
     if (!text) return;
     try {
@@ -299,6 +344,8 @@ const SalesReturnsPage: React.FC = () => {
       const detail = await warehouseApi.salesReturn.get(record.id!.toString());
       setReturnDetail(detail as SalesReturnDetail);
       setDetailDrawerVisible(true);
+      setTrackingRefreshKey((k) => k + 1);
+      setFullChainRefreshKey((k) => k + 1);
     } catch (error) {
       messageApi.error('获取销售退货单详情失败');
     }
@@ -735,13 +782,146 @@ const SalesReturnsPage: React.FC = () => {
         exampleRow={['MAT001', '10', '99.5', 'B20260117001', '备注说明']}
       />
 
+      {detailDrawerVisible && returnDetail?.id != null ? (
+        <>
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.relationsFullChainTitle')}
+            style={{
+              position: 'fixed',
+              left: SALES_RETURN_FULL_CHAIN_FLOAT_MARGIN,
+              top: SALES_RETURN_FULL_CHAIN_FLOAT_MARGIN,
+              width: salesReturnChainPanelWidthCss,
+              height: salesReturnChainHalfHeightCss,
+              zIndex: returnChainOverlayZIndex,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div style={{ flexShrink: 0, marginBottom: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
+                    {t('components.documentTrackingPanel.relationsFullChainTitle')}
+                  </div>
+                </div>
+                <Button
+                  type="default"
+                  size="small"
+                  icon={<ReloadOutlined />}
+                  loading={fullChainTraceLoading}
+                  style={{ flexShrink: 0 }}
+                  onClick={() => setFullChainRefreshKey((k) => k + 1)}
+                >
+                  {t('components.documentRelationGraph.refresh')}
+                </Button>
+              </div>
+            </div>
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <DocumentTrackingRelationsTabsBody
+                documentType="sales_return"
+                documentId={returnDetail.id}
+                refreshKey={fullChainRefreshKey}
+                onDocumentClick={onFullChainGraphNodeClick}
+                compact
+                hideInlineRefresh
+                onTraceLoadingChange={setFullChainTraceLoading}
+              />
+            </div>
+          </div>
+
+          <div
+            role="complementary"
+            aria-label={t('components.documentTrackingPanel.traceBriefTitle')}
+            style={{
+              position: 'fixed',
+              left: SALES_RETURN_FULL_CHAIN_FLOAT_MARGIN,
+              top: salesReturnBriefPanelTopCss,
+              width: salesReturnChainPanelWidthCss,
+              height: salesReturnChainHalfHeightCss,
+              zIndex: returnChainOverlayZIndex,
+              boxSizing: 'border-box',
+              padding: 16,
+              borderRadius: token.borderRadiusLG,
+              background: 'var(--ant-color-bg-container)',
+              borderRight: '1px solid var(--ant-color-border)',
+              borderBottom: '1px solid var(--ant-color-border)',
+              boxShadow: 'var(--ant-box-shadow-secondary)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 600,
+                fontSize: 13,
+                marginBottom: 8,
+                flexShrink: 0,
+                color: 'var(--ant-color-text)',
+              }}
+            >
+              {t('components.documentTrackingPanel.traceBriefTitle')}
+            </div>
+            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+              <TraceLinkedDocumentBrief
+                documentType={fullChainBriefDoc?.document_type}
+                documentId={fullChainBriefDoc?.document_id}
+                compactChrome
+              />
+            </div>
+            {fullChainBriefDoc ? (
+              <div
+                style={{
+                  flexShrink: 0,
+                  marginTop: 8,
+                  paddingTop: 10,
+                  borderTop: '1px solid var(--ant-color-border)',
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                }}
+              >
+                <Space wrap>
+                  <Button onClick={() => setFullChainBriefDoc(null)}>
+                    {t('components.documentTrackingPanel.traceBriefDismiss')}
+                  </Button>
+                  {fullChainBriefDoc.document_type === 'quotation' ? (
+                    <Button
+                      type="primary"
+                      onClick={() => {
+                        setDetailDrawerVisible(false);
+                        navigate('/apps/kuaizhizao/sales-management/quotations', {
+                          state: { openQuotationDetailId: fullChainBriefDoc.document_id },
+                        });
+                      }}
+                    >
+                      {t('components.documentTrackingPanel.traceBriefOpenQuotation')}
+                    </Button>
+                  ) : null}
+                </Space>
+              </div>
+            ) : null}
+          </div>
+        </>
+      ) : null}
+
       {/* 详情Drawer */}
       <DetailDrawerTemplate
         title={`销售退货单详情${returnDetail?.return_code ? ` - ${returnDetail.return_code}` : ''}`}
         open={detailDrawerVisible}
+        zIndex={returnDetailDrawerZIndex}
         onClose={() => {
           setDetailDrawerVisible(false);
           setReturnDetail(null);
+          setFullChainBriefDoc(null);
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
@@ -794,18 +974,13 @@ const SalesReturnsPage: React.FC = () => {
                             status={lifecycle.status}
                             showLabels
                             nextStepSuggestions={lifecycle.nextStepSuggestions}
+                            hideNextStepSuggestions
                           />
                         )}
                         {(lifecycle.subStages ?? []).length > 0 && <UniLifecycleStepper steps={lifecycle.subStages ?? []} showLabels />}
                       </>
                     );
                   })()}
-                  <div style={{ paddingTop: 12, borderTop: '1px solid var(--ant-color-border-secondary)' }}>
-                    <div style={{ marginBottom: 8, fontWeight: 600, fontSize: 13 }}>上下游单据</div>
-                    {salesReturnTracking.loading && <Spin size="small" />}
-                    {salesReturnTracking.error && <Typography.Text type="danger">{salesReturnTracking.error}</Typography.Text>}
-                    {salesReturnTracking.data && <DocumentTrackingRelationsBody data={salesReturnTracking.data} />}
-                  </div>
                 </div>
               </DetailDrawerSection>
 

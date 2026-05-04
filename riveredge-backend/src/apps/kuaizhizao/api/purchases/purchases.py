@@ -21,7 +21,7 @@ from apps.kuaizhizao.schemas.purchase import (
     PurchaseOrderCreate, PurchaseOrderUpdate, PurchaseOrderResponse,
     PurchaseOrderListResponse, PurchaseOrderApprove, PurchaseOrderConfirm,
     PurchaseOrderListParams, MaterialPriceHistoryResponse,
-    PurchaseTrackingResponse, SupplierPerformanceResponse,
+    PurchaseTrackingResponse,
     ExpediteRequest, ExpediteResponse, PriceComparisonResponse,
     LandingCostAllocationRequest, PurchaseOrderChangeResponse
 )
@@ -505,15 +505,6 @@ async def get_purchase_order_tracking(
 ):
     """获取采购订单从下达到入库的全链路追踪数据"""
     return await PurchaseService().get_purchase_order_tracking(tenant_id, order_id)
-
-
-@router.get("/suppliers/{supplier_id}/performance", response_model=SupplierPerformanceResponse, summary="获取供应商表现指标")
-async def get_supplier_performance(
-    supplier_id: int = Path(..., description="供应商ID"),
-    tenant_id: int = Depends(get_current_tenant)
-):
-    """获取供应商近半年的 OTIF、合格率等表现数据"""
-    return await PurchaseService().get_supplier_performance_metrics(tenant_id, supplier_id)
 
 
 @router.post("/purchase-orders/{order_id}/expedite", response_model=ExpediteResponse, summary="一键催单")

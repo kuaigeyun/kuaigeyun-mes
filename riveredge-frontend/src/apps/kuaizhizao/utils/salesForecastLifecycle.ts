@@ -6,6 +6,7 @@
 import type { LifecycleResult, SubStage } from '../../../../components/uni-lifecycle/types';
 import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';
+import { deriveLifecycleRingPercent } from '../../../utils/lifecycleRingPercent';
 
 /** 后端主轴 key：含历史四段式（含 pushed）与订单对齐七段式 */
 const SALES_FORECAST_BACKEND_KEYS = new Set([
@@ -76,6 +77,7 @@ const MAIN_STAGE_KEYS = [
   'draft',
   'pending_review',
   'audited',
+  'pushed',
   'effective',
   'executing',
   'delivered',
@@ -85,28 +87,11 @@ const MAIN_STAGE_LABELS: Record<(typeof MAIN_STAGE_KEYS)[number], string> = {
   draft: '草稿',
   pending_review: '待审核',
   audited: '已审核',
+  pushed: '已下推',
   effective: '已生效',
   executing: '执行中',
-  delivered: '已交货',
+  delivered: '发货出库',
   completed: '已完成',
-};
-
-const EXEC_SUB_STAGE_KEYS = [
-  'bom_check',
-  'demand_compute',
-  'production_plan',
-  'work_order_released',
-  'shipment_waiting',
-  'delivered',
-] as const;
-
-const EXEC_SUB_STAGE_LABELS: Record<(typeof EXEC_SUB_STAGE_KEYS)[number], string> = {
-  bom_check: 'BOM检查',
-  demand_compute: '需求计算',
-  production_plan: '生产计划',
-  work_order_released: '工单下达',
-  shipment_waiting: '待出库',
-  delivered: '已送货',
 };
 
 function computationPushed(record: Record<string, unknown>): boolean {
@@ -124,10 +109,14 @@ function buildMainStages(currentStageName: string, _isException: boolean): SubSt
     草稿: 0,
     待审核: 1,
     已审核: 2,
-    已生效: 3,
-    执行中: 4,
-    已交货: 5,
-    已完成: 6,
+    已下推: 3,
+    PUSHED: 3,
+    pushed: 3,
+    已生效: 4,
+    执行中: 5,
+    已交货: 6,
+    发货出库: 6,
+    已完成: 7,
     已驳回: 1,
     已取消: 0,
   };
@@ -142,27 +131,14 @@ function buildMainStages(currentStageName: string, _isException: boolean): SubSt
   });
 }
 
-function buildExecutionSubStages(record: Record<string, unknown>): SubStage[] {
-  const pushed = computationPushed(record);
-  const stages: SubStage[] = [
-    { key: EXEC_SUB_STAGE_KEYS[0], label: EXEC_SUB_STAGE_LABELS.bom_check, status: 'done' },
-    { key: EXEC_SUB_STAGE_KEYS[1], label: EXEC_SUB_STAGE_LABELS.demand_compute, status: pushed ? 'done' : 'active' },
-    { key: EXEC_SUB_STAGE_KEYS[2], label: EXEC_SUB_STAGE_LABELS.production_plan, status: 'pending' },
-    { key: EXEC_SUB_STAGE_KEYS[3], label: EXEC_SUB_STAGE_LABELS.work_order_released, status: 'pending' },
-    { key: EXEC_SUB_STAGE_KEYS[4], label: EXEC_SUB_STAGE_LABELS.shipment_waiting, status: 'pending' },
-    { key: EXEC_SUB_STAGE_KEYS[5], label: EXEC_SUB_STAGE_LABELS.delivered, status: 'pending' },
+/** 预测下推后以需求计算为主线，弱化工单/出库细拆（与销售订单列表粒度区分） */
+function buildForecastExecutionSubStages(record: Record<string, unknown>): SubStage[] {
+  const linked = computationPushed(record);
+  return [
+    { key: 'demand_compute', label: '需求计算', status: linked ? 'done' : 'active' },
+    { key: 'supply_execution', label: '供应执行', status: linked ? 'active' : 'pending' },
+    { key: 'forecast_review', label: '预测复盘', status: 'pending' },
   ];
-  if (!stages.some((s) => s.status === 'active')) {
-    const first = stages.find((s) => s.status === 'pending');
-    if (first) first.status = 'active';
-  }
-  return stages;
-}
-
-function currentSubStageLabel(subStages: SubStage[]): string {
-  const active = subStages.find((s) => s.status === 'active');
-  if (active) return active.label;
-  return subStages[subStages.length - 1]?.label ?? '';
 }
 
 function adaptForAuditSwitch(result: LifecycleResult, auditRequired: boolean): LifecycleResult {
@@ -281,6 +257,19 @@ function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecyc
       next_step_suggestions: ['下推需求计算'],
     };
   }
+  if (status === 'COMPLETED' || status === '已完成' || status === 'completed') {
+    return {
+      current_stage_key: 'completed',
+      current_stage_name: '已完成',
+      status: 'success',
+      main_stages: buildMainStages('已完成', false).map((s) => ({
+        key: s.key,
+        label: s.label,
+        status: s.status,
+      })),
+      next_step_suggestions: [],
+    };
+  }
   if (isEffective(record)) {
     const pushed = computationPushed(record);
     if (!pushed) {
@@ -293,22 +282,33 @@ function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecyc
           label: s.label,
           status: s.status,
         })),
-        next_step_suggestions: ['前往需求计算执行 MRP', '建立工单'],
+        next_step_suggestions: ['下推需求计算', '前往需求计算执行 MRP'],
       };
     }
-    const subStages = buildExecutionSubStages(record).map((s) => ({
+    const stRaw = norm(record?.status as string);
+    if (stRaw === 'PUSHED' || stRaw === '已下推' || stRaw === 'pushed') {
+      return {
+        current_stage_key: 'pushed',
+        current_stage_name: '已下推',
+        status: 'normal',
+        main_stages: buildMainStages('已下推', false).map((s) => ({
+          key: s.key,
+          label: s.label,
+          status: s.status,
+        })),
+        next_step_suggestions: ['在需求计算中查看关联需求', '必要时更新预测明细'],
+      };
+    }
+    const subStages = buildForecastExecutionSubStages(record).map((s) => ({
       key: s.key,
       label: s.label,
       status: s.status as 'done' | 'active' | 'pending',
     }));
     const activeKey = subStages.find((s) => s.status === 'active')?.key;
     const execSuggestions: Record<string, string[]> = {
-      bom_check: ['完成 BOM 检查'],
-      demand_compute: ['执行需求计算（MRP）'],
-      production_plan: ['制定生产计划'],
-      work_order_released: ['下达工单'],
-      shipment_waiting: ['准备出库'],
-      delivered: ['销售交货'],
+      demand_compute: ['执行或核对需求计算（MRP）'],
+      supply_execution: ['跟进工单与出库进度'],
+      forecast_review: ['复盘预测与实际需求偏差'],
     };
     return {
       current_stage_key: 'executing',
@@ -320,7 +320,7 @@ function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecyc
         status: s.status,
       })),
       sub_stages: subStages,
-      next_step_suggestions: (activeKey && execSuggestions[activeKey]) || ['推进执行进度'],
+      next_step_suggestions: (activeKey && execSuggestions[activeKey]) || ['推进需求与供应协同'],
     };
   }
 
@@ -335,6 +335,13 @@ function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecyc
     })),
     next_step_suggestions: ['下推需求计算'],
   };
+}
+
+function finalizeForecastLifecyclePercent(result: LifecycleResult): LifecycleResult {
+  const stages = result.mainStages;
+  if (!stages?.length) return result;
+  const p = deriveLifecycleRingPercent(stages.map(({ status }) => ({ status })));
+  return p != null ? { ...result, percent: p } : result;
 }
 
 export interface SalesForecastLike {
@@ -359,10 +366,12 @@ export function getSalesForecastLifecycle(
     | BackendLifecycle
     | undefined;
   if (backend?.main_stages?.length && isSalesForecastLifecycle(backend)) {
-    return adaptForAuditSwitch(parseBackendLifecycle(backend), auditRequired);
+    return finalizeForecastLifecyclePercent(adaptForAuditSwitch(parseBackendLifecycle(backend), auditRequired));
   }
-  return adaptForAuditSwitch(
-    parseBackendLifecycle(buildFallbackLifecycle(record as Record<string, unknown>)),
-    auditRequired
+  return finalizeForecastLifecyclePercent(
+    adaptForAuditSwitch(
+      parseBackendLifecycle(buildFallbackLifecycle(record as Record<string, unknown>)),
+      auditRequired
+    )
   );
 }
