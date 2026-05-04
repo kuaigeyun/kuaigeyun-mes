@@ -272,14 +272,14 @@ const MaterialShortageExceptionPage: React.FC = () => {
       <FormModalTemplate
         title="处理缺料异常"
         open={handleModalVisible}
-        onCancel={() => {
+        onClose={() => {
           setHandleModalVisible(false);
           setCurrentExceptionId(null);
           formRef.current?.resetFields();
         }}
         onFinish={handleExceptionSubmit}
         formRef={formRef}
-        {...MODAL_CONFIG}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
       >
         <div style={{ marginBottom: 16 }}>
           <Tag color="info">处理操作：{handleAction === 'purchase' ? '采购' : handleAction === 'substitute' ? '替代' : '解决'}</Tag>

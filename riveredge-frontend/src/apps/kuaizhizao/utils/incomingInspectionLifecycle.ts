@@ -3,7 +3,7 @@
  * 优先使用后端下发的 record.lifecycle，无则前端兜底。
  */
 
-import type { LifecycleResult } from '../../../../components/uni-lifecycle/types';
+import type { LifecycleResult } from '../../../components/uni-lifecycle/types';
 import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';
 

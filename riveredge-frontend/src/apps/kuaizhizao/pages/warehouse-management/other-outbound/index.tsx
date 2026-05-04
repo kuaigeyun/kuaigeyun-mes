@@ -98,7 +98,7 @@ const OtherOutboundPage: React.FC = () => {
   useEffect(() => {
     const load = async () => {
       try {
-        const wh = await masterDataWarehouseApi.list({ limit: 1000, isActive: true });
+        const wh = await masterDataWarehouseApi.list({ limit: 1000, is_active: true });
         setWarehouseList(Array.isArray(wh) ? wh : (wh as any)?.items || []);
       } catch (e) {
         console.error('加载仓库失败', e);

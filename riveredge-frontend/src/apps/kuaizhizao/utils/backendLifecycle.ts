@@ -3,7 +3,7 @@
  * 各单据的节点由后端控制，前端仅展示。
  */
 
-import type { LifecycleResult, SubStage } from '../../../../components/uni-lifecycle/types';
+import type { LifecycleResult, SubStage } from '../../../components/uni-lifecycle/types';
 import { deriveLifecycleRingPercent } from '../../../utils/lifecycleRingPercent';
 
 export interface BackendLifecycleStage {

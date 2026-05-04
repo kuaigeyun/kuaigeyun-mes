@@ -6,49 +6,29 @@ import { ProColumns } from '@ant-design/pro-components';
 import { Card, Row, Col, Statistic } from 'antd';
 import { Pie } from '@ant-design/charts';
 import SalesBaseReport from './BaseReport';
-import { getSalesReport } from '../../../services/reports';
+import { getSalesReport, parseSalesReportDateRange } from '../../../services/reports';
 
 const SalesReturnAnalysis: React.FC = () => {
   const [summary, setSummary] = React.useState<any>({});
 
   const columns: ProColumns[] = [
     {
-      title: '退货单号',
-      dataIndex: 'return_code',
-      copyable: true,
-      width: 150,
-    },
-    {
-      title: '客户名称',
-      dataIndex: 'customer_name',
-      ellipsis: true,
-      width: 150,
+      title: '统计期间',
+      dataIndex: 'date_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      search: { order: 10 } as any,
     },
     {
       title: '退货原因',
       dataIndex: 'return_reason',
-      width: 120,
+      width: 200,
+      ellipsis: true,
     },
     {
-      title: '退货类型',
-      dataIndex: 'return_type',
-      width: 100,
-    },
-    {
-      title: '退货金额',
-      dataIndex: 'total_amount',
-      valueType: 'money',
-      width: 120,
-    },
-    {
-      title: '退货时间',
-      dataIndex: 'return_time',
-      valueType: 'dateTime',
-      width: 160,
-    },
-    {
-      title: '状态',
-      dataIndex: 'status',
+      title: '单数',
+      dataIndex: 'count',
+      valueType: 'digit',
       width: 100,
     },
   ];
@@ -58,10 +38,12 @@ const SalesReturnAnalysis: React.FC = () => {
       title="销售退货分析"
       reportType="return_analysis"
       columns={columns}
-      request={async (params) => {
+      request={async (params, _s, _f, searchFormValues) => {
+        const { date_start, date_end } = parseSalesReportDateRange(searchFormValues);
         const res = await getSalesReport({
-          ...params,
           report_type: 'return_analysis',
+          date_start,
+          date_end,
         });
         if (res.success) {
           setSummary(res.summary || {});
@@ -69,7 +51,7 @@ const SalesReturnAnalysis: React.FC = () => {
         return {
           data: res.data,
           success: res.success,
-          total: res.data?.length || 0,
+          total: res.total ?? res.data?.length ?? 0,
         };
       }}
     >

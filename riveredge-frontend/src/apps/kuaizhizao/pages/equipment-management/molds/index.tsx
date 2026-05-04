@@ -11,7 +11,7 @@
 import React, { useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormSwitch } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormSwitch } from '@ant-design/pro-components';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
 import { App, Button, Tag, Space, message, Modal, Tabs, Table, Form, Input, InputNumber, Descriptions, DatePicker, Select, Row, Col, Typography, Spin, theme as AntdTheme, Empty } from 'antd';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
@@ -282,9 +282,14 @@ const MoldsPage: React.FC = () => {
    */
   const handleSubmitCalibration = async () => {
     try {
+      const moldUuid = moldDetail?.uuid;
+      if (!moldUuid) {
+        messageApi.error('未选择模具');
+        return;
+      }
       const values = await calibForm.validateFields();
       const data = {
-        mold_uuid: moldDetail!.uuid,
+        mold_uuid: moldUuid,
         calibration_date: values.calibration_date?.format?.('YYYY-MM-DD') || values.calibration_date,
         result: values.result,
         certificate_no: values.certificate_no,
@@ -408,7 +413,7 @@ const MoldsPage: React.FC = () => {
   /**
    * 详情列定义
    */
-  const detailColumns: ProDescriptionsItemType<Mold>[] = [
+  const detailColumns: ProDescriptionsItemProps<Mold>[] = [
     {
       title: '模具编号',
       dataIndex: 'code',
@@ -462,7 +467,8 @@ const MoldsPage: React.FC = () => {
     {
       title: '状态',
       dataIndex: 'status',
-      render: (status) => {
+      render: (_, record) => {
+        const status = record.status;
         const statusMap: Record<string, { text: string; color: string }> = {
           '正常': { text: '正常', color: 'success' },
           '使用中': { text: '使用中', color: 'processing' },
@@ -477,9 +483,9 @@ const MoldsPage: React.FC = () => {
     {
       title: '是否启用',
       dataIndex: 'is_active',
-      render: (isActive) => (
-        <Tag color={isActive ? 'success' : 'default'}>
-          {isActive ? '启用' : '停用'}
+      render: (_, record) => (
+        <Tag color={record.is_active ? 'success' : 'default'}>
+          {record.is_active ? '启用' : '停用'}
         </Tag>
       ),
     },
@@ -1061,7 +1067,7 @@ const MoldsPage: React.FC = () => {
       ) : null}
 
       {/* 模具详情 Drawer */}
-      <DetailDrawerTemplate
+      <DetailDrawerTemplate<Mold>
         title="模具详情"
         open={drawerVisible}
         zIndex={moldDetailDrawerZIndex}
@@ -1124,9 +1130,15 @@ const MoldsPage: React.FC = () => {
                           let content: React.ReactNode = val;
                           if (col.valueType === 'dateTime' && val) content = dayjs(val).format('YYYY-MM-DD HH:mm:ss');
                           else if (col.valueType === 'date' && val) content = dayjs(val).format('YYYY-MM-DD');
-                          else if (col.render) content = col.render(val, moldDetail, 0, {}, col);
+                          else if (col.render) {
+                            content = (col.render as (dom: React.ReactNode, entity: Mold, i: number) => React.ReactNode)(
+                              val,
+                              moldDetail,
+                              0,
+                            );
+                          }
                           return (
-                            <Descriptions.Item key={String(col.dataIndex)} label={col.title}>
+                            <Descriptions.Item key={String(col.dataIndex)} label={col.title as React.ReactNode}>
                               {content ?? '-'}
                             </Descriptions.Item>
                           );

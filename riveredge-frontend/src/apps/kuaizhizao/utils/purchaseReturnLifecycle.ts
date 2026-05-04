@@ -2,7 +2,7 @@
  * 采购退货单生命周期：待退货 → 已退货；已取消为异常分支。
  */
 
-import type { LifecycleResult } from '../../../../components/uni-lifecycle/types';
+import type { LifecycleResult } from '../../../components/uni-lifecycle/types';
 import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';
 

@@ -9,7 +9,7 @@ import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Form, Row, Col } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Row, Col } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
@@ -50,7 +50,7 @@ const ScriptListPage: React.FC = () => {
   const [executeModalVisible, setExecuteModalVisible] = useState(false);
   const [executeFormLoading, setExecuteFormLoading] = useState(false);
   const [currentExecuteScriptUuid, setCurrentExecuteScriptUuid] = useState<string | null>(null);
-  const [executeFormRef] = Form.useForm();
+  const executeFormRef = useRef<ProFormInstance>(null);
   const [executeResult, setExecuteResult] = useState<ScriptExecuteResponse | null>(null);
   
   // Drawer 相关状态（详情查看）
@@ -535,7 +535,7 @@ const ScriptListPage: React.FC = () => {
         open={executeModalVisible}
         onCancel={() => setExecuteModalVisible(false)}
         footer={null}
-        size={700}
+        width={700}
       >
         <ProForm
           formRef={executeFormRef}
@@ -625,45 +625,52 @@ const ScriptListPage: React.FC = () => {
           {
             title: t('pages.infra.scripts.columnActive'),
             dataIndex: 'is_active',
-            render: (value: boolean) => (
+            render: (_: React.ReactNode, record: Script) => {
+              const value = record.is_active;
+              return (
               <Tag color={value ? 'success' : 'default'}>
                 {value ? t('pages.infra.scripts.activeEnabled') : t('pages.infra.scripts.activeDisabled')}
               </Tag>
-            ),
+            ); },
           },
           {
             title: t('pages.infra.scripts.columnRunning'),
             dataIndex: 'is_running',
-            render: (value: boolean) => (
+            render: (_: React.ReactNode, record: Script) => {
+              const value = record.is_running;
+              return (
               <Tag color={value ? 'processing' : 'default'}>
                 {value ? t('pages.infra.scripts.runningRunning') : t('pages.infra.scripts.runningIdle')}
               </Tag>
-            ),
+            ); },
           },
           {
             title: t('pages.infra.scripts.columnContent'),
             dataIndex: 'content',
-            render: (value: string) => (
+            render: (_: React.ReactNode, record: Script) => (
               <pre style={{ maxHeight: '300px', overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>
-                {value}
+                {record.content}
               </pre>
             ),
           },
           {
             title: t('pages.infra.scripts.columnConfig'),
             dataIndex: 'config',
-            render: (value: Record<string, any>) => (
+            render: (_: React.ReactNode, record: Script) => {
+              const value = record.config as Record<string, any> | undefined;
+              return (
               value ? (
                 <pre style={{ maxHeight: '200px', overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>
                   {JSON.stringify(value, null, 2)}
                 </pre>
               ) : '-'
-            ),
+            ); },
           },
           {
             title: t('pages.infra.scripts.columnLastRunStatus'),
             dataIndex: 'last_run_status',
-            render: (value: string) => {
+            render: (_: React.ReactNode, record: Script) => {
+              const value = record.last_run_status;
               if (!value) return '-';
               const statusMap: Record<string, { color: string; text: string }> = {
                 success: { color: 'success', text: t('pages.infra.scripts.statusSuccess') },
@@ -682,13 +689,15 @@ const ScriptListPage: React.FC = () => {
           {
             title: t('pages.infra.scripts.columnLastError'),
             dataIndex: 'last_error',
-            render: (value: string) => (
+            render: (_: React.ReactNode, record: Script) => {
+              const value = record.last_error;
+              return (
               value ? (
                 <pre style={{ maxHeight: '100px', overflow: 'auto', background: '#fff2f0', padding: 8, borderRadius: 4, color: '#ff4d4f' }}>
                   {value}
                 </pre>
               ) : '-'
-            ),
+            ); },
           },
           {
             title: t('pages.infra.scripts.columnCreatedAt'),

@@ -4,16 +4,24 @@
 import React from 'react';
 import { ProColumns } from '@ant-design/pro-components';
 import SalesBaseReport from './BaseReport';
-import { getSalesReport } from '../../../services/reports';
+import { getSalesReport, parseSalesReportDateRange, salesReportPageParams } from '../../../services/reports';
 
 const CustomerSalesReconciliation: React.FC = () => {
   const columns: ProColumns[] = [
+    {
+      title: '交易日期',
+      dataIndex: 'transaction_date_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      search: { order: 10 } as any,
+    },
     {
       title: '交易日期',
       dataIndex: 'transaction_date',
       valueType: 'date',
       fixed: 'left',
       width: 120,
+      hideInSearch: true,
     },
     {
       title: '客户名称',
@@ -85,15 +93,25 @@ const CustomerSalesReconciliation: React.FC = () => {
       title="客户销售明细对账"
       reportType="customer_reconciliation"
       columns={columns}
-      request={async (params) => {
+      request={async (params, _s, _f, searchFormValues) => {
+        const { date_start, date_end } = parseSalesReportDateRange(searchFormValues, [
+          'transaction_date_range',
+          'date_range',
+          'dateRange',
+        ]);
+        const { skip, limit } = salesReportPageParams(params);
         const res = await getSalesReport({
-          ...params,
           report_type: 'customer_reconciliation',
+          date_start,
+          date_end,
+          customer_keyword: searchFormValues?.customer_name,
+          skip,
+          limit,
         });
         return {
           data: res.data,
           success: res.success,
-          total: res.data?.length || 0,
+          total: res.total ?? res.data?.length ?? 0,
         };
       }}
     />

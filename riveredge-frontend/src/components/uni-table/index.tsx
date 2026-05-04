@@ -21,6 +21,7 @@ import type { MenuProps } from 'antd'
 import {
   PlusOutlined,
   EditOutlined,
+  EyeOutlined,
   DeleteOutlined,
   TableOutlined,
   AppstoreOutlined,
@@ -511,6 +512,14 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   onEdit?: (selectedRowKeys: React.Key[]) => void
   /**
+   * 查看详情（需选中一行，行为与「修改」一致）
+   */
+  onDetail?: (selectedRowKeys: React.Key[]) => void | Promise<void>
+  /**
+   * 详情按钮文案
+   */
+  detailButtonText?: string
+  /**
    * 是否显示删除按钮（默认：false）
    * 需要先选中一行才能点击
    */
@@ -720,6 +729,10 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    * 建议 ASCII；需强制重置用户列顺序时可改版本后缀（如 xxx-v2）。
    */
   columnPersistenceId?: string
+  /**
+   * @deprecated 历史占位；组件内不使用，仅从 props 剥离以免传入 ProTable。
+   */
+  searchFormItems?: unknown
 }
 
 /**
@@ -761,6 +774,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   createButtonText,
   showEditButton = false,
   onEdit,
+  onDetail,
+  detailButtonText,
   showDeleteButton = false,
   onDelete,
   deleteButtonText,
@@ -790,6 +805,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   tanstackQuery,
   columnPersistenceId,
   columnsState: userColumnsState,
+  searchFormItems: _unusedSearchFormItems,
   ...restProps
 }: UniTableProps<T>) {
   const { t } = useTranslation()
@@ -1632,6 +1648,24 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           disabled={selectedRowKeys.length !== 1}
         >
           {t('components.uniTable.edit')}
+        </Button>
+      )
+    }
+
+    if (onDetail) {
+      actions.push(
+        <Button
+          key="detail"
+          icon={<EyeOutlined />}
+          size={toolBarButtonSize}
+          onClick={() => {
+            if (selectedRowKeys.length === 1) {
+              void onDetail(selectedRowKeys)
+            }
+          }}
+          disabled={selectedRowKeys.length !== 1}
+        >
+          {detailButtonText ?? t('components.uniTable.detail')}
         </Button>
       )
     }

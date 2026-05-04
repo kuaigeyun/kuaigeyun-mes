@@ -9,9 +9,10 @@ Date: 2025-12-30
 
 from datetime import date
 from typing import List, Optional, Dict, Any
+import base64
 
 from fastapi import APIRouter, Depends, Query, Path, Body
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse, Response
 
 from core.api.deps import get_current_user, get_current_tenant
 from infra.models.user import User as CurrentUser
@@ -482,12 +483,15 @@ async def print_purchase_order(
         template_code=template_code,
         output_format=output_format
     )
-    
-    if output_format == "pdf":
-        # TODO: 实现PDF生成
-        return HTMLResponse(content=result["content"], status_code=200)
-    else:
-        return HTMLResponse(content=result["content"], status_code=200)
+
+    if (output_format or "html").lower() == "pdf" and result.get("mime_type") == "application/pdf":
+        raw = base64.b64decode(result.get("content") or "")
+        return Response(
+            content=raw,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'inline; filename="purchase-order-{order_id}.pdf"'},
+        )
+    return HTMLResponse(content=result.get("content") or "", status_code=200)
 
 @router.get("/material-price-history/{material_id}", response_model=MaterialPriceHistoryResponse, summary="获取物料历史成交价")
 async def get_material_price_history(

@@ -5,10 +5,17 @@ import React from 'react';
 import { ProColumns } from '@ant-design/pro-components';
 import { Tag } from 'antd';
 import SalesBaseReport from './BaseReport';
-import { getSalesReport } from '../../../services/reports';
+import { getSalesReport, parseSalesReportDateRange, salesReportPageParams } from '../../../services/reports';
 
 const ProductSalesRanking: React.FC = () => {
   const columns: ProColumns[] = [
+    {
+      title: '交货日期',
+      dataIndex: 'delivery_date_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      search: { order: 10 } as any,
+    },
     {
       title: '排名',
       dataIndex: 'rank',
@@ -79,15 +86,24 @@ const ProductSalesRanking: React.FC = () => {
       title="产品销售排行榜"
       reportType="product_ranking"
       columns={columns}
-      request={async (params) => {
+      request={async (params, _s, _f, searchFormValues) => {
+        const { date_start, date_end } = parseSalesReportDateRange(searchFormValues, [
+          'delivery_date_range',
+          'date_range',
+          'dateRange',
+        ]);
+        const { skip, limit } = salesReportPageParams(params);
         const res = await getSalesReport({
-          ...params,
           report_type: 'product_ranking',
+          date_start,
+          date_end,
+          skip,
+          limit,
         });
         return {
           data: res.data,
           success: res.success,
-          total: res.data?.length || 0,
+          total: res.total ?? res.data?.length ?? 0,
         };
       }}
     />

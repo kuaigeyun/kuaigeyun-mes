@@ -141,16 +141,16 @@ const OperationLogsPage: React.FC = () => {
    * 详情列定义（优化：突出有用信息，技术性字段放在后面）
    */
   const detailColumns = [
-    { title: t('pages.system.operationLogs.createdAt'), dataIndex: 'created_at', render: (value: string) => dayjs(value).format('YYYY-MM-DD HH:mm:ss') },
-    { title: t('pages.system.operationLogs.operationType'), dataIndex: 'operation_type', render: (value: string) => getOperationTypeTag(value) },
-    { title: t('pages.system.operationLogs.operationModule'), dataIndex: 'operation_module', render: (value: string) => formatModuleName(value) },
-    { title: t('pages.system.operationLogs.operationObjectType'), dataIndex: 'operation_object_type', render: (value: string) => value || '-' },
-    { title: t('pages.system.operationLogs.operationContent'), dataIndex: 'operation_content', span: 2, render: (value: string, record: OperationLog) => (<div style={{ wordBreak: 'break-word' }}>{formatOperationContent(value, record.operation_object_type)}</div>) },
-    { title: t('pages.system.operationLogs.operator'), dataIndex: 'user_id', render: (_: any, record: OperationLog) => getUserDisplayName(record) },
-    { title: t('pages.system.operationLogs.ipAddress'), dataIndex: 'ip_address', render: (value: string) => value || '-' },
-    { title: t('pages.system.operationLogs.requestMethod'), dataIndex: 'request_method', render: (value: string) => value || '-' },
-    { title: t('pages.system.operationLogs.requestPath'), dataIndex: 'request_path', span: 2, render: (value: string) => (<div style={{ wordBreak: 'break-word', fontFamily: CODE_FONT_FAMILY, fontSize: '12px' }}>{value || '-'}</div>) },
-    { title: t('pages.system.operationLogs.userAgent'), dataIndex: 'user_agent', span: 2, render: (value: string) => (<div style={{ wordBreak: 'break-word', maxHeight: '100px', overflow: 'auto', fontSize: '12px', color: '#666' }}>{value || '-'}</div>) },
+    { title: t('pages.system.operationLogs.createdAt'), dataIndex: 'created_at', render: (_: React.ReactNode, record: OperationLog) => dayjs(record.created_at).format('YYYY-MM-DD HH:mm:ss') },
+    { title: t('pages.system.operationLogs.operationType'), dataIndex: 'operation_type', render: (_: React.ReactNode, record: OperationLog) => getOperationTypeTag(record.operation_type) },
+    { title: t('pages.system.operationLogs.operationModule'), dataIndex: 'operation_module', render: (_: React.ReactNode, record: OperationLog) => formatModuleName(record.operation_module) },
+    { title: t('pages.system.operationLogs.operationObjectType'), dataIndex: 'operation_object_type', render: (_: React.ReactNode, record: OperationLog) => record.operation_object_type || '-' },
+    { title: t('pages.system.operationLogs.operationContent'), dataIndex: 'operation_content', span: 2, render: (_: React.ReactNode, record: OperationLog) => (<div style={{ wordBreak: 'break-word' }}>{formatOperationContent(record.operation_content, record.operation_object_type)}</div>) },
+    { title: t('pages.system.operationLogs.operator'), dataIndex: 'user_id', render: (_: React.ReactNode, record: OperationLog) => getUserDisplayName(record) },
+    { title: t('pages.system.operationLogs.ipAddress'), dataIndex: 'ip_address', render: (_: React.ReactNode, record: OperationLog) => record.ip_address || '-' },
+    { title: t('pages.system.operationLogs.requestMethod'), dataIndex: 'request_method', render: (_: React.ReactNode, record: OperationLog) => record.request_method || '-' },
+    { title: t('pages.system.operationLogs.requestPath'), dataIndex: 'request_path', span: 2, render: (_: React.ReactNode, record: OperationLog) => (<div style={{ wordBreak: 'break-word', fontFamily: CODE_FONT_FAMILY, fontSize: '12px' }}>{record.request_path || '-'}</div>) },
+    { title: t('pages.system.operationLogs.userAgent'), dataIndex: 'user_agent', span: 2, render: (_: React.ReactNode, record: OperationLog) => (<div style={{ wordBreak: 'break-word', maxHeight: '100px', overflow: 'auto', fontSize: '12px', color: '#666' }}>{record.user_agent || '-'}</div>) },
   ];
 
   const renderDOD = (today?: number, yesterday?: number) => {
@@ -221,9 +221,9 @@ const OperationLogsPage: React.FC = () => {
   const columns: ProColumns<OperationLog>[] = [
     { title: t('pages.system.operationLogs.createdAt'), dataIndex: 'created_at', key: 'created_at', valueType: 'dateTimeRange', sorter: true, render: (_: any, record: OperationLog) => dayjs(record.created_at).format('YYYY-MM-DD HH:mm:ss'), width: 180, fixed: 'left' },
     { title: t('pages.system.operationLogs.operationType'), dataIndex: 'operation_type', key: 'operation_type', valueType: 'select', valueEnum: { create: { text: t('pages.system.operationLogs.typeCreate') }, update: { text: t('pages.system.operationLogs.typeUpdate') }, delete: { text: t('pages.system.operationLogs.typeDelete') }, view: { text: t('pages.system.operationLogs.typeView') }, error: { text: t('pages.system.operationLogs.typeError') }, unknown: { text: t('pages.system.operationLogs.typeUnknown') } }, render: (_: any, record: OperationLog) => getOperationTypeTag(record.operation_type), width: 100 },
-    { title: t('pages.system.operationLogs.operationModule'), dataIndex: 'operation_module', key: 'operation_module', ellipsis: true, width: 120, render: (value: string) => formatModuleName(value) },
-    { title: t('pages.system.operationLogs.operationObject'), dataIndex: 'operation_object_type', key: 'operation_object_type', ellipsis: true, width: 120, render: (value: string) => value || '-' },
-    { title: t('pages.system.operationLogs.operationContent'), dataIndex: 'operation_content', key: 'operation_content', ellipsis: true, search: false, width: 250, render: (value: string, record: OperationLog) => formatOperationContent(value, record.operation_object_type) },
+    { title: t('pages.system.operationLogs.operationModule'), dataIndex: 'operation_module', key: 'operation_module', ellipsis: true, width: 120, render: (_: React.ReactNode, record: OperationLog) => formatModuleName(record.operation_module) },
+    { title: t('pages.system.operationLogs.operationObject'), dataIndex: 'operation_object_type', key: 'operation_object_type', ellipsis: true, width: 120, render: (_: React.ReactNode, record: OperationLog) => record.operation_object_type || '-' },
+    { title: t('pages.system.operationLogs.operationContent'), dataIndex: 'operation_content', key: 'operation_content', ellipsis: true, search: false, width: 250, render: (_: React.ReactNode, record: OperationLog) => formatOperationContent(record.operation_content, record.operation_object_type) },
     { title: t('pages.system.operationLogs.operator'), dataIndex: 'user_id', key: 'user_id', valueType: 'digit', width: 120, render: (_: any, record: OperationLog) => getUserDisplayName(record) },
     { title: t('pages.system.operationLogs.ipAddress'), dataIndex: 'ip_address', key: 'ip_address', ellipsis: true, search: false, width: 120, hideInTable: true },
     { title: t('pages.system.operationLogs.requestMethod'), dataIndex: 'request_method', key: 'request_method', valueType: 'select', valueEnum: { GET: { text: 'GET' }, POST: { text: 'POST' }, PUT: { text: 'PUT' }, PATCH: { text: 'PATCH' }, DELETE: { text: 'DELETE' } }, width: 100, hideInTable: true },
@@ -292,6 +292,7 @@ const OperationLogsPage: React.FC = () => {
             }
           }}
           rowKey="uuid"
+          enableRowSelection
           showAdvancedSearch={true}
           showImportButton={false}
           showExportButton={true}

@@ -59,10 +59,8 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
   loading = false,
   viewMode = 'week',
   taskLevel = 'work_order',
-  onViewModeChange,
   onBatchUpdate,
   onBatchUpdateOperations,
-  onRefresh,
 }) => {
   // 首次渲染时按需注入 wx-icons.css，减少未使用页面/登录页的外链开销
   useEffect(() => {

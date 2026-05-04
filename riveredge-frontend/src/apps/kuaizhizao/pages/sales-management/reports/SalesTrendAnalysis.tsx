@@ -6,12 +6,19 @@ import { ProColumns } from '@ant-design/pro-components';
 import { Card, Row, Col } from 'antd';
 import { Line, Column } from '@ant-design/charts';
 import SalesBaseReport from './BaseReport';
-import { getSalesReport } from '../../../services/reports';
+import { getSalesReport, parseSalesReportDateRange } from '../../../services/reports';
 
 const SalesTrendAnalysis: React.FC = () => {
   const [data, setData] = React.useState<any[]>([]);
 
   const columns: ProColumns[] = [
+    {
+      title: '统计期间',
+      dataIndex: 'date_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      search: { order: 10 } as any,
+    },
     {
       title: '月份',
       dataIndex: 'month',
@@ -22,6 +29,7 @@ const SalesTrendAnalysis: React.FC = () => {
       dataIndex: 'revenue',
       valueType: 'money',
       sorter: true,
+      hideInSearch: true,
     },
     {
       title: '销售数量',
@@ -36,18 +44,25 @@ const SalesTrendAnalysis: React.FC = () => {
       title="销售趋势分析"
       reportType="trend"
       columns={columns}
-      request={async (params) => {
+      request={async (params, _s, _f, searchFormValues) => {
+        const { date_start, date_end } = parseSalesReportDateRange(searchFormValues);
         const res = await getSalesReport({
-          ...params,
           report_type: 'trend',
+          date_start,
+          date_end,
         });
+        const rows = (res.data || []).map((r: any) => ({
+          ...r,
+          revenue: r.revenue ?? r.total_amount ?? 0,
+          quantity: r.quantity ?? 0,
+        }));
         if (res.success) {
-          setData(res.data);
+          setData(rows);
         }
         return {
-          data: res.data,
+          data: rows,
           success: res.success,
-          total: res.data?.length || 0,
+          total: res.total ?? rows.length ?? 0,
         };
       }}
     >

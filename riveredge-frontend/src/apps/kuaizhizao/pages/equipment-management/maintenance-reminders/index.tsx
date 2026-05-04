@@ -11,7 +11,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { DescriptionsProps } from 'antd';
-import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Space, message, Badge, Tag, Modal, notification, Descriptions, Typography, Empty, Spin, theme as AntdTheme } from 'antd';
 import { CheckOutlined, EyeOutlined, CheckCircleOutlined, ReloadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -53,7 +53,11 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
       content = dayjs(value as string).format('YYYY-MM-DD HH:mm:ss');
     }
     if (col.render && dataSource != null) {
-      content = col.render(content, dataSource, index, {}, col);
+            content = (col.render as (dom: import('react').ReactNode, entity: T, i: number) => import('react').ReactNode)(
+        content,
+        dataSource,
+        index,
+      );
     }
     return {
       key: String(col.key ?? col.dataIndex ?? index),
@@ -133,7 +137,7 @@ const MaintenanceRemindersPage: React.FC = () => {
 
   // 处理Modal
   const [handleModalVisible, setHandleModalVisible] = useState(false);
-  const handleFormRef = useRef<any>(null);
+  const handleFormRef = useRef<ProFormInstance>();
 
   /**
    * 获取未读提醒数量
@@ -468,22 +472,30 @@ const MaintenanceRemindersPage: React.FC = () => {
 
   return (
     <ListPageTemplate
-      title={
-        <Space>
-          <span>设备维护提醒</span>
-          {unreadCount > 0 && (
-            <Badge count={unreadCount} showZero>
-              <span style={{ fontSize: 16 }}>未读提醒</span>
-            </Badge>
-          )}
-        </Space>
-      }
-      extra={
-        <Space>
-          <Button icon={<ReloadOutlined />} onClick={handleCheckMaintenancePlans}>
-            手动检查
-          </Button>
-        </Space>
+      toolbarExtra={
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: 12,
+          }}
+        >
+          <Space>
+            <span>设备维护提醒</span>
+            {unreadCount > 0 && (
+              <Badge count={unreadCount} showZero>
+                <span style={{ fontSize: 16 }}>未读提醒</span>
+              </Badge>
+            )}
+          </Space>
+          <Space>
+            <Button icon={<ReloadOutlined />} onClick={handleCheckMaintenancePlans}>
+              手动检查
+            </Button>
+          </Space>
+        </div>
       }
     >
       <UniTable<MaintenanceReminder>
@@ -730,12 +742,10 @@ const MaintenanceRemindersPage: React.FC = () => {
       <FormModalTemplate
         title="标记为已处理"
         open={handleModalVisible}
-        onCancel={() => setHandleModalVisible(false)}
-        setFormRef={(ref: any) => { handleFormRef.current = ref; }}
+        onClose={() => setHandleModalVisible(false)}
+        formRef={handleFormRef}
+        layout="vertical"
         onFinish={handleMarkAsHandledSubmit}
-        formProps={{
-          layout: 'vertical',
-        }}
       >
         <ProFormTextArea
           name="remark"

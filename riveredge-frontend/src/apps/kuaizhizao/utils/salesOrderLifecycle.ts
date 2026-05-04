@@ -5,7 +5,7 @@
  */
 
 import dayjs from 'dayjs';
-import type { LifecycleResult, SubStage } from '../../../../components/uni-lifecycle/types';
+import type { LifecycleResult, SubStage } from '../../../components/uni-lifecycle/types';
 import type { SalesOrder } from '../services/sales-order';
 import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';

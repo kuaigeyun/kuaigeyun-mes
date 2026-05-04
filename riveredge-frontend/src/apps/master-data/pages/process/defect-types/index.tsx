@@ -22,7 +22,7 @@ import { DRAWER_CONFIG } from '../../../../../components/layout-templates/consta
 import { generateCode } from '../../../../../services/codeRule';
 import { downloadFile } from '../../../../../utils';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
-import { batchImport } from '../../../../../utils/import';
+import { batchImportParsedRows } from '../../../../../utils/import';
 import { extractProTableSort, mapProcessListSortField } from '../../../../../utils/tableQueryKey';
 
 /**
@@ -293,7 +293,7 @@ const DefectTypesPage: React.FC = () => {
 
     const ruleCode = getPageRuleCode('master-data-defect-type');
     try {
-      const result = await batchImport<DefectTypeCreate>(
+      const result = await batchImportParsedRows<DefectTypeCreate>(
         importData.map((item, i) => ({ data: item, rowIndex: i + 3, rawRow: [] })),
         async (item) => {
           let data = { ...item };

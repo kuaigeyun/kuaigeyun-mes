@@ -308,7 +308,7 @@ export function showValidationErrors(errors: ImportValidationError[]): void {
  * @param options - 配置选项
  * @returns 导入结果列表
  */
-export async function batchImport<T = any>(
+export async function batchImportParsedRows<T = any>(
   importData: ImportDataItem<T>[],
   importFn: (data: T, rowIndex: number) => Promise<T>,
   options?: {
@@ -494,7 +494,7 @@ export async function handleImport<T = Record<string, any>>(
   }
 
   // 批量导入
-  const results = await batchImport(data, importFn, {
+  const results = await batchImportParsedRows(data, importFn, {
     title: options?.title,
   });
 

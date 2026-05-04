@@ -1,9 +1,9 @@
 /**
  * 报表列表（积木专业报表，历史入口；主入口为报表中心 ReportCenter）
  */
-import React, { useRef, useState } from 'react';
+import React, { useRef } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Space, Tag, Typography, Dropdown } from 'antd';
+import { App, Button, Tag, Typography } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../components/uni-table';
@@ -75,7 +75,10 @@ const ReportList: React.FC = () => {
       align: 'left',
       search: false,
       render: (_, record) => (
-        <UniLifecycle {...getPublishDraftLifecycle(record as Record<string, unknown>)} showCircleTooltip={false} />
+        <UniLifecycle
+          {...getPublishDraftLifecycle(record as unknown as Record<string, unknown>)}
+          showCircleTooltip={false}
+        />
       ),
     },
     {

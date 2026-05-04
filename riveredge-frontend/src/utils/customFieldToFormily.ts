@@ -4,7 +4,7 @@
  * 将自定义字段配置转换为 Formily 的 JSON Schema 格式
  */
 
-import { ISchema } from '@formily/core';
+import type { ISchema } from '@formily/json-schema';
 import { CustomField } from '../services/customField';
 
 /**

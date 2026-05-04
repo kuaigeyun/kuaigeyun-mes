@@ -4545,6 +4545,100 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             updated_return = await self.get_sales_return_by_id(tenant_id, return_id)
             return updated_return
 
+    async def update_sales_return(
+        self,
+        tenant_id: int,
+        return_id: int,
+        return_data: Any,
+        updated_by: int,
+    ) -> SalesReturnResponse:
+        """更新销售退货单（仅待退货/草稿，且未进入已退货）。"""
+        from apps.kuaizhizao.schemas.warehouse import SalesReturnUpdate
+        from apps.master_data.models.material import Material
+
+        async with in_transaction():
+            return_obj = await SalesReturn.get_or_none(
+                tenant_id=tenant_id, id=return_id, deleted_at__isnull=True
+            )
+            if not return_obj:
+                raise NotFoundError(f"销售退货单不存在: {return_id}")
+            if return_obj.status not in ("待退货", "草稿"):
+                raise BusinessLogicError("仅「待退货」或「草稿」状态的销售退货单可编辑")
+
+            if not isinstance(return_data, SalesReturnUpdate):
+                return_data = SalesReturnUpdate.model_validate(return_data)
+
+            payload = return_data.model_dump(exclude_unset=True, exclude={"items"})
+            for key, val in payload.items():
+                if key in ("id", "tenant_id", "uuid", "created_at", "updated_at"):
+                    continue
+                if hasattr(return_obj, key):
+                    setattr(return_obj, key, val)
+
+            items = getattr(return_data, "items", None)
+            if items is not None:
+                await SalesReturnItem.filter(tenant_id=tenant_id, return_id=return_id).delete()
+                total_quantity = Decimal(0)
+                total_amount = Decimal(0)
+                location_required, _ = await _get_warehouse_policy_flags(tenant_id)
+                for item_data in items:
+                    material = await Material.get_or_none(tenant_id=tenant_id, id=item_data.material_id)
+                    batch_number = getattr(item_data, "batch_number", None)
+                    serial_numbers = getattr(item_data, "serial_numbers", None)
+                    if material:
+                        await _validate_batch_serial_policy(
+                            tenant_id=tenant_id,
+                            material=material,
+                            batch_number=batch_number,
+                            serial_numbers=serial_numbers,
+                            quantity=getattr(item_data, "return_quantity", None),
+                            scene="销售退货",
+                        )
+                    _validate_location_if_required(
+                        location_required=location_required,
+                        location_id=getattr(item_data, "location_id", None),
+                        location_code=getattr(item_data, "location_code", None),
+                        scene="销售退货",
+                        material_label=getattr(item_data, "material_name", None)
+                        or getattr(item_data, "material_code", "未知物料"),
+                    )
+                    if serial_numbers and isinstance(serial_numbers, list):
+                        serial_numbers_json = json.dumps(serial_numbers)
+                    elif serial_numbers:
+                        serial_numbers_json = serial_numbers if isinstance(serial_numbers, str) else None
+                    else:
+                        serial_numbers_json = None
+
+                    await SalesReturnItem.create(
+                        tenant_id=tenant_id,
+                        return_id=return_obj.id,
+                        sales_delivery_item_id=getattr(item_data, "sales_delivery_item_id", None),
+                        material_id=item_data.material_id,
+                        material_code=item_data.material_code,
+                        material_name=item_data.material_name,
+                        material_spec=getattr(item_data, "material_spec", None),
+                        material_unit=item_data.material_unit,
+                        return_quantity=item_data.return_quantity,
+                        unit_price=item_data.unit_price,
+                        total_amount=item_data.total_amount,
+                        location_id=getattr(item_data, "location_id", None),
+                        location_code=getattr(item_data, "location_code", None),
+                        batch_number=batch_number,
+                        expiry_date=getattr(item_data, "expiry_date", None),
+                        serial_numbers=serial_numbers_json,
+                        status=getattr(item_data, "status", "待退货"),
+                        return_time=getattr(item_data, "return_time", None),
+                        notes=getattr(item_data, "notes", None),
+                    )
+                    total_quantity += Decimal(str(item_data.return_quantity or 0))
+                    total_amount += Decimal(str(item_data.total_amount or 0))
+                return_obj.total_quantity = total_quantity
+                return_obj.total_amount = total_amount
+
+            return_obj.updated_by = updated_by
+            await return_obj.save()
+            return await self.get_sales_return_by_id(tenant_id, return_id)
+
     async def delete_sales_return(self, tenant_id: int, return_id: int) -> bool:
         """删除销售退货单（软删除，仅待退货状态可删）"""
         return_obj = await SalesReturn.get_or_none(tenant_id=tenant_id, id=return_id, deleted_at__isnull=True)

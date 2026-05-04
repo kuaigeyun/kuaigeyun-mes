@@ -74,6 +74,7 @@ from apps.kuaizhizao.schemas.warehouse import (
     SalesDeliveryResponse,
     SalesDeliveryWithItemsResponse,
     SalesReturnCreate,
+    SalesReturnUpdate,
     SalesReturnResponse,
     PurchaseReceiptCreate,
     PurchaseReceiptUpdate,
@@ -2511,6 +2512,22 @@ async def get_sales_return(
     return await SalesReturnService().get_sales_return_by_id(
         tenant_id=tenant_id,
         return_id=return_id
+    )
+
+
+@router.put("/sales-returns/{return_id}", response_model=SalesReturnResponse, summary="更新销售退货单")
+async def update_sales_return(
+    return_id: int,
+    body: SalesReturnUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SalesReturnResponse:
+    """更新销售退货单（仅待退货/草稿）。"""
+    return await SalesReturnService().update_sales_return(
+        tenant_id=tenant_id,
+        return_id=return_id,
+        return_data=body,
+        updated_by=current_user.id,
     )
 
 

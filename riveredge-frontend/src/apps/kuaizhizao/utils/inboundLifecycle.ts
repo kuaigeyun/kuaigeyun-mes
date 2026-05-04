@@ -2,7 +2,7 @@
  * 入库管理生命周期：草稿→已确认/待退料→已退料（生产退料）/已完成（采购/成品）
  */
 
-import type { LifecycleResult } from '../../../../components/uni-lifecycle/types';
+import type { LifecycleResult } from '../../../components/uni-lifecycle/types';
 import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';
 

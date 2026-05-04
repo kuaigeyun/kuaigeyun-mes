@@ -946,13 +946,32 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         
         if not receipt_items:
             raise BusinessLogicError("没有可入库的明细")
-        
-        # 获取默认仓库（如果未指定）
-        warehouse_id = None
-        warehouse_name = None
-        # 尝试获取第一个激活的仓库作为默认仓库
-        # ... (原有实现)
-        return {"id": 1, "receipt_code": "MOCK"} # 简化占位
+
+        from apps.master_data.models.warehouse import Warehouse
+
+        wh = await Warehouse.filter(tenant_id=tenant_id, deleted_at__isnull=True, is_active=True).order_by("id").first()
+        if not wh:
+            raise BusinessLogicError("未配置可用仓库，无法生成采购入库单。请先在主数据维护仓库。")
+
+        receipt_data = PurchaseReceiptCreate(
+            purchase_order_id=int(order.id),
+            purchase_order_code=str(order.order_code or ""),
+            supplier_id=int(order.supplier_id),
+            supplier_name=str(order.supplier_name or ""),
+            warehouse_id=int(wh.id),
+            warehouse_name=str(wh.name or wh.code or f"仓库{wh.id}"),
+            status="草稿",
+            review_status="待审核",
+            notes=f"由采购订单 {order.order_code} 下推生成（草稿）",
+            items=receipt_items,
+        )
+
+        created = await receipt_service.create_purchase_receipt(
+            tenant_id=tenant_id,
+            receipt_data=receipt_data,
+            created_by=created_by,
+        )
+        return {"id": created.id, "receipt_code": created.receipt_code}
 
     # === 采购员赋能增强方法 ===
 

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { PageContainer, ProForm, ProFormSelect, ProFormDatePicker, ProFormTextArea, ProFormSwitch } from '@ant-design/pro-components';
-import { Card, message, List, Tag, Typography, Space, Divider, Row, Col } from 'antd';
-import { CheckCircleOutlined, WarningOutlined } from '@ant-design/icons';
+import { PageContainer, ProForm, ProFormSelect, ProFormTextArea, ProFormSwitch } from '@ant-design/pro-components';
+import { Card, message, Tag, Typography, Divider, Row, Col } from 'antd';
 import { equipmentApi, equipmentInspectionApi } from '../../../services/equipment';
 
 const { Text, Title } = Typography;
@@ -79,7 +78,7 @@ const EquipmentInspectionPage: React.FC = () => {
                 name="abnormality_description" 
                 label="异常描述" 
                 dependencies={['has_abnormality']}
-                hidden={({ has_abnormality }) => !has_abnormality}
+                hidden={(values: { has_abnormality?: boolean }) => !values?.has_abnormality}
                 rules={[{ required: true, message: '请简述异常情况' }]}
               />
               <ProFormTextArea name="remark" label="备注说明" />

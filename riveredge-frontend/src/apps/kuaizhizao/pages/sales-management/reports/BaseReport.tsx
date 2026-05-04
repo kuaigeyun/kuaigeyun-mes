@@ -18,8 +18,13 @@ interface SalesBaseReportProps<T = any> {
   columns: ProColumns<T>[];
   /** 统计卡片数据 */
   statCards?: StatCard[];
-  /** 默认请求函数 */
-  request?: (params: any) => Promise<{ data: T[]; total: number; success: boolean }>;
+  /** 默认请求函数（与 UniTable 一致，可接收搜索表单第四参） */
+  request?: (
+    params: any,
+    sort?: any,
+    filter?: any,
+    searchFormValues?: Record<string, any>,
+  ) => Promise<{ data: T[]; total: number; success: boolean }>;
   /** 额外内容（如图表） */
   children?: React.ReactNode;
 }
@@ -52,6 +57,20 @@ const SalesBaseReport: React.FC<SalesBaseReportProps> = ({
     };
   };
 
+  const wrappedRequest = async (
+    params: any,
+    sort: any,
+    filter: any,
+    searchFormValues?: Record<string, any>,
+  ) => {
+    const fn = request || defaultRequest;
+    try {
+      return await (fn as any)(params, sort, filter, searchFormValues);
+    } catch {
+      return await (fn as any)(params);
+    }
+  };
+
   const handleExport = async () => {
     setLoading(true);
     try {
@@ -76,7 +95,7 @@ const SalesBaseReport: React.FC<SalesBaseReportProps> = ({
         rowKey="id"
         columns={columns}
         showAdvancedSearch={true}
-        request={request || defaultRequest}
+        request={wrappedRequest}
         toolBarRender={() => [
           <Button 
               key="export" 

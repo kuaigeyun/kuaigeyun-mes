@@ -115,7 +115,7 @@ const PayableDetail: React.FC = () => {
       ]}
     >
       <DetailDrawerSection title="基本信息">
-        <ProDescriptions column={3} dataSource={data as Record<string, unknown>} loading={loading}>
+        <ProDescriptions column={3} dataSource={data as unknown as Record<string, unknown>} loading={loading}>
           <ProDescriptions.Item label="供应商名称">{data.supplier_name}</ProDescriptions.Item>
           <ProDescriptions.Item label="系统编号">{data.payable_code}</ProDescriptions.Item>
           <ProDescriptions.Item label="业务日期">{data.business_date}</ProDescriptions.Item>
@@ -152,7 +152,7 @@ const PayableDetail: React.FC = () => {
       <DetailDrawerSection title="生命周期">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {(() => {
-            const lc = getPayableLifecycle(data as Record<string, unknown>);
+            const lc = getPayableLifecycle(data as unknown as Record<string, unknown>);
             const mainStages = lc.mainStages ?? [];
             if (mainStages.length === 0) return null;
             return (

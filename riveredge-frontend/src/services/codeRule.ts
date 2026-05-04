@@ -45,6 +45,7 @@ export interface CreateCodeRuleData {
   seq_start?: number;
   seq_step?: number;
   seq_reset_rule?: 'never' | 'daily' | 'monthly' | 'yearly';
+  is_system?: boolean;
   is_active?: boolean;
   allow_manual_edit?: boolean;
 }
@@ -79,34 +80,6 @@ export interface CodeRuleListParams {
 export interface CodeRuleListResponse {
   items: CodeRule[];
   total: number;
-}
-
-/**
- * 创建编号规则数据
- */
-export interface CreateCodeRuleData {
-  name: string;
-  code: string;
-  expression: string;
-  description?: string;
-  seq_start?: number;
-  seq_step?: number;
-  seq_reset_rule?: 'never' | 'daily' | 'monthly' | 'yearly';
-  is_system?: boolean;
-  is_active?: boolean;
-}
-
-/**
- * 更新编号规则数据
- */
-export interface UpdateCodeRuleData {
-  name?: string;
-  expression?: string;
-  description?: string;
-  seq_start?: number;
-  seq_step?: number;
-  seq_reset_rule?: 'never' | 'daily' | 'monthly' | 'yearly';
-  is_active?: boolean;
 }
 
 /**
@@ -269,6 +242,7 @@ export interface CodeRulePageConfigResponse {
   auto_generate?: boolean;
   rule_code?: string;
   allow_manual_edit?: boolean;
+  fixed_text_preset?: string;
   available_fields?: Array<{
     field_name: string;
     field_label: string;

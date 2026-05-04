@@ -3,7 +3,7 @@
  * 根据 record.status 映射到 mainStages，供 UniLifecycleStepper 展示。
  */
 
-import type { LifecycleResult } from '../../../../components/uni-lifecycle/types';
+import type { LifecycleResult } from '../../../components/uni-lifecycle/types';
 import type { WorkOrder } from '../types/production';
 import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';

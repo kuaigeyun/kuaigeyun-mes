@@ -3,7 +3,7 @@
  * 阶段：进行中→完成/失败
  */
 
-import type { LifecycleResult, SubStage } from '../../../../components/uni-lifecycle/types';
+import type { LifecycleResult, SubStage } from '../../../components/uni-lifecycle/types';
 import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';
 

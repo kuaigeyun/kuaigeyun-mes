@@ -414,7 +414,7 @@ const InboundPage: React.FC = () => {
     const load = async () => {
       try {
         const [whRes, supRes] = await Promise.all([
-          masterWarehouseApi.list({ isActive: true, limit: 500 }),
+          masterWarehouseApi.list({ is_active: true, limit: 500 }),
           supplierApi.list({ limit: 500 }),
         ]);
         const whList = Array.isArray(whRes) ? whRes : (whRes as any)?.data ?? (whRes as any)?.items ?? whRes ?? [];
@@ -559,7 +559,7 @@ const InboundPage: React.FC = () => {
         const [woRes, poRes, whRes] = await Promise.all([
           workOrderApi.list({ skip: 0, limit: 500 }),
           listPurchaseOrders({ skip: 0, limit: 500 }),
-          masterWarehouseApi.list({ isActive: true }),
+          masterWarehouseApi.list({ is_active: true }),
         ]);
         const woList = Array.isArray(woRes) ? woRes : (woRes as any)?.data ?? (woRes as any)?.items ?? [];
         const eligibleWo = woList.filter(
@@ -795,7 +795,7 @@ const InboundPage: React.FC = () => {
       };
 
       const [whRes, detailData] = await Promise.all([
-        masterWarehouseApi.list({ isActive: true, limit: 500 }),
+        masterWarehouseApi.list({ is_active: true, limit: 500 }),
         fetchDetail(),
       ]);
       const whList = Array.isArray(whRes) ? whRes : (whRes as any)?.data ?? (whRes as any)?.items ?? whRes ?? [];

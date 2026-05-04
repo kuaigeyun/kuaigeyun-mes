@@ -3,7 +3,7 @@
  * 无兜底逻辑；且仅当后端返回的是「需求专用 4 阶段」时才展示 Stepper，否则视为无效。
  */
 
-import type { LifecycleResult } from '../../../../components/uni-lifecycle/types';
+import type { LifecycleResult } from '../../../components/uni-lifecycle/types';
 import type { Demand } from '../services/demand';
 import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';

@@ -9,8 +9,17 @@
 
 import React, { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, message, Descriptions } from 'antd';
+import {
+  ActionType,
+  ProColumns,
+  ProDescriptionsItemProps,
+  ProFormInstance,
+  ProFormSelect,
+  ProFormSwitch,
+  ProFormText,
+  ProFormTextArea,
+} from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Descriptions } from 'antd';
 import { PlusOutlined, EditOutlined, EyeOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../components/uni-table';
@@ -51,7 +60,7 @@ const ReportTemplatesPage: React.FC = () => {
   const [currentId, setCurrentId] = useState<number | null>(null);
   const [detailData, setDetailData] = useState<ReportTemplate | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const formRef = useRef<any>(null);
+  const formRef = useRef<ProFormInstance>(null);
 
   const reportDetailDescColumns = useMemo<ProDescriptionsItemProps<ReportTemplate>[]>(
     () => [
@@ -330,29 +339,6 @@ const ReportTemplatesPage: React.FC = () => {
     },
   ];
 
-  const formFields = [
-    { name: 'name', label: t('pages.system.reportTemplates.labelName'), type: 'input' as const, required: true, rules: [{ required: true, message: t('pages.system.reportTemplates.nameRequired') }] },
-    { name: 'code', label: t('pages.system.reportTemplates.labelCode'), type: 'input' as const, required: true, rules: [{ required: true, message: t('pages.system.reportTemplates.codeRequired') }] },
-    { name: 'type', label: t('pages.system.reportTemplates.labelType'), type: 'select' as const, required: true, options: [
-      { label: t('pages.system.reportTemplates.typeInventory'), value: 'inventory' },
-      { label: t('pages.system.reportTemplates.typeProduction'), value: 'production' },
-      { label: t('pages.system.reportTemplates.typeQuality'), value: 'quality' },
-      { label: t('pages.system.reportTemplates.typeCustom'), value: 'custom' },
-    ], rules: [{ required: true, message: t('pages.system.reportTemplates.typeRequired') }] },
-    { name: 'category', label: t('pages.system.reportTemplates.labelCategory'), type: 'select' as const, required: true, options: [
-      { label: t('pages.system.reportTemplates.categorySystem'), value: 'system' },
-      { label: t('pages.system.reportTemplates.categoryDepartment'), value: 'department' },
-      { label: t('pages.system.reportTemplates.categoryPersonal'), value: 'personal' },
-    ], rules: [{ required: true, message: t('pages.system.reportTemplates.categoryRequired') }] },
-    { name: 'status', label: t('pages.system.reportTemplates.labelStatus'), type: 'select' as const, required: true, options: [
-      { label: t('pages.system.reportTemplates.statusDraft'), value: 'draft' },
-      { label: t('pages.system.reportTemplates.statusPublished'), value: 'published' },
-      { label: t('pages.system.reportTemplates.statusArchived'), value: 'archived' },
-    ], rules: [{ required: true, message: t('pages.system.reportTemplates.statusRequired') }] },
-    { name: 'is_default', label: t('pages.system.reportTemplates.labelIsDefault'), type: 'switch' as const },
-    { name: 'description', label: t('pages.system.reportTemplates.labelDescription'), type: 'textarea' as const },
-  ];
-
   return (
     <ListPageTemplate>
       <UniTable
@@ -389,8 +375,10 @@ const ReportTemplatesPage: React.FC = () => {
         showCreateButton
         createButtonText={t('pages.system.reportTemplates.createButton')}
         onCreate={handleCreate}
+        showEditButton
         onEdit={handleEdit}
         onDetail={handleDetail}
+        enableRowSelection
         showDeleteButton
         onDelete={handleDelete}
         deleteButtonText={t('common.batchDelete')}
@@ -429,15 +417,56 @@ const ReportTemplatesPage: React.FC = () => {
       <FormModalTemplate
         title={isEdit ? t('pages.system.reportTemplates.modalEdit') : t('pages.system.reportTemplates.modalCreate')}
         open={modalVisible}
-        onCancel={() => setModalVisible(false)}
-        onOk={async () => {
-          const values = await formRef.current?.validateFields();
-          await handleSave(values);
-        }}
+        onClose={() => setModalVisible(false)}
+        onFinish={handleSave}
+        isEdit={isEdit}
         formRef={formRef}
-        fields={formFields}
         width={MODAL_CONFIG.SMALL_WIDTH}
-      />
+      >
+        <ProFormText
+          name="name"
+          label={t('pages.system.reportTemplates.labelName')}
+          rules={[{ required: true, message: t('pages.system.reportTemplates.nameRequired') }]}
+        />
+        <ProFormText
+          name="code"
+          label={t('pages.system.reportTemplates.labelCode')}
+          rules={[{ required: true, message: t('pages.system.reportTemplates.codeRequired') }]}
+        />
+        <ProFormSelect
+          name="type"
+          label={t('pages.system.reportTemplates.labelType')}
+          rules={[{ required: true, message: t('pages.system.reportTemplates.typeRequired') }]}
+          options={[
+            { label: t('pages.system.reportTemplates.typeInventory'), value: 'inventory' },
+            { label: t('pages.system.reportTemplates.typeProduction'), value: 'production' },
+            { label: t('pages.system.reportTemplates.typeQuality'), value: 'quality' },
+            { label: t('pages.system.reportTemplates.typeCustom'), value: 'custom' },
+          ]}
+        />
+        <ProFormSelect
+          name="category"
+          label={t('pages.system.reportTemplates.labelCategory')}
+          rules={[{ required: true, message: t('pages.system.reportTemplates.categoryRequired') }]}
+          options={[
+            { label: t('pages.system.reportTemplates.categorySystem'), value: 'system' },
+            { label: t('pages.system.reportTemplates.categoryDepartment'), value: 'department' },
+            { label: t('pages.system.reportTemplates.categoryPersonal'), value: 'personal' },
+          ]}
+        />
+        <ProFormSelect
+          name="status"
+          label={t('pages.system.reportTemplates.labelStatus')}
+          rules={[{ required: true, message: t('pages.system.reportTemplates.statusRequired') }]}
+          options={[
+            { label: t('pages.system.reportTemplates.statusDraft'), value: 'draft' },
+            { label: t('pages.system.reportTemplates.statusPublished'), value: 'published' },
+            { label: t('pages.system.reportTemplates.statusArchived'), value: 'archived' },
+          ]}
+        />
+        <ProFormSwitch name="is_default" label={t('pages.system.reportTemplates.labelIsDefault')} />
+        <ProFormTextArea name="description" label={t('pages.system.reportTemplates.labelDescription')} />
+      </FormModalTemplate>
 
       {/* 详情Drawer */}
       <UniDetail

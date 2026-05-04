@@ -161,7 +161,7 @@ export const moldApi = {
   },
 
   // 获取模具校验记录列表（mold_uuid 可选，不传则全量）
-  listCalibrations: async (params?: { mold_uuid?: string; skip?: number; limit?: number }) => {
+  listCalibrations: async (params?: { mold_uuid?: string; keyword?: string; skip?: number; limit?: number }) => {
     return apiRequest('/apps/kuaizhizao/molds/calibrations', { method: 'GET', params });
   },
 
@@ -171,7 +171,7 @@ export const moldApi = {
   },
 
   // 获取模具保养提醒列表
-  listMaintenanceReminders: async (params?: { skip?: number; limit?: number; reminder_type?: string }) => {
+  listMaintenanceReminders: async (params?: { keyword?: string; skip?: number; limit?: number; reminder_type?: string }) => {
     return apiRequest('/apps/kuaizhizao/molds/maintenance-reminders', { method: 'GET', params });
   },
 };
@@ -203,16 +203,16 @@ export const toolApi = {
     return apiRequest(`/apps/kuaizhizao/tools/${toolUuid}/calibrations`, { method: 'GET', params });
   },
   // 全量列表（运营页面用）
-  listAllUsages: async (params?: { tool_uuid?: string; status?: string; skip?: number; limit?: number }) => {
+  listAllUsages: async (params?: { tool_uuid?: string; keyword?: string; status?: string; skip?: number; limit?: number }) => {
     return apiRequest('/apps/kuaizhizao/tools/usages', { method: 'GET', params });
   },
-  listAllMaintenances: async (params?: { tool_uuid?: string; skip?: number; limit?: number }) => {
+  listAllMaintenances: async (params?: { tool_uuid?: string; keyword?: string; skip?: number; limit?: number }) => {
     return apiRequest('/apps/kuaizhizao/tools/maintenances', { method: 'GET', params });
   },
-  listAllCalibrations: async (params?: { tool_uuid?: string; skip?: number; limit?: number }) => {
+  listAllCalibrations: async (params?: { tool_uuid?: string; keyword?: string; skip?: number; limit?: number }) => {
     return apiRequest('/apps/kuaizhizao/tools/calibrations', { method: 'GET', params });
   },
-  listMaintenanceReminders: async (params?: { skip?: number; limit?: number; due_type?: string }) => {
+  listMaintenanceReminders: async (params?: { keyword?: string; skip?: number; limit?: number; due_type?: string }) => {
     return apiRequest('/apps/kuaizhizao/tools/maintenance-reminders', { method: 'GET', params });
   },
   checkout: async (data: any) => {

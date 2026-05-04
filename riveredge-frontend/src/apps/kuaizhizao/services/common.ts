@@ -47,8 +47,7 @@ export async function uploadImportFile(file: File, dataType: string): Promise<Im
   formData.append('file', file);
   formData.append('dataType', dataType);
 
-  return apiRequest<ImportTask>({
-    url: '/apps/kuaizhizao/common/data-import',
+  return apiRequest<ImportTask>('/apps/kuaizhizao/common/data-import', {
     method: 'POST',
     data: formData,
     headers: {
@@ -58,30 +57,26 @@ export async function uploadImportFile(file: File, dataType: string): Promise<Im
 }
 
 export async function getImportTasks(): Promise<ImportTask[]> {
-  return apiRequest<ImportTask[]>({
-    url: '/apps/kuaizhizao/common/import-tasks',
+  return apiRequest<ImportTask[]>('/apps/kuaizhizao/common/import-tasks', {
     method: 'GET',
   });
 }
 
 export async function startExport(dataType: string, filters?: Record<string, any>): Promise<ExportTask> {
-  return apiRequest<ExportTask>({
-    url: '/apps/kuaizhizao/common/data-export',
+  return apiRequest<ExportTask>('/apps/kuaizhizao/common/data-export', {
     method: 'POST',
     data: { dataType, filters },
   });
 }
 
 export async function getExportTasks(): Promise<ExportTask[]> {
-  return apiRequest<ExportTask[]>({
-    url: '/apps/kuaizhizao/common/export-tasks',
+  return apiRequest<ExportTask[]>('/apps/kuaizhizao/common/export-tasks', {
     method: 'GET',
   });
 }
 
 export async function downloadExportFile(taskId: number): Promise<Blob> {
-  return apiRequest<Blob>({
-    url: `/apps/kuaizhizao/common/export-tasks/${taskId}/download`,
+  return apiRequest<Blob>(`/apps/kuaizhizao/common/export-tasks/${taskId}/download`, {
     method: 'GET',
     responseType: 'blob',
   });

@@ -272,7 +272,7 @@ async function loadPluginInProduction(application: Application): Promise<PluginR
   return [
     {
       path: application.route_path || `/apps/${application.code}`,
-      component: PluginRoutes,
+      component: PluginRoutes as React.ComponentType<Record<string, unknown>>,
     },
   ];
 }

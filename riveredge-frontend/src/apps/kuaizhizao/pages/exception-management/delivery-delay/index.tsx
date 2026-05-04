@@ -254,14 +254,14 @@ const DeliveryDelayExceptionPage: React.FC = () => {
       <FormModalTemplate
         title="处理交期延期异常"
         open={handleModalVisible}
-        onCancel={() => {
+        onClose={() => {
           setHandleModalVisible(false);
           setCurrentExceptionId(null);
           formRef.current?.resetFields();
         }}
         onFinish={handleExceptionSubmit}
         formRef={formRef}
-        {...MODAL_CONFIG}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
       >
         <div style={{ marginBottom: 16 }}>
           <Tag color="info">

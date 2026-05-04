@@ -2691,7 +2691,8 @@ class DemandComputationService:
             source_config = mc.get("source_config", mc)
             outsource_supplier_id = mc.get("outsource_supplier_id") or source_config.get("outsource_supplier_id")
             outsource_operation = mc.get("outsource_operation") or source_config.get("outsource_operation", "")
-            
+            used_placeholder_supplier = False
+
             # allow_draft 时允许无供应商，使用占位供应商
             if not outsource_supplier_id:
                 if not allow_draft:
@@ -2702,12 +2703,14 @@ class DemandComputationService:
                 # 获取或创建占位供应商「待指定」
                 supplier = await self._get_or_create_placeholder_supplier(tenant_id)
                 outsource_supplier_id = supplier.id
-            
+                used_placeholder_supplier = True
+
             # 查询供应商信息
             supplier = await Supplier.get_or_none(tenant_id=tenant_id, id=outsource_supplier_id)
             if not supplier:
                 if allow_draft:
                     supplier = await self._get_or_create_placeholder_supplier(tenant_id)
+                    used_placeholder_supplier = True
                 else:
                     raise BusinessLogicError(
                         f"委外供应商 ID {outsource_supplier_id} 不存在，物料: {item.material_code}"
@@ -2756,14 +2759,24 @@ class DemandComputationService:
                 created_by=created_by,
                 allow_draft=allow_draft,
             )
-            
-            return {
+
+            result: Dict[str, Any] = {
                 "id": wo.id,
                 "code": wo.code,
                 "product_code": item.material_code,
                 "product_name": item.material_name,
                 "quantity": float(quantity),
             }
+            if used_placeholder_supplier:
+                result["used_placeholder_supplier"] = True
+                logger.warning(
+                    "需求计算 allow_draft：委外工单 %s 使用占位供应商「待指定」，"
+                    "计算单=%s 物料=%s；正式下达前请在主数据维护真实供应商并更新工单。",
+                    wo.code,
+                    computation.computation_code,
+                    item.material_code,
+                )
+            return result
         except BusinessLogicError:
             raise
         except Exception as e:

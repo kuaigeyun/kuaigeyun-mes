@@ -4,7 +4,7 @@
 
 import React, { useRef, useState } from 'react';
 import { ProFormSelect, ProFormDigit, ProFormDatePicker, ProDescriptions } from '@ant-design/pro-components';
-import { App, Button, Card, Tag, message, List, Badge, Alert, Space } from 'antd';
+import { App, Button, Card, Tag, List, Badge, Alert, Space } from 'antd';
 import { BulbOutlined } from '@ant-design/icons';
 import { FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
 import { costOptimizationApi } from '../../services/cost';

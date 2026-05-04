@@ -1,5 +1,4 @@
 import React from 'react';
-import { useTranslation } from 'react-i18next';
 import { Result, Button, Card, Typography, Space } from 'antd';
 import { ThunderboltOutlined, RocketOutlined } from '@ant-design/icons';
 
@@ -9,8 +8,6 @@ const { Title, Paragraph, Text } = Typography;
  * kuaiiot (快数采) 占位页面
  */
 const KuaiIotApp: React.FC = () => {
-  const { t } = useTranslation();
-
   return (
     <div style={{ padding: 24 }}>
       <Card style={{ borderRadius: 12, overflow: 'hidden' }}>

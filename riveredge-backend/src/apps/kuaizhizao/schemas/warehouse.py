@@ -684,6 +684,9 @@ class SalesReturnCreate(SalesReturnBase):
 class SalesReturnUpdate(SalesReturnBase):
     """销售退货单更新schema"""
     return_code: Optional[str] = Field(None, max_length=50, description="退货单编码")
+    items: Optional[List["SalesReturnItemCreate"]] = Field(
+        None, description="退货明细（传入则先删后插，全量替换）"
+    )
 
 
 class SalesReturnResponse(SalesReturnBase):

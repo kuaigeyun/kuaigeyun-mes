@@ -53,7 +53,7 @@ import {
   ProFormSwitch,
   ProFormInstance,
 } from '@ant-design/pro-components'
-import type { ProDescriptionsItemType } from '@ant-design/pro-components'
+import type { ProDescriptionsItemProps } from '@ant-design/pro-components'
 import type { DataNode, TreeProps } from 'antd/es/tree'
 
 /** 经典 Windows 资源管理器式实心文件夹（黄褐色） */
@@ -995,7 +995,7 @@ const MaterialsManagementPage: React.FC = () => {
   }, [materialGroups, t])
 
   /** 详情抽屉「基本信息」字段顺序（uni-detail + detailDrawerDescriptionItems） */
-  const materialDetailBasicColumns = useMemo<ProDescriptionsItemType<Material>[]>(
+  const materialDetailBasicColumns = useMemo<ProDescriptionsItemProps<Material>[]>(
     () => [
       {
         title: t('app.master-data.materials.materialCode'),

@@ -140,7 +140,11 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
       content = dayjs(value as string).format('YYYY-MM-DD');
     }
     if (col.render && dataSource != null) {
-      content = col.render(content, dataSource, index, {}, col) as React.ReactNode;
+            content = (col.render as (dom: import('react').ReactNode, entity: T, i: number) => import('react').ReactNode)(
+        content,
+        dataSource,
+        index,
+      );
     }
     return {
       key: String(col.key ?? col.dataIndex ?? index),
@@ -341,6 +345,12 @@ const PurchaseOrderFeeTotalsSummary: React.FC<{
   );
 };
 
+const ORDER_TYPE_FALLBACK: Array<{ label: string; value: string }> = [
+  { label: '标准采购', value: '标准采购' },
+  { label: '紧急采购', value: '紧急采购' },
+  { label: '框架协议', value: '框架协议' },
+];
+
 const PurchaseOrdersPage: React.FC = () => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
@@ -404,12 +414,8 @@ const PurchaseOrdersPage: React.FC = () => {
   // 供应商列表、订单类型、币种
   const [supplierList, setSupplierList] = useState<any[]>([]);
   const [suppliersLoading, setSuppliersLoading] = useState(false);
-  const [orderTypeOptions] = useState<Array<{ label: string; value: string }>>([
-    { label: '标准采购', value: '标准采购' },
-    { label: '紧急采购', value: '紧急采购' },
-    { label: '框架协议', value: '框架协议' },
-  ]);
-  const [orderTypeLoading] = useState(false);
+  const [orderTypeOptions, setOrderTypeOptions] = useState<Array<{ label: string; value: string }>>(ORDER_TYPE_FALLBACK);
+  const [orderTypeLoading, setOrderTypeLoading] = useState(false);
   const [currencyOptions, setCurrencyOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [currencyLoading, setCurrencyLoading] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
@@ -461,17 +467,19 @@ const PurchaseOrdersPage: React.FC = () => {
 
   useEffect(() => {
     const loadOrderType = async () => {
-      // ORDER_TYPE 字典当前缺失，直接使用默认值
-      // setOrderTypeLoading(true);
-      // try {
-      //   const dict = await getDataDictionaryByCode('ORDER_TYPE');
-      //   const items = await getDictionaryItemList(dict.uuid, true);
-      //   setOrderTypeOptions(items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value })));
-      // } catch {
-      //   setOrderTypeOptions([{ label: '标准采购', value: '标准采购' }, { label: '紧急采购', value: '紧急采购' }, { label: '框架协议', value: '框架协议' }]);
-      // } finally {
-      //   setOrderTypeLoading(false);
-      // }
+      setOrderTypeLoading(true);
+      try {
+        const dict = await getDataDictionaryByCode('ORDER_TYPE');
+        const items = await getDictionaryItemList(dict.uuid, true);
+        setOrderTypeOptions(
+          items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value })),
+        );
+      } catch {
+        setOrderTypeOptions(ORDER_TYPE_FALLBACK);
+        messageApi.info('订单类型数据字典未配置，已使用内置选项');
+      } finally {
+        setOrderTypeLoading(false);
+      }
     };
     const loadCurrency = async () => {
       setCurrencyLoading(true);

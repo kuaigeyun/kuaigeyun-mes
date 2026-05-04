@@ -4,10 +4,17 @@
 import React from 'react';
 import { ProColumns } from '@ant-design/pro-components';
 import SalesBaseReport from './BaseReport';
-import { getSalesReport } from '../../../services/reports';
+import { getSalesReport, parseSalesReportDateRange, salesReportPageParams } from '../../../services/reports';
 
 const CustomerSalesSummary: React.FC = () => {
   const columns: ProColumns[] = [
+    {
+      title: '统计期间',
+      dataIndex: 'date_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      search: { order: 10 } as any,
+    },
     {
       title: '客户名称',
       dataIndex: 'customer_name',
@@ -64,15 +71,21 @@ const CustomerSalesSummary: React.FC = () => {
       title="客户销售业绩汇总"
       reportType="customer_summary"
       columns={columns}
-      request={async (params) => {
+      request={async (params, _s, _f, searchFormValues) => {
+        const { date_start, date_end } = parseSalesReportDateRange(searchFormValues);
+        const { skip, limit } = salesReportPageParams(params);
         const res = await getSalesReport({
-          ...params,
           report_type: 'customer_summary',
+          date_start,
+          date_end,
+          customer_keyword: searchFormValues?.customer_name,
+          skip,
+          limit,
         });
         return {
           data: res.data,
           success: res.success,
-          total: res.data?.length || 0,
+          total: res.total ?? res.data?.length ?? 0,
         };
       }}
     />

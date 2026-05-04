@@ -110,7 +110,11 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
       content = dayjs(value as string).format('YYYY-MM-DD');
     }
     if (col.render && dataSource != null) {
-      content = col.render(content, dataSource, index, {}, col);
+            content = (col.render as (dom: import('react').ReactNode, entity: T, i: number) => import('react').ReactNode)(
+        content,
+        dataSource,
+        index,
+      );
     }
     return {
       key: String(col.key ?? col.dataIndex ?? index),
@@ -258,8 +262,8 @@ const PackingBindingPage: React.FC = () => {
       const qrcodePromises = validBindings.map((binding) =>
         qrcodeApi.generateBox({
           box_uuid: binding.box_no || binding.uuid || '',
-          box_no: binding.box_no || '',
-          box_name: binding.product_name || binding.box_no || '',
+          box_code: binding.box_no || '',
+          material_codes: binding.product_code ? [binding.product_code] : [],
         })
       );
 

@@ -170,6 +170,9 @@ async def get_sales_report(
     date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
     date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
     customer_id: Optional[int] = Query(None, description="客户ID"),
+    customer_keyword: Optional[str] = Query(None, description="客户名称模糊筛选（用于客户业绩汇总等）"),
+    skip: int = Query(0, ge=0, description="分页偏移"),
+    limit: int = Query(100, ge=1, le=500, description="分页条数"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> dict:
@@ -209,6 +212,9 @@ async def get_sales_report(
         date_start=date_start_dt,
         date_end=date_end_dt,
         customer_id=customer_id,
+        skip=skip,
+        limit=limit,
+        customer_keyword=customer_keyword,
     )
     
 @router.get("/plans", summary="获取计划报表")

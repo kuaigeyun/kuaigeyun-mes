@@ -16,16 +16,22 @@ import { SUBMIT_SHORTCUT_HINT } from '../../utils/globalSubmitShortcut';
 export interface FormModalTemplateProps {
   title: string;
   open: boolean;
-  onClose: () => void;
+  /** 关闭弹窗（与 Modal onCancel 一致） */
+  onClose?: () => void;
+  /** @deprecated 请使用 onClose */
+  onCancel?: () => void;
   onFinish: (values: any) => Promise<void>;
   isEdit?: boolean;
   initialValues?: Record<string, any>;
-  children: ReactNode;
+  /** 表单项；仅使用 formItems 动态表单时可省略 */
+  children?: ReactNode;
   width?: number;
   layout?: 'vertical' | 'horizontal';
   grid?: boolean;
   loading?: boolean;
-  formRef?: React.RefObject<ProFormInstance>;
+  formRef?:
+    | React.RefObject<ProFormInstance | null>
+    | React.MutableRefObject<ProFormInstance | undefined>;
   form?: any;
   onValuesChange?: (changedValues: any, allValues: any) => void;
   className?: string;
@@ -35,12 +41,25 @@ export interface FormModalTemplateProps {
   afterOpenChange?: (open: boolean) => void;
   /** 与详情抽屉、左侧全链路等同屏时需高于 theme.zIndexPopupBase + 嵌套偏移时使用 */
   zIndex?: number;
+  /**
+   * 兼容历史上误用的 `<FormModalTemplate {...MODAL_CONFIG} />`；模板不使用这些字段。
+   * 弹窗宽度请传 `width={MODAL_CONFIG.STANDARD_WIDTH}` 等。
+   */
+  STANDARD_WIDTH?: number;
+  LARGE_WIDTH?: number;
+  EXTRA_LARGE_WIDTH?: number;
+  SMALL_WIDTH?: number;
+  TINY_WIDTH?: number;
+  BODY_MAX_HEIGHT?: string;
+  /** @deprecated 未实现；仅从 props 剥离 */
+  formItems?: unknown;
 }
 
 export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
   title,
   open,
   onClose,
+  onCancel,
   onFinish,
   isEdit = false,
   initialValues,
@@ -57,7 +76,15 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
   extraFooter,
   afterOpenChange,
   zIndex,
+  STANDARD_WIDTH: _sw,
+  LARGE_WIDTH: _lw,
+  EXTRA_LARGE_WIDTH: _xlw,
+  SMALL_WIDTH: _smw,
+  TINY_WIDTH: _tw,
+  BODY_MAX_HEIGHT: _bmh,
+  formItems: _unusedFormItems,
 }) => {
+  const handleClose = onClose ?? onCancel ?? (() => {});
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const screens = Grid.useBreakpoint();
@@ -71,7 +98,7 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
     <Modal
       title={title}
       open={open}
-      onCancel={onClose}
+      onCancel={handleClose}
       afterOpenChange={afterOpenChange}
       zIndex={zIndex}
       width={width}
@@ -80,7 +107,7 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
       modalRender={modalRender}
       footer={
         <Space wrap>
-          <Button onClick={onClose}>{t('common.cancel')}</Button>
+          <Button onClick={handleClose}>{t('common.cancel')}</Button>
           <Button type="primary" loading={loading} onClick={() => formRef.current?.submit()}>
             {(isEdit
               ? t('components.layoutTemplates.formModal.submitUpdate')

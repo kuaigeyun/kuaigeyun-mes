@@ -16,13 +16,11 @@ import {
   ActionType,
   ProColumns,
   ProDescriptionsItemProps,
-  ProFormText,
   ProFormSelect,
   ProFormDatePicker,
-  ProFormDigit,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, message, Modal, Row, Col, Descriptions, Typography, Dropdown, Empty, Spin, theme as AntdTheme } from 'antd';
+import { App, Button, Tag, Modal, Row, Col, Descriptions, Typography, Empty, Spin, theme as AntdTheme } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, ReloadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import {
@@ -70,7 +68,11 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
       content = dayjs(value as string).format('YYYY-MM-DD HH:mm:ss');
     }
     if (col.render && dataSource != null) {
-      content = col.render(content, dataSource, index, {}, col);
+      content = (col.render as (dom: React.ReactNode, entity: T, i: number) => React.ReactNode)(
+        content,
+        dataSource,
+        index,
+      );
     }
     return {
       key: String(col.key ?? col.dataIndex ?? index),
@@ -111,7 +113,7 @@ const EquipmentFaultsPage: React.FC = () => {
   const faultDetailDrawerZIndex = token.zIndexPopupBase;
   const faultChainOverlayZIndex = token.zIndexPopupBase + 1;
   const actionRef = useRef<ActionType>(null);
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   // Modal 相关状态（创建/编辑故障记录）
   const [modalVisible, setModalVisible] = useState(false);
@@ -354,11 +356,12 @@ const EquipmentFaultsPage: React.FC = () => {
     {
       title: '故障级别',
       dataIndex: 'fault_level',
-      render: (level) => {
+      render: (_, record) => {
+        const level = record.fault_level;
         const levelMap: Record<string, { text: string; color: string }> = {
-          '轻微': { text: '轻微', color: 'default' },
-          '一般': { text: '一般', color: 'warning' },
-          '严重': { text: '严重', color: 'error' },
+          轻微: { text: '轻微', color: 'default' },
+          一般: { text: '一般', color: 'warning' },
+          严重: { text: '严重', color: 'error' },
         };
         const config = levelMap[level || ''] || { text: level || '-', color: 'default' };
         return <Tag color={config.color}>{config.text}</Tag>;
@@ -371,12 +374,13 @@ const EquipmentFaultsPage: React.FC = () => {
     {
       title: '状态',
       dataIndex: 'status',
-      render: (status) => {
+      render: (_, record) => {
+        const status = record.status;
         const statusMap: Record<string, { text: string; color: string }> = {
-          '待处理': { text: '待处理', color: 'default' },
-          '处理中': { text: '处理中', color: 'processing' },
-          '已修复': { text: '已修复', color: 'success' },
-          '已关闭': { text: '已关闭', color: 'default' },
+          待处理: { text: '待处理', color: 'default' },
+          处理中: { text: '处理中', color: 'processing' },
+          已修复: { text: '已修复', color: 'success' },
+          已关闭: { text: '已关闭', color: 'default' },
         };
         const config = statusMap[status || ''] || { text: status || '-', color: 'default' };
         return <Tag color={config.color}>{config.text}</Tag>;
@@ -385,9 +389,9 @@ const EquipmentFaultsPage: React.FC = () => {
     {
       title: '需要维修',
       dataIndex: 'repair_required',
-      render: (repairRequired) => (
-        <Tag color={repairRequired ? 'warning' : 'success'}>
-          {repairRequired ? '是' : '否'}
+      render: (_, record) => (
+        <Tag color={record.repair_required ? 'warning' : 'success'}>
+          {record.repair_required ? '是' : '否'}
         </Tag>
       ),
     },
@@ -510,11 +514,12 @@ const EquipmentFaultsPage: React.FC = () => {
       title: '故障级别',
       dataIndex: 'fault_level',
       width: 100,
-      render: (level) => {
+      render: (_, record) => {
+        const level = record.fault_level;
         const levelMap: Record<string, { text: string; color: string }> = {
-          '轻微': { text: '轻微', color: 'default' },
-          '一般': { text: '一般', color: 'warning' },
-          '严重': { text: '严重', color: 'error' },
+          轻微: { text: '轻微', color: 'default' },
+          一般: { text: '一般', color: 'warning' },
+          严重: { text: '严重', color: 'error' },
         };
         const config = levelMap[level || ''] || { text: level || '-', color: 'default' };
         return <Tag color={config.color}>{config.text}</Tag>;
@@ -524,9 +529,9 @@ const EquipmentFaultsPage: React.FC = () => {
       title: '需要维修',
       dataIndex: 'repair_required',
       width: 100,
-      render: (repairRequired) => (
-        <Tag color={repairRequired ? 'warning' : 'success'}>
-          {repairRequired ? '是' : '否'}
+      render: (_, record) => (
+        <Tag color={record.repair_required ? 'warning' : 'success'}>
+          {record.repair_required ? '是' : '否'}
         </Tag>
       ),
     },

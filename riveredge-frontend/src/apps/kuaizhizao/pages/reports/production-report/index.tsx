@@ -123,57 +123,69 @@ const ProductionReportPage: React.FC = () => {
       dataIndex: 'defectiveQuantity',
       width: 100,
       align: 'right',
-      render: (text) => <span style={{ color: text > 0 ? '#f5222d' : '#52c41a' }}>{text}</span>,
+      render: (_, record) => {
+        const text = Number(record.defective_quantity ?? 0);
+        return <span style={{ color: text > 0 ? '#f5222d' : '#52c41a' }}>{text}</span>;
+      },
     },
     {
       title: '完成率',
       dataIndex: 'completionRate',
       width: 100,
       align: 'center',
-      render: (rate) => (
-        <Progress
-          type="circle"
-          percent={rate}
-          width={40}
-          strokeColor={rate >= 100 ? '#52c41a' : rate >= 80 ? '#1890ff' : '#faad14'}
-        />
-      ),
+      render: (_, record) => {
+        const rate = Number(record.completion_rate ?? 0);
+        return (
+          <Progress
+            type="circle"
+            percent={rate}
+            width={40}
+            strokeColor={rate >= 100 ? '#52c41a' : rate >= 80 ? '#1890ff' : '#faad14'}
+          />
+        );
+      },
     },
     {
       title: '合格率',
       dataIndex: 'qualifiedRate',
       width: 100,
       align: 'center',
-      render: (rate) => (
-        <span style={{ color: rate >= 95 ? '#52c41a' : rate >= 90 ? '#faad14' : '#f5222d' }}>
-          {rate}%
-        </span>
-      ),
+      render: (_, record) => {
+        const rate = Number(record.qualified_rate ?? 0);
+        return (
+          <span style={{ color: rate >= 95 ? '#52c41a' : rate >= 90 ? '#faad14' : '#f5222d' }}>
+            {rate}%
+          </span>
+        );
+      },
     },
     {
       title: '计划工时',
       dataIndex: 'plannedDuration',
       width: 100,
       align: 'right',
-      render: (hours) => `${hours}小时`,
+      render: (_, record) => `${Number(record.planned_duration ?? 0)}小时`,
     },
     {
       title: '实际工时',
       dataIndex: 'actualDuration',
       width: 100,
       align: 'right',
-      render: (hours) => `${hours}小时`,
+      render: (_, record) => `${Number(record.actual_duration ?? 0)}小时`,
     },
     {
       title: '生产效率',
       dataIndex: 'efficiency',
       width: 100,
       align: 'center',
-      render: (efficiency) => (
-        <span style={{ color: efficiency >= 95 ? '#52c41a' : efficiency >= 85 ? '#faad14' : '#f5222d' }}>
-          {efficiency}%
-        </span>
-      ),
+      render: (_, record) => {
+        const efficiency = Number(record.efficiency ?? 0);
+        return (
+          <span style={{ color: efficiency >= 95 ? '#52c41a' : efficiency >= 85 ? '#faad14' : '#f5222d' }}>
+            {efficiency}%
+          </span>
+        );
+      },
     },
     {
       title: '状态',
@@ -195,11 +207,14 @@ const ProductionReportPage: React.FC = () => {
       dataIndex: 'delayDays',
       width: 100,
       align: 'right',
-      render: (days) => (
-        <span style={{ color: days > 0 ? '#f5222d' : '#52c41a' }}>
-          {days > 0 ? `${days}天` : '-'}
-        </span>
-      ),
+      render: (_, record) => {
+        const days = Number(record.delay_days ?? 0);
+        return (
+          <span style={{ color: days > 0 ? '#f5222d' : '#52c41a' }}>
+            {days > 0 ? `${days}天` : '-'}
+          </span>
+        );
+      },
     },
   ];
 
@@ -248,7 +263,7 @@ const ProductionReportPage: React.FC = () => {
     try {
       setLoading(true);
       await exportReport('production', {
-        report_type: reportType === 'performance' ? 'completion' : reportType === 'efficiency' ? 'efficiency' : 'reporting',
+        reportType: reportType === 'performance' ? 'completion' : reportType === 'efficiency' ? 'efficiency' : 'reporting',
         date_start: dateRange[0],
         date_end: dateRange[1],
       });
@@ -349,7 +364,7 @@ const ProductionReportPage: React.FC = () => {
             try {
               setLoading(true);
               const response = await getProductionReport({
-                report_type: 'completion',
+                reportType: 'completion',
                 date_start: dateRange[0],
                 date_end: dateRange[1],
                 ...params,

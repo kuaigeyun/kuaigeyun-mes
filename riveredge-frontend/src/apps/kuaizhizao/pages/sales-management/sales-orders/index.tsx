@@ -368,6 +368,20 @@ const SalesOrderFeeTotalsSummary: React.FC<{
   );
 };
 
+/** 数据字典未配置时的下拉兜底（与常见 SHIPPING_METHOD / PAYMENT_TERMS 取值兼容） */
+const DEFAULT_SHIPPING_METHOD_OPTIONS = [
+  { label: '快递', value: 'EXPRESS' },
+  { label: '物流', value: 'LOGISTICS' },
+  { label: '自提', value: 'SELF_PICKUP' },
+  { label: '专车', value: 'DEDICATED' },
+];
+const DEFAULT_PAYMENT_TERMS_OPTIONS = [
+  { label: '款到发货', value: 'PREPAID' },
+  { label: '货到付款', value: 'COD' },
+  { label: '月结30天', value: 'NET30' },
+  { label: '月结60天', value: 'NET60' },
+];
+
 const SalesOrdersPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi, modal: modalApi } = App.useApp();
@@ -550,8 +564,8 @@ const SalesOrdersPage: React.FC = () => {
           items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value }))
         );
       } catch (e: any) {
-        console.warn('发货方式字典未配置或加载失败:', e?.message || e);
-        setShippingMethodOptions([]);
+        setShippingMethodOptions(DEFAULT_SHIPPING_METHOD_OPTIONS);
+        messageApi.info('发货方式数据字典未加载，已使用内置常用选项');
       }
     };
     const loadPaymentTerms = async () => {
@@ -562,8 +576,8 @@ const SalesOrdersPage: React.FC = () => {
           items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value }))
         );
       } catch (e: any) {
-        console.warn('付款条件字典未配置或加载失败:', e?.message || e);
-        setPaymentTermsOptions([]);
+        setPaymentTermsOptions(DEFAULT_PAYMENT_TERMS_OPTIONS);
+        messageApi.info('付款条件数据字典未加载，已使用内置常用选项');
       }
     };
     loadShippingMethod();

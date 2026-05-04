@@ -49,6 +49,14 @@ export interface ListPageTemplateProps {
   statCards?: StatCard[];
   /** 主要内容（通常是 UniTable） */
   children: ReactNode;
+  /**
+   * @deprecated 列表页标题请放在路由 `name` / `PageContainer`；过渡期仍显示在表格上方。
+   */
+  title?: ReactNode;
+  /**
+   * @deprecated 请改用 `toolbarExtra` 放置操作按钮。
+   */
+  extra?: ReactNode;
   /** 工具栏扩展区（如导入、导出按钮，由 UniImport、UniExport 在页面层管理） */
   toolbarExtra?: ReactNode;
   /** 自定义样式类名 */
@@ -84,6 +92,8 @@ export interface ListPageTemplateProps {
 export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
   statCards,
   children,
+  title,
+  extra,
   toolbarExtra,
   className,
   style,
@@ -196,7 +206,30 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
       </div>
     ) : null;
 
-  const toolbarRow = toolbarExtra ? <div style={{ marginBottom: 16 }}>{toolbarExtra}</div> : null;
+  const legacyHeader =
+    title != null || extra != null ? (
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 8,
+          marginBottom: toolbarExtra != null && toolbarExtra !== false ? 12 : 0,
+        }}
+      >
+        {title != null ? <div style={{ flex: '1 1 auto', minWidth: 0 }}>{title}</div> : null}
+        {extra != null ? <div style={{ flexShrink: 0 }}>{extra}</div> : null}
+      </div>
+    ) : null;
+
+  const toolbarRow =
+    legacyHeader != null || toolbarExtra != null ? (
+      <div style={{ marginBottom: 16 }}>
+        {legacyHeader}
+        {toolbarExtra}
+      </div>
+    ) : null;
 
   const mainRow = <div style={prioritizeMainContentPaint ? { minWidth: 0 } : undefined}>{children}</div>;
 

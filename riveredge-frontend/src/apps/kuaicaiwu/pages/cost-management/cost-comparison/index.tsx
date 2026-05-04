@@ -9,7 +9,7 @@
 
 import React, { useRef, useState } from 'react';
 import { ProFormSelect, ProFormDigit, ProFormDatePicker, PageContainer } from '@ant-design/pro-components';
-import { App, Button, Tag, message, Divider, Row, Col, Statistic, Alert, Descriptions, Typography, Empty, Timeline } from 'antd';
+import { App, Button, Tag, Divider, Row, Col, Statistic, Alert, Descriptions, Typography, Empty, Timeline } from 'antd';
 import { BarChartOutlined } from '@ant-design/icons';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerSection, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { costComparisonApi } from '../../../services/cost';
@@ -164,7 +164,7 @@ const CostComparisonPage: React.FC = () => {
   /**
    * 获取差异类型标签
    */
-  const getVarianceTypeTag = (varianceType: string, variance: number) => {
+  const getVarianceTypeTag = (varianceType: string) => {
     if (varianceType === '超支') {
       return <Tag color="red">超支</Tag>;
     } else if (varianceType === '节约') {
@@ -177,7 +177,6 @@ const CostComparisonPage: React.FC = () => {
   return (
     <PageContainer
       title="成本对比"
-      contentStyle={{ padding: 0 }}
       extra={[
         <Button
           key="compare"
@@ -208,7 +207,7 @@ const CostComparisonPage: React.FC = () => {
                   {result.calculation_date ? dayjs(result.calculation_date).format('YYYY-MM-DD') : '-'}
                 </Descriptions.Item>
                 <Descriptions.Item label="差异类型">
-                  {getVarianceTypeTag(result.cost_variance.variance_type, result.cost_variance.total_cost_variance)}
+                  {getVarianceTypeTag(result.cost_variance.variance_type)}
                 </Descriptions.Item>
               </Descriptions>
             </DetailDrawerSection>

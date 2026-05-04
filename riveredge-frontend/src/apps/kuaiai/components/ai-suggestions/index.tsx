@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Card, List, Tag, Button, Space, Empty, Spin, Drawer, FloatButton, Badge, message, theme } from 'antd';
-import { BulbOutlined, CloseOutlined, RightOutlined, CheckCircleOutlined, ExclamationCircleOutlined, WarningOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { BulbOutlined, RightOutlined, CheckCircleOutlined, ExclamationCircleOutlined, WarningOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { getSuggestions } from '../../services/ai-suggestions';
 import './index.less';
 
@@ -219,7 +219,7 @@ const SuggestionsList: React.FC<SuggestionsListProps> = ({
               title={
                 <Space>
                   <span>{item.title}</span>
-                  <Tag color={priorityColor} size="small">
+                  <Tag color={priorityColor} style={{ fontSize: 12, marginInlineEnd: 0 }}>
                     {item.priority === 'low' ? '低' : item.priority === 'medium' ? '中' : item.priority === 'high' ? '高' : '紧急'}
                   </Tag>
                 </Space>

@@ -9,12 +9,21 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormTextArea, ProFormSwitch, ProFormJsonSchema } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, message } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
+import {
+  ActionType,
+  ProColumns,
+  ProDescriptionsItemProps,
+  ProFormText,
+  ProFormSelect,
+  ProFormTextArea,
+  ProFormSwitch,
+} from '@ant-design/pro-components';
+import { App, Button, Tag, Space } from 'antd';
+import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { costRuleApi } from '../../../services/cost';
+import { StructuredCostDataView } from '../../../../../components/structured-cost-data-view';
 import dayjs from 'dayjs';
 
 interface CostRule {
@@ -188,13 +197,14 @@ const CostRulePage: React.FC = () => {
       dataIndex: 'rule_type',
       key: 'rule_type',
       width: 120,
-      render: (text: string) => {
+      render: (_, r) => {
+        const text = r.rule_type;
         const typeMap: Record<string, { color: string; text: string }> = {
-          '材料成本': { color: 'blue', text: '材料成本' },
-          '人工成本': { color: 'green', text: '人工成本' },
-          '制造费用': { color: 'orange', text: '制造费用' },
+          材料成本: { color: 'blue', text: '材料成本' },
+          人工成本: { color: 'green', text: '人工成本' },
+          制造费用: { color: 'orange', text: '制造费用' },
         };
-        const type = typeMap[text] || { color: 'default', text: text };
+        const type = typeMap[text || ''] || { color: 'default', text: text || '-' };
         return <Tag color={type.color}>{type.text}</Tag>;
       },
     },
@@ -215,8 +225,8 @@ const CostRulePage: React.FC = () => {
       dataIndex: 'is_active',
       key: 'is_active',
       width: 100,
-      render: (text: boolean) => (
-        <Tag color={text ? 'green' : 'red'}>{text ? '启用' : '禁用'}</Tag>
+      render: (_, r) => (
+        <Tag color={r.is_active ? 'green' : 'red'}>{r.is_active ? '启用' : '禁用'}</Tag>
       ),
     },
     {
@@ -224,7 +234,7 @@ const CostRulePage: React.FC = () => {
       dataIndex: 'created_at',
       key: 'created_at',
       width: 180,
-      render: (text: string) => text ? dayjs(text).format('YYYY-MM-DD HH:mm:ss') : '-',
+      render: (_, r) => (r.created_at ? dayjs(r.created_at as string).format('YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
       title: '操作',
@@ -266,7 +276,7 @@ const CostRulePage: React.FC = () => {
   /**
    * 详情描述项
    */
-  const detailItems: ProDescriptionsItemType<CostRule>[] = [
+  const detailItems: ProDescriptionsItemProps<CostRule>[] = [
     {
       title: '规则编号',
       dataIndex: 'code',
@@ -290,18 +300,34 @@ const CostRulePage: React.FC = () => {
     {
       title: '计算公式',
       dataIndex: 'calculation_formula',
-      render: (text: any) => text ? JSON.stringify(text, null, 2) : '-',
+      span: 2,
+      render: (_, entity) =>
+        entity.calculation_formula ? (
+          <div style={{ maxHeight: 280, overflow: 'auto' }}>
+            <StructuredCostDataView data={entity.calculation_formula} />
+          </div>
+        ) : (
+          '-'
+        ),
     },
     {
       title: '规则参数',
       dataIndex: 'rule_parameters',
-      render: (text: any) => text ? JSON.stringify(text, null, 2) : '-',
+      span: 2,
+      render: (_, entity) =>
+        entity.rule_parameters ? (
+          <div style={{ maxHeight: 280, overflow: 'auto' }}>
+            <StructuredCostDataView data={entity.rule_parameters} />
+          </div>
+        ) : (
+          '-'
+        ),
     },
     {
       title: '是否启用',
       dataIndex: 'is_active',
-      render: (text: boolean) => (
-        <Tag color={text ? 'green' : 'red'}>{text ? '启用' : '禁用'}</Tag>
+      render: (_, entity) => (
+        <Tag color={entity.is_active ? 'green' : 'red'}>{entity.is_active ? '启用' : '禁用'}</Tag>
       ),
     },
     {
@@ -315,7 +341,8 @@ const CostRulePage: React.FC = () => {
     {
       title: '创建时间',
       dataIndex: 'created_at',
-      render: (text: string) => text ? dayjs(text).format('YYYY-MM-DD HH:mm:ss') : '-',
+      render: (_, entity) =>
+        entity.created_at ? dayjs(entity.created_at as string).format('YYYY-MM-DD HH:mm:ss') : '-',
     },
     {
       title: '更新人',
@@ -324,17 +351,20 @@ const CostRulePage: React.FC = () => {
     {
       title: '更新时间',
       dataIndex: 'updated_at',
-      render: (text: string) => text ? dayjs(text).format('YYYY-MM-DD HH:mm:ss') : '-',
+      render: (_, entity) =>
+        entity.updated_at ? dayjs(entity.updated_at as string).format('YYYY-MM-DD HH:mm:ss') : '-',
     },
   ];
 
   return (
-    <ListPageTemplate
-      title="成本核算规则管理"
-      onCreate={handleCreate}
-      actionRef={actionRef}
-    >
+    <ListPageTemplate>
       <UniTable<CostRule>
+        headerTitle="成本核算规则管理"
+        headerActions={
+          <Button type="primary" onClick={handleCreate}>
+            新建规则
+          </Button>
+        }
         actionRef={actionRef}
         request={async (params) => {
           // 将 ProTable 的分页参数转换为后端期望的格式
@@ -371,7 +401,7 @@ const CostRulePage: React.FC = () => {
       <FormModalTemplate
         title={isEdit ? '编辑成本核算规则' : '新建成本核算规则'}
         open={modalVisible}
-        onCancel={() => setModalVisible(false)}
+        onClose={() => setModalVisible(false)}
         onFinish={handleSave}
         formRef={formRef}
         width={MODAL_CONFIG.STANDARD_WIDTH}
@@ -455,8 +485,8 @@ const CostRulePage: React.FC = () => {
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        dataSource={costRuleDetail}
-        columns={detailItems}
+        dataSource={costRuleDetail ? (costRuleDetail as Record<string, unknown>) : undefined}
+        columns={detailItems as ProDescriptionsItemProps<Record<string, unknown>>[]}
       />
     </ListPageTemplate>
   );

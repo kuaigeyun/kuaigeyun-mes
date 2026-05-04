@@ -16,7 +16,7 @@ import { DetailDrawerSection } from './DetailDrawerSection';
 import { detailDrawerDescriptionItems } from './detailDrawerDescriptionItems';
 import './drawerSlideMotion.css';
 
-export interface DetailDrawerTemplateProps<T = Record<string, unknown>> {
+export interface DetailDrawerTemplateProps<T extends Record<string, any> = Record<string, unknown>> {
   title: ReactNode;
   open?: boolean;
   visible?: boolean;
@@ -67,7 +67,7 @@ export interface DetailDrawerTemplateProps<T = Record<string, unknown>> {
   timelineVisible?: boolean;
 
   /** 兼容：仅标题区 + Descriptions（请逐步改为 basic + detailDrawerDescriptionItems） */
-  dataSource?: T;
+  dataSource?: T | null;
   columns?: ProDescriptionsItemProps<T>[];
   column?: number;
 
@@ -101,7 +101,7 @@ function stackCollaborationParts(
   );
 }
 
-export const DetailDrawerTemplate = <T extends Record<string, unknown> = Record<string, unknown>,>({
+export const DetailDrawerTemplate = <T extends Record<string, any> = Record<string, unknown>,>({
   title,
   open,
   visible,

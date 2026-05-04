@@ -22,6 +22,17 @@ const InventorySummary: React.FC = () => {
       reportType="inventory_summary"
       columns={columns}
       columnPersistenceId="kuaizhizao-wm-report-inventory-summary"
+      request={async (params: any) => {
+        const res = await getWarehouseReport({
+          ...params,
+          report_type: 'inventory_summary',
+        });
+        return {
+          data: res.data || [],
+          success: res.success,
+          total: res.data?.length || 0,
+        };
+      }}
     />
   );
 };

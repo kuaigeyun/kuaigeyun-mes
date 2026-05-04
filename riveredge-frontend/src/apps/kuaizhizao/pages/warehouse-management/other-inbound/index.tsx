@@ -123,7 +123,7 @@ const OtherInboundPage: React.FC = () => {
     const load = async () => {
       try {
         const [wh, batchRes, serialRes] = await Promise.all([
-          masterDataWarehouseApi.list({ limit: 1000, isActive: true }),
+          masterDataWarehouseApi.list({ limit: 1000, is_active: true }),
           batchRuleApi.list({ pageSize: 200, isActive: true }),
           serialRuleApi.list({ pageSize: 200, isActive: true }),
         ]);

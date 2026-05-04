@@ -3110,7 +3110,7 @@ async def execute_disassembly_order(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> DisassemblyOrderResponse:
-    """执行拆卸（更新明细状态，TODO: 调用库存服务）"""
+    """执行拆卸（更新明细状态；已同步扣减子件库存、增加母件库存）"""
     try:
         return await disassembly_order_service.execute_disassembly_order(
             tenant_id=tenant_id,

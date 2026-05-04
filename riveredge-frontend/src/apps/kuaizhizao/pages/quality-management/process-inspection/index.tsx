@@ -81,7 +81,11 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
       content = dayjs(value as string).format('YYYY-MM-DD HH:mm:ss');
     }
     if (col.render && dataSource != null) {
-      content = col.render(content, dataSource, index, {}, col);
+            content = (col.render as (dom: import('react').ReactNode, entity: T, i: number) => import('react').ReactNode)(
+        content,
+        dataSource,
+        index,
+      );
     }
     return {
       key: String(col.key ?? col.dataIndex ?? index),
@@ -291,12 +295,9 @@ const ProcessInspectionPage: React.FC = () => {
     }
   };
 
-  /*
-  // 处理扫码报工 (TODO: Add button to trigger this)
-  const _handleScanInspection = () => {
+  const handleOpenScanInspection = useCallback(() => {
     setScanModalVisible(true);
-  };
-  */
+  }, []);
 
   // 处理检验
   const handleInspect = (record: ProcessInspection) => {
@@ -800,6 +801,11 @@ const ProcessInspectionPage: React.FC = () => {
         showCreateButton={true}
         createButtonText="从工单创建"
         onCreate={handleCreateFromWorkOrder}
+        toolBarRender={() => [
+          <Button key="scan-inspection" type="default" icon={<ScanOutlined />} onClick={handleOpenScanInspection}>
+            扫码检验
+          </Button>,
+        ]}
         enableRowSelection={true}
         onRowSelectionChange={setSelectedRowKeys}
         onRow={(record) => ({

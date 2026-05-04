@@ -6,7 +6,7 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import type { ProDescriptionsItemType } from '@ant-design/pro-components';
+import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, DatePicker, Descriptions, Select, Space, Typography, Table, Spin, Empty, theme as AntdTheme } from 'antd';
 import { CalculatorOutlined, EyeOutlined, ReloadOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -124,7 +124,7 @@ const SummariesPage: React.FC = () => {
     }
   };
 
-  const detailColumns: ProDescriptionsItemType<PerformanceDetail>[] = [
+  const detailColumns: ProDescriptionsItemProps<PerformanceDetail>[] = [
     { title: '员工', dataIndex: 'employee_name' },
     { title: '周期', dataIndex: 'period' },
     { title: '总工时', dataIndex: ['summary', 'total_hours'], render: (_, r) => r?.summary?.total_hours ?? '-' },

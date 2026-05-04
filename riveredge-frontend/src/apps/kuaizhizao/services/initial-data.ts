@@ -43,8 +43,7 @@ export async function importInitialInventory(
   data: any[][],
   snapshotTime?: string
 ): Promise<InitialInventoryImportResponse> {
-  return apiRequest<InitialInventoryImportResponse>({
-    url: '/apps/kuaizhizao/initial-data/inventory/import',
+  return apiRequest<InitialInventoryImportResponse>('/apps/kuaizhizao/initial-data/inventory/import', {
     method: 'POST',
     data: {
       data,
@@ -60,8 +59,7 @@ export async function importInitialWIP(
   data: any[][],
   snapshotTime?: string
 ): Promise<InitialInventoryImportResponse> {
-  return apiRequest<InitialInventoryImportResponse>({
-    url: '/apps/kuaizhizao/initial-data/wip/import',
+  return apiRequest<InitialInventoryImportResponse>('/apps/kuaizhizao/initial-data/wip/import', {
     method: 'POST',
     data: {
       data,
@@ -77,14 +75,16 @@ export async function importInitialReceivablesPayables(
   data: any[][],
   snapshotTime?: string
 ): Promise<InitialInventoryImportResponse> {
-  return apiRequest<InitialInventoryImportResponse>({
-    url: '/apps/kuaizhizao/initial-data/receivables-payables/import',
-    method: 'POST',
-    data: {
-      data,
-      snapshot_time: snapshotTime,
-    },
-  });
+  return apiRequest<InitialInventoryImportResponse>(
+    '/apps/kuaizhizao/initial-data/receivables-payables/import',
+    {
+      method: 'POST',
+      data: {
+        data,
+        snapshot_time: snapshotTime,
+      },
+    }
+  );
 }
 
 /**
@@ -109,8 +109,7 @@ export async function createOrUpdateCountdown(
   launchDate: string,
   snapshotTime?: string
 ): Promise<LaunchCountdown> {
-  return apiRequest<LaunchCountdown>({
-    url: '/apps/kuaizhizao/initial-data/countdown',
+  return apiRequest<LaunchCountdown>('/apps/kuaizhizao/initial-data/countdown', {
     method: 'POST',
     data: {
       launch_date: launchDate,
@@ -123,8 +122,7 @@ export async function createOrUpdateCountdown(
  * 获取上线倒计时
  */
 export async function getCountdown(): Promise<LaunchCountdown | null> {
-  return apiRequest<LaunchCountdown | null>({
-    url: '/apps/kuaizhizao/initial-data/countdown',
+  return apiRequest<LaunchCountdown | null>('/apps/kuaizhizao/initial-data/countdown', {
     method: 'GET',
   });
 }
@@ -140,8 +138,7 @@ export interface WizardCountdownPatch {
  * 持久化向导快照、当前步骤及各阶段完成/跳过状态
  */
 export async function patchWizardCountdown(body: WizardCountdownPatch): Promise<LaunchCountdown> {
-  return apiRequest<LaunchCountdown>({
-    url: '/apps/kuaizhizao/initial-data/countdown/wizard',
+  return apiRequest<LaunchCountdown>('/apps/kuaizhizao/initial-data/countdown/wizard', {
     method: 'PATCH',
     data: body,
   });
@@ -151,8 +148,7 @@ export async function patchWizardCountdown(body: WizardCountdownPatch): Promise<
  * 完成上线倒计时
  */
 export async function completeCountdown(): Promise<LaunchCountdown> {
-  return apiRequest<LaunchCountdown>({
-    url: '/apps/kuaizhizao/initial-data/countdown/complete',
+  return apiRequest<LaunchCountdown>('/apps/kuaizhizao/initial-data/countdown/complete', {
     method: 'POST',
   });
 }
@@ -194,8 +190,7 @@ export async function calculateCompensation(
   snapshotTime: string,
   launchDate: string
 ): Promise<DataCompensationResponse> {
-  return apiRequest<DataCompensationResponse>({
-    url: '/apps/kuaizhizao/initial-data/compensation',
+  return apiRequest<DataCompensationResponse>('/apps/kuaizhizao/initial-data/compensation', {
     method: 'POST',
     data: {
       snapshot_time: snapshotTime,

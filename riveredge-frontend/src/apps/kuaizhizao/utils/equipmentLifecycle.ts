@@ -3,7 +3,7 @@
  * 主数据与业务单无后端 lifecycle 字段时的前端兜底。
  */
 
-import type { LifecycleResult } from '../../../../components/uni-lifecycle/types';
+import type { LifecycleResult } from '../../../components/uni-lifecycle/types';
 
 /** 设备台账：运行状态 + 是否启用 */
 export function getEquipmentAssetLifecycle(record: Record<string, unknown> | null | undefined): LifecycleResult {

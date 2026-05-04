@@ -45,8 +45,8 @@ export const packingBindingApi = {
     const { qrcodeApi } = await import('../../../services/qrcode');
     return qrcodeApi.generateBox({
       box_uuid: boxUuid,
-      box_no: boxNo,
-      box_name: productName || boxNo,
+      box_code: boxNo,
+      material_codes: [],
     });
   },
 };

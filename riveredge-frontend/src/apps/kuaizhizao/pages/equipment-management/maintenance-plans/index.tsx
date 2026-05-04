@@ -70,7 +70,11 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
       content = dayjs(value as string).format('YYYY-MM-DD HH:mm:ss');
     }
     if (col.render && dataSource != null) {
-      content = col.render(content, dataSource, index, {}, col);
+            content = (col.render as (dom: import('react').ReactNode, entity: T, i: number) => import('react').ReactNode)(
+        content,
+        dataSource,
+        index,
+      );
     }
     return {
       key: String(col.key ?? col.dataIndex ?? index),
@@ -376,14 +380,15 @@ const MaintenancePlansPage: React.FC = () => {
     {
       title: '状态',
       dataIndex: 'status',
-      render: (status) => {
+      render: (_, record) => {
+        const statusKey = String(record.status ?? '');
         const statusMap: Record<string, { text: string; color: string }> = {
           '待执行': { text: '待执行', color: 'default' },
           '执行中': { text: '执行中', color: 'processing' },
           '已完成': { text: '已完成', color: 'success' },
           '已取消': { text: '已取消', color: 'error' },
         };
-        const config = statusMap[status || ''] || { text: status || '-', color: 'default' };
+        const config = statusMap[statusKey] || { text: statusKey || '-', color: 'default' };
         return <Tag color={config.color}>{config.text}</Tag>;
       },
     },

@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Button, Table, Empty, Space, Modal, Form, Input, Select, message } from 'antd';
+import { Button, Table, Empty, Modal, Form, Input, Select, message } from 'antd';
 import { PlusOutlined, HolderOutlined, DeleteOutlined } from '@ant-design/icons';
 import {
   DndContext,

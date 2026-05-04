@@ -629,14 +629,14 @@ const InventoryAlertPage: React.FC = () => {
       <FormModalTemplate
         title={currentRuleId ? '编辑预警规则' : '新建预警规则'}
         open={ruleModalVisible}
-        onCancel={() => {
+        onClose={() => {
           setRuleModalVisible(false);
           setCurrentRuleId(null);
           formRef.current?.resetFields();
         }}
         onFinish={handleRuleSubmit}
         formRef={formRef}
-        {...MODAL_CONFIG}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
       >
         <ProFormText
           name="name"
@@ -714,14 +714,14 @@ const InventoryAlertPage: React.FC = () => {
       <FormModalTemplate
         title="处理预警"
         open={handleModalVisible}
-        onCancel={() => {
+        onClose={() => {
           setHandleModalVisible(false);
           setCurrentAlertId(null);
           handleFormRef.current?.resetFields();
         }}
         onFinish={handleAlertSubmit}
         formRef={handleFormRef}
-        {...MODAL_CONFIG}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
       >
         <ProFormSelect
           name="status"

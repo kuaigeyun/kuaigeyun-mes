@@ -27,12 +27,9 @@ import {
   App,
   Button,
   Tag,
-  Space,
-  message,
   Modal,
   Tabs,
   Table,
-  Card,
   Form,
   Input,
   DatePicker,
@@ -41,7 +38,6 @@ import {
   Col,
   Descriptions,
   Typography,
-  Dropdown,
   Empty,
   Spin,
   theme as AntdTheme,
@@ -92,7 +88,11 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
       content = dayjs(value as string).format('YYYY-MM-DD HH:mm:ss');
     }
     if (col.render && dataSource != null) {
-      content = col.render(content, dataSource, index, {}, col);
+      content = (col.render as (dom: React.ReactNode, entity: T, i: number) => React.ReactNode)(
+        content,
+        dataSource,
+        index,
+      );
     }
     return {
       key: String(col.key ?? col.dataIndex ?? index),
@@ -146,7 +146,7 @@ const EquipmentPage: React.FC = () => {
   const equipmentDetailDrawerZIndex = token.zIndexPopupBase;
   const equipmentChainOverlayZIndex = token.zIndexPopupBase + 1;
   const actionRef = useRef<ActionType>(null);
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   // Modal 相关状态（创建/编辑设备）
   const [modalVisible, setModalVisible] = useState(false);
@@ -442,12 +442,13 @@ const EquipmentPage: React.FC = () => {
     {
       title: '状态',
       dataIndex: 'status',
-      render: (status) => {
+      render: (_, record) => {
+        const status = record.status;
         const statusMap: Record<string, { text: string; color: string }> = {
-          '正常': { text: '正常', color: 'success' },
-          '维修中': { text: '维修中', color: 'warning' },
-          '停用': { text: '停用', color: 'default' },
-          '报废': { text: '报废', color: 'error' },
+          正常: { text: '正常', color: 'success' },
+          维修中: { text: '维修中', color: 'warning' },
+          停用: { text: '停用', color: 'default' },
+          报废: { text: '报废', color: 'error' },
         };
         const config = statusMap[status || ''] || { text: status || '-', color: 'default' };
         return <Tag color={config.color}>{config.text}</Tag>;
@@ -456,9 +457,9 @@ const EquipmentPage: React.FC = () => {
     {
       title: '是否启用',
       dataIndex: 'is_active',
-      render: (isActive) => (
-        <Tag color={isActive ? 'success' : 'default'}>
-          {isActive ? '启用' : '停用'}
+      render: (_, record) => (
+        <Tag color={record.is_active ? 'success' : 'default'}>
+          {record.is_active ? '启用' : '停用'}
         </Tag>
       ),
     },
@@ -866,7 +867,7 @@ const EquipmentPage: React.FC = () => {
               placeholder="请选择工位（可选）"
               request={async () => {
                 try {
-                  const workshops = await workshopApi.list({ limit: 1000 });
+                  await workshopApi.list({ limit: 1000 });
                   return [];
                 } catch (error) {
                   return [];

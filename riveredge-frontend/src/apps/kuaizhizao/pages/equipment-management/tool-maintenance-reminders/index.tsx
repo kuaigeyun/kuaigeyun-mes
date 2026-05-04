@@ -92,7 +92,9 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
         headerTitle="工装保养校准提醒"
         columnPersistenceId="kuaizhizao-em-tool-maintenance-reminders"
         actionRef={actionRef}
-        rowKey={(_, __, index) => `reminder-${index}`}
+        rowKey={(record, index) =>
+          [record.tool_uuid, record.reminder_type, record.due_date, index].filter(Boolean).join(':') || `reminder-${index}`
+        }
         columns={columns}
         request={async (params) => {
           const res = await toolApi.listMaintenanceReminders({

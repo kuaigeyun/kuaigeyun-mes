@@ -10,7 +10,15 @@
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
-import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
+import {
+  ActionType,
+  ProColumns,
+  ProDescriptionsItemProps,
+  ProFormItem,
+  ProFormTextArea,
+  ProFormSelect,
+  ProFormText,
+} from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form as AntForm, Select, InputNumber, Input, DatePicker, Dropdown, Row, Col, Typography, Spin, Empty, Descriptions } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, PrinterOutlined, MoreOutlined, ShoppingOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -21,6 +29,9 @@ import { deliveryNoticeApi } from '../../../services/delivery-notice';
 import { getDeliveryNoticeLifecycle } from '../../../utils/deliveryNoticeLifecycle';
 import { useTranslation } from 'react-i18next';
 import type { DocumentPrintApiResult } from '../../../../../utils/printResponseHelpers';
+import { openPrintHtmlWindow, escapeHtml } from '../../../../../utils/printResponseHelpers';
+import { warehouseApi } from '../../../services/production';
+import { listSalesOrders, getSalesOrder } from '../../../services/sales-order';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { customerApi } from '../../../../master-data/services/supply-chain';
@@ -54,6 +65,25 @@ interface DeliveryNotice {
 
 interface DeliveryNoticeDetail extends DeliveryNotice {
   items?: { id?: number; material_code: string; material_name: string; material_unit: string; notice_quantity: number; unit_price?: number; total_amount?: number }[];
+}
+
+function buildDeliveryNoticePrintHtml(d: DeliveryNoticeDetail): string {
+  const esc = escapeHtml;
+  const rows = (d.items || [])
+    .map(
+      (it) =>
+        `<tr><td>${esc(it.material_code)}</td><td>${esc(it.material_name)}</td><td>${esc(it.material_unit)}</td><td style="text-align:right">${esc(it.notice_quantity)}</td><td style="text-align:right">${esc(it.unit_price)}</td></tr>`,
+    )
+    .join('');
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>发货通知 ${esc(d.notice_code)}</title><style>body{font-family:system-ui,sans-serif;padding:24px;}table{border-collapse:collapse;width:100%;margin-top:16px}th,td{border:1px solid #ccc;padding:8px;font-size:13px}th{background:#f0f0f0;text-align:left}</style></head><body>
+<h2>发货通知单</h2>
+<p><strong>通知单号</strong> ${esc(d.notice_code)} &nbsp; <strong>客户</strong> ${esc(d.customer_name)}</p>
+<p><strong>销售出库</strong> ${esc(d.sales_delivery_code)} &nbsp; <strong>销售订单</strong> ${esc(d.sales_order_code)}</p>
+<p><strong>预计送达</strong> ${esc(d.planned_delivery_date)} &nbsp; <strong>承运商</strong> ${esc(d.carrier)} &nbsp; <strong>运单号</strong> ${esc(d.tracking_number)}</p>
+<p><strong>收货地址</strong> ${esc(d.shipping_address)}</p>
+<table><thead><tr><th>物料编码</th><th>物料名称</th><th>单位</th><th>数量</th><th>单价</th></tr></thead><tbody>${rows || '<tr><td colspan="5">无明细</td></tr>'}</tbody></table>
+<p style="margin-top:16px;color:#666;font-size:12px">由系统生成（未配置打印模板时的兜底）</p>
+</body></html>`;
 }
 
 const STATUS_MAP: Record<string, { text: string; color: string }> = {
@@ -224,7 +254,9 @@ const DeliveryNotesPage: React.FC = () => {
         unit_price: Number(it.unit_price) || 0,
       }));
       formRef.current?.setFieldsValue({
+        sales_delivery_id: detail.sales_delivery_id,
         sales_delivery_code: detail.sales_delivery_code,
+        sales_order_id: detail.sales_order_id,
         sales_order_code: detail.sales_order_code,
         customer_id: detail.customer_id,
         customer_name: detail.customer_name,
@@ -336,7 +368,11 @@ const DeliveryNotesPage: React.FC = () => {
           printWindow.onload = () => printWindow.print();
         }
       } else {
-        messageApi.warning(result?.message || '打印功能暂未配置模板');
+        const detail = (await deliveryNoticeApi.get(record.id!.toString())) as DeliveryNoticeDetail;
+        const w = openPrintHtmlWindow(buildDeliveryNoticePrintHtml(detail), `发货通知 ${detail.notice_code || ''}`);
+        if (!w) {
+          messageApi.warning(result?.message || '无法打开打印窗口，请检查浏览器拦截设置');
+        }
       }
     } catch {
       messageApi.error('打印失败');
@@ -413,6 +449,10 @@ const DeliveryNotesPage: React.FC = () => {
         customer_name: cust?.name || cust?.customer_name || values.customer_name,
         customer_contact: values.customer_contact,
         customer_phone: values.customer_phone,
+        sales_delivery_id: values.sales_delivery_id,
+        sales_delivery_code: values.sales_delivery_code,
+        sales_order_id: values.sales_order_id,
+        sales_order_code: values.sales_order_code,
         planned_delivery_date: values.planned_delivery_date ? dayjs(values.planned_delivery_date).format('YYYY-MM-DD') : undefined,
         carrier: values.carrier,
         tracking_number: values.tracking_number,
@@ -488,35 +528,110 @@ const DeliveryNotesPage: React.FC = () => {
             <Input placeholder="电话" />
           </ProFormItem>
         </Col>
-        <Col span={12}>
-          <ProFormItem name="sales_delivery_code" label="销售出库单号">
-            <Input placeholder="可选，关联出库单" />
-          </ProFormItem>
-        </Col>
+        <Col span={12} />
       </Row>
       <Row gutter={16}>
         <Col span={12}>
-          <ProFormItem name="sales_order_code" label="销售订单号">
-            <Input placeholder="可选" />
-          </ProFormItem>
+          <ProFormSelect
+            name="sales_delivery_id"
+            label="关联销售出库单"
+            placeholder="可选，选择后带出单号与订单"
+            allowClear
+            showSearch
+            debounceTime={300}
+            fieldProps={{ optionFilterProp: 'label' }}
+            request={async () => {
+              try {
+                const res = await warehouseApi.salesDelivery.list({ limit: 200, skip: 0 });
+                const list = Array.isArray(res) ? res : ((res as any)?.data ?? []);
+                return (list as any[]).map((d: any) => ({
+                  label: `${d.delivery_code || d.code || '#' + d.id}${d.customer_name ? ' · ' + d.customer_name : ''}`,
+                  value: d.id,
+                }));
+              } catch {
+                return [];
+              }
+            }}
+            onChange={async (val) => {
+              if (val == null || val === '') {
+                formRef.current?.setFieldsValue({
+                  sales_delivery_code: undefined,
+                });
+                return;
+              }
+              try {
+                const d: any = await warehouseApi.salesDelivery.get(String(val));
+                formRef.current?.setFieldsValue({
+                  sales_delivery_code: d.delivery_code ?? d.code,
+                  sales_order_id: d.sales_order_id,
+                  sales_order_code: d.sales_order_code,
+                });
+              } catch {
+                /* ignore */
+              }
+            }}
+          />
         </Col>
+        <Col span={12}>
+          <ProFormSelect
+            name="sales_order_id"
+            label="关联销售订单"
+            placeholder="可不选出库单，直接选订单"
+            allowClear
+            showSearch
+            debounceTime={300}
+            fieldProps={{ optionFilterProp: 'label' }}
+            request={async ({ keyWords }) => {
+              try {
+                const r = await listSalesOrders({
+                  limit: 100,
+                  skip: 0,
+                  keyword: keyWords || undefined,
+                });
+                return (r.data || []).map((o: any) => ({
+                  label: `${o.order_code || o.id}${o.customer_name ? ' · ' + o.customer_name : ''}`,
+                  value: o.id,
+                }));
+              } catch {
+                return [];
+              }
+            }}
+            onChange={async (val) => {
+              if (val == null || val === '') {
+                formRef.current?.setFieldsValue({ sales_order_code: undefined });
+                return;
+              }
+              try {
+                const o = await getSalesOrder(Number(val), false, false);
+                formRef.current?.setFieldsValue({ sales_order_code: o.order_code });
+              } catch {
+                /* ignore */
+              }
+            }}
+          />
+        </Col>
+      </Row>
+      <ProFormText name="sales_delivery_code" hidden />
+      <ProFormText name="sales_order_code" hidden />
+      <Row gutter={16}>
         <Col span={12}>
           <ProFormItem name="planned_delivery_date" label="预计送达日期">
             <DatePicker style={{ width: '100%' }} />
           </ProFormItem>
         </Col>
-      </Row>
-      <Row gutter={16}>
         <Col span={12}>
           <ProFormItem name="carrier" label="承运商/物流">
             <Input placeholder="如：顺丰、德邦" />
           </ProFormItem>
         </Col>
+      </Row>
+      <Row gutter={16}>
         <Col span={12}>
           <ProFormItem name="tracking_number" label="运单号">
             <Input placeholder="物流单号" />
           </ProFormItem>
         </Col>
+        <Col span={12} />
       </Row>
       <Row gutter={16}>
         <Col span={12}>
@@ -778,7 +893,9 @@ const DeliveryNotesPage: React.FC = () => {
                     <Table
                       className="warehouse-detail-table"
                       size="small"
-                      rowKey={(_, idx) => (noticeDetail?.items?.[idx] as any)?.id ?? idx}
+                      rowKey={(row: Record<string, unknown>, idx = 0) =>
+                        String((row as { id?: React.Key }).id ?? `${noticeDetail?.id ?? 'dn'}-${idx}`)
+                      }
                       columns={[
                         { title: '物料编号', dataIndex: 'material_code', width: 120 },
                         { title: '物料名称', dataIndex: 'material_name', width: 150 },

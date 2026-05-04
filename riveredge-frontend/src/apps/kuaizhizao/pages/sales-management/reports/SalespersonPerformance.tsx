@@ -5,12 +5,19 @@ import React from 'react';
 import { ProColumns } from '@ant-design/pro-components';
 import { Bar } from '@ant-design/charts';
 import SalesBaseReport from './BaseReport';
-import { getSalesReport } from '../../../services/reports';
+import { getSalesReport, parseSalesReportDateRange } from '../../../services/reports';
 
 const SalespersonPerformance: React.FC = () => {
   const [data, setData] = React.useState<any[]>([]);
 
   const columns: ProColumns[] = [
+    {
+      title: '统计期间',
+      dataIndex: 'date_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      search: { order: 10 } as any,
+    },
     {
       title: '排名',
       dataIndex: 'rank',
@@ -43,18 +50,21 @@ const SalespersonPerformance: React.FC = () => {
       title="销售员业绩排行"
       reportType="salesman"
       columns={columns}
-      request={async (params) => {
+      request={async (params, _s, _f, searchFormValues) => {
+        const { date_start, date_end } = parseSalesReportDateRange(searchFormValues);
         const res = await getSalesReport({
-          ...params,
           report_type: 'salesman',
+          date_start,
+          date_end,
         });
+        const rows = res.data || [];
         if (res.success) {
-          setData(res.data);
+          setData(rows);
         }
         return {
-          data: res.data,
+          data: rows,
           success: res.success,
-          total: res.data?.length || 0,
+          total: res.total ?? rows.length ?? 0,
         };
       }}
     >

@@ -71,6 +71,15 @@ interface ProductionPlan {
   created_at?: string;
   updated_at?: string;
   items?: ProductionPlanItem[];
+  source_type?: string;
+  source_id?: number;
+  source_code?: string;
+  plan_status?: string;
+  needs_recompute?: boolean;
+  total_cost?: number;
+  reviewer_id?: number;
+  review_status?: string;
+  review_remarks?: string;
 }
 
 interface ProductionPlanItem {
@@ -183,6 +192,8 @@ const ProductionPlansPage: React.FC = () => {
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState<boolean>(false);
   const [createModalVisible, setCreateModalVisible] = useState<boolean>(false);
+  const [editingPlanId, setEditingPlanId] = useState<number | null>(null);
+  const [editingPlanSnapshot, setEditingPlanSnapshot] = useState<ProductionPlan | null>(null);
   const [currentPlan, setCurrentPlan] = useState<ProductionPlan | null>(null);
   const [syncModalVisible, setSyncModalVisible] = useState(false);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
@@ -375,9 +386,34 @@ const ProductionPlansPage: React.FC = () => {
     });
   };
 
-  // 处理编辑
-  const handleEdit = (_record: ProductionPlan) => {
-    messageApi.info('编辑功能正在对接明细调整界面...');
+  // 处理编辑（表头与计划期间；明细行以下游工单/需求计算为准）
+  const handleEdit = async (record: ProductionPlan) => {
+    if (record.execution_status === '已执行') {
+      messageApi.warning('已执行的生产计划不可修改');
+      return;
+    }
+    try {
+      const planDetail = await planningApi.productionPlan.get(record.id!.toString());
+      const planItems = await planningApi.productionPlan.getItems(record.id!.toString());
+      setEditingPlanId(record.id!);
+      setEditingPlanSnapshot({ ...planDetail, items: planItems });
+      setCreateModalVisible(true);
+      setTimeout(() => {
+        createPlanFormRef.current?.setFieldsValue({
+          plan_name: planDetail.plan_name,
+          plan_type: planDetail.plan_type,
+          dateRange: [dayjs(planDetail.plan_start_date), dayjs(planDetail.plan_end_date)],
+          items: (planItems || []).map((it: ProductionPlanItem) => ({
+            material_code: it.material_code,
+            material_name: it.material_name,
+            planned_quantity: it.planned_quantity,
+            planned_date: it.planned_date ? dayjs(it.planned_date) : undefined,
+          })),
+        });
+      }, 0);
+    } catch {
+      messageApi.error('加载生产计划失败');
+    }
   };
 
   // 处理删除
@@ -545,7 +581,11 @@ const ProductionPlansPage: React.FC = () => {
           showAdvancedSearch={true}
           showCreateButton
           createButtonText="新建生产计划"
-          onCreate={() => setCreateModalVisible(true)}
+          onCreate={() => {
+            setEditingPlanId(null);
+            setEditingPlanSnapshot(null);
+            setCreateModalVisible(true);
+          }}
           enableRowSelection
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
@@ -597,31 +637,67 @@ const ProductionPlansPage: React.FC = () => {
         />
 
       <ModalForm
-        title="创建生产计划"
+        title={editingPlanId ? '编辑生产计划' : '创建生产计划'}
         open={createModalVisible}
-        onOpenChange={setCreateModalVisible}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditingPlanId(null);
+            setEditingPlanSnapshot(null);
+          }
+          setCreateModalVisible(open);
+        }}
         formRef={createPlanFormRef}
         width={MODAL_CONFIG.LARGE_WIDTH}
         onFinish={async (values) => {
           try {
             const [start, end] = values.dateRange || [];
-            const payload = {
-              ...values,
-              plan_start_date: start,
-              plan_end_date: end,
-              source_type: 'Manual',
-              items: values.items?.map((item: any) => ({
-                ...item,
-                suggested_action: '生产',
-              })) || []
-            };
-            await planningApi.productionPlan.create(payload);
-            messageApi.success('创建生产计划成功');
+            const plan_start_date = start?.format ? start.format('YYYY-MM-DD') : start;
+            const plan_end_date = end?.format ? end.format('YYYY-MM-DD') : end;
+            if (editingPlanId != null && editingPlanSnapshot) {
+              const snap = editingPlanSnapshot;
+              await planningApi.productionPlan.update(editingPlanId.toString(), {
+                plan_name: values.plan_name,
+                plan_type: values.plan_type ?? snap.plan_type,
+                plan_start_date,
+                plan_end_date,
+                source_type: snap.source_type ?? 'Manual',
+                source_id: snap.source_id ?? undefined,
+                source_code: snap.source_code ?? undefined,
+                status: snap.status ?? '草稿',
+                execution_status: snap.execution_status ?? '未执行',
+                plan_status: snap.plan_status ?? 'draft',
+                needs_recompute: snap.needs_recompute ?? false,
+                total_work_orders: snap.total_work_orders ?? 0,
+                total_purchase_orders: snap.total_purchase_orders ?? 0,
+                total_cost: snap.total_cost ?? 0,
+                reviewer_id: snap.reviewer_id ?? undefined,
+                reviewer_name: snap.reviewer_name ?? undefined,
+                review_time: snap.review_time ?? undefined,
+                review_status: snap.review_status ?? '待审核',
+                review_remarks: snap.review_remarks ?? undefined,
+                notes: snap.notes ?? undefined,
+              });
+              messageApi.success('生产计划已更新（明细行请在下游工单或需求计算中调整）');
+            } else {
+              const payload = {
+                ...values,
+                plan_start_date,
+                plan_end_date,
+                source_type: 'Manual',
+                items:
+                  values.items?.map((item: any) => ({
+                    ...item,
+                    suggested_action: '生产',
+                  })) || [],
+              };
+              await planningApi.productionPlan.create(payload);
+              messageApi.success('创建生产计划成功');
+            }
             invalidatePlanStatistics();
             actionRef.current?.reload();
             return true;
           } catch (error) {
-            messageApi.error('创建生产计划失败');
+            messageApi.error(editingPlanId ? '更新生产计划失败' : '创建生产计划失败');
             return false;
           }
         }}

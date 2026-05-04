@@ -150,7 +150,7 @@ const OutboundPage: React.FC = () => {
         const [woRes, soRes, whRes] = await Promise.all([
           workOrderApi.list({ skip: 0, limit: 500 }),
           listSalesOrders({ skip: 0, limit: 500 }),
-          masterWarehouseApi.list({ isActive: true }),
+          masterWarehouseApi.list({ is_active: true }),
         ]);
         const woList = Array.isArray(woRes) ? woRes : (woRes as any)?.data ?? (woRes as any)?.items ?? [];
         const eligibleWo = woList.filter(

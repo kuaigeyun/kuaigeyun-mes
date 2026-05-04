@@ -30,7 +30,6 @@ const MESDashboard = lazy(() => import('./pages/dashboard'));
 // 生产执行页面
 const ManufacturingDashboardPage = lazy(() => import('./pages/production-execution/dashboard'));
 const WorkOrdersPage = lazy(() => import('./pages/production-execution/work-orders'));
-const WorkOrdersTerminalPage = lazy(() => import('./pages/production-execution/work-orders/kiosk'));
 const WorkOrderDetailKioskPage = lazy(() => import('./pages/production-execution/work-orders/detail-kiosk'));
 const ReportingPage = lazy(() => import('./pages/production-execution/reporting'));
 const ReportingKioskPage = lazy(() => import('./pages/production-execution/reporting/kiosk'));
@@ -241,7 +240,7 @@ const KuaizhizaoApp: React.FC = () => {
       {/* 生产执行路由 */}
       <Route path="production-execution/dashboard" element={withPageSuspense(ManufacturingDashboardPage)} />
       <Route path="production-execution/work-orders" element={withPageSuspense(WorkOrdersPage)} />
-      {/* <Route path="production-execution/terminal" element={withPageSuspense(WorkOrdersTerminalPage)} /> */}
+      {/* 工单终端大屏路由已下线；恢复时请重新 lazy import work-orders/kiosk */}
       <Route path="production-execution/reporting" element={withPageSuspense(ReportingPage)} />
       <Route path="production-execution/reporting/kiosk" element={withPageSuspense(ReportingKioskPage)} />
       <Route path="production-execution/reporting/statistics" element={withPageSuspense(ReportingStatisticsPage)} />

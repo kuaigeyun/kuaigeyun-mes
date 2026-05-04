@@ -20,6 +20,11 @@ export interface ReportParams {
   date_start?: string;
   date_end?: string;
   reportType?: string;
+  /** @deprecated Prefer reportType; kept for backend query parity */
+  report_type?: string;
+  skip?: number;
+  limit?: number;
+  customer_keyword?: string;
   filters?: Record<string, any>;
 }
 
@@ -157,6 +162,10 @@ export interface ProductionReportData {
   efficiency: number;
   status: 'completed' | 'in_progress' | 'delayed' | 'cancelled';
   delayDays: number;
+  plannedStartDate?: string;
+  actualStartDate?: string;
+  plannedEndDate?: string;
+  actualEndDate?: string;
 }
 
 export interface ProductionReportResponse {
@@ -232,6 +241,30 @@ export interface InventoryStatistics {
   normal_stock_items: number;
 }
 
+/**
+ * 报表响应包装：apiRequest 对形如 `{ success: true, data: [...] }` 但缺少 `total`
+ * 字段的响应会自动解包成数组，导致上层组件读取 `res.data / res.success` 时拿到 undefined。
+ * 这里把后端报表响应统一规整回 `{ data, success, summary }` 形态，保证 BaseReport 列表正常显示。
+ */
+function normalizeReportResponse<T extends { data: any[]; success: boolean; summary?: any }>(
+  res: any,
+): T {
+  if (res == null) {
+    return { data: [], success: true, summary: {} } as unknown as T;
+  }
+  if (Array.isArray(res)) {
+    return { data: res, success: true, summary: {} } as unknown as T;
+  }
+  if (typeof res === 'object') {
+    const data = Array.isArray(res.data) ? res.data : Array.isArray(res.items) ? res.items : [];
+    const summary = res.summary ?? {};
+    const success = typeof res.success === 'boolean' ? res.success : true;
+    const total = typeof res.total === 'number' ? res.total : undefined;
+    return { ...res, data, summary, success, ...(total !== undefined ? { total } : {}) } as unknown as T;
+  }
+  return { data: [], success: true, summary: {} } as unknown as T;
+}
+
 /** 获取库存统计 */
 export async function getInventoryStatistics(warehouseId?: number): Promise<InventoryStatistics> {
   return apiRequest<InventoryStatistics>('/apps/kuaizhizao/reports/inventory/statistics', {
@@ -242,7 +275,7 @@ export async function getInventoryStatistics(warehouseId?: number): Promise<Inve
 
 // 库存报表API
 export async function getInventoryReport(params: ReportParams & { report_type?: string } = {}): Promise<InventoryReportResponse> {
-  return apiRequest<InventoryReportResponse>('/apps/kuaizhizao/reports/inventory', {
+  const res = await apiRequest<any>('/apps/kuaizhizao/reports/inventory', {
     method: 'GET',
     params: {
       report_type: params.report_type || 'summary',
@@ -252,6 +285,7 @@ export async function getInventoryReport(params: ReportParams & { report_type?: 
       ...params,
     },
   });
+  return normalizeReportResponse<InventoryReportResponse>(res);
 }
 
 export async function exportInventoryReport(params: ReportParams = {}): Promise<Blob> {
@@ -264,16 +298,17 @@ export async function exportInventoryReport(params: ReportParams = {}): Promise<
 
 // 生产报表API
 export async function getProductionReport(params: ReportParams & { report_type?: string } = {}): Promise<ProductionReportResponse> {
-  return apiRequest<ProductionReportResponse>('/apps/kuaizhizao/reports/production', {
+  const res = await apiRequest<any>('/apps/kuaizhizao/reports/production', {
     method: 'GET',
     params: {
-      report_type: params.report_type || 'efficiency',
+      report_type: params.report_type || params.reportType || 'efficiency',
       date_start: params.date_start,
       date_end: params.date_end,
       work_center_id: params.filters?.work_center_id,
       ...params,
     },
   });
+  return normalizeReportResponse<ProductionReportResponse>(res);
 }
 
 export async function exportProductionReport(params: ReportParams = {}): Promise<Blob> {
@@ -286,7 +321,7 @@ export async function exportProductionReport(params: ReportParams = {}): Promise
 
 // 质量报表API
 export async function getQualityReport(params: ReportParams & { report_type?: string } = {}): Promise<QualityReportResponse> {
-  return apiRequest<QualityReportResponse>('/apps/kuaizhizao/reports/quality', {
+  const res = await apiRequest<any>('/apps/kuaizhizao/reports/quality', {
     method: 'GET',
     params: {
       report_type: params.report_type || 'analysis',
@@ -296,6 +331,7 @@ export async function getQualityReport(params: ReportParams & { report_type?: st
       ...params,
     },
   });
+  return normalizeReportResponse<QualityReportResponse>(res);
 }
 
 export async function exportQualityReport(params: ReportParams = {}): Promise<Blob> {
@@ -311,11 +347,37 @@ export interface SalesReportResponse {
   data: any[];
   summary: Record<string, any>;
   success: boolean;
+  /** 后端分页总条数（部分报表接口返回） */
+  total?: number;
+}
+
+/** 从 ProTable / UniTable 搜索表单解析日期范围（YYYY-MM-DD） */
+export function parseSalesReportDateRange(
+  searchFormValues?: Record<string, any>,
+  keys: string[] = ['date_range', 'dateRange', 'transaction_date'],
+): { date_start?: string; date_end?: string } {
+  if (!searchFormValues) return {};
+  for (const k of keys) {
+    const dr = searchFormValues[k];
+    if (Array.isArray(dr) && dr.length === 2) {
+      const fmt = (v: any) =>
+        v && typeof v.format === 'function' ? v.format('YYYY-MM-DD') : v != null ? String(v) : undefined;
+      return { date_start: fmt(dr[0]), date_end: fmt(dr[1]) };
+    }
+  }
+  return {};
+}
+
+/** UniTable 分页 → 销售报表 skip/limit */
+export function salesReportPageParams(params: any): { skip: number; limit: number } {
+  const pageSize = params.pageSize ?? 20;
+  const current = params.current ?? 1;
+  return { skip: Math.max(0, (Number(current) - 1) * Number(pageSize)), limit: Number(pageSize) };
 }
 
 /** 获取销售报表 */
 export async function getSalesReport(params: ReportParams & { report_type?: string } = {}): Promise<SalesReportResponse> {
-  return apiRequest<SalesReportResponse>('/apps/kuaizhizao/reports/sales', {
+  const res = await apiRequest<any>('/apps/kuaizhizao/reports/sales', {
     method: 'GET',
     params: {
       report_type: params.report_type || 'summary',
@@ -325,11 +387,12 @@ export async function getSalesReport(params: ReportParams & { report_type?: stri
       ...params,
     },
   });
+  return normalizeReportResponse<SalesReportResponse>(res);
 }
 
 /** 获取计划报表 */
 export async function getPlanReport(params: ReportParams & { report_type?: string } = {}): Promise<SalesReportResponse> {
-  return apiRequest<SalesReportResponse>('/apps/kuaizhizao/reports/plans', {
+  const res = await apiRequest<any>('/apps/kuaizhizao/reports/plans', {
     method: 'GET',
     params: {
       report_type: params.report_type || 'fulfillment',
@@ -338,11 +401,12 @@ export async function getPlanReport(params: ReportParams & { report_type?: strin
       ...params,
     },
   });
+  return normalizeReportResponse<SalesReportResponse>(res);
 }
 
 /** 获取采购报表 */
 export async function getPurchaseReport(params: ReportParams & { report_type?: string } = {}): Promise<SalesReportResponse> {
-  return apiRequest<SalesReportResponse>('/apps/kuaizhizao/reports/purchases', {
+  const res = await apiRequest<any>('/apps/kuaizhizao/reports/purchases', {
     method: 'GET',
     params: {
       report_type: params.report_type || 'requisition_tracking',
@@ -351,11 +415,12 @@ export async function getPurchaseReport(params: ReportParams & { report_type?: s
       ...params,
     },
   });
+  return normalizeReportResponse<SalesReportResponse>(res);
 }
 
 /** 获取设备报表 */
 export async function getEquipmentReport(params: ReportParams & { report_type?: string } = {}): Promise<SalesReportResponse> {
-  return apiRequest<SalesReportResponse>('/apps/kuaizhizao/reports/equipment', {
+  const res = await apiRequest<any>('/apps/kuaizhizao/reports/equipment', {
     method: 'GET',
     params: {
       report_type: params.report_type || 'maintenance',
@@ -364,11 +429,12 @@ export async function getEquipmentReport(params: ReportParams & { report_type?: 
       ...params,
     },
   });
+  return normalizeReportResponse<SalesReportResponse>(res);
 }
 
 /** 获取仓库报表 (如果与现有 inventory 报表不重合) */
 export async function getWarehouseReport(params: ReportParams & { report_type?: string } = {}): Promise<SalesReportResponse> {
-  return apiRequest<SalesReportResponse>('/apps/kuaizhizao/reports/warehouse', {
+  const res = await apiRequest<any>('/apps/kuaizhizao/reports/warehouse', {
     method: 'GET',
     params: {
       report_type: params.report_type || 'inbound_summary',
@@ -377,11 +443,12 @@ export async function getWarehouseReport(params: ReportParams & { report_type?: 
       ...params,
     },
   });
+  return normalizeReportResponse<SalesReportResponse>(res);
 }
 
 /** 获取绩效报表 */
 export async function getPerformanceReport(params: ReportParams & { report_type?: string } = {}): Promise<SalesReportResponse> {
-  return apiRequest<SalesReportResponse>('/apps/kuaizhizao/reports/performance', {
+  const res = await apiRequest<any>('/apps/kuaizhizao/reports/performance', {
     method: 'GET',
     params: {
       report_type: params.report_type || 'efficiency_ranking',
@@ -390,6 +457,7 @@ export async function getPerformanceReport(params: ReportParams & { report_type?
       ...params,
     },
   });
+  return normalizeReportResponse<SalesReportResponse>(res);
 }
 
 // 图表数据API

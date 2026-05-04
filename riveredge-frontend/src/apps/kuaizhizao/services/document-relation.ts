@@ -38,8 +38,7 @@ export async function getDocumentRelations(
       relation_desc?: string;
       created_at?: string;
     }>;
-  }>({
-    url: `/apps/kuaizhizao/document-relations/${documentType}/${documentId}`,
+  }>(`/apps/kuaizhizao/document-relations/${documentType}/${documentId}`, {
     method: 'GET',
   });
   return transformNewApiResponse(response);
@@ -132,14 +131,16 @@ export async function traceDocumentChain(
   direction: 'upstream' | 'downstream' | 'both' = 'both',
   maxDepth: number = 10
 ): Promise<DocumentTraceData> {
-  const response = await apiRequest<DocumentTraceData>({
-    url: `/apps/kuaizhizao/document-relations/${documentType}/${documentId}/trace`,
-    method: 'GET',
-    params: {
-      direction,
-      max_depth: maxDepth,
-    },
-  });
+  const response = await apiRequest<DocumentTraceData>(
+    `/apps/kuaizhizao/document-relations/${documentType}/${documentId}/trace`,
+    {
+      method: 'GET',
+      params: {
+        direction,
+        max_depth: maxDepth,
+      },
+    }
+  );
 
   return response;
 }
@@ -172,8 +173,7 @@ export interface ChangeImpactResponse {
  * 获取销售订单变更影响
  */
 export async function getSalesOrderChangeImpact(salesOrderId: number): Promise<ChangeImpactResponse> {
-  return apiRequest<ChangeImpactResponse>({
-    url: `/apps/kuaizhizao/sales-orders/${salesOrderId}/change-impact`,
+  return apiRequest<ChangeImpactResponse>(`/apps/kuaizhizao/sales-orders/${salesOrderId}/change-impact`, {
     method: 'GET',
   });
 }
@@ -182,8 +182,7 @@ export async function getSalesOrderChangeImpact(salesOrderId: number): Promise<C
  * 获取需求变更影响
  */
 export async function getDemandChangeImpact(demandId: number): Promise<ChangeImpactResponse> {
-  return apiRequest<ChangeImpactResponse>({
-    url: `/apps/kuaizhizao/demands/${demandId}/change-impact`,
+  return apiRequest<ChangeImpactResponse>(`/apps/kuaizhizao/demands/${demandId}/change-impact`, {
     method: 'GET',
   });
 }

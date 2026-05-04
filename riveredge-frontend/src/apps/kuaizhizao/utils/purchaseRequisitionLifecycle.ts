@@ -3,7 +3,7 @@
  * 阶段：草稿→待审核→已通过/已驳回→部分转单→全部转单
  */
 
-import type { LifecycleResult, SubStage } from '../../../../components/uni-lifecycle/types';
+import type { LifecycleResult, SubStage } from '../../../components/uni-lifecycle/types';
 import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';
 

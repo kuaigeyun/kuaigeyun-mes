@@ -8,11 +8,11 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProFormSelect, ProFormDigit, ProFormDatePicker, ProFormTextArea, PageContainer, ProDescriptions } from '@ant-design/pro-components';
-import { App, Button, Card, Tag, Space, message, Modal, Divider } from 'antd';
-import { CalculatorOutlined, EyeOutlined } from '@ant-design/icons';
-import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { ProFormSelect, ProFormDigit, ProFormDatePicker, ProFormTextArea, PageContainer, ProDescriptions } from '@ant-design/pro-components';
+import { App, Button, Card, Tag, Divider } from 'antd';
+import { CalculatorOutlined } from '@ant-design/icons';
+import { FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { StructuredCostDataView } from '../../../../../components/structured-cost-data-view';
 import { productionCostApi } from '../../../services/cost';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
@@ -40,7 +40,6 @@ export interface ProductionCostPageProps {
 
 const ProductionCostPage: React.FC<ProductionCostPageProps> = ({ embedded = false }) => {
   const { message: messageApi } = App.useApp();
-  const actionRef = useRef<ActionType>(null);
   const formRef = useRef<any>(null);
 
   const [modalVisible, setModalVisible] = useState(false);
@@ -169,9 +168,9 @@ const ProductionCostPage: React.FC<ProductionCostPageProps> = ({ embedded = fals
           {result.cost_details && (
             <>
               <Divider>成本明细</Divider>
-              <pre style={{ background: '#f5f5f5', padding: '16px', borderRadius: '4px', maxHeight: '400px', overflow: 'auto' }}>
-                {JSON.stringify(result.cost_details, null, 2)}
-              </pre>
+              <div style={{ maxHeight: 400, overflow: 'auto' }}>
+                <StructuredCostDataView data={result.cost_details} />
+              </div>
             </>
           )}
         </Card>

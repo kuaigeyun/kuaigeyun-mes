@@ -27,6 +27,7 @@ import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
 import { useTranslation } from 'react-i18next';
 import type { DocumentPrintApiResult } from '../../../../../utils/printResponseHelpers';
+import { openPrintHtmlWindow, escapeHtml } from '../../../../../utils/printResponseHelpers';
 
 interface MaterialBorrow {
   id?: number;
@@ -62,6 +63,24 @@ interface MaterialBorrowItem {
   status?: string;
 }
 
+function buildMaterialBorrowPrintHtml(d: MaterialBorrowDetail): string {
+  const esc = escapeHtml;
+  const rows = (d.items || [])
+    .map(
+      (it) =>
+        `<tr><td>${esc(it.material_code)}</td><td>${esc(it.material_name)}</td><td>${esc(it.material_unit)}</td><td style="text-align:right">${esc(it.borrow_quantity)}</td></tr>`,
+    )
+    .join('');
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>借料单 ${esc(d.borrow_code)}</title><style>body{font-family:system-ui,sans-serif;padding:24px;}table{border-collapse:collapse;width:100%;margin-top:16px}th,td{border:1px solid #ccc;padding:8px;font-size:13px}th{background:#f0f0f0;text-align:left}</style></head><body>
+<h2>借料单</h2>
+<p><strong>单号</strong> ${esc(d.borrow_code)} &nbsp; <strong>仓库</strong> ${esc(d.warehouse_name)} &nbsp; <strong>借料人</strong> ${esc(d.borrower_name)}</p>
+<p><strong>预计归还</strong> ${esc(d.expected_return_date)} &nbsp; <strong>借出时间</strong> ${esc(d.borrow_time)}</p>
+<p><strong>备注</strong> ${esc(d.notes)}</p>
+<table><thead><tr><th>物料编码</th><th>物料名称</th><th>单位</th><th>借料数量</th></tr></thead><tbody>${rows || '<tr><td colspan="4">无明细</td></tr>'}</tbody></table>
+<p style="margin-top:16px;color:#666;font-size:12px">未配置打印模板时的系统兜底</p>
+</body></html>`;
+}
+
 const MaterialBorrowsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -82,7 +101,7 @@ const MaterialBorrowsPage: React.FC = () => {
   useEffect(() => {
     const load = async () => {
       try {
-        const wh = await masterDataWarehouseApi.list({ limit: 1000, isActive: true });
+        const wh = await masterDataWarehouseApi.list({ limit: 1000, is_active: true });
         setWarehouseList(Array.isArray(wh) ? wh : (wh as any)?.items || []);
       } catch (e) {
         console.error('加载仓库失败', e);
@@ -300,7 +319,11 @@ const MaterialBorrowsPage: React.FC = () => {
           printWindow.onload = () => printWindow.print();
         }
       } else {
-        messageApi.warning(result?.message || '打印功能暂未配置模板');
+        const detail = (await warehouseApi.materialBorrow.get(record.id!.toString())) as MaterialBorrowDetail;
+        const w = openPrintHtmlWindow(buildMaterialBorrowPrintHtml(detail), `借料单 ${detail.borrow_code || ''}`);
+        if (!w) {
+          messageApi.warning(result?.message || '无法打开打印窗口，请检查浏览器拦截设置');
+        }
       }
     } catch {
       messageApi.error('打印失败');

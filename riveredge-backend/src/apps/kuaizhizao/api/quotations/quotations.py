@@ -389,8 +389,9 @@ async def print_quotation(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """打印报价单"""
+    import base64
     from apps.kuaizhizao.services.print_service import DocumentPrintService
-    from fastapi.responses import HTMLResponse, JSONResponse
+    from fastapi.responses import HTMLResponse, JSONResponse, Response
 
     try:
         result = await DocumentPrintService().print_document(
@@ -406,6 +407,13 @@ async def print_quotation(
     except BusinessLogicError as e:
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
 
+    if (output_format or "html").lower() == "pdf" and result.get("mime_type") == "application/pdf":
+        raw = base64.b64decode(result.get("content") or "")
+        return Response(
+            content=raw,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'inline; filename="quotation-{quotation_id}.pdf"'},
+        )
     if response_format == "html":
         return HTMLResponse(content=result.get("content", ""), status_code=200)
     return JSONResponse(content=result, status_code=200)

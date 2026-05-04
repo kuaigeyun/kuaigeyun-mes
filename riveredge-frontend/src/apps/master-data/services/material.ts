@@ -38,7 +38,27 @@ import type {
   MaterialCodeConvertRequest,
   MaterialCodeConvertResponse,
   MaterialCodeMappingBatchImportResult,
+  MaterialBatch,
+  MaterialBatchCreate,
+  MaterialBatchUpdate,
+  MaterialBatchListParams,
+  MaterialBatchListResponse,
+  MaterialSerial,
+  MaterialSerialCreate,
+  MaterialSerialUpdate,
+  MaterialSerialListParams,
+  MaterialSerialListResponse,
 } from '../types/material';
+
+function optionalNumberId(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
 
 /**
  * 后端 BOM 响应为 snake_case，统一转为前端 camelCase
@@ -103,10 +123,10 @@ function mapBomHierarchyItemFromApi(raw: Record<string, unknown>): BOMHierarchyI
     level: Number(raw.level ?? 0),
     path: raw.path ? String(raw.path) : '',
     isConfigurable: (raw.is_configurable ?? raw.isConfigurable) === true,
-    configurableGroupId: raw.configurable_group_id ?? raw.configurableGroupId ?? null,
+    configurableGroupId: optionalNumberId(raw.configurable_group_id ?? raw.configurableGroupId),
     isDefaultConfigurable: (raw.is_default_configurable ?? raw.isDefaultConfigurable) === true,
     isAlternative: (raw.is_alternative ?? raw.isAlternative) === true,
-    alternativeGroupId: raw.alternative_group_id ?? raw.alternativeGroupId ?? null,
+    alternativeGroupId: optionalNumberId(raw.alternative_group_id ?? raw.alternativeGroupId),
     priority: Number(raw.priority ?? 0),
     bomVersion: (raw.bom_version != null || raw.bomVersion != null) ? String(raw.bom_version ?? raw.bomVersion) : undefined,
     children: children ? children.map(item => mapBomHierarchyItemFromApi(item)) : [],
@@ -719,9 +739,11 @@ export const materialBatchApi = {
     const { qrcodeApi } = await import('../../../services/qrcode');
     return qrcodeApi.generateTrace({
       trace_uuid: batchUuid,
-      trace_type: 'batch',
       trace_code: batchNo,
-      trace_name: materialName || batchNo,
+      trace_data: {
+        trace_type: 'batch',
+        trace_name: materialName || batchNo,
+      },
     });
   },
 };
@@ -830,9 +852,11 @@ export const materialSerialApi = {
     const { qrcodeApi } = await import('../../../services/qrcode');
     return qrcodeApi.generateTrace({
       trace_uuid: serialUuid,
-      trace_type: 'serial',
       trace_code: serialNo,
-      trace_name: materialName || serialNo,
+      trace_data: {
+        trace_type: 'serial',
+        trace_name: materialName || serialNo,
+      },
     });
   },
 };

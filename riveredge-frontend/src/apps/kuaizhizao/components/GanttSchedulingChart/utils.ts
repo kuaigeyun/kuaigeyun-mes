@@ -70,7 +70,16 @@ export function workOrderToGanttTask(wo: WorkOrderForGantt): GanttTask {
  * 工序转换为 Gantt Task（工序级派工）
  */
 export function operationToGanttTask(
-  op: { id?: number; operation_name?: string; sequence?: number; planned_start_date?: string | null; planned_end_date?: string | null; assigned_equipment_name?: string; assigned_mold_name?: string; assigned_tool_name?: string },
+  op: {
+    id?: number;
+    operation_name?: string | null;
+    sequence?: number;
+    planned_start_date?: string | null;
+    planned_end_date?: string | null;
+    assigned_equipment_name?: string | null;
+    assigned_mold_name?: string | null;
+    assigned_tool_name?: string | null;
+  },
   wo: WorkOrderForGantt
 ): GanttTask {
   const DEFAULT_START = 8;

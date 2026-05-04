@@ -122,7 +122,7 @@ export class SmartFormFill {
    * 基于历史数据智能填充表单
    */
   static fillFromHistory<T extends Record<string, any>>(
-    formData: T,
+    _formData: T,
     historyData: T[],
     fields: (keyof T)[]
   ): Partial<T> {
@@ -151,7 +151,7 @@ export class SmartFormFill {
    * 基于用户偏好填充表单
    */
   static fillFromPreferences<T extends Record<string, any>>(
-    formData: T,
+    _formData: T,
     preferences: Partial<T>,
     fields: (keyof T)[]
   ): Partial<T> {
@@ -171,7 +171,7 @@ export class SmartFormFill {
    */
   static fillFromTemplate<T extends Record<string, any>>(
     template: Partial<T>,
-    formData: T
+    _formData: T
   ): Partial<T> {
     return { ...template };
   }
@@ -319,7 +319,6 @@ export class BatchOperationEnhancement {
     errors?: Array<{ index: number; error: string }>;
   }): string {
     const { success_count, failed_count, errors } = result;
-    const total = success_count + failed_count;
 
     if (failed_count === 0) {
       return `全部成功：${success_count} 条记录`;

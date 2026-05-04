@@ -11,7 +11,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
-import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormItem, ProFormDependency } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormItem, ProFormDependency } from '@ant-design/pro-components';
 import { App, Button, Col, Modal, Row, Space, Tag, message } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -102,7 +102,7 @@ const ReworkOrdersPage: React.FC = () => {
   /**
    * 详情列定义
    */
-  const detailColumns: ProDescriptionsItemType<ReworkOrder>[] = [
+  const detailColumns: ProDescriptionsItemProps<ReworkOrder>[] = [
     {
       title: '返工单编号',
       dataIndex: 'code',
@@ -127,20 +127,16 @@ const ReworkOrdersPage: React.FC = () => {
     {
       title: '返工类型',
       dataIndex: 'rework_type',
-      render: (text) => {
+      render: (_, record) => {
+        const text = String(record.rework_type ?? '');
         const typeMap: Record<string, { text: string; color: string }> = {
           '返工': { text: '返工', color: 'blue' },
           '返修': { text: '返修', color: 'orange' },
           '报废': { text: '报废', color: 'red' },
         };
-        const config = typeMap[text || ''] || { text: text || '-', color: 'default' };
+        const config = typeMap[text] || { text: text || '-', color: 'default' };
         return <Tag color={config.color}>{config.text}</Tag>;
       },
-    },
-    {
-      title: '返工原因',
-      dataIndex: 'rework_reason',
-      span: 2,
     },
     {
       title: '返工工序',
@@ -237,20 +233,16 @@ const ReworkOrdersPage: React.FC = () => {
       title: '返工类型',
       dataIndex: 'rework_type',
       width: 100,
-      render: (text) => {
+      render: (_, record) => {
+        const text = String(record.rework_type ?? '');
         const typeMap: Record<string, { text: string; color: string }> = {
           '返工': { text: '返工', color: 'blue' },
           '返修': { text: '返修', color: 'orange' },
           '报废': { text: '报废', color: 'red' },
         };
-        const config = typeMap[text || ''] || { text: text || '-', color: 'default' };
+        const config = typeMap[text] || { text: text || '-', color: 'default' };
         return <Tag color={config.color}>{config.text}</Tag>;
       },
-    },
-    {
-      title: '返工原因',
-      dataIndex: 'rework_reason',
-      width: 200,
       ellipsis: true,
     },
     {

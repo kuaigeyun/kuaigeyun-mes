@@ -6,7 +6,7 @@
 
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance, ProDescriptionsItemType, ProFormList, ProFormDateTimePicker, ProFormSelect, ProForm } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance, ProDescriptionsItemProps, ProFormList, ProFormDateTimePicker, ProFormSelect, ProForm } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
 import CodeField from '../../../../../components/code-field';
 import { App, Button, Tag, Space, Modal, Input, Tree, Spin, Table, Form as AntForm, Select, Switch, InputNumber, Dropdown, Checkbox, Descriptions } from 'antd';
@@ -173,12 +173,12 @@ const BOM_DETAIL_BASIC_FIELD_ORDER: string[] = [
   'updatedAt',
 ];
 
-function orderBomDetailBasicColumns(cols: ProDescriptionsItemType<BOM>[]): ProDescriptionsItemType<BOM>[] {
+function orderBomDetailBasicColumns(cols: ProDescriptionsItemProps<BOM>[]): ProDescriptionsItemProps<BOM>[] {
   const filtered = cols.filter(
     (c) => c.dataIndex != null && !BOM_DETAIL_LINE_ONLY_DATA_INDEX.has(String(c.dataIndex)),
   );
   const map = new Map(filtered.map((c) => [String(c.dataIndex), c]));
-  const ordered: ProDescriptionsItemType<BOM>[] = [];
+  const ordered: ProDescriptionsItemProps<BOM>[] = [];
   for (const key of BOM_DETAIL_BASIC_FIELD_ORDER) {
     const col = map.get(key);
     if (col) {
@@ -1933,7 +1933,7 @@ const BOMPage: React.FC = () => {
   /**
    * 详情 Drawer 的列定义
    */
-  const detailColumns: ProDescriptionsItemType<BOM>[] = [
+  const detailColumns: ProDescriptionsItemProps<BOM>[] = [
     {
       title: t('app.master-data.bom.bomCode'),
       dataIndex: 'bomCode',

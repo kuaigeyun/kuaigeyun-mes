@@ -293,7 +293,7 @@ const CostRulePage: React.FC = () => {
       align: 'left',
       search: false,
       render: (_, record) => (
-        <UniLifecycle {...getPerformanceConfigActiveLifecycle(record)} showCircleTooltip={false} />
+        <UniLifecycle {...getPerformanceConfigActiveLifecycle(record as unknown as Record<string, unknown>)} showCircleTooltip={false} />
       ),
     },
     {
@@ -587,11 +587,17 @@ const CostRulePage: React.FC = () => {
                 <Descriptions
                   column={3}
                   size="small"
-                  items={buildMasterDetailDescriptionItems(costRuleDetail as Record<string, unknown>, ruleDetailBaseItems as any)}
+                  items={buildMasterDetailDescriptionItems(
+                    costRuleDetail as unknown as Record<string, unknown>,
+                    ruleDetailBaseItems as any,
+                  )}
                 />
               </DetailDrawerSection>
               <DetailDrawerSection title="生命周期">
-                <UniLifecycle {...getPerformanceConfigActiveLifecycle(costRuleDetail)} showCircleTooltip={false} />
+                <UniLifecycle
+                  {...getPerformanceConfigActiveLifecycle(costRuleDetail as unknown as Record<string, unknown>)}
+                  showCircleTooltip={false}
+                />
                 <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
                   规则配置类数据；上下游单据跟踪未接入时仅展示启用状态生命周期。
                 </Typography.Paragraph>

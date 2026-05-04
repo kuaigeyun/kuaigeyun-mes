@@ -3,7 +3,7 @@
  * 适用于阶段线性、status 直接映射的单据（入库、出库、调拨、盘点等）。
  */
 
-import type { LifecycleResult } from '../../../../components/uni-lifecycle/types';
+import type { LifecycleResult } from '../../../components/uni-lifecycle/types';
 import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';
 

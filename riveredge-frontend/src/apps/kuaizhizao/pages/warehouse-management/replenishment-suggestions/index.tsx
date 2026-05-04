@@ -9,7 +9,7 @@
 
 import React, { useRef, useState } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
-import { ActionType, ProColumns, ProDescriptionsItemType } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Card, Table, Input, Typography, Descriptions } from 'antd';
 import dayjs from 'dayjs';
 import { ProForm, ProFormRadio, ProFormTextArea } from '@ant-design/pro-components';
@@ -113,7 +113,9 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
       dataIndex: 'suggested_quantity',
       width: 120,
       align: 'right',
-      render: (text) => <span style={{ fontWeight: 'bold', color: '#1890ff' }}>{text}</span>,
+      render: (_, record) => (
+        <span style={{ fontWeight: 'bold', color: '#1890ff' }}>{record.suggested_quantity}</span>
+      ),
     },
     {
       title: '优先级',
@@ -283,7 +285,7 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
   };
 
   // 详情列定义
-  const detailColumns: ProDescriptionsItemType<ReplenishmentSuggestion>[] = [
+  const detailColumns: ProDescriptionsItemProps<ReplenishmentSuggestion>[] = [
     {
       title: '物料编号',
       dataIndex: 'material_code',
@@ -315,18 +317,21 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
     {
       title: '建议补货数量',
       dataIndex: 'suggested_quantity',
-      render: (text) => <span style={{ fontWeight: 'bold', color: '#1890ff' }}>{text}</span>,
+      render: (_, record) => (
+        <span style={{ fontWeight: 'bold', color: '#1890ff' }}>{record.suggested_quantity}</span>
+      ),
     },
     {
       title: '优先级',
       dataIndex: 'priority',
-      render: (priority) => {
+      render: (_, record) => {
+        const priorityKey = String(record.priority ?? '');
         const priorityMap: Record<string, { text: string; color: string }> = {
-          'high': { text: '高', color: 'error' },
-          'medium': { text: '中', color: 'warning' },
-          'low': { text: '低', color: 'default' },
+          high: { text: '高', color: 'error' },
+          medium: { text: '中', color: 'warning' },
+          low: { text: '低', color: 'default' },
         };
-        const config = priorityMap[priority || ''] || { text: priority || '-', color: 'default' };
+        const config = priorityMap[priorityKey] || { text: priorityKey || '-', color: 'default' };
         return <Tag color={config.color}>{config.text}</Tag>;
       },
     },
@@ -350,13 +355,14 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
     {
       title: '状态',
       dataIndex: 'status',
-      render: (status) => {
+      render: (_, record) => {
+        const statusKey = String(record.status ?? '');
         const statusMap: Record<string, { text: string; color: string }> = {
-          'pending': { text: '待处理', color: 'default' },
-          'processed': { text: '已处理', color: 'success' },
-          'ignored': { text: '已忽略', color: 'error' },
+          pending: { text: '待处理', color: 'default' },
+          processed: { text: '已处理', color: 'success' },
+          ignored: { text: '已忽略', color: 'error' },
         };
-        const config = statusMap[status || ''] || { text: status || '-', color: 'default' };
+        const config = statusMap[statusKey] || { text: statusKey || '-', color: 'default' };
         return <Tag color={config.color}>{config.text}</Tag>;
       },
     },

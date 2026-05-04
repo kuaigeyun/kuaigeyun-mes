@@ -442,7 +442,7 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/system/data-sources': ManufacturingIcons.database, // 数据源 - 使用数据库图标
       '/system/application-connections': ManufacturingIcons.gitBranch, // 应用连接器 - 使用分支连接图标
       '/system/datasets': ManufacturingIcons.inventory, // 数据集 - 使用库存图标
-      '/system/initial-data': ManufacturingIcons.arrowDownToLine, // 期初数据导入（导入入库）
+      '/system/initial-data': ManufacturingIcons['arrow-down-to-line'], // 期初数据导入（导入入库）
       '/system/onboarding-wizard': ManufacturingIcons.compass, // 上线向导 - 指引/向导
       '/system/messages/config': ManufacturingIcons.bell, // 消息配置 - 使用铃铛图标
       '/system/messages/template': ManufacturingIcons.fileText, // 消息模板 - 使用文件文本图标
@@ -4572,7 +4572,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           );
         }}
         actionsRender={() => {
-          const actions = [];
+          const actions: React.ReactNode[] = [];
 
           if (!isMobileOrTablet && hasAiAssistantEntry) {
           // AI 助手入口：仅 Lottie 图标 48x48，无文字、无背景、无动效
@@ -5227,7 +5227,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             const badgeKey = getMenuBadgeKey(path);
             const badgeData = (badgeKey ? menuBadgeCounts[badgeKey] : null) as any;
 
-            let badgeEl = null;
+            let badgeEl: React.ReactNode = null;
             if (badgeData) {
               if (typeof badgeData === 'number' && badgeData > 0) {
                 // 传统形式：仅数字，默认红色（antd Badge 默认）

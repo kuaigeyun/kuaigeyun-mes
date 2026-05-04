@@ -8,10 +8,11 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProFormSelect, ProFormDatePicker, PageContainer, ProDescriptions } from '@ant-design/pro-components';
-import { App, Button, Card, Tag, message, Modal, Divider, Row, Col, Statistic } from 'antd';
+import { ProFormSelect, ProFormDatePicker, PageContainer, ProDescriptions } from '@ant-design/pro-components';
+import { App, Button, Card, Divider, Row, Col, Statistic } from 'antd';
 import { CalculatorOutlined } from '@ant-design/icons';
-import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { StructuredCostDataView } from '../../../../../components/structured-cost-data-view';
 import { qualityCostApi } from '../../../services/cost';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
@@ -200,9 +201,9 @@ const QualityCostPage: React.FC<QualityCostPageProps> = ({ embedded = false }) =
           {result.cost_details && (
             <>
               <Divider>成本明细</Divider>
-              <pre style={{ background: '#f5f5f5', padding: '16px', borderRadius: '4px', maxHeight: '400px', overflow: 'auto' }}>
-                {JSON.stringify(result.cost_details, null, 2)}
-              </pre>
+              <div style={{ maxHeight: 400, overflow: 'auto' }}>
+                <StructuredCostDataView data={result.cost_details} />
+              </div>
             </>
           )}
         </Card>

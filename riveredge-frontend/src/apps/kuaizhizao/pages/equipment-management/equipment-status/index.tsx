@@ -10,7 +10,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Card, Badge, Button, Space, message, Modal, Timeline, Tag, Row, Col, Select, Input, App, Typography, Spin, Empty, theme as AntdTheme } from 'antd';
+import { Card, Badge, Button, Space, Timeline, Tag, Row, Col, Select, Input, App, Typography, Spin, Empty, theme as AntdTheme } from 'antd';
 import { ProDescriptions } from '@ant-design/pro-components';
 import { ReloadOutlined, HistoryOutlined, EditOutlined, PlayCircleOutlined, PauseCircleOutlined, WarningOutlined } from '@ant-design/icons';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DRAWER_CONFIG } from '../../../../../components/layout-templates';
@@ -287,8 +287,7 @@ const EquipmentStatusPage: React.FC = () => {
 
   return (
     <ListPageTemplate
-      title="设备状态监控"
-      extra={
+      toolbarExtra={
         <Space>
           <Button
             icon={autoRefresh ? <PauseCircleOutlined /> : <PlayCircleOutlined />}
@@ -302,6 +301,9 @@ const EquipmentStatusPage: React.FC = () => {
         </Space>
       }
     >
+      <Typography.Title level={4} style={{ marginTop: 0, marginBottom: 16 }}>
+        设备状态监控
+      </Typography.Title>
       {/* 统计卡片 */}
       <Row gutter={16} style={{ marginBottom: 16 }}>
         <Col xs={12} sm={8} md={6} lg={4}>
@@ -728,12 +730,10 @@ const EquipmentStatusPage: React.FC = () => {
       <FormModalTemplate
         title="更新设备状态"
         open={updateModalVisible}
-        onCancel={() => setUpdateModalVisible(false)}
-        setFormRef={(ref: any) => { updateFormRef.current = ref; }}
+        onClose={() => setUpdateModalVisible(false)}
+        formRef={updateFormRef}
         onFinish={handleUpdateStatusSubmit}
-        formProps={{
-          layout: 'vertical',
-        }}
+        layout="vertical"
       >
         <ProFormSelect
           name="status"

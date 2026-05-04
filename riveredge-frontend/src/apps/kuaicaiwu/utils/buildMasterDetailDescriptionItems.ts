@@ -21,7 +21,8 @@ export function buildMasterDetailDescriptionItems<T extends Record<string, any>>
       content = dayjs(value as string).format('YYYY-MM-DD HH:mm:ss');
     }
     if (col.render && dataSource != null) {
-      content = col.render(content, dataSource, index, {}, col);
+      // ProDescriptions 的 render 与 ProTable 列 render 共享复杂签名；此处仅传前三项即可
+      content = (col.render as (dom: ReactNode, entity: T, i: number) => ReactNode)(content, dataSource, index);
     }
     return {
       key: String(col.key ?? col.dataIndex ?? index),

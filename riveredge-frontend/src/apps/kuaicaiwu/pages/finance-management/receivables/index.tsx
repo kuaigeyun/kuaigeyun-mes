@@ -229,7 +229,7 @@ const ReceivableList: React.FC = () => {
                 columns={columns}
                 columnPersistenceId="kuaicaiwu-finance-receivables"
                 scroll={{ x: 1680 }}
-                request={async (params, sort, _filter, searchFormValues) => {
+                request={async (params, _sort, _filter, searchFormValues) => {
                     const { current, pageSize } = params;
                     const apiParams: ReceivableListParams = {
                         skip: ((current || 1) - 1) * (pageSize || 20),

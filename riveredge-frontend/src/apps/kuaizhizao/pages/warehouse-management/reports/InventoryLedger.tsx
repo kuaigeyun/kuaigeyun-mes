@@ -21,6 +21,17 @@ const InventoryLedger: React.FC = () => {
       reportType="inventory_ledger"
       columns={columns}
       columnPersistenceId="kuaizhizao-wm-report-inventory-ledger"
+      request={async (params: any) => {
+        const res = await getWarehouseReport({
+          ...params,
+          report_type: 'inventory_ledger',
+        });
+        return {
+          data: res.data || [],
+          success: res.success,
+          total: res.data?.length || 0,
+        };
+      }}
     />
   );
 };

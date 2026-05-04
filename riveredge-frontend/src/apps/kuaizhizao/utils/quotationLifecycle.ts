@@ -3,7 +3,7 @@
  * 主轴：草稿 → 已发送 → 已审核 → 客户确认·转订单 → 已转订单（关闭审核时跳过「已审核」）
  */
 
-import type { LifecycleResult, SubStage } from '../../../../components/uni-lifecycle/types';
+import type { LifecycleResult, SubStage } from '../../../components/uni-lifecycle/types';
 import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';
 

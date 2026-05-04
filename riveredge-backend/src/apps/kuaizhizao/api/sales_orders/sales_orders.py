@@ -110,7 +110,10 @@ async def get_sales_order_statistics(
 
     tz = zoneinfo.ZoneInfo("Asia/Shanghai")
     today = datetime.now(tz).date()
+    # 基础过滤：租户隔离 + 未删除
     base = SalesOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+    count = await base.count()
+    logger.info(f"get_sales_order_statistics: tenant_id={tenant_id}, total_count={count}")
     audited = ("AUDITED", "已审核", "CONFIRMED", "已确认")
     pending_review = ("PENDING", "PENDING_REVIEW", "待审核")
 

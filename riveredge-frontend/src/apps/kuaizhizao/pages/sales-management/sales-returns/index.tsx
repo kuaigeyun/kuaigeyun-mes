@@ -13,7 +13,7 @@ import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidate
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Space, Modal, Table, Row, Col, Form as AntForm, InputNumber, Input, Dropdown, Tag, Card, Typography, Spin, Empty } from 'antd';
-import { EyeOutlined, CheckCircleOutlined, PlusOutlined, AppstoreAddOutlined, ImportOutlined, MoreOutlined, CopyOutlined, ReloadOutlined } from '@ant-design/icons';
+import { EyeOutlined, CheckCircleOutlined, PlusOutlined, AppstoreAddOutlined, ImportOutlined, MoreOutlined, CopyOutlined, ReloadOutlined, EditOutlined } from '@ant-design/icons';
 import { theme as AntdTheme } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, DetailDrawerSection } from '../../../../../components/layout-templates';
@@ -77,6 +77,7 @@ interface SalesReturnDetail extends SalesReturn {
 
 interface SalesReturnItem {
   id?: number;
+  sales_delivery_item_id?: number;
   material_id?: number;
   material_code?: string;
   material_name?: string;
@@ -183,6 +184,7 @@ const SalesReturnsPage: React.FC = () => {
   // 创建/编辑相关状态
   const [modalVisible, setModalVisible] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingDetail, setEditingDetail] = useState<SalesReturnDetail | null>(null);
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const formRef = useRef<ProFormInstance>(null);
@@ -328,6 +330,9 @@ const SalesReturnsPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => renderSalesReturnRowActions([
         <Button key="detail" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>详情</Button>,
+        ...(record.status === '待退货' || record.status === '草稿' ? [
+          <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => void handleEdit(record)}>编辑</Button>,
+        ] : []),
         ...(record.status === '待退货' ? [
           <Button key="confirm" type="link" size="small" icon={<CheckCircleOutlined />} onClick={() => handleConfirm(record)}>确认退货</Button>,
         ] : []),
@@ -351,10 +356,71 @@ const SalesReturnsPage: React.FC = () => {
     }
   };
 
+  const buildSalesReturnItemsPayload = (items: any[]) =>
+    (items || []).map((it) => {
+      const qty = Number(it.return_quantity ?? 0);
+      const price = Number(it.unit_price ?? 0);
+      const total = Number((it.total_amount != null ? it.total_amount : qty * price).toFixed(2));
+      return {
+        sales_delivery_item_id: it.sales_delivery_item_id ?? undefined,
+        material_id: it.material_id,
+        material_code: it.material_code || '',
+        material_name: it.material_name || '',
+        material_spec: it.material_spec ?? undefined,
+        material_unit: it.material_unit || '件',
+        return_quantity: qty,
+        unit_price: price,
+        total_amount: total,
+        batch_number: it.batch_number ?? undefined,
+        location_code: it.location_code ?? undefined,
+        notes: it.notes ?? undefined,
+      };
+    });
+
   // 处理新增
   const handleCreate = () => {
     setEditingId(null);
+    setEditingDetail(null);
     setModalVisible(true);
+  };
+
+  const handleEdit = async (record: SalesReturn) => {
+    if (record.status !== '待退货' && record.status !== '草稿') {
+      messageApi.warning('仅「待退货」或「草稿」状态可编辑');
+      return;
+    }
+    try {
+      const detail = (await warehouseApi.salesReturn.get(record.id!.toString())) as SalesReturnDetail;
+      setEditingId(record.id!);
+      setEditingDetail(detail);
+      setModalVisible(true);
+      const rt = detail.return_time ? dayjs(detail.return_time) : dayjs();
+      formRef.current?.setFieldsValue({
+        customer_id: detail.customer_id,
+        customer_name: detail.customer_name,
+        warehouse_id: detail.warehouse_id,
+        warehouse_name: detail.warehouse_name,
+        return_time: rt,
+        return_reason: detail.return_reason,
+        return_type: detail.return_type,
+        shipping_method: detail.shipping_method,
+        notes: detail.notes,
+        items: (detail.items || []).map((it) => ({
+          material_id: it.material_id,
+          material_code: it.material_code,
+          material_name: it.material_name,
+          return_quantity: it.return_quantity,
+          unit_price: it.unit_price,
+          batch_number: it.batch_number,
+          notes: it.notes,
+          sales_delivery_item_id: it.sales_delivery_item_id,
+          material_spec: (it as any).material_spec,
+          material_unit: (it as any).material_unit ?? '件',
+        })),
+      });
+    } catch {
+      messageApi.error('加载退货单失败');
+    }
   };
 
   // 处理确认退货
@@ -418,14 +484,48 @@ const SalesReturnsPage: React.FC = () => {
   // 表单提交处理
   const onFinish = async (values: any) => {
     try {
+      const itemsPayload = buildSalesReturnItemsPayload(values.items);
+      const returnTime =
+        values.return_time && typeof values.return_time.format === 'function'
+          ? values.return_time.format('YYYY-MM-DD')
+          : values.return_time;
       if (editingId) {
-        // 更新逻辑
-        messageApi.warning('非草稿状态不支持编辑');
+        const detail = editingDetail;
+        if (!detail || (detail.status !== '待退货' && detail.status !== '草稿')) {
+          messageApi.warning('当前状态不允许编辑');
+          return false;
+        }
+        await warehouseApi.salesReturn.update(editingId.toString(), {
+          customer_id: values.customer_id,
+          customer_name: values.customer_name ?? detail.customer_name,
+          warehouse_id: values.warehouse_id,
+          warehouse_name: values.warehouse_name ?? detail.warehouse_name,
+          return_time: returnTime,
+          return_reason: values.return_reason ?? null,
+          return_type: values.return_type ?? detail.return_type ?? '质量问题',
+          shipping_method: values.shipping_method ?? null,
+          tracking_number: detail.tracking_number ?? null,
+          shipping_address: detail.shipping_address ?? null,
+          notes: values.notes ?? null,
+          sales_delivery_id: detail.sales_delivery_id ?? null,
+          sales_delivery_code: detail.sales_delivery_code ?? null,
+          sales_order_id: detail.sales_order_id ?? null,
+          sales_order_code: detail.sales_order_code ?? null,
+          status: detail.status,
+          items: itemsPayload,
+        });
+        messageApi.success('销售退货单已更新');
       } else {
-        await warehouseApi.salesReturn.create(values);
+        await warehouseApi.salesReturn.create({
+          ...values,
+          return_time: returnTime,
+          items: itemsPayload,
+        });
         messageApi.success('销售退货单创建成功');
       }
       setModalVisible(false);
+      setEditingId(null);
+      setEditingDetail(null);
       invalidateMenuBadgeCounts();
 
       actionRef.current?.reload();
@@ -584,7 +684,11 @@ const SalesReturnsPage: React.FC = () => {
       <FormModalTemplate
         title={editingId ? '编辑销售退货单' : '新增销售退货单'}
         open={modalVisible}
-        onClose={() => setModalVisible(false)}
+        onClose={() => {
+          setModalVisible(false);
+          setEditingId(null);
+          setEditingDetail(null);
+        }}
         onFinish={onFinish}
         formRef={formRef}
       >

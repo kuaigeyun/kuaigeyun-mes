@@ -76,7 +76,6 @@ import { getBackups } from '../../../services/dataBackup';
 import { getInstalledApplicationList } from '../../../services/application';
 
 const { Title, Paragraph, Text } = Typography;
-const { Step } = Steps;
 
 /** 与侧栏/顶栏菜单 pathMap 对齐的 Lucide 图标尺寸（上线向导左栏） */
 const ONBOARDING_MENU_ICON_SIZE = 16;
@@ -752,7 +751,13 @@ const OnboardingWizardPage: React.FC = () => {
       task()
         .then((partial) => {
           if (cancelled) return;
-          setRealCounts((prev) => ({ ...prev, ...partial }));
+          setRealCounts((prev) => {
+            const next: Record<string, number> = { ...prev };
+            for (const [k, v] of Object.entries(partial)) {
+              if (typeof v === 'number') next[k] = v;
+            }
+            return next;
+          });
         })
         .catch((err) => {
           if (cancelled) return;
@@ -1067,7 +1072,7 @@ const OnboardingWizardPage: React.FC = () => {
         name: enhancedCat.name,
         items: enhancedCat.items.map((enhancedItem) => {
           // 遍历后端所有分类，寻找匹配的任务项，以同步后端可能的完成状态
-          let apiItem = null;
+          let apiItem: any = null;
           for (const cat of apiChecklist) {
             const found = (cat.items || []).find((i: any) => i.id === enhancedItem.id || i.name === enhancedItem.name);
             if (found) {
@@ -2434,10 +2439,10 @@ const OnboardingWizardPage: React.FC = () => {
                 key: 'name',
                 width: 160,
                 fixed: 'left',
-                render: (text, record) => (
+                render: (text, record: { check_key?: string; id?: string; name?: string }) => (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    {((record.check_key ? (realCounts[record.check_key] ?? 0) : (realCounts[record.id] ?? 0)) > 0 ||
-                      (record.id && completedItems.has(record.id))) && (
+                    {((record.check_key ? (realCounts[record.check_key] ?? 0) : (record.id ? (realCounts[record.id] ?? 0) : 0)) > 0 ||
+                      (!!record.id && completedItems.has(record.id))) && (
                       <CheckCircle2 size={14} color={token.colorSuccess} style={{ flexShrink: 0 }} />
                     )}
                     <Text strong>{text}</Text>
@@ -2477,11 +2482,11 @@ const OnboardingWizardPage: React.FC = () => {
                 width: 132,
                 align: 'center',
                 fixed: 'right',
-                render: (_, record) => (
+                render: (_, record: { jump_path?: string }) => (
                   <Typography.Link
                     onClick={() => {
                       setDetailModalVisible(false);
-                      navigate(record.jump_path);
+                      if (record.jump_path) navigate(record.jump_path);
                     }}
                     style={{
                       fontSize: 13,

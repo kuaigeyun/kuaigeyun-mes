@@ -5,28 +5,29 @@ import React from 'react';
 import { ProColumns } from '@ant-design/pro-components';
 import { Tag } from 'antd';
 import SalesBaseReport from './BaseReport';
-import { getSalesReport } from '../../../services/reports';
+import { getSalesReport, parseSalesReportDateRange, salesReportPageParams } from '../../../services/reports';
 
 const QuotationQuery: React.FC = () => {
   const columns: ProColumns[] = [
     {
+      title: '报价日期',
+      dataIndex: 'quotation_date_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      search: { order: 10 } as any,
+    },
+    {
       title: '报价单号',
-      dataIndex: 'quote_code',
+      dataIndex: 'quotation_code',
       copyable: true,
       fixed: 'left',
       width: 150,
     },
     {
       title: '报价日期',
-      dataIndex: 'quote_date',
+      dataIndex: 'quotation_date',
       valueType: 'date',
       sorter: true,
-      width: 120,
-    },
-    {
-      title: '有效截止日',
-      dataIndex: 'expiry_date',
-      valueType: 'date',
       width: 120,
     },
     {
@@ -59,12 +60,6 @@ const QuotationQuery: React.FC = () => {
       width: 100,
     },
     {
-      title: '胜率',
-      dataIndex: 'win_probability',
-      render: (text) => <Tag color="blue">{text}%</Tag>,
-      width: 80,
-    },
-    {
       title: '备注',
       dataIndex: 'notes',
       ellipsis: true,
@@ -76,15 +71,25 @@ const QuotationQuery: React.FC = () => {
       title="报价单综合查询"
       reportType="quotation"
       columns={columns}
-      request={async (params) => {
+      request={async (params, _s, _f, searchFormValues) => {
+        const { date_start, date_end } = parseSalesReportDateRange(searchFormValues, [
+          'quotation_date_range',
+          'date_range',
+          'dateRange',
+        ]);
+        const { skip, limit } = salesReportPageParams(params);
         const res = await getSalesReport({
-          ...params,
           report_type: 'quotation',
+          date_start,
+          date_end,
+          customer_keyword: searchFormValues?.customer_name,
+          skip,
+          limit,
         });
         return {
           data: res.data,
           success: res.success,
-          total: res.data?.length || 0,
+          total: res.total ?? res.data?.length ?? 0,
         };
       }}
     />

@@ -88,7 +88,6 @@ const InvoiceDetail: React.FC = () => {
       valueType: 'money',
       width: '10%',
       formItemProps: { rules: [{ required: true, message: '必填' }] },
-      editable: true,
     },
     { title: '税率', dataIndex: 'tax_rate', valueType: 'percent', width: '10%', initialValue: 0.13 },
     {
@@ -196,7 +195,7 @@ const InvoiceDetail: React.FC = () => {
               maxLength={50}
               name="items"
               value={dataSource}
-              onChange={setDataSource}
+              onChange={(list) => setDataSource([...list] as InvoiceItem[])}
               recordCreatorProps={{
                 newRecordType: 'dataSource',
                 record: () => ({ id: Date.now(), item_name: '', amount: 0, tax_rate: 0.13, tax_amount: 0 }),

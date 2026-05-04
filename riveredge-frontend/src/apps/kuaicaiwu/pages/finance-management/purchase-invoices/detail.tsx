@@ -84,7 +84,7 @@ const PurchaseInvoiceDetail: React.FC = () => {
       ]}
     >
       <DetailDrawerSection title="基本信息">
-        <ProDescriptions column={3} dataSource={data as Record<string, unknown>} loading={loading}>
+        <ProDescriptions column={3} dataSource={data as unknown as Record<string, unknown>} loading={loading}>
           <ProDescriptions.Item label="发票编号">{data.invoice_code}</ProDescriptions.Item>
           <ProDescriptions.Item label="采购订单">{data.purchase_order_code}</ProDescriptions.Item>
           <ProDescriptions.Item label="供应商">{data.supplier_name}</ProDescriptions.Item>

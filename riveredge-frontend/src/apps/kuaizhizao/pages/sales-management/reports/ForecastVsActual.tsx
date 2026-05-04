@@ -5,16 +5,24 @@ import React from 'react';
 import { ProColumns } from '@ant-design/pro-components';
 import { Progress, Tag } from 'antd';
 import SalesBaseReport from './BaseReport';
-import { getSalesReport } from '../../../services/reports';
+import { getSalesReport, parseSalesReportDateRange, salesReportPageParams } from '../../../services/reports';
 
 const ForecastVsActual: React.FC = () => {
   const columns: ProColumns[] = [
+    {
+      title: '预测/交货期间',
+      dataIndex: 'forecast_date_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      search: { order: 10 } as any,
+    },
     {
       title: '预测编号',
       dataIndex: 'forecast_code',
       copyable: true,
       fixed: 'left',
       width: 150,
+      hideInSearch: true,
     },
     {
       title: '预测周期',
@@ -88,15 +96,32 @@ const ForecastVsActual: React.FC = () => {
       title="销售预测与实际对比"
       reportType="forecast_actual"
       columns={columns}
-      request={async (params) => {
+      request={async (params, _s, _f, searchFormValues) => {
+        const { date_start, date_end } = parseSalesReportDateRange(searchFormValues, [
+          'forecast_date_range',
+          'date_range',
+          'dateRange',
+        ]);
+        const { skip, limit } = salesReportPageParams(params);
         const res = await getSalesReport({
-          ...params,
           report_type: 'forecast_actual',
+          date_start,
+          date_end,
+          skip,
+          limit,
         });
+        const rows = (res.data || []).map((row: any, idx: number) => ({
+          ...row,
+          forecast_code: row.forecast_code ?? row.material_code ?? `F-${skip + idx + 1}`,
+          forecast_period: row.forecast_period ?? '-',
+          product_name: row.product_name ?? row.material_name ?? '-',
+          start_date: row.start_date ?? date_start,
+          end_date: row.end_date ?? date_end,
+        }));
         return {
-          data: res.data,
+          data: rows,
           success: res.success,
-          total: res.data?.length || 0,
+          total: res.total ?? rows.length ?? 0,
         };
       }}
     />

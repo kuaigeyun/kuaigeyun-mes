@@ -9,13 +9,14 @@
 
 import React, { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDigit, ProFormDatePicker, ProFormTextArea, ProForm, ProFormInstance } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, message, Modal, Tabs, Card, Statistic, Row, Col } from 'antd';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormSelect, ProFormDigit, ProFormDatePicker, ProFormTextArea, ProForm } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Tabs, Card, Statistic, Row, Col, Typography, Descriptions } from 'antd';
 import { ProDescriptions } from '@ant-design/pro-components';
-import { EyeOutlined, CalculatorOutlined, BarChartOutlined, LineChartOutlined, BulbOutlined } from '@ant-design/icons';
+import { EyeOutlined, CalculatorOutlined, BarChartOutlined, LineChartOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { costCalculationApi } from '../../../services/cost';
+import { StructuredCostDataView } from '../../../../../components/structured-cost-data-view';
 import dayjs from 'dayjs';
 
 interface CostCalculation {
@@ -61,7 +62,6 @@ const CostCalculationPage: React.FC = () => {
   const [productModalVisible, setProductModalVisible] = useState(false);
   const [compareModalVisible, setCompareModalVisible] = useState(false);
   const [analyzeModalVisible, setAnalyzeModalVisible] = useState(false);
-  const [optimizationModalVisible, setOptimizationModalVisible] = useState(false);
   const [compareData, setCompareData] = useState<any>(null);
   const [analyzeData, setAnalyzeData] = useState<any>(null);
   const [optimizationData, setOptimizationData] = useState<any>(null);
@@ -208,14 +208,15 @@ const CostCalculationPage: React.FC = () => {
       dataIndex: 'calculation_type',
       key: 'calculation_type',
       width: 120,
-      render: (text: string) => {
+      render: (_, r) => {
+        const text = r.calculation_type;
         const typeMap: Record<string, { color: string; text: string }> = {
-          '工单成本': { color: 'blue', text: '工单成本' },
-          '产品成本': { color: 'green', text: '产品成本' },
-          '标准成本': { color: 'orange', text: '标准成本' },
-          '实际成本': { color: 'red', text: '实际成本' },
+          工单成本: { color: 'blue', text: '工单成本' },
+          产品成本: { color: 'green', text: '产品成本' },
+          标准成本: { color: 'orange', text: '标准成本' },
+          实际成本: { color: 'red', text: '实际成本' },
         };
-        const type = typeMap[text] || { color: 'default', text: text };
+        const type = typeMap[text || ''] || { color: 'default', text: text || '-' };
         return <Tag color={type.color}>{type.text}</Tag>;
       },
     },
@@ -242,55 +243,56 @@ const CostCalculationPage: React.FC = () => {
       dataIndex: 'quantity',
       key: 'quantity',
       width: 100,
-      render: (text: number) => text?.toFixed(2) || '0.00',
+      render: (_, r) => (r.quantity != null ? Number(r.quantity).toFixed(2) : '0.00'),
     },
     {
       title: '材料成本',
       dataIndex: 'material_cost',
       key: 'material_cost',
       width: 120,
-      render: (text: number) => `¥${text?.toFixed(2) || '0.00'}`,
+      render: (_, r) => `¥${r.material_cost != null ? Number(r.material_cost).toFixed(2) : '0.00'}`,
     },
     {
       title: '人工成本',
       dataIndex: 'labor_cost',
       key: 'labor_cost',
       width: 120,
-      render: (text: number) => `¥${text?.toFixed(2) || '0.00'}`,
+      render: (_, r) => `¥${r.labor_cost != null ? Number(r.labor_cost).toFixed(2) : '0.00'}`,
     },
     {
       title: '制造费用',
       dataIndex: 'manufacturing_cost',
       key: 'manufacturing_cost',
       width: 120,
-      render: (text: number) => `¥${text?.toFixed(2) || '0.00'}`,
+      render: (_, r) => `¥${r.manufacturing_cost != null ? Number(r.manufacturing_cost).toFixed(2) : '0.00'}`,
     },
     {
       title: '总成本',
       dataIndex: 'total_cost',
       key: 'total_cost',
       width: 120,
-      render: (text: number) => `¥${text?.toFixed(2) || '0.00'}`,
+      render: (_, r) => `¥${r.total_cost != null ? Number(r.total_cost).toFixed(2) : '0.00'}`,
     },
     {
       title: '单位成本',
       dataIndex: 'unit_cost',
       key: 'unit_cost',
       width: 120,
-      render: (text: number) => `¥${text?.toFixed(2) || '0.00'}`,
+      render: (_, r) => `¥${r.unit_cost != null ? Number(r.unit_cost).toFixed(2) : '0.00'}`,
     },
     {
       title: '核算状态',
       dataIndex: 'calculation_status',
       key: 'calculation_status',
       width: 100,
-      render: (text: string) => {
+      render: (_, r) => {
+        const text = r.calculation_status;
         const statusMap: Record<string, { color: string; text: string }> = {
-          '草稿': { color: 'default', text: '草稿' },
-          '已核算': { color: 'processing', text: '已核算' },
-          '已审核': { color: 'success', text: '已审核' },
+          草稿: { color: 'default', text: '草稿' },
+          已核算: { color: 'processing', text: '已核算' },
+          已审核: { color: 'success', text: '已审核' },
         };
-        const status = statusMap[text] || { color: 'default', text: text };
+        const status = statusMap[text || ''] || { color: 'default', text: text || '-' };
         return <Tag color={status.color}>{status.text}</Tag>;
       },
     },
@@ -299,7 +301,7 @@ const CostCalculationPage: React.FC = () => {
       dataIndex: 'calculation_date',
       key: 'calculation_date',
       width: 120,
-      render: (text: string) => text ? dayjs(text).format('YYYY-MM-DD') : '-',
+      render: (_, r) => (r.calculation_date ? dayjs(r.calculation_date as string).format('YYYY-MM-DD') : '-'),
     },
     {
       title: '操作',
@@ -322,7 +324,7 @@ const CostCalculationPage: React.FC = () => {
   /**
    * 详情描述项
    */
-  const detailItems: ProDescriptionsItemType<CostCalculation>[] = [
+  const detailItems: ProDescriptionsItemProps<CostCalculation>[] = [
     {
       title: '核算单号',
       dataIndex: 'calculation_no',
@@ -346,37 +348,46 @@ const CostCalculationPage: React.FC = () => {
     {
       title: '数量',
       dataIndex: 'quantity',
-      render: (text: number) => text?.toFixed(2) || '0.00',
+      render: (_, entity) => (entity.quantity != null ? Number(entity.quantity).toFixed(2) : '0.00'),
     },
     {
       title: '材料成本',
       dataIndex: 'material_cost',
-      render: (text: number) => `¥${text?.toFixed(2) || '0.00'}`,
+      render: (_, entity) => `¥${entity.material_cost != null ? Number(entity.material_cost).toFixed(2) : '0.00'}`,
     },
     {
       title: '人工成本',
       dataIndex: 'labor_cost',
-      render: (text: number) => `¥${text?.toFixed(2) || '0.00'}`,
+      render: (_, entity) => `¥${entity.labor_cost != null ? Number(entity.labor_cost).toFixed(2) : '0.00'}`,
     },
     {
       title: '制造费用',
       dataIndex: 'manufacturing_cost',
-      render: (text: number) => `¥${text?.toFixed(2) || '0.00'}`,
+      render: (_, entity) =>
+        `¥${entity.manufacturing_cost != null ? Number(entity.manufacturing_cost).toFixed(2) : '0.00'}`,
     },
     {
       title: '总成本',
       dataIndex: 'total_cost',
-      render: (text: number) => `¥${text?.toFixed(2) || '0.00'}`,
+      render: (_, entity) => `¥${entity.total_cost != null ? Number(entity.total_cost).toFixed(2) : '0.00'}`,
     },
     {
       title: '单位成本',
       dataIndex: 'unit_cost',
-      render: (text: number) => `¥${text?.toFixed(2) || '0.00'}`,
+      render: (_, entity) => `¥${entity.unit_cost != null ? Number(entity.unit_cost).toFixed(2) : '0.00'}`,
     },
     {
       title: '成本明细',
       dataIndex: 'cost_details',
-      render: (text: any) => text ? JSON.stringify(text, null, 2) : '-',
+      span: 2,
+      render: (_, entity) =>
+        entity.cost_details ? (
+          <div style={{ maxHeight: 360, overflow: 'auto' }}>
+            <StructuredCostDataView data={entity.cost_details} />
+          </div>
+        ) : (
+          '-'
+        ),
     },
     {
       title: '核算状态',
@@ -385,7 +396,8 @@ const CostCalculationPage: React.FC = () => {
     {
       title: '核算日期',
       dataIndex: 'calculation_date',
-      render: (text: string) => text ? dayjs(text).format('YYYY-MM-DD') : '-',
+      render: (_, entity) =>
+        entity.calculation_date ? dayjs(entity.calculation_date as string).format('YYYY-MM-DD') : '-',
     },
     {
       title: '备注',
@@ -398,7 +410,8 @@ const CostCalculationPage: React.FC = () => {
     {
       title: '创建时间',
       dataIndex: 'created_at',
-      render: (text: string) => text ? dayjs(text).format('YYYY-MM-DD HH:mm:ss') : '-',
+      render: (_, entity) =>
+        entity.created_at ? dayjs(entity.created_at as string).format('YYYY-MM-DD HH:mm:ss') : '-',
     },
   ];
 
@@ -449,8 +462,8 @@ const CostCalculationPage: React.FC = () => {
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        dataSource={costCalculationDetail}
-        columns={detailItems}
+        dataSource={costCalculationDetail ? (costCalculationDetail as Record<string, unknown>) : undefined}
+        columns={detailItems as ProDescriptionsItemProps<Record<string, unknown>>[]}
       />
 
       {/* 工单成本核算 Modal */}
@@ -733,13 +746,17 @@ const CostCalculationPage: React.FC = () => {
             </Tabs.TabPane>
             <Tabs.TabPane tab="成本趋势" key="2">
               <Card>
-                <p>成本趋势图表（待实现）</p>
-                <pre>{JSON.stringify(analyzeData.cost_trend, null, 2)}</pre>
+                <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
+                  最近若干次「已审核」核算记录的成本构成与单位成本（按核算日期升序）。
+                </Typography.Paragraph>
+                <StructuredCostDataView data={analyzeData.cost_trend} emptyDescription="暂无趋势数据" />
               </Card>
             </Tabs.TabPane>
             <Tabs.TabPane tab="成本明细" key="3">
               <Card>
-                <pre>{JSON.stringify(analyzeData.cost_breakdown, null, 2)}</pre>
+                <div style={{ maxHeight: 480, overflow: 'auto' }}>
+                  <StructuredCostDataView data={analyzeData.cost_breakdown} emptyDescription="暂无明细" />
+                </div>
               </Card>
             </Tabs.TabPane>
             {optimizationData && (

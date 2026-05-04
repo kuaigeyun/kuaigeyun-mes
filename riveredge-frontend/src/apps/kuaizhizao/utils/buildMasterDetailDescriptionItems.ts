@@ -21,7 +21,7 @@ export function buildMasterDetailDescriptionItems<T extends Record<string, any>>
       content = dayjs(value as string).format('YYYY-MM-DD HH:mm:ss');
     }
     if (col.render && dataSource != null) {
-      content = col.render(content, dataSource, index, {}, col);
+      content = (col.render as (dom: ReactNode, entity: T, i: number) => ReactNode)(content, dataSource, index);
     }
     return {
       key: String(col.key ?? col.dataIndex ?? index),
