@@ -4,17 +4,18 @@
  * 提供工艺路线的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography, Divider, Spin, Select } from 'antd';
+import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography, Spin, Select, Descriptions, Card, Collapse } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, BranchesOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { downloadFile } from '../../../../../utils';
 import { batchImport } from '../../../../../utils/batchOperations';
-import { ListPageTemplate, DetailDrawerTemplate } from '../../../../../components/layout-templates';
+import { ListPageTemplate, flushDrawerOpen } from '../../../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
 import { RouteFormModal } from '../../../components/RouteFormModal';
 
 import { processRouteApi } from '../../../services/process';
@@ -48,6 +49,130 @@ const ProcessRoutesPage: React.FC = () => {
   const [allMaterials, setAllMaterials] = useState<Material[]>([]);
   const [allMaterialGroups, setAllMaterialGroups] = useState<MaterialGroup[]>([]);
   const [bindLoading, setBindLoading] = useState(false);
+  /** 绑定弹窗展示的工艺路线摘要 */
+  const [bindModalRouteSummary, setBindModalRouteSummary] = useState<{ code: string; name: string } | null>(null);
+  const [pendingMaterialGroupUuids, setPendingMaterialGroupUuids] = useState<string[]>([]);
+  const [pendingMaterialUuids, setPendingMaterialUuids] = useState<string[]>([]);
+  const [bindApplying, setBindApplying] = useState(false);
+  const routeDetailReqRef = useRef(0);
+
+  const closeBindModal = () => {
+    setBindModalVisible(false);
+    setCurrentBindProcessRouteUuid(null);
+    setBoundMaterials({ materials: [], material_groups: [] });
+    setBindModalRouteSummary(null);
+    setPendingMaterialGroupUuids([]);
+    setPendingMaterialUuids([]);
+  };
+
+  const processRouteDetailColumns: ProDescriptionsItemProps<ProcessRoute>[] = useMemo(
+    () => [
+      { title: t('field.route.code'), dataIndex: 'code' },
+      { title: t('field.route.name'), dataIndex: 'name' },
+      { title: t('field.route.description'), dataIndex: 'description' },
+      {
+        title: t('field.route.isActive'),
+        dataIndex: 'is_active',
+        render: (_: unknown, record: ProcessRoute) => {
+          const isActive = record?.is_active ?? (record as any)?.isActive;
+          return (
+            <Tag color={isActive ? 'success' : 'default'}>
+              {isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
+            </Tag>
+          );
+        },
+      },
+      { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+      { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+      {
+        title: t('app.master-data.routes.operationSequence', { defaultValue: '工序序列' }),
+        dataIndex: 'operation_sequence',
+        span: 2,
+        render: (_: unknown, record: ProcessRoute) => {
+          const seq = record?.operation_sequence ?? (record as any)?.operationSequence;
+          if (!seq) {
+            return <span style={{ color: '#999' }}>{t('app.master-data.routes.noOperations', { defaultValue: '暂无工序' })}</span>;
+          }
+
+          try {
+            let operations: any[] = [];
+
+            if (Array.isArray(seq)) {
+              operations = seq;
+            } else if (typeof seq === 'object' && seq !== null) {
+              const seqObj = seq as Record<string, unknown>;
+              if (seqObj.operations && Array.isArray(seqObj.operations)) {
+                operations = seqObj.operations as any[];
+              } else if (seqObj.sequence && Array.isArray(seqObj.sequence)) {
+                operations = (seqObj.sequence as string[]).map((uuid: string) => ({
+                  uuid,
+                  code: uuid.substring(0, 8),
+                  name: '工序',
+                }));
+              } else {
+                const entries = Object.entries(seqObj);
+                for (const [, value] of entries) {
+                  if (Array.isArray(value)) {
+                    operations = value as any[];
+                    break;
+                  }
+                }
+
+                if (operations.length === 0) {
+                  const allValues = Object.values(seqObj).filter((v) => v != null);
+                  if (allValues.length > 0 && Array.isArray(allValues[0])) {
+                    operations = allValues[0] as any[];
+                  } else if (allValues.length > 0) {
+                    operations = allValues as any[];
+                  }
+                }
+              }
+            }
+
+            if (!operations || operations.length === 0) {
+              return <span style={{ color: '#999' }}>{t('app.master-data.routes.noOperations', { defaultValue: '暂无工序' })}</span>;
+            }
+
+            const getOpLabel = (op: any, index: number) => {
+              if (op?.code != null) return `${op.code} - ${op?.name ?? '未知工序'}`;
+              if (op?.name != null) return op.name;
+              if (op?.operation_uuid) return `${t('app.master-data.routes.operation', { defaultValue: '工序' })} ${index + 1} (${String(op.operation_uuid).slice(0, 8)}...)`;
+              if (op?.operation_id) return `${t('app.master-data.routes.operation', { defaultValue: '工序' })} ${index + 1} (ID: ${op.operation_id})`;
+              return `${t('app.master-data.routes.operation', { defaultValue: '工序' })} ${index + 1}`;
+            };
+            return (
+              <div>
+                <div style={{ marginBottom: 8, fontWeight: 500 }}>
+                  {t('app.master-data.routes.operationSequenceCount', {
+                    defaultValue: '共 {{count}} 个工序：',
+                    count: operations.length,
+                  })}
+                </div>
+                <Space wrap>
+                  {operations.map((op: any, index: number) => (
+                    <Tag key={op?.uuid ?? op?.operation_uuid ?? index} color="blue">
+                      {getOpLabel(op, index)}
+                    </Tag>
+                  ))}
+                </Space>
+              </div>
+            );
+          } catch (error: any) {
+            console.error('解析工序序列失败:', error, seq);
+            return (
+              <span style={{ color: '#ff4d4f' }}>
+                {t('app.master-data.routes.operationSequenceParseFailed', {
+                  defaultValue: '工序数据解析失败: {{message}}',
+                  message: error.message,
+                })}
+              </span>
+            );
+          }
+        },
+      },
+    ],
+    [t]
+  );
 
   const handleCreate = () => {
     setEditUuid(null);
@@ -253,6 +378,12 @@ const ProcessRoutesPage: React.FC = () => {
   const handleOpenBindModal = async (record: ProcessRoute) => {
     try {
       setCurrentBindProcessRouteUuid(record.uuid);
+      setBindModalRouteSummary({
+        code: record.code ?? (record as any)?.code ?? '',
+        name: record.name ?? (record as any)?.name ?? '',
+      });
+      setPendingMaterialGroupUuids([]);
+      setPendingMaterialUuids([]);
       setBindLoading(true);
       
       // 加载绑定的物料和物料分组
@@ -276,23 +407,6 @@ const ProcessRoutesPage: React.FC = () => {
   };
 
   /**
-   * 处理绑定物料分组
-   */
-  const handleBindMaterialGroup = async (materialGroupUuid: string) => {
-    if (!currentBindProcessRouteUuid) return;
-    
-    try {
-      await processRouteApi.bindMaterialGroup(currentBindProcessRouteUuid, materialGroupUuid);
-      messageApi.success(t('app.master-data.routes.bindSuccess'));
-      // 重新加载绑定信息
-      const bound = await processRouteApi.getBoundMaterials(currentBindProcessRouteUuid);
-      setBoundMaterials(bound);
-    } catch (error: any) {
-      messageApi.error(error.message || t('app.master-data.routes.bindFailed'));
-    }
-  };
-
-  /**
    * 处理解绑物料分组
    */
   const handleUnbindMaterialGroup = async (materialGroupUuid: string) => {
@@ -310,19 +424,56 @@ const ProcessRoutesPage: React.FC = () => {
   };
 
   /**
-   * 处理绑定物料
+   * 批量添加待选的物料分组绑定
    */
-  const handleBindMaterial = async (materialUuid: string) => {
-    if (!currentBindProcessRouteUuid) return;
-    
+  const handleApplyPendingMaterialGroups = async () => {
+    if (!currentBindProcessRouteUuid || pendingMaterialGroupUuids.length === 0) return;
+    setBindApplying(true);
     try {
-      await processRouteApi.bindMaterial(currentBindProcessRouteUuid, materialUuid);
+      for (const uuid of pendingMaterialGroupUuids) {
+        await processRouteApi.bindMaterialGroup(currentBindProcessRouteUuid, uuid);
+      }
       messageApi.success(t('app.master-data.routes.bindSuccess'));
-      // 重新加载绑定信息
+      setPendingMaterialGroupUuids([]);
       const bound = await processRouteApi.getBoundMaterials(currentBindProcessRouteUuid);
       setBoundMaterials(bound);
     } catch (error: any) {
       messageApi.error(error.message || t('app.master-data.routes.bindFailed'));
+      try {
+        const bound = await processRouteApi.getBoundMaterials(currentBindProcessRouteUuid);
+        setBoundMaterials(bound);
+      } catch {
+        /* ignore */
+      }
+    } finally {
+      setBindApplying(false);
+    }
+  };
+
+  /**
+   * 批量添加待选的物料绑定
+   */
+  const handleApplyPendingMaterials = async () => {
+    if (!currentBindProcessRouteUuid || pendingMaterialUuids.length === 0) return;
+    setBindApplying(true);
+    try {
+      for (const uuid of pendingMaterialUuids) {
+        await processRouteApi.bindMaterial(currentBindProcessRouteUuid, uuid);
+      }
+      messageApi.success(t('app.master-data.routes.bindSuccess'));
+      setPendingMaterialUuids([]);
+      const bound = await processRouteApi.getBoundMaterials(currentBindProcessRouteUuid);
+      setBoundMaterials(bound);
+    } catch (error: any) {
+      messageApi.error(error.message || t('app.master-data.routes.bindFailed'));
+      try {
+        const bound = await processRouteApi.getBoundMaterials(currentBindProcessRouteUuid);
+        setBoundMaterials(bound);
+      } catch {
+        /* ignore */
+      }
+    } finally {
+      setBindApplying(false);
     }
   };
 
@@ -347,16 +498,24 @@ const ProcessRoutesPage: React.FC = () => {
    * 处理打开详情
    */
   const handleOpenDetail = async (record: ProcessRoute) => {
-    try {
+    const req = ++routeDetailReqRef.current;
+    flushDrawerOpen(() => {
+      setProcessRouteDetail(record);
       setDrawerVisible(true);
       setDetailLoading(true);
-      
+    });
+    try {
       const detail = await processRouteApi.get(record.uuid);
+      if (routeDetailReqRef.current !== req) return;
       setProcessRouteDetail(detail);
     } catch (error: any) {
-      messageApi.error(error.message || t('app.master-data.routes.getDetailFailed'));
+      if (routeDetailReqRef.current === req) {
+        messageApi.error(error.message || t('app.master-data.routes.getDetailFailed'));
+      }
     } finally {
-      setDetailLoading(false);
+      if (routeDetailReqRef.current === req) {
+        setDetailLoading(false);
+      }
     }
   };
 
@@ -540,114 +699,20 @@ const ProcessRoutesPage: React.FC = () => {
         onExport={handleExport}
       />
 
-      <DetailDrawerTemplate
-        title="工艺路线详情"
+      <UniDetail
+        title={t('app.master-data.routes.detailTitle', { defaultValue: '工艺路线详情' })}
         open={drawerVisible}
         onClose={handleCloseDetail}
-        dataSource={processRouteDetail || undefined}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        column={1}
-        columns={[
-          { title: '工艺路线编号', dataIndex: 'code' },
-          { title: '工艺路线名称', dataIndex: 'name' },
-          { title: '描述', dataIndex: 'description' },
-          {
-            title: '启用状态',
-            dataIndex: 'is_active',
-            render: (_, record) => {
-              const isActive = record?.is_active ?? (record as any)?.isActive;
-              return (
-                <Tag color={isActive ? 'success' : 'default'}>
-                  {isActive ? '启用' : '禁用'}
-                </Tag>
-              );
-            },
-          },
-          { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
-          { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
-          {
-            title: '工序序列',
-            span: 2,
-            render: (_, record) => {
-              const seq = record?.operation_sequence ?? (record as any)?.operationSequence;
-              if (!seq) {
-                return <span style={{ color: '#999' }}>暂无工序</span>;
-              }
-
-              try {
-                let operations: any[] = [];
-
-                // 解析工序序列数据
-                if (Array.isArray(seq)) {
-                  operations = seq;
-                } else if (typeof seq === 'object' && seq !== null) {
-                  // 优先使用 operations 数组（包含完整信息）
-                  const seqObj = seq as Record<string, any>;
-                  if (seqObj.operations && Array.isArray(seqObj.operations)) {
-                    operations = seqObj.operations;
-                  } else if (seqObj.sequence && Array.isArray(seqObj.sequence)) {
-                    operations = seqObj.sequence.map((uuid: string) => ({
-                      uuid,
-                      code: uuid.substring(0, 8),
-                      name: '工序',
-                    }));
-                  } else {
-                    // 尝试直接使用对象的值
-                    const entries = Object.entries(seqObj);
-                    for (const [_, value] of entries) {
-                      if (Array.isArray(value)) {
-                        operations = value;
-                        break;
-                      }
-                    }
-
-                    // 如果还没找到，尝试将所有值合并
-                    if (operations.length === 0) {
-                      const allValues = Object.values(seqObj).filter(v => v != null);
-                      if (allValues.length > 0 && Array.isArray(allValues[0])) {
-                        operations = allValues[0] as any[];
-                      } else if (allValues.length > 0) {
-                        operations = allValues as any[];
-                      }
-                    }
-                  }
-                }
-
-                if (!operations || operations.length === 0) {
-                  console.log('operations 为空或长度为0');
-                  return <span style={{ color: '#999' }}>暂无工序</span>;
-                }
-
-                // 显示工序列表（op 可能是 {uuid, code, name} 或 {sequence, operation_id, operation_uuid}，不可直接渲染对象）
-                const getOpLabel = (op: any, index: number) => {
-                  if (op?.code != null) return `${op.code} - ${op?.name ?? '未知工序'}`;
-                  if (op?.name != null) return op.name;
-                  if (op?.operation_uuid) return `工序 ${index + 1} (${String(op.operation_uuid).slice(0, 8)}...)`;
-                  if (op?.operation_id) return `工序 ${index + 1} (ID: ${op.operation_id})`;
-                  return `工序 ${index + 1}`;
-                };
-                return (
-                  <div>
-                    <div style={{ marginBottom: 8, fontWeight: 500 }}>
-                      共 {operations.length} 个工序：
-                    </div>
-                    <Space wrap>
-                      {operations.map((op: any, index: number) => (
-                        <Tag key={op?.uuid ?? op?.operation_uuid ?? index} color="blue">
-                          {getOpLabel(op, index)}
-                        </Tag>
-                      ))}
-                    </Space>
-                  </div>
-                );
-              } catch (error: any) {
-                console.error('解析工序序列失败:', error, seq);
-                return <span style={{ color: '#ff4d4f' }}>工序数据解析失败: {error.message}</span>;
-              }
-            },
-          },
-        ]}
+        basic={
+          processRouteDetail ? (
+            <Descriptions
+              column={1}
+              items={detailDrawerDescriptionItems(processRouteDetailColumns, processRouteDetail)}
+            />
+          ) : null
+        }
       />
 
       <RouteFormModal
@@ -659,138 +724,232 @@ const ProcessRoutesPage: React.FC = () => {
 
       {/* 绑定管理 Modal */}
       <Modal
-        title="绑定物料管理"
+        title={
+          <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 0, flexWrap: 'nowrap', maxWidth: '100%' }}>
+            <span style={{ fontWeight: 600, flexShrink: 0 }}>绑定物料管理</span>
+            {bindModalRouteSummary ? (
+              <Typography.Text type="secondary" ellipsis={{ tooltip: true }} style={{ flex: '1 1 auto', minWidth: 0 }}>
+                {' · '}
+                {bindModalRouteSummary.code}
+                {bindModalRouteSummary.name ? ` · ${bindModalRouteSummary.name}` : ''}
+              </Typography.Text>
+            ) : null}
+          </span>
+        }
         open={bindModalVisible}
-        onCancel={() => {
-          setBindModalVisible(false);
-          setCurrentBindProcessRouteUuid(null);
-          setBoundMaterials({ materials: [], material_groups: [] });
-        }}
+        onCancel={closeBindModal}
         footer={[
-          <Button key="close" onClick={() => {
-            setBindModalVisible(false);
-            setCurrentBindProcessRouteUuid(null);
-            setBoundMaterials({ materials: [], material_groups: [] });
-          }}>
+          <Button key="close" onClick={closeBindModal}>
             关闭
           </Button>,
         ]}
-        width={900}
+        width={920}
+        destroyOnClose
+        styles={{ body: { maxHeight: 'min(72vh, 720px)', overflowY: 'auto', paddingTop: 8 } }}
       >
-        <Spin spinning={bindLoading}>
-          <Space direction="vertical" style={{ width: '100%' }} size="large">
-            {/* 绑定物料分组 */}
-            <div>
-              <Typography.Title level={5}>绑定物料分组（批量管理）</Typography.Title>
-              <Typography.Text type="secondary" style={{ fontSize: '12px', display: 'block', marginBottom: '12px' }}>
+        <Spin spinning={bindLoading || bindApplying}>
+          <Space direction="vertical" style={{ width: '100%' }} size={16}>
+            <Card
+              size="small"
+              title={
+                <Space size={8}>
+                  <span>绑定物料分组（批量管理）</span>
+                  <Tag color="blue">{boundMaterials.material_groups.length}</Tag>
+                </Space>
+              }
+            >
+              <Typography.Paragraph type="secondary" style={{ marginBottom: 12, fontSize: 12 }}>
                 绑定后，该物料分组下的所有物料（如果没有单独绑定工艺路线）将自动使用此工艺路线。
+              </Typography.Paragraph>
+              <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
+                当前已绑定
               </Typography.Text>
-              
-              {/* 已绑定的物料分组 */}
-              {boundMaterials.material_groups.length > 0 && (
-                <div style={{ marginBottom: '16px' }}>
-                  <Typography.Text strong style={{ display: 'block', marginBottom: '8px' }}>
-                    已绑定的物料分组：
-                  </Typography.Text>
-                  <Space wrap>
-                    {boundMaterials.material_groups.map((mg) => (
-                      <Tag
-                        key={mg.uuid}
-                        closable
-                        onClose={() => handleUnbindMaterialGroup(mg.uuid)}
-                        color="blue"
+              <List
+                size="small"
+                bordered
+                locale={{
+                  emptyText: '暂无分组绑定，可在下方多选后一次性添加',
+                }}
+                dataSource={boundMaterials.material_groups}
+                style={{ marginBottom: 16 }}
+                renderItem={(mg) => (
+                  <List.Item
+                    actions={[
+                      <Popconfirm
+                        key="unbind-mg"
+                        title="确认解绑该物料分组？"
+                        okText="解绑"
+                        cancelText="取消"
+                        disabled={bindApplying}
+                        onConfirm={() => handleUnbindMaterialGroup(mg.uuid)}
                       >
-                        {mg.code} - {mg.name}
-                      </Tag>
-                    ))}
-                  </Space>
-                </div>
-              )}
-              
-              {/* 选择物料分组 */}
-              <Select
-                placeholder="选择物料分组进行绑定"
-                style={{ width: '100%' }}
-                showSearch
-                filterOption={(input, option) =>
-                  (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-                }
-                options={allMaterialGroups
-                  .filter(mg => !boundMaterials.material_groups.some(bm => bm.uuid === mg.uuid))
-                  .map(mg => ({
-                    label: `${mg.code} - ${mg.name}`,
-                    value: mg.uuid,
-                  }))}
-                onSelect={(value) => handleBindMaterialGroup(value)}
+                        <Button type="link" size="small" danger disabled={bindApplying}>
+                          解绑
+                        </Button>
+                      </Popconfirm>,
+                    ]}
+                  >
+                    <List.Item.Meta
+                      title={
+                        <Typography.Text ellipsis={{ tooltip: `${mg.code} — ${mg.name}` }}>
+                          {mg.code} — {mg.name}
+                        </Typography.Text>
+                      }
+                    />
+                  </List.Item>
+                )}
               />
-            </div>
+              <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
+                添加绑定
+              </Typography.Text>
+              <Space.Compact style={{ width: '100%' }}>
+                <Select
+                  mode="multiple"
+                  allowClear
+                  placeholder="搜索并多选物料分组，点击右侧按钮提交"
+                  style={{ flex: 1 }}
+                  maxTagCount="responsive"
+                  optionFilterProp="label"
+                  disabled={bindApplying || bindLoading}
+                  value={pendingMaterialGroupUuids}
+                  onChange={setPendingMaterialGroupUuids}
+                  showSearch
+                  filterOption={(input, option) =>
+                    String(option?.label ?? '')
+                      .toLowerCase()
+                      .includes(input.trim().toLowerCase())
+                  }
+                  options={allMaterialGroups
+                    .filter((mg) => !boundMaterials.material_groups.some((bm) => bm.uuid === mg.uuid))
+                    .map((mg) => ({
+                      label: `${mg.code} - ${mg.name}`,
+                      value: mg.uuid,
+                    }))}
+                />
+                <Button
+                  type="primary"
+                  disabled={
+                    bindApplying || bindLoading || pendingMaterialGroupUuids.length === 0
+                  }
+                  onClick={handleApplyPendingMaterialGroups}
+                >
+                  添加所选 ({pendingMaterialGroupUuids.length})
+                </Button>
+              </Space.Compact>
+            </Card>
 
-            <Divider />
-
-            {/* 绑定物料 */}
-            <div>
-              <Typography.Title level={5}>绑定物料（精确控制）</Typography.Title>
-              <Typography.Text type="secondary" style={{ fontSize: '12px', display: 'block', marginBottom: '12px' }}>
+            <Card
+              size="small"
+              title={
+                <Space size={8}>
+                  <span>绑定物料（精确控制）</span>
+                  <Tag color="green">{boundMaterials.materials.length}</Tag>
+                </Space>
+              }
+            >
+              <Typography.Paragraph type="secondary" style={{ marginBottom: 12, fontSize: 12 }}>
                 物料绑定优先级高于物料分组绑定。绑定后，该物料将优先使用此工艺路线（即使物料所属分组也绑定了其他工艺路线）。
+              </Typography.Paragraph>
+              <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
+                当前已绑定
               </Typography.Text>
-              
-              {/* 已绑定的物料 */}
-              {boundMaterials.materials.length > 0 && (
-                <div style={{ marginBottom: '16px' }}>
-                  <Typography.Text strong style={{ display: 'block', marginBottom: '8px' }}>
-                    已绑定的物料：
-                  </Typography.Text>
-                  <Space wrap>
-                    {boundMaterials.materials.map((m) => (
-                      <Tag
-                        key={m.uuid}
-                        closable
-                        onClose={() => handleUnbindMaterial(m.uuid)}
-                        color="green"
+              <List
+                size="small"
+                bordered
+                locale={{
+                  emptyText: '暂无物料绑定，可在下方多选后一次性添加',
+                }}
+                dataSource={boundMaterials.materials}
+                style={{ marginBottom: 16 }}
+                renderItem={(m) => (
+                  <List.Item
+                    actions={[
+                      <Popconfirm
+                        key="unbind-m"
+                        title="确认解绑该物料？"
+                        okText="解绑"
+                        cancelText="取消"
+                        disabled={bindApplying}
+                        onConfirm={() => handleUnbindMaterial(m.uuid)}
                       >
-                        {m.code} - {m.name}
-                      </Tag>
-                    ))}
-                  </Space>
-                </div>
-              )}
-              
-              {/* 选择物料 */}
-              <Select
-                placeholder="选择物料进行绑定"
-                style={{ width: '100%' }}
-                showSearch
-                filterOption={(input, option) =>
-                  (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-                }
-                options={allMaterials
-                  .filter(m => !boundMaterials.materials.some(bm => bm.uuid === m.uuid))
-                  .map(m => ({
-                    label: `${(m as any).mainCode || (m as any).code || m.uuid} - ${m.name}`,
-                    value: m.uuid,
-                  }))}
-                onSelect={(value) => handleBindMaterial(value)}
+                        <Button type="link" size="small" danger disabled={bindApplying}>
+                          解绑
+                        </Button>
+                      </Popconfirm>,
+                    ]}
+                  >
+                    <List.Item.Meta
+                      title={
+                        <Typography.Text ellipsis={{ tooltip: `${m.code} — ${m.name}` }}>
+                          {m.code} — {m.name}
+                        </Typography.Text>
+                      }
+                    />
+                  </List.Item>
+                )}
               />
-            </div>
+              <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
+                添加绑定
+              </Typography.Text>
+              <Space.Compact style={{ width: '100%' }}>
+                <Select
+                  mode="multiple"
+                  allowClear
+                  placeholder="搜索并多选物料，点击右侧按钮提交"
+                  style={{ flex: 1 }}
+                  maxTagCount="responsive"
+                  optionFilterProp="label"
+                  disabled={bindApplying || bindLoading}
+                  value={pendingMaterialUuids}
+                  onChange={setPendingMaterialUuids}
+                  showSearch
+                  filterOption={(input, option) =>
+                    String(option?.label ?? '')
+                      .toLowerCase()
+                      .includes(input.trim().toLowerCase())
+                  }
+                  options={allMaterials
+                    .filter((m) => !boundMaterials.materials.some((bm) => bm.uuid === m.uuid))
+                    .map((m) => ({
+                      label: `${(m as any).mainCode || (m as any).code || m.uuid} - ${m.name}`,
+                      value: m.uuid,
+                    }))}
+                />
+                <Button
+                  type="primary"
+                  disabled={bindApplying || bindLoading || pendingMaterialUuids.length === 0}
+                  onClick={handleApplyPendingMaterials}
+                >
+                  添加所选 ({pendingMaterialUuids.length})
+                </Button>
+              </Space.Compact>
+            </Card>
 
-            {/* 优先级说明 */}
-            <div style={{
-              marginTop: '24px',
-              padding: '12px',
-              backgroundColor: '#f6ffed',
-              border: '1px solid #b7eb8f',
-              borderRadius: '6px',
-            }}>
-              <Typography.Text strong style={{ display: 'block', marginBottom: '8px' }}>
-                优先级说明：
-              </Typography.Text>
-              <Typography.Text type="secondary" style={{ fontSize: '12px', display: 'block' }}>
-                1. 物料主数据中的工艺路线关联（最高优先级）<br />
-                2. 物料绑定工艺路线（第二优先级）<br />
-                3. 物料分组绑定工艺路线（第三优先级）<br />
-                4. 默认工艺路线（最低优先级，如果配置了）
-              </Typography.Text>
-            </div>
+            <Collapse
+              bordered={false}
+              style={{ background: '#fafafa' }}
+              items={[
+                {
+                  key: 'priority',
+                  label: (
+                    <Typography.Text strong style={{ fontSize: 13 }}>
+                      工艺路线优先级说明
+                    </Typography.Text>
+                  ),
+                  children: (
+                    <Typography.Paragraph type="secondary" style={{ marginBottom: 0, fontSize: 12 }}>
+                      1. 物料主数据中的工艺路线关联（最高优先级）
+                      <br />
+                      2. 物料绑定工艺路线（第二优先级）
+                      <br />
+                      3. 物料分组绑定工艺路线（第三优先级）
+                      <br />
+                      4. 默认工艺路线（最低优先级，如果配置了）
+                    </Typography.Paragraph>
+                  ),
+                },
+              ]}
+            />
           </Space>
         </Spin>
       </Modal>

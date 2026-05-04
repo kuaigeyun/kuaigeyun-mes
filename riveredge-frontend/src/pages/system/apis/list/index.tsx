@@ -5,7 +5,7 @@
  * 支持接口的 CRUD 操作和接口测试功能。
  */
 
-import React, { useRef, useState } from 'react'
+import React, { useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   ActionType,
@@ -15,6 +15,7 @@ import {
   ProFormSwitch,
   ProFormList,
   ProFormGroup,
+  ProDescriptionsItemProps,
 } from '@ant-design/pro-components'
 import SafeProFormSelect from '../../../../components/safe-pro-form-select'
 import {
@@ -26,7 +27,7 @@ import {
   Drawer,
   Input,
   Typography,
-  Modal,
+  Descriptions,
 } from 'antd'
 import {
   EditOutlined,
@@ -36,12 +37,13 @@ import {
 } from '@ant-design/icons'
 import { UniTable } from '../../../../components/uni-table'
 import {
+  flushDrawerOpen,
   ListPageTemplate,
   FormModalTemplate,
-  DetailDrawerTemplate,
   MODAL_CONFIG,
   DRAWER_CONFIG,
 } from '../../../../components/layout-templates'
+import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail'
 import {
   getAPIList,
   getAPIByUuid,
@@ -110,6 +112,7 @@ const APIListPage: React.FC = () => {
   const { t } = useTranslation()
   const { message: messageApi } = App.useApp()
   const actionRef = useRef<ActionType>(null)
+  const apiDetailReqRef = useRef(0)
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
 
   // Modal 相关状态（创建/编辑接口）
@@ -186,17 +189,157 @@ const APIListPage: React.FC = () => {
    * 处理查看详情
    */
   const handleView = async (record: API) => {
-    try {
-      setDetailLoading(true)
+    const req = ++apiDetailReqRef.current
+    flushDrawerOpen(() => {
       setDrawerVisible(true)
+      setDetailData(null)
+      setDetailLoading(true)
+    })
+    try {
       const detail = await getAPIByUuid(record.uuid)
+      if (apiDetailReqRef.current !== req) return
       setDetailData(detail)
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.apis.getDetailFailed'))
+      if (apiDetailReqRef.current === req) {
+        messageApi.error(error.message || t('pages.system.apis.getDetailFailed'))
+      }
     } finally {
-      setDetailLoading(false)
+      if (apiDetailReqRef.current === req) {
+        setDetailLoading(false)
+      }
     }
   }
+
+  const apiDetailDescColumns = useMemo<ProDescriptionsItemProps<API>[]>(
+    () => [
+      { title: t('pages.system.apis.detailColumnName'), dataIndex: 'name' },
+      { title: t('pages.system.apis.detailColumnCode'), dataIndex: 'code' },
+      { title: t('pages.system.apis.detailColumnDescription'), dataIndex: 'description' },
+      {
+        title: t('pages.system.apis.detailColumnMethod'),
+        dataIndex: 'method',
+        render: (_dom, entity: API) => <Tag color="blue">{entity.method}</Tag>,
+      },
+      { title: t('pages.system.apis.detailColumnPath'), dataIndex: 'path' },
+      {
+        title: t('pages.system.apis.detailColumnRequestHeaders'),
+        dataIndex: 'request_headers',
+        render: (_dom, entity: API) => (
+          <pre
+            style={{
+              margin: 0,
+              padding: '8px',
+              backgroundColor: '#f5f5f5',
+              borderRadius: '4px',
+              overflow: 'auto',
+              maxHeight: '200px',
+              fontSize: 12,
+            }}
+          >
+            {JSON.stringify(entity.request_headers || {}, null, 2)}
+          </pre>
+        ),
+      },
+      {
+        title: t('pages.system.apis.detailColumnRequestParams'),
+        dataIndex: 'request_params',
+        render: (_dom, entity: API) => (
+          <pre
+            style={{
+              margin: 0,
+              padding: '8px',
+              backgroundColor: '#f5f5f5',
+              borderRadius: '4px',
+              overflow: 'auto',
+              maxHeight: '200px',
+              fontSize: 12,
+            }}
+          >
+            {JSON.stringify(entity.request_params || {}, null, 2)}
+          </pre>
+        ),
+      },
+      {
+        title: t('pages.system.apis.detailColumnRequestBody'),
+        dataIndex: 'request_body',
+        render: (_dom, entity: API) => (
+          <pre
+            style={{
+              margin: 0,
+              padding: '8px',
+              backgroundColor: '#f5f5f5',
+              borderRadius: '4px',
+              overflow: 'auto',
+              maxHeight: '200px',
+              fontSize: 12,
+            }}
+          >
+            {JSON.stringify(entity.request_body || {}, null, 2)}
+          </pre>
+        ),
+      },
+      {
+        title: t('pages.system.apis.detailColumnResponseFormat'),
+        dataIndex: 'response_format',
+        render: (_dom, entity: API) => (
+          <pre
+            style={{
+              margin: 0,
+              padding: '8px',
+              backgroundColor: '#f5f5f5',
+              borderRadius: '4px',
+              overflow: 'auto',
+              maxHeight: '200px',
+              fontSize: 12,
+            }}
+          >
+            {JSON.stringify(entity.response_format || {}, null, 2)}
+          </pre>
+        ),
+      },
+      {
+        title: t('pages.system.apis.detailColumnResponseExample'),
+        dataIndex: 'response_example',
+        render: (_dom, entity: API) => (
+          <pre
+            style={{
+              margin: 0,
+              padding: '8px',
+              backgroundColor: '#f5f5f5',
+              borderRadius: '4px',
+              overflow: 'auto',
+              maxHeight: '200px',
+              fontSize: 12,
+            }}
+          >
+            {JSON.stringify(entity.response_example || {}, null, 2)}
+          </pre>
+        ),
+      },
+      {
+        title: t('pages.system.apis.detailColumnActive'),
+        dataIndex: 'is_active',
+        render: (_dom, entity: API) => (
+          <Tag color={entity.is_active ? 'success' : 'default'}>
+            {entity.is_active ? t('pages.system.apis.enabled') : t('pages.system.apis.disabled')}
+          </Tag>
+        ),
+      },
+      {
+        title: t('pages.system.apis.detailColumnSystem'),
+        dataIndex: 'is_system',
+        render: (_dom, entity: API) =>
+          entity.is_system ? (
+            <Tag color="purple">{t('pages.system.apis.systemTag')}</Tag>
+          ) : (
+            <Tag>{t('pages.system.apis.customTag')}</Tag>
+          ),
+      },
+      { title: t('pages.system.apis.detailColumnCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+      { title: t('pages.system.apis.detailColumnUpdatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+    ],
+    [t]
+  )
 
   /**
    * 处理删除接口
@@ -480,7 +623,7 @@ const APIListPage: React.FC = () => {
         <UniTable<API>
           actionRef={actionRef}
           columns={columns}
-          request={async (params, sort, _filter, searchFormValues) => {
+          request={async (params, _sort, _filter, searchFormValues) => {
             // 处理搜索参数
             const apiParams: any = {
               page: params.current || 1,
@@ -763,140 +906,17 @@ const APIListPage: React.FC = () => {
       </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
-      <DetailDrawerTemplate
+      <UniDetail
         title={t('pages.system.apis.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.LARGE_WIDTH}
-        dataSource={detailData}
-        columns={[
-          { title: t('pages.system.apis.detailColumnName'), dataIndex: 'name' },
-          { title: t('pages.system.apis.detailColumnCode'), dataIndex: 'code' },
-          { title: t('pages.system.apis.detailColumnDescription'), dataIndex: 'description' },
-          {
-            title: t('pages.system.apis.detailColumnMethod'),
-            dataIndex: 'method',
-            render: (value: string) => <Tag color="blue">{value}</Tag>,
-          },
-          { title: t('pages.system.apis.detailColumnPath'), dataIndex: 'path' },
-          {
-            title: t('pages.system.apis.detailColumnRequestHeaders'),
-            dataIndex: 'request_headers',
-            render: (value: any) => (
-              <pre
-                style={{
-                  margin: 0,
-                  padding: '8px',
-                  backgroundColor: '#f5f5f5',
-                  borderRadius: '4px',
-                  overflow: 'auto',
-                  maxHeight: '200px',
-                  fontSize: 12,
-                }}
-              >
-                {JSON.stringify(value || {}, null, 2)}
-              </pre>
-            ),
-          },
-          {
-            title: t('pages.system.apis.detailColumnRequestParams'),
-            dataIndex: 'request_params',
-            render: (value: any) => (
-              <pre
-                style={{
-                  margin: 0,
-                  padding: '8px',
-                  backgroundColor: '#f5f5f5',
-                  borderRadius: '4px',
-                  overflow: 'auto',
-                  maxHeight: '200px',
-                  fontSize: 12,
-                }}
-              >
-                {JSON.stringify(value || {}, null, 2)}
-              </pre>
-            ),
-          },
-          {
-            title: t('pages.system.apis.detailColumnRequestBody'),
-            dataIndex: 'request_body',
-            render: (value: any) => (
-              <pre
-                style={{
-                  margin: 0,
-                  padding: '8px',
-                  backgroundColor: '#f5f5f5',
-                  borderRadius: '4px',
-                  overflow: 'auto',
-                  maxHeight: '200px',
-                  fontSize: 12,
-                }}
-              >
-                {JSON.stringify(value || {}, null, 2)}
-              </pre>
-            ),
-          },
-          {
-            title: t('pages.system.apis.detailColumnResponseFormat'),
-            dataIndex: 'response_format',
-            render: (value: any) => (
-              <pre
-                style={{
-                  margin: 0,
-                  padding: '8px',
-                  backgroundColor: '#f5f5f5',
-                  borderRadius: '4px',
-                  overflow: 'auto',
-                  maxHeight: '200px',
-                  fontSize: 12,
-                }}
-              >
-                {JSON.stringify(value || {}, null, 2)}
-              </pre>
-            ),
-          },
-          {
-            title: t('pages.system.apis.detailColumnResponseExample'),
-            dataIndex: 'response_example',
-            render: (value: any) => (
-              <pre
-                style={{
-                  margin: 0,
-                  padding: '8px',
-                  backgroundColor: '#f5f5f5',
-                  borderRadius: '4px',
-                  overflow: 'auto',
-                  maxHeight: '200px',
-                  fontSize: 12,
-                }}
-              >
-                {JSON.stringify(value || {}, null, 2)}
-              </pre>
-            ),
-          },
-          {
-            title: t('pages.system.apis.detailColumnActive'),
-            dataIndex: 'is_active',
-            render: (value: boolean) => (
-              <Tag color={value ? 'success' : 'default'}>
-                {value ? t('pages.system.apis.enabled') : t('pages.system.apis.disabled')}
-              </Tag>
-            ),
-          },
-          {
-            title: t('pages.system.apis.detailColumnSystem'),
-            dataIndex: 'is_system',
-            render: (value: boolean) =>
-              value ? (
-                <Tag color="purple">{t('pages.system.apis.systemTag')}</Tag>
-              ) : (
-                <Tag>{t('pages.system.apis.customTag')}</Tag>
-              ),
-          },
-          { title: t('pages.system.apis.detailColumnCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },
-          { title: t('pages.system.apis.detailColumnUpdatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
-        ]}
+        basic={
+          detailData ? (
+            <Descriptions column={1} items={detailDrawerDescriptionItems(apiDetailDescColumns, detailData)} />
+          ) : null
+        }
       />
 
       {/* 接口测试 Drawer */}

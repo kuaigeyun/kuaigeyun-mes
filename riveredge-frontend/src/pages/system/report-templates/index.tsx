@@ -7,14 +7,15 @@
  * @date 2025-01-15
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, message } from 'antd';
+import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, message, Descriptions } from 'antd';
 import { PlusOutlined, EditOutlined, EyeOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
+import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../components/uni-detail';
 import { apiRequest } from '../../../services/api';
 
 /**
@@ -43,11 +44,78 @@ const ReportTemplatesPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
+  const reportTemplateDetailReqRef = useRef(0);
   const [modalVisible, setModalVisible] = useState(false);
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [currentId, setCurrentId] = useState<number | null>(null);
+  const [detailData, setDetailData] = useState<ReportTemplate | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const formRef = useRef<any>(null);
+
+  const reportDetailDescColumns = useMemo<ProDescriptionsItemProps<ReportTemplate>[]>(
+    () => [
+      { title: t('pages.system.reportTemplates.columnName'), dataIndex: 'name' },
+      { title: t('pages.system.reportTemplates.columnCode'), dataIndex: 'code' },
+      {
+        title: t('pages.system.reportTemplates.columnType'),
+        dataIndex: 'type',
+        render: (_: unknown, record: ReportTemplate) => {
+          const map: Record<string, string> = {
+            inventory: t('pages.system.reportTemplates.typeInventory'),
+            production: t('pages.system.reportTemplates.typeProduction'),
+            quality: t('pages.system.reportTemplates.typeQuality'),
+            custom: t('pages.system.reportTemplates.typeCustom'),
+          };
+          const v = record.type;
+          return v ? map[v] ?? v : '—';
+        },
+      },
+      {
+        title: t('pages.system.reportTemplates.columnCategory'),
+        dataIndex: 'category',
+        render: (_: unknown, record: ReportTemplate) => {
+          const map: Record<string, string> = {
+            system: t('pages.system.reportTemplates.categorySystem'),
+            department: t('pages.system.reportTemplates.categoryDepartment'),
+            personal: t('pages.system.reportTemplates.categoryPersonal'),
+          };
+          const v = record.category;
+          return v ? map[v] ?? v : '—';
+        },
+      },
+      {
+        title: t('pages.system.reportTemplates.columnStatus'),
+        dataIndex: 'status',
+        render: (_: unknown, record: ReportTemplate) => {
+          const map: Record<string, { text: string; color: string }> = {
+            draft: { text: t('pages.system.reportTemplates.statusDraft'), color: 'default' },
+            published: { text: t('pages.system.reportTemplates.statusPublished'), color: 'success' },
+            archived: { text: t('pages.system.reportTemplates.statusArchived'), color: 'error' },
+          };
+          const v = record.status;
+          if (!v) return '—';
+          const item = map[v] ?? { text: v, color: 'default' };
+          return <Tag color={item.color}>{item.text}</Tag>;
+        },
+      },
+      {
+        title: t('pages.system.reportTemplates.columnIsDefault'),
+        dataIndex: 'is_default',
+        render: (_: unknown, record: ReportTemplate) =>
+          record.is_default ? (
+            <Tag color="green">{t('pages.system.reportTemplates.yes')}</Tag>
+          ) : (
+            <Tag>{t('pages.system.reportTemplates.no')}</Tag>
+          ),
+      },
+      { title: t('pages.system.reportTemplates.labelDescription'), dataIndex: 'description' },
+      { title: t('pages.system.reportTemplates.columnCreatedBy'), dataIndex: 'created_by_name' },
+      { title: t('pages.system.reportTemplates.columnCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+      { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+    ],
+    [t]
+  );
 
   /**
    * 处理新建
@@ -84,10 +152,29 @@ const ReportTemplatesPage: React.FC = () => {
    * 处理查看详情
    */
   const handleDetail = async (keys: React.Key[]) => {
-    if (keys.length === 1) {
-      const id = Number(keys[0]);
+    if (keys.length !== 1) return;
+    const id = Number(keys[0]);
+    const req = ++reportTemplateDetailReqRef.current;
+    flushDrawerOpen(() => {
       setCurrentId(id);
       setDrawerVisible(true);
+      setDetailData(null);
+      setDetailLoading(true);
+    });
+    try {
+      const data = await apiRequest(`/core/reports/templates/${id}`, {
+        method: 'GET',
+      });
+      if (reportTemplateDetailReqRef.current !== req) return;
+      setDetailData(data as ReportTemplate);
+    } catch {
+      if (reportTemplateDetailReqRef.current === req) {
+        messageApi.error(t('pages.system.reportTemplates.loadFailed'));
+      }
+    } finally {
+      if (reportTemplateDetailReqRef.current === req) {
+        setDetailLoading(false);
+      }
     }
   };
 
@@ -353,18 +440,24 @@ const ReportTemplatesPage: React.FC = () => {
       />
 
       {/* 详情Drawer */}
-      <DetailDrawerTemplate
+      <UniDetail
         title={`${t('pages.system.reportTemplates.detailTitle')} - ${currentId || ''}`}
         open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
-        columns={columns}
-        request={async () => {
-          if (!currentId) return null;
-          return await apiRequest(`/core/reports/templates/${currentId}`, {
-            method: 'GET',
-          });
+        onClose={() => {
+          setDrawerVisible(false);
+          setDetailData(null);
+          setCurrentId(null);
         }}
+        loading={detailLoading}
+        width={DRAWER_CONFIG.LARGE_WIDTH}
+        basic={
+          detailData ? (
+            <Descriptions
+              column={1}
+              items={detailDrawerDescriptionItems(reportDetailDescColumns, detailData)}
+            />
+          ) : null
+        }
       />
     </ListPageTemplate>
   );

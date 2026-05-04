@@ -8,7 +8,7 @@
  * Date: 2025-01-15
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormJsonSchema } from '@ant-design/pro-components';
@@ -16,7 +16,8 @@ import { App, Popconfirm, Button, Tag, Space, message, Card, Modal } from 'antd'
 import { ProDescriptions } from '@ant-design/pro-components';
 import { EditOutlined, DeleteOutlined, EyeOutlined, HistoryOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { UniDetail } from '../../../../components/uni-detail';
 import {
   getEquipmentList,
   getEquipmentByUuid,
@@ -38,6 +39,7 @@ const EquipmentListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
+  const equipmentDetailReqRef = useRef(0);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Modal 相关状态（创建/编辑）
@@ -169,15 +171,24 @@ const EquipmentListPage: React.FC = () => {
    * 处理查看详情
    */
   const handleView = async (record: Equipment) => {
-    try {
-      setDetailLoading(true);
+    const req = ++equipmentDetailReqRef.current;
+    flushDrawerOpen(() => {
       setDrawerVisible(true);
+      setDetailData(null);
+      setDetailLoading(true);
+    });
+    try {
       const detail = await getEquipmentByUuid(record.uuid);
+      if (equipmentDetailReqRef.current !== req) return;
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.equipment.getDetailFailed'));
+      if (equipmentDetailReqRef.current === req) {
+        messageApi.error(error.message || t('pages.system.equipment.getDetailFailed'));
+      }
     } finally {
-      setDetailLoading(false);
+      if (equipmentDetailReqRef.current === req) {
+        setDetailLoading(false);
+      }
     }
   };
 
@@ -604,13 +615,13 @@ const EquipmentListPage: React.FC = () => {
       </FormModalTemplate>
 
       {/* 详情 Drawer */}
-      <DetailDrawerTemplate
+      <UniDetail
         title={t('pages.system.equipment.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        customContent={
+        plainBody={
           <>
             <ProDescriptions<Equipment>
               dataSource={detailData || undefined}
@@ -632,15 +643,26 @@ const EquipmentListPage: React.FC = () => {
                 {
                   title: t('pages.system.equipment.columnStatus'),
                   dataIndex: 'status',
-                  render: (value: string) => {
-                    const key = statusTextKey[value];
-                    return key ? t(`pages.system.equipment.${key}`) : value;
+                  render: (_: unknown, record: Equipment) => {
+                    const key = statusTextKey[record.status];
+                    const text = key ? t(`pages.system.equipment.${key}`) : record.status;
+                    const colorMap: Record<string, string> = {
+                      '正常': 'success',
+                      '维修中': 'warning',
+                      '停用': 'default',
+                      '报废': 'error',
+                    };
+                    return <Tag color={colorMap[record.status] || 'default'}>{text}</Tag>;
                   },
                 },
                 {
                   title: t('pages.system.equipment.columnActive'),
                   dataIndex: 'is_active',
-                  render: (value: boolean) => (value ? t('pages.system.equipment.enabled') : t('pages.system.equipment.disabled')),
+                  render: (_: unknown, record: Equipment) => (
+                    <Tag color={record?.is_active ? 'success' : 'default'}>
+                      {record?.is_active ? t('pages.system.equipment.enabled') : t('pages.system.equipment.disabled')}
+                    </Tag>
+                  ),
                 },
                 { title: t('pages.system.equipment.labelDescription'), dataIndex: 'description', span: 2 },
                 { title: t('pages.system.equipment.columnCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },

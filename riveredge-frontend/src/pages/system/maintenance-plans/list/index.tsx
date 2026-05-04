@@ -8,13 +8,23 @@
  * Date: 2025-01-15
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSelect, ProFormDatePicker, ProFormDigit } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, message, Modal } from 'antd';
+import {
+  ActionType,
+  ProColumns,
+  ProFormText,
+  ProFormTextArea,
+  ProFormSelect,
+  ProFormDatePicker,
+  ProFormDigit,
+  ProDescriptionsItemProps,
+} from '@ant-design/pro-components';
+import { App, Popconfirm, Button, Tag, Space, message, Modal, Descriptions } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import {
   getMaintenancePlanList,
   getMaintenancePlanByUuid,
@@ -34,6 +44,7 @@ const MaintenancePlanListPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const maintenancePlanDetailReqRef = useRef(0);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Modal 相关状态（创建/编辑）
@@ -115,15 +126,24 @@ const MaintenancePlanListPage: React.FC = () => {
    * 处理查看详情
    */
   const handleView = async (record: MaintenancePlan) => {
-    try {
-      setDetailLoading(true);
+    const req = ++maintenancePlanDetailReqRef.current;
+    flushDrawerOpen(() => {
       setDrawerVisible(true);
+      setDetailData(null);
+      setDetailLoading(true);
+    });
+    try {
       const detail = await getMaintenancePlanByUuid(record.uuid);
+      if (maintenancePlanDetailReqRef.current !== req) return;
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.maintenancePlans.getDetailFailed'));
+      if (maintenancePlanDetailReqRef.current === req) {
+        messageApi.error(error.message || t('pages.system.maintenancePlans.getDetailFailed'));
+      }
     } finally {
-      setDetailLoading(false);
+      if (maintenancePlanDetailReqRef.current === req) {
+        setDetailLoading(false);
+      }
     }
   };
 
@@ -210,12 +230,61 @@ const MaintenancePlanListPage: React.FC = () => {
     '按使用次数': 'pages.system.maintenancePlans.cycleByCount',
     '按运行时长': 'pages.system.maintenancePlans.cycleByRuntime',
   };
-  const detailStatusKey: Record<string, string> = {
-    '待执行': 'pages.system.maintenancePlans.statusPending',
-    '执行中': 'pages.system.maintenancePlans.statusRunning',
-    '已完成': 'pages.system.maintenancePlans.statusCompleted',
-    '已取消': 'pages.system.maintenancePlans.statusCancelled',
-  };
+
+  const maintenancePlanDetailDescColumns = useMemo<ProDescriptionsItemProps<MaintenancePlan>[]>(
+    () => [
+      { title: t('pages.system.maintenancePlans.columnPlanNo'), dataIndex: 'plan_no' },
+      { title: t('pages.system.maintenancePlans.columnPlanName'), dataIndex: 'plan_name' },
+      { title: t('pages.system.maintenancePlans.columnEquipment'), dataIndex: 'equipment_name' },
+      {
+        title: t('pages.system.maintenancePlans.columnPlanType'),
+        dataIndex: 'plan_type',
+        render: (v: string) => (planTypeKey[v] ? t(planTypeKey[v]) : v),
+      },
+      {
+        title: t('pages.system.maintenancePlans.columnMaintenanceType'),
+        dataIndex: 'maintenance_type',
+        render: (v: string) => (maintenanceTypeKey[v] ? t(maintenanceTypeKey[v]) : v),
+      },
+      {
+        title: t('pages.system.maintenancePlans.columnCycleType'),
+        dataIndex: 'cycle_type',
+        render: (v: string) => (cycleTypeKey[v] ? t(cycleTypeKey[v]) : v),
+      },
+      {
+        title: t('pages.system.maintenancePlans.columnCycleValue'),
+        dataIndex: 'cycle_value',
+        render: (value: number, record: MaintenancePlan) => {
+          if (value && record.cycle_unit) {
+            return `${value} ${record.cycle_unit}`;
+          }
+          return value || '-';
+        },
+      },
+      { title: t('pages.system.maintenancePlans.columnCycleUnit'), dataIndex: 'cycle_unit' },
+      { title: t('pages.system.maintenancePlans.columnPlannedStart'), dataIndex: 'planned_start_date' },
+      { title: t('pages.system.maintenancePlans.columnPlannedEnd'), dataIndex: 'planned_end_date' },
+      { title: t('pages.system.maintenancePlans.columnResponsible'), dataIndex: 'responsible_person_name' },
+      {
+        title: t('pages.system.maintenancePlans.columnStatus'),
+        dataIndex: 'status',
+        render: (_: unknown, record: MaintenancePlan) => {
+          const statusMap: Record<string, { color: string; text: string }> = {
+            '待执行': { color: 'default', text: t('pages.system.maintenancePlans.statusPending') },
+            '执行中': { color: 'processing', text: t('pages.system.maintenancePlans.statusRunning') },
+            '已完成': { color: 'success', text: t('pages.system.maintenancePlans.statusCompleted') },
+            '已取消': { color: 'error', text: t('pages.system.maintenancePlans.statusCancelled') },
+          };
+          const statusInfo = statusMap[record.status] || { color: 'default', text: record.status };
+          return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
+        },
+      },
+      { title: t('pages.system.maintenancePlans.labelRemark'), dataIndex: 'remark', span: 2 },
+      { title: t('pages.system.maintenancePlans.columnCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+      { title: t('pages.system.maintenancePlans.columnUpdatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+    ],
+    [t]
+  );
 
   /**
    * 表格列定义
@@ -553,39 +622,20 @@ const MaintenancePlanListPage: React.FC = () => {
       </FormModalTemplate>
 
       {/* 详情 Drawer */}
-      <DetailDrawerTemplate
+      <UniDetail
         title={t('pages.system.maintenancePlans.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        dataSource={detailData}
-        columns={[
-          { title: t('pages.system.maintenancePlans.columnPlanNo'), dataIndex: 'plan_no' },
-          { title: t('pages.system.maintenancePlans.columnPlanName'), dataIndex: 'plan_name' },
-          { title: t('pages.system.maintenancePlans.columnEquipment'), dataIndex: 'equipment_name' },
-          { title: t('pages.system.maintenancePlans.columnPlanType'), dataIndex: 'plan_type', render: (v: string) => (planTypeKey[v] ? t(planTypeKey[v]) : v) },
-          { title: t('pages.system.maintenancePlans.columnMaintenanceType'), dataIndex: 'maintenance_type', render: (v: string) => (maintenanceTypeKey[v] ? t(maintenanceTypeKey[v]) : v) },
-          { title: t('pages.system.maintenancePlans.columnCycleType'), dataIndex: 'cycle_type', render: (v: string) => (cycleTypeKey[v] ? t(cycleTypeKey[v]) : v) },
-          {
-            title: t('pages.system.maintenancePlans.columnCycleValue'),
-            dataIndex: 'cycle_value',
-            render: (value: number, record: MaintenancePlan) => {
-              if (value && record.cycle_unit) {
-                return `${value} ${record.cycle_unit}`;
-              }
-              return value || '-';
-            },
-          },
-          { title: t('pages.system.maintenancePlans.columnCycleUnit'), dataIndex: 'cycle_unit' },
-          { title: t('pages.system.maintenancePlans.columnPlannedStart'), dataIndex: 'planned_start_date' },
-          { title: t('pages.system.maintenancePlans.columnPlannedEnd'), dataIndex: 'planned_end_date' },
-          { title: t('pages.system.maintenancePlans.columnResponsible'), dataIndex: 'responsible_person_name' },
-          { title: t('pages.system.maintenancePlans.columnStatus'), dataIndex: 'status', render: (v: string) => (detailStatusKey[v] ? t(detailStatusKey[v]) : v) },
-          { title: t('pages.system.maintenancePlans.labelRemark'), dataIndex: 'remark', span: 2 },
-          { title: t('pages.system.maintenancePlans.columnCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },
-          { title: t('pages.system.maintenancePlans.columnUpdatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
-        ]}
+        basic={
+          detailData ? (
+            <Descriptions
+              column={1}
+              items={detailDrawerDescriptionItems(maintenancePlanDetailDescColumns, detailData)}
+            />
+          ) : null
+        }
       />
     </>
   );

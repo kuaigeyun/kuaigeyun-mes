@@ -24,12 +24,6 @@ export const defectTypeFormSchema: FieldConfig[] = [
     rules: [{ required: true, messageKey: 'field.defectType.nameRequired' }],
   },
   {
-    name: 'category',
-    type: 'text',
-    labelKey: 'field.defectType.category',
-    colSpan: 12,
-  },
-  {
     name: 'description',
     type: 'textarea',
     labelKey: 'field.defectType.description',

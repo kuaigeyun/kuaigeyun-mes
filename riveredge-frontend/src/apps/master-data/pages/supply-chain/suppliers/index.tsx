@@ -12,7 +12,8 @@ import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
+import { flushDrawerOpen, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
 
 import { supplierApi, getUserOptions, getDictionaryOptions } from '../../../services/supply-chain';
 import { SupplierFormModal } from '../../../components/SupplierFormModal';
@@ -38,6 +39,7 @@ const SuppliersPage: React.FC = () => {
   const [editUuid, setEditUuid] = useState<string | null>(null);
 
   const [dictLabelMaps, setDictLabelMaps] = useState<Record<string, Record<string, string>>>({});
+  const supplierDetailReqRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -152,16 +154,24 @@ const SuppliersPage: React.FC = () => {
    * 处理打开详情
    */
   const handleOpenDetail = async (record: Supplier) => {
-    try {
+    const req = ++supplierDetailReqRef.current;
+    flushDrawerOpen(() => {
+      setSupplierDetail(record);
       setDrawerVisible(true);
       setDetailLoading(true);
-      
+    });
+    try {
       const detail = await supplierApi.get(record.uuid);
+      if (supplierDetailReqRef.current !== req) return;
       setSupplierDetail(detail);
     } catch (error: any) {
-      messageApi.error(error.message || t('app.master-data.suppliers.getDetailFailed'));
+      if (supplierDetailReqRef.current === req) {
+        messageApi.error(error.message || t('app.master-data.suppliers.getDetailFailed'));
+      }
     } finally {
-      setDetailLoading(false);
+      if (supplierDetailReqRef.current === req) {
+        setDetailLoading(false);
+      }
     }
   };
 
@@ -841,16 +851,18 @@ const SuppliersPage: React.FC = () => {
       />
       </ListPageTemplate>
 
-      {/* 详情 Drawer */}
-      <DetailDrawerTemplate
+      {/* 详情 Drawer（uni-detail） */}
+      <UniDetail
         title={t('app.master-data.suppliers.detailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        basic={supplierDetail ? (
+        basic={
+          supplierDetail ? (
             <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, supplierDetail)} />
-          ) : undefined}
+          ) : null
+        }
       />
 
       {/* 创建/编辑供应商 Modal */}

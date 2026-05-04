@@ -10,10 +10,11 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProForm } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Modal, Form, Space, Typography, Tooltip, Card, theme } from 'antd';
+import { App, Popconfirm, Button, Tag, Modal, Form, Space, Typography, Tooltip, Card, theme, Descriptions } from 'antd';
 import { DeleteOutlined, EyeOutlined, PrinterOutlined, FileTextOutlined, EditOutlined, ApartmentOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import {
   getPrintTemplateList,
   getPrintTemplateByUuid,
@@ -92,6 +93,7 @@ const PrintTemplateListPage: React.FC = () => {
   const { token } = useToken();
   const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
+  const printTemplateDetailReqRef = useRef(0);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [allTemplates, setAllTemplates] = useState<PrintTemplate[]>([]); // 用于统计
   
@@ -176,15 +178,24 @@ const PrintTemplateListPage: React.FC = () => {
    * 处理查看详情
    */
   const handleView = async (record: PrintTemplate) => {
-    try {
-      setDetailLoading(true);
+    const req = ++printTemplateDetailReqRef.current;
+    flushDrawerOpen(() => {
       setDrawerVisible(true);
+      setDetailData(null);
+      setDetailLoading(true);
+    });
+    try {
       const detail = await getPrintTemplateByUuid(record.uuid);
+      if (printTemplateDetailReqRef.current !== req) return;
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.printTemplates.getDetailFailed'));
+      if (printTemplateDetailReqRef.current === req) {
+        messageApi.error(error.message || t('pages.system.printTemplates.getDetailFailed'));
+      }
     } finally {
-      setDetailLoading(false);
+      if (printTemplateDetailReqRef.current === req) {
+        setDetailLoading(false);
+      }
     }
   };
 
@@ -921,15 +932,17 @@ const PrintTemplateListPage: React.FC = () => {
       </Modal>
 
       {/* 详情 Drawer */}
-      <DetailDrawerTemplate
+      <UniDetail
         title={t('pages.system.printTemplates.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        dataSource={detailData || undefined}
-        columns={detailColumns as any}
-        column={1}
+        basic={
+          detailData ? (
+            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns as any, detailData)} />
+          ) : null
+        }
       />
     </>
   );

@@ -36,6 +36,7 @@ const VariantAttributesPage = lazy(() => import('./pages/materials/variant-attri
 const BatchRulesPage = lazy(() => import('./pages/materials/batch-rules'));
 const BatchesPage = lazy(() => import('./pages/materials/batches'));
 const SerialRulesPage = lazy(() => import('./pages/materials/serial-rules'));
+const SerialsPage = lazy(() => import('./pages/materials/serials'));
 
 // 工艺管理页面
 const DefectTypesPage = lazy(() => import('./pages/process/defect-types'));
@@ -74,6 +75,7 @@ const MasterDataApp: React.FC = () => {
       <Route path="materials/batch-rules" element={withPageSuspense(BatchRulesPage)} />
       <Route path="materials/batches" element={withPageSuspense(BatchesPage)} />
       <Route path="materials/serial-rules" element={withPageSuspense(SerialRulesPage)} />
+      <Route path="materials/serials" element={withPageSuspense(SerialsPage)} />
 
       {/* 工艺管理路由 */}
       <Route path="process/defect-types" element={withPageSuspense(DefectTypesPage)} />

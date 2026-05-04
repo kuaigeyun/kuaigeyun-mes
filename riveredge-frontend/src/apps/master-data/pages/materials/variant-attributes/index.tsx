@@ -1,21 +1,18 @@
 /**
  * 属性定义管理页面
  *
- * 提供属性定义的 CRUD 操作、版本管理等功能。
- *
- * Author: Luigi Lu
- * Date: 2026-01-08
+ * 提供属性定义的 CRUD、预设加载等。
  */
 
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { App, Tag, Space, Button, Popconfirm, Modal, Table } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, HistoryOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormDigit, ProFormInstance, ProForm } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import type { VariantAttributeDefinition } from '../../../types/variant-attribute';
 import { variantAttributeApi, type PresetAttributeItem } from '../../../services/variant-attribute';
 
@@ -25,11 +22,9 @@ const VariantAttributesPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);
   const [modalVisible, setModalVisible] = useState(false);
-  const [historyDrawerVisible, setHistoryDrawerVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [currentUuid, setCurrentUuid] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
-  const [historyUuid, setHistoryUuid] = useState<string | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [loadPresetLoading, setLoadPresetLoading] = useState(false);
   const [presetModalVisible, setPresetModalVisible] = useState(false);
@@ -167,7 +162,7 @@ const VariantAttributesPage: React.FC = () => {
     {
       title: '操作',
       valueType: 'option',
-      width: 200,
+      width: 160,
       fixed: 'right',
       render: (_: any, record: VariantAttributeDefinition) => (
         <Space>
@@ -178,14 +173,6 @@ const VariantAttributesPage: React.FC = () => {
             onClick={() => handleEdit(record)}
           >
             编辑
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<HistoryOutlined />}
-            onClick={() => handleViewHistory(record.uuid)}
-          >
-            历史
           </Button>
           <Popconfirm
             title={t('common.confirmDelete')}
@@ -298,14 +285,6 @@ const VariantAttributesPage: React.FC = () => {
         }
       },
     });
-  };
-
-  /**
-   * 处理查看历史
-   */
-  const handleViewHistory = (uuid: string) => {
-    setHistoryUuid(uuid);
-    setHistoryDrawerVisible(true);
   };
 
   /**
@@ -597,19 +576,6 @@ const VariantAttributesPage: React.FC = () => {
           ]}
         />
       </Modal>
-
-      {/* 版本历史 Drawer - 待实现 */}
-      {historyDrawerVisible && historyUuid && (
-        <DetailDrawerTemplate
-          title="版本历史"
-          open={historyDrawerVisible}
-          onClose={() => setHistoryDrawerVisible(false)}
-          loading={false}
-          columns={[]}
-          dataSource={undefined}
-          width={DRAWER_CONFIG.STANDARD_WIDTH}
-        />
-      )}
     </>
   );
 };

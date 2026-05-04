@@ -13,7 +13,8 @@ import { App, Card, Tag, Space, message, Modal, Descriptions, Popconfirm, Button
 import { StatCardTrendArea } from '../../../components/common/StatCardTrendArea';
 import { EyeOutlined, PlusOutlined, ReloadOutlined, DeleteOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../components/uni-detail';
 import {
   getBackups,
   createBackup,
@@ -743,18 +744,17 @@ const DataBackupsPage: React.FC = () => {
       </Modal>
 
       {/* 备份详情 Drawer */}
-      <DetailDrawerTemplate
+      <UniDetail
         title={t('pages.system.dataBackups.detailTitle')}
         open={detailDrawerVisible}
         onClose={() => {
           setDetailDrawerVisible(false);
           setCurrentBackup(null);
         }}
-        dataSource={currentBackup || {}}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
         basic={currentBackup ? (
             <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, currentBackup)} />
-          ) : undefined}
+          ) : null}
       />
     </>
   );

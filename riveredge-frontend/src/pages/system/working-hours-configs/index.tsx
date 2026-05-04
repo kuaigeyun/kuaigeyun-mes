@@ -13,7 +13,8 @@ import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormSwitch, ProF
 import { App, Tag, Button, Space, Popconfirm } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
+import { UniDetail } from '../../../components/uni-detail';
 import { apiRequest } from '../../../services/api';
 
 /**
@@ -431,13 +432,12 @@ const WorkingHoursConfigsPage: React.FC = () => {
       </FormModalTemplate>
 
       {/* 详情 Drawer */}
-      <DetailDrawerTemplate
+      <UniDetail
         title={`${t('pages.system.workingHoursConfigs.detailTitle')} - ${currentRecord?.name || ''}`}
         open={detailDrawerVisible}
         onClose={() => setDetailDrawerVisible(false)}
         width={DRAWER_CONFIG.LARGE_WIDTH}
-        columns={[]}
-        customContent={
+        plainBody={
           currentRecord ? (
             <div style={{ padding: '16px 0' }}>
               <p><strong>{t('pages.system.workingHoursConfigs.columnName')}：</strong>{currentRecord.name}</p>

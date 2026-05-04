@@ -6,12 +6,13 @@
  * Schema 驱动 + 国际化
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ProColumns } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, List, Popconfirm, Tooltip, Modal, Table } from 'antd';
+import { ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, List, Popconfirm, Tooltip, Modal, Table, Descriptions } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, EyeOutlined } from '@ant-design/icons';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { flushDrawerOpen, ListPageTemplate, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import { UniTable } from '../../../../components/uni-table';
 import { DepartmentFormModal } from '../components/DepartmentFormModal';
 import {
@@ -32,7 +33,35 @@ const DepartmentListPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi, modal } = App.useApp();
   const actionRef = useRef<any>();
+  const departmentDetailReqRef = useRef(0);
 
+  const departmentDetailDescColumns = useMemo<ProDescriptionsItemProps<Department>[]>(
+    () => [
+      { title: t('field.department.name'), dataIndex: 'name' },
+      { title: t('field.department.code'), dataIndex: 'code' },
+      {
+        title: t('field.department.parentName'),
+        dataIndex: ['parent', 'name'],
+        render: (_: unknown, record: Department) => (record as any)?.parent_name || '-',
+      },
+      {
+        title: t('field.role.status'),
+        dataIndex: 'is_active',
+        render: (_: unknown, entity: Department) => (
+          <Tag color={entity?.is_active ? 'success' : 'default'}>
+            {entity?.is_active ? t('field.role.enabled') : t('field.role.disabled')}
+          </Tag>
+        ),
+      },
+      { title: t('field.department.userCount'), dataIndex: 'user_count' },
+      { title: t('field.department.sortOrder'), dataIndex: 'sort_order' },
+      { title: t('field.department.queryCode'), dataIndex: 'query_code' },
+      { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+      { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+      { title: t('field.department.remark'), dataIndex: 'description' },
+    ],
+    [t]
+  );
 
   const [modalVisible, setModalVisible] = useState(false);
   const [currentDepartmentUuid, setCurrentDepartmentUuid] = useState<string | null>(null);
@@ -189,15 +218,24 @@ const DepartmentListPage: React.FC = () => {
   };
 
   const handleView = async (record: Department) => {
-    try {
-      setDetailLoading(true);
+    const req = ++departmentDetailReqRef.current;
+    flushDrawerOpen(() => {
       setDrawerVisible(true);
+      setDetailData(null);
+      setDetailLoading(true);
+    });
+    try {
       const detail = await getDepartmentByUuid(record.uuid);
+      if (departmentDetailReqRef.current !== req) return;
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || t('common.loadFailed'));
+      if (departmentDetailReqRef.current === req) {
+        messageApi.error(error.message || t('common.loadFailed'));
+      }
     } finally {
-      setDetailLoading(false);
+      if (departmentDetailReqRef.current === req) {
+        setDetailLoading(false);
+      }
     }
   };
 
@@ -566,35 +604,20 @@ const DepartmentListPage: React.FC = () => {
         deptTreeItems={deptTreeData}
       />
 
-      <DetailDrawerTemplate
+      <UniDetail
         title={t('field.department.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        column={1}
-        dataSource={detailData as any}
-        columns={[
-          { title: t('field.department.name'), dataIndex: 'name' },
-          { title: t('field.department.code'), dataIndex: 'code' },
-          {
-            title: t('field.department.parentName'),
-            dataIndex: ['parent', 'name'],
-            render: (_: any, record: any) => record?.parent_name || '-',
-          },
-          {
-            title: t('field.role.status'),
-            dataIndex: 'is_active',
-            render: (_: any, entity: any) =>
-              entity?.is_active ? t('field.role.enabled') : t('field.role.disabled'),
-          },
-          { title: t('field.department.userCount'), dataIndex: 'user_count' },
-          { title: t('field.department.sortOrder'), dataIndex: 'sort_order' },
-          { title: t('field.department.queryCode'), dataIndex: 'query_code' },
-          { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
-          { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
-          { title: t('field.department.remark'), dataIndex: 'description' },
-        ]}
+        basic={
+          detailData ? (
+            <Descriptions
+              column={1}
+              items={detailDrawerDescriptionItems(departmentDetailDescColumns, detailData)}
+            />
+          ) : null
+        }
       />
     </ListPageTemplate>
   );

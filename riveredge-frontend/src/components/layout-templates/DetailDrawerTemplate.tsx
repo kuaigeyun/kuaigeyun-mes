@@ -5,7 +5,7 @@
 
 import type { CSSProperties } from 'react';
 import React, { useMemo } from 'react';
-import { Drawer, Descriptions, theme } from 'antd';
+import { Drawer, Descriptions, Spin, theme } from 'antd';
 import type { DrawerProps } from 'antd';
 import type { ReactNode } from 'react';
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
@@ -14,6 +14,7 @@ import { DRAWER_CONFIG } from './constants';
 import { getDrawerFloatingWrapperStyle } from './drawerFloatingChrome';
 import { DetailDrawerSection } from './DetailDrawerSection';
 import { detailDrawerDescriptionItems } from './detailDrawerDescriptionItems';
+import './drawerSlideMotion.css';
 
 export interface DetailDrawerTemplateProps<T = Record<string, unknown>> {
   title: ReactNode;
@@ -22,6 +23,10 @@ export interface DetailDrawerTemplateProps<T = Record<string, unknown>> {
   onClose: () => void;
   width?: number | string;
   size?: number | string;
+  /**
+   * 为 true 时在正文上方叠加载层（仍渲染 basic / children），便于滑入动画期间展示列表快照并并行拉详情。
+   * 不使用 Drawer 内置 Skeleton，避免整块替换导致无法乐观展示。
+   */
   loading?: boolean;
   /** Ant Design Drawer 底栏（固定在抽屉底部，适合放主操作如下推） */
   footer?: ReactNode;
@@ -229,13 +234,18 @@ export const DetailDrawerTemplate = <T extends Record<string, unknown> = Record<
   );
 
   const drawerBody = usesStructuredSections ? sectionedBody : legacyBody;
+  const isOpen = open ?? visible ?? false;
+  const showLoadingOverlay = !!loading && isOpen;
 
   return (
     <Drawer
       title={title}
-      open={open ?? visible}
+      open={isOpen}
       onClose={onClose}
       placement={resolvedPlacement}
+      rootClassName="drawer-slide-motion"
+      destroyOnHidden={false}
+      loading={false}
       size={
         drawerSize === 'default' || drawerSize === 'large'
           ? (drawerSize as 'default' | 'large')
@@ -252,14 +262,48 @@ export const DetailDrawerTemplate = <T extends Record<string, unknown> = Record<
           ...styles?.wrapper,
         },
       }}
-      loading={loading}
       className={className}
       footer={footer}
       extra={extra}
       zIndex={zIndex}
     >
       {banner}
-      {drawerBody}
+      <div
+        style={{
+          position: 'relative',
+          flex: 1,
+          minHeight: showLoadingOverlay ? 120 : undefined,
+        }}
+      >
+        {showLoadingOverlay ? (
+          <>
+            <div
+              aria-hidden
+              style={{
+                position: 'absolute',
+                inset: 0,
+                zIndex: 3,
+                background: token.colorBgContainer,
+                opacity: 0.55,
+              }}
+            />
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                zIndex: 4,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'progress',
+              }}
+            >
+              <Spin />
+            </div>
+          </>
+        ) : null}
+        {drawerBody}
+      </div>
     </Drawer>
   );
 };

@@ -11,7 +11,8 @@ import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Avatar, Badge, Button, Card, Descriptions, Popconfirm, Space, Tag, Tooltip, Typography, theme } from 'antd';
 import { EyeOutlined, BarChartOutlined, LogoutOutlined, UserOutlined, ClockCircleOutlined, GlobalOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
-import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../components/layout-templates';
+import { DRAWER_CONFIG, ListPageTemplate } from '../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../components/uni-detail';
 import {
   getOnlineUsers,
   getOnlineUserStats,
@@ -471,7 +472,7 @@ const OnlineUsersPage: React.FC = () => {
       </ListPageTemplate>
 
       {/* 用户详情 Drawer */}
-      <DetailDrawerTemplate
+      <UniDetail
         title={t('pages.system.onlineUsers.detailTitle')}
         open={detailDrawerVisible}
         onClose={() => {
@@ -479,10 +480,9 @@ const OnlineUsersPage: React.FC = () => {
           setCurrentUserInfo(null);
         }}
         width={DRAWER_CONFIG.LARGE_WIDTH}
-        dataSource={currentUserInfo || {}}
         basic={currentUserInfo ? (
             <Descriptions column={2} items={detailDrawerDescriptionItems(detailColumns, currentUserInfo)} />
-          ) : undefined}
+          ) : null}
       />
     </>
   );

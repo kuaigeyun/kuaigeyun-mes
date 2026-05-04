@@ -11,7 +11,6 @@ import type {
   VariantAttributeDefinitionCreate,
   VariantAttributeDefinitionUpdate,
   VariantAttributeDefinitionListParams,
-  VariantAttributeDefinitionHistory,
   VariantAttributeValidationRequest,
   VariantAttributeValidationResponse,
 } from '../types/variant-attribute';
@@ -53,13 +52,6 @@ export const variantAttributeApi = {
    */
   delete: async (uuid: string): Promise<void> => {
     return api.delete(`/core/variant-attributes/${uuid}`);
-  },
-
-  /**
-   * 获取属性定义版本历史
-   */
-  getHistory: async (uuid: string): Promise<VariantAttributeDefinitionHistory[]> => {
-    return api.get(`/core/variant-attributes/${uuid}/history`);
   },
 
   /**

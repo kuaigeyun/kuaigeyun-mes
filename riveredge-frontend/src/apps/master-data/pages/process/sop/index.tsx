@@ -4,11 +4,11 @@
  * 提供标准操作SOP的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Modal, Row, Col, List, Typography } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Modal, Row, Col, List, Typography, Descriptions } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, ApartmentOutlined } from '@ant-design/icons';
 import SOPBatchCreateSteps from './SOPBatchCreateSteps';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -17,7 +17,8 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { downloadFile } from '../../../../../utils';
 import { batchImport } from '../../../../../utils/batchOperations';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, flushDrawerOpen } from '../../../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
 
 import { sopApi, operationApi, processRouteApi } from '../../../services/process';
 import { materialApi, materialGroupApi } from '../../../services/material';
@@ -57,6 +58,7 @@ const SOPPage: React.FC = () => {
   const [materialGroups, setMaterialGroups] = useState<{ uuid: string; code: string; name: string }[]>([]);
   const [materials, setMaterials] = useState<{ uuid: string; code: string; name: string }[]>([]);
   const [routes, setRoutes] = useState<{ uuid: string; code: string; name: string }[]>([]);
+  const sopDetailReqRef = useRef(0);
 
   /**
    * 从 URL 参数打开编辑弹窗（editUuid）、设计页（editUuid+tab=workflow/formConfig）或新建弹窗（create=1）
@@ -227,17 +229,25 @@ const SOPPage: React.FC = () => {
    * 处理打开详情
    */
   const handleOpenDetail = async (record: SOP) => {
-    try {
+    const req = ++sopDetailReqRef.current;
+    flushDrawerOpen(() => {
       setCurrentSOPUuid(record.uuid);
+      setSopDetail(record);
       setDrawerVisible(true);
       setDetailLoading(true);
-      
+    });
+    try {
       const detail = await sopApi.get(record.uuid);
+      if (sopDetailReqRef.current !== req) return;
       setSopDetail(detail);
     } catch (error: any) {
-      messageApi.error(error.message || t('app.master-data.sop.getDetailFailed'));
+      if (sopDetailReqRef.current === req) {
+        messageApi.error(error.message || t('app.master-data.sop.getDetailFailed'));
+      }
     } finally {
-      setDetailLoading(false);
+      if (sopDetailReqRef.current === req) {
+        setDetailLoading(false);
+      }
     }
   };
 
@@ -435,6 +445,36 @@ const SOPPage: React.FC = () => {
     const operation = operations.find(o => o.id === operationId);
     return operation ? `${operation.code} - ${operation.name}` : `工序ID: ${operationId}`;
   };
+
+  const sopDetailColumns: ProDescriptionsItemProps<SOP>[] = useMemo(
+    () => [
+      { title: t('app.master-data.sop.codeLabel', { defaultValue: 'SOP编号' }), dataIndex: 'code' },
+      { title: t('app.master-data.sop.nameLabel', { defaultValue: 'SOP名称' }), dataIndex: 'name' },
+      {
+        title: t('app.master-data.sop.operationLabel', { defaultValue: '关联工序' }),
+        dataIndex: 'operationId',
+        render: (_: unknown, record: SOP) =>
+          getOperationName(record?.operationId ?? (record as any)?.operation_id),
+      },
+      { title: t('app.master-data.sop.versionLabel', { defaultValue: '版本号' }), dataIndex: 'version' },
+      { title: t('app.master-data.sop.contentLabel', { defaultValue: 'SOP内容' }), dataIndex: 'content', span: 2 },
+      {
+        title: t('field.route.isActive'),
+        dataIndex: 'isActive',
+        render: (_: unknown, record: SOP) => {
+          const isActive = record?.isActive ?? (record as any)?.is_active;
+          return (
+            <Tag color={isActive ? 'success' : 'default'}>
+              {isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
+            </Tag>
+          );
+        },
+      },
+      { title: t('common.createdAt'), dataIndex: 'createdAt', valueType: 'dateTime' },
+      { title: t('common.updatedAt'), dataIndex: 'updatedAt', valueType: 'dateTime' },
+    ],
+    [t, operations]
+  );
 
   /**
    * 表格列定义
@@ -682,35 +722,20 @@ const SOPPage: React.FC = () => {
         onExport={handleExport}
       />
 
-      <DetailDrawerTemplate
-        title="SOP详情"
+      <UniDetail
+        title={t('app.master-data.sop.detailTitle', { defaultValue: 'SOP详情' })}
         open={drawerVisible}
         onClose={handleCloseDetail}
-        dataSource={sopDetail || undefined}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        column={1}
-        columns={[
-          { title: 'SOP编号', dataIndex: 'code' },
-          { title: 'SOP名称', dataIndex: 'name' },
-          { title: '关联工序', dataIndex: 'operationId', render: (_, record) => getOperationName(record?.operationId ?? (record as any)?.operation_id) },
-          { title: '版本号', dataIndex: 'version' },
-          { title: 'SOP内容', dataIndex: 'content' },
-          {
-            title: '启用状态',
-            dataIndex: 'isActive',
-            render: (_, record) => {
-              const isActive = record?.isActive ?? (record as any)?.is_active;
-              return (
-                <Tag color={isActive ? 'success' : 'default'}>
-                  {isActive ? '启用' : '禁用'}
-                </Tag>
-              );
-            },
-          },
-          { title: '创建时间', dataIndex: 'createdAt', valueType: 'dateTime' },
-          { title: '更新时间', dataIndex: 'updatedAt', valueType: 'dateTime' },
-        ]}
+        basic={
+          sopDetail ? (
+            <Descriptions
+              column={1}
+              items={detailDrawerDescriptionItems(sopDetailColumns, sopDetail)}
+            />
+          ) : null
+        }
       />
 
       {/* 新建 SOP Modal：按工艺路线批量创建 */}

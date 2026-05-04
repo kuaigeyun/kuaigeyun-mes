@@ -24,9 +24,10 @@ import { getUserList } from '../../../services/user';
 import { testGenerateCode, generateCode } from '../../../services/codeRule';
 import { getCodeRulePageConfig } from '../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../utils/codeRulePage';
-import type { Operation, OperationCreate, OperationUpdate, DefectTypeMinimal } from '../types/process';
+import type { Operation, OperationCreate, OperationUpdate, DefectTypeMinimal, DefectType } from '../types/process';
 import { SchemaFormRenderer } from '../../../components/schema-form';
 import { operationFormSchema } from '../schemas/operation';
+import { DefectTypeFormModal } from './DefectTypeFormModal';
 
 const PAGE_CODE = 'master-data-process-operation';
 
@@ -74,6 +75,7 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
   const [equipmentOptions, setEquipmentOptions] = useState<{ label: string; value: number }[]>([]);
   const [inspectionPlanOptions, setInspectionPlanOptions] = useState<{ label: string; value: number }[]>([]);
   const [currentOperationId, setCurrentOperationId] = useState<number | null>(null);
+  const [defectQuickAddOpen, setDefectQuickAddOpen] = useState(false);
 
   const isEdit = Boolean(editUuid);
 
@@ -419,6 +421,7 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
   };
 
   const handleClose = () => {
+    setDefectQuickAddOpen(false);
     onClose();
     formRef.current?.resetFields();
     setPreviewCode(null);
@@ -439,6 +442,18 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
     navigate(`/apps/kuaizhizao/quality-management/inspection-plans${opId ? `?operationId=${opId}` : ''}`);
   };
 
+  /** 嵌套新建不良品类型成功后刷新下拉选项并勾选新项目 */
+  const handleDefectTypeQuickCreated = async (created: DefectType) => {
+    const selected = (formRef.current?.getFieldValue('defectTypeUuids') as string[] | undefined) ?? [];
+    const boundMinimal = selected.map((uuid) => ({ uuid }));
+    await loadFormOptions(currentOperationId ?? undefined, boundMinimal);
+    const newUuid = String(created.uuid ?? '').trim();
+    if (newUuid) {
+      const next = [...new Set([...selected.map((u) => String(u).trim()).filter(Boolean), newUuid])];
+      formRef.current?.setFieldsValue({ defectTypeUuids: next });
+    }
+  };
+
   const formInitialValues = useMemo(
     () => ({ isActive: true, reportingType: 'quantity' as const, inspectionMode: 'simple' as const }),
     []
@@ -447,6 +462,7 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
   const editFormInitialValues = useMemo(() => ({}), []);
 
   return (
+    <>
     <FormModalTemplate
       key={isEdit && editUuid ? `operation-edit-${editUuid}` : 'operation-create'}
       title={isEdit ? t('field.operation.editTitle') : t('field.operation.createTitle')}
@@ -503,7 +519,14 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
                       {mode === 'simple' && (
                         <ProFormSelect
                           name="defectTypeUuids"
-                          label={t('field.operation.defectTypeUuids')}
+                          label={
+                            <Space size="small">
+                              <span>{t('field.operation.defectTypeUuids')}</span>
+                              <Button type="link" size="small" onClick={() => setDefectQuickAddOpen(true)}>
+                                {t('field.operation.quickAddDefectType')}
+                              </Button>
+                            </Space>
+                          }
                           placeholder={t('field.operation.defectTypeUuidsPlaceholder')}
                           colProps={{ span: 24 }}
                           mode="multiple"
@@ -528,5 +551,13 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
         optionsMap={optionsMap}
       />
     </FormModalTemplate>
+
+    <DefectTypeFormModal
+      open={defectQuickAddOpen}
+      onClose={() => setDefectQuickAddOpen(false)}
+      editUuid={null}
+      onSuccess={handleDefectTypeQuickCreated}
+    />
+    </>
   );
 };

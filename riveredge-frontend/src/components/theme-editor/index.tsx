@@ -14,6 +14,7 @@ import { getToken } from '../../utils/auth';
 import { useThemeStore } from '../../stores/themeStore';
 import { clearTabsData } from '../../stores/tabsStorage';
 import { getDrawerFloatingWrapperStyle } from '../layout-templates/drawerFloatingChrome';
+import '../layout-templates/drawerSlideMotion.css';
 
 const { Text } = Typography;
 
@@ -715,7 +716,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
 
   return (
     <Drawer
-      className="theme-editor-drawer"
+      rootClassName="theme-editor-drawer drawer-slide-motion"
       placement="right"
       styles={{
         body: { overflowY: 'scroll' },
@@ -755,7 +756,8 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         .theme-editor-drawer .ant-card {
           box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
         }
-        /* 修复大圆角时 Tooltip 变成圆形或变形的问题 */
+        /* slide-in/out 见 layout-templates/drawerSlideMotion.css（drawer-slide-motion） */
+        /* 修复大圆角时 Tooltip 变成圆形或变形的问题（Tooltip 在 portal，勿挂在 drawer 根下） */
         .ant-tooltip-inner {
           border-radius: 6px !important;
           padding: 4px 8px !important;

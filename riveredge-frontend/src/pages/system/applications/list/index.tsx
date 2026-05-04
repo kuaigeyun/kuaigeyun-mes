@@ -5,12 +5,13 @@
  * 支持应用的 CRUD 操作、安装/卸载、启用/禁用功能。
  */
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { ActionType, ProColumns, ProFormInstance, ProFormText, ProFormTextArea, ProFormDigit, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Card, Descriptions, Dropdown, Modal, Popconfirm, Space, Switch, Tag } from 'antd';
-import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { flushDrawerOpen, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import { UniTable } from '../../../../components/uni-table';
 import { theme } from 'antd';
 import {
@@ -112,9 +113,25 @@ const ApplicationListPage: React.FC = () => {
   const { message: messageApi, modal: modalApi } = App.useApp();
   const { token: themeToken } = theme.useToken();
   const queryClient = useQueryClient();
+  /** 后端写入菜单或清单后失效侧边栏与工作台菜单缓存（与 increment + invalidate 双通道，避免漏刷新） */
+  const refreshApplicationMenusAfterBackendMenuChange = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
+    queryClient.invalidateQueries({ queryKey: ['dashboard-menu-tree'] });
+    useGlobalStore.getState().incrementApplicationMenuVersion();
+  }, [queryClient]);
+  /** 与「一键同步菜单」第二步一致：按库内清单把菜单写入 core_menus，再刷新前端缓存（避免仅更新了 core_applications 但菜单表滞后） */
+  const finalizeManifestSyncForSidebar = useCallback(async () => {
+    try {
+      await syncAllMenus();
+    } catch {
+      /* 仍刷新侧边栏：清单接口往往已写入菜单；全量入库失败时不阻断 UI */
+    }
+    refreshApplicationMenusAfterBackendMenuChange();
+  }, [refreshApplicationMenusAfterBackendMenuChange]);
   const actionRef = useRef<ActionType>(null);
   const editFormRef = useRef<ProFormInstance>(null);
   const proKeyFormRef = useRef<ProFormInstance>(null);
+  const applicationDetailReqRef = useRef(0);
 
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -151,8 +168,7 @@ const ApplicationListPage: React.FC = () => {
         duration: 6,
       });
       actionRef.current?.reload();
-      queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
-      useGlobalStore.getState().incrementApplicationMenuVersion();
+      refreshApplicationMenusAfterBackendMenuChange();
     } catch (error: any) {
       messageApi.error(error?.message || t('pages.system.applications.scanFailed', { defaultValue: '扫描应用失败' }));
     } finally {
@@ -236,9 +252,7 @@ const ApplicationListPage: React.FC = () => {
         });
       }
       actionRef.current?.reload();
-      queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard-menu-tree'] });
-      useGlobalStore.getState().incrementApplicationMenuVersion();
+      refreshApplicationMenusAfterBackendMenuChange();
     } catch (error: any) {
       messageApi.error({
         content: error?.message || t('pages.system.applications.syncAllFailed', { defaultValue: '一键同步菜单失败' }),
@@ -253,15 +267,24 @@ const ApplicationListPage: React.FC = () => {
    * 处理查看详情
    */
   const handleView = async (record: Application) => {
-    try {
-      setDetailLoading(true);
+    const req = ++applicationDetailReqRef.current;
+    flushDrawerOpen(() => {
       setDrawerVisible(true);
+      setDetailData(null);
+      setDetailLoading(true);
+    });
+    try {
       const detail = await getApplicationByUuid(record.uuid);
+      if (applicationDetailReqRef.current !== req) return;
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.applications.getDetailFailed'));
+      if (applicationDetailReqRef.current === req) {
+        messageApi.error(error.message || t('pages.system.applications.getDetailFailed'));
+      }
     } finally {
-      setDetailLoading(false);
+      if (applicationDetailReqRef.current === req) {
+        setDetailLoading(false);
+      }
     }
   };
 
@@ -274,10 +297,7 @@ const ApplicationListPage: React.FC = () => {
       await installApplication(record.uuid);
       messageApi.success(t('pages.system.applications.installSuccess'));
       actionRef.current?.reload();
-      // 使应用菜单缓存失效，自动更新菜单
-      queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
-
-      useGlobalStore.getState().incrementApplicationMenuVersion();
+      refreshApplicationMenusAfterBackendMenuChange();
       console.log(`📢 已触发应用安装事件: ${record.name}`);
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.applications.installFailed'));
@@ -292,10 +312,7 @@ const ApplicationListPage: React.FC = () => {
       await uninstallApplication(record.uuid);
       messageApi.success(t('pages.system.applications.uninstallSuccess'));
       actionRef.current?.reload();
-      // 使应用菜单缓存失效，自动更新菜单
-      queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
-
-      useGlobalStore.getState().incrementApplicationMenuVersion();
+      refreshApplicationMenusAfterBackendMenuChange();
       console.log(`📢 已触发应用卸载事件: ${record.name}`);
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.applications.uninstallFailed'));
@@ -326,10 +343,7 @@ const ApplicationListPage: React.FC = () => {
       }
       actionRef.current?.reload();
 
-      // 使应用菜单缓存失效，自动更新菜单
-      queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
-
-      useGlobalStore.getState().incrementApplicationMenuVersion();
+      refreshApplicationMenusAfterBackendMenuChange();
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.applications.operationFailed'));
     }
@@ -351,8 +365,7 @@ const ApplicationListPage: React.FC = () => {
       setProKeyModalVisible(false);
       setPendingEnableAfterActivation(false);
       actionRef.current?.reload();
-      queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
-      useGlobalStore.getState().incrementApplicationMenuVersion();
+      refreshApplicationMenusAfterBackendMenuChange();
     } catch (error: any) {
       messageApi.error(error?.message || t('pages.system.applications.proActivateFailed', { defaultValue: 'License Key 校验失败' }));
     } finally {
@@ -370,10 +383,7 @@ const ApplicationListPage: React.FC = () => {
       messageApi.success(t('pages.system.applications.configUpdateSuccess'));
       setEditModalVisible(false);
       actionRef.current?.reload();
-      // 使应用菜单缓存失效，自动更新菜单
-      queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
-
-      useGlobalStore.getState().incrementApplicationMenuVersion();
+      refreshApplicationMenusAfterBackendMenuChange();
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.applications.operationFailed'));
     } finally {
@@ -514,7 +524,7 @@ const ApplicationListPage: React.FC = () => {
                   if (result.success) {
                     messageApi.success({ content: result.message || t('pages.system.applications.syncMenuSuccess'), key: 'sync-manifest' });
                     actionRef.current?.reload();
-                    useGlobalStore.getState().incrementApplicationMenuVersion();
+                    await finalizeManifestSyncForSidebar();
                   } else {
                     throw new Error(result.message || t('pages.system.applications.syncFailed'));
                   }
@@ -636,7 +646,7 @@ const ApplicationListPage: React.FC = () => {
 
                   actionRef.current?.reload();
 
-                  useGlobalStore.getState().incrementApplicationMenuVersion();
+                  await finalizeManifestSyncForSidebar();
                 } else {
                   throw new Error(result.message || t('pages.system.applications.syncFailed'));
                 }
@@ -939,7 +949,12 @@ const ApplicationListPage: React.FC = () => {
     {
       title: t('pages.system.applications.isSystem'),
       dataIndex: 'is_system',
-      render: (dom: any) => (dom ? t('field.customField.yes') : t('field.customField.no')),
+      render: (dom: any) =>
+        dom ? (
+          <Tag color="purple">{t('field.customField.yes')}</Tag>
+        ) : (
+          <Tag>{t('field.customField.no')}</Tag>
+        ),
     },
     {
       title: t('pages.system.applications.installStatus'),
@@ -1201,7 +1216,7 @@ const ApplicationListPage: React.FC = () => {
       </Modal>
 
       {/* 查看详情 Drawer */}
-      <DetailDrawerTemplate
+      <UniDetail
         title={t('pages.system.applications.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
@@ -1209,7 +1224,7 @@ const ApplicationListPage: React.FC = () => {
         width={DRAWER_CONFIG.STANDARD_WIDTH}
         basic={detailData ? (
             <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, detailData)} />
-          ) : undefined}
+          ) : null}
       />
 
       {/* 应用设置 Modal - 使用 FormModalTemplate */}
@@ -1260,6 +1275,7 @@ const ApplicationListPage: React.FC = () => {
                         is_custom_sort: false,
                       });
                       await syncApplicationManifest(editingApp.code);
+                      await finalizeManifestSyncForSidebar();
                       messageApi.success(t('pages.system.applications.restoreSuccess'));
                       setEditModalVisible(false);
                       actionRef.current?.reload();

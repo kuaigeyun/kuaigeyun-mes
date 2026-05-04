@@ -8,13 +8,24 @@
  * Date: 2025-01-15
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDatePicker, ProFormDigit } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, message, Modal } from 'antd';
+import {
+  ActionType,
+  ProColumns,
+  ProFormText,
+  ProFormTextArea,
+  ProFormSwitch,
+  ProFormSelect,
+  ProFormDatePicker,
+  ProFormDigit,
+  ProDescriptionsItemProps,
+} from '@ant-design/pro-components';
+import { App, Popconfirm, Button, Tag, Space, message, Modal, Descriptions } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import {
   getMoldList,
   getMoldByUuid,
@@ -33,6 +44,7 @@ const MoldListPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const moldDetailReqRef = useRef(0);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Modal 相关状态（创建/编辑）
@@ -96,15 +108,24 @@ const MoldListPage: React.FC = () => {
    * 处理查看详情
    */
   const handleView = async (record: Mold) => {
-    try {
-      setDetailLoading(true);
+    const req = ++moldDetailReqRef.current;
+    flushDrawerOpen(() => {
       setDrawerVisible(true);
+      setDetailData(null);
+      setDetailLoading(true);
+    });
+    try {
       const detail = await getMoldByUuid(record.uuid);
+      if (moldDetailReqRef.current !== req) return;
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.molds.getDetailFailed'));
+      if (moldDetailReqRef.current === req) {
+        messageApi.error(error.message || t('pages.system.molds.getDetailFailed'));
+      }
     } finally {
-      setDetailLoading(false);
+      if (moldDetailReqRef.current === req) {
+        setDetailLoading(false);
+      }
     }
   };
 
@@ -179,6 +200,52 @@ const MoldListPage: React.FC = () => {
     '停用': 'statusStopped',
     '报废': 'statusScrapped',
   };
+
+  const moldDetailDescColumns = useMemo<ProDescriptionsItemProps<Mold>[]>(
+    () => [
+      { title: t('pages.system.molds.columnCode'), dataIndex: 'code' },
+      { title: t('pages.system.molds.columnName'), dataIndex: 'name' },
+      { title: t('pages.system.molds.columnType'), dataIndex: 'type' },
+      { title: t('pages.system.molds.columnCategory'), dataIndex: 'category' },
+      { title: t('pages.system.molds.columnBrand'), dataIndex: 'brand' },
+      { title: t('pages.system.molds.columnModel'), dataIndex: 'model' },
+      { title: t('pages.system.molds.columnSerialNumber'), dataIndex: 'serial_number' },
+      { title: t('pages.system.molds.labelManufacturer'), dataIndex: 'manufacturer' },
+      { title: t('pages.system.molds.labelSupplier'), dataIndex: 'supplier' },
+      { title: t('pages.system.molds.labelPurchaseDate'), dataIndex: 'purchase_date' },
+      { title: t('pages.system.molds.labelInstallDate'), dataIndex: 'installation_date' },
+      { title: t('pages.system.molds.labelWarranty'), dataIndex: 'warranty_period' },
+      { title: t('pages.system.molds.columnTotalUsage'), dataIndex: 'total_usage_count' },
+      {
+        title: t('pages.system.molds.columnStatus'),
+        dataIndex: 'status',
+        render: (_: unknown, record: Mold) => {
+          const key = statusTextKey[record.status];
+          const text = key ? t(`pages.system.molds.${key}`) : record.status;
+          const colorMap: Record<string, string> = {
+            '正常': 'success',
+            '维修中': 'warning',
+            '停用': 'default',
+            '报废': 'error',
+          };
+          return <Tag color={colorMap[record.status] || 'default'}>{text}</Tag>;
+        },
+      },
+      {
+        title: t('pages.system.molds.columnActive'),
+        dataIndex: 'is_active',
+        render: (_: unknown, entity: Mold) => (
+          <Tag color={entity?.is_active ? 'success' : 'default'}>
+            {entity?.is_active ? t('pages.system.molds.enabled') : t('pages.system.molds.disabled')}
+          </Tag>
+        ),
+      },
+      { title: t('pages.system.molds.labelDescription'), dataIndex: 'description', span: 2 },
+      { title: t('pages.system.molds.columnCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+      { title: t('pages.system.molds.labelUpdatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+    ],
+    [t]
+  );
 
   const columns: ProColumns<Mold>[] = [
     {
@@ -499,44 +566,17 @@ const MoldListPage: React.FC = () => {
       </FormModalTemplate>
 
       {/* 详情 Drawer */}
-      <DetailDrawerTemplate
+      <UniDetail
         title={t('pages.system.molds.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        dataSource={detailData}
-          columns={[
-                { title: t('pages.system.molds.columnCode'), dataIndex: 'code' },
-                { title: t('pages.system.molds.columnName'), dataIndex: 'name' },
-                { title: t('pages.system.molds.columnType'), dataIndex: 'type' },
-                { title: t('pages.system.molds.columnCategory'), dataIndex: 'category' },
-                { title: t('pages.system.molds.columnBrand'), dataIndex: 'brand' },
-                { title: t('pages.system.molds.columnModel'), dataIndex: 'model' },
-                { title: t('pages.system.molds.columnSerialNumber'), dataIndex: 'serial_number' },
-                { title: t('pages.system.molds.labelManufacturer'), dataIndex: 'manufacturer' },
-                { title: t('pages.system.molds.labelSupplier'), dataIndex: 'supplier' },
-                { title: t('pages.system.molds.labelPurchaseDate'), dataIndex: 'purchase_date' },
-                { title: t('pages.system.molds.labelInstallDate'), dataIndex: 'installation_date' },
-                { title: t('pages.system.molds.labelWarranty'), dataIndex: 'warranty_period' },
-                { title: t('pages.system.molds.columnTotalUsage'), dataIndex: 'total_usage_count' },
-                {
-                  title: t('pages.system.molds.columnStatus'),
-                  dataIndex: 'status',
-                  render: (value: string) => {
-                    const key = statusTextKey[value];
-                    return key ? t(`pages.system.molds.${key}`) : value;
-                  },
-                },
-                {
-                  title: t('pages.system.molds.columnActive'),
-                  dataIndex: 'is_active',
-                  render: (value: boolean) => (value ? t('pages.system.molds.enabled') : t('pages.system.molds.disabled')),
-                },
-                { title: t('pages.system.molds.labelDescription'), dataIndex: 'description', span: 2 },
-                { title: t('pages.system.molds.columnCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },
-                { title: t('pages.system.molds.labelUpdatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
-              ]}
+        basic={
+          detailData ? (
+            <Descriptions column={1} items={detailDrawerDescriptionItems(moldDetailDescColumns, detailData)} />
+          ) : null
+        }
       />
     </>
   );

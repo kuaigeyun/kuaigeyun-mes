@@ -81,7 +81,6 @@ export const DefectTypeFormModal: React.FC<DefectTypeFormModalProps> = ({
         formRef.current?.setFieldsValue({
           code: detail.code,
           name: detail.name,
-          category: detail.category,
           description: detail.description,
           isActive: detail.isActive ?? true,
         });

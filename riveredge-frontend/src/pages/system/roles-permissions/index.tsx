@@ -197,7 +197,7 @@ const RESOURCE_ALIAS_MAP: Record<string, string[]> = {
   'purchase-invoice': ['invoice'],
   // 主数据：「物料管理」菜单码为 material:read，物料分组权限码为 material-group:*，需归并展示
   material: ['material-group'],
-  // 批号规则（material-batch-rule）与批号实例 API（material-batch:*）为两套码；合并到批号规则菜单匹配，避免 DB 未同步「批号记录」时出现孤儿
+  // 批号规则（material-batch-rule）与批号记录 API（material-batch:*）为两套码；合并到批号规则菜单匹配，避免 DB 未同步「批号记录」时出现孤儿
   'material-batch-rule': ['material-batch'],
 };
 

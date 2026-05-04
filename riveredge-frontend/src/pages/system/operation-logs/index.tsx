@@ -15,7 +15,8 @@ import { App, Button, Descriptions, Modal, Space, Tag, Typography } from 'antd';
 import { EyeOutlined, BarChartOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
 import { StatCardTrendArea } from '../../../components/common/StatCardTrendArea';
-import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../components/layout-templates';
+import { DRAWER_CONFIG, ListPageTemplate } from '../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../components/uni-detail';
 import {
   getOperationLogs,
   getOperationLogStats,
@@ -340,7 +341,7 @@ const OperationLogsPage: React.FC = () => {
         />
       </ListPageTemplate>
 
-      <DetailDrawerTemplate
+      <UniDetail
         title={t('pages.system.operationLogs.detailTitle')}
         open={detailDrawerVisible}
         onClose={() => {
@@ -348,10 +349,9 @@ const OperationLogsPage: React.FC = () => {
           setCurrentLog(null);
         }}
         width={DRAWER_CONFIG.LARGE_WIDTH}
-        dataSource={currentLog || {}}
         basic={currentLog ? (
             <Descriptions column={2} items={detailDrawerDescriptionItems(detailColumns, currentLog)} />
-          ) : undefined}
+          ) : null}
       />
     </>
   );

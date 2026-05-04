@@ -12,7 +12,8 @@ import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Button, Descriptions, Modal, Popconfirm, Space, Tag } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { flushDrawerOpen, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import {
   getMessageTemplateList,
   getMessageTemplateByUuid,
@@ -33,6 +34,7 @@ const MessageTemplateListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);
+  const messageTemplateDetailReqRef = useRef(0);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Modal 相关状态（创建/编辑消息模板）
@@ -97,15 +99,24 @@ const MessageTemplateListPage: React.FC = () => {
    * 处理查看详情
    */
   const handleView = async (record: MessageTemplate) => {
-    try {
-      setDetailLoading(true);
+    const req = ++messageTemplateDetailReqRef.current;
+    flushDrawerOpen(() => {
       setDrawerVisible(true);
+      setDetailData(null);
+      setDetailLoading(true);
+    });
+    try {
       const detail = await getMessageTemplateByUuid(record.uuid);
+      if (messageTemplateDetailReqRef.current !== req) return;
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.messageTemplate.getDetailFailed'));
+      if (messageTemplateDetailReqRef.current === req) {
+        messageApi.error(error.message || t('pages.system.messageTemplate.getDetailFailed'));
+      }
     } finally {
-      setDetailLoading(false);
+      if (messageTemplateDetailReqRef.current === req) {
+        setDetailLoading(false);
+      }
     }
   };
 
@@ -607,7 +618,7 @@ const MessageTemplateListPage: React.FC = () => {
       </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
-      <DetailDrawerTemplate
+      <UniDetail
         title={t('pages.system.messageTemplate.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
@@ -615,7 +626,7 @@ const MessageTemplateListPage: React.FC = () => {
         width={DRAWER_CONFIG.STANDARD_WIDTH}
         basic={detailData ? (
             <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, detailData)} />
-          ) : undefined}
+          ) : null}
       />
     </>
   );

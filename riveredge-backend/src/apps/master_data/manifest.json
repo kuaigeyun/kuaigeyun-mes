@@ -115,6 +115,12 @@
             "path": "/apps/master-data/materials/serial-rules",
             "permission": "master-data:material-serial:read",
             "sort_order": 5
+          },
+          {
+            "title": "app.master-data.menu.materials.serials",
+            "path": "/apps/master-data/materials/serials",
+            "permission": "master-data:material-serial:read",
+            "sort_order": 6
           }
         ]
       },

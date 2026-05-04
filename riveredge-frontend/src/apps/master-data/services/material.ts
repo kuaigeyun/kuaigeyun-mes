@@ -728,17 +728,37 @@ export const materialBatchApi = {
  */
 export const materialSerialApi = {
   /**
-   * 创建物料序列号
+   * 创建物料序列号（后端 snake_case）
    */
   create: async (data: MaterialSerialCreate): Promise<MaterialSerial> => {
-    return api.post('/apps/master-data/materials/serials', data);
+    const payload: Record<string, unknown> = {
+      material_uuid: data.materialUuid ?? (data as any).material_uuid,
+      serial_no: data.serialNo ?? (data as any).serial_no,
+      supplier_serial_no: data.supplierSerialNo ?? (data as any).supplier_serial_no,
+      status: data.status ?? (data as any).status ?? 'in_stock',
+      remark: data.remark ?? (data as any).remark,
+    };
+    const prod = data.productionDate ?? (data as any).production_date;
+    const fac = data.factoryDate ?? (data as any).factory_date;
+    if (prod != null) payload.production_date = prod;
+    if (fac != null) payload.factory_date = fac;
+    return api.post('/apps/master-data/materials/serials', payload);
   },
 
   /**
-   * 获取物料序列号列表
+   * 获取物料序列号列表（查询参数 snake_case）
    */
   list: async (params?: MaterialSerialListParams): Promise<MaterialSerialListResponse> => {
-    return api.get('/apps/master-data/materials/serials', { params });
+    const backendParams = params
+      ? {
+          material_uuid: params.materialUuid,
+          serial_no: params.serialNo,
+          status: params.status,
+          page: params.page ?? 1,
+          page_size: params.pageSize ?? 20,
+        }
+      : undefined;
+    return api.get('/apps/master-data/materials/serials', { params: backendParams });
   },
 
   /**
@@ -752,7 +772,18 @@ export const materialSerialApi = {
    * 更新物料序列号
    */
   update: async (uuid: string, data: MaterialSerialUpdate): Promise<MaterialSerial> => {
-    return api.put(`/apps/master-data/materials/serials/${uuid}`, data);
+    const payload: Record<string, unknown> = {};
+    const prod = data.productionDate ?? (data as any).production_date;
+    const fac = data.factoryDate ?? (data as any).factory_date;
+    const sup = data.supplierSerialNo ?? (data as any).supplier_serial_no;
+    const st = data.status ?? (data as any).status;
+    const rm = data.remark ?? (data as any).remark;
+    if (prod !== undefined) payload.production_date = prod;
+    if (fac !== undefined) payload.factory_date = fac;
+    if (sup !== undefined) payload.supplier_serial_no = sup;
+    if (st !== undefined) payload.status = st;
+    if (rm !== undefined) payload.remark = rm;
+    return api.put(`/apps/master-data/materials/serials/${uuid}`, payload);
   },
 
   /**

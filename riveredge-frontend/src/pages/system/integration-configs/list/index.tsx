@@ -12,7 +12,8 @@ import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Badge, Button, Card, Descriptions, Drawer, Input, Modal, Popconfirm, Space, Tag, Tooltip, Typography, message, theme } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, ApiOutlined, LinkOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { flushDrawerOpen, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import {
   getIntegrationConfigList,
   getIntegrationConfigByUuid,
@@ -88,6 +89,7 @@ const IntegrationConfigListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
   const actionRef = useRef<ActionType>(null);
+  const integrationDetailReqRef = useRef(0);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [allIntegrations, setAllIntegrations] = useState<IntegrationConfig[]>([]); // 用于统计
   
@@ -153,15 +155,24 @@ const IntegrationConfigListPage: React.FC = () => {
    * 处理查看详情
    */
   const handleView = async (record: IntegrationConfig) => {
-    try {
-      setDetailLoading(true);
+    const req = ++integrationDetailReqRef.current;
+    flushDrawerOpen(() => {
       setDrawerVisible(true);
+      setDetailData(null);
+      setDetailLoading(true);
+    });
+    try {
       const detail = await getIntegrationConfigByUuid(record.uuid);
+      if (integrationDetailReqRef.current !== req) return;
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.integrationConfigs.getDetailFailed'));
+      if (integrationDetailReqRef.current === req) {
+        messageApi.error(error.message || t('pages.system.integrationConfigs.getDetailFailed'));
+      }
     } finally {
-      setDetailLoading(false);
+      if (integrationDetailReqRef.current === req) {
+        setDetailLoading(false);
+      }
     }
   };
 
@@ -829,16 +840,15 @@ const IntegrationConfigListPage: React.FC = () => {
       />
 
       {/* 查看详情 Drawer */}
-      <DetailDrawerTemplate
+      <UniDetail
         title={t('pages.system.integrationConfigs.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        dataSource={detailData || {}}
         basic={detailData ? (
             <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, detailData)} />
-          ) : undefined}
+          ) : null}
       />
     </>
   );

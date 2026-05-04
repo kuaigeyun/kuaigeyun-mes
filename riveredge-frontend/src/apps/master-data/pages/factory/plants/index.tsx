@@ -12,7 +12,13 @@ import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
+import {
+  detailDrawerDescriptionItems,
+  DetailDrawerTemplate,
+  DRAWER_CONFIG,
+  flushDrawerOpen,
+  ListPageTemplate,
+} from '../../../../../components/layout-templates';
 
 import { plantApi, applyFactoryKeyword, applyFactoryTableSort } from '../../../services/factory';
 import { PlantFormModal } from '../../../components/PlantFormModal';
@@ -40,6 +46,7 @@ const PlantsPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [plantDetail, setPlantDetail] = useState<Plant | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const plantDetailReqRef = useRef(0);
 
   const {
     customFields,
@@ -75,16 +82,25 @@ const PlantsPage: React.FC = () => {
    * 处理打开详情
    */
   const handleOpenDetail = async (record: Plant) => {
-    try {
+    const req = ++plantDetailReqRef.current;
+    flushDrawerOpen(() => {
+      setPlantDetail(record);
       setDrawerVisible(true);
       setDetailLoading(true);
+    });
+    try {
       const detail = await plantApi.get(record.uuid);
+      if (plantDetailReqRef.current !== req) return;
       setPlantDetail(detail);
       await loadFieldValuesForDetail(detail.id);
     } catch (error: any) {
-      messageApi.error(error.message || t('app.master-data.plants.getDetailFailed'));
+      if (plantDetailReqRef.current === req) {
+        messageApi.error(error.message || t('app.master-data.plants.getDetailFailed'));
+      }
     } finally {
-      setDetailLoading(false);
+      if (plantDetailReqRef.current === req) {
+        setDetailLoading(false);
+      }
     }
   };
 

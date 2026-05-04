@@ -19,7 +19,8 @@ import {
   CheckCircleOutlined,
 } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { flushDrawerOpen, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import {
   getMessageConfigList,
   getMessageConfigByUuid,
@@ -41,6 +42,7 @@ const MessageConfigListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);
+  const messageConfigDetailReqRef = useRef(0);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Modal 相关状态（创建/编辑消息配置）
@@ -118,20 +120,31 @@ const MessageConfigListPage: React.FC = () => {
    */
   const handleView = async (record: MessageConfig) => {
     if (isBuiltInChannel(record)) {
-      setDetailData(builtInInternalChannel);
-      setDrawerVisible(true);
-      setDetailLoading(false);
+      flushDrawerOpen(() => {
+        setDetailData(builtInInternalChannel);
+        setDrawerVisible(true);
+        setDetailLoading(false);
+      });
       return;
     }
-    try {
-      setDetailLoading(true);
+    const req = ++messageConfigDetailReqRef.current;
+    flushDrawerOpen(() => {
       setDrawerVisible(true);
+      setDetailData(null);
+      setDetailLoading(true);
+    });
+    try {
       const detail = await getMessageConfigByUuid(record.uuid);
+      if (messageConfigDetailReqRef.current !== req) return;
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.messageConfig.getDetailFailed'));
+      if (messageConfigDetailReqRef.current === req) {
+        messageApi.error(error.message || t('pages.system.messageConfig.getDetailFailed'));
+      }
     } finally {
-      setDetailLoading(false);
+      if (messageConfigDetailReqRef.current === req) {
+        setDetailLoading(false);
+      }
     }
   };
 
@@ -759,7 +772,7 @@ const MessageConfigListPage: React.FC = () => {
       </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
-      <DetailDrawerTemplate
+      <UniDetail
         title={t('pages.system.messageConfig.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
@@ -767,7 +780,7 @@ const MessageConfigListPage: React.FC = () => {
         width={DRAWER_CONFIG.STANDARD_WIDTH}
         basic={detailData ? (
             <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, detailData)} />
-          ) : undefined}
+          ) : null}
       />
     </>
   );

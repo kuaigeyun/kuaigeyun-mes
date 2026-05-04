@@ -9,7 +9,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Modal, Input, message, App } from 'antd';
+import { Modal, Input, Form, App } from 'antd';
 import { ProForm } from '@ant-design/pro-components';
 import { UniDropdown } from '../uni-dropdown';
 import {
@@ -17,8 +17,6 @@ import {
   getDictionaryItemList,
   createDictionaryItem,
 } from '../../services/dataDictionary';
-
-const { TextArea } = Input;
 
 /**
  * 数据字典选择组件属性
@@ -58,6 +56,11 @@ export interface DictionarySelectProps {
   onChange?: (value: any, option: any) => void;
   /** 当前选中的值 */
   value?: any;
+  /**
+   * 快速创建时仅填写「标签」，存储用的 value 与 label 相同（适合基础单位等场景）。
+   * 其它字典仍可单独填写稳定唯一标识。
+   */
+  valueEqualsLabel?: boolean;
 }
 
 /**
@@ -81,15 +84,14 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
   className,
   onChange,
   value,
+  valueEqualsLabel = false,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const [options, setOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [loading, setLoading] = useState(false);
   const [createModalVisible, setCreateModalVisible] = useState(false);
-  const [createLabel, setCreateLabel] = useState('');
-  const [createValue, setCreateValue] = useState('');
-  const [createDescription, setCreateDescription] = useState('');
+  const [createForm] = Form.useForm<{ displayLabel: string; storedValue?: string; description?: string }>();
   const [creating, setCreating] = useState(false);
   const [dictionaryUuid, setDictionaryUuid] = useState<string>('');
 
@@ -125,12 +127,26 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
    * 处理创建新项
    */
   const handleCreateItem = async () => {
-    if (!createLabel.trim() || !createValue.trim()) {
-      messageApi.warning(t('components.dictionarySelect.enterLabelAndValue'));
+    let trimmedLabel: string;
+    let trimmedValue: string;
+    try {
+      const values = await createForm.validateFields();
+      trimmedLabel = String(values.displayLabel ?? '').trim();
+      trimmedValue = valueEqualsLabel ? trimmedLabel : String(values.storedValue ?? '').trim();
+    } catch {
       return;
     }
 
-    const exists = options.some(option => option.value === createValue.trim());
+    if (!trimmedLabel || (!valueEqualsLabel && !trimmedValue)) {
+      messageApi.warning(
+        valueEqualsLabel
+          ? t('components.dictionarySelect.enterUnitItem')
+          : t('components.dictionarySelect.enterLabelAndValue')
+      );
+      return;
+    }
+
+    const exists = options.some(option => option.value === trimmedValue);
     if (exists) {
       messageApi.warning(t('components.dictionarySelect.valueExists'));
       return;
@@ -138,19 +154,19 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
 
     try {
       setCreating(true);
+      const descTrimmed = String(createForm.getFieldValue('description') ?? '').trim();
+
       const newItem = await createDictionaryItem(dictionaryUuid, {
-        label: createLabel.trim(),
-        value: createValue.trim(),
-        description: createDescription.trim() || undefined,
+        label: trimmedLabel,
+        value: trimmedValue,
+        description: descTrimmed || undefined,
         is_active: true,
         sort_order: options.length,
       });
 
       messageApi.success(t('common.createSuccess'));
       setCreateModalVisible(false);
-      setCreateLabel('');
-      setCreateValue('');
-      setCreateDescription('');
+      createForm.resetFields();
 
       await loadDictionaryItems();
 
@@ -201,9 +217,7 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
       quickCreate={{
         label: '创建新项',
         onClick: () => {
-          setCreateLabel('');
-          setCreateValue('');
-          setCreateDescription('');
+          createForm.resetFields();
           setCreateModalVisible(true);
         },
       }}
@@ -217,43 +231,69 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
       onOk={handleCreateItem}
       onCancel={() => {
         setCreateModalVisible(false);
-        setCreateLabel('');
-        setCreateValue('');
-        setCreateDescription('');
+        createForm.resetFields();
       }}
       confirmLoading={creating}
       okText="创建"
       cancelText="取消"
       zIndex={2000} // 确保在 Table 单元格等复杂场景下也能正确覆盖
     >
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ marginBottom: 8, fontWeight: 500 }}>标签 *</div>
-        <Input
-          value={createLabel}
-          onChange={(e) => setCreateLabel(e.target.value)}
-          placeholder="请输入标签（显示名称）"
-          maxLength={100}
-        />
-      </div>
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ marginBottom: 8, fontWeight: 500 }}>值 *</div>
-        <Input
-          value={createValue}
-          onChange={(e) => setCreateValue(e.target.value)}
-          placeholder="请输入值（唯一标识）"
-          maxLength={100}
-        />
-      </div>
-      <div>
-        <div style={{ marginBottom: 8, fontWeight: 500 }}>描述</div>
-        <TextArea
-          value={createDescription}
-          onChange={(e) => setCreateDescription(e.target.value)}
-          placeholder="请输入描述（可选）"
-          rows={3}
-          maxLength={500}
-        />
-      </div>
+      <Form form={createForm} layout="vertical" preserve={false}>
+        <Form.Item
+          name="displayLabel"
+          label={
+            valueEqualsLabel
+              ? t('components.dictionarySelect.unitItem')
+              : t('components.dictionarySelect.fieldLabel')
+          }
+          rules={[
+            {
+              required: true,
+              whitespace: true,
+              message: valueEqualsLabel
+                ? t('components.dictionarySelect.enterUnitItem')
+                : t('components.dictionarySelect.enterLabel'),
+            },
+            { max: 100, message: t('components.dictionarySelect.maxLength100') },
+          ]}
+          extra={
+            valueEqualsLabel ? t('components.dictionarySelect.valueMirrorsLabelHint') : undefined
+          }
+        >
+          <Input
+            placeholder={
+              valueEqualsLabel
+                ? t('components.dictionarySelect.placeholderUnitItem')
+                : t('components.dictionarySelect.placeholderLabel')
+            }
+            maxLength={100}
+          />
+        </Form.Item>
+        {!valueEqualsLabel ? (
+          <Form.Item
+            name="storedValue"
+            label={t('components.dictionarySelect.fieldValue')}
+            rules={[
+              {
+                required: true,
+                whitespace: true,
+                message: t('components.dictionarySelect.enterValue'),
+              },
+              { max: 100, message: t('components.dictionarySelect.maxLength100') },
+            ]}
+          >
+            <Input placeholder={t('components.dictionarySelect.placeholderValue')} maxLength={100} />
+          </Form.Item>
+        ) : null}
+        <Form.Item name="description" label={t('components.dictionarySelect.fieldDescription')}>
+          <Input.TextArea
+            placeholder={t('components.dictionarySelect.placeholderDescription')}
+            rows={3}
+            maxLength={500}
+            showCount
+          />
+        </Form.Item>
+      </Form>
     </Modal>
   );
 

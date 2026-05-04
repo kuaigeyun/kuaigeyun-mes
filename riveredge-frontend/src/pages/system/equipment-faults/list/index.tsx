@@ -8,13 +8,24 @@
  * Date: 2025-01-15
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormSwitch } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, message, Tabs, Modal } from 'antd';
+import {
+  ActionType,
+  ProColumns,
+  ProFormText,
+  ProFormTextArea,
+  ProFormSelect,
+  ProFormDatePicker,
+  ProFormDigit,
+  ProFormSwitch,
+  ProDescriptionsItemProps,
+} from '@ant-design/pro-components';
+import { App, Popconfirm, Button, Tag, Space, message, Tabs, Modal, Descriptions } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import {
   getEquipmentFaultList,
   getEquipmentFaultByUuid,
@@ -34,6 +45,7 @@ const EquipmentFaultListPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const equipmentFaultDetailReqRef = useRef(0);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [activeTab, setActiveTab] = useState<'faults' | 'repairs'>('faults');
   
@@ -113,15 +125,24 @@ const EquipmentFaultListPage: React.FC = () => {
    * 处理查看详情
    */
   const handleView = async (record: EquipmentFault) => {
-    try {
-      setDetailLoading(true);
+    const req = ++equipmentFaultDetailReqRef.current;
+    flushDrawerOpen(() => {
       setDrawerVisible(true);
+      setDetailData(null);
+      setDetailLoading(true);
+    });
+    try {
       const detail = await getEquipmentFaultByUuid(record.uuid);
+      if (equipmentFaultDetailReqRef.current !== req) return;
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.equipmentFaults.getDetailFailed'));
+      if (equipmentFaultDetailReqRef.current === req) {
+        messageApi.error(error.message || t('pages.system.equipmentFaults.getDetailFailed'));
+      }
     } finally {
-      setDetailLoading(false);
+      if (equipmentFaultDetailReqRef.current === req) {
+        setDetailLoading(false);
+      }
     }
   };
 
@@ -205,12 +226,53 @@ const EquipmentFaultListPage: React.FC = () => {
     '严重': 'pages.system.equipmentFaults.levelSerious',
     '紧急': 'pages.system.equipmentFaults.levelUrgent',
   };
-  const statusTextKey: Record<string, string> = {
-    '待处理': 'pages.system.equipmentFaults.statusPending',
-    '处理中': 'pages.system.equipmentFaults.statusProcessing',
-    '已修复': 'pages.system.equipmentFaults.statusFixed',
-    '已关闭': 'pages.system.equipmentFaults.statusClosed',
-  };
+
+  const equipmentFaultDetailDescColumns = useMemo<ProDescriptionsItemProps<EquipmentFault>[]>(
+    () => [
+      { title: t('pages.system.equipmentFaults.columnFaultNo'), dataIndex: 'fault_no' },
+      { title: t('pages.system.equipmentFaults.columnEquipment'), dataIndex: 'equipment_name' },
+      { title: t('pages.system.equipmentFaults.columnFaultDate'), dataIndex: 'fault_date', valueType: 'dateTime' },
+      {
+        title: t('pages.system.equipmentFaults.columnFaultType'),
+        dataIndex: 'fault_type',
+        render: (v: string) => (faultTypeTextKey[v] ? t(faultTypeTextKey[v]) : v),
+      },
+      {
+        title: t('pages.system.equipmentFaults.columnFaultLevel'),
+        dataIndex: 'fault_level',
+        render: (v: string) => (faultLevelTextKey[v] ? t(faultLevelTextKey[v]) : v),
+      },
+      { title: t('pages.system.equipmentFaults.columnFaultDesc'), dataIndex: 'fault_description', span: 2 },
+      { title: t('pages.system.equipmentFaults.columnReporter'), dataIndex: 'reporter_name' },
+      {
+        title: t('pages.system.equipmentFaults.columnStatus'),
+        dataIndex: 'status',
+        render: (_: unknown, record: EquipmentFault) => {
+          const statusMap: Record<string, { color: string; text: string }> = {
+            '待处理': { color: 'default', text: t('pages.system.equipmentFaults.statusPending') },
+            '处理中': { color: 'processing', text: t('pages.system.equipmentFaults.statusProcessing') },
+            '已修复': { color: 'success', text: t('pages.system.equipmentFaults.statusFixed') },
+            '已关闭': { color: 'error', text: t('pages.system.equipmentFaults.statusClosed') },
+          };
+          const statusInfo = statusMap[record.status] || { color: 'default', text: record.status };
+          return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
+        },
+      },
+      {
+        title: t('pages.system.equipmentFaults.columnRepairRequired'),
+        dataIndex: 'repair_required',
+        render: (_: unknown, entity: EquipmentFault) => (
+          <Tag color={entity?.repair_required ? 'success' : 'default'}>
+            {entity?.repair_required ? t('pages.system.equipmentFaults.yes') : t('pages.system.equipmentFaults.no')}
+          </Tag>
+        ),
+      },
+      { title: t('pages.system.equipmentFaults.labelRemark'), dataIndex: 'remark', span: 2 },
+      { title: t('pages.system.equipmentFaults.columnCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+      { title: t('pages.system.equipmentFaults.labelUpdatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+    ],
+    [t]
+  );
 
   const columns: ProColumns<EquipmentFault>[] = [
     {
@@ -519,27 +581,20 @@ const EquipmentFaultListPage: React.FC = () => {
       </FormModalTemplate>
 
       {/* 详情 Drawer */}
-      <DetailDrawerTemplate
+      <UniDetail
         title={t('pages.system.equipmentFaults.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        dataSource={detailData}
-        columns={[
-          { title: t('pages.system.equipmentFaults.columnFaultNo'), dataIndex: 'fault_no' },
-          { title: t('pages.system.equipmentFaults.columnEquipment'), dataIndex: 'equipment_name' },
-          { title: t('pages.system.equipmentFaults.columnFaultDate'), dataIndex: 'fault_date', valueType: 'dateTime' },
-          { title: t('pages.system.equipmentFaults.columnFaultType'), dataIndex: 'fault_type', render: (v: string) => (faultTypeTextKey[v] ? t(faultTypeTextKey[v]) : v) },
-          { title: t('pages.system.equipmentFaults.columnFaultLevel'), dataIndex: 'fault_level', render: (v: string) => (faultLevelTextKey[v] ? t(faultLevelTextKey[v]) : v) },
-          { title: t('pages.system.equipmentFaults.columnFaultDesc'), dataIndex: 'fault_description', span: 2 },
-          { title: t('pages.system.equipmentFaults.columnReporter'), dataIndex: 'reporter_name' },
-          { title: t('pages.system.equipmentFaults.columnStatus'), dataIndex: 'status', render: (v: string) => (statusTextKey[v] ? t(statusTextKey[v]) : v) },
-          { title: t('pages.system.equipmentFaults.columnRepairRequired'), dataIndex: 'repair_required', render: (value: boolean) => (value ? t('pages.system.equipmentFaults.yes') : t('pages.system.equipmentFaults.no')) },
-          { title: t('pages.system.equipmentFaults.labelRemark'), dataIndex: 'remark', span: 2 },
-          { title: t('pages.system.equipmentFaults.columnCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },
-          { title: t('pages.system.equipmentFaults.labelUpdatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
-        ]}
+        basic={
+          detailData ? (
+            <Descriptions
+              column={1}
+              items={detailDrawerDescriptionItems(equipmentFaultDetailDescColumns, detailData)}
+            />
+          ) : null
+        }
       />
     </>
   );

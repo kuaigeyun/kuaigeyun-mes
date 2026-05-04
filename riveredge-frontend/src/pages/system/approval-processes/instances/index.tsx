@@ -7,20 +7,19 @@
 
 import React, { useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormItem, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Button, Descriptions, Input, Popconfirm, Space, Tag, Tooltip, Typography, message } from 'antd';
-import { EyeOutlined, PlusOutlined, CheckOutlined, CloseOutlined, StopOutlined, SwapOutlined } from '@ant-design/icons';
+import { App, Button, Descriptions, Input, Space, Tag, Tooltip, Typography } from 'antd';
+import { EyeOutlined, CheckOutlined, CloseOutlined, StopOutlined, SwapOutlined } from '@ant-design/icons';
 import { useGlobalStore } from '../../../../stores';
 import { UniTable } from '../../../../components/uni-table';
-import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { flushDrawerOpen, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import { theme } from 'antd';
 import {
   getApprovalInstanceList,
   getApprovalInstanceByUuid,
   createApprovalInstance,
-  updateApprovalInstance,
-  deleteApprovalInstance,
   performApprovalAction,
   ApprovalInstance,
   CreateApprovalInstanceData,
@@ -39,7 +38,7 @@ const ApprovalInstanceListPage: React.FC = () => {
   const { token: themeToken } = theme.useToken();
   const currentUser = useGlobalStore((s) => s.currentUser);
   const actionRef = useRef<ActionType>(null);
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const approvalInstanceDetailReqRef = useRef(0);
   const [tableData, setTableData] = useState<ApprovalInstance[]>([]);
   
   // Modal 相关状态（提交审批）
@@ -130,15 +129,24 @@ const ApprovalInstanceListPage: React.FC = () => {
    * 处理查看详情
    */
   const handleView = async (record: ApprovalInstance) => {
-    try {
-      setDetailLoading(true);
+    const req = ++approvalInstanceDetailReqRef.current;
+    flushDrawerOpen(() => {
       setDrawerVisible(true);
+      setDetailData(null);
+      setDetailLoading(true);
+    });
+    try {
       const detail = await getApprovalInstanceByUuid(record.uuid);
+      if (approvalInstanceDetailReqRef.current !== req) return;
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.approvalInstances.getDetailFailed'));
+      if (approvalInstanceDetailReqRef.current === req) {
+        messageApi.error(error.message || t('pages.system.approvalInstances.getDetailFailed'));
+      }
     } finally {
-      setDetailLoading(false);
+      if (approvalInstanceDetailReqRef.current === req) {
+        setDetailLoading(false);
+      }
     }
   };
 
@@ -279,7 +287,7 @@ const ApprovalInstanceListPage: React.FC = () => {
   /**
    * 渲染看板卡片
    */
-  const renderKanbanCard = (item: ApprovalInstance, status: string) => {
+  const renderKanbanCard = (item: ApprovalInstance, _status: string) => {
     const statusMap = {
       pending: { color: 'processing', text: t('pages.system.approvalInstances.statusPending') },
       approved: { color: 'success', text: t('pages.system.approvalInstances.statusApproved') },
@@ -369,37 +377,41 @@ const ApprovalInstanceListPage: React.FC = () => {
   /**
    * 详情列定义
    */
-  const detailColumns = [
-    { title: t('pages.system.approvalInstances.title'), dataIndex: 'title' },
-    { title: t('pages.system.approvalInstances.content'), dataIndex: 'content' },
-    {
-      title: t('pages.system.approvalInstances.status'),
-      dataIndex: 'status',
-      render: (value: string) => {
-        const statusMap: Record<string, { color: string; text: string }> = {
-          pending: { color: 'processing', text: t('pages.system.approvalInstances.statusPending') },
-          approved: { color: 'success', text: t('pages.system.approvalInstances.statusApproved') },
-          rejected: { color: 'error', text: t('pages.system.approvalInstances.statusRejected') },
-          cancelled: { color: 'default', text: t('pages.system.approvalInstances.statusCancelled') },
-        };
-        const statusInfo = statusMap[value] || { color: 'default', text: value };
-        return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
+  const approvalInstanceDetailDescColumns = useMemo<ProDescriptionsItemProps<ApprovalInstance>[]>(
+    () => [
+      { title: t('pages.system.approvalInstances.title'), dataIndex: 'title' },
+      { title: t('pages.system.approvalInstances.content'), dataIndex: 'content' },
+      {
+        title: t('pages.system.approvalInstances.status'),
+        dataIndex: 'status',
+        render: (_dom, entity: ApprovalInstance) => {
+          const value = entity.status;
+          const statusMap: Record<string, { color: string; text: string }> = {
+            pending: { color: 'processing', text: t('pages.system.approvalInstances.statusPending') },
+            approved: { color: 'success', text: t('pages.system.approvalInstances.statusApproved') },
+            rejected: { color: 'error', text: t('pages.system.approvalInstances.statusRejected') },
+            cancelled: { color: 'default', text: t('pages.system.approvalInstances.statusCancelled') },
+          };
+          const statusInfo = statusMap[value] || { color: 'default', text: value };
+          return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
+        },
       },
-    },
-    { title: t('pages.system.approvalInstances.currentNode'), dataIndex: 'current_node' },
-    { title: t('pages.system.approvalInstances.currentApproverId'), dataIndex: 'current_approver_id' },
-    {
-      title: t('pages.system.approvalInstances.approvalData'),
-      dataIndex: 'data',
-      render: (value: any) => (
-        <pre style={{ maxHeight: '200px', overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>
-          {JSON.stringify(value, null, 2)}
-        </pre>
-      ),
-    },
-    { title: t('pages.system.approvalInstances.submittedAt'), dataIndex: 'submitted_at', valueType: 'dateTime' },
-    { title: t('pages.system.approvalInstances.completedAt'), dataIndex: 'completed_at', valueType: 'dateTime' },
-  ];
+      { title: t('pages.system.approvalInstances.currentNode'), dataIndex: 'current_node' },
+      { title: t('pages.system.approvalInstances.currentApproverId'), dataIndex: 'current_approver_id' },
+      {
+        title: t('pages.system.approvalInstances.approvalData'),
+        dataIndex: 'data',
+        render: (_dom, entity: ApprovalInstance) => (
+          <pre style={{ maxHeight: '200px', overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>
+            {JSON.stringify(entity.data, null, 2)}
+          </pre>
+        ),
+      },
+      { title: t('pages.system.approvalInstances.submittedAt'), dataIndex: 'submitted_at', valueType: 'dateTime' },
+      { title: t('pages.system.approvalInstances.completedAt'), dataIndex: 'completed_at', valueType: 'dateTime' },
+    ],
+    [t]
+  );
 
   return (
     <>
@@ -435,8 +447,8 @@ const ApprovalInstanceListPage: React.FC = () => {
           headerTitle={t('pages.system.approvalInstances.headerTitle')}
           actionRef={actionRef}
           columns={columns}
-          request={async (params, sort, _filter, searchFormValues) => {
-            const { current = 1, pageSize = 20, ...rest } = params;
+          request={async (params, _sort, _filter, searchFormValues) => {
+            const { current = 1, pageSize = 20 } = params;
             const skip = (current - 1) * pageSize;
             const limit = pageSize;
             
@@ -481,7 +493,6 @@ const ApprovalInstanceListPage: React.FC = () => {
           toolBarRender={() => []}
           search={{
             labelWidth: 'auto',
-            showAdvancedSearch: true,
           }}
           showCreateButton
           createButtonText={t('pages.system.approvalInstances.createButton')}
@@ -606,16 +617,15 @@ const ApprovalInstanceListPage: React.FC = () => {
       </FormModalTemplate>
 
       {/* 详情 Drawer */}
-      <DetailDrawerTemplate
+      <UniDetail
         title={t('pages.system.approvalInstances.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        dataSource={detailData || {}}
         basic={detailData ? (
-            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, detailData)} />
-          ) : undefined}
+            <Descriptions column={1} items={detailDrawerDescriptionItems(approvalInstanceDetailDescColumns, detailData)} />
+          ) : null}
       />
     </>
   );

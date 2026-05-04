@@ -6,13 +6,14 @@
  * Schema 驱动 + 国际化
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, message, Modal, Table } from 'antd';
+import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { App, Popconfirm, Button, Tag, Space, message, Modal, Table, Descriptions } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { flushDrawerOpen, ListPageTemplate, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import { PositionFormModal } from '../components/PositionFormModal';
 import {
   getPositionList,
@@ -38,6 +39,35 @@ const PositionListPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const positionDetailReqRef = useRef(0);
+
+  const positionDetailDescColumns = useMemo<ProDescriptionsItemProps<Position>[]>(
+    () => [
+      { title: t('field.position.name'), dataIndex: 'name' },
+      { title: t('field.position.code'), dataIndex: 'code' },
+      { title: t('field.position.remark'), dataIndex: 'description' },
+      {
+        title: t('field.position.departmentUuid'),
+        dataIndex: ['department', 'name'],
+        render: (_: unknown, record: Position) => record?.department?.name || '-',
+      },
+      {
+        title: t('field.position.status'),
+        dataIndex: 'is_active',
+        render: (_: unknown, entity: Position) => (
+          <Tag color={entity?.is_active ? 'success' : 'default'}>
+            {entity?.is_active ? t('field.role.enabled') : t('field.role.disabled')}
+          </Tag>
+        ),
+      },
+      { title: t('field.position.userCount'), dataIndex: 'user_count' },
+      { title: t('field.position.sortOrder'), dataIndex: 'sort_order' },
+      { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+      { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+    ],
+    [t]
+  );
+
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [deptTreeData, setDeptTreeData] = useState<Array<{ title: string; value: string; key: string; children?: any[] }>>([]);
 
@@ -90,15 +120,24 @@ const PositionListPage: React.FC = () => {
   };
 
   const handleView = async (record: Position) => {
-    try {
-      setDetailLoading(true);
+    const req = ++positionDetailReqRef.current;
+    flushDrawerOpen(() => {
       setDrawerVisible(true);
+      setDetailData(null);
+      setDetailLoading(true);
+    });
+    try {
       const detail = await getPositionByUuid(record.uuid);
+      if (positionDetailReqRef.current !== req) return;
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || t('common.loadFailed'));
+      if (positionDetailReqRef.current === req) {
+        messageApi.error(error.message || t('common.loadFailed'));
+      }
     } finally {
-      setDetailLoading(false);
+      if (positionDetailReqRef.current === req) {
+        setDetailLoading(false);
+      }
     }
   };
 
@@ -369,34 +408,20 @@ const PositionListPage: React.FC = () => {
         onSuccess={() => actionRef.current?.reload()}
       />
 
-      <DetailDrawerTemplate
+      <UniDetail
         title={t('field.position.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        dataSource={detailData as any}
-        column={1}
-        columns={[
-          { title: t('field.position.name'), dataIndex: 'name' },
-          { title: t('field.position.code'), dataIndex: 'code' },
-          { title: t('field.position.remark'), dataIndex: 'description' },
-          {
-            title: t('field.position.departmentUuid'),
-            dataIndex: ['department', 'name'],
-            render: (_: any, record: any) => record?.department?.name || '-',
-          },
-          {
-            title: t('field.position.status'),
-            dataIndex: 'is_active',
-            render: (_: any, entity: any) =>
-              entity?.is_active ? t('field.role.enabled') : t('field.role.disabled'),
-          },
-          { title: t('field.position.userCount'), dataIndex: 'user_count' },
-          { title: t('field.position.sortOrder'), dataIndex: 'sort_order' },
-          { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
-          { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
-        ]}
+        basic={
+          detailData ? (
+            <Descriptions
+              column={1}
+              items={detailDrawerDescriptionItems(positionDetailDescColumns, detailData)}
+            />
+          ) : null
+        }
       />
     </>
   );

@@ -83,22 +83,6 @@ export interface VariantAttributeDefinitionListParams {
 }
 
 /**
- * 属性定义版本历史
- */
-export interface VariantAttributeDefinitionHistory {
-  uuid: string;
-  tenant_id: number;
-  attribute_definition_id: number;
-  version: number;
-  attribute_config: Record<string, any>;
-  change_description?: string;
-  changed_by?: number;
-  changed_at?: string;
-  created_at: string;
-  updated_at: string;
-}
-
-/**
  * 属性验证请求
  */
 export interface VariantAttributeValidationRequest {

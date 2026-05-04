@@ -6,13 +6,28 @@
  * Schema 驱动 + 国际化
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, Table, Tooltip } from 'antd';
+import {
+  ActionType,
+  ProColumns,
+  ProForm,
+  ProFormText,
+  ProFormTextArea,
+  ProFormSwitch,
+  ProFormInstance,
+  ProDescriptionsItemProps,
+} from '@ant-design/pro-components';
+import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, Table, Tooltip, Descriptions, theme } from 'antd';
 import { SettingOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import {
+  flushDrawerOpen,
+  ListPageTemplate,
+  DRAWER_CONFIG,
+  getDrawerFloatingWrapperStyle,
+} from '../../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import { DataDictionaryFormModal } from '../components/DataDictionaryFormModal';
 import { renderUniTableOperationCell } from '../../../../components/uni-action';
 import {
@@ -33,8 +48,41 @@ import {
 const DataDictionaryListPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const { token } = theme.useToken();
   const actionRef = useRef<ActionType>(null);
   const itemFormRef = useRef<ProFormInstance>();
+  const dataDictionaryDetailReqRef = useRef(0);
+
+  const dataDictionaryDetailDescColumns = useMemo<ProDescriptionsItemProps<DataDictionary>[]>(
+    () => [
+      { title: t('field.dataDictionary.name'), dataIndex: 'name' },
+      { title: t('field.dataDictionary.code'), dataIndex: 'code' },
+      { title: t('field.dataDictionary.description'), dataIndex: 'description' },
+      {
+        title: t('field.dataDictionary.systemDictionary'),
+        dataIndex: 'is_system',
+        render: (_: unknown, entity: DataDictionary) =>
+          entity?.is_system ? (
+            <Tag color="purple">{t('field.role.yes')}</Tag>
+          ) : (
+            <Tag>{t('field.role.no')}</Tag>
+          ),
+      },
+      {
+        title: t('field.role.status'),
+        dataIndex: 'is_active',
+        render: (_: unknown, entity: DataDictionary) => (
+          <Tag color={entity?.is_active ? 'success' : 'default'}>
+            {entity?.is_active ? t('field.role.enabled') : t('field.role.disabled')}
+          </Tag>
+        ),
+      },
+      { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+      { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+    ],
+    [t]
+  );
+
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [initializing, setInitializing] = useState(false);
 
@@ -69,15 +117,24 @@ const DataDictionaryListPage: React.FC = () => {
    * 处理查看详情
    */
   const handleView = async (record: DataDictionary) => {
-    try {
-      setDetailLoading(true);
+    const req = ++dataDictionaryDetailReqRef.current;
+    flushDrawerOpen(() => {
       setDrawerVisible(true);
+      setDetailData(null);
+      setDetailLoading(true);
+    });
+    try {
       const detail = await getDataDictionaryByUuid(record.uuid);
+      if (dataDictionaryDetailReqRef.current !== req) return;
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || t('common.loadFailed'));
+      if (dataDictionaryDetailReqRef.current === req) {
+        messageApi.error(error.message || t('common.loadFailed'));
+      }
     } finally {
-      setDetailLoading(false);
+      if (dataDictionaryDetailReqRef.current === req) {
+        setDetailLoading(false);
+      }
     }
   };
 
@@ -425,6 +482,17 @@ const DataDictionaryListPage: React.FC = () => {
     },
   ];
 
+  const dictionaryItemDrawerStyles = useMemo(() => {
+    const floating = getDrawerFloatingWrapperStyle('right', token);
+    return {
+      wrapper: {
+        ...floating,
+        width: '70%',
+      },
+      body: { paddingBottom: 24 },
+    };
+  }, [token.borderRadiusLG, token.boxShadowSecondary]);
+
   return (
     <>
       <ListPageTemplate>
@@ -532,31 +600,20 @@ const DataDictionaryListPage: React.FC = () => {
         onSuccess={() => actionRef.current?.reload()}
       />
 
-      <DetailDrawerTemplate
+      <UniDetail
         title={t('field.dataDictionary.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        column={1}
-        dataSource={detailData}
-        columns={[
-          { title: t('field.dataDictionary.name'), dataIndex: 'name' },
-          { title: t('field.dataDictionary.code'), dataIndex: 'code' },
-          { title: t('field.dataDictionary.description'), dataIndex: 'description' },
-          {
-            title: t('field.dataDictionary.systemDictionary'),
-            dataIndex: 'is_system',
-            render: (value: boolean) => (value ? t('field.role.yes') : t('field.role.no')),
-          },
-          {
-            title: t('field.role.status'),
-            dataIndex: 'is_active',
-            render: (value: boolean) => (value ? t('field.role.enabled') : t('field.role.disabled')),
-          },
-          { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
-          { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
-        ]}
+        basic={
+          detailData ? (
+            <Descriptions
+              column={1}
+              items={detailDrawerDescriptionItems(dataDictionaryDetailDescColumns, detailData)}
+            />
+          ) : null
+        }
       />
 
       {/* 字典项管理 Drawer */}
@@ -568,8 +625,8 @@ const DataDictionaryListPage: React.FC = () => {
           setCurrentDictionaryForItems(null);
           setItems([]);
         }}
-        width="70%"
-        styles={{ body: { paddingBottom: 24 } }}
+        rootClassName="drawer-slide-motion"
+        styles={dictionaryItemDrawerStyles}
       >
         <div style={{ marginBottom: 16 }}>
           <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateItem}>

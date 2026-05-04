@@ -1679,6 +1679,7 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
             required
             formRef={formRef}
             colProps={{ span: 24 }}
+            valueEqualsLabel
           />
         </Col>
         <Col span={6} style={{ minWidth: 0 }}>

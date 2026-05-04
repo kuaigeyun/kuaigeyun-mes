@@ -12,7 +12,8 @@ import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Badge, Button, Card, Descriptions, Form, Modal, Popconfirm, Space, Tag, Tooltip, Typography, theme } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PrinterOutlined, CheckCircleOutlined, PrinterFilled } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { flushDrawerOpen, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import {
   getPrintDeviceList,
   getPrintDeviceByUuid,
@@ -85,6 +86,7 @@ const PrintDeviceListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
   const actionRef = useRef<ActionType>(null);
+  const printDeviceDetailReqRef = useRef(0);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Modal 相关状态（创建/编辑打印设备）
@@ -159,15 +161,24 @@ const PrintDeviceListPage: React.FC = () => {
    * 处理查看详情
    */
   const handleView = async (record: PrintDevice) => {
-    try {
-      setDetailLoading(true);
+    const req = ++printDeviceDetailReqRef.current;
+    flushDrawerOpen(() => {
       setDrawerVisible(true);
+      setDetailData(null);
+      setDetailLoading(true);
+    });
+    try {
       const detail = await getPrintDeviceByUuid(record.uuid);
+      if (printDeviceDetailReqRef.current !== req) return;
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.printDevices.getDetailFailed'));
+      if (printDeviceDetailReqRef.current === req) {
+        messageApi.error(error.message || t('pages.system.printDevices.getDetailFailed'));
+      }
     } finally {
-      setDetailLoading(false);
+      if (printDeviceDetailReqRef.current === req) {
+        setDetailLoading(false);
+      }
     }
   };
 
@@ -986,7 +997,7 @@ const PrintDeviceListPage: React.FC = () => {
       </Modal>
 
       {/* 详情 Drawer */}
-      <DetailDrawerTemplate
+      <UniDetail
         title={t('pages.system.printDevices.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
@@ -994,7 +1005,7 @@ const PrintDeviceListPage: React.FC = () => {
         width={DRAWER_CONFIG.STANDARD_WIDTH}
         basic={detailData ? (
             <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, detailData)} />
-          ) : undefined}
+          ) : null}
       />
     </>
   );

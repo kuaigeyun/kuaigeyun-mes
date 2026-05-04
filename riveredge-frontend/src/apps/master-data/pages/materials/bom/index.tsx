@@ -6,10 +6,10 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance, ProDescriptionsItemType, ProDescriptions, ProFormList, ProFormDateTimePicker, ProFormSelect, ProForm } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance, ProDescriptionsItemType, ProFormList, ProFormDateTimePicker, ProFormSelect, ProForm } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
 import CodeField from '../../../../../components/code-field';
-import { App, Button, Tag, Space, Modal, Input, Tree, Spin, Table, Form as AntForm, Select, Switch, InputNumber, Dropdown, Tabs, Checkbox } from 'antd';
+import { App, Button, Tag, Space, Modal, Input, Tree, Spin, Table, Form as AntForm, Select, Switch, InputNumber, Dropdown, Checkbox, Descriptions } from 'antd';
 import type { MenuProps } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import type { ColumnsType } from 'antd/es/table';
@@ -18,7 +18,8 @@ import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, flushDrawerOpen, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
 import { bomApi, materialApi } from '../../../services/material';
 import type { BOM, BOMCreate, BOMUpdate, Material, BOMBatchCreate, BOMItemCreate, BOMBatchImport, BOMBatchImportItem, BOMVersionCreate, BOMVersionCompare, BOMVersionCompareResult, BOMHierarchy, BOMHierarchyItem, BOMQuantityResult, BOMQuantityComponent } from '../../../types/material';
 import { testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
@@ -65,6 +66,7 @@ const BOMPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
+  const bomDetailReqRef = useRef(0);
   const formRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
@@ -697,15 +699,24 @@ const BOMPage: React.FC = () => {
    * 处理打开详情
    */
   const handleOpenDetail = async (record: BOM) => {
-    try {
+    const req = ++bomDetailReqRef.current;
+    flushDrawerOpen(() => {
       setCurrentBOMUuid(record.uuid);
       setDrawerVisible(true);
       setDetailLoading(true);
       setHierarchyLoading(true);
-      
+      setBomDetail(null);
+      setBomItems([]);
+      setHierarchyData(null);
+      setHierarchyTreeData([]);
+      setExpandedKeys([]);
+    });
+    try {
       // 获取整个BOM结构（所有子物料）
       const allBomItems = await bomApi.getByMaterial(record.materialId, record.version, false);
-      
+
+      if (bomDetailReqRef.current !== req) return;
+
       if (!allBomItems || allBomItems.length === 0) {
         messageApi.error(t('app.master-data.bom.bomDataNotFound'));
         return;
@@ -715,9 +726,11 @@ const BOMPage: React.FC = () => {
       const firstItem = allBomItems[0]!;
       setBomDetail(firstItem);
       setBomItems(allBomItems);
-      
+
       // 并行加载层级结构
       const hierarchy = await bomApi.getHierarchy(record.materialId, record.version).catch(() => null);
+
+      if (bomDetailReqRef.current !== req) return;
       
       // 处理层级结构数据
       if (hierarchy) {
@@ -788,10 +801,14 @@ const BOMPage: React.FC = () => {
         setExpandedKeys([]);
       }
     } catch (error: any) {
-      messageApi.error(error.message || t('app.master-data.bom.getDetailFailed'));
+      if (bomDetailReqRef.current === req) {
+        messageApi.error(error.message || t('app.master-data.bom.getDetailFailed'));
+      }
     } finally {
-      setDetailLoading(false);
-      setHierarchyLoading(false);
+      if (bomDetailReqRef.current === req) {
+        setDetailLoading(false);
+        setHierarchyLoading(false);
+      }
     }
   };
 
@@ -2220,206 +2237,203 @@ const BOMPage: React.FC = () => {
       />
       </ListPageTemplate>
 
-      {/* 详情 Drawer */}
-      <DetailDrawerTemplate
+      {/* 详情 Drawer（uni-detail：基本信息区 + 层级结构区，与工厂管理等页面一致） */}
+      <UniDetail
         title={t('app.master-data.bom.bomDetailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
-        dataSource={bomDetail || undefined}
-        columns={detailColumns}
         loading={detailLoading}
         width={DRAWER_CONFIG.LARGE_WIDTH}
-        customContent={
-          <Tabs
-            items={[
-              {
-                key: 'detail',
-                label: t('app.master-data.bom.basicInfo'),
-                children: (
-                  <div style={{ paddingTop: 16 }}>
-                    {/* BOM基本信息 */}
-                    <ProDescriptions<BOM>
-                      dataSource={bomDetail || undefined}
-                      column={2}
-                      columns={detailColumns.filter(col => 
-                        // 只显示基本信息，不显示子物料相关字段
-                        col.dataIndex !== 'componentId' && 
-                        col.dataIndex !== 'quantity' && 
-                        col.dataIndex !== 'unit' && 
-                        col.dataIndex !== 'wasteRate' &&
-                        col.dataIndex !== 'isRequired' &&
-                        col.dataIndex !== 'level' &&
-                        col.dataIndex !== 'path' &&
-                        // 不显示替代料、优先级、备注
-                        col.dataIndex !== 'isAlternative' &&
-                        col.dataIndex !== 'priority' &&
-                        col.dataIndex !== 'remark'
-                      )}
-                    />
-                    
-                    {/* 子物料列表 */}
-                    {bomItems.length > 0 && (
-                      <div style={{ marginTop: 24 }}>
-                        <h4 style={{ marginBottom: 16, fontWeight: 500 }}>{t('app.master-data.bom.childMaterialListWithCount', { count: bomItems.length })}</h4>
-                        <Table<BOM>
-                          dataSource={bomItems}
-                          rowKey="uuid"
-                          pagination={false}
-                          size="small"
-                          scroll={{ x: 'max-content' }}
-                          columns={[
-                            {
-                              title: t('app.master-data.bom.serialNo'),
-                              key: 'index',
-                              width: 50,
-                              align: 'center',
-                              render: (_, __, index) => index + 1,
-                            },
-                            {
-                              title: t('app.master-data.bom.childMaterialTitle'),
-                              dataIndex: 'componentId',
-                              minWidth: 200,
-                              render: (_, record) => getMaterialName(record.componentId),
-                            },
-                            {
-                              title: t('app.master-data.bom.quantityTitle'),
-                              dataIndex: 'quantity',
-                              width: 80,
-                              align: 'right',
-                            },
-                            {
-                              title: t('app.master-data.bom.unitTitle'),
-                              dataIndex: 'unit',
-                              width: 60,
-                              align: 'center',
-                              render: (_, record) => {
-                                const unitValue = record.unit;
-                                const unitLabel = unitValueToLabel[unitValue || ''] || unitValue || '-';
-                                return unitLabel;
-                              },
-                            },
-                            {
-                              title: t('app.master-data.bom.wasteRateTitle'),
-                              dataIndex: 'wasteRate',
-                              width: 80,
-                              align: 'right',
-                              render: (_, record) => record.wasteRate ? `${record.wasteRate}%` : '0%',
-                            },
-                            {
-                              title: t('app.master-data.bom.isRequiredTitle'),
-                              dataIndex: 'isRequired',
-                              width: 70,
-                              align: 'center',
-                              render: (_, record) => (
-                                <Tag color={record.isRequired !== false ? 'success' : 'default'} style={{ marginRight: 0 }}>
-                                  {record.isRequired !== false ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
-                                </Tag>
-                              ),
-                            },
-                            {
-                              title: t('app.master-data.bom.levelTitle'),
-                              dataIndex: 'level',
-                              width: 50,
-                              align: 'center',
-                              render: (_, record) => record.level ?? 0,
-                            },
-                            {
-                              title: t('app.master-data.bom.alternativeTitle'),
-                              dataIndex: 'isAlternative',
-                              width: 70,
-                              align: 'center',
-                              render: (_, record) => (
-                                <Tag color={record.isAlternative ? 'orange' : 'default'} style={{ marginRight: 0 }}>
-                                  {record.isAlternative ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
-                                </Tag>
-                              ),
-                            },
-                            {
-                              title: t('app.master-data.bom.isConfigurableColumn'),
-                              dataIndex: 'isConfigurable',
-                              width: 70,
-                              align: 'center',
-                              render: (_, record) => {
-                                const manualCfg = record.isConfigurable === true;
-                                const componentMaterial = materials.find((m) => m.id === record.componentId);
-                                const autoCfg = !!componentMaterial?.variantManaged;
-                                const isConfigurableItem = manualCfg || autoCfg;
-                                return (
-                                  <Tag color={isConfigurableItem ? 'cyan' : 'default'} style={{ marginRight: 0 }}>
-                                    {isConfigurableItem ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
-                                  </Tag>
-                                );
-                              },
-                            },
-                            {
-                              title: t('app.master-data.bom.alternativeGroupIdLabel'),
-                              dataIndex: 'alternativeGroupId',
-                              width: 80,
-                              align: 'center',
-                              render: (_, record) => (record.isAlternative && record.alternativeGroupId != null) ? record.alternativeGroupId : '-',
-                            },
-                            {
-                              title: t('app.master-data.bom.priorityTitle'),
-                              dataIndex: 'priority',
-                              width: 60,
-                              align: 'center',
-                              render: (_, record) => record.priority ?? 0,
-                            },
-                            {
-                              title: t('app.master-data.bom.descTitle'),
-                              dataIndex: 'description',
-                              width: 150,
-                              ellipsis: true,
-                              render: (_, record) => record.description || '-',
-                            },
-                          ]}
-                        />
-                      </div>
-                    )}
+        basic={
+          bomDetail ? (
+            <div>
+              <Descriptions
+                column={2}
+                items={detailDrawerDescriptionItems(
+                  detailColumns.filter(
+                    (col) =>
+                      col.dataIndex !== 'componentId' &&
+                      col.dataIndex !== 'quantity' &&
+                      col.dataIndex !== 'unit' &&
+                      col.dataIndex !== 'wasteRate' &&
+                      col.dataIndex !== 'isRequired' &&
+                      col.dataIndex !== 'level' &&
+                      col.dataIndex !== 'path' &&
+                      col.dataIndex !== 'isAlternative' &&
+                      col.dataIndex !== 'priority' &&
+                      col.dataIndex !== 'remark'
+                  ) as any,
+                  bomDetail
+                )}
+              />
+              {bomItems.length > 0 && (
+                <div style={{ marginTop: 24 }}>
+                  <h4 style={{ marginBottom: 16, fontWeight: 500 }}>
+                    {t('app.master-data.bom.childMaterialListWithCount', { count: bomItems.length })}
+                  </h4>
+                  <Table<BOM>
+                    dataSource={bomItems}
+                    rowKey="uuid"
+                    pagination={false}
+                    size="small"
+                    scroll={{ x: 'max-content' }}
+                    columns={[
+                      {
+                        title: t('app.master-data.bom.serialNo'),
+                        key: 'index',
+                        width: 50,
+                        align: 'center',
+                        render: (_, __, index) => index + 1,
+                      },
+                      {
+                        title: t('app.master-data.bom.childMaterialTitle'),
+                        dataIndex: 'componentId',
+                        minWidth: 200,
+                        render: (_, record) => getMaterialName(record.componentId),
+                      },
+                      {
+                        title: t('app.master-data.bom.quantityTitle'),
+                        dataIndex: 'quantity',
+                        width: 80,
+                        align: 'right',
+                      },
+                      {
+                        title: t('app.master-data.bom.unitTitle'),
+                        dataIndex: 'unit',
+                        width: 60,
+                        align: 'center',
+                        render: (_, record) => {
+                          const unitValue = record.unit;
+                          const unitLabel = unitValueToLabel[unitValue || ''] || unitValue || '-';
+                          return unitLabel;
+                        },
+                      },
+                      {
+                        title: t('app.master-data.bom.wasteRateTitle'),
+                        dataIndex: 'wasteRate',
+                        width: 80,
+                        align: 'right',
+                        render: (_, record) => (record.wasteRate ? `${record.wasteRate}%` : '0%'),
+                      },
+                      {
+                        title: t('app.master-data.bom.isRequiredTitle'),
+                        dataIndex: 'isRequired',
+                        width: 70,
+                        align: 'center',
+                        render: (_, record) => (
+                          <Tag color={record.isRequired !== false ? 'success' : 'default'} style={{ marginRight: 0 }}>
+                            {record.isRequired !== false ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
+                          </Tag>
+                        ),
+                      },
+                      {
+                        title: t('app.master-data.bom.levelTitle'),
+                        dataIndex: 'level',
+                        width: 50,
+                        align: 'center',
+                        render: (_, record) => record.level ?? 0,
+                      },
+                      {
+                        title: t('app.master-data.bom.alternativeTitle'),
+                        dataIndex: 'isAlternative',
+                        width: 70,
+                        align: 'center',
+                        render: (_, record) => (
+                          <Tag color={record.isAlternative ? 'orange' : 'default'} style={{ marginRight: 0 }}>
+                            {record.isAlternative ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
+                          </Tag>
+                        ),
+                      },
+                      {
+                        title: t('app.master-data.bom.isConfigurableColumn'),
+                        dataIndex: 'isConfigurable',
+                        width: 70,
+                        align: 'center',
+                        render: (_, record) => {
+                          const manualCfg = record.isConfigurable === true;
+                          const componentMaterial = materials.find((m) => m.id === record.componentId);
+                          const autoCfg = !!componentMaterial?.variantManaged;
+                          const isConfigurableItem = manualCfg || autoCfg;
+                          return (
+                            <Tag color={isConfigurableItem ? 'cyan' : 'default'} style={{ marginRight: 0 }}>
+                              {isConfigurableItem ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
+                            </Tag>
+                          );
+                        },
+                      },
+                      {
+                        title: t('app.master-data.bom.alternativeGroupIdLabel'),
+                        dataIndex: 'alternativeGroupId',
+                        width: 80,
+                        align: 'center',
+                        render: (_, record) =>
+                          record.isAlternative && record.alternativeGroupId != null ? record.alternativeGroupId : '-',
+                      },
+                      {
+                        title: t('app.master-data.bom.priorityTitle'),
+                        dataIndex: 'priority',
+                        width: 60,
+                        align: 'center',
+                        render: (_, record) => record.priority ?? 0,
+                      },
+                      {
+                        title: t('app.master-data.bom.descTitle'),
+                        dataIndex: 'description',
+                        width: 150,
+                        ellipsis: true,
+                        render: (_, record) => record.description || '-',
+                      },
+                    ]}
+                  />
+                </div>
+              )}
+            </div>
+          ) : null
+        }
+        linesTitle={t('app.master-data.bom.hierarchyStructure')}
+        lines={
+          <Spin spinning={hierarchyLoading}>
+            {hierarchyTreeData.length === 0 && !hierarchyLoading ? (
+              <div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>
+                {t('app.master-data.bom.noHierarchyData')}
+              </div>
+            ) : (
+              <div>
+                {hierarchyData && (
+                  <div
+                    style={{
+                      marginBottom: 16,
+                      padding: '12px',
+                      backgroundColor: '#f0f9ff',
+                      borderRadius: '4px',
+                      border: '1px solid #91d5ff',
+                    }}
+                  >
+                    <Space>
+                      <span style={{ fontWeight: 500 }}>主物料：</span>
+                      <span>
+                        {hierarchyData.materialCode && hierarchyData.materialName
+                          ? `${hierarchyData.materialCode} - ${hierarchyData.materialName}`
+                          : hierarchyData.materialCode ||
+                            hierarchyData.materialName ||
+                            getMaterialName(hierarchyData.materialId) ||
+                            '-'}
+                      </span>
+                      <span style={{ color: '#999' }}>版本：{hierarchyData.version || ''}</span>
+                    </Space>
                   </div>
-                ),
-              },
-              {
-                key: 'hierarchy',
-                label: t('app.master-data.bom.hierarchyStructure'),
-                children: (
-                  <div style={{ paddingTop: 16 }}>
-                    <Spin spinning={hierarchyLoading}>
-                      {hierarchyTreeData.length === 0 && !hierarchyLoading ? (
-                        <div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>
-                          {t('app.master-data.bom.noHierarchyData')}
-                        </div>
-                      ) : (
-                        <div>
-                          {hierarchyData && (
-                            <div style={{ marginBottom: 16, padding: '12px', backgroundColor: '#f0f9ff', borderRadius: '4px', border: '1px solid #91d5ff' }}>
-                              <Space>
-                                <span style={{ fontWeight: 500 }}>主物料：</span>
-                                <span>
-                                  {hierarchyData.materialCode && hierarchyData.materialName 
-                                    ? `${hierarchyData.materialCode} - ${hierarchyData.materialName}`
-                                    : hierarchyData.materialCode || hierarchyData.materialName || getMaterialName(hierarchyData.materialId) || '-'}
-                                </span>
-                                <span style={{ color: '#999' }}>版本：{hierarchyData.version || ''}</span>
-                              </Space>
-                            </div>
-                          )}
-                          <Tree
-                            treeData={hierarchyTreeData}
-                            expandedKeys={expandedKeys}
-                            onExpand={setExpandedKeys}
-                            blockNode
-                            showLine={{ showLeafIcon: false }}
-                            defaultExpandAll={false}
-                          />
-                        </div>
-                      )}
-                    </Spin>
-                  </div>
-                ),
-              },
-            ]}
-          />
+                )}
+                <Tree
+                  treeData={hierarchyTreeData}
+                  expandedKeys={expandedKeys}
+                  onExpand={setExpandedKeys}
+                  blockNode
+                  showLine={{ showLeafIcon: false }}
+                  defaultExpandAll={false}
+                />
+              </div>
+            )}
+          </Spin>
         }
       />
 

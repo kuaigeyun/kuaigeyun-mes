@@ -1,0 +1,76 @@
+/**
+ * 右侧/左侧抽屉统一 slide-in / slide-out（与主题编辑器一致）
+ * 通过根节点 class `drawer-slide-motion` + `.ant-drawer-right` / `.ant-drawer-left` 区分方向。
+ */
+
+@keyframes drawer-slide-in-right {
+  from {
+    transform: translate3d(100%, 0, 0);
+    opacity: 0.88;
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+  }
+}
+
+@keyframes drawer-slide-out-right {
+  from {
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+  }
+  to {
+    transform: translate3d(100%, 0, 0);
+    opacity: 0.88;
+  }
+}
+
+@keyframes drawer-slide-in-left {
+  from {
+    transform: translate3d(-100%, 0, 0);
+    opacity: 0.88;
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+  }
+}
+
+@keyframes drawer-slide-out-left {
+  from {
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+  }
+  to {
+    transform: translate3d(-100%, 0, 0);
+    opacity: 0.88;
+  }
+}
+
+.drawer-slide-motion.ant-drawer-right .ant-drawer-content-wrapper[class*='ant-drawer-panel-motion-right-enter-active'],
+.drawer-slide-motion.ant-drawer-right .ant-drawer-content-wrapper[class*='ant-drawer-panel-motion-right-appear-active'] {
+  transition: none !important;
+  animation: drawer-slide-in-right 0.32s cubic-bezier(0.25, 0.46, 0.45, 0.94) both !important;
+}
+
+.drawer-slide-motion.ant-drawer-right .ant-drawer-content-wrapper[class*='ant-drawer-panel-motion-right-leave-active'] {
+  transition: none !important;
+  animation: drawer-slide-out-right 0.28s cubic-bezier(0.25, 0.46, 0.45, 0.94) both !important;
+}
+
+.drawer-slide-motion.ant-drawer-left .ant-drawer-content-wrapper[class*='ant-drawer-panel-motion-left-enter-active'],
+.drawer-slide-motion.ant-drawer-left .ant-drawer-content-wrapper[class*='ant-drawer-panel-motion-left-appear-active'] {
+  transition: none !important;
+  animation: drawer-slide-in-left 0.32s cubic-bezier(0.25, 0.46, 0.45, 0.94) both !important;
+}
+
+.drawer-slide-motion.ant-drawer-left .ant-drawer-content-wrapper[class*='ant-drawer-panel-motion-left-leave-active'] {
+  transition: none !important;
+  animation: drawer-slide-out-left 0.28s cubic-bezier(0.25, 0.46, 0.45, 0.94) both !important;
+}
+
+.drawer-slide-motion .ant-drawer-mask[class*='ant-drawer-mask-motion-enter-active'],
+.drawer-slide-motion .ant-drawer-mask[class*='ant-drawer-mask-motion-leave-active'] {
+  transition-duration: 0.28s !important;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1) !important;
+}

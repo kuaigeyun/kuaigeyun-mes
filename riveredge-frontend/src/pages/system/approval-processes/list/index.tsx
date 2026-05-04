@@ -5,17 +5,18 @@
  * 支持审批流程的 CRUD 操作。
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space } from 'antd';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { App, Popconfirm, Button, Tag, Space, Descriptions } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, ApartmentOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { countWithPagedRequests } from '../../../../utils/pagedCount';
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import '../../../../styles/action-column.less';
 import { UniTable } from '../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import {
   getApprovalProcessList,
   getApprovalProcessByUuid,
@@ -37,6 +38,85 @@ const ApprovalProcessListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
+  const approvalProcessDetailReqRef = useRef(0);
+
+  const approvalProcessDetailDescColumns = useMemo<ProDescriptionsItemProps<Record<string, unknown>>[]>(
+    () => [
+      {
+        title: t('pages.system.approvalProcesses.name'),
+        dataIndex: 'name',
+      },
+      {
+        title: t('pages.system.approvalProcesses.code'),
+        dataIndex: 'code',
+      },
+      {
+        title: t('pages.system.approvalProcesses.description'),
+        dataIndex: 'description',
+      },
+      {
+        title: t('pages.system.approvalProcesses.enableStatus'),
+        dataIndex: 'is_active',
+        render: (value: unknown) => (
+          <Tag color={value ? 'success' : 'default'}>
+            {value ? t('pages.system.approvalProcesses.enabled') : t('pages.system.approvalProcesses.disabled')}
+          </Tag>
+        ),
+      },
+      {
+        title: t('pages.system.approvalProcesses.nodesConfig'),
+        dataIndex: 'nodes',
+        render: (value: unknown) => (
+          <pre
+            style={{
+              maxHeight: '200px',
+              overflow: 'auto',
+              padding: '12px',
+              background: '#f5f5f5',
+              borderRadius: '4px',
+              margin: 0,
+            }}
+          >
+            {JSON.stringify(value, null, 2)}
+          </pre>
+        ),
+      },
+      {
+        title: t('pages.system.approvalProcesses.flowConfig'),
+        dataIndex: 'config',
+        render: (value: unknown) => (
+          <pre
+            style={{
+              maxHeight: '200px',
+              overflow: 'auto',
+              padding: '12px',
+              background: '#f5f5f5',
+              borderRadius: '4px',
+              margin: 0,
+            }}
+          >
+            {JSON.stringify(value, null, 2)}
+          </pre>
+        ),
+      },
+      {
+        title: t('pages.system.approvalProcesses.inngestWorkflowId'),
+        dataIndex: 'inngest_workflow_id',
+      },
+      {
+        title: t('pages.system.approvalProcesses.createdAt'),
+        dataIndex: 'created_at',
+        valueType: 'dateTime',
+      },
+      {
+        title: t('pages.system.approvalProcesses.updatedAt'),
+        dataIndex: 'updated_at',
+        valueType: 'dateTime',
+      },
+    ],
+    [t]
+  );
+
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Modal 相关状态（创建/编辑审批流程）
@@ -88,15 +168,24 @@ const ApprovalProcessListPage: React.FC = () => {
    * 处理查看详情
    */
   const handleView = async (record: ApprovalProcess) => {
-    try {
-      setDetailLoading(true);
+    const req = ++approvalProcessDetailReqRef.current;
+    flushDrawerOpen(() => {
       setDrawerVisible(true);
+      setDetailData(null);
+      setDetailLoading(true);
+    });
+    try {
       const detail = await getApprovalProcessByUuid(record.uuid);
+      if (approvalProcessDetailReqRef.current !== req) return;
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.approvalProcesses.getDetailFailed'));
+      if (approvalProcessDetailReqRef.current === req) {
+        messageApi.error(error.message || t('pages.system.approvalProcesses.getDetailFailed'));
+      }
     } finally {
-      setDetailLoading(false);
+      if (approvalProcessDetailReqRef.current === req) {
+        setDetailLoading(false);
+      }
     }
   };
 
@@ -458,83 +547,20 @@ const ApprovalProcessListPage: React.FC = () => {
       </FormModalTemplate>
 
       {/* 详情 Drawer */}
-      <DetailDrawerTemplate
+      <UniDetail
         title={t('pages.system.approvalProcesses.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        dataSource={detailData}
-        column={1}
-        columns={[
-              {
-                title: t('pages.system.approvalProcesses.name'),
-                dataIndex: 'name',
-              },
-              {
-                title: t('pages.system.approvalProcesses.code'),
-                dataIndex: 'code',
-              },
-              {
-                title: t('pages.system.approvalProcesses.description'),
-                dataIndex: 'description',
-              },
-              {
-                title: t('pages.system.approvalProcesses.enableStatus'),
-                dataIndex: 'is_active',
-                render: (value: any) => (
-                  <Tag color={value ? 'success' : 'default'}>
-                    {value ? t('pages.system.approvalProcesses.enabled') : t('pages.system.approvalProcesses.disabled')}
-                  </Tag>
-                ),
-              },
-              {
-                title: t('pages.system.approvalProcesses.nodesConfig'),
-                dataIndex: 'nodes',
-                render: (value: any) => (
-                  <pre style={{ 
-                    maxHeight: '200px', 
-                    overflow: 'auto', 
-                    padding: '12px', 
-                    background: '#f5f5f5', 
-                    borderRadius: '4px',
-                    margin: 0
-                  }}>
-                    {JSON.stringify(value, null, 2)}
-                  </pre>
-                ),
-              },
-              {
-                title: t('pages.system.approvalProcesses.flowConfig'),
-                dataIndex: 'config',
-                render: (value: any) => (
-                  <pre style={{ 
-                    maxHeight: '200px', 
-                    overflow: 'auto', 
-                    padding: '12px', 
-                    background: '#f5f5f5', 
-                    borderRadius: '4px',
-                    margin: 0
-                  }}>
-                    {JSON.stringify(value, null, 2)}
-                  </pre>
-                ),
-              },
-              {
-                title: t('pages.system.approvalProcesses.inngestWorkflowId'),
-                dataIndex: 'inngest_workflow_id',
-              },
-              {
-                title: t('pages.system.approvalProcesses.createdAt'),
-                dataIndex: 'created_at',
-                valueType: 'dateTime',
-              },
-              {
-                title: t('pages.system.approvalProcesses.updatedAt'),
-                dataIndex: 'updated_at',
-                valueType: 'dateTime',
-              },
-        ]}
+        basic={
+          detailData ? (
+            <Descriptions
+              column={1}
+              items={detailDrawerDescriptionItems(approvalProcessDetailDescColumns, detailData as Record<string, unknown>)}
+            />
+          ) : null
+        }
       />
     </>
   );

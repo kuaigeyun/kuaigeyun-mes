@@ -1,5 +1,5 @@
 /**
- * 批号记录（按物料维护批次号、数量、效期等；与质量管理「追溯查询」互补）
+ * 物料序列号台账（唯一序列号、状态与日期；与「序列号规则」配置、质量管理追溯互补）
  */
 
 import React, { useRef, useState } from 'react';
@@ -7,20 +7,21 @@ import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Space } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
-import { ProFormText, ProFormSelect, ProFormDigit, ProFormDatePicker } from '@ant-design/pro-components';
+import { ProFormText, ProFormSelect, ProFormDatePicker } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
-import { materialBatchApi, materialApi } from '../../../services/material';
-import type { MaterialBatch, MaterialBatchCreate, MaterialBatchUpdate } from '../../../types/material';
+import { materialSerialApi, materialApi } from '../../../services/material';
+import type { MaterialSerial, MaterialSerialCreate, MaterialSerialUpdate } from '../../../types/material';
 
-const BATCH_STATUS_OPTIONS = [
+const SERIAL_STATUS_OPTIONS = [
   { label: '在库', value: 'in_stock' },
   { label: '已出库', value: 'out_stock' },
-  { label: '已过期', value: 'expired' },
+  { label: '已销售', value: 'sold' },
   { label: '已报废', value: 'scrapped' },
+  { label: '已退货', value: 'returned' },
 ];
 
-const BatchesPage: React.FC = () => {
+const SerialsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
@@ -36,24 +37,23 @@ const BatchesPage: React.FC = () => {
     formRef.current?.resetFields();
   };
 
-  const handleEdit = async (record: MaterialBatch) => {
+  const handleEdit = async (record: MaterialSerial) => {
     setIsEdit(true);
     setCurrentUuid(record.uuid);
     setModalVisible(true);
     try {
-      const detail = await materialBatchApi.get(record.uuid);
+      const detail = await materialSerialApi.get(record.uuid);
       formRef.current?.setFieldsValue({
         materialUuid: detail.materialUuid ?? (detail as any).material_uuid,
-        batchNo: detail.batchNo ?? (detail as any).batch_no,
+        serialNo: detail.serialNo ?? (detail as any).serial_no,
         productionDate: detail.productionDate ?? (detail as any).production_date,
-        expiryDate: detail.expiryDate ?? (detail as any).expiry_date,
-        supplierBatchNo: detail.supplierBatchNo ?? (detail as any).supplier_batch_no,
-        quantity: detail.quantity,
+        factoryDate: detail.factoryDate ?? (detail as any).factory_date,
+        supplierSerialNo: detail.supplierSerialNo ?? (detail as any).supplier_serial_no,
         status: detail.status,
         remark: detail.remark,
       });
     } catch (e: any) {
-      messageApi.error(e?.message || t('app.master-data.batches.getDetailFailed'));
+      messageApi.error(e?.message || t('app.master-data.serials.getDetailFailed'));
     }
   };
 
@@ -69,26 +69,26 @@ const BatchesPage: React.FC = () => {
   const handleSubmit = async (values: Record<string, unknown>) => {
     try {
       if (isEdit && currentUuid) {
-        await materialBatchApi.update(currentUuid, {
+        const upd: MaterialSerialUpdate = {
           productionDate: formatDate(values.productionDate),
-          expiryDate: formatDate(values.expiryDate),
-          supplierBatchNo: values.supplierBatchNo as string | undefined,
-          quantity: values.quantity as number | undefined,
+          factoryDate: formatDate(values.factoryDate),
+          supplierSerialNo: values.supplierSerialNo as string | undefined,
           status: values.status as string | undefined,
           remark: values.remark as string | undefined,
-        });
+        };
+        await materialSerialApi.update(currentUuid, upd);
         messageApi.success(t('common.updateSuccess'));
       } else {
-        await materialBatchApi.create({
+        const crt: MaterialSerialCreate = {
           materialUuid: values.materialUuid as string,
-          batchNo: values.batchNo as string,
+          serialNo: values.serialNo as string,
           productionDate: formatDate(values.productionDate),
-          expiryDate: formatDate(values.expiryDate),
-          supplierBatchNo: values.supplierBatchNo as string | undefined,
-          quantity: (values.quantity as number) ?? 0,
+          factoryDate: formatDate(values.factoryDate),
+          supplierSerialNo: values.supplierSerialNo as string | undefined,
           status: (values.status as string) ?? 'in_stock',
           remark: values.remark as string | undefined,
-        });
+        };
+        await materialSerialApi.create(crt);
         messageApi.success(t('common.createSuccess'));
       }
       setModalVisible(false);
@@ -99,9 +99,9 @@ const BatchesPage: React.FC = () => {
     }
   };
 
-  const handleDelete = async (record: MaterialBatch) => {
+  const handleDelete = async (record: MaterialSerial) => {
     try {
-      await materialBatchApi.delete(record.uuid);
+      await materialSerialApi.delete(record.uuid);
       messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (e: any) {
@@ -109,16 +109,16 @@ const BatchesPage: React.FC = () => {
     }
   };
 
-  const columns: ProColumns<MaterialBatch>[] = [
+  const columns: ProColumns<MaterialSerial>[] = [
     {
-      title: t('app.master-data.batches.batchNo') || '批号',
-      dataIndex: 'batch_no',
-      width: 140,
+      title: t('app.master-data.serials.serialNo'),
+      dataIndex: 'serial_no',
+      width: 160,
       ellipsis: true,
-      render: (_, r) => r.batchNo ?? (r as any).batch_no,
+      render: (_, r) => r.serialNo ?? (r as any).serial_no,
     },
     {
-      title: t('app.master-data.batches.materialName') || '物料名称',
+      title: t('app.master-data.serials.materialName'),
       dataIndex: 'material_name',
       width: 200,
       ellipsis: true,
@@ -126,38 +126,32 @@ const BatchesPage: React.FC = () => {
       render: (_, r) => r.materialName ?? (r as any).material_name ?? '-',
     },
     {
-      title: t('app.master-data.batches.quantity') || '数量',
-      dataIndex: 'quantity',
-      width: 100,
-      valueType: 'digit',
-      render: (_, r) => r.quantity ?? (r as any).quantity ?? 0,
-    },
-    {
-      title: t('app.master-data.batches.status') || '状态',
+      title: t('app.master-data.serials.status'),
       dataIndex: 'status',
       width: 100,
       valueType: 'select',
       valueEnum: {
         in_stock: { text: '在库', status: 'Success' },
         out_stock: { text: '已出库', status: 'Default' },
-        expired: { text: '已过期', status: 'Error' },
+        sold: { text: '已销售', status: 'Processing' },
         scrapped: { text: '已报废', status: 'Warning' },
+        returned: { text: '已退货', status: 'Error' },
       },
       render: (_, r) => r.status ?? (r as any).status ?? '-',
     },
     {
-      title: t('app.master-data.batches.productionDate') || '生产日期',
+      title: t('app.master-data.serials.productionDate'),
       dataIndex: 'productionDate',
       width: 120,
       valueType: 'date',
       render: (_, r) => r.productionDate ?? (r as any).production_date ?? '-',
     },
     {
-      title: t('app.master-data.batches.expiryDate') || '有效期',
-      dataIndex: 'expiryDate',
+      title: t('app.master-data.serials.factoryDate'),
+      dataIndex: 'factoryDate',
       width: 120,
       valueType: 'date',
-      render: (_, r) => r.expiryDate ?? (r as any).expiry_date ?? '-',
+      render: (_, r) => r.factoryDate ?? (r as any).factory_date ?? '-',
     },
     {
       title: t('common.actions'),
@@ -165,18 +159,10 @@ const BatchesPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
+          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
             {t('field.customField.edit')}
           </Button>
-          <Popconfirm
-            title={t('common.confirmDelete')}
-            onConfirm={() => handleDelete(record)}
-          >
+          <Popconfirm title={t('common.confirmDelete')} onConfirm={() => handleDelete(record)}>
             <Button type="link" size="small" danger icon={<DeleteOutlined />}>
               {t('field.customField.delete')}
             </Button>
@@ -188,17 +174,16 @@ const BatchesPage: React.FC = () => {
 
   return (
     <ListPageTemplate>
-      <UniTable<MaterialBatch>
-        headerTitle={t('app.master-data.menu.materials.batches')}
+      <UniTable<MaterialSerial>
+        headerTitle={t('app.master-data.menu.materials.serials')}
         actionRef={actionRef}
         rowKey="uuid"
         columns={columns}
         request={async (params) => {
-          const { current = 1, pageSize = 20, material_uuid, batch_no, status } = params || {};
-          const res = await materialBatchApi.list({
-            materialUuid: material_uuid,
-            batchNo: batch_no,
-            status,
+          const { current = 1, pageSize = 20, serial_no, status } = params || {};
+          const res = await materialSerialApi.list({
+            serialNo: serial_no as string | undefined,
+            status: status as string | undefined,
             page: current,
             pageSize,
           });
@@ -215,7 +200,11 @@ const BatchesPage: React.FC = () => {
       />
 
       <FormModalTemplate
-        title={isEdit ? t('field.customField.edit') + '批号' : t('pages.system.create') + '批号'}
+        title={
+          isEdit
+            ? `${t('field.customField.edit')}${t('app.master-data.serials.serialNo')}`
+            : `${t('pages.system.create')}${t('app.master-data.serials.serialNo')}`
+        }
         open={modalVisible}
         onClose={() => setModalVisible(false)}
         onFinish={handleSubmit}
@@ -225,8 +214,8 @@ const BatchesPage: React.FC = () => {
       >
         <ProFormSelect
           name="materialUuid"
-          label={t('app.master-data.batches.material') || '物料'}
-          rules={[{ required: !isEdit, message: t('app.master-data.batches.selectMaterial') }]}
+          label={t('app.master-data.serials.material')}
+          rules={[{ required: !isEdit, message: t('app.master-data.serials.selectMaterial') }]}
           disabled={isEdit}
           request={async () => {
             const res = await materialApi.list({ limit: 500, isActive: true });
@@ -239,49 +228,38 @@ const BatchesPage: React.FC = () => {
           colProps={{ span: 12 }}
         />
         <ProFormText
-          name="batchNo"
-          label={t('app.master-data.batches.batchNo') || '批号'}
-          rules={[{ required: true, message: '请输入批号' }]}
+          name="serialNo"
+          label={t('app.master-data.serials.serialNo')}
+          rules={[{ required: true, message: t('app.master-data.serials.enterSerialNo') }]}
           disabled={isEdit}
           colProps={{ span: 12 }}
         />
         <ProFormDatePicker
           name="productionDate"
-          label={t('app.master-data.batches.productionDate') || '生产日期'}
+          label={t('app.master-data.serials.productionDate')}
           colProps={{ span: 12 }}
         />
         <ProFormDatePicker
-          name="expiryDate"
-          label={t('app.master-data.batches.expiryDate') || '有效期'}
+          name="factoryDate"
+          label={t('app.master-data.serials.factoryDate')}
           colProps={{ span: 12 }}
         />
         <ProFormText
-          name="supplierBatchNo"
-          label={t('app.master-data.batches.supplierBatchNo') || '供应商批号'}
-          colProps={{ span: 12 }}
-        />
-        <ProFormDigit
-          name="quantity"
-          label={t('app.master-data.batches.quantity') || '数量'}
-          initialValue={0}
-          min={0}
+          name="supplierSerialNo"
+          label={t('app.master-data.serials.supplierSerialNo')}
           colProps={{ span: 12 }}
         />
         <ProFormSelect
           name="status"
-          label={t('app.master-data.batches.status') || '状态'}
-          options={BATCH_STATUS_OPTIONS}
+          label={t('app.master-data.serials.status')}
+          options={SERIAL_STATUS_OPTIONS}
           initialValue="in_stock"
           colProps={{ span: 12 }}
         />
-        <ProFormText
-          name="remark"
-          label={t('common.remark')}
-          colProps={{ span: 24 }}
-        />
+        <ProFormText name="remark" label={t('common.remark')} colProps={{ span: 24 }} />
       </FormModalTemplate>
     </ListPageTemplate>
   );
 };
 
-export default BatchesPage;
+export default SerialsPage;

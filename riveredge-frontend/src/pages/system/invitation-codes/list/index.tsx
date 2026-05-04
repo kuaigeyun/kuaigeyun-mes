@@ -6,13 +6,14 @@
  * Schema 驱动 + 国际化
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal, message } from 'antd';
+import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { App, Popconfirm, Button, Tag, Space, Modal, message, Descriptions } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, CopyOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { flushDrawerOpen, ListPageTemplate, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import { InvitationCodeFormModal } from '../components/InvitationCodeFormModal';
 import {
   getInvitationCodeList,
@@ -26,6 +27,7 @@ const InvitationCodeListPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const invitationCodeDetailReqRef = useRef(0);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const [modalVisible, setModalVisible] = useState(false);
@@ -46,15 +48,24 @@ const InvitationCodeListPage: React.FC = () => {
   };
 
   const handleView = async (record: InvitationCode) => {
-    try {
-      setDetailLoading(true);
+    const req = ++invitationCodeDetailReqRef.current;
+    flushDrawerOpen(() => {
       setDrawerVisible(true);
+      setDetailData(null);
+      setDetailLoading(true);
+    });
+    try {
       const detail = await getInvitationCodeByUuid(record.uuid);
+      if (invitationCodeDetailReqRef.current !== req) return;
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || t('common.loadFailed'));
+      if (invitationCodeDetailReqRef.current === req) {
+        messageApi.error(error.message || t('common.loadFailed'));
+      }
     } finally {
-      setDetailLoading(false);
+      if (invitationCodeDetailReqRef.current === req) {
+        setDetailLoading(false);
+      }
     }
   };
 
@@ -107,21 +118,79 @@ const InvitationCodeListPage: React.FC = () => {
     });
   };
 
-  const handleCopy = (code: string) => {
-    navigator.clipboard
-      .writeText(code)
-      .then(() => messageApi.success(t('field.invitationCode.copySuccess')))
-      .catch(() => messageApi.error(t('common.copyFailed')));
-  };
+  const handleCopy = useCallback(
+    (code: string) => {
+      navigator.clipboard
+        .writeText(code)
+        .then(() => messageApi.success(t('field.invitationCode.copySuccess')))
+        .catch(() => messageApi.error(t('common.copyFailed')));
+    },
+    [messageApi, t]
+  );
 
-  const isCodeValid = (record: InvitationCode): boolean => {
+  const isCodeValid = useCallback((record: InvitationCode): boolean => {
     if (!record.is_active) return false;
     if (record.used_count >= record.max_uses) return false;
     if (record.expires_at) {
       if (new Date(record.expires_at) < new Date()) return false;
     }
     return true;
-  };
+  }, []);
+
+  const invitationDetailDescColumns = useMemo<ProDescriptionsItemProps<InvitationCode>[]>(
+    () => [
+      {
+        title: t('field.invitationCode.code'),
+        dataIndex: 'code',
+        render: (value: string) => (
+          <Space>
+            <span style={{ fontFamily: CODE_FONT_FAMILY, fontSize: '16px', fontWeight: 'bold' }}>{value}</span>
+            <Button type="link" size="small" icon={<CopyOutlined />} onClick={() => handleCopy(value)}>
+              {t('field.invitationCode.copy')}
+            </Button>
+          </Space>
+        ),
+      },
+      {
+        title: t('field.invitationCode.email'),
+        dataIndex: 'email',
+        render: (value: string) => value || '-',
+      },
+      {
+        title: t('field.invitationCode.roleId'),
+        dataIndex: 'role_id',
+        render: (value: number) => value ?? '-',
+      },
+      {
+        title: t('field.invitationCode.usedCount'),
+        dataIndex: 'used_count',
+        render: (_: unknown, record: InvitationCode) => `${record.used_count} / ${record.max_uses}`,
+      },
+      {
+        title: t('field.invitationCode.expiresAt'),
+        dataIndex: 'expires_at',
+        render: (value: string) => value || t('field.invitationCode.neverExpires'),
+      },
+      {
+        title: t('field.role.status'),
+        dataIndex: 'is_active',
+        render: (value: boolean, record: InvitationCode) => {
+          const valid = isCodeValid(record);
+          return (
+            <Space>
+              <Tag color={value ? 'success' : 'default'}>
+                {value ? t('field.role.enabled') : t('field.role.disabled')}
+              </Tag>
+              {!valid && value && <Tag color="error">{t('field.invitationCode.invalid')}</Tag>}
+            </Space>
+          );
+        },
+      },
+      { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+      { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+    ],
+    [t, handleCopy, isCodeValid]
+  );
 
   const columns: ProColumns<InvitationCode>[] = [
     {
@@ -295,69 +364,20 @@ const InvitationCodeListPage: React.FC = () => {
         onSuccess={() => actionRef.current?.reload()}
       />
 
-      <DetailDrawerTemplate
+      <UniDetail
         title={t('field.invitationCode.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        dataSource={detailData}
-        columns={[
-          {
-            title: t('field.invitationCode.code'),
-            dataIndex: 'code',
-            render: (value: string) => (
-              <Space>
-                <span style={{ fontFamily: CODE_FONT_FAMILY, fontSize: '16px', fontWeight: 'bold' }}>{value}</span>
-                <Button
-                  type="link"
-                  size="small"
-                  icon={<CopyOutlined />}
-                  onClick={() => handleCopy(value)}
-                >
-                  {t('field.invitationCode.copy')}
-                </Button>
-              </Space>
-            ),
-          },
-          {
-            title: t('field.invitationCode.email'),
-            dataIndex: 'email',
-            render: (value: string) => value || '-',
-          },
-          {
-            title: t('field.invitationCode.roleId'),
-            dataIndex: 'role_id',
-            render: (value: number) => value ?? '-',
-          },
-          {
-            title: t('field.invitationCode.usedCount'),
-            dataIndex: 'used_count',
-            render: (_: any, record: InvitationCode) => `${record.used_count} / ${record.max_uses}`,
-          },
-          {
-            title: t('field.invitationCode.expiresAt'),
-            dataIndex: 'expires_at',
-            render: (value: string) => value || t('field.invitationCode.neverExpires'),
-          },
-          {
-            title: t('field.role.status'),
-            dataIndex: 'is_active',
-            render: (value: boolean, record: InvitationCode) => {
-              const valid = isCodeValid(record);
-              return (
-                <Space>
-                  <Tag color={value ? 'success' : 'default'}>
-                    {value ? t('field.role.enabled') : t('field.role.disabled')}
-                  </Tag>
-                  {!valid && value && <Tag color="error">{t('field.invitationCode.invalid')}</Tag>}
-                </Space>
-              );
-            },
-          },
-          { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
-          { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
-        ]}
+        basic={
+          detailData ? (
+            <Descriptions
+              column={1}
+              items={detailDrawerDescriptionItems(invitationDetailDescColumns, detailData)}
+            />
+          ) : null
+        }
       />
     </>
   );

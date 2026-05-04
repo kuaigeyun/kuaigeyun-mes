@@ -12,7 +12,8 @@ import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormSwitch, ProD
 import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography, theme } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, ReloadOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { flushDrawerOpen, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import {
   getUserList,
   getUserByUuid,
@@ -49,7 +50,7 @@ const UserListPage: React.FC = () => {
   const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
   const [roleUuidsDraft, setRoleUuidsDraft] = useState<string[]>([]);
   const formRef = useRef<ProFormInstance>();
-
+  const userDetailReqRef = useRef(0);
 
   // Modal 相关状态（创建/编辑）
   const [modalVisible, setModalVisible] = useState(false);
@@ -66,15 +67,24 @@ const UserListPage: React.FC = () => {
    * 处理查看详情
    */
   const handleView = useCallback(async (record: User) => {
-    try {
-      setDetailLoading(true);
+    const req = ++userDetailReqRef.current;
+    flushDrawerOpen(() => {
       setDrawerVisible(true);
+      setDetailData(null);
+      setDetailLoading(true);
+    });
+    try {
       const detail = await getUserByUuid(record.uuid);
+      if (userDetailReqRef.current !== req) return;
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || t('field.user.fetchDetailFailed'));
+      if (userDetailReqRef.current === req) {
+        messageApi.error(error.message || t('field.user.fetchDetailFailed'));
+      }
     } finally {
-      setDetailLoading(false);
+      if (userDetailReqRef.current === req) {
+        setDetailLoading(false);
+      }
     }
   }, [messageApi, t]);
 
@@ -640,12 +650,20 @@ const UserListPage: React.FC = () => {
     {
       title: t('field.user.status'),
       dataIndex: 'is_active',
-      render: (_: any, record: User) => (record?.is_active ? t('field.systemParameter.enabled') : t('field.systemParameter.disabled')),
+      render: (_: any, record: User) => (
+        <Tag color={record?.is_active ? 'success' : 'default'}>
+          {record?.is_active ? t('field.systemParameter.enabled') : t('field.systemParameter.disabled')}
+        </Tag>
+      ),
     },
     {
       title: t('field.user.isTenantAdmin'),
       dataIndex: 'is_tenant_admin',
-      render: (_: any, record: User) => (record?.is_tenant_admin ? t('field.customField.yes') : t('field.customField.no')),
+      render: (_: any, record: User) => (
+        <Tag color={record?.is_tenant_admin ? 'blue' : 'default'}>
+          {record?.is_tenant_admin ? t('field.customField.yes') : t('field.customField.no')}
+        </Tag>
+      ),
     },
     { title: t('field.user.lastLogin'), dataIndex: 'last_login', valueType: 'dateTime' },
     { title: t('field.user.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
@@ -928,7 +946,7 @@ const UserListPage: React.FC = () => {
       </FormModalTemplate>
 
       {/* 详情 Drawer */}
-      <DetailDrawerTemplate
+      <UniDetail
         title={t('field.user.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}

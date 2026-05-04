@@ -6,13 +6,14 @@
  * 国际化
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Tag, message } from 'antd';
+import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { App, Button, Tag, message, Descriptions } from 'antd';
 import { EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { flushDrawerOpen, ListPageTemplate, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import {
   getPermissionList,
   getPermissionByUuid,
@@ -23,20 +24,66 @@ const PermissionListPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const permissionDetailReqRef = useRef(0);
+
+  const permissionDetailDescColumns = useMemo<ProDescriptionsItemProps<Permission>[]>(
+    () => [
+      { title: t('field.permission.name'), dataIndex: 'name' },
+      { title: t('field.permission.code'), dataIndex: 'code' },
+      { title: t('field.permission.resource'), dataIndex: 'resource' },
+      { title: t('field.permission.action'), dataIndex: 'action' },
+      {
+        title: t('field.permission.type'),
+        dataIndex: 'permission_type',
+        render: (value: string) => {
+          const typeMap: Record<string, string> = {
+            function: t('field.permission.typeFunction'),
+            data: t('field.permission.typeData'),
+            field: t('field.permission.typeField'),
+          };
+          return typeMap[value] || value;
+        },
+      },
+      {
+        title: t('field.permission.systemPermission'),
+        dataIndex: 'is_system',
+        render: (_: unknown, entity: Permission) =>
+          entity?.is_system ? (
+            <Tag color="purple">{t('field.role.yes')}</Tag>
+          ) : (
+            <Tag>{t('field.role.no')}</Tag>
+          ),
+      },
+      { title: t('field.permission.description'), dataIndex: 'description', span: 2 },
+      { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+      { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+    ],
+    [t]
+  );
+
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<Permission | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
   const handleView = async (record: Permission) => {
-    try {
-      setDetailLoading(true);
+    const req = ++permissionDetailReqRef.current;
+    flushDrawerOpen(() => {
       setDrawerVisible(true);
+      setDetailData(null);
+      setDetailLoading(true);
+    });
+    try {
       const detail = await getPermissionByUuid(record.uuid);
+      if (permissionDetailReqRef.current !== req) return;
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || t('common.loadFailed'));
+      if (permissionDetailReqRef.current === req) {
+        messageApi.error(error.message || t('common.loadFailed'));
+      }
     } finally {
-      setDetailLoading(false);
+      if (permissionDetailReqRef.current === req) {
+        setDetailLoading(false);
+      }
     }
   };
 
@@ -182,39 +229,20 @@ const PermissionListPage: React.FC = () => {
         />
       </ListPageTemplate>
 
-      <DetailDrawerTemplate
+      <UniDetail
         title={t('field.permission.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        dataSource={detailData}
-        columns={[
-          { title: t('field.permission.name'), dataIndex: 'name' },
-          { title: t('field.permission.code'), dataIndex: 'code' },
-          { title: t('field.permission.resource'), dataIndex: 'resource' },
-          { title: t('field.permission.action'), dataIndex: 'action' },
-          {
-            title: t('field.permission.type'),
-            dataIndex: 'permission_type',
-            render: (value: string) => {
-              const typeMap: Record<string, string> = {
-                function: t('field.permission.typeFunction'),
-                data: t('field.permission.typeData'),
-                field: t('field.permission.typeField'),
-              };
-              return typeMap[value] || value;
-            },
-          },
-          {
-            title: t('field.permission.systemPermission'),
-            dataIndex: 'is_system',
-            render: (value: boolean) => (value ? t('field.role.yes') : t('field.role.no')),
-          },
-          { title: t('field.permission.description'), dataIndex: 'description', span: 2 },
-          { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
-          { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
-        ]}
+        basic={
+          detailData ? (
+            <Descriptions
+              column={1}
+              items={detailDrawerDescriptionItems(permissionDetailDescColumns, detailData)}
+            />
+          ) : null
+        }
       />
     </>
   );

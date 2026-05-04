@@ -1408,7 +1408,7 @@ const MaterialsManagementPage: React.FC = () => {
                 t('app.master-data.materials.sourceType'),
                 t('app.master-data.materials.materialGroup'),
               ]}
-              importExampleRow={['MAT-WX-E001', '无锡精工电控单元', 'EA', 'SK-WX-001', 'Buy', 'DEPT001']}
+              importExampleRow={['MAT-WX-E001', '无锡精工电控单元', '个', 'SK-WX-001', 'Buy', 'DEPT001']}
               importFieldMap={{
                 [t('app.master-data.materials.materialCode')]: 'mainCode',
                 [t('app.master-data.materials.materialName')]: 'name',

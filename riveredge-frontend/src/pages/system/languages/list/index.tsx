@@ -6,14 +6,22 @@
  * 国际化
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProFormText, ProFormSwitch, ProFormDigit } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormSwitch, ProFormDigit, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, Table, Input } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, Table, Input, Descriptions, theme } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, TranslationOutlined, SettingOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import {
+  flushDrawerOpen,
+  ListPageTemplate,
+  FormModalTemplate,
+  MODAL_CONFIG,
+  DRAWER_CONFIG,
+  getDrawerFloatingWrapperStyle,
+} from '../../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import {
   getLanguageList,
   getLanguageByUuid,
@@ -37,7 +45,69 @@ import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 const LanguageListPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const { token } = theme.useToken();
   const actionRef = useRef<ActionType>(null);
+  const languageDetailReqRef = useRef(0);
+
+  const languageDetailDescColumns = useMemo<ProDescriptionsItemProps<Language>[]>(
+    () => [
+      {
+        title: t('field.language.code'),
+        dataIndex: 'code',
+        render: (_: unknown, entity: Language) => (
+          <span style={{ fontFamily: CODE_FONT_FAMILY, fontWeight: 'bold' }}>{entity?.code}</span>
+        ),
+      },
+      {
+        title: t('field.language.name'),
+        dataIndex: 'name',
+      },
+      {
+        title: t('field.language.nativeName'),
+        dataIndex: 'native_name',
+        render: (_: unknown, entity: Language) => entity?.native_name || '-',
+      },
+      {
+        title: t('field.language.translationCount'),
+        dataIndex: 'translations',
+        render: (_: unknown, entity: Language) => Object.keys(entity?.translations || {}).length,
+      },
+      {
+        title: t('field.language.isDefault'),
+        dataIndex: 'is_default',
+        render: (_: unknown, entity: Language) => (
+          <Tag color={entity?.is_default ? 'processing' : 'default'}>
+            {entity?.is_default ? t('field.role.yes') : t('field.role.no')}
+          </Tag>
+        ),
+      },
+      {
+        title: t('field.language.sortOrder'),
+        dataIndex: 'sort_order',
+      },
+      {
+        title: t('field.role.status'),
+        dataIndex: 'is_active',
+        render: (_: unknown, entity: Language) => (
+          <Tag color={entity?.is_active ? 'success' : 'default'}>
+            {entity?.is_active ? t('field.role.enabled') : t('field.role.disabled')}
+          </Tag>
+        ),
+      },
+      {
+        title: t('common.createdAt'),
+        dataIndex: 'created_at',
+        valueType: 'dateTime',
+      },
+      {
+        title: t('common.updatedAt'),
+        dataIndex: 'updated_at',
+        valueType: 'dateTime',
+      },
+    ],
+    [t]
+  );
+
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Modal 相关状态（创建/编辑语言）
@@ -125,15 +195,24 @@ const LanguageListPage: React.FC = () => {
    * 处理查看详情
    */
   const handleView = async (record: Language) => {
-    try {
-      setDetailLoading(true);
+    const req = ++languageDetailReqRef.current;
+    flushDrawerOpen(() => {
       setDrawerVisible(true);
+      setDetailData(null);
+      setDetailLoading(true);
+    });
+    try {
       const detail = await getLanguageByUuid(record.uuid);
+      if (languageDetailReqRef.current !== req) return;
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || t('common.loadFailed'));
+      if (languageDetailReqRef.current === req) {
+        messageApi.error(error.message || t('common.loadFailed'));
+      }
     } finally {
-      setDetailLoading(false);
+      if (languageDetailReqRef.current === req) {
+        setDetailLoading(false);
+      }
     }
   };
 
@@ -501,6 +580,24 @@ const LanguageListPage: React.FC = () => {
     value,
   }));
 
+  const floatPad = DRAWER_CONFIG.FLOAT_MARGIN * 2;
+  const translationDrawerStyles = useMemo(() => {
+    const floating = getDrawerFloatingWrapperStyle('right', token);
+    return {
+      wrapper: {
+        ...floating,
+        width: '70%',
+      },
+      body: {
+        display: 'flex',
+        flexDirection: 'column',
+        height: `calc(100vh - ${110 + floatPad}px)`,
+        overflow: 'hidden',
+        paddingBottom: 24,
+      },
+    };
+  }, [token.borderRadiusLG, token.boxShadowSecondary, floatPad]);
+
   return (
     <>
       <ListPageTemplate>
@@ -652,61 +749,20 @@ const LanguageListPage: React.FC = () => {
       </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
-      <DetailDrawerTemplate
+      <UniDetail
         title={t('field.language.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        column={1}
-        dataSource={detailData || undefined}
-        columns={[
-          {
-            title: t('field.language.code'),
-            dataIndex: 'code',
-            render: (_: any, entity: Language) => (
-              <span style={{ fontFamily: CODE_FONT_FAMILY, fontWeight: 'bold' }}>{entity?.code}</span>
-            ),
-          },
-          {
-            title: t('field.language.name'),
-            dataIndex: 'name',
-          },
-          {
-            title: t('field.language.nativeName'),
-            dataIndex: 'native_name',
-            render: (_: any, entity: Language) => entity?.native_name || '-',
-          },
-          {
-            title: t('field.language.translationCount'),
-            dataIndex: 'translations',
-            render: (_: any, entity: Language) => Object.keys(entity?.translations || {}).length,
-          },
-          {
-            title: t('field.language.isDefault'),
-            dataIndex: 'is_default',
-            render: (_: any, entity: Language) => (entity?.is_default ? t('field.role.yes') : t('field.role.no')),
-          },
-          {
-            title: t('field.language.sortOrder'),
-            dataIndex: 'sort_order',
-          },
-          {
-            title: t('field.role.status'),
-            dataIndex: 'is_active',
-            render: (_: any, entity: Language) => (entity?.is_active ? t('field.role.enabled') : t('field.role.disabled')),
-          },
-          {
-            title: t('common.createdAt'),
-            dataIndex: 'created_at',
-            valueType: 'dateTime',
-          },
-          {
-            title: t('common.updatedAt'),
-            dataIndex: 'updated_at',
-            valueType: 'dateTime',
-          },
-        ]}
+        basic={
+          detailData ? (
+            <Descriptions
+              column={1}
+              items={detailDrawerDescriptionItems(languageDetailDescColumns, detailData)}
+            />
+          ) : null
+        }
       />
 
       {/* 翻译管理 Drawer */}
@@ -718,17 +774,9 @@ const LanguageListPage: React.FC = () => {
           setCurrentLanguageForTranslation(null);
           setTranslations({});
         }}
-        width="70%"
         loading={translationLoading}
-        styles={{
-          body: {
-            display: 'flex',
-            flexDirection: 'column',
-            height: 'calc(100vh - 110px)',
-            overflow: 'hidden',
-            paddingBottom: 24,
-          },
-        }}
+        rootClassName="drawer-slide-motion"
+        styles={translationDrawerStyles}
         extra={
           <Space size="middle">
             <Button
@@ -776,7 +824,7 @@ const LanguageListPage: React.FC = () => {
             pagination={false}
             tableLayout="fixed"
             style={{ width: '100%' }}
-            scroll={{ y: 'calc(100vh - 220px)' }}
+            scroll={{ y: `calc(100vh - ${220 + floatPad}px)` }}
           />
         </div>
       </Drawer>

@@ -17,7 +17,8 @@ import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Button, Col, Descriptions, Form, Input, Popconfirm, Row, Space, Spin, Tag, theme } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, SearchOutlined, DatabaseOutlined, MinusCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { flushDrawerOpen, DRAWER_CONFIG, FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import {
   getCustomFieldList,
   getCustomFieldByUuid,
@@ -92,6 +93,7 @@ const CustomFieldListPage: React.FC = () => {
   const { token } = theme.useToken();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);
+  const customFieldDetailReqRef = useRef(0);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   // 功能页面选择状态（左右结构）
@@ -247,15 +249,24 @@ const CustomFieldListPage: React.FC = () => {
    * 处理查看详情
    */
   const handleView = async (record: CustomField) => {
-    try {
-      setDetailLoading(true);
+    const req = ++customFieldDetailReqRef.current;
+    flushDrawerOpen(() => {
       setDrawerVisible(true);
+      setDetailData(null);
+      setDetailLoading(true);
+    });
+    try {
       const detail = await getCustomFieldByUuid(record.uuid);
+      if (customFieldDetailReqRef.current !== req) return;
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || t('field.customField.fetchDetailFailed'));
+      if (customFieldDetailReqRef.current === req) {
+        messageApi.error(error.message || t('field.customField.fetchDetailFailed'));
+      }
     } finally {
-      setDetailLoading(false);
+      if (customFieldDetailReqRef.current === req) {
+        setDetailLoading(false);
+      }
     }
   };
 
@@ -921,23 +932,39 @@ const CustomFieldListPage: React.FC = () => {
     {
       title: t('field.customField.isRequired'),
       dataIndex: 'is_required',
-      render: (_: any, entity: CustomField) => (entity?.is_required ? t('field.customField.yes') : t('field.customField.no')),
+      render: (_: any, entity: CustomField) => (
+        <Tag color={entity?.is_required ? 'success' : 'default'}>
+          {entity?.is_required ? t('field.customField.yes') : t('field.customField.no')}
+        </Tag>
+      ),
     },
     {
       title: t('field.customField.isSearchable'),
       dataIndex: 'is_searchable',
-      render: (_: any, entity: CustomField) => (entity?.is_searchable ? t('field.customField.yes') : t('field.customField.no')),
+      render: (_: any, entity: CustomField) => (
+        <Tag color={entity?.is_searchable ? 'success' : 'default'}>
+          {entity?.is_searchable ? t('field.customField.yes') : t('field.customField.no')}
+        </Tag>
+      ),
     },
     {
       title: t('field.customField.isSortable'),
       dataIndex: 'is_sortable',
-      render: (_: any, entity: CustomField) => (entity?.is_sortable ? t('field.customField.yes') : t('field.customField.no')),
+      render: (_: any, entity: CustomField) => (
+        <Tag color={entity?.is_sortable ? 'success' : 'default'}>
+          {entity?.is_sortable ? t('field.customField.yes') : t('field.customField.no')}
+        </Tag>
+      ),
     },
     { title: t('field.customField.sortOrderLabel'), dataIndex: 'sort_order' },
     {
       title: t('field.customField.status'),
       dataIndex: 'is_active',
-      render: (_: any, entity: CustomField) => (entity?.is_active ? t('field.customField.enabled') : t('field.customField.disabled')),
+      render: (_: any, entity: CustomField) => (
+        <Tag color={entity?.is_active ? 'success' : 'default'}>
+          {entity?.is_active ? t('field.customField.enabled') : t('field.customField.disabled')}
+        </Tag>
+      ),
     },
     { title: t('field.customField.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' as const },
     { title: t('field.customField.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' as const },
@@ -1354,7 +1381,7 @@ const CustomFieldListPage: React.FC = () => {
       </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
-      <DetailDrawerTemplate
+      <UniDetail
         title={t('field.customField.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
@@ -1362,7 +1389,7 @@ const CustomFieldListPage: React.FC = () => {
         width={DRAWER_CONFIG.STANDARD_WIDTH}
         basic={detailData ? (
             <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, detailData)} />
-          ) : undefined}
+          ) : null}
       />
     </>
   );

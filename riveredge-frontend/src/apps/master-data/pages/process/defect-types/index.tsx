@@ -4,15 +4,16 @@
  * 提供不良品信息的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography, Table } from 'antd';
+import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography, Table, Descriptions } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { ListPageTemplate, DetailDrawerTemplate } from '../../../../../components/layout-templates';
+import { ListPageTemplate, flushDrawerOpen } from '../../../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
 import { DefectTypeFormModal } from '../../../components/DefectTypeFormModal';
 
 import { defectTypeApi, type PresetDefectTypeItem } from '../../../services/process';
@@ -45,6 +46,30 @@ const DefectTypesPage: React.FC = () => {
   const [presetList, setPresetList] = useState<PresetDefectTypeItem[]>([]);
   const [selectedPresetCodes, setSelectedPresetCodes] = useState<string[]>([]);
   const [presetConfirmLoading, setPresetConfirmLoading] = useState(false);
+  const defectDetailReqRef = useRef(0);
+
+  const defectTypeDetailColumns: ProDescriptionsItemProps<DefectType>[] = useMemo(
+    () => [
+      { title: t('app.master-data.defectTypes.code'), dataIndex: 'code' },
+      { title: t('app.master-data.defectTypes.name'), dataIndex: 'name' },
+      { title: t('field.defectType.description'), dataIndex: 'description' },
+      {
+        title: t('field.defectType.isActive'),
+        dataIndex: 'isActive',
+        render: (_: unknown, record: DefectType) => {
+          const isActive = record?.isActive ?? false;
+          return (
+            <Tag color={isActive ? 'success' : 'default'}>
+              {isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
+            </Tag>
+          );
+        },
+      },
+      { title: t('common.createdAt'), dataIndex: 'createdAt', valueType: 'dateTime' },
+      { title: t('common.updatedAt'), dataIndex: 'updatedAt', valueType: 'dateTime' },
+    ],
+    [t]
+  );
 
   const handleCreate = () => {
     setEditUuid(null);
@@ -128,16 +153,24 @@ const DefectTypesPage: React.FC = () => {
    * 处理打开详情
    */
   const handleOpenDetail = async (record: DefectType) => {
-    try {
+    const req = ++defectDetailReqRef.current;
+    flushDrawerOpen(() => {
+      setDefectTypeDetail(record);
       setDrawerVisible(true);
       setDetailLoading(true);
-      
+    });
+    try {
       const detail = await defectTypeApi.get(record.uuid);
+      if (defectDetailReqRef.current !== req) return;
       setDefectTypeDetail(detail);
     } catch (error: any) {
-      messageApi.error(error.message || t('app.master-data.defectTypes.getDetailFailed'));
+      if (defectDetailReqRef.current === req) {
+        messageApi.error(error.message || t('app.master-data.defectTypes.getDetailFailed'));
+      }
     } finally {
-      setDetailLoading(false);
+      if (defectDetailReqRef.current === req) {
+        setDetailLoading(false);
+      }
     }
   };
 
@@ -354,12 +387,6 @@ const DefectTypesPage: React.FC = () => {
       width: 200,
     },
     {
-      title: '分类',
-      dataIndex: 'category',
-      width: 150,
-      hideInSearch: true,
-    },
-    {
       title: '描述',
       dataIndex: 'description',
       ellipsis: true,
@@ -452,11 +479,6 @@ const DefectTypesPage: React.FC = () => {
             apiParams.isActive = searchFormValues.isActive;
           }
           
-          // 分类筛选
-          if (searchFormValues?.category !== undefined && searchFormValues.category !== '' && searchFormValues.category !== null) {
-            apiParams.category = searchFormValues.category;
-          }
-          
           try {
             const result = await defectTypeApi.list(apiParams);
             const list = result?.data ?? result;
@@ -527,46 +549,31 @@ const DefectTypesPage: React.FC = () => {
         }}
         showImportButton={true}
         onImport={handleImport}
-        importHeaders={['*不良品编号', '*不良品名称', '分类', '描述']}
-        importExampleRow={['DEF-WX-001', '无锡精工尺寸超差', '加工质量', '精密压铸件外径超出公差范围']}
+        importHeaders={['*不良品编号', '*不良品名称', '描述']}
+        importExampleRow={['DEF-WX-001', '无锡精工尺寸超差', '精密压铸件外径超出公差范围']}
         importFieldMap={{
           '不良品编号': 'code', '*不良品编号': 'code', '编号': 'code', 'code': 'code',
           '不良品名称': 'name', '*不良品名称': 'name', '名称': 'name', 'name': 'name',
-          '分类': 'category', 'category': 'category',
           '描述': 'description', 'description': 'description',
         }}
         showExportButton={true}
         onExport={handleExport}
       />
 
-      <DetailDrawerTemplate
-        title="不良品详情"
+      <UniDetail
+        title={t('app.master-data.defectTypes.detailTitle', { defaultValue: '不良品详情' })}
         open={drawerVisible}
         onClose={handleCloseDetail}
-        dataSource={defectTypeDetail || undefined}
-        columns={[
-          { title: '不良品编号', dataIndex: 'code' },
-          { title: '不良品名称', dataIndex: 'name' },
-          { title: '分类', dataIndex: 'category' },
-          { title: '描述', dataIndex: 'description' },
-          {
-            title: '启用状态',
-            dataIndex: 'isActive',
-            render: (_, record) => {
-              const isActive = record?.isActive ?? false;
-              return (
-                <Tag color={isActive ? 'success' : 'default'}>
-                  {isActive ? '启用' : '禁用'}
-                </Tag>
-              );
-            },
-          },
-          { title: '创建时间', dataIndex: 'createdAt', valueType: 'dateTime' },
-          { title: '更新时间', dataIndex: 'updatedAt', valueType: 'dateTime' },
-        ]}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        column={1}
+        basic={
+          defectTypeDetail ? (
+            <Descriptions
+              column={1}
+              items={detailDrawerDescriptionItems(defectTypeDetailColumns, defectTypeDetail)}
+            />
+          ) : null
+        }
       />
 
       <DefectTypeFormModal
@@ -622,7 +629,6 @@ const DefectTypesPage: React.FC = () => {
           columns={[
             { title: '不良品编号', dataIndex: 'code', width: 120 },
             { title: '不良品名称', dataIndex: 'name', width: 140 },
-            { title: '分类', dataIndex: 'category', ellipsis: true },
           ]}
         />
       </Modal>

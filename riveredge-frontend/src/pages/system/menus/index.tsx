@@ -7,10 +7,11 @@
  */
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
-import { ProFormText, ProFormTextArea, ProFormSwitch, ProColumns, ProFormTreeSelect, ProFormSelect } from '@ant-design/pro-components';
+import { ProFormText, ProFormTextArea, ProFormSwitch, ProColumns, ProFormTreeSelect, ProFormSelect, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { DeleteOutlined, PlusOutlined, AppstoreOutlined, LinkOutlined, CheckCircleOutlined, SyncOutlined } from '@ant-design/icons';
-import { App, Button, Tag, Space, Popconfirm, Tooltip } from 'antd';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
+import { App, Button, Tag, Space, Popconfirm, Tooltip, Descriptions } from 'antd';
+import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../components/uni-detail';
 import { UniTable } from '../../../components/uni-table';
 import * as Icons from '@ant-design/icons';
 import {
@@ -57,6 +58,66 @@ const MenuListPage: React.FC = () => {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const actionRef = useRef<any>();
+  const menuDetailReqRef = useRef(0);
+
+  const menuDetailDescColumns = useMemo<ProDescriptionsItemProps<Menu>[]>(
+    () => [
+      {
+        title: t('pages.system.menus.name'),
+        dataIndex: 'name',
+        render: (_: unknown, row: Menu) =>
+          translateAppMenuItemName(row?.name, row?.path, t, (row as any)?.children),
+      },
+      { title: t('pages.system.menus.path'), dataIndex: 'path' },
+      { title: t('pages.system.menus.icon'), dataIndex: 'icon' },
+      { title: t('pages.system.menus.component'), dataIndex: 'component' },
+      { title: t('pages.system.menus.permissionCode'), dataIndex: 'permission_code' },
+      { title: t('pages.system.menus.sort'), dataIndex: 'sort_order' },
+      {
+        title: t('pages.system.menus.status'),
+        dataIndex: 'is_active',
+        render: (_: unknown, entity: Menu) => (
+          <Tag color={entity?.is_active ? 'success' : 'default'}>
+            {entity?.is_active ? t('pages.system.menus.enabled') : t('pages.system.menus.disabled')}
+          </Tag>
+        ),
+      },
+      {
+        title: t('pages.system.menus.externalLink'),
+        dataIndex: 'is_external',
+        render: (_: unknown, entity: Menu) => (
+          <Tag color={entity?.is_external ? 'blue' : 'default'}>
+            {entity?.is_external ? t('pages.system.menus.externalYes') : t('pages.system.menus.externalNo')}
+          </Tag>
+        ),
+      },
+      { title: t('pages.system.menus.externalUrl'), dataIndex: 'external_url' },
+      { title: t('pages.system.menus.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+      { title: t('pages.system.menus.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+      {
+        title: t('pages.system.menus.metadata'),
+        dataIndex: 'meta',
+        render: (_: unknown, entity: Menu) => (
+          <pre
+            style={{
+              backgroundColor: '#f6f8fa',
+              padding: '12px',
+              borderRadius: '8px',
+              border: '1px solid #d0d7de',
+              fontSize: '12px',
+              fontFamily: 'monospace',
+              margin: 0,
+              maxHeight: '200px',
+              overflow: 'auto',
+            }}
+          >
+            {JSON.stringify(entity?.meta, null, 2)}
+          </pre>
+        ),
+      },
+    ],
+    [t]
+  );
 
   // 统计数据状态
   const [stats, setStats] = useState({
@@ -282,18 +343,30 @@ const MenuListPage: React.FC = () => {
     }
   }, [messageApi, t]);
   
-  const handleView = useCallback(async (record: Menu) => {
-    try {
-      setDetailLoading(true);
-      setDrawerVisible(true);
-      const detail = await getMenuDetail(record.uuid);
-      setDetailData(detail);
-    } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.menus.getDetailFailed'));
-    } finally {
-      setDetailLoading(false);
-    }
-  }, [messageApi, t]);
+  const handleView = useCallback(
+    async (record: Menu) => {
+      const req = ++menuDetailReqRef.current;
+      flushDrawerOpen(() => {
+        setDrawerVisible(true);
+        setDetailData(null);
+        setDetailLoading(true);
+      });
+      try {
+        const detail = await getMenuDetail(record.uuid);
+        if (menuDetailReqRef.current !== req) return;
+        setDetailData(detail);
+      } catch (error: any) {
+        if (menuDetailReqRef.current === req) {
+          messageApi.error(error.message || t('pages.system.menus.getDetailFailed'));
+        }
+      } finally {
+        if (menuDetailReqRef.current === req) {
+          setDetailLoading(false);
+        }
+      }
+    },
+    [messageApi, t]
+  );
 
   const handleSubmit = useCallback(async (values: any) => {
     try {
@@ -619,47 +692,20 @@ const MenuListPage: React.FC = () => {
              <ProFormSwitch name="is_active" label={t('pages.system.menus.enabled')} colProps={{ span: 12 }} />
         </FormModalTemplate>
 
-        <DetailDrawerTemplate
+        <UniDetail
             title={t('pages.system.menus.detailTitle')}
             open={drawerVisible}
             onClose={() => setDrawerVisible(false)}
-            dataSource={detailData || {}}
             loading={detailLoading}
             width={DRAWER_CONFIG.STANDARD_WIDTH}
-            column={1}
-            columns={[
-                {
-                  title: t('pages.system.menus.name'),
-                  dataIndex: 'name',
-                  render: (_: any, row: any) =>
-                    translateAppMenuItemName(row?.name, row?.path, t, row?.children),
-                },
-                { title: t('pages.system.menus.path'), dataIndex: 'path' },
-                { title: t('pages.system.menus.icon'), dataIndex: 'icon' },
-                { title: t('pages.system.menus.component'), dataIndex: 'component' },
-                { title: t('pages.system.menus.permissionCode'), dataIndex: 'permission_code' },
-                { title: t('pages.system.menus.sort'), dataIndex: 'sort_order' },
-                { title: t('pages.system.menus.status'), dataIndex: 'is_active', render: (_: any, entity: any) => (entity?.is_active ? t('pages.system.menus.enabled') : t('pages.system.menus.disabled')) },
-                { title: t('pages.system.menus.externalLink'), dataIndex: 'is_external', render: (_: any, entity: any) => (entity?.is_external ? t('pages.system.menus.externalYes') : t('pages.system.menus.externalNo')) },
-                { title: t('pages.system.menus.externalUrl'), dataIndex: 'external_url' },
-                { title: t('pages.system.menus.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
-                { title: t('pages.system.menus.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
-                { title: t('pages.system.menus.metadata'), dataIndex: 'meta', render: (_: any, entity: any) => (
-                  <pre style={{
-                    backgroundColor: '#f6f8fa',
-                    padding: '12px',
-                    borderRadius: '8px',
-                    border: '1px solid #d0d7de',
-                    fontSize: '12px',
-                    fontFamily: 'monospace',
-                    margin: 0,
-                    maxHeight: '200px',
-                    overflow: 'auto'
-                  }}>
-                    {JSON.stringify(entity?.meta, null, 2)}
-                  </pre>
-                ) }
-            ]}
+            basic={
+              detailData ? (
+                <Descriptions
+                  column={1}
+                  items={detailDrawerDescriptionItems(menuDetailDescColumns, detailData)}
+                />
+              ) : null
+            }
         />
     </ListPageTemplate>
   );

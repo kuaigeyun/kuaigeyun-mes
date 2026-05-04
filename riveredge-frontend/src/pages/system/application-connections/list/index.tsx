@@ -26,6 +26,7 @@ import {
   Button,
   Dropdown,
   Modal,
+  Descriptions,
 } from 'antd';
 import {
   DeleteOutlined,
@@ -44,12 +45,13 @@ import {
 } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import {
+  flushDrawerOpen,
   ListPageTemplate,
   FormModalTemplate,
-  DetailDrawerTemplate,
   MODAL_CONFIG,
   DRAWER_CONFIG,
 } from '../../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import AppConnectorMarket from '../AppConnectorMarket';
 import type { AppConnectorDefinition } from '../connectors';
 import {
@@ -150,6 +152,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
   };
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const applicationConnectionDetailReqRef = useRef(0);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
@@ -200,15 +203,24 @@ const ApplicationConnectionsListPage: React.FC = () => {
   };
 
   const handleView = async (record: ApplicationConnection) => {
-    try {
-      setDetailLoading(true);
+    const req = ++applicationConnectionDetailReqRef.current;
+    flushDrawerOpen(() => {
       setDrawerVisible(true);
+      setDetailData(null);
+      setDetailLoading(true);
+    });
+    try {
       const detail = await getApplicationConnectionByUuid(record.uuid);
+      if (applicationConnectionDetailReqRef.current !== req) return;
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.applicationConnections.getDetailFailed'));
+      if (applicationConnectionDetailReqRef.current === req) {
+        messageApi.error(error.message || t('pages.system.applicationConnections.getDetailFailed'));
+      }
     } finally {
-      setDetailLoading(false);
+      if (applicationConnectionDetailReqRef.current === req) {
+        setDetailLoading(false);
+      }
     }
   };
 
@@ -961,14 +973,17 @@ const ApplicationConnectionsListPage: React.FC = () => {
         onSelect={handleConnectorSelect}
       />
 
-      <DetailDrawerTemplate
+      <UniDetail
         title="应用连接器详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.LARGE_WIDTH}
-        dataSource={(detailData || {}) as ApplicationConnection}
-        columns={detailColumns as any}
+        basic={
+          detailData ? (
+            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns as any, detailData)} />
+          ) : null
+        }
         extra={
           detailData && (
             <Space>

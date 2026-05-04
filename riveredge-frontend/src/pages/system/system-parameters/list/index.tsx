@@ -5,14 +5,25 @@
  * 支持系统参数的 CRUD 操作和批量更新。
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
+import {
+  ActionType,
+  ProColumns,
+  ProFormText,
+  ProFormTextArea,
+  ProFormSwitch,
+  ProFormSelect,
+  ProFormDigit,
+  ProFormInstance,
+  ProDescriptionsItemProps,
+} from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Modal, Popconfirm, Button, Tag, Space, Card, Typography } from 'antd';
+import { App, Modal, Popconfirm, Button, Tag, Space, Card, Typography, Descriptions } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import { theme } from 'antd';
 import {
   getSystemParameterList,
@@ -33,6 +44,7 @@ const SystemParameterListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const { token: themeToken } = theme.useToken();
   const actionRef = useRef<ActionType>(null);
+  const systemParameterDetailReqRef = useRef(0);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Modal 相关状态（创建/编辑参数）
@@ -96,15 +108,24 @@ const SystemParameterListPage: React.FC = () => {
    * 处理查看详情
    */
   const handleView = async (record: SystemParameter) => {
-    try {
-      setDetailLoading(true);
+    const req = ++systemParameterDetailReqRef.current;
+    flushDrawerOpen(() => {
       setDrawerVisible(true);
+      setDetailData(null);
+      setDetailLoading(true);
+    });
+    try {
       const detail = await getSystemParameterByUuid(record.uuid);
+      if (systemParameterDetailReqRef.current !== req) return;
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || t('field.systemParameter.fetchDetailFailed'));
+      if (systemParameterDetailReqRef.current === req) {
+        messageApi.error(error.message || t('field.systemParameter.fetchDetailFailed'));
+      }
     } finally {
-      setDetailLoading(false);
+      if (systemParameterDetailReqRef.current === req) {
+        setDetailLoading(false);
+      }
     }
   };
 
@@ -225,12 +246,83 @@ const SystemParameterListPage: React.FC = () => {
   /**
    * 格式化参数值显示
    */
-  const formatValue = (value: any, type: string): string => {
+  const formatValue = useCallback((value: any, type: string): string => {
     if (type === 'json') {
       return JSON.stringify(value, null, 2);
     }
     return String(value);
-  };
+  }, []);
+
+  const systemParameterDetailDescColumns = useMemo<ProDescriptionsItemProps<SystemParameter>[]>(
+    () => [
+      {
+        title: t('field.systemParameter.key'),
+        dataIndex: 'key',
+      },
+      {
+        title: t('field.systemParameter.value'),
+        dataIndex: 'value',
+        render: (value: unknown, record: SystemParameter) => {
+          const displayValue = formatValue(value, record.type);
+          if (record.type === 'json') {
+            return (
+              <pre
+                style={{
+                  margin: 0,
+                  padding: '8px',
+                  backgroundColor: '#f5f5f5',
+                  borderRadius: '4px',
+                  overflow: 'auto',
+                  maxHeight: '300px',
+                }}
+              >
+                {displayValue}
+              </pre>
+            );
+          }
+          return <span>{displayValue}</span>;
+        },
+      },
+      {
+        title: t('field.systemParameter.type'),
+        dataIndex: 'type',
+      },
+      {
+        title: t('field.systemParameter.description'),
+        dataIndex: 'description',
+      },
+      {
+        title: t('field.systemParameter.isSystem'),
+        dataIndex: 'is_system',
+        render: (_: unknown, record: SystemParameter) =>
+          record?.is_system ? (
+            <Tag color="purple">{t('field.systemParameter.yes')}</Tag>
+          ) : (
+            <Tag>{t('field.systemParameter.no')}</Tag>
+          ),
+      },
+      {
+        title: t('field.systemParameter.status'),
+        dataIndex: 'is_active',
+        render: (_: unknown, record: SystemParameter) => (
+          <Tag color={record?.is_active ? 'success' : 'default'}>
+            {record?.is_active ? t('field.systemParameter.enabled') : t('field.systemParameter.disabled')}
+          </Tag>
+        ),
+      },
+      {
+        title: t('field.systemParameter.createdAt'),
+        dataIndex: 'created_at',
+        valueType: 'dateTime',
+      },
+      {
+        title: t('field.systemParameter.updatedAt'),
+        dataIndex: 'updated_at',
+        valueType: 'dateTime',
+      },
+    ],
+    [t, formatValue]
+  );
 
   /**
    * 渲染参数卡片
@@ -669,69 +761,20 @@ const SystemParameterListPage: React.FC = () => {
       </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
-      <DetailDrawerTemplate
+      <UniDetail
         title={t('field.systemParameter.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        dataSource={detailData}
-        columns={[
-              {
-                title: t('field.systemParameter.key'),
-                dataIndex: 'key',
-              },
-              {
-                title: t('field.systemParameter.value'),
-                dataIndex: 'value',
-                render: (value, record) => {
-                  const displayValue = formatValue(value, record.type);
-                  if (record.type === 'json') {
-                    return (
-                      <pre style={{
-                        margin: 0,
-                        padding: '8px',
-                        backgroundColor: '#f5f5f5',
-                        borderRadius: '4px',
-                        overflow: 'auto',
-                        maxHeight: '300px',
-                      }}>
-                        {displayValue}
-                      </pre>
-                    );
-                  }
-                  return <span>{displayValue}</span>;
-                },
-              },
-              {
-                title: t('field.systemParameter.type'),
-                dataIndex: 'type',
-              },
-              {
-                title: t('field.systemParameter.description'),
-                dataIndex: 'description',
-              },
-              {
-                title: t('field.systemParameter.isSystem'),
-                dataIndex: 'is_system',
-                render: (value) => (value ? t('field.systemParameter.yes') : t('field.systemParameter.no')),
-              },
-              {
-                title: t('field.systemParameter.status'),
-                dataIndex: 'is_active',
-                render: (value) => (value ? t('field.systemParameter.enabled') : t('field.systemParameter.disabled')),
-              },
-              {
-                title: t('field.systemParameter.createdAt'),
-                dataIndex: 'created_at',
-                valueType: 'dateTime',
-              },
-              {
-                title: t('field.systemParameter.updatedAt'),
-                dataIndex: 'updated_at',
-                valueType: 'dateTime',
-              },
-        ]}
+        basic={
+          detailData ? (
+            <Descriptions
+              column={1}
+              items={detailDrawerDescriptionItems(systemParameterDetailDescColumns, detailData)}
+            />
+          ) : null
+        }
       />
     </>
   );

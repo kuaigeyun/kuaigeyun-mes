@@ -4,16 +4,17 @@
  * 提供工序信息的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProDescriptions } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal, Table, theme } from 'antd';
+import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { App, Popconfirm, Button, Tag, Space, Modal, Table, theme, Descriptions } from 'antd';
 import { useSearchParams } from 'react-router-dom';
 import { EditOutlined, DeleteOutlined, PlusOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { ListPageTemplate, DetailDrawerTemplate } from '../../../../../components/layout-templates';
+import { ListPageTemplate, flushDrawerOpen } from '../../../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
 import { OperationFormModal } from '../../../components/OperationFormModal';
 import { operationApi, defectTypeApi, type PresetOperationItem } from '../../../services/process';
 import { QRCodeGenerator } from '../../../../../components/qrcode';
@@ -45,21 +46,84 @@ const OperationsPage: React.FC = () => {
   const [presetList, setPresetList] = useState<PresetOperationItem[]>([]);
   const [selectedPresetCodes, setSelectedPresetCodes] = useState<string[]>([]);
   const [presetConfirmLoading, setPresetConfirmLoading] = useState(false);
+  const operationDetailReqRef = useRef(0);
+
+  const operationDetailColumns: ProDescriptionsItemProps<Operation>[] = useMemo(
+    () => [
+      { title: t('field.operation.code'), dataIndex: 'code' },
+      { title: t('field.operation.name'), dataIndex: 'name' },
+      { title: t('field.operation.description'), dataIndex: 'description', span: 2 },
+      {
+        title: t('field.route.isActive'),
+        dataIndex: 'isActive',
+        render: (_: unknown, record: Operation) => (
+          <Tag color={record.isActive ? 'success' : 'default'}>
+            {record.isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
+          </Tag>
+        ),
+      },
+      {
+        title: t('field.operation.defectTypeUuids'),
+        dataIndex: 'defectTypes',
+        span: 2,
+        render: (_: unknown, record: Operation) => {
+          const dts = record.defectTypes ?? record.defect_types ?? [];
+          const arr = Array.isArray(dts) ? dts : [];
+          if (!arr.length) return '-';
+          return (
+            <Space size={[0, 4]} wrap>
+              {arr.map((d: DefectTypeMinimal) => (
+                <Tag key={d.uuid}>{d.name ?? d.code}</Tag>
+              ))}
+            </Space>
+          );
+        },
+      },
+      {
+        title: t('field.operation.defaultPersonnelConfigs'),
+        dataIndex: 'defaultOperatorNames',
+        span: 2,
+        render: (_: unknown, record: Operation) => {
+          const names = record.defaultOperatorNames ?? record.default_operator_names ?? [];
+          const arr = Array.isArray(names) ? names : [];
+          if (!arr.length) return '-';
+          return (
+            <Space size={[0, 4]} wrap>
+              {arr.map((name: string, idx: number) => (
+                <Tag key={idx}>{name}</Tag>
+              ))}
+            </Space>
+          );
+        },
+      },
+      { title: t('common.createdAt'), dataIndex: 'createdAt', valueType: 'dateTime' },
+      { title: t('common.updatedAt'), dataIndex: 'updatedAt', valueType: 'dateTime' },
+    ],
+    [t]
+  );
 
   /**
    * 处理打开详情
    */
   const handleOpenDetail = async (record: Operation) => {
-    try {
+    const req = ++operationDetailReqRef.current;
+    flushDrawerOpen(() => {
+      setOperationDetail({ ...record, uuid: record.uuid } as Operation);
       setDrawerVisible(true);
       setDetailLoading(true);
-      
+    });
+    try {
       const detail = await operationApi.get(record.uuid);
+      if (operationDetailReqRef.current !== req) return;
       setOperationDetail(detail);
     } catch (error: any) {
-      messageApi.error(error.message || t('app.master-data.operations.getDetailFailed'));
+      if (operationDetailReqRef.current === req) {
+        messageApi.error(error.message || t('app.master-data.operations.getDetailFailed'));
+      }
     } finally {
-      setDetailLoading(false);
+      if (operationDetailReqRef.current === req) {
+        setDetailLoading(false);
+      }
     }
   };
 
@@ -604,104 +668,36 @@ const OperationsPage: React.FC = () => {
         onExport={handleExport}
       />
 
-      <DetailDrawerTemplate
-        title="工序详情"
+      <UniDetail
+        title={t('app.master-data.operations.detailTitle', { defaultValue: '工序详情' })}
         open={drawerVisible}
         onClose={handleCloseDetail}
-        dataSource={operationDetail || undefined}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        styles={{ body: { position: 'relative' } }}
-        customContent={
-          <>
-            <ProDescriptions<Operation>
-              dataSource={operationDetail || undefined}
-              column={1}
-              columns={[
-                { title: '工序编号', dataIndex: 'code' },
-                { title: '工序名称', dataIndex: 'name' },
-                { title: '描述', dataIndex: 'description', span: 2 },
-                {
-                  title: '启用状态',
-                  dataIndex: 'isActive',
-                  render: (_, record) => (
-                    <Tag color={record.isActive ? 'success' : 'default'}>
-                      {record.isActive ? '启用' : '禁用'}
-                    </Tag>
-                  ),
-                },
-                {
-                  title: '绑定不良品项',
-                  dataIndex: 'defectTypes',
-                  span: 2,
-                  render: (_, record) => {
-                    const dts = record.defectTypes ?? record.defect_types ?? [];
-                    const arr = Array.isArray(dts) ? dts : [];
-                    if (!arr.length) return '-';
-                    return (
-                      <Space size={[0, 4]} wrap>
-                        {arr.map((d: DefectTypeMinimal) => (
-                          <Tag key={d.uuid}>{d.name ?? d.code}</Tag>
-                        ))}
-                      </Space>
-                    );
-                  },
-                },
-                {
-                  title: '默认生产人员',
-                  dataIndex: 'defaultOperatorNames',
-                  span: 2,
-                  render: (_, record) => {
-                    const names = record.defaultOperatorNames ?? record.default_operator_names ?? [];
-                    const arr = Array.isArray(names) ? names : [];
-                    if (!arr.length) return '-';
-                    return (
-                      <Space size={[0, 4]} wrap>
-                        {arr.map((name: string, idx: number) => (
-                          <Tag key={idx}>{name}</Tag>
-                        ))}
-                      </Space>
-                    );
-                  },
-                },
-                {
-                  title: '创建时间',
-                  dataIndex: 'createdAt',
-                  render: (_, record) => {
-                    const val = record.createdAt ?? (record as any).created_at;
-                    if (val == null || val === '') return '-';
-                    return dayjs(val).isValid() ? dayjs(val).format('YYYY-MM-DD HH:mm:ss') : String(val);
-                  },
-                },
-                {
-                  title: '更新时间',
-                  dataIndex: 'updatedAt',
-                  render: (_, record) => {
-                    const val = record.updatedAt ?? (record as any).updated_at;
-                    if (val == null || val === '') return '-';
-                    return dayjs(val).isValid() ? dayjs(val).format('YYYY-MM-DD HH:mm:ss') : String(val);
-                  },
-                },
-              ]}
-            />
-            
-            {/* 工序二维码 */}
-            {operationDetail && (
-              <div style={{ 
-                position: 'absolute', 
-                top: 24, 
-                right: 24, 
-                width: 152, 
-                zIndex: 10,
-                background: '#fff',
-                padding: '12px',
-                borderRadius: token.borderRadiusLG,
-                border: '1px solid rgba(0, 0, 0, 0.06)',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
+        basic={
+          operationDetail ? (
+            <div style={{ position: 'relative', paddingRight: 168 }}>
+              <Descriptions
+                column={1}
+                items={detailDrawerDescriptionItems(operationDetailColumns, operationDetail)}
+              />
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  right: 0,
+                  width: 152,
+                  zIndex: 1,
+                  background: token.colorBgContainer,
+                  padding: 12,
+                  borderRadius: token.borderRadiusLG,
+                  border: `1px solid ${token.colorBorderSecondary}`,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
                 <QRCodeGenerator
                   qrcodeType="OP"
                   data={{
@@ -715,8 +711,8 @@ const OperationsPage: React.FC = () => {
                   noCard={true}
                 />
               </div>
-            )}
-          </>
+            </div>
+          ) : null
         }
       />
 

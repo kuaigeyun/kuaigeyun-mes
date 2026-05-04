@@ -12,7 +12,8 @@ import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
+import { flushDrawerOpen, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
 
 import { customerApi, getUserOptions, getDictionaryOptions } from '../../../services/supply-chain';
 import { CustomerFormModal } from '../../../components/CustomerFormModal';
@@ -39,6 +40,7 @@ const CustomersPage: React.FC = () => {
   const [editUuid, setEditUuid] = useState<string | null>(null);
 
   const [dictLabelMaps, setDictLabelMaps] = useState<Record<string, Record<string, string>>>({});
+  const customerDetailReqRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -151,16 +153,24 @@ const CustomersPage: React.FC = () => {
   };
 
   const handleOpenDetail = async (record: Customer) => {
-    try {
+    const req = ++customerDetailReqRef.current;
+    flushDrawerOpen(() => {
+      setCustomerDetail(record);
       setDrawerVisible(true);
       setDetailLoading(true);
-      
+    });
+    try {
       const detail = await customerApi.get(record.uuid);
+      if (customerDetailReqRef.current !== req) return;
       setCustomerDetail(detail);
     } catch (error: any) {
-      messageApi.error(error.message || t('app.master-data.customers.getDetailFailed'));
+      if (customerDetailReqRef.current === req) {
+        messageApi.error(error.message || t('app.master-data.customers.getDetailFailed'));
+      }
     } finally {
-      setDetailLoading(false);
+      if (customerDetailReqRef.current === req) {
+        setDetailLoading(false);
+      }
     }
   };
 
@@ -854,16 +864,18 @@ const CustomersPage: React.FC = () => {
       />
       </ListPageTemplate>
 
-      {/* 详情 Drawer */}
-      <DetailDrawerTemplate
+      {/* 详情 Drawer（uni-detail） */}
+      <UniDetail
         title={t('app.master-data.customers.detailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        basic={customerDetail ? (
+        basic={
+          customerDetail ? (
             <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, customerDetail)} />
-          ) : undefined}
+          ) : null
+        }
       />
 
       {/* 创建/编辑客户 Modal */}

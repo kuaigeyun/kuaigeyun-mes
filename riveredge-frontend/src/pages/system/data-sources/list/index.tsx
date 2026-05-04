@@ -9,10 +9,11 @@ import React, { useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDependency, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Tag, Space, Badge, Typography, Alert, Tooltip, Card, Button, Dropdown, Modal, theme } from 'antd';
+import { App, Popconfirm, Tag, Space, Badge, Typography, Alert, Tooltip, Card, Button, Dropdown, Modal, theme, Descriptions } from 'antd';
 import { DeleteOutlined, EyeOutlined, DatabaseOutlined, ThunderboltOutlined, EditOutlined, MoreOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import DataSourceConnectorMarket from '../DataSourceConnectorMarket';
 import type { ConnectorDefinition } from '../connectors';
 import {
@@ -115,6 +116,7 @@ const DataSourceListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
   const actionRef = useRef<ActionType>(null);
+  const dataSourceDetailReqRef = useRef(0);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
@@ -182,18 +184,27 @@ const DataSourceListPage: React.FC = () => {
    * 处理查看详情
    */
   const handleView = async (record: DataSource) => {
-    try {
-      setDetailLoading(true);
+    const req = ++dataSourceDetailReqRef.current;
+    flushDrawerOpen(() => {
       setDrawerVisible(true);
+      setDetailData(null);
+      setDetailLoading(true);
+    });
+    try {
       const [detail, dsList] = await Promise.all([
         getDataSourceByUuid(record.uuid),
         getDatasetList({ data_source_uuid: record.uuid, page_size: 50 }),
       ]);
+      if (dataSourceDetailReqRef.current !== req) return;
       setDetailData({ ...detail, related_datasets: dsList.items });
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.dataSources.getDetailFailed'));
+      if (dataSourceDetailReqRef.current === req) {
+        messageApi.error(error.message || t('pages.system.dataSources.getDetailFailed'));
+      }
     } finally {
-      setDetailLoading(false);
+      if (dataSourceDetailReqRef.current === req) {
+        setDetailLoading(false);
+      }
     }
   };
 
@@ -1248,14 +1259,17 @@ const DataSourceListPage: React.FC = () => {
       />
 
       {/* 查看详情 Drawer */}
-      <DetailDrawerTemplate
+      <UniDetail
         title={t('pages.system.dataSources.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.LARGE_WIDTH}
-        dataSource={(detailData || {}) as DataSource}
-        columns={detailColumns as any}
+        basic={
+          detailData ? (
+            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns as any, detailData)} />
+          ) : null
+        }
         extra={
           detailData && (
             <Space>

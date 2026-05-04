@@ -5,15 +5,24 @@
  * 支持数据集的 CRUD 操作和查询执行功能。
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect } from '@ant-design/pro-components';
+import {
+  ActionType,
+  ProColumns,
+  ProFormText,
+  ProFormTextArea,
+  ProFormSwitch,
+  ProFormSelect,
+  ProDescriptionsItemProps,
+} from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Modal, Badge, Table, Dropdown } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Modal, Badge, Table, Dropdown, Descriptions } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlayCircleOutlined, MoreOutlined, CopyOutlined, FormOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import {
   getDatasetList,
   getDatasetByUuid,
@@ -39,6 +48,7 @@ const DatasetListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
+  const datasetDetailReqRef = useRef(0);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Modal 相关状态（创建/编辑数据集）
@@ -122,17 +132,111 @@ const DatasetListPage: React.FC = () => {
    * 处理查看详情
    */
   const handleView = async (record: Dataset) => {
-    try {
-      setDetailLoading(true);
+    const req = ++datasetDetailReqRef.current;
+    flushDrawerOpen(() => {
       setDrawerVisible(true);
+      setDetailData(null);
+      setDetailLoading(true);
+    });
+    try {
       const detail = await getDatasetByUuid(record.uuid);
+      if (datasetDetailReqRef.current !== req) return;
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.datasets.getDetailFailed'));
+      if (datasetDetailReqRef.current === req) {
+        messageApi.error(error.message || t('pages.system.datasets.getDetailFailed'));
+      }
     } finally {
-      setDetailLoading(false);
+      if (datasetDetailReqRef.current === req) {
+        setDetailLoading(false);
+      }
     }
   };
+
+  const datasetDetailDescColumns = useMemo<ProDescriptionsItemProps<Dataset>[]>(
+    () => [
+      {
+        title: t('pages.system.datasets.columnName'),
+        dataIndex: 'name',
+      },
+      {
+        title: t('pages.system.datasets.columnCode'),
+        dataIndex: 'code',
+      },
+      {
+        title: t('pages.system.datasets.columnDataConnection'),
+        dataIndex: 'data_source_uuid',
+        render: (value: string) => {
+          const conn = dataConnectionsFlat.find((c) => c.uuid === value);
+          return conn ? `${conn.name} (${conn.type})` : value;
+        },
+      },
+      {
+        title: t('pages.system.datasets.columnQueryType'),
+        dataIndex: 'query_type',
+        render: (value: string) => {
+          const typeMap: Record<string, string> = {
+            sql: t('pages.system.datasets.queryTypeSql'),
+            api: t('pages.system.datasets.queryTypeApi'),
+          };
+          return typeMap[value] || value;
+        },
+      },
+      {
+        title: t('pages.system.datasets.labelDescription'),
+        dataIndex: 'description',
+      },
+      {
+        title: t('pages.system.datasets.columnQueryConfig'),
+        dataIndex: 'query_config',
+        render: (value: Record<string, unknown>) => (
+          <pre
+            style={{
+              margin: 0,
+              padding: '8px',
+              backgroundColor: '#f5f5f5',
+              borderRadius: '4px',
+              overflow: 'auto',
+              maxHeight: '300px',
+              fontSize: 12,
+            }}
+          >
+            {JSON.stringify(value, null, 2)}
+          </pre>
+        ),
+      },
+      {
+        title: t('pages.system.datasets.columnEnabled'),
+        dataIndex: 'is_active',
+        render: (value: boolean) => (
+          <Tag color={value ? 'success' : 'default'}>
+            {value ? t('pages.system.datasets.enabled') : t('pages.system.datasets.disabled')}
+          </Tag>
+        ),
+      },
+      {
+        title: t('pages.system.datasets.columnLastExecuted'),
+        dataIndex: 'last_executed_at',
+        valueType: 'dateTime',
+      },
+      {
+        title: t('pages.system.datasets.columnLastError'),
+        dataIndex: 'last_error',
+        render: (value: string) => (value ? <Tag color="error">{value}</Tag> : '-'),
+      },
+      {
+        title: t('pages.system.datasets.columnCreatedAt'),
+        dataIndex: 'created_at',
+        valueType: 'dateTime',
+      },
+      {
+        title: t('pages.system.datasets.columnUpdatedAt'),
+        dataIndex: 'updated_at',
+        valueType: 'dateTime',
+      },
+    ],
+    [t, dataConnectionsFlat]
+  );
 
   /**
    * 批量启用/禁用
@@ -713,13 +817,12 @@ const DatasetListPage: React.FC = () => {
       </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
-      <DetailDrawerTemplate
+      <UniDetail
         title={t('pages.system.datasets.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.LARGE_WIDTH}
-        dataSource={detailData}
         extra={
           detailData && (
             <Space>
@@ -756,87 +859,11 @@ const DatasetListPage: React.FC = () => {
             </Space>
           )
         }
-        columns={[
-          {
-            title: t('pages.system.datasets.columnName'),
-            dataIndex: 'name',
-          },
-          {
-            title: t('pages.system.datasets.columnCode'),
-            dataIndex: 'code',
-          },
-          {
-            title: t('pages.system.datasets.columnDataConnection'),
-            dataIndex: 'data_source_uuid',
-            render: (value: string) => {
-              const conn = dataConnectionsFlat.find(c => c.uuid === value);
-              return conn ? `${conn.name} (${conn.type})` : value;
-            },
-          },
-          {
-            title: t('pages.system.datasets.columnQueryType'),
-            dataIndex: 'query_type',
-            render: (value: string) => {
-              const typeMap: Record<string, string> = {
-                sql: t('pages.system.datasets.queryTypeSql'),
-                api: t('pages.system.datasets.queryTypeApi'),
-              };
-              return typeMap[value] || value;
-            },
-          },
-          {
-            title: t('pages.system.datasets.labelDescription'),
-            dataIndex: 'description',
-          },
-          {
-            title: t('pages.system.datasets.columnQueryConfig'),
-            dataIndex: 'query_config',
-            render: (value: Record<string, any>) => (
-              <pre style={{
-                margin: 0,
-                padding: '8px',
-                backgroundColor: '#f5f5f5',
-                borderRadius: '4px',
-                overflow: 'auto',
-                maxHeight: '300px',
-                fontSize: 12,
-              }}>
-                {JSON.stringify(value, null, 2)}
-              </pre>
-            ),
-          },
-          {
-            title: t('pages.system.datasets.columnEnabled'),
-            dataIndex: 'is_active',
-            render: (value: boolean) => (
-              <Tag color={value ? 'success' : 'default'}>
-                {value ? t('pages.system.datasets.enabled') : t('pages.system.datasets.disabled')}
-              </Tag>
-            ),
-          },
-          {
-            title: t('pages.system.datasets.columnLastExecuted'),
-            dataIndex: 'last_executed_at',
-            valueType: 'dateTime',
-          },
-          {
-            title: t('pages.system.datasets.columnLastError'),
-            dataIndex: 'last_error',
-            render: (value: string) => value ? (
-              <Tag color="error">{value}</Tag>
-            ) : '-',
-          },
-          {
-            title: t('pages.system.datasets.columnCreatedAt'),
-            dataIndex: 'created_at',
-            valueType: 'dateTime',
-          },
-          {
-            title: t('pages.system.datasets.columnUpdatedAt'),
-            dataIndex: 'updated_at',
-            valueType: 'dateTime',
-          },
-        ]}
+        basic={
+          detailData ? (
+            <Descriptions column={1} items={detailDrawerDescriptionItems(datasetDetailDescColumns, detailData)} />
+          ) : null
+        }
       />
 
       {/* 执行查询结果 Modal */}
