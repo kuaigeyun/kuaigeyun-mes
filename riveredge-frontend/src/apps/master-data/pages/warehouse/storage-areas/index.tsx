@@ -15,6 +15,7 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
 import { storageAreaApi, warehouseApi } from '../../../services/warehouse';
+import { applyFactoryKeyword, applyFactoryTableSort } from '../../../services/factory';
 import { StorageAreaFormModal } from '../../../components/StorageAreaFormModal';
 import { QRCodeGenerator } from '../../../../../components/qrcode';
 import type { StorageArea, StorageAreaCreate, Warehouse } from '../../../types/warehouse';
@@ -46,7 +47,7 @@ const StorageAreasPage: React.FC = () => {
   useEffect(() => {
     const loadWarehouses = async () => {
       try {
-        const result = await warehouseApi.list({ limit: 1000, isActive: true });
+        const result = await warehouseApi.list({ limit: 1000, is_active: true });
         setWarehouses(result.items);
       } catch (error: any) {
         console.error('加载仓库列表失败:', error);
@@ -541,21 +542,31 @@ const StorageAreasPage: React.FC = () => {
     {
       title: t('app.master-data.storageAreas.code'),
       dataIndex: 'code',
-      copyable: true,width: 150,
+      width: 150,
       fixed: 'left',
       ellipsis: true,
       copyable: true,
+      sorter: true,
     },
     {
       title: t('app.master-data.storageAreas.name'),
       dataIndex: 'name',
       width: 200,
+      sorter: true,
     },
     {
       title: t('app.master-data.storageAreas.warehouse'),
       dataIndex: 'warehouseId',
       width: 200,
-      hideInSearch: true,
+      valueType: 'select',
+      valueEnum: warehouses.reduce(
+        (acc, w) => {
+          acc[w.id] = { text: `${w.code} - ${w.name}` };
+          return acc;
+        },
+        {} as Record<number, { text: string }>
+      ),
+      sorter: true,
       render: (_, record) => formatWarehouseDisplay(record),
     },
     {
@@ -580,6 +591,7 @@ const StorageAreasPage: React.FC = () => {
           </Tag>
         );
       },
+      sorter: true,
     },
     {
       title: t('app.master-data.warehouses.createTime'),
@@ -681,24 +693,24 @@ const StorageAreasPage: React.FC = () => {
         actionRef={actionRef}
         columns={columns}
         request={async (params, sort, _filter, searchFormValues) => {
-          // 处理搜索参数
-          const apiParams: any = {
+          const apiParams: Record<string, unknown> = {
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
           };
-          
-          // 启用状态筛选
+
           if (searchFormValues?.isActive !== undefined && searchFormValues.isActive !== '' && searchFormValues.isActive !== null) {
-            apiParams.isActive = searchFormValues.isActive;
+            apiParams.is_active = searchFormValues.isActive;
           }
-          
-          // 仓库筛选
+
           if (searchFormValues?.warehouseId !== undefined && searchFormValues.warehouseId !== '' && searchFormValues.warehouseId !== null) {
-            apiParams.warehouseId = searchFormValues.warehouseId;
+            apiParams.warehouse_id = searchFormValues.warehouseId;
           }
-          
+
+          applyFactoryKeyword(apiParams, searchFormValues);
+          applyFactoryTableSort(apiParams, sort);
+
           try {
-            const result = await storageAreaApi.list(apiParams);
+            const result = await storageAreaApi.list(apiParams as any);
             return {
               data: result.items,
               success: true,

@@ -43,7 +43,7 @@ export const StorageAreaFormModal: React.FC<StorageAreaFormModalProps> = ({
   useEffect(() => {
     const loadWarehouses = async () => {
       try {
-        const result = await warehouseApi.list({ limit: 1000, isActive: true });
+        const result = await warehouseApi.list({ limit: 1000, is_active: true });
         setWarehouses(result.items);
       } catch (error) {
         console.error('加载仓库列表失败:', error);

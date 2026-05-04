@@ -572,7 +572,7 @@ const DemandComputationPage: React.FC = () => {
   const { data: warehouseRows = [] } = useQuery({
     queryKey: ['warehouses', 'mrp-demand-computation'],
     queryFn: async () => {
-      const r = await warehouseApi.list({ limit: 500, isActive: true })
+      const r = await warehouseApi.list({ limit: 500, is_active: true })
       return r?.items ?? []
     },
   })

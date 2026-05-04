@@ -49,8 +49,11 @@ export interface WarehouseUpdate {
 export interface WarehouseListParams {
   skip?: number;
   limit?: number;
-  isActive?: boolean;
+  is_active?: boolean;
   warehouse_type?: string;
+  keyword?: string;
+  sort_field?: string;
+  sort_order?: 'asc' | 'desc';
 }
 
 export interface StorageArea {
@@ -89,8 +92,11 @@ export interface StorageAreaUpdate {
 export interface StorageAreaListParams {
   skip?: number;
   limit?: number;
-  warehouseId?: number;
-  isActive?: boolean;
+  warehouse_id?: number;
+  is_active?: boolean;
+  keyword?: string;
+  sort_field?: string;
+  sort_order?: 'asc' | 'desc';
 }
 
 export interface StorageLocation {
@@ -129,8 +135,11 @@ export interface StorageLocationUpdate {
 export interface StorageLocationListParams {
   skip?: number;
   limit?: number;
-  storageAreaId?: number;
-  isActive?: boolean;
+  storage_area_id?: number;
+  is_active?: boolean;
+  keyword?: string;
+  sort_field?: string;
+  sort_order?: 'asc' | 'desc';
 }
 
 export interface WarehouseListResponse {

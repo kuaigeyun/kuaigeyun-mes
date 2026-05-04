@@ -80,7 +80,10 @@ async def list_warehouses(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     is_active: Optional[bool] = Query(None, description="是否启用"),
-    warehouse_type: Optional[str] = Query(None, description="仓库类型（normal/line_side/wip/outsourcing/consignment/vmi/defect/quarantine）")
+    warehouse_type: Optional[str] = Query(None, description="仓库类型（normal/line_side/wip/outsourcing/consignment/vmi/defect/quarantine）"),
+    keyword: Optional[str] = Query(None, description="关键词（编码或名称模糊匹配）"),
+    sort_field: Optional[str] = Query(None, description="排序字段（code/name/createdAt 等）"),
+    sort_order: Optional[str] = Query(None, description="排序方向：asc / desc"),
 ):
     """
     获取仓库列表
@@ -89,9 +92,13 @@ async def list_warehouses(
     - **limit**: 限制数量（默认：100，最大：1000）
     - **is_active**: 是否启用（可选）
     - **warehouse_type**: 仓库类型（可选）
+    - **keyword**: 模糊搜索（可选）
+    - **sort_field** / **sort_order**: 表格排序（可选）
     """
     try:
-        return await WarehouseService.list_warehouses(tenant_id, skip, limit, is_active, warehouse_type)
+        return await WarehouseService.list_warehouses(
+            tenant_id, skip, limit, is_active, warehouse_type, keyword, sort_field, sort_order
+        )
     except Exception as e:
         from loguru import logger
         logger.exception(f"获取仓库列表失败: {e}")
@@ -269,7 +276,10 @@ async def list_storage_areas(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     warehouse_id: Optional[int] = Query(None, description="仓库ID（过滤）"),
-    is_active: Optional[bool] = Query(None, description="是否启用")
+    is_active: Optional[bool] = Query(None, description="是否启用"),
+    keyword: Optional[str] = Query(None, description="关键词（编码或名称模糊匹配）"),
+    sort_field: Optional[str] = Query(None, description="排序字段"),
+    sort_order: Optional[str] = Query(None, description="排序方向：asc / desc"),
 ):
     """
     获取库区列表
@@ -278,8 +288,12 @@ async def list_storage_areas(
     - **limit**: 限制数量（默认：100，最大：1000）
     - **warehouse_id**: 仓库ID（可选，用于过滤）
     - **is_active**: 是否启用（可选）
+    - **keyword**: 模糊搜索（可选）
+    - **sort_field** / **sort_order**: 表格排序（可选）
     """
-    return await WarehouseService.list_storage_areas(tenant_id, skip, limit, warehouse_id, is_active)
+    return await WarehouseService.list_storage_areas(
+        tenant_id, skip, limit, warehouse_id, is_active, keyword, sort_field, sort_order
+    )
 
 
 @router.get("/storage-areas/{storage_area_uuid}", response_model=StorageAreaResponse, summary="获取库区详情")
@@ -405,7 +419,10 @@ async def list_storage_locations(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     storage_area_id: Optional[int] = Query(None, description="库区ID（过滤）"),
-    is_active: Optional[bool] = Query(None, description="是否启用")
+    is_active: Optional[bool] = Query(None, description="是否启用"),
+    keyword: Optional[str] = Query(None, description="关键词（编码或名称模糊匹配）"),
+    sort_field: Optional[str] = Query(None, description="排序字段"),
+    sort_order: Optional[str] = Query(None, description="排序方向：asc / desc"),
 ):
     """
     获取库位列表
@@ -414,8 +431,12 @@ async def list_storage_locations(
     - **limit**: 限制数量（默认：100，最大：1000）
     - **storage_area_id**: 库区ID（可选，用于过滤）
     - **is_active**: 是否启用（可选）
+    - **keyword**: 模糊搜索（可选）
+    - **sort_field** / **sort_order**: 表格排序（可选）
     """
-    return await WarehouseService.list_storage_locations(tenant_id, skip, limit, storage_area_id, is_active)
+    return await WarehouseService.list_storage_locations(
+        tenant_id, skip, limit, storage_area_id, is_active, keyword, sort_field, sort_order
+    )
 
 
 @router.get("/storage-locations/{storage_location_uuid}", response_model=StorageLocationResponse, summary="获取库位详情")

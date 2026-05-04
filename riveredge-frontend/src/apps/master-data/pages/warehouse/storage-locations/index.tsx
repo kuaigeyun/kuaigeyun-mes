@@ -13,6 +13,7 @@ import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
 import { storageLocationApi, storageAreaApi } from '../../../services/warehouse';
+import { applyFactoryKeyword, applyFactoryTableSort } from '../../../services/factory';
 import { StorageLocationFormModal } from '../../../components/StorageLocationFormModal';
 import { BatchCreateStorageLocationModal } from '../../../components/BatchCreateStorageLocationModal';
 import { QRCodeGenerator } from '../../../../../components/qrcode';
@@ -25,6 +26,7 @@ import { batchImport } from '../../../../../utils/batchOperations';
 const StorageLocationsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const { token } = theme.useToken();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
@@ -45,7 +47,7 @@ const StorageLocationsPage: React.FC = () => {
   useEffect(() => {
     const loadStorageAreas = async () => {
       try {
-        const result = await storageAreaApi.list({ limit: 1000, isActive: true });
+        const result = await storageAreaApi.list({ limit: 1000, is_active: true });
         setStorageAreas(result.items);
       } catch (error: any) {
         console.error('加载库区列表失败:', error);
@@ -540,21 +542,31 @@ const StorageLocationsPage: React.FC = () => {
     {
       title: t('app.master-data.storageLocations.code'),
       dataIndex: 'code',
-      copyable: true,width: 150,
+      width: 150,
       fixed: 'left',
       ellipsis: true,
       copyable: true,
+      sorter: true,
     },
     {
       title: t('app.master-data.storageLocations.name'),
       dataIndex: 'name',
       width: 200,
+      sorter: true,
     },
     {
       title: t('app.master-data.storageLocations.storageArea'),
       dataIndex: 'storageAreaId',
       width: 200,
-      hideInSearch: true,
+      valueType: 'select',
+      valueEnum: storageAreas.reduce(
+        (acc, s) => {
+          acc[s.id] = { text: `${s.code} - ${s.name}` };
+          return acc;
+        },
+        {} as Record<number, { text: string }>
+      ),
+      sorter: true,
       render: (_, record) => formatStorageAreaDisplay(record),
     },
     {
@@ -579,6 +591,7 @@ const StorageLocationsPage: React.FC = () => {
           </Tag>
         );
       },
+      sorter: true,
     },
     {
       title: t('app.master-data.warehouses.createTime'),
@@ -679,24 +692,24 @@ const StorageLocationsPage: React.FC = () => {
         actionRef={actionRef}
         columns={columns}
         request={async (params, sort, _filter, searchFormValues) => {
-          // 处理搜索参数
-          const apiParams: any = {
+          const apiParams: Record<string, unknown> = {
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
           };
-          
-          // 启用状态筛选
+
           if (searchFormValues?.isActive !== undefined && searchFormValues.isActive !== '' && searchFormValues.isActive !== null) {
-            apiParams.isActive = searchFormValues.isActive;
+            apiParams.is_active = searchFormValues.isActive;
           }
-          
-          // 库区筛选
+
           if (searchFormValues?.storageAreaId !== undefined && searchFormValues.storageAreaId !== '' && searchFormValues.storageAreaId !== null) {
-            apiParams.storageAreaId = searchFormValues.storageAreaId;
+            apiParams.storage_area_id = searchFormValues.storageAreaId;
           }
-          
+
+          applyFactoryKeyword(apiParams, searchFormValues);
+          applyFactoryTableSort(apiParams, sort);
+
           try {
-            const result = await storageLocationApi.list(apiParams);
+            const result = await storageLocationApi.list(apiParams as any);
             return {
               data: result.items,
               success: true,

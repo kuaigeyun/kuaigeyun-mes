@@ -56,9 +56,9 @@ export const UniWarehouseSelect: React.FC<UniWarehouseSelectProps> = ({
     setLoading(true);
     try {
       const response: any = await warehouseApi.list({
-        ...(searchText ? { name: searchText } : {}), // Fallback if API needs name
-        ...(activeOnly ? { isActive: true } : {}),
-      } as any);
+        ...(searchText ? { keyword: searchText.trim() } : {}),
+        ...(activeOnly ? { is_active: true } : {}),
+      });
       // 兼容不同服务层的返回结构
       const items = response.items || response.data || response || [];
       setData(items);

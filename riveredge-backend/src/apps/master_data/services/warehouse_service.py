@@ -6,6 +6,7 @@
 
 from typing import List, Optional, TYPE_CHECKING
 from tortoise.exceptions import IntegrityError
+from tortoise.models import Q
 
 from apps.master_data.models.warehouse import Warehouse, StorageArea, StorageLocation
 from apps.master_data.models.factory import Workshop, WorkCenter, Workstation
@@ -22,6 +23,57 @@ if TYPE_CHECKING:
         StorageAreaTreeResponse,
         StorageLocationTreeResponse
     )
+
+_WAREHOUSE_LIST_SORT_FIELDS = {
+    "code": "code",
+    "name": "name",
+    "createdAt": "created_at",
+    "updatedAt": "updated_at",
+    "isActive": "is_active",
+    "warehouseType": "warehouse_type",
+}
+
+_STORAGE_AREA_LIST_SORT_FIELDS = {
+    "code": "code",
+    "name": "name",
+    "createdAt": "created_at",
+    "updatedAt": "updated_at",
+    "isActive": "is_active",
+    "warehouseId": "warehouse_id",
+}
+
+_STORAGE_LOCATION_LIST_SORT_FIELDS = {
+    "code": "code",
+    "name": "name",
+    "createdAt": "created_at",
+    "updatedAt": "updated_at",
+    "isActive": "is_active",
+    "storageAreaId": "storage_area_id",
+}
+
+
+def _warehouse_list_order(sort_field: Optional[str], sort_order: Optional[str], default_col: str = "code") -> str:
+    key = (sort_field or "").strip()
+    col = _WAREHOUSE_LIST_SORT_FIELDS.get(key, default_col)
+    if (sort_order or "asc").lower() == "desc":
+        return f"-{col}"
+    return col
+
+
+def _storage_area_list_order(sort_field: Optional[str], sort_order: Optional[str], default_col: str = "code") -> str:
+    key = (sort_field or "").strip()
+    col = _STORAGE_AREA_LIST_SORT_FIELDS.get(key, default_col)
+    if (sort_order or "asc").lower() == "desc":
+        return f"-{col}"
+    return col
+
+
+def _storage_location_list_order(sort_field: Optional[str], sort_order: Optional[str], default_col: str = "code") -> str:
+    key = (sort_field or "").strip()
+    col = _STORAGE_LOCATION_LIST_SORT_FIELDS.get(key, default_col)
+    if (sort_order or "asc").lower() == "desc":
+        return f"-{col}"
+    return col
 
 
 class WarehouseService:
@@ -212,6 +264,9 @@ class WarehouseService:
         limit: int = 100,
         is_active: Optional[bool] = None,
         warehouse_type: Optional[str] = None,
+        keyword: Optional[str] = None,
+        sort_field: Optional[str] = None,
+        sort_order: Optional[str] = None,
     ) -> dict:
         """
         获取仓库列表
@@ -222,6 +277,9 @@ class WarehouseService:
             limit: 限制数量
             is_active: 是否启用（可选）
             warehouse_type: 仓库类型（可选）
+            keyword: 关键词（编码或名称模糊匹配）
+            sort_field: 排序字段（前端 camelCase）
+            sort_order: asc / desc
 
         Returns:
             dict: 包含 items (仓库列表) 和 total (总数) 的字典
@@ -235,9 +293,14 @@ class WarehouseService:
             query = query.filter(is_active=is_active)
         if warehouse_type:
             query = query.filter(warehouse_type=warehouse_type)
+        if keyword:
+            kw = keyword.strip()
+            if kw:
+                query = query.filter(Q(code__icontains=kw) | Q(name__icontains=kw))
 
         total = await query.count()
-        warehouses = await query.offset(skip).limit(limit).order_by("code").all()
+        order_expr = _warehouse_list_order(sort_field, sort_order, "code")
+        warehouses = await query.offset(skip).limit(limit).order_by(order_expr).all()
 
         return {
             "items": [WarehouseResponse.model_validate(w) for w in warehouses],
@@ -554,7 +617,10 @@ class WarehouseService:
         skip: int = 0,
         limit: int = 100,
         warehouse_id: Optional[int] = None,
-        is_active: Optional[bool] = None
+        is_active: Optional[bool] = None,
+        keyword: Optional[str] = None,
+        sort_field: Optional[str] = None,
+        sort_order: Optional[str] = None,
     ) -> dict:
         """
         获取库区列表
@@ -565,6 +631,9 @@ class WarehouseService:
             limit: 限制数量
             warehouse_id: 仓库ID（可选，用于过滤）
             is_active: 是否启用（可选）
+            keyword: 关键词（编码或名称模糊匹配）
+            sort_field: 排序字段（前端 camelCase）
+            sort_order: asc / desc
             
         Returns:
             dict: 包含 items (库区列表) 和 total (总数) 的字典
@@ -579,9 +648,14 @@ class WarehouseService:
         
         if is_active is not None:
             query = query.filter(is_active=is_active)
+        if keyword:
+            kw = keyword.strip()
+            if kw:
+                query = query.filter(Q(code__icontains=kw) | Q(name__icontains=kw))
         
         total = await query.count()
-        storage_areas = await query.offset(skip).limit(limit).order_by("code").all()
+        order_expr = _storage_area_list_order(sort_field, sort_order, "code")
+        storage_areas = await query.offset(skip).limit(limit).order_by(order_expr).all()
 
         items: List[StorageAreaResponse] = []
         for sa in storage_areas:
@@ -898,7 +972,10 @@ class WarehouseService:
         skip: int = 0,
         limit: int = 100,
         storage_area_id: Optional[int] = None,
-        is_active: Optional[bool] = None
+        is_active: Optional[bool] = None,
+        keyword: Optional[str] = None,
+        sort_field: Optional[str] = None,
+        sort_order: Optional[str] = None,
     ) -> dict:
         """
         获取库位列表
@@ -909,6 +986,9 @@ class WarehouseService:
             limit: 限制数量
             storage_area_id: 库区ID（可选，用于过滤）
             is_active: 是否启用（可选）
+            keyword: 关键词（编码或名称模糊匹配）
+            sort_field: 排序字段（前端 camelCase）
+            sort_order: asc / desc
             
         Returns:
             dict: 包含 items (库位列表) 和 total (总数) 的字典
@@ -923,9 +1003,14 @@ class WarehouseService:
         
         if is_active is not None:
             query = query.filter(is_active=is_active)
+        if keyword:
+            kw = keyword.strip()
+            if kw:
+                query = query.filter(Q(code__icontains=kw) | Q(name__icontains=kw))
         
         total = await query.count()
-        storage_locations = await query.offset(skip).limit(limit).order_by("code").all()
+        order_expr = _storage_location_list_order(sort_field, sort_order, "code")
+        storage_locations = await query.offset(skip).limit(limit).order_by(order_expr).all()
 
         loc_items: List[StorageLocationResponse] = []
         for sl in storage_locations:

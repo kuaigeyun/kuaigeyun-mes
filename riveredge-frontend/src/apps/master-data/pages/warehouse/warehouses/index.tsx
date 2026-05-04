@@ -15,7 +15,13 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
 import { warehouseApi, type PresetWarehouseItem } from '../../../services/warehouse';
-import { workshopApi, workCenterApi, factoryListItems } from '../../../services/factory';
+import {
+  workshopApi,
+  workCenterApi,
+  factoryListItems,
+  applyFactoryKeyword,
+  applyFactoryTableSort,
+} from '../../../services/factory';
 import { WarehouseFormModal } from '../../../components/WarehouseFormModal';
 import { QRCodeGenerator } from '../../../../../components/qrcode';
 import type { Warehouse, WarehouseCreate } from '../../../types/warehouse';
@@ -581,6 +587,7 @@ const WarehousesPage: React.FC = () => {
           {record?.isActive ? t('common.enabled') : t('common.disabled')}
         </Tag>
       ),
+      sorter: true,
     },
     {
       title: t('app.master-data.warehouses.createTime'),
@@ -689,24 +696,24 @@ const WarehousesPage: React.FC = () => {
         <UniTable<Warehouse>
         actionRef={actionRef}
         columns={columns}
-        request={async (params, _sort, _filter, searchFormValues) => {
-          // 处理搜索参数
-          const apiParams: any = {
+        request={async (params, sort, _filter, searchFormValues) => {
+          const apiParams: Record<string, unknown> = {
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
           };
-          
-          // 启用状态筛选
+
           if (searchFormValues?.isActive !== undefined && searchFormValues.isActive !== '' && searchFormValues.isActive !== null) {
-            apiParams.isActive = searchFormValues.isActive;
+            apiParams.is_active = searchFormValues.isActive;
           }
-          // 仓库类型筛选
           if (searchFormValues?.warehouseType) {
             apiParams.warehouse_type = searchFormValues.warehouseType;
           }
 
+          applyFactoryKeyword(apiParams, searchFormValues);
+          applyFactoryTableSort(apiParams, sort);
+
           try {
-            const result = await warehouseApi.list(apiParams);
+            const result = await warehouseApi.list(apiParams as any);
             return {
               data: result.items,
               success: true,
