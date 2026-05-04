@@ -32,6 +32,7 @@ import {
   ProjectOutlined,
   ImportOutlined,
   DownloadOutlined,
+  DownOutlined,
   SyncOutlined,
 } from '@ant-design/icons'
 import { isPinyinKeyword, matchPinyinInitialsAsync } from '../../utils/pinyin'
@@ -1674,9 +1675,17 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         },
       ]
       rightButtons.push(
-        <Dropdown key="export" menu={{ items: exportMenuItems }} placement="bottomRight">
+        <Dropdown
+          key="export"
+          menu={{ items: exportMenuItems }}
+          placement="bottomRight"
+          trigger={['hover', 'click']}
+          mouseEnterDelay={0.05}
+          mouseLeaveDelay={0.2}
+        >
           <Button icon={<DownloadOutlined />} size={toolBarButtonSize}>
             {t('components.uniTable.export')}
+            <DownOutlined style={{ fontSize: 10, marginInlineStart: 2, opacity: 0.65 }} />
           </Button>
         </Dropdown>
       )

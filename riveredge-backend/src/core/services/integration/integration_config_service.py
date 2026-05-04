@@ -153,36 +153,76 @@ class IntegrationConfigService:
     @staticmethod
     async def list_integrations(
         tenant_id: int,
-        skip: int = 0,
-        limit: int = 100,
+        page: int = 1,
+        page_size: int = 20,
         type: Optional[str] = None,
-        is_active: Optional[bool] = None
-    ) -> List[IntegrationConfig]:
+        types: Optional[list[str]] = None,
+        is_active: Optional[bool] = None,
+        search: Optional[str] = None,
+        sort_by: Optional[str] = None,
+        sort_order: Optional[str] = None,
+    ) -> tuple[List[IntegrationConfig], int]:
         """
-        获取集成配置列表
-        
+        获取集成配置列表（分页）
+
         Args:
             tenant_id: 组织ID
-            skip: 跳过数量
-            limit: 限制数量
+            page: 页码（从 1 开始）
+            page_size: 每页数量
             type: 集成类型（可选）
             is_active: 是否启用（可选）
-            
+            search: 关键词（名称、代码、描述）
+            sort_by / sort_order: 排序（白名单字段）
+
         Returns:
-            List[IntegrationConfig]: 集成配置列表
+            (集成配置列表, 总数)
         """
         query = IntegrationConfig.filter(
             tenant_id=tenant_id,
-            deleted_at__isnull=True
+            deleted_at__isnull=True,
         )
-        
-        if type:
+
+        if types is not None:
+            query = query.filter(type__in=types)
+        elif type:
             query = query.filter(type=type)
-        
+
         if is_active is not None:
             query = query.filter(is_active=is_active)
-        
-        return await query.offset(skip).limit(limit).order_by("-created_at", "id")
+
+        if search:
+            from tortoise.expressions import Q
+            q = search.strip()
+            if q:
+                query = query.filter(
+                    Q(name__icontains=q)
+                    | Q(code__icontains=q)
+                    | Q(description__icontains=q)
+                )
+
+        total = await query.count()
+
+        allowed_sort = {
+            "name",
+            "code",
+            "type",
+            "created_at",
+            "updated_at",
+            "is_active",
+            "last_connected_at",
+        }
+        if sort_by in allowed_sort:
+            desc = sort_order and str(sort_order).lower() in ("desc", "descend")
+            primary = f"-{sort_by}" if desc else sort_by
+            ordered = query.order_by(primary, "id")
+        else:
+            ordered = query.order_by("-created_at", "id")
+
+        safe_page = max(page, 1)
+        safe_size = min(max(page_size, 1), 1000)
+        offset = (safe_page - 1) * safe_size
+        items = await ordered.offset(offset).limit(safe_size).all()
+        return items, total
     
     @staticmethod
     async def update_integration(

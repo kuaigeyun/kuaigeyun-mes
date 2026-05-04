@@ -35,6 +35,8 @@ export interface PermissionListParams {
   code?: string;
   resource?: string;
   permission_type?: string;
+  sort_by?: string;
+  sort_order?: 'asc' | 'desc';
 }
 
 /**

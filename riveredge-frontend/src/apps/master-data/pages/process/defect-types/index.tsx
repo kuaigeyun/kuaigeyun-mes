@@ -23,6 +23,7 @@ import { generateCode } from '../../../../../services/codeRule';
 import { downloadFile } from '../../../../../utils';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { batchImport } from '../../../../../utils/import';
+import { extractProTableSort, mapProcessListSortField } from '../../../../../utils/tableQueryKey';
 
 /**
  * 不良品信息管理列表页面组件
@@ -380,11 +381,13 @@ const DefectTypesPage: React.FC = () => {
       dataIndex: 'code',
       copyable: true,width: 150,
       fixed: 'left',
+      sorter: true,
     },
     {
       title: '不良品名称',
       dataIndex: 'name',
       width: 200,
+      sorter: true,
     },
     {
       title: '描述',
@@ -409,6 +412,7 @@ const DefectTypesPage: React.FC = () => {
           </Tag>
         );
       },
+      sorter: true,
     },
     {
       title: '创建时间',
@@ -467,7 +471,7 @@ const DefectTypesPage: React.FC = () => {
       <UniTable<DefectType>
         actionRef={actionRef}
         columns={columns}
-        request={async (params, _sort, _filter, searchFormValues) => {
+        request={async (params, sort, _filter, searchFormValues) => {
           // 处理搜索参数
           const apiParams: any = {
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
@@ -477,6 +481,20 @@ const DefectTypesPage: React.FC = () => {
           // 启用状态筛选
           if (searchFormValues?.isActive !== undefined && searchFormValues.isActive !== '' && searchFormValues.isActive !== null) {
             apiParams.isActive = searchFormValues.isActive;
+          }
+
+          const fuzzyKw = String(searchFormValues?.keyword ?? '').trim();
+          const fallbackKw =
+            fuzzyKw ||
+            String(searchFormValues?.code ?? '').trim() ||
+            String(searchFormValues?.name ?? '').trim();
+          if (fallbackKw) apiParams.keyword = fallbackKw;
+
+          const { sortBy: rawSortBy, sortOrder } = extractProTableSort(sort);
+          const sortField = mapProcessListSortField(rawSortBy);
+          if (sortField) {
+            apiParams.sortBy = sortField;
+            apiParams.sortOrder = sortOrder;
           }
           
           try {

@@ -36,6 +36,8 @@ async def get_permission_list(
     resource: Optional[str] = Query(None, description="资源筛选"),
     permission_type: Optional[str] = Query(None, description="权限类型筛选"),
     exclude_derived_data: bool = Query(False, description="是否过滤自动派生的数据权限"),
+    sort_by: Optional[str] = Query(None, description="排序字段：code/name/resource/action/permission_type/created_at/updated_at"),
+    sort_order: Optional[str] = Query(None, description="排序方向：asc 或 desc"),
     dry_run: bool = Query(False, description="仅执行权限治理模拟，不落库"),
     _auth: object = Depends(require_access("system.permission", "read")),
     current_user: User = Depends(soil_get_current_user),
@@ -68,6 +70,8 @@ async def get_permission_list(
         resource=resource,
         permission_type=permission_type,
         exclude_derived_data=exclude_derived_data,
+        sort_by=sort_by,
+        sort_order=sort_order,
     )
     
     # 转换为响应格式

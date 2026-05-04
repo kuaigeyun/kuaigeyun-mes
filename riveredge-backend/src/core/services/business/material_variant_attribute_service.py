@@ -10,6 +10,7 @@ Date: 2026-01-08
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from tortoise.exceptions import IntegrityError
+from tortoise.expressions import Q
 from loguru import logger
 
 from core.models.material_variant_attribute import (
@@ -310,6 +311,9 @@ class MaterialVariantAttributeService:
         tenant_id: int,
         is_active: Optional[bool] = None,
         attribute_type: Optional[str] = None,
+        keyword: Optional[str] = None,
+        sort_by: Optional[str] = None,
+        sort_order: Optional[str] = None,
     ) -> List[MaterialVariantAttributeDefinition]:
         """
         列出属性定义
@@ -332,8 +336,28 @@ class MaterialVariantAttributeService:
         
         if attribute_type:
             query = query.filter(attribute_type=attribute_type)
-        
-        attributes = await query.order_by("display_order", "attribute_name").all()
+
+        if keyword and keyword.strip():
+            kw = keyword.strip()
+            query = query.filter(
+                Q(attribute_name__icontains=kw)
+                | Q(display_name__icontains=kw)
+                | Q(description__icontains=kw)
+            )
+
+        allowed_sort = {
+            "display_order",
+            "attribute_name",
+            "display_name",
+            "created_at",
+            "updated_at",
+        }
+        if sort_by in allowed_sort:
+            desc = (sort_order or "asc").lower() == "desc"
+            order_expr = f"-{sort_by}" if desc else sort_by
+            attributes = await query.order_by(order_expr).all()
+        else:
+            attributes = await query.order_by("display_order", "attribute_name").all()
         return attributes
     
     @staticmethod

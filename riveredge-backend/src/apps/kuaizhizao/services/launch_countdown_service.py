@@ -8,7 +8,7 @@ Date: 2026-01-15
 """
 
 from typing import Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 from tortoise.transactions import in_transaction
 from loguru import logger
 
@@ -122,25 +122,75 @@ class LaunchCountdownService(AppBaseService[LaunchCountdown]):
         if not countdown:
             raise NotFoundError("上线倒计时不存在")
         
+        done = status in ("completed", "skipped")
         if countdown.progress:
             countdown.progress[stage] = {
                 "status": status,
-                "completed": status == "completed",
-                "updated_at": datetime.now().isoformat()
+                "completed": done,
+                "updated_at": datetime.now().isoformat(),
             }
         else:
             countdown.progress = {
                 stage: {
                     "status": status,
-                    "completed": status == "completed",
-                    "updated_at": datetime.now().isoformat()
+                    "completed": done,
+                    "updated_at": datetime.now().isoformat(),
                 }
             }
         
         countdown.updated_by = created_by
         await countdown.save()
         return countdown
-    
+
+    async def ensure_countdown_for_wizard(
+        self,
+        tenant_id: int,
+        created_by: int = 1,
+    ) -> LaunchCountdown:
+        """无上线倒计时时创建默认上线日（30 天后），供期初向导持久化步骤。"""
+        existing = await self.get_countdown(tenant_id)
+        if existing:
+            return existing
+        default_launch = datetime.now() + timedelta(days=30)
+        default_launch = default_launch.replace(hour=23, minute=59, second=0, microsecond=0)
+        return await self.create_or_update_countdown(
+            tenant_id=tenant_id,
+            launch_date=default_launch,
+            snapshot_time=None,
+            created_by=created_by,
+        )
+
+    async def patch_wizard_state(
+        self,
+        tenant_id: int,
+        *,
+        snapshot_time: Optional[datetime] = None,
+        wizard_step: Optional[int] = None,
+        stage: Optional[str] = None,
+        stage_status: Optional[str] = None,
+        created_by: int = 1,
+    ) -> LaunchCountdown:
+        countdown = await self.ensure_countdown_for_wizard(tenant_id, created_by)
+        if snapshot_time is not None:
+            countdown.snapshot_time = snapshot_time
+        progress: Dict[str, Any] = dict(countdown.progress) if countdown.progress else {}
+        wizard_meta: Dict[str, Any] = dict(progress.get("wizard") or {})
+        if wizard_step is not None:
+            wizard_meta["current_step"] = wizard_step
+            wizard_meta["updated_at"] = datetime.now().isoformat()
+        progress["wizard"] = wizard_meta
+        valid_stages = ("inventory", "wip", "receivables_payables", "compensation")
+        if stage and stage_status and stage in valid_stages:
+            progress[stage] = {
+                "status": stage_status,
+                "completed": stage_status in ("completed", "skipped"),
+                "updated_at": datetime.now().isoformat(),
+            }
+        countdown.progress = progress
+        countdown.updated_by = created_by
+        await countdown.save()
+        return countdown
+
     async def complete_countdown(self, tenant_id: int, created_by: int = 1) -> LaunchCountdown:
         """
         完成上线倒计时

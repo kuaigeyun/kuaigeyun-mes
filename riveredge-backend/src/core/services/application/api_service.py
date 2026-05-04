@@ -99,6 +99,8 @@ class APIService:
         search: Optional[str] = None,
         method: Optional[str] = None,
         is_active: Optional[bool] = None,
+        sort_by: Optional[str] = None,
+        sort_order: Optional[str] = None,
     ) -> tuple[List[API], int]:
         """
         获取接口列表
@@ -145,8 +147,23 @@ class APIService:
         
         # 分页查询（使用索引字段排序）
         offset = (page - 1) * page_size
-        apis = await query.order_by("-created_at").offset(offset).limit(page_size).all()
-        
+        allowed_sort = {
+            "name",
+            "code",
+            "path",
+            "method",
+            "created_at",
+            "updated_at",
+            "is_active",
+        }
+        if sort_by in allowed_sort:
+            desc = sort_order and str(sort_order).lower() in ("desc", "descend")
+            primary = f"-{sort_by}" if desc else sort_by
+            order_clause: tuple[str, ...] = (primary, "id")
+        else:
+            order_clause = ("-created_at", "id")
+        apis = await query.order_by(*order_clause).offset(offset).limit(page_size).all()
+
         return apis, total
     
     async def update_api(

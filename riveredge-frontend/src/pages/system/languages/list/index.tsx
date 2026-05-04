@@ -38,6 +38,7 @@ import {
 import zhCN from '../../../../locales/zh-CN';
 import enUS from '../../../../locales/en-US';
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
+import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 
 /**
  * 语言管理列表页面组件
@@ -480,51 +481,38 @@ const LanguageListPage: React.FC = () => {
     {
       title: t('common.actions'),
       valueType: 'option',
-      width: 250,
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleView(record)}
-          >
-            {t('field.language.view')}
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<TranslationOutlined />}
-            onClick={() => handleManageTranslations(record)}
-          >
-            {t('field.language.translations')}
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            {t('field.language.edit')}
-          </Button>
-          <Popconfirm
-            title={t('field.language.deleteConfirm')}
-            onConfirm={() => handleDelete(record)}
-            disabled={record.is_default}
-          >
+      render: (_, record) =>
+        renderRowActionsOverflow(
+          [
+            <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+              {t('field.language.view')}
+            </Button>,
             <Button
+              key="translations"
               type="link"
-              danger
               size="small"
-              icon={<DeleteOutlined />}
+              icon={<TranslationOutlined />}
+              onClick={() => handleManageTranslations(record)}
+            >
+              {t('field.language.translations')}
+            </Button>,
+            <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+              {t('field.language.edit')}
+            </Button>,
+            <Popconfirm
+              key="delete"
+              title={t('field.language.deleteConfirm')}
+              onConfirm={() => handleDelete(record)}
               disabled={record.is_default}
             >
-              {t('field.language.delete')}
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
+              <Button type="link" danger size="small" icon={<DeleteOutlined />} disabled={record.is_default}>
+                {t('field.language.delete')}
+              </Button>
+            </Popconfirm>,
+          ],
+          `language-${record.uuid}`,
+        ),
     },
   ];
 

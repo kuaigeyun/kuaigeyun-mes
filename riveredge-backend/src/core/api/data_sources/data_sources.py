@@ -97,27 +97,15 @@ async def list_data_sources(
     try:
         if type is not None and type not in DATA_SOURCE_TYPES:
             return {"items": [], "total": 0, "page": page, "page_size": page_size}
-        skip = (page - 1) * page_size
-        items = await IntegrationConfigService.list_integrations(
+        type_scope = [type] if type is not None else list(DATA_SOURCE_TYPES)
+        items, total = await IntegrationConfigService.list_integrations(
             tenant_id=tenant_id,
-            skip=skip,
-            limit=page_size,
-            type=type,
+            page=page,
+            page_size=page_size,
+            types=type_scope,
             is_active=is_active,
+            search=search,
         )
-        items = [i for i in items if i.type in DATA_SOURCE_TYPES]
-        if search:
-            search_lower = search.lower()
-            items = [i for i in items if (search_lower in (i.name or "").lower() or search_lower in (i.code or "").lower())]
-        total = len(items)
-        if not search and (type is None or type in DATA_SOURCE_TYPES):
-            all_list = await IntegrationConfigService.list_integrations(
-                tenant_id=tenant_id, skip=0, limit=10000, type=type, is_active=is_active
-            )
-            total = sum(1 for i in all_list if i.type in DATA_SOURCE_TYPES)
-            if search:
-                search_lower = search.lower()
-                total = sum(1 for i in all_list if i.type in DATA_SOURCE_TYPES and (search_lower in (i.name or "").lower() or search_lower in (i.code or "").lower()))
         return {
             "items": [_ic_to_ds_response(i) for i in items],
             "total": total,

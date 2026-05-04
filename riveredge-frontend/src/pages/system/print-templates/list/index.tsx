@@ -32,9 +32,9 @@ import {
 import { DOCUMENT_TYPE_OPTIONS, DOCUMENT_TYPE_TO_CODE, getSchemaByType } from '../../../../config/printTemplateSchemas';
 import { EMPTY_HTML_TEMPLATE, DEFAULT_WORK_ORDER_HTML_TEMPLATE } from '../../../../utils/printTemplateDefaults';
 import { countWithPagedRequests } from '../../../../utils/pagedCount';
+import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
-import '../../../../styles/action-column.less';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 
@@ -591,55 +591,39 @@ const PrintTemplateListPage: React.FC = () => {
     {
       title: t('common.actions'),
       valueType: 'option',
-      width: 250,
       fixed: 'right',
-      render: (_, record) => (
-        <Space size="small">
-          <Button
-            type="link"
-            size="small"
-            className="ant-btn-row-action ant-btn-row-action-detail"
-            icon={<EyeOutlined />}
-            onClick={() => handleView(record)}
-          >
-            {t('pages.system.printTemplates.detail')}
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            className="ant-btn-row-action"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            {t('pages.system.printTemplates.edit')}
-          </Button>
-          <Popconfirm
-            title={t('pages.system.printTemplates.deleteConfirmTitle')}
-            onConfirm={() => handleDelete(record)}
-            okText={t('common.confirm')}
-            cancelText={t('common.cancel')}
-          >
+      render: (_, record) =>
+        renderRowActionsOverflow(
+          [
+            <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+              {t('pages.system.printTemplates.detail')}
+            </Button>,
+            <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+              {t('pages.system.printTemplates.edit')}
+            </Button>,
+            <Popconfirm
+              key="delete"
+              title={t('pages.system.printTemplates.deleteConfirmTitle')}
+              onConfirm={() => handleDelete(record)}
+              okText={t('common.confirm')}
+              cancelText={t('common.cancel')}
+            >
+              <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                {t('pages.system.printTemplates.deleteTooltip')}
+              </Button>
+            </Popconfirm>,
             <Button
+              key="design"
               type="link"
               size="small"
-              className="ant-btn-row-action"
-              danger
-              icon={<DeleteOutlined />}
+              icon={<ApartmentOutlined />}
+              onClick={() => handleOpenDesigner(record)}
             >
-              {t('pages.system.printTemplates.deleteTooltip')}
-            </Button>
-          </Popconfirm>
-          <Button
-            type="link"
-            size="small"
-            className="ant-btn-row-action"
-            icon={<ApartmentOutlined />}
-            onClick={() => handleOpenDesigner(record)}
-          >
-            {t('pages.system.printTemplates.design')}
-          </Button>
-        </Space>
-      ),
+              {t('pages.system.printTemplates.design')}
+            </Button>,
+          ],
+          `print-template-${record.uuid}`,
+        ),
     },
   ];
 

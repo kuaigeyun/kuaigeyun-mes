@@ -17,8 +17,8 @@ import {
   ProDescriptionsItemProps,
 } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Modal, Badge, Table, Dropdown, Descriptions } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, PlayCircleOutlined, MoreOutlined, CopyOutlined, FormOutlined } from '@ant-design/icons';
+import { App, Popconfirm, Button, Tag, Space, Modal, Badge, Table, Descriptions } from 'antd';
+import { EditOutlined, DeleteOutlined, EyeOutlined, PlayCircleOutlined, CopyOutlined, FormOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../components/uni-table';
 import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
@@ -39,6 +39,7 @@ import {
   getDataConnectionsForDataset,
   IntegrationConfig,
 } from '../../../../services/integrationConfig';
+import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 
 /**
  * 数据集管理列表页面组件
@@ -532,58 +533,46 @@ const DatasetListPage: React.FC = () => {
     {
       title: t('pages.system.datasets.columnActions'),
       valueType: 'option',
-      width: 220,
       fixed: 'right',
-      render: (_, record) => (
-        <Space size="small">
-          <Button type="link" size="small" icon={<FormOutlined />} onClick={() => handleDesign(record)}>
-            {t('pages.system.datasets.design')}
-          </Button>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
-            {t('pages.system.datasets.view')}
-          </Button>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            {t('pages.system.datasets.edit')}
-          </Button>
-          <Dropdown
-            menu={{
-              items: [
-                {
-                  key: 'execute',
-                  icon: <PlayCircleOutlined />,
-                  label: t('pages.system.datasets.executeQuery'),
-                  onClick: () => handleExecute(record),
-                },
-                {
-                  key: 'copy',
-                  icon: <CopyOutlined />,
-                  label: t('pages.system.datasets.copy'),
-                  onClick: () => handleCopy(record),
-                },
-                {
-                  key: 'delete',
-                  icon: <DeleteOutlined />,
-                  label: t('pages.system.datasets.delete'),
-                  danger: true,
-                  onClick: () => {
-                    Modal.confirm({
-                      title: t('pages.system.datasets.confirmDelete'),
-                      okText: t('common.confirm'),
-                      cancelText: t('common.cancel'),
-                      okType: 'danger',
-                      onOk: () => handleDelete(record),
-                    });
-                  },
-                },
-              ],
-            }}
-          >
-            <Button type="link" size="small" icon={<MoreOutlined />} loading={executingUuid === record.uuid}>
-              {t('pages.system.datasets.more')}
-            </Button>
-          </Dropdown>
-        </Space>
-      ),
+      render: (_, record) =>
+        renderRowActionsOverflow(
+          [
+            <Button key="design" type="link" size="small" icon={<FormOutlined />} onClick={() => handleDesign(record)}>
+              {t('pages.system.datasets.design')}
+            </Button>,
+            <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+              {t('pages.system.datasets.view')}
+            </Button>,
+            <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+              {t('pages.system.datasets.edit')}
+            </Button>,
+            <Button
+              key="execute"
+              type="link"
+              size="small"
+              icon={<PlayCircleOutlined />}
+              loading={executingUuid === record.uuid}
+              onClick={() => handleExecute(record)}
+            >
+              {t('pages.system.datasets.executeQuery')}
+            </Button>,
+            <Button key="copy" type="link" size="small" icon={<CopyOutlined />} onClick={() => handleCopy(record)}>
+              {t('pages.system.datasets.copy')}
+            </Button>,
+            <Popconfirm
+              key="delete"
+              title={t('pages.system.datasets.confirmDelete')}
+              onConfirm={() => handleDelete(record)}
+              okText={t('common.confirm')}
+              cancelText={t('common.cancel')}
+            >
+              <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                {t('pages.system.datasets.delete')}
+              </Button>
+            </Popconfirm>,
+          ],
+          `dataset-${record.uuid}`,
+        ),
     },
   ];
 

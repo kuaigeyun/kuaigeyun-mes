@@ -12,12 +12,24 @@ import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { flushDrawerOpen, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
+import {
+  DetailDrawerSection,
+  DRAWER_CONFIG,
+  flushDrawerOpen,
+  ListPageTemplate,
+} from '../../../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
 
 import { customerApi, getUserOptions, getDictionaryOptions } from '../../../services/supply-chain';
+import { extractProTableSort, mapSupplyChainSortField } from '../../../../../utils/tableQueryKey';
 import { CustomerFormModal } from '../../../components/CustomerFormModal';
 import type { Customer, CustomerCreate } from '../../../types/supply-chain';
+import {
+  partnerEnterpriseTypeLabel,
+  partnerInvoiceTypeLabel,
+  partnerSettlementMethodLabel,
+  partnerTaxpayerTypeLabel,
+} from '../../../utils/partner-static-labels';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { downloadFile } from '../../../../../utils';
 
@@ -410,7 +422,8 @@ const CustomersPage: React.FC = () => {
         exportData = currentPageData;
         filename = `${t('app.master-data.customers.exportFilenameCurrentPage', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       } else {
-        exportData = await customerApi.list({ skip: 0, limit: 10000 });
+        const exportRes = await customerApi.list({ skip: 0, limit: 10000 });
+        exportData = Array.isArray(exportRes) ? exportRes : exportRes?.data ?? [];
         filename = `${t('app.master-data.customers.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       }
 
@@ -423,18 +436,14 @@ const CustomersPage: React.FC = () => {
         t('field.customer.code'),
         t('field.customer.name'),
         t('field.customer.shortName'),
+        t('field.customer.category'),
         t('field.customer.contactPerson'),
         t('field.customer.contactTitle'),
         t('field.customer.phone'),
         t('field.customer.email'),
         t('field.customer.address'),
-        t('field.customer.category'),
-        t('field.customer.industry'),
-        t('field.customer.level'),
-        t('field.customer.leadSource'),
-        t('field.customer.estimatedAnnualPurchase'),
-        t('field.customer.creditLimit'),
         t('field.customer.salesman'),
+        t('field.customer.visibility'),
         t('app.master-data.warehouses.status'),
         t('common.createdAt'),
       ];
@@ -445,6 +454,9 @@ const CustomersPage: React.FC = () => {
           item.code || '',
           item.name || '',
           item.shortName || '',
+          item.category
+            ? dictLabelMaps['CUSTOMER_CATEGORY']?.[item.category] ?? item.category
+            : '',
           item.contactPerson || '',
           item.contactTitle
             ? dictLabelMaps['CONTACT_TITLE']?.[item.contactTitle] ?? item.contactTitle
@@ -452,23 +464,8 @@ const CustomersPage: React.FC = () => {
           item.phone || '',
           item.email || '',
           item.address || '',
-          item.category
-            ? dictLabelMaps['CUSTOMER_CATEGORY']?.[item.category] ?? item.category
-            : '',
-          item.industryCode
-            ? dictLabelMaps['INDUSTRY_SECTOR']?.[item.industryCode] ?? item.industryCode
-            : '',
-          item.customerLevelCode
-            ? dictLabelMaps['CUSTOMER_LEVEL']?.[item.customerLevelCode] ?? item.customerLevelCode
-            : '',
-          item.leadSourceCode
-            ? dictLabelMaps['PARTNER_SOURCE_CHANNEL']?.[item.leadSourceCode] ?? item.leadSourceCode
-            : '',
-          item.estimatedAnnualPurchase != null && item.estimatedAnnualPurchase !== ''
-            ? String(item.estimatedAnnualPurchase)
-            : '',
-          item.creditLimit != null && item.creditLimit !== '' ? String(item.creditLimit) : '',
           item.salesmanName || '',
+          item.isPublic ? t('field.customer.visibilityPublic') : t('field.customer.visibilityPrivate'),
           (item.isActive ?? (item as any)?.is_active) ? t('common.enabled') : t('common.disabled'),
           item.createdAt ? new Date(item.createdAt).toLocaleString() : '',
         ];
@@ -497,19 +494,30 @@ const CustomersPage: React.FC = () => {
     {
       title: t('field.customer.code'),
       dataIndex: 'code',
-      copyable: true,width: 150,
+      copyable: true,
+      width: 150,
       fixed: 'left',
+      sorter: true,
     },
     {
       title: t('field.customer.name'),
       dataIndex: 'name',
       width: 200,
+      sorter: true,
     },
     {
       title: t('field.customer.shortName'),
       dataIndex: 'shortName',
       width: 150,
       hideInSearch: true,
+    },
+    {
+      title: t('field.customer.category'),
+      dataIndex: 'category',
+      width: 120,
+      hideInSearch: true,
+      sorter: true,
+      render: (_, r) => dictLabel('CUSTOMER_CATEGORY', r.category),
     },
     {
       title: t('field.customer.contactPerson'),
@@ -537,52 +545,11 @@ const CustomersPage: React.FC = () => {
       hideInSearch: true,
     },
     {
-      title: t('field.customer.category'),
-      dataIndex: 'category',
-      width: 120,
+      title: t('field.customer.address'),
+      dataIndex: 'address',
+      width: 220,
       hideInSearch: true,
-      render: (_, r) => dictLabel('CUSTOMER_CATEGORY', r.category),
-    },
-    {
-      title: t('field.customer.industry'),
-      dataIndex: 'industryCode',
-      width: 110,
-      hideInSearch: true,
-      render: (_, r) => dictLabel('INDUSTRY_SECTOR', r.industryCode),
-    },
-    {
-      title: t('field.customer.level'),
-      dataIndex: 'customerLevelCode',
-      width: 100,
-      hideInSearch: true,
-      render: (_, r) => dictLabel('CUSTOMER_LEVEL', r.customerLevelCode),
-    },
-    {
-      title: t('field.customer.leadSource'),
-      dataIndex: 'leadSourceCode',
-      width: 110,
-      hideInSearch: true,
-      render: (_, r) => dictLabel('PARTNER_SOURCE_CHANNEL', r.leadSourceCode),
-    },
-    {
-      title: t('field.customer.estimatedAnnualPurchase'),
-      dataIndex: 'estimatedAnnualPurchase',
-      width: 120,
-      hideInSearch: true,
-      render: (_, r) =>
-        r.estimatedAnnualPurchase != null && r.estimatedAnnualPurchase !== ''
-          ? Number(r.estimatedAnnualPurchase).toLocaleString()
-          : '—',
-    },
-    {
-      title: t('field.customer.creditLimit'),
-      dataIndex: 'creditLimit',
-      width: 110,
-      hideInSearch: true,
-      render: (_, r) =>
-        r.creditLimit != null && r.creditLimit !== ''
-          ? Number(r.creditLimit).toLocaleString()
-          : '—',
+      ellipsis: true,
     },
     {
       title: t('field.customer.salesman'),
@@ -590,10 +557,18 @@ const CustomersPage: React.FC = () => {
       width: 120,
       valueType: 'select',
       request: getUserOptions,
-      // 使用 salesmanId 进行搜索
+      sorter: true,
       fieldProps: {
         name: 'salesmanId',
       },
+    },
+    {
+      title: t('field.customer.visibility'),
+      dataIndex: 'isPublic',
+      width: 100,
+      hideInSearch: true,
+      render: (_, r) =>
+        r.isPublic ? t('field.customer.visibilityPublic') : t('field.customer.visibilityPrivate'),
     },
     {
       title: t('app.master-data.warehouses.status'),
@@ -609,6 +584,7 @@ const CustomersPage: React.FC = () => {
           {(record?.isActive ?? (record as any)?.is_active) ? t('common.enabled') : t('common.disabled')}
         </Tag>
       ),
+      sorter: true,
     },
     {
       title: t('app.master-data.warehouses.createTime'),
@@ -658,45 +634,67 @@ const CustomersPage: React.FC = () => {
     },
   ];
 
-  // 详情列定义
-  const detailColumns: ProDescriptionsItemProps<Customer>[] = [
-    {
-      title: t('field.customer.code'),
-      dataIndex: 'code',
-    copyable: true,},
-    {
-      title: t('field.customer.name'),
-      dataIndex: 'name',
-    },
-    {
-      title: t('field.customer.shortName'),
-      dataIndex: 'shortName',
-    },
-    {
-      title: t('field.customer.contactPerson'),
-      dataIndex: 'contactPerson',
-    },
-    {
-      title: t('field.customer.contactTitle'),
-      dataIndex: 'contactTitle',
-    },
-    {
-      title: t('field.customer.phone'),
-      dataIndex: 'phone',
-    },
-    {
-      title: t('field.customer.email'),
-      dataIndex: 'email',
-    },
-    {
-      title: t('field.customer.address'),
-      dataIndex: 'address',
-      span: 2,
-    },
+  /** 详情列：与表单 Tab「基本信息 / 开票资料 / 业务与扩展」一致 */
+  const detailColumnsBasic: ProDescriptionsItemProps<Customer>[] = [
+    { title: t('field.customer.code'), dataIndex: 'code', copyable: true },
+    { title: t('field.customer.name'), dataIndex: 'name' },
+    { title: t('field.customer.shortName'), dataIndex: 'shortName' },
     {
       title: t('field.customer.category'),
       dataIndex: 'category',
+      render: (_, r) => dictLabel('CUSTOMER_CATEGORY', r.category),
     },
+    { title: t('field.customer.contactPerson'), dataIndex: 'contactPerson' },
+    {
+      title: t('field.customer.contactTitle'),
+      dataIndex: 'contactTitle',
+      render: (_, r) => dictLabel('CONTACT_TITLE', r.contactTitle),
+    },
+    { title: t('field.customer.phone'), dataIndex: 'phone' },
+    { title: t('field.customer.email'), dataIndex: 'email' },
+    { title: t('field.customer.salesman'), dataIndex: 'salesmanName' },
+    { title: t('field.customer.address'), dataIndex: 'address', span: 2 },
+    {
+      title: t('field.customer.visibility'),
+      dataIndex: 'isPublic',
+      render: (_, r) =>
+        r.isPublic === true
+          ? t('field.customer.visibilityPublic')
+          : r.isPublic === false
+            ? t('field.customer.visibilityPrivate')
+            : '—',
+    },
+    {
+      title: t('app.master-data.warehouses.status'),
+      dataIndex: 'isActive',
+      render: (_, record) => (
+        <Tag color={(record?.isActive ?? (record as any)?.is_active) ? 'success' : 'default'}>
+          {(record?.isActive ?? (record as any)?.is_active) ? t('common.enabled') : t('common.disabled')}
+        </Tag>
+      ),
+    },
+  ];
+
+  const detailColumnsInvoice: ProDescriptionsItemProps<Customer>[] = [
+    { title: t('field.partner.taxRegistrationNo'), dataIndex: 'taxRegistrationNo' },
+    { title: t('field.partner.invoiceTitle'), dataIndex: 'invoiceTitle' },
+    { title: t('field.partner.invoiceAddress'), dataIndex: 'invoiceAddress', span: 2 },
+    { title: t('field.partner.invoicePhone'), dataIndex: 'invoicePhone' },
+    { title: t('field.partner.invoiceBankName'), dataIndex: 'invoiceBankName' },
+    { title: t('field.partner.invoiceBankAccount'), dataIndex: 'invoiceBankAccount' },
+    {
+      title: t('field.partner.invoiceType'),
+      dataIndex: 'invoiceTypeCode',
+      render: (_, r) => partnerInvoiceTypeLabel(t, r.invoiceTypeCode),
+    },
+    {
+      title: t('field.partner.taxpayerType'),
+      dataIndex: 'taxpayerTypeCode',
+      render: (_, r) => partnerTaxpayerTypeLabel(t, r.taxpayerTypeCode),
+    },
+  ];
+
+  const detailColumnsExtended: ProDescriptionsItemProps<Customer>[] = [
     {
       title: t('field.customer.industry'),
       dataIndex: 'industryCode',
@@ -728,29 +726,31 @@ const CustomersPage: React.FC = () => {
           ? Number(r.creditLimit).toLocaleString()
           : '—',
     },
+    { title: t('field.partner.legalRepresentative'), dataIndex: 'legalRepresentative' },
     {
-      title: t('field.customer.salesman'),
-      dataIndex: 'salesmanName',
+      title: t('field.partner.enterpriseType'),
+      dataIndex: 'enterpriseTypeCode',
+      render: (_, r) => partnerEnterpriseTypeLabel(t, r.enterpriseTypeCode),
     },
     {
-      title: t('app.master-data.warehouses.status'),
-      dataIndex: 'isActive',
-      render: (_, record) => (
-        <Tag color={(record?.isActive ?? (record as any)?.is_active) ? 'success' : 'default'}>
-          {(record?.isActive ?? (record as any)?.is_active) ? t('common.enabled') : t('common.disabled')}
-        </Tag>
-      ),
+      title: t('field.partner.paymentTermsDays'),
+      dataIndex: 'paymentTermsDays',
+      render: (_, r) =>
+        r.paymentTermsDays != null && r.paymentTermsDays !== '' ? String(r.paymentTermsDays) : '—',
     },
     {
-      title: t('app.master-data.warehouses.createTime'),
-      dataIndex: 'createdAt',
-      valueType: 'dateTime',
+      title: t('field.partner.settlementMethod'),
+      dataIndex: 'settlementMethodCode',
+      render: (_, r) => partnerSettlementMethodLabel(t, r.settlementMethodCode),
     },
-    {
-      title: t('app.master-data.warehouses.updateTime'),
-      dataIndex: 'updatedAt',
-      valueType: 'dateTime',
-    },
+    { title: t('field.partner.financeContactName'), dataIndex: 'financeContactName' },
+    { title: t('field.partner.financeContactPhone'), dataIndex: 'financeContactPhone' },
+    { title: t('field.partner.financeContactEmail'), dataIndex: 'financeContactEmail' },
+    { title: t('field.partner.deliveryContactName'), dataIndex: 'deliveryContactName' },
+    { title: t('field.partner.deliveryContactPhone'), dataIndex: 'deliveryContactPhone' },
+    { title: t('field.partner.deliveryAddress'), dataIndex: 'deliveryAddress', span: 2 },
+    { title: t('app.master-data.warehouses.createTime'), dataIndex: 'createdAt', valueType: 'dateTime' },
+    { title: t('app.master-data.warehouses.updateTime'), dataIndex: 'updatedAt', valueType: 'dateTime' },
   ];
 
   return (
@@ -759,7 +759,7 @@ const CustomersPage: React.FC = () => {
       <UniTable<Customer>
         actionRef={actionRef}
         columns={columns}
-        request={async (params, _sort, __filter, searchFormValues) => {
+        request={async (params, sort, __filter, searchFormValues) => {
           // 处理搜索参数
           const apiParams: any = {
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
@@ -780,13 +780,28 @@ const CustomersPage: React.FC = () => {
           if (searchFormValues?.salesmanId !== undefined && searchFormValues.salesmanId !== '' && searchFormValues.salesmanId !== null) {
             apiParams.salesmanId = searchFormValues.salesmanId;
           }
+
+          const fuzzyKw = String(searchFormValues?.keyword ?? '').trim();
+          const fallbackKw =
+            fuzzyKw ||
+            String(searchFormValues?.code ?? '').trim() ||
+            String(searchFormValues?.name ?? '').trim();
+          if (fallbackKw) apiParams.keyword = fallbackKw;
+
+          const { sortBy: rawSortBy, sortOrder } = extractProTableSort(sort);
+          const sortField = mapSupplyChainSortField(rawSortBy);
+          if (sortField) {
+            apiParams.sortBy = sortField;
+            apiParams.sortOrder = sortOrder;
+          }
           
           try {
             const result = await customerApi.list(apiParams);
+            const listData = Array.isArray(result) ? result : result?.data ?? [];
             return {
-              data: result,
+              data: listData,
               success: true,
-              total: result.length,
+              total: typeof result?.total === 'number' ? result.total : listData.length,
             };
           } catch (error: any) {
             console.error('获取客户列表失败:', error);
@@ -871,9 +886,28 @@ const CustomersPage: React.FC = () => {
         onClose={handleCloseDetail}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        basic={
+        plainBody={
           customerDetail ? (
-            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, customerDetail)} />
+            <>
+              <DetailDrawerSection title={t('field.partner.tabBasic')}>
+                <Descriptions
+                  column={2}
+                  items={detailDrawerDescriptionItems(detailColumnsBasic, customerDetail)}
+                />
+              </DetailDrawerSection>
+              <DetailDrawerSection title={t('field.partner.tabInvoice')}>
+                <Descriptions
+                  column={2}
+                  items={detailDrawerDescriptionItems(detailColumnsInvoice, customerDetail)}
+                />
+              </DetailDrawerSection>
+              <DetailDrawerSection title={t('field.partner.tabExtended')} marginBottom={0}>
+                <Descriptions
+                  column={2}
+                  items={detailDrawerDescriptionItems(detailColumnsExtended, customerDetail)}
+                />
+              </DetailDrawerSection>
+            </>
           ) : null
         }
       />

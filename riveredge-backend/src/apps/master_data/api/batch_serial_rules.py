@@ -73,11 +73,25 @@ async def list_batch_rules(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=500, description="每页条数（下拉等场景可一次拉全量）"),
     is_active: Optional[bool] = Query(None),
+    keyword: Optional[str] = Query(None, description="模糊匹配名称、编码、描述"),
+    sort_by: Optional[str] = Query(
+        None,
+        description="排序字段：name,code,description,seq_reset_rule,is_active,created_at,updated_at",
+    ),
+    sort_order: Optional[str] = Query(None, description="asc 或 desc"),
     current_user: Annotated[User, Depends(get_current_user)] = None,
     tenant_id: Annotated[int, Depends(get_current_tenant)] = None,
 ):
     """获取批号规则列表"""
-    rules, total = await BatchRuleService.list_rules(tenant_id, page, page_size, is_active)
+    rules, total = await BatchRuleService.list_rules(
+        tenant_id,
+        page,
+        page_size,
+        is_active,
+        keyword=keyword,
+        sort_by=sort_by,
+        sort_order=sort_order,
+    )
     return BatchRuleListResponse(items=[BatchRuleResponse.model_validate(r) for r in rules], total=total)
 
 
@@ -149,11 +163,25 @@ async def list_serial_rules(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=500, description="每页条数（下拉等场景可一次拉全量）"),
     is_active: Optional[bool] = Query(None),
+    keyword: Optional[str] = Query(None, description="模糊匹配名称、编码、描述"),
+    sort_by: Optional[str] = Query(
+        None,
+        description="排序字段：name,code,description,seq_reset_rule,is_active,created_at,updated_at",
+    ),
+    sort_order: Optional[str] = Query(None, description="asc 或 desc"),
     current_user: Annotated[User, Depends(get_current_user)] = None,
     tenant_id: Annotated[int, Depends(get_current_tenant)] = None,
 ):
     """获取序列号规则列表"""
-    rules, total = await SerialRuleService.list_rules(tenant_id, page, page_size, is_active)
+    rules, total = await SerialRuleService.list_rules(
+        tenant_id,
+        page,
+        page_size,
+        is_active,
+        keyword=keyword,
+        sort_by=sort_by,
+        sort_order=sort_order,
+    )
     return SerialRuleListResponse(items=[SerialRuleResponse.model_validate(r) for r in rules], total=total)
 
 

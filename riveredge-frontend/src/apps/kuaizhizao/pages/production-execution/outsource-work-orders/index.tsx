@@ -65,7 +65,7 @@ import {
   TraceLinkedDocumentBrief,
   useDocumentTracking,
 } from '../../../../../components/document-tracking-panel';
-import { supplierApi } from '../../../../master-data/services/supply-chain';
+import { supplierApi, unwrapSupplyPagedList } from '../../../../master-data/services/supply-chain';
 import { materialApi } from '../../../../master-data/services/material';
 import { warehouseApi } from '../../../../master-data/services/warehouse';
 import dayjs from 'dayjs';
@@ -293,7 +293,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         setProductList(outsourceProducts);
 
         // 加载供应商列表
-        const suppliers = await supplierApi.list({ isActive: true });
+        const suppliers = unwrapSupplyPagedList(await supplierApi.list({ isActive: true }));
         setSupplierList(suppliers);
       } catch (error) {
         window.console.error('获取数据失败:', error);

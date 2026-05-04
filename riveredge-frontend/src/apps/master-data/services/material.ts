@@ -648,6 +648,9 @@ export const materialBatchApi = {
           status: params.status,
           page: params.page ?? 1,
           page_size: params.pageSize ?? 20,
+          ...(params.keyword?.trim() ? { keyword: params.keyword.trim() } : {}),
+          ...(params.sortBy ? { sort_by: params.sortBy } : {}),
+          ...(params.sortOrder ? { sort_order: params.sortOrder } : {}),
         }
       : undefined;
     return api.get('/apps/master-data/materials/batches', { params: backendParams });
@@ -756,6 +759,9 @@ export const materialSerialApi = {
           status: params.status,
           page: params.page ?? 1,
           page_size: params.pageSize ?? 20,
+          ...(params.keyword?.trim() ? { keyword: params.keyword.trim() } : {}),
+          ...(params.sortBy ? { sort_by: params.sortBy } : {}),
+          ...(params.sortOrder ? { sort_order: params.sortOrder } : {}),
         }
       : undefined;
     return api.get('/apps/master-data/materials/serials', { params: backendParams });

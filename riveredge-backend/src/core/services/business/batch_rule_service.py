@@ -12,6 +12,8 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime, date
 from decimal import Decimal
 
+from tortoise.expressions import Q
+
 from core.models.batch_rule import BatchRule
 from core.models.batch_rule_sequence import BatchRuleSequence
 from core.services.code_rule.code_rule_component_service import CodeRuleComponentService
@@ -58,13 +60,31 @@ class BatchRuleService:
         page: int = 1,
         page_size: int = 20,
         is_active: Optional[bool] = None,
+        keyword: Optional[str] = None,
+        sort_by: Optional[str] = None,
+        sort_order: Optional[str] = None,
     ) -> tuple[List[BatchRule], int]:
-        """获取批号规则列表"""
+        """获取批号规则列表（支持关键词模糊、字段排序）"""
         qs = BatchRule.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if is_active is not None:
             qs = qs.filter(is_active=is_active)
+        if keyword and keyword.strip():
+            kw = keyword.strip()
+            qs = qs.filter(Q(name__icontains=kw) | Q(code__icontains=kw) | Q(description__icontains=kw))
         total = await qs.count()
-        rules = await qs.offset((page - 1) * page_size).limit(page_size).all()
+        allowed = {
+            "name",
+            "code",
+            "description",
+            "seq_reset_rule",
+            "is_active",
+            "created_at",
+            "updated_at",
+        }
+        field = sort_by if sort_by in allowed else "name"
+        desc = (sort_order or "asc").lower() == "desc"
+        order_expr = f"-{field}" if desc else field
+        rules = await qs.order_by(order_expr).offset((page - 1) * page_size).limit(page_size).all()
         return rules, total
 
     # 系统默认批号规则代码（未配置时使用）

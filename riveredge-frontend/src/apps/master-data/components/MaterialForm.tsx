@@ -24,8 +24,7 @@ import type { Material, MaterialCreate, MaterialUpdate, DepartmentCodeMapping, C
 import type { Customer } from '../types/supply-chain';
 import type { Supplier } from '../types/supply-chain';
 import SafeProFormSelect from '../../../components/safe-pro-form-select';
-import { customerApi } from '../services/supply-chain';
-import { supplierApi } from '../services/supply-chain';
+import { customerApi, supplierApi, unwrapSupplyPagedList } from '../services/supply-chain';
 import { warehouseApi } from '../services/warehouse';
 import { processRouteApi, operationApi } from '../services/process';
 import { materialCodeMappingApi } from '../services/material';
@@ -170,7 +169,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
     try {
       setCustomersLoading(true);
       const result = await customerApi.list({ limit: 1000, isActive: true });
-      setCustomers(result);
+      setCustomers(unwrapSupplyPagedList(result));
     } catch (error: any) {
       console.error(t('app.master-data.materialForm.fetchCustomersFailed'), error);
     } finally {
@@ -185,7 +184,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
     try {
       setSuppliersLoading(true);
       const result = await supplierApi.list({ limit: 1000, isActive: true });
-      setSuppliers(result);
+      setSuppliers(unwrapSupplyPagedList(result));
     } catch (error: any) {
       console.error(t('app.master-data.materialForm.fetchSuppliersFailed'), error);
     } finally {
@@ -214,8 +213,8 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
   const loadProcessRoutes = async () => {
     try {
       setProcessRoutesLoading(true);
-      const result = await processRouteApi.list({ limit: 1000, is_active: true });
-      setProcessRoutes(result);
+      const result = await processRouteApi.list({ limit: 1000, isActive: true });
+      setProcessRoutes(Array.isArray(result) ? result : result?.data ?? []);
     } catch (error: any) {
       console.error(t('app.master-data.materialForm.fetchProcessRoutesFailed'), error);
     } finally {
@@ -229,8 +228,8 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
   const loadOperations = async () => {
     try {
       setOperationsLoading(true);
-      const result = await operationApi.list({ limit: 1000, is_active: true });
-      setOperations(result);
+      const result = await operationApi.list({ limit: 1000, isActive: true });
+      setOperations(Array.isArray(result) ? result : result?.data ?? []);
     } catch (error: any) {
       console.error(t('app.master-data.materialForm.fetchOperationsFailed'), error);
     } finally {

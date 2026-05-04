@@ -84,11 +84,21 @@ function mapRuleFromApi(raw: Record<string, unknown>): BatchRule | SerialRule {
 }
 
 export const batchRuleApi = {
-  list: async (params?: { page?: number; pageSize?: number; isActive?: boolean }) => {
+  list: async (params?: {
+    page?: number;
+    pageSize?: number;
+    isActive?: boolean;
+    keyword?: string;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  }) => {
     const p: Record<string, unknown> = {};
     if (params?.page) p.page = params.page;
     if (params?.pageSize) p.page_size = params.pageSize;
     if (params?.isActive !== undefined) p.is_active = params.isActive;
+    if (params?.keyword?.trim()) p.keyword = params.keyword.trim();
+    if (params?.sortBy) p.sort_by = params.sortBy;
+    if (params?.sortOrder) p.sort_order = params.sortOrder;
     const res = await api.get<{ items: Record<string, unknown>[]; total: number }>(
       '/apps/master-data/materials/batch-rules',
       { params: p }
@@ -135,11 +145,21 @@ export const batchRuleApi = {
 };
 
 export const serialRuleApi = {
-  list: async (params?: { page?: number; pageSize?: number; isActive?: boolean }) => {
+  list: async (params?: {
+    page?: number;
+    pageSize?: number;
+    isActive?: boolean;
+    keyword?: string;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  }) => {
     const p: Record<string, unknown> = {};
     if (params?.page) p.page = params.page;
     if (params?.pageSize) p.page_size = params.pageSize;
     if (params?.isActive !== undefined) p.is_active = params.isActive;
+    if (params?.keyword?.trim()) p.keyword = params.keyword.trim();
+    if (params?.sortBy) p.sort_by = params.sortBy;
+    if (params?.sortOrder) p.sort_order = params.sortOrder;
     const res = await api.get<{ items: Record<string, unknown>[]; total: number }>(
       '/apps/master-data/materials/serial-rules',
       { params: p }

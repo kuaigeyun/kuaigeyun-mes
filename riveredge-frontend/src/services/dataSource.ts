@@ -6,6 +6,7 @@
  */
 
 import { apiRequest } from './api';
+import { getIntegrationConfigListAllMatching } from './integrationConfig';
 
 export interface DataSource {
   uuid: string;
@@ -33,11 +34,15 @@ export interface DataSourceListParams {
   search?: string;
   type?: string;
   is_active?: boolean;
+  sort_by?: string;
+  sort_order?: 'asc' | 'desc';
 }
 
 export interface DataSourceListResponse {
   items: DataSource[];
   total: number;
+  page: number;
+  page_size: number;
 }
 
 export interface CreateDataSourceData {
@@ -73,22 +78,24 @@ export interface TestConnectionResponse {
  * @returns 数据源列表
  */
 export async function getDataSourceList(params?: DataSourceListParams): Promise<DataSourceListResponse> {
-  // 切换到全量集成配置 API
-  const items = await apiRequest<DataSource[]>('/core/integration-configs', {
+  return apiRequest<DataSourceListResponse>('/core/integration-configs', {
     params: {
-      skip: params?.page && params?.page_size ? (params.page - 1) * params.page_size : undefined,
-      limit: params?.page_size,
+      page: params?.page ?? 1,
+      page_size: params?.page_size ?? 20,
+      search: params?.search,
       type: params?.type,
       is_active: params?.is_active,
+      sort_by: params?.sort_by,
+      sort_order: params?.sort_order,
     },
   });
-  
-  return {
-    items,
-    total: items.length, // 注意：由于后端列表 API 可能不返回 total，这里暂时取长度或者后续优化
-    page: params?.page || 1,
-    page_size: params?.page_size || 20,
-  } as DataSourceListResponse;
+}
+
+/** 与集成配置共用接口；按筛选条件分页拉全量（单请求 page_size 不得超过后端上限）。 */
+export async function getDataSourceListAllMatching(
+  params?: Omit<DataSourceListParams, 'page' | 'page_size'>,
+): Promise<DataSource[]> {
+  return getIntegrationConfigListAllMatching(params) as Promise<DataSource[]>;
 }
 
 /**

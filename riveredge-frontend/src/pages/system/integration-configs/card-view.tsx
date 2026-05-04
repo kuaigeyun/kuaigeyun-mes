@@ -10,7 +10,7 @@ import { App, Card, Tag, Space, Button, Modal, Descriptions, Popconfirm, Statist
 import { EyeOutlined, EditOutlined, DeleteOutlined, ApiOutlined, ReloadOutlined, CheckCircleOutlined, CloseCircleOutlined, ExclamationCircleOutlined, LinkOutlined } from '@ant-design/icons';
 import { PageContainer } from '@ant-design/pro-components';
 import {
-  getIntegrationConfigList,
+  getIntegrationConfigListAllMatching,
   getIntegrationConfigByUuid,
   updateIntegrationConfig,
   deleteIntegrationConfig,
@@ -50,8 +50,8 @@ const CardView: React.FC = () => {
   const loadIntegrationConfigs = async () => {
     setLoading(true);
     try {
-      const configs = await getIntegrationConfigList();
-      setIntegrationConfigs(configs);
+      const items = await getIntegrationConfigListAllMatching();
+      setIntegrationConfigs(items);
     } catch (error: any) {
       handleError(error, t('pages.system.integrationConfigs.getListFailed'));
     } finally {

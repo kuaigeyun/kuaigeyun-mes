@@ -16,13 +16,13 @@ from apps.master_data.services.process_service import ProcessService
 from apps.master_data.services.process_route_change_service import ProcessRouteChangeService
 from apps.master_data.schemas.process_schemas import (
     DefectTypeCreate, DefectTypeUpdate, DefectTypeResponse, DefectTypeListResponse,
-    OperationCreate, OperationUpdate, OperationResponse,
-    ProcessRouteCreate, ProcessRouteUpdate, ProcessRouteResponse,
+    OperationCreate, OperationUpdate, OperationResponse, OperationListResponse,
+    ProcessRouteCreate, ProcessRouteUpdate, ProcessRouteResponse, ProcessRouteListResponse,
     ProcessRouteTreeResponse,
     ProcessRouteVersionCreate, ProcessRouteVersionCompare, ProcessRouteVersionCompareResult,
     ProcessRouteTemplateCreate, ProcessRouteTemplateUpdate, ProcessRouteTemplateResponse,
     ProcessRouteTemplateVersionCreate, ProcessRouteFromTemplateCreate,
-    SOPCreate, SOPUpdate, SOPResponse, SOPBatchCreateFromRouteRequest
+    SOPCreate, SOPUpdate, SOPResponse, SOPListResponse, SOPBatchCreateFromRouteRequest
 )
 from apps.master_data.schemas.process_route_change_schemas import (
     ProcessRouteChangeCreate, ProcessRouteChangeUpdate, ProcessRouteChangeResponse,
@@ -89,7 +89,10 @@ async def list_defect_types(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     category: Optional[str] = Query(None, description="分类（过滤）"),
-    is_active: Optional[bool] = Query(None, description="是否启用")
+    is_active: Optional[bool] = Query(None, alias="isActive", description="是否启用"),
+    keyword: Optional[str] = Query(None, description="模糊匹配编号、名称、描述"),
+    sort_by: Optional[str] = Query(None, alias="sortBy", description="排序字段：code,name,category,created_at,is_active"),
+    sort_order: Optional[str] = Query(None, alias="sortOrder", description="asc 或 desc"),
 ):
     """
     获取不良品列表（分页，返回 data 与 total）
@@ -99,7 +102,16 @@ async def list_defect_types(
     - **category**: 分类（可选，用于过滤）
     - **is_active**: 是否启用（可选）
     """
-    items, total = await ProcessService.list_defect_types(tenant_id, skip, limit, category, is_active)
+    items, total = await ProcessService.list_defect_types(
+        tenant_id,
+        skip,
+        limit,
+        category,
+        is_active,
+        keyword=keyword,
+        sort_by=sort_by,
+        sort_order=sort_order,
+    )
     return DefectTypeListResponse(data=items, total=total)
 
 
@@ -236,13 +248,16 @@ async def create_operation(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/operations", response_model=List[OperationResponse], summary="获取工序列表")
+@router.get("/operations", response_model=OperationListResponse, summary="获取工序列表")
 async def list_operations(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
-    is_active: Optional[bool] = Query(None, description="是否启用")
+    is_active: Optional[bool] = Query(None, alias="isActive", description="是否启用"),
+    keyword: Optional[str] = Query(None, description="模糊匹配编号、名称、描述"),
+    sort_by: Optional[str] = Query(None, alias="sortBy", description="排序字段：code,name,created_at,is_active,reporting_type"),
+    sort_order: Optional[str] = Query(None, alias="sortOrder", description="asc 或 desc"),
 ):
     """
     获取工序列表
@@ -252,7 +267,16 @@ async def list_operations(
     - **is_active**: 是否启用（可选）
     """
     try:
-        return await ProcessService.list_operations(tenant_id, skip, limit, is_active)
+        items, total = await ProcessService.list_operations(
+            tenant_id,
+            skip,
+            limit,
+            is_active,
+            keyword=keyword,
+            sort_by=sort_by,
+            sort_order=sort_order,
+        )
+        return OperationListResponse(data=items, total=total)
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -376,13 +400,16 @@ async def create_process_route(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/routes", response_model=List[ProcessRouteResponse], summary="获取工艺路线列表")
+@router.get("/routes", response_model=ProcessRouteListResponse, summary="获取工艺路线列表")
 async def list_process_routes(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
-    is_active: Optional[bool] = Query(None, description="是否启用")
+    is_active: Optional[bool] = Query(None, alias="isActive", description="是否启用"),
+    keyword: Optional[str] = Query(None, description="模糊匹配编号、名称、描述"),
+    sort_by: Optional[str] = Query(None, alias="sortBy", description="排序字段：code,name,created_at,is_active"),
+    sort_order: Optional[str] = Query(None, alias="sortOrder", description="asc 或 desc"),
 ):
     """
     获取工艺路线列表
@@ -391,7 +418,16 @@ async def list_process_routes(
     - **limit**: 限制数量（默认：100，最大：1000）
     - **is_active**: 是否启用（可选）
     """
-    return await ProcessService.list_process_routes(tenant_id, skip, limit, is_active)
+    items, total = await ProcessService.list_process_routes(
+        tenant_id,
+        skip,
+        limit,
+        is_active,
+        keyword=keyword,
+        sort_by=sort_by,
+        sort_order=sort_order,
+    )
+    return ProcessRouteListResponse(data=items, total=total)
 
 
 @router.get("/routes/{process_route_uuid}", response_model=ProcessRouteResponse, summary="获取工艺路线详情")
@@ -966,17 +1002,20 @@ async def create_sop(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/sop", response_model=List[SOPResponse], summary="获取作业程序（SOP）列表")
+@router.get("/sop", response_model=SOPListResponse, summary="获取作业程序（SOP）列表")
 async def list_sops(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
-    operation_id: Optional[int] = Query(None, description="工序ID（过滤）"),
-    is_active: Optional[bool] = Query(None, description="是否启用"),
+    operation_id: Optional[int] = Query(None, alias="operationId", description="工序ID（过滤）"),
+    is_active: Optional[bool] = Query(None, alias="isActive", description="是否启用"),
     material_uuid: Optional[str] = Query(None, description="物料UUID（筛选绑定该物料的SOP）"),
     material_group_uuid: Optional[str] = Query(None, description="物料组UUID（筛选绑定该物料组的SOP）"),
     route_uuid: Optional[str] = Query(None, description="工艺路线UUID（筛选载入该工艺路线的SOP）"),
+    keyword: Optional[str] = Query(None, description="模糊匹配编号、名称、版本、内容"),
+    sort_by: Optional[str] = Query(None, alias="sortBy", description="排序字段：code,name,version,created_at,is_active,operation_id"),
+    sort_order: Optional[str] = Query(None, alias="sortOrder", description="asc 或 desc"),
 ):
     """
     获取作业程序（SOP）列表
@@ -984,14 +1023,20 @@ async def list_sops(
     - **operation_id**: 工序ID（可选）
     - **material_uuid** / **material_group_uuid** / **route_uuid**: 按绑定与载入关系筛选
     """
-    return await ProcessService.list_sops(
-        tenant_id, skip, limit,
+    items, total = await ProcessService.list_sops(
+        tenant_id,
+        skip,
+        limit,
         operation_id=operation_id,
         is_active=is_active,
         material_uuid=material_uuid,
         material_group_uuid=material_group_uuid,
         route_uuid=route_uuid,
+        keyword=keyword,
+        sort_by=sort_by,
+        sort_order=sort_order,
     )
+    return SOPListResponse(data=items, total=total)
 
 
 @router.get(

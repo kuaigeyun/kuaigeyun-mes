@@ -117,6 +117,12 @@ async def list_attribute_definitions(
     tenant_id: int = Depends(get_current_tenant),
     is_active: Optional[bool] = Query(None, description="是否启用（用于筛选）"),
     attribute_type: Optional[str] = Query(None, description="属性类型（用于筛选）"),
+    keyword: Optional[str] = Query(None, description="模糊匹配属性名、显示名、备注"),
+    sort_by: Optional[str] = Query(
+        None,
+        description="排序字段：display_order,attribute_name,display_name,created_at,updated_at",
+    ),
+    sort_order: Optional[str] = Query(None, description="asc 或 desc"),
 ):
     """
     列出属性定义
@@ -133,6 +139,9 @@ async def list_attribute_definitions(
         tenant_id=tenant_id,
         is_active=is_active,
         attribute_type=attribute_type,
+        keyword=keyword,
+        sort_by=sort_by,
+        sort_order=sort_order,
     )
     return [MaterialVariantAttributeDefinitionResponse.model_validate(attr) for attr in attributes]
 

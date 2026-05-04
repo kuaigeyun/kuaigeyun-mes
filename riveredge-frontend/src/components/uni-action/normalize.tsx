@@ -33,11 +33,40 @@ import {
   normalizeActionLabelText,
   resolveActionKind,
   resolveButtonTone,
+  type ResolvedRowActionTone,
   isAuditSemanticAction,
 } from './actionText'
 
+function rowActionToneMatchesProps(tone: ResolvedRowActionTone, props: Record<string, unknown>): boolean {
+  const danger =
+    tone.mode === 'destructive' ? true : !!tone.danger
+  return (
+    props.type === tone.type &&
+    !!props.danger === danger &&
+    props.size === 'small' &&
+    props.style == null &&
+    props.color === undefined &&
+    props.variant === undefined
+  )
+}
+
+function clonePropsForRowTone(
+  tone: ResolvedRowActionTone,
+  extra: Record<string, unknown>,
+): Record<string, unknown> {
+  const danger = tone.mode === 'destructive' ? true : !!tone.danger
+  return {
+    ...extra,
+    type: tone.type,
+    danger,
+    color: undefined,
+    variant: undefined,
+    style: undefined,
+  }
+}
+
 function rowActionClassName(kind: ReturnType<typeof resolveActionKind>): string {
-  return `ant-btn-row-action ${kind === 'detail' ? 'ant-btn-row-action-detail' : ''}`.trim()
+  return ['ant-btn-row-action', kind === 'detail' ? 'ant-btn-row-action-detail' : ''].filter(Boolean).join(' ')
 }
 
 /** 主行展示用默认图标（含从「更多」提升的常见操作），与详情/编辑/删除对齐 */
@@ -117,11 +146,7 @@ export function normalizeActionTree(node: React.ReactNode, ctx: NormalizeActionC
     const nextIcon = currentIcon ?? defaultIcon
     const targetClass = rowActionClassName(kind)
 
-    const sameTone =
-      props.type === tone.type &&
-      (!!props.danger) === (!!tone.danger) &&
-      props.size === 'small' &&
-      props.style == null
+    const sameTone = rowActionToneMatchesProps(tone, props as Record<string, unknown>)
     const sameClass = String(props.className || '').trim() === targetClass
     const sameChildren =
       typeof normalizedText === 'string'
@@ -132,15 +157,15 @@ export function normalizeActionTree(node: React.ReactNode, ctx: NormalizeActionC
       return node
     }
 
-    return React.cloneElement(node as React.ReactElement<any>, {
-      type: tone.type,
-      danger: tone.danger,
-      size: 'small',
-      className: targetClass,
-      icon: nextIcon,
-      style: undefined,
-      children: normalizedText,
-    })
+    return React.cloneElement(
+      node as React.ReactElement<any>,
+      clonePropsForRowTone(tone, {
+        size: 'small',
+        className: targetClass,
+        icon: nextIcon,
+        children: normalizedText,
+      }) as any,
+    )
   }
 
   if (typeof node.type === 'string' && node.type.toLowerCase() === 'a') {
@@ -156,7 +181,7 @@ export function normalizeActionTree(node: React.ReactNode, ctx: NormalizeActionC
       <Button
         className={rowActionClassName(kind)}
         type={tone.type}
-        danger={tone.danger}
+        danger={tone.mode === 'destructive' ? true : tone.danger}
         size="small"
         icon={(props.icon as React.ReactNode) || defaultIcon}
         onClick={typeof props.onClick === 'function' ? (props.onClick as React.MouseEventHandler) : undefined}

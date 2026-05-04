@@ -56,23 +56,64 @@ export interface TestConnectionResponse {
   error?: string;
 }
 
+export interface IntegrationConfigListResponse {
+  items: IntegrationConfig[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
 /**
- * 获取集成配置列表
- * 
- * 自动过滤当前组织的集成配置。
- * 
- * @param params - 查询参数
- * @returns 集成配置列表
+ * 获取集成配置列表（分页）
  */
+/** 与后端 `integration_configs.list_integrations` 的 Query le= 一致，超出返回 422 */
+export const INTEGRATION_CONFIG_LIST_MAX_PAGE_SIZE = 1000;
+
 export async function getIntegrationConfigList(params?: {
-  skip?: number;
-  limit?: number;
+  page?: number;
+  page_size?: number;
   type?: string;
   is_active?: boolean;
-}): Promise<IntegrationConfig[]> {
-  return apiRequest<IntegrationConfig[]>('/core/integration-configs', {
-    params,
+  search?: string;
+  sort_by?: string;
+  sort_order?: 'asc' | 'desc';
+}): Promise<IntegrationConfigListResponse> {
+  return apiRequest<IntegrationConfigListResponse>('/core/integration-configs', {
+    params: {
+      page: params?.page ?? 1,
+      page_size: params?.page_size ?? 100,
+      type: params?.type,
+      is_active: params?.is_active,
+      search: params?.search,
+      sort_by: params?.sort_by,
+      sort_order: params?.sort_order,
+    },
   });
+}
+
+/**
+ * 按筛选条件拉取全部集成配置（多页拼接，每页不超过 {@link INTEGRATION_CONFIG_LIST_MAX_PAGE_SIZE}）。
+ */
+export async function getIntegrationConfigListAllMatching(params?: {
+  type?: string;
+  is_active?: boolean;
+  search?: string;
+  sort_by?: string;
+  sort_order?: 'asc' | 'desc';
+}): Promise<IntegrationConfig[]> {
+  const page_size = INTEGRATION_CONFIG_LIST_MAX_PAGE_SIZE;
+  let page = 1;
+  const out: IntegrationConfig[] = [];
+  for (;;) {
+    const res = await getIntegrationConfigList({ ...params, page, page_size });
+    out.push(...res.items);
+    if (res.items.length === 0 || res.items.length < page_size || out.length >= res.total) {
+      break;
+    }
+    page += 1;
+    if (page > 500) break;
+  }
+  return out;
 }
 
 /**
@@ -191,7 +232,7 @@ export interface DataConnectionsForDatasetResult {
  * 按类型分组：数据库、API、协作、ERP、PLM、CRM
  */
 export async function getDataConnectionsForDataset(): Promise<DataConnectionsForDatasetResult> {
-  const items = await getIntegrationConfigList({ skip: 0, limit: 1000 });
+  const { items } = await getIntegrationConfigList({ page: 1, page_size: 2000 });
   const byCategory: Record<string, { label: string; value: string }[]> = {};
   for (const [cat, types] of Object.entries(TYPE_CATEGORIES)) {
     byCategory[cat] = [];

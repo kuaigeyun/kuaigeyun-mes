@@ -79,7 +79,8 @@ const SOPViewerKioskPage: React.FC = () => {
   const loadSOPByOperationId = async (operationId: number) => {
     setLoading(true);
     try {
-      const sops = await sopApi.list({ operationId, isActive: true });
+      const res = await sopApi.list({ operationId, isActive: true });
+      const sops = Array.isArray(res) ? res : res?.data ?? [];
       if (sops && sops.length > 0) {
         const sopData = sops[0];
         setSop(sopData);

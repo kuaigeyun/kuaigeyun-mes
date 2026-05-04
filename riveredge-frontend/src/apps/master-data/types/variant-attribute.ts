@@ -80,6 +80,9 @@ export interface VariantAttributeDefinitionListParams {
   pageSize?: number;
   is_active?: boolean;
   attribute_type?: VariantAttributeType;
+  keyword?: string;
+  sort_by?: string;
+  sort_order?: 'asc' | 'desc';
 }
 
 /**

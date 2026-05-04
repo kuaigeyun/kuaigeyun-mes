@@ -4,7 +4,29 @@
  * 定义客户、供应商的数据类型
  */
 
-export interface Customer {
+/** 开票资料与商事/结算/联系人扩展（客户、供应商共用字段） */
+export interface PartnerInvoiceAndExtendedFields {
+  taxRegistrationNo?: string;
+  invoiceTitle?: string;
+  invoiceAddress?: string;
+  invoicePhone?: string;
+  invoiceBankName?: string;
+  invoiceBankAccount?: string;
+  invoiceTypeCode?: string;
+  taxpayerTypeCode?: string;
+  legalRepresentative?: string;
+  enterpriseTypeCode?: string;
+  paymentTermsDays?: number | string | null;
+  settlementMethodCode?: string;
+  financeContactName?: string;
+  financeContactPhone?: string;
+  financeContactEmail?: string;
+  deliveryContactName?: string;
+  deliveryContactPhone?: string;
+  deliveryAddress?: string;
+}
+
+export interface Customer extends PartnerInvoiceAndExtendedFields {
   id: number;
   uuid: string;
   tenantId: number;
@@ -31,7 +53,7 @@ export interface Customer {
   deletedAt?: string;
 }
 
-export interface CustomerCreate {
+export interface CustomerCreate extends PartnerInvoiceAndExtendedFields {
   code: string;
   name: string;
   shortName?: string;
@@ -52,7 +74,7 @@ export interface CustomerCreate {
   isPublic?: boolean;
 }
 
-export interface CustomerUpdate {
+export interface CustomerUpdate extends PartnerInvoiceAndExtendedFields {
   code?: string;
   name?: string;
   shortName?: string;
@@ -80,9 +102,17 @@ export interface CustomerListParams {
   isActive?: boolean;
   keyword?: string;
   salesmanId?: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
 }
 
-export interface Supplier {
+/** 客户列表分页响应 */
+export interface CustomerListResponse {
+  data: Customer[];
+  total: number;
+}
+
+export interface Supplier extends PartnerInvoiceAndExtendedFields {
   id: number;
   uuid: string;
   tenantId: number;
@@ -107,7 +137,7 @@ export interface Supplier {
   deletedAt?: string;
 }
 
-export interface SupplierCreate {
+export interface SupplierCreate extends PartnerInvoiceAndExtendedFields {
   code: string;
   name: string;
   shortName?: string;
@@ -126,7 +156,7 @@ export interface SupplierCreate {
   isActive?: boolean;
 }
 
-export interface SupplierUpdate {
+export interface SupplierUpdate extends PartnerInvoiceAndExtendedFields {
   code?: string;
   name?: string;
   shortName?: string;
@@ -154,4 +184,11 @@ export interface SupplierListParams {
   buyerId?: number;
   code?: string;
   name?: string;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+}
+
+export interface SupplierListResponse {
+  data: Supplier[];
+  total: number;
 }

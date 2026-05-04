@@ -19,6 +19,8 @@ import {
   getPermissionByUuid,
   Permission,
 } from '../../../../services/permission';
+import { extractProTableSort, mergeListKeyword, mapPermissionListSortField } from '../../../../utils/tableQueryKey';
+import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 
 const PermissionListPage: React.FC = () => {
   const { t } = useTranslation();
@@ -174,18 +176,16 @@ const PermissionListPage: React.FC = () => {
     {
       title: t('common.actions'),
       valueType: 'option',
-      width: 100,
       fixed: 'right',
-      render: (_, record) => (
-        <Button
-          type="link"
-          size="small"
-          icon={<EyeOutlined />}
-          onClick={() => handleView(record)}
-        >
-          {t('field.permission.view')}
-        </Button>
-      ),
+      render: (_, record) =>
+        renderRowActionsOverflow(
+          [
+            <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+              {t('field.permission.view')}
+            </Button>,
+          ],
+          `permission-${record.uuid}`,
+        ),
     },
   ];
 
@@ -195,15 +195,19 @@ const PermissionListPage: React.FC = () => {
         <UniTable<Permission>
           actionRef={actionRef}
           columns={columns}
-          request={async (params, _sort, _filter, searchFormValues) => {
+          request={async (params, sort, _filter, searchFormValues) => {
+            const { sortBy, sortOrder } = extractProTableSort(sort);
+            const keyword = mergeListKeyword(searchFormValues);
             const response = await getPermissionList({
               page: params.current || 1,
               page_size: params.pageSize || 20,
-              keyword: searchFormValues?.keyword,
-              name: searchFormValues?.name,
-              code: searchFormValues?.code,
-              resource: searchFormValues?.resource,
-              permission_type: searchFormValues?.permission_type,
+              keyword: keyword || undefined,
+              name: searchFormValues?.name as string | undefined,
+              code: searchFormValues?.code as string | undefined,
+              resource: searchFormValues?.resource as string | undefined,
+              permission_type: searchFormValues?.permission_type as string | undefined,
+              sort_by: mapPermissionListSortField(sortBy),
+              sort_order: sortOrder,
             });
             return {
               data: response.items,

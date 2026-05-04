@@ -12,12 +12,24 @@ import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { flushDrawerOpen, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
+import {
+  DetailDrawerSection,
+  DRAWER_CONFIG,
+  flushDrawerOpen,
+  ListPageTemplate,
+} from '../../../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
 
 import { supplierApi, getUserOptions, getDictionaryOptions } from '../../../services/supply-chain';
+import { extractProTableSort, mapSupplyChainSortField } from '../../../../../utils/tableQueryKey';
 import { SupplierFormModal } from '../../../components/SupplierFormModal';
 import type { Supplier, SupplierCreate } from '../../../types/supply-chain';
+import {
+  partnerEnterpriseTypeLabel,
+  partnerInvoiceTypeLabel,
+  partnerSettlementMethodLabel,
+  partnerTaxpayerTypeLabel,
+} from '../../../utils/partner-static-labels';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { downloadFile } from '../../../../../utils';
 /**
@@ -412,7 +424,8 @@ const SuppliersPage: React.FC = () => {
         exportData = currentPageData;
         filename = `${t('app.master-data.suppliers.exportFilenameCurrentPage', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       } else {
-        exportData = await supplierApi.list({ skip: 0, limit: 10000 });
+        const exportRes = await supplierApi.list({ skip: 0, limit: 10000 });
+        exportData = Array.isArray(exportRes) ? exportRes : exportRes?.data ?? [];
         filename = `${t('app.master-data.suppliers.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       }
 
@@ -425,16 +438,12 @@ const SuppliersPage: React.FC = () => {
         t('field.supplier.code'),
         t('field.supplier.name'),
         t('field.supplier.shortName'),
+        t('field.supplier.category'),
         t('field.supplier.contactPerson'),
         t('field.supplier.contactTitle'),
         t('field.supplier.phone'),
         t('field.supplier.email'),
         t('field.supplier.address'),
-        t('field.supplier.category'),
-        t('field.supplier.industry'),
-        t('field.supplier.sourceChannel'),
-        t('field.supplier.estimatedAnnualPurchase'),
-        t('field.supplier.creditLimit'),
         t('field.supplier.buyer'),
         t('app.master-data.warehouses.status'),
         t('common.createdAt'),
@@ -446,20 +455,16 @@ const SuppliersPage: React.FC = () => {
           item.code || '',
           item.name || '',
           item.shortName || '',
+          item.category
+            ? dictLabelMaps['CUSTOMER_CATEGORY']?.[item.category] ?? item.category
+            : '',
           item.contactPerson || '',
-          item.contactTitle || '',
+          item.contactTitle
+            ? dictLabelMaps['CONTACT_TITLE']?.[item.contactTitle] ?? item.contactTitle
+            : '',
           item.phone || '',
           item.email || '',
           item.address || '',
-          item.category || '',
-          item.industryCode ? dictLabelMaps['INDUSTRY_SECTOR']?.[item.industryCode] ?? item.industryCode : '',
-          item.sourceChannelCode
-            ? dictLabelMaps['PARTNER_SOURCE_CHANNEL']?.[item.sourceChannelCode] ?? item.sourceChannelCode
-            : '',
-          item.estimatedAnnualPurchase != null && item.estimatedAnnualPurchase !== ''
-            ? String(item.estimatedAnnualPurchase)
-            : '',
-          item.creditLimit != null && item.creditLimit !== '' ? String(item.creditLimit) : '',
           item.buyerName || '',
           item.isActive ? t('common.enabled') : t('common.disabled'),
           item.createdAt ? new Date(item.createdAt).toLocaleString() : '',
@@ -489,13 +494,16 @@ const SuppliersPage: React.FC = () => {
     {
       title: t('field.supplier.code'),
       dataIndex: 'code',
-      copyable: true,width: 150,
+      copyable: true,
+      width: 150,
       fixed: 'left',
+      sorter: true,
     },
     {
       title: t('field.supplier.name'),
       dataIndex: 'name',
       width: 250,
+      sorter: true,
     },
     {
       title: t('field.supplier.shortName'),
@@ -504,10 +512,25 @@ const SuppliersPage: React.FC = () => {
       hideInSearch: true,
     },
     {
+      title: t('field.supplier.category'),
+      dataIndex: 'category',
+      width: 120,
+      hideInSearch: true,
+      sorter: true,
+      render: (_, r) => dictLabel('CUSTOMER_CATEGORY', r.category),
+    },
+    {
       title: t('field.supplier.contactPerson'),
       dataIndex: 'contactPerson',
       width: 120,
       hideInSearch: true,
+    },
+    {
+      title: t('field.supplier.contactTitle'),
+      dataIndex: 'contactTitle',
+      width: 120,
+      hideInSearch: true,
+      render: (_, r) => dictLabel('CONTACT_TITLE', r.contactTitle),
     },
     {
       title: t('field.supplier.phone'),
@@ -522,45 +545,11 @@ const SuppliersPage: React.FC = () => {
       hideInSearch: true,
     },
     {
-      title: t('field.supplier.category'),
-      dataIndex: 'category',
-      width: 120,
+      title: t('field.supplier.address'),
+      dataIndex: 'address',
+      width: 220,
       hideInSearch: true,
-      render: (_, r) => dictLabel('CUSTOMER_CATEGORY', r.category),
-    },
-    {
-      title: t('field.supplier.industry'),
-      dataIndex: 'industryCode',
-      width: 110,
-      hideInSearch: true,
-      render: (_, r) => dictLabel('INDUSTRY_SECTOR', r.industryCode),
-    },
-    {
-      title: t('field.supplier.sourceChannel'),
-      dataIndex: 'sourceChannelCode',
-      width: 110,
-      hideInSearch: true,
-      render: (_, r) => dictLabel('PARTNER_SOURCE_CHANNEL', r.sourceChannelCode),
-    },
-    {
-      title: t('field.supplier.estimatedAnnualPurchase'),
-      dataIndex: 'estimatedAnnualPurchase',
-      width: 120,
-      hideInSearch: true,
-      render: (_, r) =>
-        r.estimatedAnnualPurchase != null && r.estimatedAnnualPurchase !== ''
-          ? Number(r.estimatedAnnualPurchase).toLocaleString()
-          : '—',
-    },
-    {
-      title: t('field.supplier.creditLimit'),
-      dataIndex: 'creditLimit',
-      width: 110,
-      hideInSearch: true,
-      render: (_, r) =>
-        r.creditLimit != null && r.creditLimit !== ''
-          ? Number(r.creditLimit).toLocaleString()
-          : '—',
+      ellipsis: true,
     },
     {
       title: t('field.supplier.buyer'),
@@ -568,6 +557,7 @@ const SuppliersPage: React.FC = () => {
       width: 120,
       valueType: 'select',
       request: getUserOptions,
+      sorter: true,
       fieldProps: {
         name: 'buyerId',
       },
@@ -586,6 +576,7 @@ const SuppliersPage: React.FC = () => {
           {record?.isActive ? t('common.enabled') : t('common.disabled')}
         </Tag>
       ),
+      sorter: true,
     },
     {
       title: t('app.master-data.warehouses.createTime'),
@@ -635,46 +626,57 @@ const SuppliersPage: React.FC = () => {
     },
   ];
 
-  const detailColumns: ProDescriptionsItemProps<Supplier>[] = [
-    {
-      title: t('field.supplier.code'),
-      dataIndex: 'code',
-    copyable: true,},
-    {
-      title: t('field.supplier.name'),
-      dataIndex: 'name',
-    },
-    {
-      title: t('field.supplier.shortName'),
-      dataIndex: 'shortName',
-    },
-    {
-      title: t('field.supplier.contactPerson'),
-      dataIndex: 'contactPerson',
-    },
-    {
-      title: t('field.supplier.contactTitle'),
-      dataIndex: 'contactTitle',
-      render: (_, r) => dictLabel('CONTACT_TITLE', r.contactTitle),
-    },
-    {
-      title: t('field.supplier.phone'),
-      dataIndex: 'phone',
-    },
-    {
-      title: t('field.supplier.email'),
-      dataIndex: 'email',
-    },
-    {
-      title: t('field.supplier.address'),
-      dataIndex: 'address',
-      span: 2,
-    },
+  /** 详情列：与表单 Tab「基本信息 / 开票资料 / 业务与扩展」一致 */
+  const detailColumnsBasic: ProDescriptionsItemProps<Supplier>[] = [
+    { title: t('field.supplier.code'), dataIndex: 'code', copyable: true },
+    { title: t('field.supplier.name'), dataIndex: 'name' },
+    { title: t('field.supplier.shortName'), dataIndex: 'shortName' },
     {
       title: t('field.supplier.category'),
       dataIndex: 'category',
       render: (_, r) => dictLabel('CUSTOMER_CATEGORY', r.category),
     },
+    { title: t('field.supplier.contactPerson'), dataIndex: 'contactPerson' },
+    {
+      title: t('field.supplier.contactTitle'),
+      dataIndex: 'contactTitle',
+      render: (_, r) => dictLabel('CONTACT_TITLE', r.contactTitle),
+    },
+    { title: t('field.supplier.phone'), dataIndex: 'phone' },
+    { title: t('field.supplier.email'), dataIndex: 'email' },
+    { title: t('field.supplier.buyer'), dataIndex: 'buyerName' },
+    { title: t('field.supplier.address'), dataIndex: 'address', span: 2 },
+    {
+      title: t('app.master-data.warehouses.status'),
+      dataIndex: 'isActive',
+      render: (_, record) => (
+        <Tag color={record?.isActive ? 'success' : 'default'}>
+          {record?.isActive ? t('common.enabled') : t('common.disabled')}
+        </Tag>
+      ),
+    },
+  ];
+
+  const detailColumnsInvoice: ProDescriptionsItemProps<Supplier>[] = [
+    { title: t('field.partner.taxRegistrationNo'), dataIndex: 'taxRegistrationNo' },
+    { title: t('field.partner.invoiceTitle'), dataIndex: 'invoiceTitle' },
+    { title: t('field.partner.invoiceAddress'), dataIndex: 'invoiceAddress', span: 2 },
+    { title: t('field.partner.invoicePhone'), dataIndex: 'invoicePhone' },
+    { title: t('field.partner.invoiceBankName'), dataIndex: 'invoiceBankName' },
+    { title: t('field.partner.invoiceBankAccount'), dataIndex: 'invoiceBankAccount' },
+    {
+      title: t('field.partner.invoiceType'),
+      dataIndex: 'invoiceTypeCode',
+      render: (_, r) => partnerInvoiceTypeLabel(t, r.invoiceTypeCode),
+    },
+    {
+      title: t('field.partner.taxpayerType'),
+      dataIndex: 'taxpayerTypeCode',
+      render: (_, r) => partnerTaxpayerTypeLabel(t, r.taxpayerTypeCode),
+    },
+  ];
+
+  const detailColumnsExtended: ProDescriptionsItemProps<Supplier>[] = [
     {
       title: t('field.supplier.industry'),
       dataIndex: 'industryCode',
@@ -701,29 +703,31 @@ const SuppliersPage: React.FC = () => {
           ? Number(r.creditLimit).toLocaleString()
           : '—',
     },
+    { title: t('field.partner.legalRepresentative'), dataIndex: 'legalRepresentative' },
     {
-      title: t('field.supplier.buyer'),
-      dataIndex: 'buyerName',
+      title: t('field.partner.enterpriseType'),
+      dataIndex: 'enterpriseTypeCode',
+      render: (_, r) => partnerEnterpriseTypeLabel(t, r.enterpriseTypeCode),
     },
     {
-      title: t('app.master-data.warehouses.status'),
-      dataIndex: 'isActive',
-      render: (_, record) => (
-        <Tag color={record?.isActive ? 'success' : 'default'}>
-          {record?.isActive ? t('common.enabled') : t('common.disabled')}
-        </Tag>
-      ),
+      title: t('field.partner.paymentTermsDays'),
+      dataIndex: 'paymentTermsDays',
+      render: (_, r) =>
+        r.paymentTermsDays != null && r.paymentTermsDays !== '' ? String(r.paymentTermsDays) : '—',
     },
     {
-      title: t('app.master-data.warehouses.createTime'),
-      dataIndex: 'createdAt',
-      valueType: 'dateTime',
+      title: t('field.partner.settlementMethod'),
+      dataIndex: 'settlementMethodCode',
+      render: (_, r) => partnerSettlementMethodLabel(t, r.settlementMethodCode),
     },
-    {
-      title: t('app.master-data.warehouses.updateTime'),
-      dataIndex: 'updatedAt',
-      valueType: 'dateTime',
-    },
+    { title: t('field.partner.financeContactName'), dataIndex: 'financeContactName' },
+    { title: t('field.partner.financeContactPhone'), dataIndex: 'financeContactPhone' },
+    { title: t('field.partner.financeContactEmail'), dataIndex: 'financeContactEmail' },
+    { title: t('field.partner.deliveryContactName'), dataIndex: 'deliveryContactName' },
+    { title: t('field.partner.deliveryContactPhone'), dataIndex: 'deliveryContactPhone' },
+    { title: t('field.partner.deliveryAddress'), dataIndex: 'deliveryAddress', span: 2 },
+    { title: t('app.master-data.warehouses.createTime'), dataIndex: 'createdAt', valueType: 'dateTime' },
+    { title: t('app.master-data.warehouses.updateTime'), dataIndex: 'updatedAt', valueType: 'dateTime' },
   ];
 
   return (
@@ -732,7 +736,7 @@ const SuppliersPage: React.FC = () => {
       <UniTable<Supplier>
         actionRef={actionRef}
         columns={columns}
-        request={async (params, _sort, __filter, searchFormValues) => {
+        request={async (params, sort, __filter, searchFormValues) => {
           // 处理搜索参数
           const apiParams: any = {
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
@@ -763,17 +767,23 @@ const SuppliersPage: React.FC = () => {
             apiParams.name = searchFormValues.name.trim();
           }
 
-          // 如果有关键词搜索，传递给后端
-          if (searchFormValues?.keyword && searchFormValues.keyword.trim()) {
-            apiParams.keyword = searchFormValues.keyword.trim();
+          const fuzzyKw = String(searchFormValues?.keyword ?? '').trim();
+          if (fuzzyKw) apiParams.keyword = fuzzyKw;
+
+          const { sortBy: rawSortBy, sortOrder } = extractProTableSort(sort);
+          const sortField = mapSupplyChainSortField(rawSortBy);
+          if (sortField) {
+            apiParams.sortBy = sortField;
+            apiParams.sortOrder = sortOrder;
           }
           
           try {
             const result = await supplierApi.list(apiParams);
+            const listData = Array.isArray(result) ? result : result?.data ?? [];
             return {
-              data: result,
+              data: listData,
               success: true,
-              total: result.length,
+              total: typeof result?.total === 'number' ? result.total : listData.length,
             };
           } catch (error: any) {
             console.error('获取供应商列表失败:', error);
@@ -858,9 +868,28 @@ const SuppliersPage: React.FC = () => {
         onClose={handleCloseDetail}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        basic={
+        plainBody={
           supplierDetail ? (
-            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, supplierDetail)} />
+            <>
+              <DetailDrawerSection title={t('field.partner.tabBasic')}>
+                <Descriptions
+                  column={2}
+                  items={detailDrawerDescriptionItems(detailColumnsBasic, supplierDetail)}
+                />
+              </DetailDrawerSection>
+              <DetailDrawerSection title={t('field.partner.tabInvoice')}>
+                <Descriptions
+                  column={2}
+                  items={detailDrawerDescriptionItems(detailColumnsInvoice, supplierDetail)}
+                />
+              </DetailDrawerSection>
+              <DetailDrawerSection title={t('field.partner.tabExtended')} marginBottom={0}>
+                <Descriptions
+                  column={2}
+                  items={detailDrawerDescriptionItems(detailColumnsExtended, supplierDetail)}
+                />
+              </DetailDrawerSection>
+            </>
           ) : null
         }
       />

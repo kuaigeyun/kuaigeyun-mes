@@ -7,21 +7,24 @@ Author: Luigi Lu
 Date: 2026-01-15
 """
 
-from datetime import datetime
-from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, Query, status, HTTPException
+from typing import Optional
+from fastapi import APIRouter, Depends, status, HTTPException
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
 from infra.models.user import User
-from infra.exceptions.exceptions import ValidationError
+from infra.exceptions.exceptions import ValidationError, NotFoundError
 
 from apps.kuaizhizao.services.initial_data_service import InitialDataService
 from apps.kuaizhizao.services.launch_countdown_service import LaunchCountdownService
 from apps.kuaizhizao.services.data_compensation_service import DataCompensationService
 from apps.kuaizhizao.schemas.initial_data import (
-    LaunchCountdownCreate, LaunchCountdownUpdate, LaunchCountdownResponse,
-    DataCompensationRequest, DataCompensationResponse,
+    LaunchCountdownCreate,
+    LaunchCountdownResponse,
+    DataCompensationRequest,
+    DataCompensationResponse,
+    InitialImportRequest,
+    WizardCountdownPatchRequest,
 )
 
 router = APIRouter(prefix="/initial-data", tags=["Initial Data Import"])
@@ -34,8 +37,7 @@ data_compensation_service = DataCompensationService()
 
 @router.post("/inventory/import", summary="导入期初库存")
 async def import_initial_inventory(
-    data: List[List[Any]],  # 二维数组数据（从 uni_import 组件传递）
-    snapshot_time: Optional[datetime] = Query(None, description="快照时间点（可选）"),
+    payload: InitialImportRequest,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -68,9 +70,9 @@ async def import_initial_inventory(
     try:
         result = await initial_data_service.import_initial_inventory(
             tenant_id=tenant_id,
-            data=data,
-            snapshot_time=snapshot_time,
-            created_by=current_user.id
+            data=payload.data,
+            snapshot_time=payload.snapshot_time,
+            created_by=current_user.id,
         )
         return result
     except ValidationError as e:
@@ -88,8 +90,7 @@ async def import_initial_inventory(
 
 @router.post("/wip/import", summary="导入期初在制品")
 async def import_initial_wip(
-    data: List[List[Any]],  # 二维数组数据（从 uni_import 组件传递）
-    snapshot_time: Optional[datetime] = Query(None, description="快照时间点（可选）"),
+    payload: InitialImportRequest,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -123,9 +124,9 @@ async def import_initial_wip(
     try:
         result = await initial_data_service.import_initial_wip(
             tenant_id=tenant_id,
-            data=data,
-            snapshot_time=snapshot_time,
-            created_by=current_user.id
+            data=payload.data,
+            snapshot_time=payload.snapshot_time,
+            created_by=current_user.id,
         )
         return result
     except ValidationError as e:
@@ -143,8 +144,7 @@ async def import_initial_wip(
 
 @router.post("/receivables-payables/import", summary="导入期初应收应付")
 async def import_initial_receivables_payables(
-    data: List[List[Any]],  # 二维数组数据（从 uni_import 组件传递）
-    snapshot_time: Optional[datetime] = Query(None, description="快照时间点（可选）"),
+    payload: InitialImportRequest,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -183,9 +183,9 @@ async def import_initial_receivables_payables(
     try:
         result = await initial_data_service.import_initial_receivables_payables(
             tenant_id=tenant_id,
-            data=data,
-            snapshot_time=snapshot_time,
-            created_by=current_user.id
+            data=payload.data,
+            snapshot_time=payload.snapshot_time,
+            created_by=current_user.id,
         )
         return result
     except ValidationError as e:
@@ -234,6 +234,48 @@ async def get_countdown(
     if not countdown:
         return None
     return LaunchCountdownResponse.model_validate(countdown)
+
+
+@router.patch("/countdown/wizard", response_model=LaunchCountdownResponse, summary="更新期初向导快照与步骤")
+async def patch_countdown_wizard(
+    payload: WizardCountdownPatchRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """写入快照时间、当前向导步骤及各阶段完成/跳过状态（无倒计时时自动创建默认上线日）"""
+    allowed_stage = {"inventory", "wip", "receivables_payables"}
+    allowed_status = {"pending", "in_progress", "completed", "skipped"}
+    if payload.stage and payload.stage not in allowed_stage:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"stage 必须是之一: {', '.join(sorted(allowed_stage))}",
+        )
+    if payload.stage_status and payload.stage_status not in allowed_status:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"stage_status 必须是之一: {', '.join(sorted(allowed_status))}",
+        )
+    if payload.stage and not payload.stage_status:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="提供 stage 时必须同时提供 stage_status",
+        )
+    try:
+        countdown = await launch_countdown_service.patch_wizard_state(
+            tenant_id=tenant_id,
+            snapshot_time=payload.snapshot_time,
+            wizard_step=payload.wizard_step,
+            stage=payload.stage,
+            stage_status=payload.stage_status,
+            created_by=current_user.id,
+        )
+        return LaunchCountdownResponse.model_validate(countdown)
+    except Exception as e:
+        logger.error(f"更新期初向导状态失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"操作失败: {str(e)}",
+        )
 
 
 @router.post("/countdown/complete", response_model=LaunchCountdownResponse, summary="完成上线倒计时")

@@ -4,7 +4,7 @@
 提供集成配置的 CRUD 操作和连接测试功能。
 """
 
-from typing import Optional, List, Dict, Any
+from typing import Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 
 from core.schemas.integration_config import (
@@ -81,37 +81,42 @@ async def create_integration(
         )
 
 
-@router.get("", response_model=List[IntegrationConfigResponse])
+@router.get("", response_model=dict)
 async def list_integrations(
-    skip: int = Query(0, ge=0, description="跳过数量"),
-    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(20, ge=1, le=1000, description="每页数量"),
     type: Optional[str] = Query(None, description="集成类型（可选）"),
     is_active: Optional[bool] = Query(None, description="是否启用（可选）"),
+    search: Optional[str] = Query(None, description="关键词（名称、代码、描述）"),
+    sort_by: Optional[str] = Query(
+        None,
+        description="排序字段：name/code/type/created_at/updated_at/is_active/last_connected_at",
+    ),
+    sort_order: Optional[str] = Query(None, description="排序方向：asc 或 desc"),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
-    获取集成配置列表
-    
-    获取当前组织的集成配置列表，支持分页和筛选。
-    
-    Args:
-        skip: 跳过数量（默认 0）
-        limit: 限制数量（默认 100，最大 1000）
-        type: 集成类型（可选）
-        is_active: 是否启用（可选）
-        tenant_id: 当前组织ID（依赖注入）
-        
+    获取集成配置列表（分页）
+
     Returns:
-        List[IntegrationConfigResponse]: 集成配置列表
+        dict: { items, total, page, page_size }
     """
-    integrations = await IntegrationConfigService.list_integrations(
+    integrations, total = await IntegrationConfigService.list_integrations(
         tenant_id=tenant_id,
-        skip=skip,
-        limit=limit,
+        page=page,
+        page_size=page_size,
         type=type,
-        is_active=is_active
+        is_active=is_active,
+        search=search,
+        sort_by=sort_by,
+        sort_order=sort_order,
     )
-    return [IntegrationConfigResponse(**build_integration_response(i)) for i in integrations]
+    return {
+        "items": [IntegrationConfigResponse(**build_integration_response(i)) for i in integrations],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
 
 
 @router.get("/{uuid}", response_model=IntegrationConfigResponse)

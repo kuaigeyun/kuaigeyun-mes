@@ -35,12 +35,19 @@ export function readActionPriority(node: React.ReactNode): number | undefined {
   return Number.isFinite(n) ? n : undefined
 }
 
-export function resolveButtonTone(text: string): { type: 'text'; danger?: boolean } {
+/**
+ * 行内按钮语义色：删除 / 重置 / 卸载 等高风险操作使用主题 **危险红**（`danger`，对应 `--ant-color-error`）。
+ */
+export type ResolvedRowActionTone =
+  | { mode: 'destructive'; type: 'text'; danger: true }
+  | { mode: 'default'; type: 'text'; danger?: boolean }
+
+export function resolveButtonTone(text: string): ResolvedRowActionTone {
   const normalized = text.replace(/\s+/g, '')
-  if (/删除|驳回|报废/.test(normalized)) {
-    return { type: 'text', danger: true }
+  if (/删除|驳回|报废|重置|清空|清除|卸载/.test(normalized)) {
+    return { mode: 'destructive', type: 'text', danger: true }
   }
-  return { type: 'text' }
+  return { mode: 'default', type: 'text' }
 }
 
 export function isAuditSemanticAction(text: string): boolean {

@@ -23,6 +23,7 @@ import { qrcodeApi } from '../../../../../services/qrcode';
 import type { Operation, DefectTypeMinimal } from '../../../types/process';
 import { DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
 import dayjs from 'dayjs';
+import { extractProTableSort, mapProcessListSortField } from '../../../../../utils/tableQueryKey';
 
 /**
  * 工序信息管理列表页面组件
@@ -321,7 +322,7 @@ const OperationsPage: React.FC = () => {
         list = pageData;
       } else {
         const res = await operationApi.list({ skip: 0, limit: 10000 });
-        list = Array.isArray(res) ? res : (res as any)?.data ?? [];
+        list = Array.isArray(res) ? res : res?.data ?? [];
       }
       if (list.length === 0) {
         messageApi.warning(t('app.master-data.noExportData'));
@@ -412,11 +413,13 @@ const OperationsPage: React.FC = () => {
       dataIndex: 'code',
       copyable: true,width: 150,
       fixed: 'left',
+      sorter: true,
     },
     {
       title: '工序名称',
       dataIndex: 'name',
       width: 200,
+      sorter: true,
     },
     {
       title: '描述',
@@ -438,6 +441,7 @@ const OperationsPage: React.FC = () => {
           {record.reportingType === 'quantity' ? '按数量报工' : '按状态报工'}
         </Tag>
       ),
+      sorter: true,
     },
     {
       title: '超报',
@@ -466,6 +470,7 @@ const OperationsPage: React.FC = () => {
           {record.isActive ? '启用' : '禁用'}
         </Tag>
       ),
+      sorter: true,
     },
     {
       title: '绑定不良品项',
@@ -566,7 +571,7 @@ const OperationsPage: React.FC = () => {
       <UniTable<Operation>
         actionRef={actionRef}
         columns={columns}
-        request={async (params, _sort, _filter, searchFormValues) => {
+        request={async (params, sort, _filter, searchFormValues) => {
           // 处理搜索参数
           const apiParams: any = {
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
@@ -577,15 +582,28 @@ const OperationsPage: React.FC = () => {
           if (searchFormValues?.isActive !== undefined && searchFormValues.isActive !== '' && searchFormValues.isActive !== null) {
             apiParams.isActive = searchFormValues.isActive;
           }
+
+          const fuzzyKw = String(searchFormValues?.keyword ?? '').trim();
+          const fallbackKw =
+            fuzzyKw ||
+            String(searchFormValues?.code ?? '').trim() ||
+            String(searchFormValues?.name ?? '').trim();
+          if (fallbackKw) apiParams.keyword = fallbackKw;
+
+          const { sortBy: rawSortBy, sortOrder } = extractProTableSort(sort);
+          const sortField = mapProcessListSortField(rawSortBy);
+          if (sortField) {
+            apiParams.sortBy = sortField;
+            apiParams.sortOrder = sortOrder;
+          }
           
           try {
             const result = await operationApi.list(apiParams);
-            // 兼容：接口可能直接返回数组或 { data: [] }，且保证每条含 defect_types
-            const listData = Array.isArray(result) ? result : ((result as any)?.data ?? []);
+            const listData = Array.isArray(result) ? result : result?.data ?? [];
             return {
               data: listData,
               success: true,
-              total: (result as any)?.total ?? listData.length,
+              total: typeof result?.total === 'number' ? result.total : listData.length,
             };
           } catch (error: any) {
             console.error('获取工序列表失败:', error);

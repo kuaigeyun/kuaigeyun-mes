@@ -129,6 +129,24 @@ export async function getCountdown(): Promise<LaunchCountdown | null> {
   });
 }
 
+export interface WizardCountdownPatch {
+  snapshot_time?: string | null;
+  wizard_step?: number;
+  stage?: 'inventory' | 'wip' | 'receivables_payables';
+  stage_status?: 'pending' | 'in_progress' | 'completed' | 'skipped';
+}
+
+/**
+ * 持久化向导快照、当前步骤及各阶段完成/跳过状态
+ */
+export async function patchWizardCountdown(body: WizardCountdownPatch): Promise<LaunchCountdown> {
+  return apiRequest<LaunchCountdown>({
+    url: '/apps/kuaizhizao/initial-data/countdown/wizard',
+    method: 'PATCH',
+    data: body,
+  });
+}
+
 /**
  * 完成上线倒计时
  */

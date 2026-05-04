@@ -12,7 +12,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormJsonSchema } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, message, Card, Modal } from 'antd';
+import { App, Popconfirm, Button, Tag, message, Card, Modal } from 'antd';
 import { ProDescriptions } from '@ant-design/pro-components';
 import { EditOutlined, DeleteOutlined, EyeOutlined, HistoryOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
@@ -30,6 +30,7 @@ import {
 } from '../../../../services/equipment';
 import { QRCodeGenerator } from '../../../../components/qrcode';
 import { qrcodeApi } from '../../../../services/qrcode';
+import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 
 /**
  * 设备管理列表页面组件
@@ -371,49 +372,49 @@ const EquipmentListPage: React.FC = () => {
     {
       title: t('pages.system.equipment.columnActions'),
       valueType: 'option',
-      width: 200,
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleView(record)}
-          >
-            {t('pages.system.equipment.view')}
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            {t('pages.system.equipment.edit')}
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<HistoryOutlined />}
-            onClick={() => navigate(`/system/equipment/${record.uuid}/trace`)}
-          >
-            {t('pages.system.equipment.trace')}
-          </Button>
-          <Popconfirm
-            title={t('pages.system.equipment.confirmDeleteOne')}
-            onConfirm={() => handleDelete(record)}
-          >
+      render: (_, record) =>
+        renderRowActionsOverflow(
+          [
             <Button
+              key="view"
               type="link"
-              danger
               size="small"
-              icon={<DeleteOutlined />}
+              icon={<EyeOutlined />}
+              onClick={() => handleView(record)}
             >
-              {t('pages.system.equipment.delete')}
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
+              {t('pages.system.equipment.view')}
+            </Button>,
+            <Button
+              key="edit"
+              type="link"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => handleEdit(record)}
+            >
+              {t('pages.system.equipment.edit')}
+            </Button>,
+            <Button
+              key="trace"
+              type="link"
+              size="small"
+              icon={<HistoryOutlined />}
+              onClick={() => navigate(`/system/equipment/${record.uuid}/trace`)}
+            >
+              {t('pages.system.equipment.trace')}
+            </Button>,
+            <Popconfirm
+              key="delete"
+              title={t('pages.system.equipment.confirmDeleteOne')}
+              onConfirm={() => handleDelete(record)}
+            >
+              <Button type="link" danger size="small" icon={<DeleteOutlined />}>
+                {t('pages.system.equipment.delete')}
+              </Button>
+            </Popconfirm>,
+          ],
+          `equipment-${record.uuid}`,
+        ),
     },
   ];
 

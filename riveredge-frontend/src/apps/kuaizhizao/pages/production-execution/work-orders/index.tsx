@@ -129,7 +129,8 @@ import {
   getSalesForecastItems,
 } from '../../../services/sales-forecast'
 import { listDemands, getDemand } from '../../../services/demand'
-import { operationApi, processRouteApi } from '../../../../master-data/services/process'
+import { operationApi, processRouteApi, unwrapProcessPagedList } from '../../../../master-data/services/process'
+import { supplierApi, unwrapSupplyPagedList } from '../../../../master-data/services/supply-chain'
 import {
   workshopApi,
   workCenterApi,
@@ -138,7 +139,6 @@ import {
   factoryListItems,
 } from '../../../../master-data/services/factory'
 import type { Workshop } from '../../../../master-data/types/factory'
-import { supplierApi } from '../../../../master-data/services/supply-chain'
 import { warehouseApi } from '../../../services/warehouse-execution'
 import { materialApi } from '../../../../master-data/services/material'
 import { useNavigate, useLocation } from 'react-router-dom'
@@ -670,8 +670,8 @@ const WorkOrdersPage: React.FC = () => {
         const [products, operations, routes, usersRes, equipmentRes, moldsRes, toolsRes] =
           await Promise.all([
             materialApi.list({ isActive: true, limit: 1000 }),
-            operationApi.list({ is_active: true, limit: 500 }).catch(() => []),
-            processRouteApi.list({ is_active: true, limit: 500 }).catch(() => []),
+            operationApi.list({ isActive: true, limit: 500 }).catch(() => ({ data: [], total: 0 })),
+            processRouteApi.list({ isActive: true, limit: 500 }).catch(() => ({ data: [], total: 0 })),
             getUserList({ is_active: true, page_size: 100 }).catch(() => ({ items: [] })),
             getEquipmentList({ is_active: true, limit: 100 }).catch(() => ({ items: [] })),
             getMoldList({ is_active: true, limit: 100 }).catch(() => ({ items: [] })),
@@ -679,8 +679,8 @@ const WorkOrdersPage: React.FC = () => {
           ])
         if (cancelled) return
         setProductList(Array.isArray(products) ? products : (products as any)?.data ?? (products as any)?.items ?? [])
-        setOperationList(Array.isArray(operations) ? operations : [])
-        setProcessRouteList(Array.isArray(routes) ? routes : [])
+        setOperationList(unwrapProcessPagedList(operations))
+        setProcessRouteList(unwrapProcessPagedList(routes))
         setWorkerList(usersRes?.items || [])
         setEquipmentList(equipmentRes?.items || [])
         setMoldList(moldsRes?.items || [])
@@ -2837,7 +2837,7 @@ const WorkOrdersPage: React.FC = () => {
 
       // 加载供应商列表
       try {
-        const suppliers = await supplierApi.list({ isActive: true })
+        const suppliers = unwrapSupplyPagedList(await supplierApi.list({ isActive: true }))
         setSupplierList(suppliers || [])
       } catch (error) {
         console.error('加载供应商列表失败:', error)
@@ -6246,7 +6246,7 @@ const WorkOrdersPage: React.FC = () => {
           rules={[{ required: true, message: '请选择工序' }]}
           request={async () => {
             try {
-              const operations = await operationApi.list({ is_active: true, limit: 1000 })
+              const operations = unwrapProcessPagedList(await operationApi.list({ isActive: true, limit: 1000 }))
               return operations.map((op: any) => ({
                 label: `${op.code} - ${op.name}`,
                 value: op.id,

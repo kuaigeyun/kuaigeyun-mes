@@ -4,10 +4,10 @@
 提供供应链数据的业务逻辑处理（客户、供应商），支持多组织隔离。
 """
 
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from tortoise.exceptions import IntegrityError
 
-from tortoise.models import Q
+from tortoise.expressions import Q
 from apps.master_data.models.customer import Customer
 from apps.master_data.models.supplier import Supplier
 from apps.master_data.schemas.supply_chain_schemas import (
@@ -113,8 +113,11 @@ class SupplyChainService:
         category: Optional[str] = None,
         is_active: Optional[bool] = None,
         keyword: Optional[str] = None,
-        current_user: Optional[User] = None
-    ) -> List[CustomerResponse]:
+        salesman_id: Optional[int] = None,
+        sort_by: Optional[str] = None,
+        sort_order: Optional[str] = None,
+        current_user: Optional[User] = None,
+    ) -> Tuple[List[CustomerResponse], int]:
         """
         获取客户列表
         
@@ -124,11 +127,13 @@ class SupplyChainService:
             limit: 限制数量
             category: 客户分类（可选，用于过滤）
             is_active: 是否启用（可选）
-            keyword: 搜索关键词（编号或名称）
+            keyword: 搜索关键词（编号、名称、简称、联系人、电话、邮箱）
+            salesman_id: 归属业务员（可选）
+            sort_by / sort_order: 排序字段与方向（asc/desc）
             current_user: 当前用户（用于数据隔离）
             
         Returns:
-            List[CustomerResponse]: 客户列表
+            (客户列表, 总条数)
         """
         query = Customer.filter(
             tenant_id=tenant_id,
@@ -141,18 +146,35 @@ class SupplyChainService:
         if is_active is not None:
             query = query.filter(is_active=is_active)
 
-        if keyword:
+        if salesman_id is not None:
+            query = query.filter(salesman_id=salesman_id)
+
+        if keyword and keyword.strip():
+            kw = keyword.strip()
             query = query.filter(
-                Q(code__icontains=keyword) | Q(name__icontains=keyword)
+                Q(code__icontains=kw)
+                | Q(name__icontains=kw)
+                | Q(short_name__icontains=kw)
+                | Q(contact_person__icontains=kw)
+                | Q(phone__icontains=kw)
+                | Q(email__icontains=kw)
+                | Q(tax_registration_no__icontains=kw)
+                | Q(invoice_title__icontains=kw)
             )
 
         # 业务员数据隔离：普通用户只能看到自己负责的客户 + 公共客户
         if current_user and current_user.is_regular_user():
             query = query.filter(Q(salesman_id=current_user.id) | Q(is_public=True))
-        
-        customers = await query.offset(skip).limit(limit).order_by("code").all()
-        
-        return [CustomerResponse.model_validate(c) for c in customers]
+
+        total = await query.count()
+        allowed_sort = {"code", "name", "category", "created_at", "is_active", "salesman_name", "short_name"}
+        field = sort_by if sort_by in allowed_sort else "code"
+        desc = (sort_order or "asc").lower() == "desc"
+        order_expr = f"-{field}" if desc else field
+
+        customers = await query.offset(skip).limit(limit).order_by(order_expr).all()
+
+        return [CustomerResponse.model_validate(c) for c in customers], total
     
     @staticmethod
     async def update_customer(
@@ -340,8 +362,11 @@ class SupplyChainService:
         keyword: Optional[str] = None,
         code: Optional[str] = None,
         name: Optional[str] = None,
-        current_user: Optional[User] = None
-    ) -> List[SupplierResponse]:
+        buyer_id: Optional[int] = None,
+        sort_by: Optional[str] = None,
+        sort_order: Optional[str] = None,
+        current_user: Optional[User] = None,
+    ) -> Tuple[List[SupplierResponse], int]:
         """
         获取供应商列表
 
@@ -351,13 +376,15 @@ class SupplyChainService:
             limit: 限制数量
             category: 供应商分类（可选，用于过滤）
             is_active: 是否启用（可选）
-            keyword: 搜索关键词（供应商编码或名称）
-            code: 供应商编码（精确匹配）
+            keyword: 搜索关键词（编码、名称、简称、联系人、电话、邮箱）
+            code: 供应商编码（模糊）
             name: 供应商名称（模糊匹配）
+            buyer_id: 归属采购员（可选）
+            sort_by / sort_order: 排序
             current_user: 当前用户（用于数据隔离）
 
         Returns:
-            List[SupplierResponse]: 供应商列表
+            (供应商列表, 总条数)
         """
         query = Supplier.filter(
             tenant_id=tenant_id,
@@ -370,11 +397,21 @@ class SupplyChainService:
         if is_active is not None:
             query = query.filter(is_active=is_active)
 
+        if buyer_id is not None:
+            query = query.filter(buyer_id=buyer_id)
+
         # 添加搜索条件
-        if keyword:
-            # 关键词搜索供应商编码或名称
+        if keyword and keyword.strip():
+            kw = keyword.strip()
             query = query.filter(
-                Q(code__icontains=keyword) | Q(name__icontains=keyword)
+                Q(code__icontains=kw)
+                | Q(name__icontains=kw)
+                | Q(short_name__icontains=kw)
+                | Q(contact_person__icontains=kw)
+                | Q(phone__icontains=kw)
+                | Q(email__icontains=kw)
+                | Q(tax_registration_no__icontains=kw)
+                | Q(invoice_title__icontains=kw)
             )
 
         if code:
@@ -388,10 +425,16 @@ class SupplyChainService:
         # 采购员数据隔离：普通用户只能看到自己负责的供应商
         if current_user and current_user.is_regular_user():
             query = query.filter(buyer_id=current_user.id)
-        
-        suppliers = await query.offset(skip).limit(limit).order_by("code").all()
-        
-        return [SupplierResponse.model_validate(s) for s in suppliers]
+
+        total = await query.count()
+        allowed_sort = {"code", "name", "category", "created_at", "is_active", "buyer_name", "short_name"}
+        field = sort_by if sort_by in allowed_sort else "code"
+        desc = (sort_order or "asc").lower() == "desc"
+        order_expr = f"-{field}" if desc else field
+
+        suppliers = await query.offset(skip).limit(limit).order_by(order_expr).all()
+
+        return [SupplierResponse.model_validate(s) for s in suppliers], total
     
     @staticmethod
     async def update_supplier(

@@ -175,8 +175,8 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
             if (seqObj.operations && Array.isArray(seqObj.operations)) {
               sequenceData = seqObj.operations;
             } else if (seqObj.sequence && Array.isArray(seqObj.sequence)) {
-              const { operationApi } = await import('../services/process');
-              const allOps = await operationApi.list({ limit: 1000 });
+              const { operationApi, unwrapProcessPagedList } = await import('../services/process');
+              const allOps = unwrapProcessPagedList(await operationApi.list({ limit: 1000 }));
               for (const uuid of seqObj.sequence) {
                 const op = allOps.find((o) => o.uuid === uuid);
                 if (op) {
@@ -195,8 +195,8 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
             }
           }
           if (sequenceData.length > 0) {
-            const { operationApi } = await import('../services/process');
-            const allOps = await operationApi.list({ limit: 1000 });
+            const { operationApi, unwrapProcessPagedList } = await import('../services/process');
+            const allOps = unwrapProcessPagedList(await operationApi.list({ limit: 1000 }));
             const ops: OperationItem[] = [];
             for (const item of sequenceData) {
               let opItem: OperationItem | null = null;

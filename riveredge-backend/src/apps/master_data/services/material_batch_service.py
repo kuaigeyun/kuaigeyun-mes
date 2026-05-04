@@ -131,6 +131,9 @@ class MaterialBatchService:
         status: Optional[str] = None,
         page: int = 1,
         page_size: int = 20,
+        keyword: Optional[str] = None,
+        sort_by: Optional[str] = None,
+        sort_order: Optional[str] = None,
     ) -> MaterialBatchListResponse:
         """
         获取批号列表
@@ -164,6 +167,15 @@ class MaterialBatchService:
         # 批号模糊搜索
         if batch_no:
             query = query.filter(batch_no__icontains=batch_no)
+
+        # 综合关键词（批号、供应商批号、物料名称）
+        if keyword and keyword.strip():
+            kw = keyword.strip()
+            query = query.filter(
+                Q(batch_no__icontains=kw)
+                | Q(supplier_batch_no__icontains=kw)
+                | Q(material__name__icontains=kw)
+            )
         
         # 状态筛选
         if status:
@@ -171,11 +183,24 @@ class MaterialBatchService:
         
         # 总数
         total = await query.count()
+
+        sort_field_map = {
+            "batch_no": "batch_no",
+            "quantity": "quantity",
+            "status": "status",
+            "production_date": "production_date",
+            "expiry_date": "expiry_date",
+            "created_at": "created_at",
+            "material_name": "material__name",
+        }
+        db_sort = sort_field_map.get(sort_by or "", "created_at")
+        desc = (sort_order or "desc").lower() == "desc"
+        order_expr = f"-{db_sort}" if desc else db_sort
         
         # 分页查询
         batches = await query.prefetch_related("material").offset(
             (page - 1) * page_size
-        ).limit(page_size).order_by("-created_at")
+        ).limit(page_size).order_by(order_expr).all()
         
         items = []
         for batch in batches:

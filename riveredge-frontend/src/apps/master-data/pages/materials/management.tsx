@@ -82,6 +82,7 @@ import { batchImport } from '../../../../utils/batchOperations'
 import { downloadFile } from '../../../../utils'
 import { useNewShortcut } from '../../../../hooks/useNewShortcut'
 import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut'
+import { extractProTableSort } from '../../../../utils/tableQueryKey'
 import { getSuspendedModal, clearSuspendedModal } from '../../utils/suspendedModal'
 
 /** 与 MaterialForm 一致：表示使用系统默认批号/序列号规则 */
@@ -989,6 +990,7 @@ const MaterialsManagementPage: React.FC = () => {
         title: t('app.master-data.materials.materialName'),
         dataIndex: 'name',
         width: 200,
+        sorter: true,
       },
       {
         title: t('app.master-data.materials.productImage'),
@@ -1296,7 +1298,7 @@ const MaterialsManagementPage: React.FC = () => {
                   </Button>
                 </Space>
               }
-              request={async (params, _sort, _filter, searchFormValues) => {
+              request={async (params, sort, _filter, searchFormValues) => {
                 const apiParams: any = {
                   skip: ((params.current || 1) - 1) * (params.pageSize || 20),
                   limit: params.pageSize || 20,
@@ -1368,6 +1370,18 @@ const MaterialsManagementPage: React.FC = () => {
                 // 如果有关键词搜索，传递给后端
                 if (searchFormValues?.keyword && searchFormValues.keyword.trim()) {
                   apiParams.keyword = searchFormValues.keyword.trim()
+                }
+
+                const { sortBy: rawSortField, sortOrder } = extractProTableSort(sort)
+                const materialSortMap: Record<string, string> = {
+                  createdAt: 'created_at',
+                  name: 'name',
+                  mainCode: 'main_code',
+                }
+                const sortKey = rawSortField ? materialSortMap[rawSortField] : undefined
+                if (sortKey) {
+                  apiParams.sortBy = sortKey
+                  apiParams.sortOrder = sortOrder
                 }
 
                 try {

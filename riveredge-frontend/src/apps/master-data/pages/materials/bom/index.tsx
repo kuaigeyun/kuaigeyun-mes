@@ -27,6 +27,7 @@ import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/cod
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { downloadFile } from '../../../../../utils';
 import { getUserList, User } from '../../../../../services/user';
+import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 
 /**
  * 单位列展示：接收 Form 的 value（单位 code），渲染字典标签，表格渲染前已映射
@@ -56,6 +57,85 @@ interface MaterialBOMRow extends BOMGroupRow {
   materialId: number;
   versions: BOMGroupRow[];
   selectedVersion: BOMGroupRow;
+}
+
+function normalizeBomKeyword(searchFormValues: Record<string, unknown> | undefined): string {
+  const k = searchFormValues?.keyword;
+  if (k != null && String(k).trim()) return String(k).trim();
+  return '';
+}
+
+function materialBomRowMatchesKeyword(row: MaterialBOMRow, kw: string, materials: Material[]): boolean {
+  if (!kw) return true;
+  const lower = kw.toLowerCase();
+  const mid = row.materialId;
+  const mat = materials.find((m) => m.id === mid);
+  const code = String((mat as any)?.mainCode ?? mat?.code ?? '').toLowerCase();
+  const name = String(mat?.name ?? '').toLowerCase();
+  const bomCode = String(row.bomCode ?? '').toLowerCase();
+  const ver = String(row.selectedVersion?.version ?? row.version ?? '').toLowerCase();
+  return (
+    code.includes(lower) ||
+    name.includes(lower) ||
+    bomCode.includes(lower) ||
+    ver.includes(lower) ||
+    String(mid).includes(lower)
+  );
+}
+
+function sortMaterialBomRows(
+  rows: MaterialBOMRow[],
+  sortBy: string | undefined,
+  sortOrder: 'asc' | 'desc' | undefined,
+  materials: Material[],
+): MaterialBOMRow[] {
+  if (!sortBy || !sortOrder) return rows;
+  const dir = sortOrder === 'desc' ? -1 : 1;
+  const labelFor = (row: MaterialBOMRow) => {
+    const mid = row.materialId;
+    const mat = materials.find((m) => m.id === mid);
+    switch (sortBy) {
+      case 'materialId':
+        return `${(mat as any)?.mainCode ?? mat?.code ?? ''} ${mat?.name ?? ''}`.trim().toLowerCase();
+      case 'bomCode':
+        return String(row.bomCode ?? '').toLowerCase();
+      case 'version':
+        return String(row.selectedVersion?.version ?? row.version ?? '').toLowerCase();
+      case 'approvalStatus':
+        return String(row.approvalStatus ?? '').toLowerCase();
+      default:
+        return String(mid);
+    }
+  };
+  return [...rows].sort((a, b) => {
+    const va = labelFor(a);
+    const vb = labelFor(b);
+    if (va < vb) return -1 * dir;
+    if (va > vb) return 1 * dir;
+    return 0;
+  });
+}
+
+function pageMaterialBomRows(
+  materialRows: MaterialBOMRow[],
+  params: { current?: number; pageSize?: number },
+  searchFormValues: Record<string, unknown> | undefined,
+  sort: Record<string, 'ascend' | 'descend' | null | undefined>,
+  materials: Material[],
+) {
+  let rows = materialRows;
+  const kw = normalizeBomKeyword(searchFormValues);
+  if (kw) rows = rows.filter((r) => materialBomRowMatchesKeyword(r, kw, materials));
+  const { sortBy, sortOrder } = extractProTableSort(sort);
+  rows = sortMaterialBomRows(rows, sortBy, sortOrder, materials);
+  const pageSize = params.pageSize || 20;
+  const current = params.current || 1;
+  const start = (current - 1) * pageSize;
+  return {
+    data: rows.slice(start, start + pageSize),
+    success: true as const,
+    total: rows.length,
+  };
 }
 
 /**
@@ -1488,7 +1568,8 @@ const BOMPage: React.FC = () => {
       title: t('app.master-data.bom.materialTitle'), 
       dataIndex: 'materialId', 
       width: 200, 
-      hideInSearch: true, 
+      hideInSearch: true,
+      sorter: true,
       render: (_, r: any) => {
         if (isRootRow(r)) return <span style={{ fontWeight: 500 }}>{getMaterialName(r.materialId)}</span>;
         return getMaterialName(r.componentId);
@@ -1498,7 +1579,8 @@ const BOMPage: React.FC = () => {
       title: t('app.master-data.bom.versionTitle'), 
       dataIndex: 'version', 
       width: 140, 
-      hideInSearch: true, 
+      hideInSearch: true,
+      sorter: true,
       render: (_, r: any) => {
         if (isRootRow(r)) {
           const versions = r.versions as BOMGroupRow[];
@@ -1552,7 +1634,8 @@ const BOMPage: React.FC = () => {
       title: 'BOM编号', 
       dataIndex: 'bomCode', 
       width: 150, 
-      hideInSearch: true, 
+      hideInSearch: true,
+      sorter: true,
       render: (_, r: any) => {
         if (isRootRow(r)) return r.bomCode || '-';
         if (r._bomCode) return r._bomCode;
@@ -1651,6 +1734,7 @@ const BOMPage: React.FC = () => {
       dataIndex: 'approvalStatus',
       width: 120,
       valueType: 'select',
+      sorter: true,
       valueEnum: { draft: { text: t('app.master-data.bom.statusDraft'), status: 'Default' }, pending: { text: t('app.master-data.bom.statusPending'), status: 'Processing' }, approved: { text: t('app.master-data.bom.statusApproved'), status: 'Success' }, rejected: { text: t('app.master-data.bom.statusRejected'), status: 'Error' } },
       render: (_, r: any) => {
         if (isRootRow(r)) return getApprovalStatusTag(r.approvalStatus);
@@ -1978,14 +2062,7 @@ const BOMPage: React.FC = () => {
                 groupKeyToUuidsRef.current = keyToUuids;
                 // 传入完整 groupRows 作为 allGroupRows，否则成品下的半成品无法展开
                 const materialRows = groupBomsByMaterial(filteredGroupRows, selectedVersionByMaterial, groupRows);
-                const pageSize = params.pageSize || 20;
-                const current = params.current || 1;
-                const start = (current - 1) * pageSize;
-                return {
-                  data: materialRows.slice(start, start + pageSize),
-                  success: true,
-                  total: materialRows.length,
-                };
+                return pageMaterialBomRows(materialRows, params, searchFormValues as Record<string, unknown>, sort, materials);
               }
               throw apiErr;
             }
@@ -2038,14 +2115,7 @@ const BOMPage: React.FC = () => {
                 }
                 groupKeyToUuidsRef.current = keyToUuids;
                 const materialRows = groupBomsByMaterial(filteredGroupRows, selectedVersionByMaterial, groupRows);
-                const pageSize = params.pageSize || 20;
-                const current = params.current || 1;
-                const start = (current - 1) * pageSize;
-                return {
-                  data: materialRows.slice(start, start + pageSize),
-                  success: true,
-                  total: materialRows.length,
-                };
+                return pageMaterialBomRows(materialRows, params, searchFormValues as Record<string, unknown>, sort, materials);
               }
               throw batchErr;
             }
@@ -2129,15 +2199,7 @@ const BOMPage: React.FC = () => {
             }
             groupKeyToUuidsRef.current = keyToUuids;
             const materialRows = groupBomsByMaterial(displayGroupRows, selectedVersionByMaterial, allGroupRowsForNesting);
-            const pageSize = params.pageSize || 20;
-            const current = params.current || 1;
-            const start = (current - 1) * pageSize;
-            const pagedData = materialRows.slice(start, start + pageSize);
-            return {
-              data: pagedData,
-              success: true,
-              total: materialRows.length,
-            };
+            return pageMaterialBomRows(materialRows, params, searchFormValues as Record<string, unknown>, sort, materials);
           } catch (error: any) {
             console.error('获取BOM列表失败:', error);
             messageApi.error(error?.message || t('app.master-data.bom.getListFailed'));

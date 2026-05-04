@@ -33,6 +33,7 @@ import { qrcodeApi } from '../../../../services/qrcode';
 import { getDepartmentTree, DepartmentTreeItem } from '../../../../services/department';
 import { getPositionList } from '../../../../services/position';
 import { getRoleList } from '../../../../services/role';
+import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 
 /**
  * 账户管理列表页面组件
@@ -571,49 +572,45 @@ const UserListPage: React.FC = () => {
     {
       title: t('common.actions'),
       valueType: 'option',
-      width: 320,
       fixed: 'right',
-      render: (_, record) => (
-        <Space size="small">
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleView(record)}
-          >
-            {t('field.user.view')}
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            {t('field.user.edit')}
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<ReloadOutlined />}
-            onClick={() => handleResetPassword(record)}
-          >
-            {t('field.user.reset')}
-          </Button>
-          <Popconfirm
-            title={t('field.user.deleteConfirm')}
-            onConfirm={() => handleDelete(record)}
-          >
+      render: (_, record) =>
+        renderRowActionsOverflow(
+          [
             <Button
+              key="view"
               type="link"
-              danger
               size="small"
-              icon={<DeleteOutlined />}
+              icon={<EyeOutlined />}
+              onClick={() => handleView(record)}
             >
-              {t('field.user.delete')}
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
+              {t('field.user.view')}
+            </Button>,
+            <Button
+              key="edit"
+              type="link"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => handleEdit(record)}
+            >
+              {t('field.user.edit')}
+            </Button>,
+            <Button
+              key="reset"
+              type="link"
+              size="small"
+              icon={<ReloadOutlined />}
+              onClick={() => handleResetPassword(record)}
+            >
+              {t('field.user.reset')}
+            </Button>,
+            <Popconfirm key="delete" title={t('field.user.deleteConfirm')} onConfirm={() => handleDelete(record)}>
+              <Button type="link" danger size="small" icon={<DeleteOutlined />}>
+                {t('field.user.delete')}
+              </Button>
+            </Popconfirm>,
+          ],
+          `user-${record.uuid}`,
+        ),
     },
   ], [t, departmentOptions, positionOptions, handleView, handleEdit, handleResetPassword, handleDelete]);
 

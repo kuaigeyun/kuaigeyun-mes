@@ -245,6 +245,13 @@ class OperationResponse(OperationBase):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True, by_alias=True)
 
 
+class OperationListResponse(BaseModel):
+    """工序列表分页响应"""
+
+    data: List["OperationResponse"] = Field(..., description="列表数据")
+    total: int = Field(..., ge=0, description="总条数")
+
+
 class ProcessRouteBase(BaseModel):
     """工艺路线基础 Schema"""
 
@@ -336,6 +343,13 @@ class ProcessRouteResponse(ProcessRouteBase):
     
     class Config:
         from_attributes = True
+
+
+class ProcessRouteListResponse(BaseModel):
+    """工艺路线列表分页响应"""
+
+    data: List[ProcessRouteResponse] = Field(..., description="列表数据")
+    total: int = Field(..., ge=0, description="总条数")
 
 
 # ==================== 级联查询相关 Schema ====================
@@ -591,4 +605,11 @@ class SOPResponse(SOPBase):
     
     class Config:
         from_attributes = True
+
+
+class SOPListResponse(BaseModel):
+    """作业程序（SOP）列表分页响应"""
+
+    data: List[SOPResponse] = Field(..., description="列表数据")
+    total: int = Field(..., ge=0, description="总条数")
 

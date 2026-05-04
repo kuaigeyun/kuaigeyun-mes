@@ -31,8 +31,8 @@ import {
 } from '../../../../services/printDevice';
 import { getPrintTemplateList } from '../../../../services/printTemplate';
 import { countWithPagedRequests } from '../../../../utils/pagedCount';
+import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
-import '../../../../styles/action-column.less';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 
@@ -610,76 +610,60 @@ const PrintDeviceListPage: React.FC = () => {
       title: t('pages.system.printDevices.columnActions'),
       dataIndex: 'option',
       valueType: 'option',
-      width: 320,
       fixed: 'right',
-      render: (_, record) => (
-        <Space size="small">
-          <Button
-            type="link"
-            size="small"
-            className="ant-btn-row-action ant-btn-row-action-detail"
-            icon={<EyeOutlined />}
-            onClick={() => handleView(record)}
-          >
-            {t('pages.system.printTemplates.detail')}
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            className="ant-btn-row-action"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            {t('pages.system.printTemplates.edit')}
-          </Button>
-          <Popconfirm
-            title={t('pages.system.printDevices.deleteConfirmTitle')}
-            onConfirm={() => handleDelete(record)}
-            okText={t('common.confirm')}
-            cancelText={t('common.cancel')}
-          >
+      render: (_, record) =>
+        renderRowActionsOverflow(
+          [
+            <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+              {t('pages.system.printTemplates.detail')}
+            </Button>,
+            <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+              {t('pages.system.printTemplates.edit')}
+            </Button>,
+            <Popconfirm
+              key="delete"
+              title={t('pages.system.printDevices.deleteConfirmTitle')}
+              onConfirm={() => handleDelete(record)}
+              okText={t('common.confirm')}
+              cancelText={t('common.cancel')}
+            >
+              <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                {t('pages.system.printDevices.deleteTooltip')}
+              </Button>
+            </Popconfirm>,
             <Button
+              key="test"
               type="link"
               size="small"
-              className="ant-btn-row-action"
-              danger
-              icon={<DeleteOutlined />}
+              icon={<CheckCircleOutlined />}
+              onClick={() => handleTest(record)}
+              disabled={!record.is_active}
             >
-              {t('pages.system.printDevices.deleteTooltip')}
-            </Button>
-          </Popconfirm>
-          <Button
-            type="link"
-            size="small"
-            className="ant-btn-row-action"
-            icon={<CheckCircleOutlined />}
-            onClick={() => handleTest(record)}
-            disabled={!record.is_active}
-          >
-            {t('pages.system.printDevices.testConnection')}
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            className="ant-btn-row-action"
-            icon={<PrinterOutlined />}
-            onClick={() => handlePrint(record)}
-            disabled={!record.is_active || !record.is_online}
-          >
-            {t('pages.system.printDevices.printTask')}
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            className="ant-btn-row-action"
-            icon={<PrinterOutlined />}
-            onClick={() => handlePrintTestPage(record)}
-            disabled={!record.is_active || !record.is_online}
-          >
-            {t('pages.system.printDevices.printTestPage')}
-          </Button>
-        </Space>
-      ),
+              {t('pages.system.printDevices.testConnection')}
+            </Button>,
+            <Button
+              key="print"
+              type="link"
+              size="small"
+              icon={<PrinterOutlined />}
+              onClick={() => handlePrint(record)}
+              disabled={!record.is_active || !record.is_online}
+            >
+              {t('pages.system.printDevices.printTask')}
+            </Button>,
+            <Button
+              key="print-test"
+              type="link"
+              size="small"
+              icon={<PrinterOutlined />}
+              onClick={() => handlePrintTestPage(record)}
+              disabled={!record.is_active || !record.is_online}
+            >
+              {t('pages.system.printDevices.printTestPage')}
+            </Button>,
+          ],
+          `print-device-${record.uuid}`,
+        ),
     },
   ];
 

@@ -1,10 +1,12 @@
 /**
- * 客户表单 Schema 配置
+ * 客户表单 Schema：TAB1 基本信息、TAB2 开票资料、TAB3 业务与扩展
  */
 
-import type { FieldConfig } from './form-schemas';
+import type { FieldConfig } from '../../../components/schema-form';
+import { partnerInvoiceFormFields, partnerExtendedCommonFormFields } from './partner-form-shared';
 
-export const customerFormSchema: FieldConfig[] = [
+/** TAB：基本信息 */
+export const customerFormSchemaBasic: FieldConfig[] = [
   {
     name: 'code',
     type: 'text',
@@ -88,6 +90,46 @@ export const customerFormSchema: FieldConfig[] = [
     ],
   },
   {
+    name: 'salesmanId',
+    type: 'select',
+    labelKey: 'field.customer.salesman',
+    placeholderKey: 'field.customer.salesmanPlaceholder',
+    colSpan: 12,
+    allowClear: true,
+  },
+  {
+    name: 'address',
+    type: 'textarea',
+    labelKey: 'field.customer.address',
+    placeholderKey: 'field.customer.addressPlaceholder',
+    colSpan: 24,
+    fieldProps: { rows: 3, maxLength: 500 },
+  },
+  {
+    name: 'isPublic',
+    type: 'segmented',
+    labelKey: 'field.customer.visibility',
+    colSpan: 12,
+    required: true,
+    options: [
+      { labelKey: 'field.customer.visibilityPrivate', value: false },
+      { labelKey: 'field.customer.visibilityPublic', value: true },
+    ],
+    rules: [{ required: true, messageKey: 'field.customer.visibilityRequired' }],
+  },
+  {
+    name: 'isActive',
+    type: 'switch',
+    labelKey: 'field.customer.isActive',
+    colSpan: 12,
+  },
+];
+
+/** TAB：开票资料（与客户/供应商共用字段） */
+export const customerFormSchemaInvoice: FieldConfig[] = partnerInvoiceFormFields;
+
+const customerBusinessFields: FieldConfig[] = [
+  {
     name: 'industryCode',
     type: 'select',
     labelKey: 'field.customer.industry',
@@ -127,38 +169,10 @@ export const customerFormSchema: FieldConfig[] = [
     colSpan: 12,
     fieldProps: { min: 0, precision: 2, style: { width: '100%' } },
   },
-  {
-    name: 'salesmanId',
-    type: 'select',
-    labelKey: 'field.customer.salesman',
-    placeholderKey: 'field.customer.salesmanPlaceholder',
-    colSpan: 12,
-    allowClear: true,
-  },
-  {
-    name: 'address',
-    type: 'textarea',
-    labelKey: 'field.customer.address',
-    placeholderKey: 'field.customer.addressPlaceholder',
-    colSpan: 24,
-    fieldProps: { rows: 3, maxLength: 500 },
-  },
-  {
-    name: 'isPublic',
-    type: 'segmented',
-    labelKey: 'field.customer.visibility',
-    colSpan: 12,
-    required: true,
-    options: [
-      { labelKey: 'field.customer.visibilityPrivate', value: false },
-      { labelKey: 'field.customer.visibilityPublic', value: true },
-    ],
-    rules: [{ required: true, messageKey: 'field.customer.visibilityRequired' }],
-  },
-  {
-    name: 'isActive',
-    type: 'switch',
-    labelKey: 'field.customer.isActive',
-    colSpan: 12,
-  },
+];
+
+/** TAB：业务与扩展（客户业务指标 + 商事/结算/联系人） */
+export const customerFormSchemaExtended: FieldConfig[] = [
+  ...customerBusinessFields,
+  ...partnerExtendedCommonFormFields,
 ];

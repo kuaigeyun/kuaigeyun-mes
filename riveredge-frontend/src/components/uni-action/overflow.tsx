@@ -174,14 +174,16 @@ function isClickableVisibleAction(node: React.ReactNode): boolean {
 function toMenuItem(node: React.ReactNode, key: string) {
   const text = normalizeActionLabelText(readNodeText(node)) || '操作'
   const interactive = findInteractiveElement(node)
+  const tone = resolveButtonTone(text)
 
   if (interactive) {
     const props = (interactive.props || {}) as Record<string, unknown>
     const onClick = typeof props.onClick === 'function' ? (props.onClick as () => void) : undefined
+    const destructive = tone.mode === 'destructive'
     return {
       key,
       label: text,
-      danger: !!props.danger || resolveButtonTone(text).danger,
+      danger: destructive || !!props.danger,
       disabled: !!props.disabled,
       onClick,
     }

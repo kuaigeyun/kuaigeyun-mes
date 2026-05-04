@@ -79,6 +79,28 @@ class Supplier(BaseModel):
     credit_limit = fields.DecimalField(
         max_digits=18, decimal_places=2, null=True, description="授信额度"
     )
+
+    # 开票资料（收票/票面常用）
+    tax_registration_no = fields.CharField(max_length=50, null=True, description="统一社会信用代码/纳税人识别号")
+    invoice_title = fields.CharField(max_length=200, null=True, description="发票抬头")
+    invoice_address = fields.TextField(null=True, description="开票地址")
+    invoice_phone = fields.CharField(max_length=50, null=True, description="开票电话")
+    invoice_bank_name = fields.CharField(max_length=200, null=True, description="开票开户银行")
+    invoice_bank_account = fields.CharField(max_length=64, null=True, description="开票银行账号")
+    invoice_type_code = fields.CharField(max_length=50, null=True, description="发票类型偏好编码")
+    taxpayer_type_code = fields.CharField(max_length=50, null=True, description="纳税人类型编码")
+
+    # 商事主体与结算、联系人扩展
+    legal_representative = fields.CharField(max_length=100, null=True, description="法定代表人")
+    enterprise_type_code = fields.CharField(max_length=50, null=True, description="企业类型编码")
+    payment_terms_days = fields.IntField(null=True, description="付款账期（天）")
+    settlement_method_code = fields.CharField(max_length=50, null=True, description="结算方式编码")
+    finance_contact_name = fields.CharField(max_length=100, null=True, description="财务联系人")
+    finance_contact_phone = fields.CharField(max_length=30, null=True, description="财务联系电话")
+    finance_contact_email = fields.CharField(max_length=100, null=True, description="财务联系邮箱")
+    delivery_contact_name = fields.CharField(max_length=100, null=True, description="收货联系人")
+    delivery_contact_phone = fields.CharField(max_length=30, null=True, description="收货联系电话")
+    delivery_address = fields.TextField(null=True, description="收货地址")
     
     # 状态信息
     is_active = fields.BooleanField(default=True, description="是否启用")

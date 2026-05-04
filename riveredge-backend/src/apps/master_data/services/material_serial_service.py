@@ -128,6 +128,9 @@ class MaterialSerialService:
         status: Optional[str] = None,
         page: int = 1,
         page_size: int = 20,
+        keyword: Optional[str] = None,
+        sort_by: Optional[str] = None,
+        sort_order: Optional[str] = None,
     ) -> MaterialSerialListResponse:
         """
         获取序列号列表
@@ -161,6 +164,14 @@ class MaterialSerialService:
         # 序列号模糊搜索
         if serial_no:
             query = query.filter(serial_no__icontains=serial_no)
+
+        if keyword and keyword.strip():
+            kw = keyword.strip()
+            query = query.filter(
+                Q(serial_no__icontains=kw)
+                | Q(supplier_serial_no__icontains=kw)
+                | Q(material__name__icontains=kw)
+            )
         
         # 状态筛选
         if status:
@@ -168,11 +179,23 @@ class MaterialSerialService:
         
         # 总数
         total = await query.count()
+
+        sort_field_map = {
+            "serial_no": "serial_no",
+            "status": "status",
+            "production_date": "production_date",
+            "factory_date": "factory_date",
+            "created_at": "created_at",
+            "material_name": "material__name",
+        }
+        db_sort = sort_field_map.get(sort_by or "", "created_at")
+        desc = (sort_order or "desc").lower() == "desc"
+        order_expr = f"-{db_sort}" if desc else db_sort
         
         # 分页查询
         serials = await query.prefetch_related("material").offset(
             (page - 1) * page_size
-        ).limit(page_size).order_by("-created_at")
+        ).limit(page_size).order_by(order_expr).all()
         
         items = []
         for serial in serials:

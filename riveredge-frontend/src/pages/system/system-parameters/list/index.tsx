@@ -35,6 +35,7 @@ import {
   CreateSystemParameterData,
   UpdateSystemParameterData,
 } from '../../../../services/systemParameter';
+import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 
 /**
  * 系统参数管理列表页面组件
@@ -513,43 +514,47 @@ const SystemParameterListPage: React.FC = () => {
     {
       title: t('common.actions'),
       valueType: 'option',
-      width: 200,
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleView(record)}
-          >
-            {t('field.systemParameter.view')}
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            {t('field.systemParameter.edit')}
-          </Button>
-          <Popconfirm
-            title={t('field.systemParameter.deleteConfirm')}
-            onConfirm={() => handleDelete(record)}
-            disabled={record.is_system}
-          >
+      render: (_, record) =>
+        renderRowActionsOverflow(
+          [
             <Button
+              key="view"
               type="link"
-              danger
               size="small"
-              icon={<DeleteOutlined />}
+              icon={<EyeOutlined />}
+              onClick={() => handleView(record)}
+            >
+              {t('field.systemParameter.view')}
+            </Button>,
+            <Button
+              key="edit"
+              type="link"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => handleEdit(record)}
+            >
+              {t('field.systemParameter.edit')}
+            </Button>,
+            <Popconfirm
+              key="delete"
+              title={t('field.systemParameter.deleteConfirm')}
+              onConfirm={() => handleDelete(record)}
               disabled={record.is_system}
             >
-              {t('field.systemParameter.delete')}
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
+              <Button
+                type="link"
+                danger
+                size="small"
+                icon={<DeleteOutlined />}
+                disabled={record.is_system}
+              >
+                {t('field.systemParameter.delete')}
+              </Button>
+            </Popconfirm>,
+          ],
+          `sys-param-${record.uuid}`,
+        ),
     },
   ];
 

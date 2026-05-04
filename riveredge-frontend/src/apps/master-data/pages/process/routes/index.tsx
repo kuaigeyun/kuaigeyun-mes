@@ -23,6 +23,7 @@ import { materialApi, materialGroupApi } from '../../../services/material';
 import type { ProcessRoute } from '../../../types/process';
 import type { Material, MaterialGroup } from '../../../types/material';
 import { DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
+import { extractProTableSort, mapProcessListSortField } from '../../../../../utils/tableQueryKey';
 
 /**
  * 工艺路线管理列表页面组件
@@ -337,13 +338,15 @@ const ProcessRoutesPage: React.FC = () => {
     try {
       let toExport: ProcessRoute[] = [];
       if (type === 'all') {
-        toExport = await processRouteApi.list({ skip: 0, limit: 10000 });
+        const res = await processRouteApi.list({ skip: 0, limit: 10000 });
+        toExport = Array.isArray(res) ? res : res?.data ?? [];
       } else if (type === 'selected' && selectedRowKeys?.length && currentPageData) {
         toExport = currentPageData.filter((r) => selectedRowKeys.includes(r.uuid));
       } else if (type === 'currentPage' && currentPageData) {
         toExport = currentPageData;
       } else {
-        toExport = await processRouteApi.list({ skip: 0, limit: 10000 });
+        const res = await processRouteApi.list({ skip: 0, limit: 10000 });
+        toExport = Array.isArray(res) ? res : res?.data ?? [];
       }
       if (toExport.length === 0) {
         messageApi.warning(t('app.master-data.noExportData'));
@@ -536,11 +539,13 @@ const ProcessRoutesPage: React.FC = () => {
       dataIndex: 'code',
       copyable: true,width: 150,
       fixed: 'left',
+      sorter: true,
     },
     {
       title: '工艺路线名称',
       dataIndex: 'name',
       width: 200,
+      sorter: true,
     },
     {
       title: '描述',
@@ -565,6 +570,7 @@ const ProcessRoutesPage: React.FC = () => {
           </Tag>
         );
       },
+      sorter: true,
     },
     {
       title: '创建时间',
@@ -627,7 +633,7 @@ const ProcessRoutesPage: React.FC = () => {
       <UniTable<ProcessRoute>
         actionRef={actionRef}
         columns={columns}
-        request={async (params, _sort, _filter, searchFormValues) => {
+        request={async (params, sort, _filter, searchFormValues) => {
           // 处理搜索参数
           const apiParams: any = {
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
@@ -636,15 +642,30 @@ const ProcessRoutesPage: React.FC = () => {
           
           // 启用状态筛选
           if (searchFormValues?.isActive !== undefined && searchFormValues.isActive !== '' && searchFormValues.isActive !== null) {
-            apiParams.is_active = searchFormValues.isActive;
+            apiParams.isActive = searchFormValues.isActive;
+          }
+
+          const fuzzyKw = String(searchFormValues?.keyword ?? '').trim();
+          const fallbackKw =
+            fuzzyKw ||
+            String(searchFormValues?.code ?? '').trim() ||
+            String(searchFormValues?.name ?? '').trim();
+          if (fallbackKw) apiParams.keyword = fallbackKw;
+
+          const { sortBy: rawSortBy, sortOrder } = extractProTableSort(sort);
+          const sortField = mapProcessListSortField(rawSortBy);
+          if (sortField) {
+            apiParams.sortBy = sortField;
+            apiParams.sortOrder = sortOrder;
           }
           
           try {
             const result = await processRouteApi.list(apiParams);
+            const listData = Array.isArray(result) ? result : result?.data ?? [];
             return {
-              data: result,
+              data: listData,
               success: true,
-              total: result.length,
+              total: typeof result?.total === 'number' ? result.total : listData.length,
             };
           } catch (error: any) {
             console.error('获取工艺路线列表失败:', error);

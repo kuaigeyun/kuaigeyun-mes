@@ -16,6 +16,7 @@ import { flushDrawerOpen, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MO
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import {
   getIntegrationConfigList,
+  getIntegrationConfigListAllMatching,
   getIntegrationConfigByUuid,
   createIntegrationConfig,
   updateIntegrationConfig,
@@ -29,6 +30,7 @@ import ConnectionWizard from '../ConnectionWizard';
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
+import { extractProTableSort, mergeListKeyword, mapIntegrationConfigListSortField } from '../../../../utils/tableQueryKey';
 
 dayjs.extend(relativeTime);
 
@@ -639,37 +641,39 @@ const IntegrationConfigListPage: React.FC = () => {
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {
-            // 处理搜索参数（不传skip和limit，让后端返回所有数据，前端进行分页）
-            const apiParams: any = {};
-            
-            // 状态筛选
-            if (searchFormValues?.is_active !== undefined && searchFormValues.is_active !== '' && searchFormValues.is_active !== null) {
-              apiParams.is_active = searchFormValues.is_active;
-            }
-            
-            // 类型筛选
-            if (searchFormValues?.type) {
-              apiParams.type = searchFormValues.type;
-            }
-            
+            const { sortBy, sortOrder } = extractProTableSort(sort);
+            const kw = mergeListKeyword(searchFormValues, 'search');
+
+            const filterBase = {
+              type: searchFormValues?.type as string | undefined,
+              is_active:
+                searchFormValues?.is_active !== undefined &&
+                searchFormValues.is_active !== '' &&
+                searchFormValues.is_active !== null
+                  ? (searchFormValues.is_active as boolean)
+                  : undefined,
+              search: kw || undefined,
+              sort_by: mapIntegrationConfigListSortField(sortBy),
+              sort_order: sortOrder,
+            };
+
             try {
-              // 获取所有数据（集成配置数量通常不会太多）
-              const allData = await getIntegrationConfigList(apiParams);
-              
-              // 同时保存所有数据用于统计
-              setAllIntegrations(allData);
-              
-              // 前端进行分页处理
               const page = params.current || 1;
               const pageSize = params.pageSize || 20;
-              const startIndex = (page - 1) * pageSize;
-              const endIndex = startIndex + pageSize;
-              const paginatedData = allData.slice(startIndex, endIndex);
-              
+              const [pageRes, wideItems] = await Promise.all([
+                getIntegrationConfigList({
+                  ...filterBase,
+                  page,
+                  page_size: pageSize,
+                }),
+                getIntegrationConfigListAllMatching(filterBase),
+              ]);
+              setAllIntegrations(wideItems);
+
               return {
-                data: paginatedData,
+                data: pageRes.items,
                 success: true,
-                total: allData.length,
+                total: pageRes.total,
               };
             } catch (error: any) {
               console.error('获取集成配置列表失败:', error);
@@ -705,7 +709,7 @@ const IntegrationConfigListPage: React.FC = () => {
             } else if (type === 'currentPage' && pageData?.length) {
               items = pageData;
             } else {
-              items = await getIntegrationConfigList({ skip: 0, limit: 10000 });
+              items = await getIntegrationConfigListAllMatching();
             }
             if (items.length === 0) {
               messageApi.warning(t('pages.system.integrationConfigs.exportNoData'));

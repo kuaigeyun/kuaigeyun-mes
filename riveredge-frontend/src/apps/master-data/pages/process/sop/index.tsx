@@ -20,7 +20,8 @@ import { batchImport } from '../../../../../utils/batchOperations';
 import { ListPageTemplate, FormModalTemplate, flushDrawerOpen } from '../../../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
 
-import { sopApi, operationApi, processRouteApi } from '../../../services/process';
+import { sopApi, operationApi, processRouteApi, unwrapProcessPagedList } from '../../../services/process';
+import { extractProTableSort, mapProcessListSortField } from '../../../../../utils/tableQueryKey';
 import { materialApi, materialGroupApi } from '../../../services/material';
 import type { SOP, SOPCreate, SOPUpdate, Operation } from '../../../types/process';
 import { DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
@@ -97,12 +98,25 @@ const SOPPage: React.FC = () => {
           operationApi.list({ limit: 1000, isActive: true }),
           materialGroupApi.list({ limit: 1000 }).catch(() => []),
           materialApi.list({ limit: 2000, isActive: true }).catch(() => []),
-          processRouteApi.list({ limit: 500, is_active: true }).catch(() => []),
+          processRouteApi.list({ limit: 500, isActive: true }).catch(() => []),
         ]);
-        setOperations(opRes);
+        setOperations(unwrapProcessPagedList(opRes));
         setMaterialGroups(Array.isArray(mgRes) ? mgRes : []);
-        setMaterials(Array.isArray(matRes) ? matRes : []);
-        setRoutes(Array.isArray(routeRes) ? routeRes : []);
+        const rawMats = Array.isArray(matRes) ? matRes : [];
+        setMaterials(
+          rawMats.map((m: any) => ({
+            uuid: m.uuid,
+            code: m.mainCode ?? m.code ?? '',
+            name: m.name ?? '',
+          }))
+        );
+        setRoutes(
+          unwrapProcessPagedList(routeRes).map((r: any) => ({
+            uuid: r.uuid,
+            code: r.code,
+            name: r.name,
+          }))
+        );
       } catch (e) {
         console.error('加载基础数据失败:', e);
       } finally {
@@ -379,13 +393,15 @@ const SOPPage: React.FC = () => {
     try {
       let toExport: SOP[] = [];
       if (type === 'all') {
-        toExport = await sopApi.list({ skip: 0, limit: 10000 });
+        const res = await sopApi.list({ skip: 0, limit: 10000 });
+        toExport = Array.isArray(res) ? res : res?.data ?? [];
       } else if (type === 'selected' && selectedRowKeys?.length && currentPageData) {
         toExport = currentPageData.filter((r) => selectedRowKeys.includes(r.uuid));
       } else if (type === 'currentPage' && currentPageData) {
         toExport = currentPageData;
       } else {
-        toExport = await sopApi.list({ skip: 0, limit: 10000 });
+        const res = await sopApi.list({ skip: 0, limit: 10000 });
+        toExport = Array.isArray(res) ? res : res?.data ?? [];
       }
       if (toExport.length === 0) {
         messageApi.warning(t('app.master-data.noExportData'));
@@ -485,17 +501,32 @@ const SOPPage: React.FC = () => {
       dataIndex: 'code',
       copyable: true,width: 150,
       fixed: 'left',
+      sorter: true,
     },
     {
       title: 'SOP名称',
       dataIndex: 'name',
       width: 200,
+      sorter: true,
+    },
+    {
+      key: 'sop-operation-filter',
+      title: '关联工序',
+      dataIndex: 'operationId',
+      hideInTable: true,
+      valueType: 'select',
+      fieldProps: {
+        placeholder: '筛选工序',
+        options: operations.map((o) => ({ label: `${o.code} - ${o.name}`, value: o.id })),
+        showSearch: true,
+      },
     },
     {
       title: '关联工序',
       dataIndex: 'operationId',
       width: 200,
       hideInSearch: true,
+      sorter: true,
       render: (_, record) => getOperationName(record.operationId),
     },
     {
@@ -552,6 +583,7 @@ const SOPPage: React.FC = () => {
       dataIndex: 'version',
       width: 120,
       hideInSearch: true,
+      sorter: true,
     },
     {
       title: '内容',
@@ -577,6 +609,7 @@ const SOPPage: React.FC = () => {
           </Tag>
         );
       },
+      sorter: true,
     },
     {
       title: '创建时间',
@@ -662,12 +695,27 @@ const SOPPage: React.FC = () => {
           if (searchFormValues?.material_group_uuid) apiParams.material_group_uuid = searchFormValues.material_group_uuid;
           if (searchFormValues?.route_uuid) apiParams.route_uuid = searchFormValues.route_uuid;
 
+          const fuzzyKw = String(searchFormValues?.keyword ?? '').trim();
+          const fallbackKw =
+            fuzzyKw ||
+            String(searchFormValues?.code ?? '').trim() ||
+            String(searchFormValues?.name ?? '').trim();
+          if (fallbackKw) apiParams.keyword = fallbackKw;
+
+          const { sortBy: rawSortBy, sortOrder } = extractProTableSort(sort);
+          const sortField = mapProcessListSortField(rawSortBy);
+          if (sortField) {
+            apiParams.sortBy = sortField;
+            apiParams.sortOrder = sortOrder;
+          }
+
           try {
             const result = await sopApi.list(apiParams);
+            const listData = Array.isArray(result) ? result : result?.data ?? [];
             return {
-              data: result,
+              data: listData,
               success: true,
-              total: result.length,
+              total: typeof result?.total === 'number' ? result.total : listData.length,
             };
           } catch (error: any) {
             console.error('获取SOP列表失败:', error);

@@ -44,7 +44,7 @@ import {
   removeNode,
 } from './utils';
 import { bomApi, materialApi, materialGroupApi } from '../../../services/material';
-import { processRouteApi } from '../../../services/process';
+import { processRouteApi, unwrapProcessPagedList } from '../../../services/process';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import type { Material, MaterialCreate, MaterialUpdate, BOMHierarchyItem, MaterialUnits, BOMVersionCompareResult } from '../../../types/material';
 import type { ProcessRoute } from '../../../types/process';
@@ -1867,7 +1867,7 @@ const BOMDesignerPage: React.FC = () => {
     }
     setProcessRouteEditLoading(true);
     try {
-      const list = await processRouteApi.list({});
+      const list = unwrapProcessPagedList(await processRouteApi.list({}));
       const route = list.find((r: ProcessRoute) => r.id === routeId);
       if (route) {
         setProcessRouteToEditUuid(route.uuid);

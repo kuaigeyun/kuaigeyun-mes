@@ -32,6 +32,8 @@ export interface APIListParams {
   search?: string;
   method?: string;
   is_active?: boolean;
+  sort_by?: string;
+  sort_order?: 'asc' | 'desc';
 }
 
 export interface APIListResponse {

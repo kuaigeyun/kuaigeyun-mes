@@ -263,6 +263,9 @@ export interface MaterialListParams {
   code?: string;
   name?: string;
   sourceType?: string; // 物料来源类型（Make/Buy/Outsource/Phantom）
+  /** 后端：main_code | name | created_at | updated_at */
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
 }
 
 /** 批量更新批号/序列号管理（POST /materials/batch-tracking） */
@@ -710,6 +713,11 @@ export interface MaterialBatchListParams {
   status?: string;
   page?: number;
   pageSize?: number;
+  /** 综合模糊：批号、供应商批号、物料名称 */
+  keyword?: string;
+  /** 后端 snake：batch_no | quantity | status | production_date | expiry_date | created_at | material_name */
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
 }
 
 export interface MaterialBatchListResponse {
@@ -761,6 +769,10 @@ export interface MaterialSerialListParams {
   status?: string;
   page?: number;
   pageSize?: number;
+  keyword?: string;
+  /** serial_no | status | production_date | factory_date | created_at | material_name */
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
 }
 
 export interface MaterialSerialListResponse {

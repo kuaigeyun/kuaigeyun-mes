@@ -33,7 +33,7 @@ APPLICATION_TYPES = (
     "weaver", "seeyon", "landray", "cloudhub", "tongda_oa",
     "rootcloud", "casicloud", "alicloud_iot", "huaweicloud_iot", "thingsboard", "jetlinks",
     "flux_wms", "kejian_wms", "digiwin_wms", "openwms",
-),
+)
 
 
 def _to_response(ic) -> IntegrationConfigResponse:
@@ -79,33 +79,15 @@ async def list_application_connections(
     try:
         if type is not None and type not in APPLICATION_TYPES:
             return {"items": [], "total": 0, "page": page, "page_size": page_size}
-        skip = (page - 1) * page_size
-        items = await IntegrationConfigService.list_integrations(
+        type_scope = [type] if type is not None else list(APPLICATION_TYPES)
+        items, total = await IntegrationConfigService.list_integrations(
             tenant_id=tenant_id,
-            skip=skip,
-            limit=page_size,
-            type=type,
+            page=page,
+            page_size=page_size,
+            types=type_scope,
             is_active=is_active,
+            search=search,
         )
-        items = [i for i in items if i.type in APPLICATION_TYPES]
-        if search:
-            search_lower = search.lower()
-            items = [
-                i for i in items
-                if search_lower in (i.name or "").lower() or search_lower in (i.code or "").lower()
-            ]
-        all_list = await IntegrationConfigService.list_integrations(
-            tenant_id=tenant_id, skip=0, limit=10000, type=type, is_active=is_active
-        )
-        all_list = [i for i in all_list if i.type in APPLICATION_TYPES]
-        if search:
-            search_lower = search.lower()
-            total = sum(
-                1 for i in all_list
-                if search_lower in (i.name or "").lower() or search_lower in (i.code or "").lower()
-            )
-        else:
-            total = len(all_list)
         return {
             "items": [_to_response(i) for i in items],
             "total": total,

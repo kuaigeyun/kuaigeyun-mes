@@ -1,10 +1,12 @@
 /**
- * 供应商表单 Schema 配置
+ * 供应商表单 Schema：TAB1 基本信息、TAB2 开票资料、TAB3 业务与扩展
  */
 
-import type { FieldConfig } from './form-schemas';
+import type { FieldConfig } from '../../../components/schema-form';
+import { partnerInvoiceFormFields, partnerExtendedCommonFormFields } from './partner-form-shared';
 
-export const supplierFormSchema: FieldConfig[] = [
+/** TAB：基本信息 */
+export const supplierFormSchemaBasic: FieldConfig[] = [
   {
     name: 'code',
     type: 'text',
@@ -42,6 +44,14 @@ export const supplierFormSchema: FieldConfig[] = [
     rules: [{ maxLength: 100, messageKey: 'field.supplier.shortNameMaxLength' }],
   },
   {
+    name: 'category',
+    type: 'select',
+    labelKey: 'field.supplier.category',
+    placeholderKey: 'field.supplier.categoryPlaceholder',
+    colSpan: 12,
+    allowClear: true,
+  },
+  {
     name: 'contactPerson',
     type: 'text',
     labelKey: 'field.supplier.contactPerson',
@@ -58,6 +68,54 @@ export const supplierFormSchema: FieldConfig[] = [
     colSpan: 12,
     allowClear: true,
   },
+  {
+    name: 'phone',
+    type: 'text',
+    labelKey: 'field.supplier.phone',
+    placeholderKey: 'field.supplier.phonePlaceholder',
+    maxLength: 20,
+    colSpan: 12,
+    rules: [{ maxLength: 20, messageKey: 'field.supplier.phoneMaxLength' }],
+  },
+  {
+    name: 'email',
+    type: 'text',
+    labelKey: 'field.supplier.email',
+    placeholderKey: 'field.supplier.emailPlaceholder',
+    maxLength: 100,
+    colSpan: 12,
+    rules: [
+      { type: 'email', messageKey: 'field.supplier.emailInvalid' },
+      { maxLength: 100, messageKey: 'field.supplier.emailMaxLength' },
+    ],
+  },
+  {
+    name: 'buyerId',
+    type: 'select',
+    labelKey: 'field.supplier.buyer',
+    placeholderKey: 'field.supplier.buyerPlaceholder',
+    colSpan: 12,
+    allowClear: true,
+  },
+  {
+    name: 'address',
+    type: 'textarea',
+    labelKey: 'field.supplier.address',
+    placeholderKey: 'field.supplier.addressPlaceholder',
+    colSpan: 24,
+    fieldProps: { rows: 3, maxLength: 500 },
+  },
+  {
+    name: 'isActive',
+    type: 'switch',
+    labelKey: 'field.supplier.isActive',
+    colSpan: 12,
+  },
+];
+
+export const supplierFormSchemaInvoice: FieldConfig[] = partnerInvoiceFormFields;
+
+const supplierBusinessFields: FieldConfig[] = [
   {
     name: 'industryCode',
     type: 'select',
@@ -90,55 +148,9 @@ export const supplierFormSchema: FieldConfig[] = [
     colSpan: 12,
     fieldProps: { min: 0, precision: 2, style: { width: '100%' } },
   },
-  {
-    name: 'phone',
-    type: 'text',
-    labelKey: 'field.supplier.phone',
-    placeholderKey: 'field.supplier.phonePlaceholder',
-    maxLength: 20,
-    colSpan: 12,
-    rules: [{ maxLength: 20, messageKey: 'field.supplier.phoneMaxLength' }],
-  },
-  {
-    name: 'email',
-    type: 'text',
-    labelKey: 'field.supplier.email',
-    placeholderKey: 'field.supplier.emailPlaceholder',
-    maxLength: 100,
-    colSpan: 12,
-    rules: [
-      { type: 'email', messageKey: 'field.supplier.emailInvalid' },
-      { maxLength: 100, messageKey: 'field.supplier.emailMaxLength' },
-    ],
-  },
-  {
-    name: 'category',
-    type: 'select',
-    labelKey: 'field.supplier.category',
-    placeholderKey: 'field.supplier.categoryPlaceholder',
-    colSpan: 12,
-    allowClear: true,
-  },
-  {
-    name: 'buyerId',
-    type: 'select',
-    labelKey: 'field.supplier.buyer',
-    placeholderKey: 'field.supplier.buyerPlaceholder',
-    colSpan: 12,
-    allowClear: true,
-  },
-  {
-    name: 'address',
-    type: 'textarea',
-    labelKey: 'field.supplier.address',
-    placeholderKey: 'field.supplier.addressPlaceholder',
-    colSpan: 24,
-    fieldProps: { rows: 3, maxLength: 500 },
-  },
-  {
-    name: 'isActive',
-    type: 'switch',
-    labelKey: 'field.supplier.isActive',
-    colSpan: 12,
-  },
+];
+
+export const supplierFormSchemaExtended: FieldConfig[] = [
+  ...supplierBusinessFields,
+  ...partnerExtendedCommonFormFields,
 ];

@@ -3,8 +3,16 @@
  */
 
 export type { FieldConfig, FieldType, RuleConfig } from './form-schemas';
-export { customerFormSchema } from './customer';
-export { supplierFormSchema } from './supplier';
+export {
+  customerFormSchemaBasic,
+  customerFormSchemaInvoice,
+  customerFormSchemaExtended,
+} from './customer';
+export {
+  supplierFormSchemaBasic,
+  supplierFormSchemaInvoice,
+  supplierFormSchemaExtended,
+} from './supplier';
 export { plantFormSchema } from './plant';
 export { warehouseFormSchema } from './warehouse';
 export { productionLineFormSchema } from './production-line';

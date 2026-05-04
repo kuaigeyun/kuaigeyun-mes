@@ -6,15 +6,21 @@
 
 import uuid
 from fastapi import APIRouter, Depends, HTTPException as FastAPIHTTPException, Query, status
-from typing import Any, List, Optional, Annotated
+from typing import Any, Optional, Annotated
 from loguru import logger
 
 from core.api.deps.deps import get_current_user, get_current_tenant
 from infra.models.user import User
 from apps.master_data.services.supply_chain_service import SupplyChainService
 from apps.master_data.schemas.supply_chain_schemas import (
-    CustomerCreate, CustomerUpdate, CustomerResponse,
-    SupplierCreate, SupplierUpdate, SupplierResponse
+    CustomerCreate,
+    CustomerUpdate,
+    CustomerResponse,
+    CustomerListResponse,
+    SupplierCreate,
+    SupplierUpdate,
+    SupplierResponse,
+    SupplierListResponse,
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
@@ -74,15 +80,18 @@ async def create_customer(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/customers", response_model=List[CustomerResponse], summary="获取客户列表")
+@router.get("/customers", response_model=CustomerListResponse, summary="获取客户列表")
 async def list_customers(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     category: Optional[str] = Query(None, description="客户分类（过滤）"),
-    is_active: Optional[bool] = Query(None, description="是否启用"),
-    keyword: Optional[str] = Query(None, description="搜索关键词（编号或名称）")
+    is_active: Optional[bool] = Query(None, alias="isActive", description="是否启用"),
+    keyword: Optional[str] = Query(None, description="搜索关键词（编号、名称、联系人等）"),
+    salesman_id: Optional[int] = Query(None, alias="salesmanId", description="归属业务员"),
+    sort_by: Optional[str] = Query(None, alias="sortBy", description="排序字段"),
+    sort_order: Optional[str] = Query(None, alias="sortOrder", description="asc 或 desc"),
 ):
     """
     获取客户列表
@@ -93,7 +102,19 @@ async def list_customers(
     - **is_active**: 是否启用（可选）
     - **keyword**: 搜索关键词（可选）
     """
-    return await SupplyChainService.list_customers(tenant_id, skip, limit, category, is_active, keyword, current_user)
+    items, total = await SupplyChainService.list_customers(
+        tenant_id,
+        skip,
+        limit,
+        category,
+        is_active,
+        keyword,
+        salesman_id,
+        sort_by,
+        sort_order,
+        current_user,
+    )
+    return CustomerListResponse(data=items, total=total)
 
 
 @router.get("/customers/{customer_uuid}", response_model=CustomerResponse, summary="获取客户详情")
@@ -187,17 +208,20 @@ async def create_supplier(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/suppliers", response_model=List[SupplierResponse], summary="获取供应商列表")
+@router.get("/suppliers", response_model=SupplierListResponse, summary="获取供应商列表")
 async def list_suppliers(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     category: Optional[str] = Query(None, description="供应商分类（过滤）"),
-    is_active: Optional[bool] = Query(None, description="是否启用"),
-    keyword: Optional[str] = Query(None, description="搜索关键词（供应商编码或名称）"),
-    code: Optional[str] = Query(None, description="供应商编码（精确匹配）"),
-    name: Optional[str] = Query(None, description="供应商名称（模糊匹配）")
+    is_active: Optional[bool] = Query(None, alias="isActive", description="是否启用"),
+    keyword: Optional[str] = Query(None, description="搜索关键词（编码、名称、联系人等）"),
+    code: Optional[str] = Query(None, description="供应商编码（模糊匹配）"),
+    name: Optional[str] = Query(None, description="供应商名称（模糊匹配）"),
+    buyer_id: Optional[int] = Query(None, alias="buyerId", description="归属采购员"),
+    sort_by: Optional[str] = Query(None, alias="sortBy", description="排序字段"),
+    sort_order: Optional[str] = Query(None, alias="sortOrder", description="asc 或 desc"),
 ):
     """
     获取供应商列表
@@ -210,7 +234,21 @@ async def list_suppliers(
     - **code**: 供应商编码（精确匹配）
     - **name**: 供应商名称（模糊匹配）
     """
-    return await SupplyChainService.list_suppliers(tenant_id, skip, limit, category, is_active, keyword, code, name, current_user)
+    items, total = await SupplyChainService.list_suppliers(
+        tenant_id,
+        skip,
+        limit,
+        category,
+        is_active,
+        keyword,
+        code,
+        name,
+        buyer_id,
+        sort_by,
+        sort_order,
+        current_user,
+    )
+    return SupplierListResponse(data=items, total=total)
 
 
 @router.get("/suppliers/{supplier_uuid}", response_model=SupplierResponse, summary="获取供应商详情")

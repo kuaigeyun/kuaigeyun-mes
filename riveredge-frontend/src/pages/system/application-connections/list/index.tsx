@@ -24,8 +24,6 @@ import {
   Typography,
   Alert,
   Button,
-  Dropdown,
-  Modal,
   Descriptions,
 } from 'antd';
 import {
@@ -33,7 +31,6 @@ import {
   EyeOutlined,
   ThunderboltOutlined,
   EditOutlined,
-  MoreOutlined,
   AppstoreOutlined,
   MessageOutlined,
   CloudOutlined,
@@ -64,6 +61,7 @@ import {
   testApplicationConnectionConfig,
   ApplicationConnection,
 } from '../../../../services/applicationConnection';
+import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 
@@ -700,42 +698,39 @@ const ApplicationConnectionsListPage: React.FC = () => {
     {
       title: '操作',
       valueType: 'option',
-      width: 180,
       fixed: 'right',
-      render: (_, record) => (
-        <Space size="small">
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
-            查看
-          </Button>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            编辑
-          </Button>
-          <Dropdown
-            menu={{
-              items: [
-                { key: 'test', icon: <ThunderboltOutlined />, label: '测试连接', onClick: () => handleTestConnection(record) },
-                {
-                  key: 'delete',
-                  icon: <DeleteOutlined />,
-                  label: '删除',
-                  danger: true,
-                  onClick: () => {
-                    Modal.confirm({
-                      title: '确定要删除这个应用连接器吗？',
-                      okText: '确定',
-                      cancelText: '取消',
-                      okType: 'danger',
-                      onOk: () => handleDelete(record),
-                    });
-                  },
-                },
-              ],
-            }}
-          >
-            <Button type="link" size="small" icon={<MoreOutlined />}>更多</Button>
-          </Dropdown>
-        </Space>
-      ),
+      render: (_, record) =>
+        renderRowActionsOverflow(
+          [
+            <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+              查看
+            </Button>,
+            <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+              编辑
+            </Button>,
+            <Button
+              key="test"
+              type="link"
+              size="small"
+              icon={<ThunderboltOutlined />}
+              onClick={() => handleTestConnection(record)}
+            >
+              测试连接
+            </Button>,
+            <Popconfirm
+              key="delete"
+              title="确定要删除这个应用连接器吗？"
+              onConfirm={() => handleDelete(record)}
+              okText="确定"
+              cancelText="取消"
+            >
+              <Button type="link" size="small" icon={<DeleteOutlined />} danger>
+                删除
+              </Button>
+            </Popconfirm>,
+          ],
+          `app-conn-${record.uuid}`,
+        ),
     },
   ];
 

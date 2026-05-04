@@ -58,6 +58,8 @@ import {
   APITestResponse,
 } from '../../../../services/apiManagement'
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts'
+import { extractProTableSort, mergeListKeyword, mapApiListSortField } from '../../../../utils/tableQueryKey'
+import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow'
 
 const { TextArea } = Input
 const { Text, Paragraph } = Typography
@@ -574,46 +576,30 @@ const APIListPage: React.FC = () => {
     {
       title: t('pages.system.apis.columnActions'),
       valueType: 'option',
-      width: 250,
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleView(record)}
-          >
+      render: (_, record) => {
+        const actions: React.ReactNode[] = [
+          <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
             {t('pages.system.apis.view')}
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
+          </Button>,
+          <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
             {t('pages.system.apis.edit')}
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<ThunderboltOutlined />}
-            onClick={() => handleTest(record)}
-          >
+          </Button>,
+          <Button key="test" type="link" size="small" icon={<ThunderboltOutlined />} onClick={() => handleTest(record)}>
             {t('pages.system.apis.test')}
-          </Button>
-          {!record.is_system && (
-            <Popconfirm
-              title={t('pages.system.apis.deleteConfirmTitle')}
-              onConfirm={() => handleDelete(record)}
-            >
+          </Button>,
+        ]
+        if (!record.is_system) {
+          actions.push(
+            <Popconfirm key="delete" title={t('pages.system.apis.deleteConfirmTitle')} onConfirm={() => handleDelete(record)}>
               <Button type="link" danger size="small" icon={<DeleteOutlined />}>
                 {t('pages.system.apis.delete')}
               </Button>
-            </Popconfirm>
-          )}
-        </Space>
-      ),
+            </Popconfirm>,
+          )
+        }
+        return renderRowActionsOverflow(actions, `api-${record.uuid}`)
+      },
     },
   ]
 
@@ -623,16 +609,19 @@ const APIListPage: React.FC = () => {
         <UniTable<API>
           actionRef={actionRef}
           columns={columns}
-          request={async (params, _sort, _filter, searchFormValues) => {
+          request={async (params, sort, _filter, searchFormValues) => {
+            const { sortBy, sortOrder } = extractProTableSort(sort)
             // 处理搜索参数
             const apiParams: any = {
               page: params.current || 1,
               page_size: params.pageSize || 20,
+              sort_by: mapApiListSortField(sortBy),
+              sort_order: sortOrder,
             }
 
-            // 搜索关键词
-            if (searchFormValues?.search) {
-              apiParams.search = searchFormValues.search
+            const kw = mergeListKeyword(searchFormValues, 'search')
+            if (kw) {
+              apiParams.search = kw
             }
 
             // 方法筛选

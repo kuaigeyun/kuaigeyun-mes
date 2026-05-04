@@ -9,6 +9,7 @@ import { App, Popconfirm, Button, Space } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { ProFormText, ProFormSelect, ProFormDigit, ProFormDatePicker } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
+import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { materialBatchApi, materialApi } from '../../../services/material';
 import type { MaterialBatch, MaterialBatchCreate, MaterialBatchUpdate } from '../../../types/material';
@@ -109,12 +110,22 @@ const BatchesPage: React.FC = () => {
     }
   };
 
+  const batchSortFieldMap: Record<string, string> = {
+    batch_no: 'batch_no',
+    material_name: 'material_name',
+    quantity: 'quantity',
+    status: 'status',
+    productionDate: 'production_date',
+    expiryDate: 'expiry_date',
+  };
+
   const columns: ProColumns<MaterialBatch>[] = [
     {
       title: t('app.master-data.batches.batchNo') || '批号',
       dataIndex: 'batch_no',
       width: 140,
       ellipsis: true,
+      sorter: true,
       render: (_, r) => r.batchNo ?? (r as any).batch_no,
     },
     {
@@ -123,6 +134,7 @@ const BatchesPage: React.FC = () => {
       width: 200,
       ellipsis: true,
       hideInSearch: true,
+      sorter: true,
       render: (_, r) => r.materialName ?? (r as any).material_name ?? '-',
     },
     {
@@ -130,6 +142,7 @@ const BatchesPage: React.FC = () => {
       dataIndex: 'quantity',
       width: 100,
       valueType: 'digit',
+      sorter: true,
       render: (_, r) => r.quantity ?? (r as any).quantity ?? 0,
     },
     {
@@ -137,6 +150,7 @@ const BatchesPage: React.FC = () => {
       dataIndex: 'status',
       width: 100,
       valueType: 'select',
+      sorter: true,
       valueEnum: {
         in_stock: { text: '在库', status: 'Success' },
         out_stock: { text: '已出库', status: 'Default' },
@@ -150,6 +164,7 @@ const BatchesPage: React.FC = () => {
       dataIndex: 'productionDate',
       width: 120,
       valueType: 'date',
+      sorter: true,
       render: (_, r) => r.productionDate ?? (r as any).production_date ?? '-',
     },
     {
@@ -157,6 +172,7 @@ const BatchesPage: React.FC = () => {
       dataIndex: 'expiryDate',
       width: 120,
       valueType: 'date',
+      sorter: true,
       render: (_, r) => r.expiryDate ?? (r as any).expiry_date ?? '-',
     },
     {
@@ -193,14 +209,19 @@ const BatchesPage: React.FC = () => {
         actionRef={actionRef}
         rowKey="uuid"
         columns={columns}
-        request={async (params) => {
+        request={async (params, sort, _filter, searchFormValues) => {
           const { current = 1, pageSize = 20, material_uuid, batch_no, status } = params || {};
+          const { sortBy: raw, sortOrder } = extractProTableSort(sort);
+          const sortBy = raw ? batchSortFieldMap[raw] : undefined;
           const res = await materialBatchApi.list({
             materialUuid: material_uuid,
             batchNo: batch_no,
             status,
             page: current,
             pageSize,
+            keyword: searchFormValues?.keyword?.trim() || undefined,
+            sortBy,
+            sortOrder,
           });
           return { data: res.items || [], success: true, total: res.total || 0 };
         }}

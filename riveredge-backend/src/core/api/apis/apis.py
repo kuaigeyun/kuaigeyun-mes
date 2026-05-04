@@ -99,6 +99,8 @@ async def list_apis(
     search: Optional[str] = Query(None, description="搜索关键词（名称、代码、路径）"),
     method: Optional[str] = Query(None, description="请求方法筛选"),
     is_active: Optional[bool] = Query(None, description="是否启用筛选"),
+    sort_by: Optional[str] = Query(None, description="排序字段：name/code/path/method/created_at/updated_at/is_active"),
+    sort_order: Optional[str] = Query(None, description="排序方向：asc 或 desc"),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -133,6 +135,8 @@ async def list_apis(
             search=search,
             method=method,
             is_active=is_active,
+            sort_by=sort_by,
+            sort_order=sort_order,
         )
         
         return {

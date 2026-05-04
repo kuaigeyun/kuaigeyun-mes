@@ -78,8 +78,17 @@ export const skillApi = {
  * 工序 API（用于计件单价等，从主数据 process 获取）
  */
 export const operationApi = {
-  list: async (params?: { limit?: number; is_active?: boolean }): Promise<Operation[]> => {
-    return api.get('/apps/master-data/process/operations', { params });
+  list: async (params?: { limit?: number; is_active?: boolean; isActive?: boolean }): Promise<Operation[]> => {
+    const p: Record<string, unknown> = params ? { ...params } : {};
+    if (p.is_active !== undefined && p.isActive === undefined) {
+      p.isActive = p.is_active;
+      delete p.is_active;
+    }
+    const res = await api.get<{ data?: Operation[]; total?: number } | Operation[]>(
+      '/apps/master-data/process/operations',
+      { params: p }
+    );
+    return Array.isArray(res) ? res : res?.data ?? [];
   },
 };
 

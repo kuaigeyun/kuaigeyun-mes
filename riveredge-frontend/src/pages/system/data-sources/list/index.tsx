@@ -9,8 +9,8 @@ import React, { useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDependency, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Tag, Space, Badge, Typography, Alert, Tooltip, Card, Button, Dropdown, Modal, theme, Descriptions } from 'antd';
-import { DeleteOutlined, EyeOutlined, DatabaseOutlined, ThunderboltOutlined, EditOutlined, MoreOutlined } from '@ant-design/icons';
+import { App, Popconfirm, Tag, Space, Badge, Typography, Alert, Tooltip, Card, Button, theme, Descriptions } from 'antd';
+import { DeleteOutlined, EyeOutlined, DatabaseOutlined, ThunderboltOutlined, EditOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
@@ -18,6 +18,7 @@ import DataSourceConnectorMarket from '../DataSourceConnectorMarket';
 import type { ConnectorDefinition } from '../connectors';
 import {
   getDataSourceList,
+  getDataSourceListAllMatching,
   getDataSourceByUuid,
   createDataSource,
   updateDataSource,
@@ -32,6 +33,8 @@ import { getDatasetList } from '../../../../services/dataset';
 import { updateIntegrationConfig } from '../../../../services/integrationConfig';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
+import { extractProTableSort, mergeListKeyword, mapIntegrationConfigListSortField } from '../../../../utils/tableQueryKey';
+import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 
 dayjs.extend(relativeTime);
 
@@ -650,51 +653,60 @@ const DataSourceListPage: React.FC = () => {
     {
       title: t('pages.system.dataSources.columnActions'),
       valueType: 'option',
-      width: 200,
       fixed: 'right',
-      render: (_, record) => (
-        <Space size="small">
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
-            {t('pages.system.dataSources.view')}
-          </Button>
-          {record.is_editable !== false && (
-            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-              {t('pages.system.dataSources.edit')}
-            </Button>
-          )}
-          <Dropdown
-            menu={{
-              items: [
-                {
-                  key: 'test',
-                  icon: <ThunderboltOutlined />,
-                  label: t('pages.system.dataSources.testConnection'),
-                  onClick: () => handleTestConnection(record),
-                },
-                ...(record.is_editable !== false ? [{
-                  key: 'delete',
-                  icon: <DeleteOutlined />,
-                  label: t('pages.system.dataSources.delete'),
-                  danger: true,
-                  onClick: () => {
-                    Modal.confirm({
-                      title: t('pages.system.dataSources.deleteConfirmTitle'),
-                      okText: t('common.confirm'),
-                      cancelText: t('common.cancel'),
-                      okType: 'danger',
-                      onOk: () => handleDelete(record),
-                    });
-                  },
-                }] : []),
-              ],
-            }}
+      render: (_, record) => {
+        const actions: React.ReactNode[] = [
+          <Button
+            key="view"
+            type="link"
+            size="small"
+            icon={<EyeOutlined />}
+            onClick={() => handleView(record)}
           >
-            <Button type="link" size="small" icon={<MoreOutlined />}>
-              {t('pages.system.dataSources.more')}
-            </Button>
-          </Dropdown>
-        </Space>
-      ),
+            {t('pages.system.dataSources.view')}
+          </Button>,
+        ];
+        if (record.is_editable !== false) {
+          actions.push(
+            <Button
+              key="edit"
+              type="link"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => handleEdit(record)}
+            >
+              {t('pages.system.dataSources.edit')}
+            </Button>,
+          );
+        }
+        actions.push(
+          <Button
+            key="test"
+            type="link"
+            size="small"
+            icon={<ThunderboltOutlined />}
+            onClick={() => handleTestConnection(record)}
+          >
+            {t('pages.system.dataSources.testConnection')}
+          </Button>,
+        );
+        if (record.is_editable !== false) {
+          actions.push(
+            <Popconfirm
+              key="delete"
+              title={t('pages.system.dataSources.deleteConfirmTitle')}
+              onConfirm={() => handleDelete(record)}
+              okText={t('common.confirm')}
+              cancelText={t('common.cancel')}
+            >
+              <Button type="link" size="small" icon={<DeleteOutlined />} danger>
+                {t('pages.system.dataSources.delete')}
+              </Button>
+            </Popconfirm>,
+          );
+        }
+        return renderRowActionsOverflow(actions, `data-source-${record.uuid}`);
+      },
     },
   ];
 
@@ -802,41 +814,39 @@ const DataSourceListPage: React.FC = () => {
         <UniTable<DataSource>
           actionRef={actionRef}
           columns={columns}
-          request={async (params, _sort, _filter, searchFormValues) => {
-            // 处理搜索参数
+          request={async (params, sort, _filter, searchFormValues) => {
+            const { sortBy, sortOrder } = extractProTableSort(sort);
             const apiParams: any = {
               page: params.current || 1,
               page_size: params.pageSize || 20,
+              sort_by: mapIntegrationConfigListSortField(sortBy),
+              sort_order: sortOrder,
             };
-            
-            // 搜索关键词
-            if (searchFormValues?.search) {
-              apiParams.search = searchFormValues.search;
+
+            const kw = mergeListKeyword(searchFormValues, 'search');
+            if (kw) {
+              apiParams.search = kw;
             }
-            
-            // 类型筛选
+
             if (searchFormValues?.type) {
               apiParams.type = searchFormValues.type;
             }
-            
-            // 启用状态筛选
+
             if (searchFormValues?.is_active !== undefined && searchFormValues.is_active !== '' && searchFormValues.is_active !== null) {
               apiParams.is_active = searchFormValues.is_active;
             }
-            
+
             try {
-              const result = await getDataSourceList(apiParams);
-              
-              // 同时获取所有数据用于统计（如果当前页是第一页）
-              if ((params.current || 1) === 1) {
-                try {
-                  const allResult = await getDataSourceList({ page: 1, page_size: 1000 });
-                  setAllDataSources(allResult.items);
-                } catch (e) {
-                  // 忽略统计数据的错误
-                }
-              }
-              
+              const [result, wideItems] = await Promise.all([
+                getDataSourceList(apiParams),
+                getDataSourceListAllMatching({
+                  search: apiParams.search,
+                  type: apiParams.type,
+                  is_active: apiParams.is_active,
+                }),
+              ]);
+              setAllDataSources(wideItems);
+
               return {
                 data: result.items,
                 success: true,

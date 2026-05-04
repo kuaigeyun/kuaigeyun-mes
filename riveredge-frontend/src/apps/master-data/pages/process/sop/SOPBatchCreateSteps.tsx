@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { App, Button, Card, Radio, Select, Space, Table, Steps, Empty, Modal, Input, Form, Typography } from 'antd';
 import { ApartmentOutlined, FormOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { processRouteApi, operationApi, sopApi } from '../../../services/process';
+import { processRouteApi, operationApi, sopApi, unwrapProcessPagedList } from '../../../services/process';
 import { materialApi, materialGroupApi } from '../../../services/material';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import type { ProcessRoute, Operation } from '../../../types/process';
@@ -73,11 +73,11 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
         const [matRes, mgRes, opRes] = await Promise.all([
           materialApi.list({ limit: 1000, isActive: true }).catch(() => []),
           materialGroupApi.list({ limit: 1000 }).catch(() => []),
-          operationApi.list({ is_active: true, limit: 1000 }),
+          operationApi.list({ isActive: true, limit: 1000 }),
         ]);
         setMaterials(Array.isArray(matRes) ? matRes : []);
         setMaterialGroups(Array.isArray(mgRes) ? mgRes : []);
-        setAllOperations(opRes);
+        setAllOperations(unwrapProcessPagedList(opRes));
       } catch (e) {
         console.error('加载基础数据失败:', e);
       } finally {

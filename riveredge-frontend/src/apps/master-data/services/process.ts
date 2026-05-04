@@ -15,20 +15,30 @@ import type {
   OperationCreate,
   OperationUpdate,
   OperationListParams,
+  OperationListResponse,
   ProcessRoute,
   ProcessRouteCreate,
   ProcessRouteUpdate,
   ProcessRouteListParams,
+  ProcessRouteListResponse,
   SOP,
   SOPCreate,
   SOPUpdate,
   SOPListParams,
+  SOPListResponse,
   SOPExecution,
   SOPExecutionCreate,
   SOPExecutionUpdate,
   SOPExecutionListParams,
   SOPNodeCompleteRequest,
 } from '../types/process';
+
+/** 工序/工艺路线/SOP 列表统一为 { data, total }，旧代码取数组时用 */
+export function unwrapProcessPagedList<T>(res: { data?: T[]; total?: number } | T[] | null | undefined): T[] {
+  if (res == null) return []
+  if (Array.isArray(res)) return res
+  return Array.isArray(res.data) ? res.data : []
+}
 
 /**
  * 不良品 API 服务
@@ -113,7 +123,7 @@ export const operationApi = {
   /**
    * 获取工序列表
    */
-  list: async (params?: OperationListParams): Promise<Operation[]> => {
+  list: async (params?: OperationListParams): Promise<OperationListResponse> => {
     return api.get('/apps/master-data/process/operations', { params });
   },
 
@@ -182,7 +192,7 @@ export const processRouteApi = {
   /**
    * 获取工艺路线列表
    */
-  list: async (params?: ProcessRouteListParams): Promise<ProcessRoute[]> => {
+  list: async (params?: ProcessRouteListParams): Promise<ProcessRouteListResponse> => {
     return api.get('/apps/master-data/process/routes', { params });
   },
 
@@ -381,7 +391,7 @@ export const sopApi = {
   /**
    * 获取SOP列表
    */
-  list: async (params?: SOPListParams): Promise<SOP[]> => {
+  list: async (params?: SOPListParams): Promise<SOPListResponse> => {
     return api.get('/apps/master-data/process/sop', { params });
   },
 

@@ -4,9 +4,10 @@
 提供工艺数据的业务逻辑处理（不良品、工序、工艺路线、作业程序），支持多组织隔离。
 """
 
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 import re
 from tortoise.exceptions import IntegrityError
+from tortoise.expressions import Q
 
 from apps.master_data.models.process import DefectType, Operation, OperationDefectType, ProcessRoute, ProcessRouteTemplate, SOP
 from apps.master_data.schemas.process_schemas import (
@@ -337,7 +338,10 @@ class ProcessService:
         skip: int = 0,
         limit: int = 100,
         category: Optional[str] = None,
-        is_active: Optional[bool] = None
+        is_active: Optional[bool] = None,
+        keyword: Optional[str] = None,
+        sort_by: Optional[str] = None,
+        sort_order: Optional[str] = None,
     ) -> tuple[List[DefectTypeResponse], int]:
         """
         获取不良品列表（分页，返回列表与总数）
@@ -362,9 +366,19 @@ class ProcessService:
         
         if is_active is not None:
             query = query.filter(is_active=is_active)
-        
+
+        if keyword and keyword.strip():
+            kw = keyword.strip()
+            query = query.filter(
+                Q(code__icontains=kw) | Q(name__icontains=kw) | Q(description__icontains=kw)
+            )
+
         total = await query.count()
-        defect_types = await query.offset(skip).limit(limit).order_by("code").all()
+        allowed_sort = {"code", "name", "category", "created_at", "is_active"}
+        field = sort_by if sort_by in allowed_sort else "code"
+        desc = (sort_order or "asc").lower() == "desc"
+        order_expr = f"-{field}" if desc else field
+        defect_types = await query.offset(skip).limit(limit).order_by(order_expr).all()
         items = [DefectTypeResponse.model_validate(_defect_type_to_response_data(dt)) for dt in defect_types]
         return items, total
     
@@ -755,8 +769,11 @@ class ProcessService:
         tenant_id: int,
         skip: int = 0,
         limit: int = 100,
-        is_active: Optional[bool] = None
-    ) -> List[OperationResponse]:
+        is_active: Optional[bool] = None,
+        keyword: Optional[str] = None,
+        sort_by: Optional[str] = None,
+        sort_order: Optional[str] = None,
+    ) -> Tuple[List[OperationResponse], int]:
         """
         获取工序列表
         
@@ -767,7 +784,7 @@ class ProcessService:
             is_active: 是否启用（可选）
             
         Returns:
-            List[OperationResponse]: 工序列表
+            (工序列表, 总条数)
         """
         query = Operation.filter(
             tenant_id=tenant_id,
@@ -776,13 +793,25 @@ class ProcessService:
         
         if is_active is not None:
             query = query.filter(is_active=is_active)
-        
+
+        if keyword and keyword.strip():
+            kw = keyword.strip()
+            query = query.filter(
+                Q(code__icontains=kw) | Q(name__icontains=kw) | Q(description__icontains=kw)
+            )
+
+        total = await query.count()
+        allowed_sort = {"code", "name", "created_at", "is_active", "reporting_type"}
+        field = sort_by if sort_by in allowed_sort else "code"
+        desc = (sort_order or "asc").lower() == "desc"
+        order_expr = f"-{field}" if desc else field
+
         # 不使用 prefetch_related("defect_types")，避免 Tortoise 解析 through 模型失败；不良品列表在 _operation_to_response_data 中通过关联表 SQL 查询
-        operations = await query.offset(skip).limit(limit).order_by("code").all()
+        operations = await query.offset(skip).limit(limit).order_by(order_expr).all()
         out = []
         for op in operations:
             out.append(OperationResponse.model_validate(await _operation_to_response_data(op)))
-        return out
+        return out, total
 
     @staticmethod
     async def update_operation(
@@ -1055,8 +1084,11 @@ class ProcessService:
         tenant_id: int,
         skip: int = 0,
         limit: int = 100,
-        is_active: Optional[bool] = None
-    ) -> List[ProcessRouteResponse]:
+        is_active: Optional[bool] = None,
+        keyword: Optional[str] = None,
+        sort_by: Optional[str] = None,
+        sort_order: Optional[str] = None,
+    ) -> Tuple[List[ProcessRouteResponse], int]:
         """
         获取工艺路线列表
         
@@ -1067,7 +1099,7 @@ class ProcessService:
             is_active: 是否启用（可选）
             
         Returns:
-            List[ProcessRouteResponse]: 工艺路线列表
+            (工艺路线列表, 总条数)
         """
         query = ProcessRoute.filter(
             tenant_id=tenant_id,
@@ -1076,10 +1108,23 @@ class ProcessService:
         
         if is_active is not None:
             query = query.filter(is_active=is_active)
-        
-        process_routes = await query.offset(skip).limit(limit).order_by("code").all()
-        
-        return [await ProcessService._to_process_route_response(pr) for pr in process_routes]
+
+        if keyword and keyword.strip():
+            kw = keyword.strip()
+            query = query.filter(
+                Q(code__icontains=kw) | Q(name__icontains=kw) | Q(description__icontains=kw)
+            )
+
+        total = await query.count()
+        allowed_sort = {"code", "name", "created_at", "is_active"}
+        field = sort_by if sort_by in allowed_sort else "code"
+        desc = (sort_order or "asc").lower() == "desc"
+        order_expr = f"-{field}" if desc else field
+
+        process_routes = await query.offset(skip).limit(limit).order_by(order_expr).all()
+
+        items = [await ProcessService._to_process_route_response(pr) for pr in process_routes]
+        return items, total
     
     @staticmethod
     async def update_process_route(
@@ -1489,7 +1534,10 @@ class ProcessService:
         material_uuid: Optional[str] = None,
         material_group_uuid: Optional[str] = None,
         route_uuid: Optional[str] = None,
-    ) -> List[SOPResponse]:
+        keyword: Optional[str] = None,
+        sort_by: Optional[str] = None,
+        sort_order: Optional[str] = None,
+    ) -> Tuple[List[SOPResponse], int]:
         """
         获取作业程序（SOP）列表
         
@@ -1504,7 +1552,7 @@ class ProcessService:
             route_uuid: 工艺路线UUID（可选，筛选载入该工艺路线的 SOP）
             
         Returns:
-            List[SOPResponse]: SOP列表
+            (SOP列表, 总条数)
         """
         query = SOP.filter(
             tenant_id=tenant_id,
@@ -1523,10 +1571,25 @@ class ProcessService:
             query = query.filter(material_group_uuids__contains=[material_group_uuid])
         if route_uuid:
             query = query.filter(route_uuids__contains=[route_uuid])
-        
-        sops = await query.offset(skip).limit(limit).order_by("code").prefetch_related("operation").all()
-        
-        return [SOPResponse.model_validate(s) for s in sops]
+
+        if keyword and keyword.strip():
+            kw = keyword.strip()
+            query = query.filter(
+                Q(code__icontains=kw)
+                | Q(name__icontains=kw)
+                | Q(version__icontains=kw)
+                | Q(content__icontains=kw)
+            )
+
+        total = await query.count()
+        allowed_sort = {"code", "name", "version", "created_at", "is_active", "operation_id"}
+        field = sort_by if sort_by in allowed_sort else "code"
+        desc = (sort_order or "asc").lower() == "desc"
+        order_expr = f"-{field}" if desc else field
+
+        sops = await query.offset(skip).limit(limit).order_by(order_expr).prefetch_related("operation").all()
+
+        return [SOPResponse.model_validate(s) for s in sops], total
     
     @staticmethod
     async def update_sop(

@@ -12,11 +12,20 @@ import type {
   CustomerCreate,
   CustomerUpdate,
   CustomerListParams,
+  CustomerListResponse,
   Supplier,
   SupplierCreate,
   SupplierUpdate,
   SupplierListParams,
+  SupplierListResponse,
 } from '../types/supply-chain';
+
+/** 客户/供应商列表统一为 { data, total }，下拉等场景取数组 */
+export function unwrapSupplyPagedList<T>(res: { data?: T[]; total?: number } | T[] | null | undefined): T[] {
+  if (res == null) return [];
+  if (Array.isArray(res)) return res;
+  return Array.isArray(res.data) ? res.data : [];
+}
 
 /**
  * 客户 API 服务
@@ -32,7 +41,7 @@ export const customerApi = {
   /**
    * 获取客户列表
    */
-  list: async (params?: CustomerListParams): Promise<Customer[]> => {
+  list: async (params?: CustomerListParams): Promise<CustomerListResponse> => {
     return api.get('/apps/master-data/supply-chain/customers', { params });
   },
 
@@ -72,7 +81,7 @@ export const supplierApi = {
   /**
    * 获取供应商列表
    */
-  list: async (params?: SupplierListParams): Promise<Supplier[]> => {
+  list: async (params?: SupplierListParams): Promise<SupplierListResponse> => {
     return api.get('/apps/master-data/supply-chain/suppliers', { params });
   },
 

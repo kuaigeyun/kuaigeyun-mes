@@ -901,7 +901,9 @@ class MaterialService:
         specification: Optional[str] = None,
         brand: Optional[str] = None,
         model: Optional[str] = None,
-        base_unit: Optional[str] = None
+        base_unit: Optional[str] = None,
+        sort_by: Optional[str] = None,
+        sort_order: Optional[str] = None,
     ) -> List[MaterialResponse]:
         """
         获取物料列表
@@ -1008,8 +1010,18 @@ class MaterialService:
             # 模糊匹配型号
             query = query.filter(model__icontains=model)
         
+        sort_field_map = {
+            "main_code": "main_code",
+            "name": "name",
+            "created_at": "created_at",
+            "updated_at": "updated_at",
+        }
+        db_sort = sort_field_map.get(sort_by or "", "main_code")
+        desc = (sort_order or "asc").lower() == "desc"
+        order_expr = f"-{db_sort}" if desc else db_sort
+
         # 预加载关联关系（优化，修复500错误）
-        materials = await query.prefetch_related("group", "process_route").offset(skip).limit(limit).order_by("main_code").all()
+        materials = await query.prefetch_related("group", "process_route").offset(skip).limit(limit).order_by(order_expr).all()
         
         # 构建响应数据（用 _material_to_response_data 避免 ReverseRelation 的 code_aliases；列表不加载别名）
         result = []

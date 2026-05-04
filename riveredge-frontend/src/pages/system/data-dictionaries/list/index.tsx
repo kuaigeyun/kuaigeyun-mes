@@ -18,7 +18,7 @@ import {
   ProFormInstance,
   ProDescriptionsItemProps,
 } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, Table, Tooltip, Descriptions, theme } from 'antd';
+import { App, Popconfirm, Button, Tag, Drawer, Modal, Table, Tooltip, Descriptions, theme } from 'antd';
 import { SettingOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import {
@@ -30,6 +30,7 @@ import {
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import { DataDictionaryFormModal } from '../components/DataDictionaryFormModal';
 import { renderUniTableOperationCell } from '../../../../components/uni-action';
+import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 import {
   getDataDictionaryList,
   getDataDictionaryByUuid,
@@ -368,41 +369,44 @@ const DataDictionaryListPage: React.FC = () => {
     {
       title: t('common.actions'),
       valueType: 'option',
-      width: 340,
       fixed: 'right',
-      render: (_, record) => (
-        <Space size="small" wrap>
-          <Button type="default" size="small" onClick={() => handleView(record)}>
-            {t('common.detail')}
-          </Button>
-          <Button
-            type="primary"
-            size="small"
-            onClick={() => handleEdit(record)}
-            disabled={record.is_system}
-          >
-            {t('field.dataDictionary.edit')}
-          </Button>
-          <Button type="default" size="small" onClick={() => handleManageItems(record)}>
-            {t('field.dataDictionary.items')}
-          </Button>
-          <Popconfirm
-            title={t('field.dataDictionary.deleteConfirm')}
-            onConfirm={() => handleDelete(record)}
-            disabled={record.is_system}
-          >
-            <Tooltip
-              title={record.is_system ? t('field.dataDictionary.systemDictionaryNoDelete') : undefined}
+      render: (_, record) =>
+        renderRowActionsOverflow(
+          [
+            <Button key="view" type="link" size="small" onClick={() => handleView(record)}>
+              {t('common.detail')}
+            </Button>,
+            <Button
+              key="edit"
+              type="link"
+              size="small"
+              onClick={() => handleEdit(record)}
+              disabled={record.is_system}
             >
-              <span>
-                <Button type="default" danger size="small" disabled={record.is_system}>
-                  {t('field.dataDictionary.delete')}
-                </Button>
-              </span>
-            </Tooltip>
-          </Popconfirm>
-        </Space>
-      ),
+              {t('field.dataDictionary.edit')}
+            </Button>,
+            <Button key="items" type="link" size="small" onClick={() => handleManageItems(record)}>
+              {t('field.dataDictionary.items')}
+            </Button>,
+            <Popconfirm
+              key="delete"
+              title={t('field.dataDictionary.deleteConfirm')}
+              onConfirm={() => handleDelete(record)}
+              disabled={record.is_system}
+            >
+              <Tooltip
+                title={record.is_system ? t('field.dataDictionary.systemDictionaryNoDelete') : undefined}
+              >
+                <span>
+                  <Button type="link" danger size="small" disabled={record.is_system}>
+                    {t('field.dataDictionary.delete')}
+                  </Button>
+                </span>
+              </Tooltip>
+            </Popconfirm>,
+          ],
+          `data-dict-${record.uuid}`,
+        ),
     },
   ];
 

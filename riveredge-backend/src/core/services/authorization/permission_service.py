@@ -33,6 +33,8 @@ class PermissionService:
         resource: Optional[str] = None,
         permission_type: Optional[str] = None,
         exclude_derived_data: bool = False,
+        sort_by: Optional[str] = None,
+        sort_order: Optional[str] = None,
     ) -> dict:
         """
         获取权限列表
@@ -104,8 +106,22 @@ class PermissionService:
         
         # 分页（不在 annotate 里跨 role_permissions→role 过滤：Tortoise 会生成缺失 JOIN 的 SQL）
         total = await query.count()
-        # 分页必须使用稳定排序，否则多页拉取会出现重复/漏项，导致权限树节点随机丢失
-        ordered_query = query.order_by("code", "id")
+        allowed_sort = {
+            "code",
+            "name",
+            "resource",
+            "action",
+            "permission_type",
+            "created_at",
+            "updated_at",
+        }
+        if sort_by in allowed_sort:
+            desc = sort_order and str(sort_order).lower() in ("desc", "descend")
+            primary = f"-{sort_by}" if desc else sort_by
+            ordered_query = query.order_by(primary, "id")
+        else:
+            # 分页必须使用稳定排序，否则多页拉取会出现重复/漏项，导致权限树节点随机丢失
+            ordered_query = query.order_by("code", "id")
         permissions = await ordered_query.offset((page - 1) * page_size).limit(page_size).all()
         perm_ids = [p.id for p in permissions]
         role_count_map: dict[int, int] = {pid: 0 for pid in perm_ids}

@@ -12,6 +12,7 @@ import { ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormDigit, Pro
 import { App, Popconfirm, Button, Tag, Space } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
@@ -104,6 +105,16 @@ const BatchRulesPage: React.FC = () => {
     }
   };
 
+  const ruleSortFieldMap: Record<string, string> = {
+    name: 'name',
+    code: 'code',
+    description: 'description',
+    seqResetRule: 'seq_reset_rule',
+    isActive: 'is_active',
+    createdAt: 'created_at',
+    updatedAt: 'updated_at',
+  };
+
   const handleDelete = async (record: BatchRule) => {
     try {
       await batchRuleApi.delete(record.uuid);
@@ -115,19 +126,34 @@ const BatchRulesPage: React.FC = () => {
   };
 
   const columns: ProColumns<BatchRule>[] = [
-    { title: t('app.master-data.seqRules.ruleName'), dataIndex: 'name', width: 150, ellipsis: true, fixed: 'left' },
-    { title: t('app.master-data.seqRules.ruleCode'), dataIndex: 'code', copyable: true, width: 120 },
-    { title: t('app.master-data.seqRules.description'), dataIndex: 'description', width: 200, ellipsis: true },
+    {
+      title: t('app.master-data.seqRules.ruleName'),
+      dataIndex: 'name',
+      width: 150,
+      ellipsis: true,
+      fixed: 'left',
+      sorter: true,
+    },
+    { title: t('app.master-data.seqRules.ruleCode'), dataIndex: 'code', copyable: true, width: 120, sorter: true },
+    {
+      title: t('app.master-data.seqRules.description'),
+      dataIndex: 'description',
+      width: 200,
+      ellipsis: true,
+      sorter: true,
+    },
     {
       title: t('app.master-data.seqRules.seqReset'),
       dataIndex: 'seqResetRule',
       width: 100,
+      sorter: true,
       render: (_, r) => seqResetOptions.find((o) => o.value === r.seqResetRule)?.label || r.seqResetRule || '-',
     },
     {
       title: t('app.master-data.seqRules.status'),
       dataIndex: 'isActive',
       width: 80,
+      sorter: true,
       render: (_, r) => (
         <Tag color={r.isActive ? 'success' : 'default'}>{r.isActive ? t('app.master-data.seqRules.enabled') : t('app.master-data.seqRules.disabled')}</Tag>
       ),
@@ -168,11 +194,16 @@ const BatchRulesPage: React.FC = () => {
         actionRef={actionRef}
         rowKey="uuid"
         columns={columns}
-        request={async (params) => {
+        request={async (params, sort, _filter, searchFormValues) => {
           const { current = 1, pageSize = 20 } = params;
+          const { sortBy: raw, sortOrder } = extractProTableSort(sort);
+          const sortBy = raw ? ruleSortFieldMap[raw] : undefined;
           const res = await batchRuleApi.list({
             page: current,
             pageSize,
+            keyword: searchFormValues?.keyword?.trim() || undefined,
+            sortBy,
+            sortOrder,
           });
           return { data: res.items, success: true, total: res.total };
         }}

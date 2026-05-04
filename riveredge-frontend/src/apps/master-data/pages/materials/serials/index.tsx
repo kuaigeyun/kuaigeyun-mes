@@ -9,6 +9,7 @@ import { App, Popconfirm, Button, Space } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { ProFormText, ProFormSelect, ProFormDatePicker } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
+import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { materialSerialApi, materialApi } from '../../../services/material';
 import type { MaterialSerial, MaterialSerialCreate, MaterialSerialUpdate } from '../../../types/material';
@@ -109,12 +110,21 @@ const SerialsPage: React.FC = () => {
     }
   };
 
+  const serialSortFieldMap: Record<string, string> = {
+    serial_no: 'serial_no',
+    material_name: 'material_name',
+    status: 'status',
+    productionDate: 'production_date',
+    factoryDate: 'factory_date',
+  };
+
   const columns: ProColumns<MaterialSerial>[] = [
     {
       title: t('app.master-data.serials.serialNo'),
       dataIndex: 'serial_no',
       width: 160,
       ellipsis: true,
+      sorter: true,
       render: (_, r) => r.serialNo ?? (r as any).serial_no,
     },
     {
@@ -123,6 +133,7 @@ const SerialsPage: React.FC = () => {
       width: 200,
       ellipsis: true,
       hideInSearch: true,
+      sorter: true,
       render: (_, r) => r.materialName ?? (r as any).material_name ?? '-',
     },
     {
@@ -130,6 +141,7 @@ const SerialsPage: React.FC = () => {
       dataIndex: 'status',
       width: 100,
       valueType: 'select',
+      sorter: true,
       valueEnum: {
         in_stock: { text: '在库', status: 'Success' },
         out_stock: { text: '已出库', status: 'Default' },
@@ -144,6 +156,7 @@ const SerialsPage: React.FC = () => {
       dataIndex: 'productionDate',
       width: 120,
       valueType: 'date',
+      sorter: true,
       render: (_, r) => r.productionDate ?? (r as any).production_date ?? '-',
     },
     {
@@ -151,6 +164,7 @@ const SerialsPage: React.FC = () => {
       dataIndex: 'factoryDate',
       width: 120,
       valueType: 'date',
+      sorter: true,
       render: (_, r) => r.factoryDate ?? (r as any).factory_date ?? '-',
     },
     {
@@ -179,13 +193,18 @@ const SerialsPage: React.FC = () => {
         actionRef={actionRef}
         rowKey="uuid"
         columns={columns}
-        request={async (params) => {
+        request={async (params, sort, _filter, searchFormValues) => {
           const { current = 1, pageSize = 20, serial_no, status } = params || {};
+          const { sortBy: raw, sortOrder } = extractProTableSort(sort);
+          const sortBy = raw ? serialSortFieldMap[raw] : undefined;
           const res = await materialSerialApi.list({
             serialNo: serial_no as string | undefined,
             status: status as string | undefined,
             page: current,
             pageSize,
+            keyword: searchFormValues?.keyword?.trim() || undefined,
+            sortBy,
+            sortOrder,
           });
           return { data: res.items || [], success: true, total: res.total || 0 };
         }}

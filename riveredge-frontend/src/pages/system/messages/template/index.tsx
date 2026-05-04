@@ -9,7 +9,7 @@ import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProFormList, ProFormGroup } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Button, Descriptions, Modal, Popconfirm, Space, Tag } from 'antd';
+import { App, Button, Descriptions, Modal, Popconfirm, Tag } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { flushDrawerOpen, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
@@ -25,6 +25,7 @@ import {
   CreateMessageTemplateData,
   UpdateMessageTemplateData,
 } from '../../../../services/messageTemplate';
+import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 
 /**
  * 消息模板管理列表页面组件
@@ -293,41 +294,28 @@ const MessageTemplateListPage: React.FC = () => {
     {
       title: t('pages.system.messageConfig.actions'),
       valueType: 'option',
-      width: 200,
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleView(record)}
-          >
-            {t('pages.system.messageConfig.view')}
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            {t('pages.system.messageConfig.edit')}
-          </Button>
-          <Popconfirm
-            title={t('pages.system.messageTemplate.deleteConfirm')}
-            onConfirm={() => handleDelete(record)}
-          >
-            <Button
-              type="link"
-              danger
-              size="small"
-              icon={<DeleteOutlined />}
+      render: (_, record) =>
+        renderRowActionsOverflow(
+          [
+            <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+              {t('pages.system.messageConfig.view')}
+            </Button>,
+            <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+              {t('pages.system.messageConfig.edit')}
+            </Button>,
+            <Popconfirm
+              key="delete"
+              title={t('pages.system.messageTemplate.deleteConfirm')}
+              onConfirm={() => handleDelete(record)}
             >
-              {t('pages.system.messageConfig.delete')}
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
+              <Button type="link" danger size="small" icon={<DeleteOutlined />}>
+                {t('pages.system.messageConfig.delete')}
+              </Button>
+            </Popconfirm>,
+          ],
+          `message-template-${record.uuid}`,
+        ),
     },
   ];
 

@@ -28,6 +28,7 @@ import {
   CreateDataBackupData,
 } from '../../../services/dataBackup';
 import { useGlobalStore } from '../../../stores';
+import { renderRowActionsOverflow } from '../../../utils/renderRowActionsOverflow';
 import dayjs from 'dayjs';
 
 const { Text } = Typography;
@@ -467,34 +468,38 @@ const DataBackupsPage: React.FC = () => {
       title: t('pages.system.dataBackups.columnActions'),
       key: 'option',
       valueType: 'option',
-      width: 180,
       fixed: 'right',
-      render: (_: any, record: DataBackup) => [
-        <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>{t('common.detail')}</Button>,
-        record.status === 'success' && (
-          <Button key="download" type="link" size="small" icon={<DownloadOutlined />} onClick={() => handleDownload(record)}>{t('pages.system.dataBackups.downloadBackup')}</Button>
-        ),
-        record.status === 'success' && (
-          <Button
-            key="restore"
-            type="link"
-            size="small"
-            icon={<ReloadOutlined />}
-            onClick={() => handleRestore(record)}
+      render: (_: any, record: DataBackup) => {
+        const actions: React.ReactNode[] = [
+          <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>
+            {t('common.detail')}
+          </Button>,
+        ];
+        if (record.status === 'success') {
+          actions.push(
+            <Button key="download" type="link" size="small" icon={<DownloadOutlined />} onClick={() => handleDownload(record)}>
+              {t('pages.system.dataBackups.downloadBackup')}
+            </Button>,
+            <Button key="restore" type="link" size="small" icon={<ReloadOutlined />} onClick={() => handleRestore(record)}>
+              {t('pages.system.dataBackups.restore')}
+            </Button>,
+          );
+        }
+        actions.push(
+          <Popconfirm
+            key="delete"
+            title={t('pages.system.dataBackups.deleteConfirmTitle')}
+            onConfirm={() => handleDelete(record)}
+            okText={t('common.confirm')}
+            cancelText={t('common.cancel')}
           >
-            {t('pages.system.dataBackups.restore')}
-          </Button>
-        ),
-        <Popconfirm
-          key="delete"
-          title={t('pages.system.dataBackups.deleteConfirmTitle')}
-          onConfirm={() => handleDelete(record)}
-          okText={t('common.confirm')}
-          cancelText={t('common.cancel')}
-        >
-          <Button type="link" size="small" danger icon={<DeleteOutlined />}>{t('pages.system.dataBackups.delete')}</Button>
-        </Popconfirm>,
-      ].filter(Boolean),
+            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+              {t('pages.system.dataBackups.delete')}
+            </Button>
+          </Popconfirm>,
+        );
+        return renderRowActionsOverflow(actions, `backup-${record.uuid}`);
+      },
     },
   ];
 

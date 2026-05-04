@@ -15,7 +15,7 @@ import { EditOutlined, DeleteOutlined, PlusOutlined, EyeOutlined } from '@ant-de
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
-import { customerApi } from '../../../../master-data/services/supply-chain';
+import { customerApi, unwrapSupplyPagedList } from '../../../../master-data/services/supply-chain';
 import { materialApi } from '../../../../master-data/services/material';
 
 /**
@@ -364,8 +364,8 @@ const BarcodeMappingRulesPage: React.FC = () => {
           placeholder="请选择客户（留空则适用于所有客户）"
           request={async () => {
             try {
-              const customers = await customerApi.list();
-              return customers.map(c => ({ label: c.name, value: c.id }));
+              const customers = unwrapSupplyPagedList(await customerApi.list());
+              return customers.map((c) => ({ label: c.name, value: c.id }));
             } catch {
               return [];
             }

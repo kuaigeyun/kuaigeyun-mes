@@ -10,6 +10,7 @@ import { App, Tag, Space, Button, Popconfirm, Modal, Table } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormDigit, ProFormInstance, ProForm } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
+import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
@@ -52,11 +53,13 @@ const VariantAttributesPage: React.FC = () => {
       dataIndex: 'attribute_name',
       width: 150,
       fixed: 'left',
+      sorter: true,
     },
     {
       title: '显示名称',
       dataIndex: 'display_name',
       width: 150,
+      sorter: true,
     },
     {
       title: '属性类型',
@@ -340,16 +343,32 @@ const VariantAttributesPage: React.FC = () => {
           actionRef={actionRef}
           columns={columns}
           showAdvancedSearch={true}
-          request={async (_params, _sort, _filter, searchFormValues) => {
+          request={async (params, sort, _filter, searchFormValues) => {
             try {
+              const { sortBy: rawSort, sortOrder } = extractProTableSort(sort);
+              const sortFieldMap: Record<string, string> = {
+                display_order: 'display_order',
+                attribute_name: 'attribute_name',
+                display_name: 'display_name',
+                createdAt: 'created_at',
+                updatedAt: 'updated_at',
+              };
+              const sort_by = rawSort ? sortFieldMap[rawSort] : undefined;
               const data = await variantAttributeApi.list({
                 is_active: searchFormValues?.is_active,
                 attribute_type: searchFormValues?.attribute_type,
+                keyword: searchFormValues?.keyword?.trim() || undefined,
+                sort_by,
+                sort_order: sortOrder,
               });
+              const current = params.current || 1;
+              const pageSize = params.pageSize || 20;
+              const total = data.length;
+              const start = (current - 1) * pageSize;
               return {
-                data,
+                data: data.slice(start, start + pageSize),
                 success: true,
-                total: data.length,
+                total,
               };
             } catch (error: any) {
               messageApi.error(error.message || '加载失败');

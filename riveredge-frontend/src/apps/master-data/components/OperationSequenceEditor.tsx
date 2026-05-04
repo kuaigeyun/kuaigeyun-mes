@@ -61,8 +61,8 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
     const loadOperations = async () => {
       try {
         setLoading(true);
-        const result = await operationApi.list({ is_active: true, limit: 1000 });
-        setAllOperations(result);
+        const result = await operationApi.list({ isActive: true, limit: 1000 });
+        setAllOperations(Array.isArray(result) ? result : result?.data ?? []);
       } catch (error: any) {
         message.error(error.message || t('app.master-data.operationSequence.loadListFailed'));
       } finally {

@@ -7,11 +7,62 @@
 from decimal import Decimal
 
 from pydantic import BaseModel, Field, validator, ConfigDict
-from typing import Optional
+from typing import List, Optional
 from datetime import datetime
 
 
-class CustomerBase(BaseModel):
+class PartnerInvoiceAndExtendedMixin(BaseModel):
+    """客户/供应商共用的开票资料与扩展字段（API 使用 camelCase alias）"""
+
+    tax_registration_no: Optional[str] = Field(
+        None, max_length=50, description="统一社会信用代码/纳税人识别号", alias="taxRegistrationNo"
+    )
+    invoice_title: Optional[str] = Field(None, max_length=200, description="发票抬头", alias="invoiceTitle")
+    invoice_address: Optional[str] = Field(None, description="开票地址", alias="invoiceAddress")
+    invoice_phone: Optional[str] = Field(None, max_length=50, description="开票电话", alias="invoicePhone")
+    invoice_bank_name: Optional[str] = Field(
+        None, max_length=200, description="开票开户银行", alias="invoiceBankName"
+    )
+    invoice_bank_account: Optional[str] = Field(
+        None, max_length=64, description="开票银行账号", alias="invoiceBankAccount"
+    )
+    invoice_type_code: Optional[str] = Field(
+        None, max_length=50, description="发票类型偏好编码", alias="invoiceTypeCode"
+    )
+    taxpayer_type_code: Optional[str] = Field(
+        None, max_length=50, description="纳税人类型编码", alias="taxpayerTypeCode"
+    )
+    legal_representative: Optional[str] = Field(
+        None, max_length=100, description="法定代表人", alias="legalRepresentative"
+    )
+    enterprise_type_code: Optional[str] = Field(
+        None, max_length=50, description="企业类型编码", alias="enterpriseTypeCode"
+    )
+    payment_terms_days: Optional[int] = Field(None, ge=0, description="付款账期（天）", alias="paymentTermsDays")
+    settlement_method_code: Optional[str] = Field(
+        None, max_length=50, description="结算方式编码", alias="settlementMethodCode"
+    )
+    finance_contact_name: Optional[str] = Field(
+        None, max_length=100, description="财务联系人", alias="financeContactName"
+    )
+    finance_contact_phone: Optional[str] = Field(
+        None, max_length=30, description="财务联系电话", alias="financeContactPhone"
+    )
+    finance_contact_email: Optional[str] = Field(
+        None, max_length=100, description="财务联系邮箱", alias="financeContactEmail"
+    )
+    delivery_contact_name: Optional[str] = Field(
+        None, max_length=100, description="收货联系人", alias="deliveryContactName"
+    )
+    delivery_contact_phone: Optional[str] = Field(
+        None, max_length=30, description="收货联系电话", alias="deliveryContactPhone"
+    )
+    delivery_address: Optional[str] = Field(None, description="收货地址", alias="deliveryAddress")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class CustomerBase(PartnerInvoiceAndExtendedMixin):
     """客户基础 Schema"""
 
     code: str = Field(..., max_length=50, description="客户编码")
@@ -55,7 +106,7 @@ class CustomerCreate(CustomerBase):
     pass
 
 
-class CustomerUpdate(BaseModel):
+class CustomerUpdate(PartnerInvoiceAndExtendedMixin):
     """更新客户 Schema"""
 
     code: Optional[str] = Field(None, max_length=50, description="客户编码")
@@ -107,7 +158,16 @@ class CustomerResponse(CustomerBase):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True, by_alias=True)
 
 
-class SupplierBase(BaseModel):
+class CustomerListResponse(BaseModel):
+    """客户分页列表"""
+
+    data: List[CustomerResponse]
+    total: int
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class SupplierBase(PartnerInvoiceAndExtendedMixin):
     """供应商基础 Schema"""
 
     code: str = Field(..., max_length=50, description="供应商编码")
@@ -149,7 +209,7 @@ class SupplierCreate(SupplierBase):
     pass
 
 
-class SupplierUpdate(BaseModel):
+class SupplierUpdate(PartnerInvoiceAndExtendedMixin):
     """更新供应商 Schema"""
 
     code: Optional[str] = Field(None, max_length=50, description="供应商编码")
@@ -197,4 +257,13 @@ class SupplierResponse(SupplierBase):
     deleted_at: Optional[datetime] = Field(None, description="删除时间", alias="deletedAt")
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True, by_alias=True)
+
+
+class SupplierListResponse(BaseModel):
+    """供应商分页列表"""
+
+    data: List[SupplierResponse]
+    total: int
+
+    model_config = ConfigDict(populate_by_name=True)
 

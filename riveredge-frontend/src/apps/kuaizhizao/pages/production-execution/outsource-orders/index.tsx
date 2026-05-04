@@ -59,7 +59,7 @@ import {
   TraceLinkedDocumentBrief,
   useDocumentTracking,
 } from '../../../../../components/document-tracking-panel';
-import { supplierApi } from '../../../../master-data/services/supply-chain';
+import { supplierApi, unwrapSupplyPagedList } from '../../../../master-data/services/supply-chain';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
@@ -224,7 +224,7 @@ export const OutsourceOrdersTable: React.FC = () => {
   useEffect(() => {
     const loadSuppliers = async () => {
       try {
-        const suppliers = await supplierApi.list({ isActive: true });
+        const suppliers = unwrapSupplyPagedList(await supplierApi.list({ isActive: true }));
         setSupplierList(suppliers || []);
       } catch (error) {
         window.console.error('获取数据失败:', error);

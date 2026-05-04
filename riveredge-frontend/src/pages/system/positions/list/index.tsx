@@ -25,6 +25,7 @@ import {
   Position,
 } from '../../../../services/position';
 import { getDepartmentTree, DepartmentTreeItem } from '../../../../services/department';
+import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 
 function toTreeData(items: DepartmentTreeItem[]): Array<{ title: string; value: string; key: string; children?: any[] }> {
   return items.map((item) => ({
@@ -257,26 +258,24 @@ const PositionListPage: React.FC = () => {
     {
       title: t('common.actions'),
       valueType: 'option',
-      width: 200,
       fixed: 'right',
-      render: (_, record) => (
-        <Space size="small">
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
-            {t('field.position.view')}
-          </Button>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            {t('field.position.edit')}
-          </Button>
-          <Popconfirm
-            title={t('field.position.deleteConfirm')}
-            onConfirm={() => handleDelete(record)}
-          >
-            <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-              {t('field.position.delete')}
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
+      render: (_, record) =>
+        renderRowActionsOverflow(
+          [
+            <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+              {t('field.position.view')}
+            </Button>,
+            <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+              {t('field.position.edit')}
+            </Button>,
+            <Popconfirm key="delete" title={t('field.position.deleteConfirm')} onConfirm={() => handleDelete(record)}>
+              <Button type="link" danger size="small" icon={<DeleteOutlined />}>
+                {t('field.position.delete')}
+              </Button>
+            </Popconfirm>,
+          ],
+          `position-${record.uuid}`,
+        ),
     },
   ];
 

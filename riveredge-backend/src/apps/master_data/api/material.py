@@ -1109,6 +1109,12 @@ async def list_material_batches(
     material_uuid: Optional[str] = Query(None, description="物料UUID（筛选条件）"),
     batch_no: Optional[str] = Query(None, description="批号（模糊搜索）"),
     batch_status: Optional[str] = Query(None, alias="status", description="状态（筛选条件）"),
+    keyword: Optional[str] = Query(None, description="综合模糊：批号、供应商批号、物料名称"),
+    sort_by: Optional[str] = Query(
+        None,
+        description="排序字段：batch_no,quantity,status,production_date,expiry_date,created_at,material_name",
+    ),
+    sort_order: Optional[str] = Query(None, description="asc 或 desc，默认 desc"),
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=100, description="每页数量"),
     current_user: Annotated[User, Depends(get_current_user)] = None,
@@ -1126,7 +1132,10 @@ async def list_material_batches(
             batch_no=batch_no,
             status=batch_status,
             page=page,
-            page_size=page_size
+            page_size=page_size,
+            keyword=keyword,
+            sort_by=sort_by,
+            sort_order=sort_order,
         )
     except Exception as e:
         raise _http_error(
@@ -1265,6 +1274,12 @@ async def list_material_serials(
     material_uuid: Optional[str] = Query(None, description="物料UUID（筛选条件）"),
     serial_no: Optional[str] = Query(None, description="序列号（模糊搜索）"),
     serial_status: Optional[str] = Query(None, alias="status", description="状态（筛选条件）"),
+    keyword: Optional[str] = Query(None, description="综合模糊：序列号、供应商序列号、物料名称"),
+    sort_by: Optional[str] = Query(
+        None,
+        description="排序字段：serial_no,status,production_date,factory_date,created_at,material_name",
+    ),
+    sort_order: Optional[str] = Query(None, description="asc 或 desc，默认 desc"),
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=100, description="每页数量"),
     current_user: Annotated[User, Depends(get_current_user)] = None,
@@ -1282,7 +1297,10 @@ async def list_material_serials(
             serial_no=serial_no,
             status=serial_status,
             page=page,
-            page_size=page_size
+            page_size=page_size,
+            keyword=keyword,
+            sort_by=sort_by,
+            sort_order=sort_order,
         )
     except Exception as e:
         raise _http_error(
@@ -1432,6 +1450,16 @@ async def list_materials(
     brand: Optional[str] = Query(None, description="品牌（模糊匹配）"),
     model: Optional[str] = Query(None, description="型号（模糊匹配）"),
     base_unit: Optional[str] = Query(None, alias="baseUnit", description="基础单位（精确匹配）"),
+    sort_by: Optional[str] = Query(
+        None,
+        alias="sortBy",
+        description="排序字段：main_code,name,created_at,updated_at（默认 main_code 升序）",
+    ),
+    sort_order: Optional[str] = Query(
+        None,
+        alias="sortOrder",
+        description="asc 或 desc；未传时 main_code 为 asc，其余字段默认 desc",
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):
@@ -1452,8 +1480,21 @@ async def list_materials(
     - **base_unit**: 基础单位（可选，精确匹配）
     """
     return await MaterialService.list_materials(
-        tenant_id, skip, limit, group_id, is_active, keyword, code, name,
-        source_type, specification, brand, model, base_unit
+        tenant_id,
+        skip,
+        limit,
+        group_id,
+        is_active,
+        keyword,
+        code,
+        name,
+        source_type,
+        specification,
+        brand,
+        model,
+        base_unit,
+        sort_by,
+        sort_order,
     )
 
 

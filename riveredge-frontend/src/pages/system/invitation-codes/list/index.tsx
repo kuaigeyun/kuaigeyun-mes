@@ -22,6 +22,7 @@ import {
   InvitationCode,
 } from '../../../../services/invitationCode';
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
+import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 
 const InvitationCodeListPage: React.FC = () => {
   const { t } = useTranslation();
@@ -264,26 +265,28 @@ const InvitationCodeListPage: React.FC = () => {
     {
       title: t('common.actions'),
       valueType: 'option',
-      width: 200,
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
-            {t('field.invitationCode.view')}
-          </Button>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            {t('field.invitationCode.edit')}
-          </Button>
-          <Popconfirm
-            title={t('field.invitationCode.deleteConfirm')}
-            onConfirm={() => handleDelete(record)}
-          >
-            <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-              {t('field.invitationCode.delete')}
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
+      render: (_, record) =>
+        renderRowActionsOverflow(
+          [
+            <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+              {t('field.invitationCode.view')}
+            </Button>,
+            <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+              {t('field.invitationCode.edit')}
+            </Button>,
+            <Popconfirm
+              key="delete"
+              title={t('field.invitationCode.deleteConfirm')}
+              onConfirm={() => handleDelete(record)}
+            >
+              <Button type="link" danger size="small" icon={<DeleteOutlined />}>
+                {t('field.invitationCode.delete')}
+              </Button>
+            </Popconfirm>,
+          ],
+          `invitation-code-${record.uuid}`,
+        ),
     },
   ];
 

@@ -9,7 +9,7 @@ import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProFormDependency, ProFormDigit, ProFormGroup } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Button, Descriptions, Input, Modal, Popconfirm, Space, Tag } from 'antd';
+import { App, Button, Descriptions, Input, Modal, Popconfirm, Tag } from 'antd';
 import {
   EditOutlined,
   DeleteOutlined,
@@ -32,7 +32,7 @@ import {
   UpdateMessageConfigData,
   testMessageConfig,
 } from '../../../../services/messageConfig';
-
+import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 
 /**
  * 消息配置管理列表页面组件
@@ -419,44 +419,42 @@ const MessageConfigListPage: React.FC = () => {
     {
       title: t('pages.system.messageConfig.actions'),
       valueType: 'option',
-      width: 200,
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleView(record)}
-          >
-            {t('pages.system.messageConfig.view')}
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            disabled={isBuiltInChannel(record)}
-            onClick={() => handleEdit(record)}
-          >
-            {t('pages.system.messageConfig.edit')}
-          </Button>
-          <Popconfirm
-            title={t('pages.system.messageConfig.deleteConfirm')}
-            disabled={isBuiltInChannel(record)}
-            onConfirm={() => handleDelete(record)}
-          >
+      render: (_, record) =>
+        renderRowActionsOverflow(
+          [
+            <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+              {t('pages.system.messageConfig.view')}
+            </Button>,
             <Button
+              key="edit"
               type="link"
-              danger
               size="small"
-              icon={<DeleteOutlined />}
+              icon={<EditOutlined />}
               disabled={isBuiltInChannel(record)}
+              onClick={() => handleEdit(record)}
             >
-              {t('pages.system.messageConfig.delete')}
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
+              {t('pages.system.messageConfig.edit')}
+            </Button>,
+            <Popconfirm
+              key="delete"
+              title={t('pages.system.messageConfig.deleteConfirm')}
+              disabled={isBuiltInChannel(record)}
+              onConfirm={() => handleDelete(record)}
+            >
+              <Button
+                type="link"
+                danger
+                size="small"
+                icon={<DeleteOutlined />}
+                disabled={isBuiltInChannel(record)}
+              >
+                {t('pages.system.messageConfig.delete')}
+              </Button>
+            </Popconfirm>,
+          ],
+          `message-config-${record.uuid}`,
+        ),
     },
   ];
 

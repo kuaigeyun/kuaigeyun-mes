@@ -32,6 +32,7 @@ import {
   CustomFieldPageConfig,
 } from '../../../../services/customField';
 import { getApplicationList } from '../../../../services/application';
+import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 
 /**
  * 获取所有可用的表名选项（用于关联表名选择框）
@@ -844,41 +845,24 @@ const CustomFieldListPage: React.FC = () => {
     {
       title: t('common.actions'),
       valueType: 'option',
-      width: 200,
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleView(record)}
-          >
-            {t('field.customField.view')}
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            {t('field.customField.edit')}
-          </Button>
-          <Popconfirm
-            title={t('field.customField.deleteConfirm')}
-            onConfirm={() => handleDelete(record)}
-          >
-            <Button
-              type="link"
-              danger
-              size="small"
-              icon={<DeleteOutlined />}
-            >
-              {t('field.customField.delete')}
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
+      render: (_, record) =>
+        renderRowActionsOverflow(
+          [
+            <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+              {t('field.customField.view')}
+            </Button>,
+            <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+              {t('field.customField.edit')}
+            </Button>,
+            <Popconfirm key="delete" title={t('field.customField.deleteConfirm')} onConfirm={() => handleDelete(record)}>
+              <Button type="link" danger size="small" icon={<DeleteOutlined />}>
+                {t('field.customField.delete')}
+              </Button>
+            </Popconfirm>,
+          ],
+          `custom-field-${record.uuid}`,
+        ),
     },
   ];
 

@@ -681,11 +681,12 @@ const OnboardingWizardPage: React.FC = () => {
 
   const getApiListCount = (res: any): number | undefined => {
     if (!res) return undefined;
-    const data = res.data || res;
+    if (typeof res.total === 'number' && Number.isFinite(res.total)) return Number(res.total);
+    const data = res.data !== undefined ? res.data : res;
     if (Array.isArray(data)) return data.length;
-    if (data.total !== undefined) return Number(data.total);
-    if (data.count !== undefined) return Number(data.count);
-    if (Array.isArray(data.items)) return data.items.length;
+    if (data && typeof data.total === 'number') return Number(data.total);
+    if (data && data.count !== undefined) return Number(data.count);
+    if (data && Array.isArray(data.items)) return data.items.length;
     return 0;
   };
 

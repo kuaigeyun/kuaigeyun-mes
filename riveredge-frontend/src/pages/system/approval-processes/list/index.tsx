@@ -8,12 +8,11 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Descriptions } from 'antd';
+import { App, Popconfirm, Button, Tag, Descriptions } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, ApartmentOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { countWithPagedRequests } from '../../../../utils/pagedCount';
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
-import '../../../../styles/action-column.less';
 import { UniTable } from '../../../../components/uni-table';
 import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
@@ -28,7 +27,7 @@ import {
   CreateApprovalProcessData,
   UpdateApprovalProcessData,
 } from '../../../../services/approvalProcess';
-
+import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 
 /**
  * 审批流程管理列表页面组件
@@ -312,71 +311,39 @@ const ApprovalProcessListPage: React.FC = () => {
     {
       title: t('pages.system.approvalProcesses.actions'),
       valueType: 'option',
-      width: 220,
       fixed: 'right',
-      onHeaderCell: () => ({
-        style: {
-          whiteSpace: 'nowrap',
-          width: '1%',
-        },
-      }),
-      onCell: () => ({
-        style: {
-          whiteSpace: 'nowrap',
-          width: '1%',
-        },
-      }),
-      render: (_, record) => (
-        <Space size="small">
-          <Button
-            key="view"
-            type="link"
-            size="small"
-            className="ant-btn-row-action ant-btn-row-action-detail"
-            icon={<EyeOutlined />}
-            onClick={() => handleView(record)}
-          >
-            {t('pages.system.approvalProcesses.view')}
-          </Button>
-          <Button
-            key="edit"
-            type="link"
-            size="small"
-            className="ant-btn-row-action"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            {t('pages.system.approvalProcesses.edit')}
-          </Button>
-          <Popconfirm
-            key="delete"
-            title={t('pages.system.approvalProcesses.deleteConfirmTitle')}
-            onConfirm={() => handleDelete(record)}
-            okText={t('common.confirm')}
-            cancelText={t('common.cancel')}
-          >
+      render: (_, record) =>
+        renderRowActionsOverflow(
+          [
+            <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+              {t('pages.system.approvalProcesses.view')}
+            </Button>,
+            <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+              {t('pages.system.approvalProcesses.edit')}
+            </Button>,
+            <Popconfirm
+              key="delete"
+              title={t('pages.system.approvalProcesses.deleteConfirmTitle')}
+              onConfirm={() => handleDelete(record)}
+              okText={t('common.confirm')}
+              cancelText={t('common.cancel')}
+            >
+              <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                {t('pages.system.approvalProcesses.delete')}
+              </Button>
+            </Popconfirm>,
             <Button
+              key="design"
               type="link"
               size="small"
-              className="ant-btn-row-action"
-              danger
-              icon={<DeleteOutlined />}
+              icon={<ApartmentOutlined />}
+              onClick={() => handleDesign(record)}
             >
-              {t('pages.system.approvalProcesses.delete')}
-            </Button>
-          </Popconfirm>
-          <Button
-            key="design"
-            type="link"
-            size="small"
-            className="ant-btn-row-action"
-            icon={<ApartmentOutlined />}
-            onClick={() => handleDesign(record)}
-          >
-            {t('pages.system.approvalProcesses.design')}
-          </Button>
-        </Space>
-      ),
+              {t('pages.system.approvalProcesses.design')}
+            </Button>,
+          ],
+          `approval-process-${record.uuid}`,
+        ),
     },
   ];
 

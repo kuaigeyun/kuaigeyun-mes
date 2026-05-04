@@ -30,7 +30,13 @@ export const variantAttributeApi = {
    * 获取属性定义列表
    */
   list: async (params?: VariantAttributeDefinitionListParams): Promise<VariantAttributeDefinition[]> => {
-    return api.get('/core/variant-attributes', { params });
+    const q: Record<string, unknown> = {};
+    if (params?.is_active !== undefined) q.is_active = params.is_active;
+    if (params?.attribute_type) q.attribute_type = params.attribute_type;
+    if (params?.keyword?.trim()) q.keyword = params.keyword.trim();
+    if (params?.sort_by) q.sort_by = params.sort_by;
+    if (params?.sort_order) q.sort_order = params.sort_order;
+    return api.get('/core/variant-attributes', { params: q });
   },
 
   /**

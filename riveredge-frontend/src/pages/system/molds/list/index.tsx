@@ -21,7 +21,7 @@ import {
   ProFormDigit,
   ProDescriptionsItemProps,
 } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, message, Modal, Descriptions } from 'antd';
+import { App, Popconfirm, Button, Tag, message, Modal, Descriptions } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
@@ -36,6 +36,7 @@ import {
   CreateMoldData,
   UpdateMoldData,
 } from '../../../../services/mold';
+import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 
 /**
  * 模具管理列表页面组件
@@ -351,41 +352,40 @@ const MoldListPage: React.FC = () => {
     {
       title: t('pages.system.molds.columnActions'),
       valueType: 'option',
-      width: 200,
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleView(record)}
-          >
-            {t('pages.system.molds.view')}
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            {t('pages.system.molds.edit')}
-          </Button>
-          <Popconfirm
-            title={t('pages.system.molds.confirmDeleteOne')}
-            onConfirm={() => handleDelete(record)}
-          >
+      render: (_, record) =>
+        renderRowActionsOverflow(
+          [
             <Button
+              key="view"
               type="link"
-              danger
               size="small"
-              icon={<DeleteOutlined />}
+              icon={<EyeOutlined />}
+              onClick={() => handleView(record)}
             >
-              {t('pages.system.molds.delete')}
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
+              {t('pages.system.molds.view')}
+            </Button>,
+            <Button
+              key="edit"
+              type="link"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => handleEdit(record)}
+            >
+              {t('pages.system.molds.edit')}
+            </Button>,
+            <Popconfirm
+              key="delete"
+              title={t('pages.system.molds.confirmDeleteOne')}
+              onConfirm={() => handleDelete(record)}
+            >
+              <Button type="link" danger size="small" icon={<DeleteOutlined />}>
+                {t('pages.system.molds.delete')}
+              </Button>
+            </Popconfirm>,
+          ],
+          `mold-${record.uuid}`,
+        ),
     },
   ];
 

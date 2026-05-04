@@ -26,6 +26,7 @@ import {
   ApprovalInstanceActionData,
 } from '../../../../services/approvalInstance';
 import { getApprovalProcessList } from '../../../../services/approvalProcess';
+import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 
 const { TextArea } = Input;
 
@@ -213,7 +214,6 @@ const ApprovalInstanceListPage: React.FC = () => {
     {
       title: t('pages.system.approvalInstances.actions'),
       valueType: 'option',
-      width: 300,
       fixed: 'right',
       render: (_, record) => {
         const actions = [
@@ -278,8 +278,8 @@ const ApprovalInstanceListPage: React.FC = () => {
             );
           }
         }
-        
-        return actions;
+
+        return renderRowActionsOverflow(actions, `approval-inst-${record.uuid}`);
       },
     },
   ];

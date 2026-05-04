@@ -93,7 +93,7 @@ const DeliveryNotesPage: React.FC = () => {
     const load = async () => {
       try {
         const cust = await customerApi.list({ limit: 1000, isActive: true });
-        setCustomerList(Array.isArray(cust) ? cust : cust?.items || []);
+        setCustomerList(Array.isArray(cust) ? cust : cust?.data ?? cust?.items ?? []);
       } catch (e) {
         console.error('加载客户失败', e);
       }
