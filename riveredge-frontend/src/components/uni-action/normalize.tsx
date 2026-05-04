@@ -93,7 +93,7 @@ function defaultIconForRowAction(node: React.ReactNode): React.ReactNode | undef
   if (/复制|拷贝/.test(n)) return <CopyOutlined />
   if (/pdf|PDF/.test(label)) return <FilePdfOutlined />
   if (/另存为新版本|另存为新/.test(n)) return <SaveOutlined />
-  if (/修订版|新建修订/.test(n)) return <BranchesOutlined />
+  if (/修订版|新建修订|创建新版/.test(n)) return <BranchesOutlined />
   if (/打印/.test(n)) return <PrinterOutlined />
   if (/导出/.test(n)) return <ExportOutlined />
   if (/导入/.test(n)) return <ImportOutlined />

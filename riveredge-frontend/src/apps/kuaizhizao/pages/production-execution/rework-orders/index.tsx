@@ -12,12 +12,12 @@ import React, { useRef, useState, useEffect } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormItem, ProFormDependency } from '@ant-design/pro-components';
-import { App, Button, Col, Descriptions, Modal, Row, Space, Tag, message } from 'antd';
+import { App, Button, Col, Modal, Row, Space, Tag, message } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
-import { DetailDrawerActions, detailDrawerDescriptionItems, DetailDrawerSection, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { DetailDrawerActions, DetailDrawerSection, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import CodeField from '../../../../../components/code-field';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { reworkOrderApi, workOrderApi } from '../../../services/production';
@@ -798,6 +798,8 @@ const ReworkOrdersPage: React.FC = () => {
         open={detailDrawerVisible}
         onClose={() => setDetailDrawerVisible(false)}
         width={DRAWER_CONFIG.HALF_WIDTH}
+        columns={detailColumns}
+        dataSource={reworkOrderDetail ?? undefined}
         extra={
           reworkOrderDetail && (() => {
             const lifecycle = getReworkOrderLifecycle(reworkOrderDetail);
@@ -805,10 +807,38 @@ const ReworkOrdersPage: React.FC = () => {
             return (
               <DetailDrawerActions
                 items={[
-                  { key: 'edit', visible: canEdit, render: () => <Button type="link" size="small" icon={<EditOutlined
-        basic={<Descriptions column={2} items={detailDrawerDescriptionItems(detailColumns, reworkOrderDetail)} />}
-      />} onClick={() => { setDetailDrawerVisible(false); handleEdit(reworkOrderDetail); }}>编辑</Button> },
-                  { key: 'delete', visible: canEdit, render: () => <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(reworkOrderDetail)}>删除</Button> },
+                  {
+                    key: 'edit',
+                    visible: canEdit,
+                    render: () => (
+                      <Button
+                        type="link"
+                        size="small"
+                        icon={<EditOutlined />}
+                        onClick={() => {
+                          setDetailDrawerVisible(false);
+                          handleEdit(reworkOrderDetail);
+                        }}
+                      >
+                        编辑
+                      </Button>
+                    ),
+                  },
+                  {
+                    key: 'delete',
+                    visible: canEdit,
+                    render: () => (
+                      <Button
+                        type="link"
+                        size="small"
+                        danger
+                        icon={<DeleteOutlined />}
+                        onClick={() => handleDelete(reworkOrderDetail)}
+                      >
+                        删除
+                      </Button>
+                    ),
+                  },
                 ]}
               />
             );
@@ -818,8 +848,7 @@ const ReworkOrdersPage: React.FC = () => {
         {reworkOrderDetail && (() => {
           const lifecycle = getReworkOrderLifecycle(reworkOrderDetail);
           const mainStages = lifecycle.mainStages ?? [];
-          const subStages = lifecycle.subStages ?? [];
-          if (mainStages.length === 0 && subStages.length === 0) return null;
+          if (mainStages.length === 0) return null;
           return (
             <DetailDrawerSection title="生命周期">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -830,14 +859,6 @@ const ReworkOrdersPage: React.FC = () => {
                     showLabels
                     nextStepSuggestions={lifecycle.nextStepSuggestions}
                   />
-                )}
-                {subStages.length > 0 && (
-                  <div>
-                    <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
-                      执行中 · 全链路
-                    </div>
-                    <UniLifecycleStepper steps={subStages} showLabels />
-                  </div>
                 )}
               </div>
             </DetailDrawerSection>

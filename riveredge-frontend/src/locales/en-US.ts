@@ -1849,10 +1849,10 @@ export default {
   'app.kuaizhizao.menu.sales-management.shipment-notices': 'Shipment Notices',
   'app.kuaizhizao.menu.sales-management.sales-returns': 'Sales Returns',
   'app.kuaizhizao.menu.sales-management.quotations': 'Quotations',
-  'app.kuaizhizao.quotation.saveAsRevision': 'Create new revision',
+  'app.kuaizhizao.quotation.saveAsRevision': 'New version',
   'app.kuaizhizao.quotation.saveAsRevisionHint':
     'Copy the latest revision in this series to a new draft revision so you can change lines and prices. Continue?',
-  'app.kuaizhizao.quotation.formalPrint': 'Generate PDF quotation',
+  'app.kuaizhizao.quotation.formalPrint': 'Generate PDF',
   'app.kuaizhizao.quotation.formalPrintDenied':
     'PDF generation is available after approval, customer acceptance, or conversion to sales order.',
   'app.kuaizhizao.quotation.colSeries': 'Series code',

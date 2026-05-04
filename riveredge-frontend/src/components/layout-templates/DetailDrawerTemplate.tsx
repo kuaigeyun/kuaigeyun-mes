@@ -81,6 +81,8 @@ export interface DetailDrawerTemplateProps<T = Record<string, unknown>> {
   placement?: DrawerProps['placement'];
   /** 为 true 时不施加悬浮外边距与圆角（仅占满贴边抽屉） */
   disableFloatingChrome?: boolean;
+  /** 打开/关闭动画结束后回调（与 Ant Design Drawer 一致） */
+  afterOpenChange?: DrawerProps['afterOpenChange'];
 }
 
 function stackCollaborationParts(
@@ -137,6 +139,7 @@ export const DetailDrawerTemplate = <T extends Record<string, unknown> = Record<
   children,
   placement,
   disableFloatingChrome = false,
+  afterOpenChange,
 }: DetailDrawerTemplateProps<T>) => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
@@ -266,6 +269,7 @@ export const DetailDrawerTemplate = <T extends Record<string, unknown> = Record<
       footer={footer}
       extra={extra}
       zIndex={zIndex}
+      afterOpenChange={afterOpenChange}
     >
       {banner}
       <div

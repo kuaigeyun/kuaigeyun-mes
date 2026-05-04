@@ -18,7 +18,6 @@ import { UniLifecycleStepper } from '../../../../../../components/uni-lifecycle'
 import type { LifecycleResult } from '../../../../../../components/uni-lifecycle/types';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../../components/document-tracking-panel';
 import { DetailDrawerSection } from '../../../../../../components/layout-templates';
-import { SalesOrderTrackingRadar } from './SalesOrderTrackingRadar';
 import { getSalesOrderLifecycle } from '../../../../utils/salesOrderLifecycle';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../../services/dataDictionary';
 import type { SalesOrder, SalesOrderItem } from '../../../../services/sales-order';
@@ -311,7 +310,6 @@ export const SalesOrderDetailCollaborationPane: React.FC = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {order.id != null && <SalesOrderTrackingRadar salesOrderId={order.id} />}
       {mainStages.length > 0 && (
         <UniLifecycleStepper
           steps={mainStages}

@@ -1853,10 +1853,10 @@ export default {
   'app.kuaizhizao.menu.sales-management.shipment-notices': '发货通知单',
   'app.kuaizhizao.menu.sales-management.sales-returns': '销售退货单',
   'app.kuaizhizao.menu.sales-management.quotations': '报价单',
-  'app.kuaizhizao.quotation.saveAsRevision': '新建修订版',
+  'app.kuaizhizao.quotation.saveAsRevision': '创建新版',
   'app.kuaizhizao.quotation.saveAsRevisionHint':
     '将基于当前系列最新版复制为新的草稿修订，可在新版中调整明细与价格。是否继续？',
-  'app.kuaizhizao.quotation.formalPrint': '生成PDF报价',
+  'app.kuaizhizao.quotation.formalPrint': '生成PDF',
   'app.kuaizhizao.quotation.formalPrintDenied': '须审核通过、客户确认或已转订单后方可生成',
   'app.kuaizhizao.quotation.colSeries': '系列编码',
   'app.kuaizhizao.quotation.colVersion': '版本',

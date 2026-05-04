@@ -1564,9 +1564,7 @@ const DemandManagementPage: React.FC = () => {
                 {(() => {
                   const lifecycle = getDemandLifecycle(currentDemand);
                   const mainStages = lifecycle.mainStages ?? [];
-                  const subStages = lifecycle.subStages ?? [];
-                  const chainSub = subStages.filter((s) => !DEMAND_ORIGIN_SUB_KEYS.has(s.key));
-                  const hasStepper = mainStages.length > 0 || chainSub.length > 0;
+                  const hasStepper = mainStages.length > 0;
                   return (
                     <>
                       {mainStages.length > 0 && (
@@ -1577,14 +1575,6 @@ const DemandManagementPage: React.FC = () => {
                           nextStepSuggestions={lifecycle.nextStepSuggestions}
                           hideNextStepSuggestions
                         />
-                      )}
-                      {chainSub.length > 0 && (
-                        <div>
-                          <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
-                            执行中 · 全链路
-                          </div>
-                          <UniLifecycleStepper steps={chainSub} showLabels />
-                        </div>
                       )}
                       {!hasStepper && (
                         <Typography.Text type="secondary">暂无可展示的生命周期步骤</Typography.Text>

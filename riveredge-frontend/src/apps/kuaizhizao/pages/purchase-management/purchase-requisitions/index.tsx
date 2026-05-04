@@ -1581,7 +1581,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
                   {(() => {
                     const lifecycle = getPurchaseRequisitionLifecycle(currentReq);
                     const mainStages = lifecycle.mainStages ?? [];
-                    const subStages = lifecycle.subStages ?? [];
                     return (
                       <>
                         {mainStages.length > 0 && (
@@ -1592,14 +1591,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
                             nextStepSuggestions={lifecycle.nextStepSuggestions}
                             hideNextStepSuggestions
                           />
-                        )}
-                        {subStages.length > 0 && (
-                          <div>
-                            <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
-                              执行中 · 全链路
-                            </div>
-                            <UniLifecycleStepper steps={subStages} showLabels />
-                          </div>
                         )}
                       </>
                     );

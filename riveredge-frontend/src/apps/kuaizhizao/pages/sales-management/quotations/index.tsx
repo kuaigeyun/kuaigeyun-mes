@@ -12,7 +12,7 @@ import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidate
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, List, Typography, Alert, theme as AntdTheme, Descriptions, Empty, Spin, Dropdown, Tooltip, Select } from 'antd';
+import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, List, Typography, theme as AntdTheme, Descriptions, Empty, Spin, Dropdown, Tooltip, Select } from 'antd';
 import type { DescriptionsProps } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, AppstoreAddOutlined, SendOutlined, CommentOutlined, RollbackOutlined, CheckOutlined, CloseCircleOutlined, UndoOutlined, ArrowDownOutlined, BranchesOutlined, ReloadOutlined } from '@ant-design/icons';
 import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
@@ -98,26 +98,32 @@ function isApprovedReview(rs: string | undefined): boolean {
   return ['已通过', 'APPROVED', '审核通过', '通过', '已审核'].includes(r);
 }
 
-function canWithdrawQuotation(q: Quotation): boolean {
+function canWithdrawQuotation(q: Quotation, auditRequired: boolean): boolean {
+  if (!auditRequired) return false;
   return q.status === '已发送' && PENDING_REVIEW_STATUSES.has((q.review_status || '').trim());
 }
 
-function canApproveQuotation(q: Quotation): boolean {
+function canApproveQuotation(q: Quotation, auditRequired: boolean): boolean {
+  if (!auditRequired) return false;
   if (q.status !== '已发送') return false;
   const rs = (q.review_status || '').trim();
   return PENDING_REVIEW_STATUSES.has(rs) || rs === '';
 }
 
-function canRejectQuotation(q: Quotation): boolean {
-  return canApproveQuotation(q);
+function canRejectQuotation(q: Quotation, auditRequired: boolean): boolean {
+  return canApproveQuotation(q, auditRequired);
 }
 
-function canRevokeReviewQuotation(q: Quotation): boolean {
+function canRevokeReviewQuotation(q: Quotation, auditRequired: boolean): boolean {
+  if (!auditRequired) return false;
   return q.status === '已发送' && isApprovedReview(q.review_status);
 }
 
-function canConfirmCustomerQuotation(q: Quotation): boolean {
-  return q.status === '已发送' && isApprovedReview(q.review_status);
+/** 未开审核时：已发送即可客户确认（不依赖 review_status 是否「已通过」） */
+function canConfirmCustomerQuotation(q: Quotation, auditRequired: boolean): boolean {
+  if (q.status !== '已发送') return false;
+  if (!auditRequired) return true;
+  return isApprovedReview(q.review_status);
 }
 
 function canReopenQuotation(q: Quotation): boolean {
@@ -135,23 +141,29 @@ function canDeleteQuotation(q: Quotation): boolean {
   return true;
 }
 
-/** 允许「转订单」：已审核通过或已接受；或已转单但下游已删可重新下推 */
-function canConvertQuotation(q: Quotation): boolean {
+/** 允许「转订单」：已接受；或开审核且已发送并已审核通过；或已转单但下游已删可重新下推 */
+function canConvertQuotation(q: Quotation, auditRequired: boolean): boolean {
   if (q.is_latest_in_series === false) return false;
   if (q.status === '已拒绝') return false;
   if (q.status === '已转订单') {
     return q.conversion_downstream_missing === true;
   }
   if (q.status === '已接受') return true;
-  if (q.status === '已发送') return isApprovedReview(q.review_status);
+  if (q.status === '已发送') {
+    if (!auditRequired) return false;
+    return isApprovedReview(q.review_status);
+  }
   return false;
 }
 
-/** 生成PDF报价：与后端 print 门禁一致 */
-function canPrintFormalQuotation(q: Quotation): boolean {
+/** 生成PDF报价：与后端 print 门禁一致；未开审核时「已发送」也可生成 */
+function canPrintFormalQuotation(q: Quotation, auditRequired: boolean): boolean {
   const st = (q.status || '').trim();
   if (st === '已接受' || st === '已转订单') return true;
-  if (st === '已发送' && isApprovedReview(q.review_status)) return true;
+  if (st === '已发送') {
+    if (!auditRequired) return true;
+    return isApprovedReview(q.review_status);
+  }
   return false;
 }
 
@@ -211,6 +223,9 @@ const QUOTATION_LEFT_CHAIN_GAP = 16;
 /** 左侧「全链路 + 关联简览」悬浮窗与右侧报价单抽屉之间的水平间距（避免两块视觉贴死） */
 const QUOTATION_CHAIN_DRAWER_GAP = 16;
 
+/** 关闭报价详情时：先收起左侧悬浮层，再触发抽屉关闭（与 drawerSlideMotion 入场 320ms 无关，此处仅留出绘制间隙） */
+const QUOTATION_CHAIN_OVERLAY_HIDE_BEFORE_DRAWER_MS = 48;
+
 /** 左半屏上下两块悬浮窗参与高度平分的纵向扣除：上外边距 + 下外边距 + 中间间隙 */
 const QUOTATION_CHAIN_VERTICAL_TRIM =
   QUOTATION_FULL_CHAIN_FLOAT_MARGIN * 2 + QUOTATION_LEFT_CHAIN_GAP;
@@ -218,6 +233,75 @@ const QUOTATION_CHAIN_VERTICAL_TRIM =
 const quotationChainHalfHeightCss = `calc((100vh - ${QUOTATION_CHAIN_VERTICAL_TRIM}px) / 2)`;
 const quotationChainPanelWidthCss = `calc(50vw - ${QUOTATION_FULL_CHAIN_FLOAT_MARGIN * 2 + QUOTATION_CHAIN_DRAWER_GAP}px)`;
 const quotationBriefPanelTopCss = `calc(${QUOTATION_FULL_CHAIN_FLOAT_MARGIN}px + (100vh - ${QUOTATION_CHAIN_VERTICAL_TRIM}px) / 2 + ${QUOTATION_LEFT_CHAIN_GAP}px)`;
+
+/** 列表树形行（antd Table children） */
+type QuotationTableRow = Quotation & { children?: QuotationTableRow[] };
+
+/** 同一系列的分组键：优先后端 series_code；否则从编号剥 `-Vn` 后缀 */
+function quotationSeriesGroupKey(r: Quotation): string {
+  const series = (r.quotation_series_code || '').trim();
+  if (series) return series;
+  const qc = String(r.quotation_code || '').trim();
+  if (!qc) return `__id_${r.id ?? 'unknown'}`;
+  const m = qc.match(/^(.*)-V(\d+)$/i);
+  if (m) return m[1];
+  return qc;
+}
+
+function pickQuotationSeriesParent(group: Quotation[]): Quotation {
+  const latest = group.find((x) => x.is_latest_in_series === true);
+  if (latest) return latest;
+  return group.reduce((a, b) => ((b.version_no ?? 0) > (a.version_no ?? 0) ? b : a));
+}
+
+/**
+ * 将当前页的扁平列表按系列合成树：父行为「最新版」（或 version 最高），其余版本为子行。
+ * 仅作用于本页数据；跨分页的系列只在同一页内合并。
+ */
+function buildQuotationSeriesTree(rows: Quotation[]): QuotationTableRow[] {
+  if (!rows?.length) return [];
+  const groups = new Map<string, Quotation[]>();
+  const firstIndex = new Map<string, number>();
+  rows.forEach((r, i) => {
+    const k = quotationSeriesGroupKey(r);
+    if (!firstIndex.has(k)) firstIndex.set(k, i);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k)!.push(r);
+  });
+  /** 子行须严格剔除可能由后端附带的 children（即使为 []），否则 antd Table 会把该行当作可展开行，
+   *  渲染出隐形的展开占位符，导致行高 / 缩进与同级兄弟节点不一致。 */
+  const stripChildren = (q: Quotation): QuotationTableRow => {
+    const { ...rest } = q as Quotation & { children?: unknown };
+    delete (rest as { children?: unknown }).children;
+    return rest as QuotationTableRow;
+  };
+  const roots: QuotationTableRow[] = [];
+  for (const group of groups.values()) {
+    if (group.length === 1) {
+      roots.push(stripChildren(group[0]));
+      continue;
+    }
+    const parent = pickQuotationSeriesParent(group);
+    const children = group
+      .filter((x) => x.id !== parent.id)
+      .sort((a, b) => (b.version_no ?? 0) - (a.version_no ?? 0))
+      .map(stripChildren);
+    roots.push({ ...stripChildren(parent), children });
+  }
+  roots.sort((a, b) => (firstIndex.get(quotationSeriesGroupKey(a)) ?? 0) - (firstIndex.get(quotationSeriesGroupKey(b)) ?? 0));
+  return roots;
+}
+
+function flattenQuotationTableRows(rows: QuotationTableRow[]): Quotation[] {
+  const out: Quotation[] = [];
+  const walk = (r: QuotationTableRow) => {
+    const { children, ...rest } = r;
+    out.push(rest);
+    children?.forEach(walk);
+  };
+  rows.forEach(walk);
+  return out;
+}
 
 function renderQuotationRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
   return renderRowActionsOverflow(nodes, keyPrefix);
@@ -323,6 +407,9 @@ const QuotationsPage: React.FC = () => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [quotationDetail, setQuotationDetail] = useState<Quotation | null>(null);
+  /** 抽屉滑入结束后再显示左侧「全链路 / 关联预览」悬浮层；关闭时先隐藏悬浮层再关抽屉 */
+  const [quotationChainOverlayVisible, setQuotationChainOverlayVisible] = useState(false);
+  const quotationDrawerCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** 抽屉外全链路悬浮窗：刷新追溯图（驱动 DocumentTraceFlowGraph refreshKey） */
   const [fullChainRefreshKey, setFullChainRefreshKey] = useState(0);
   const [fullChainTraceLoading, setFullChainTraceLoading] = useState(false);
@@ -334,7 +421,8 @@ const QuotationsPage: React.FC = () => {
     detailDrawerVisible && quotationDetail ? 'quotation' : undefined,
     quotationDetail?.id
   );
-  const quotationAuditRequired = useAuditRequired('quotation', true);
+  /** 默认 false：配置未加载时不应误判为「已开审核」，否则会出现未开审核仍显示「撤回审核」等 */
+  const quotationAuditRequired = useAuditRequired('quotation', false);
   const salesOrderAuditRequired = useAuditRequired('sales_order', false);
   const quotationLifecycleDetail = useMemo(
     () => (quotationDetail ? getQuotationLifecycle(quotationDetail, quotationAuditRequired) : null),
@@ -441,16 +529,25 @@ const QuotationsPage: React.FC = () => {
   const columns: ProColumns<Quotation>[] = [
     {
       title: '报价单编号',
+      key: 'quotation_code',
       dataIndex: 'quotation_code',
-      width: 168,
+      /** 树形展开 + 复制占宽；关闭列级 ellipsis，避免 rc-table 与 Typography 双重省略号 */
+      width: 520,
+      ellipsis: false,
       fixed: 'left',
       order: 10,
       fieldProps: { placeholder: '支持模糊匹配' },
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.quotation_code ?? '') }} ellipsis>
-          {r.quotation_code ?? '-'}
-        </Typography.Text>
-      ),
+      onCell: () => ({
+        className: 'quotation-list-code-cell',
+      }),
+      render: (_, r) => {
+        const code = String(r.quotation_code ?? '-');
+        return (
+          <Typography.Text copyable={{ text: code }} style={{ whiteSpace: 'nowrap' }}>
+            {code}
+          </Typography.Text>
+        );
+      },
     },
     {
       title: t('app.kuaizhizao.quotation.colSeries'),
@@ -583,35 +680,35 @@ const QuotationsPage: React.FC = () => {
             </Button>
           );
         }
-        if (canWithdrawQuotation(record)) {
+        if (canWithdrawQuotation(record, quotationAuditRequired)) {
           parts.push(
             <Button key="w" type="link" size="small" onClick={() => handleWithdraw(record)}>
               撤回
             </Button>
           );
         }
-        if (canApproveQuotation(record)) {
+        if (canApproveQuotation(record, quotationAuditRequired)) {
           parts.push(
             <Button key="ap" type="link" size="small" onClick={() => handleApprove(record)}>
               审核通过
             </Button>
           );
         }
-        if (canRejectQuotation(record)) {
+        if (canRejectQuotation(record, quotationAuditRequired)) {
           parts.push(
             <Button key="rj" type="link" size="small" onClick={() => openRejectModal(record)}>
               驳回
             </Button>
           );
         }
-        if (canRevokeReviewQuotation(record)) {
+        if (canRevokeReviewQuotation(record, quotationAuditRequired)) {
           parts.push(
             <Button key="rv" type="link" size="small" onClick={() => handleRevokeReview(record)}>
               撤回审核
             </Button>
           );
         }
-        if (canConfirmCustomerQuotation(record)) {
+        if (canConfirmCustomerQuotation(record, quotationAuditRequired)) {
           parts.push(
             <Button key="cc" type="link" size="small" onClick={() => handleConfirmCustomer(record)}>
               客户确认
@@ -626,7 +723,7 @@ const QuotationsPage: React.FC = () => {
           );
         }
         {
-          const convertible = canConvertQuotation(record);
+          const convertible = canConvertQuotation(record, quotationAuditRequired);
           // 仅当 superseded_by_id 有值时才认为"真正被取代"，避免数据异常导致误判
           const superseded =
             record.is_latest_in_series === false &&
@@ -636,7 +733,8 @@ const QuotationsPage: React.FC = () => {
             convertible ||
             (superseded &&
               (record.status === '已接受' ||
-                (record.status === '已发送' && isApprovedReview(record.review_status))));
+                (record.status === '已发送' &&
+                  (quotationAuditRequired ? isApprovedReview(record.review_status) : false))));
           if (showConvert) {
             parts.push(
               <Tooltip
@@ -678,7 +776,7 @@ const QuotationsPage: React.FC = () => {
           <Tooltip
             key="pr"
             title={
-              canPrintFormalQuotation(record)
+              canPrintFormalQuotation(record, quotationAuditRequired)
                 ? t('app.kuaizhizao.quotation.formalPrint')
                 : t('app.kuaizhizao.quotation.formalPrintDenied')
             }
@@ -686,8 +784,10 @@ const QuotationsPage: React.FC = () => {
             <Button
               type="link"
               size="small"
-              disabled={!canPrintFormalQuotation(record)}
-              onClick={() => canPrintFormalQuotation(record) && handlePrint(record)}
+              disabled={!canPrintFormalQuotation(record, quotationAuditRequired)}
+              onClick={() =>
+                canPrintFormalQuotation(record, quotationAuditRequired) && handlePrint(record)
+              }
             >
               {t('app.kuaizhizao.quotation.formalPrint')}
             </Button>
@@ -1122,8 +1222,7 @@ const QuotationsPage: React.FC = () => {
           invalidateMenuBadgeCounts();
 
           actionRef.current?.reload();
-          setDetailDrawerVisible(false);
-          setQuotationDetail(null);
+          closeQuotationDetailDrawer();
         } catch (error: any) {
           messageApi.error(error.message || '转订单失败');
         }
@@ -1134,7 +1233,9 @@ const QuotationsPage: React.FC = () => {
   const handleSubmit = (record: Quotation) => {
     Modal.confirm({
       title: '提交报价单',
-      content: `确定提交报价单「${record.quotation_code || record.id}」？提交后状态将变为「已发送」；若业务蓝图要求审核，将进入待审核。`,
+      content: quotationAuditRequired
+        ? `确定提交报价单「${record.quotation_code || record.id}」？提交后状态将变为「已发送」；若业务蓝图要求审核，将进入待审核。`
+        : `确定提交报价单「${record.quotation_code || record.id}」？提交后状态将变为「已发送」。`,
       onOk: async () => {
         try {
           const updated = await submitQuotation(record.id!);
@@ -1340,7 +1441,7 @@ const QuotationsPage: React.FC = () => {
       /[/\\?%*:|"<>]/g,
       '-',
     );
-    const fileName = `生成PDF报价_${safeCode}.pdf`;
+    const fileName = `生成PDF_${safeCode}.pdf`;
 
     const openPdfPreview = (blobUrl: string) => {
       setPdfPreviewBlobUrl(blobUrl);
@@ -1655,6 +1756,38 @@ const QuotationsPage: React.FC = () => {
     setLinkedSalesOrder(null);
     setLinkedSalesOrderLoading(false);
   }, []);
+
+  const closeQuotationDetailDrawer = useCallback(() => {
+    if (quotationDrawerCloseTimerRef.current) {
+      clearTimeout(quotationDrawerCloseTimerRef.current);
+      quotationDrawerCloseTimerRef.current = null;
+    }
+    setQuotationChainOverlayVisible(false);
+    setFullChainBriefDoc(null);
+    closeLinkedSalesOrderDrawer();
+    quotationDrawerCloseTimerRef.current = window.setTimeout(() => {
+      quotationDrawerCloseTimerRef.current = null;
+      setDetailDrawerVisible(false);
+      setQuotationDetail(null);
+    }, QUOTATION_CHAIN_OVERLAY_HIDE_BEFORE_DRAWER_MS);
+  }, [closeLinkedSalesOrderDrawer]);
+
+  useEffect(() => {
+    if (!detailDrawerVisible) return;
+    if (quotationDrawerCloseTimerRef.current) {
+      clearTimeout(quotationDrawerCloseTimerRef.current);
+      quotationDrawerCloseTimerRef.current = null;
+    }
+  }, [detailDrawerVisible]);
+
+  useEffect(
+    () => () => {
+      if (quotationDrawerCloseTimerRef.current) {
+        clearTimeout(quotationDrawerCloseTimerRef.current);
+      }
+    },
+    [],
+  );
 
   const appendQuotationItemsFromMaterials = useCallback(
     (selected: Material[]) => {
@@ -2119,7 +2252,8 @@ const QuotationsPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable
-          columnPersistenceId="kuaizhizao-sales-quotations"
+          className="kuaizhizao-quotations-table"
+          columnPersistenceId="kuaizhizao-sales-quotations-v2"
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           headerTitle="报价单"
@@ -2153,12 +2287,16 @@ const QuotationsPage: React.FC = () => {
                       icon: <SendOutlined />,
                       onClick: () => handleBatchSubmit(selectedRowKeys),
                     },
-                    {
-                      key: 'approve',
-                      label: '批量审核通过',
-                      icon: <CheckOutlined />,
-                      onClick: () => handleBatchApprove(selectedRowKeys),
-                    },
+                    ...(quotationAuditRequired
+                      ? [
+                          {
+                            key: 'approve',
+                            label: '批量审核通过',
+                            icon: <CheckOutlined />,
+                            onClick: () => handleBatchApprove(selectedRowKeys),
+                          } as const,
+                        ]
+                      : []),
                     {
                       key: 'withdraw',
                       label: '批量撤回',
@@ -2204,7 +2342,7 @@ const QuotationsPage: React.FC = () => {
               const res = await listQuotations({ skip: 0, limit: 10000 });
               let items = res.data || [];
               if (type === 'currentPage' && pageData?.length) {
-                items = pageData;
+                items = flattenQuotationTableRows(pageData as QuotationTableRow[]);
               } else if (type === 'selected' && keys?.length) {
                 items = items.filter((d) => d.id != null && keys.includes(d.id));
               }
@@ -2246,8 +2384,9 @@ const QuotationsPage: React.FC = () => {
                 end_date: endDate,
               });
               setListTotal(response.total ?? 0);
+              const flat = response.data || [];
               return {
-                data: response.data || [],
+                data: buildQuotationSeriesTree(flat),
                 success: true,
                 total: response.total ?? 0,
               };
@@ -2257,11 +2396,15 @@ const QuotationsPage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          scroll={{ x: 1280 }}
+          scroll={{ x: 1632 }}
+          expandable={{
+            defaultExpandAllRows: true,
+            indentSize: 16,
+          }}
         />
       </ListPageTemplate>
 
-      {detailDrawerVisible && quotationDetail ? (
+      {detailDrawerVisible && quotationDetail && quotationChainOverlayVisible ? (
         <>
           <div
             role="complementary"
@@ -2404,11 +2547,10 @@ const QuotationsPage: React.FC = () => {
         title={`报价单详情${quotationDetail?.quotation_code ? ` - ${quotationDetail.quotation_code}` : ''}`}
         open={detailDrawerVisible}
         zIndex={quotationDetailDrawerZIndex}
-        onClose={() => {
-          setDetailDrawerVisible(false);
-          setQuotationDetail(null);
-          setFullChainBriefDoc(null);
-          closeLinkedSalesOrderDrawer();
+        onClose={closeQuotationDetailDrawer}
+        afterOpenChange={(open) => {
+          if (open) setQuotationChainOverlayVisible(true);
+          else setQuotationChainOverlayVisible(false);
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         extra={
@@ -2417,19 +2559,19 @@ const QuotationsPage: React.FC = () => {
               {quotationDetail.status === '草稿' && (
                 <Button icon={<SendOutlined />} onClick={() => handleSubmit(quotationDetail)}>提交</Button>
               )}
-              {canWithdrawQuotation(quotationDetail) && (
+              {canWithdrawQuotation(quotationDetail, quotationAuditRequired) && (
                 <Button icon={<RollbackOutlined />} onClick={() => handleWithdraw(quotationDetail)}>撤回</Button>
               )}
-              {canApproveQuotation(quotationDetail) && (
+              {canApproveQuotation(quotationDetail, quotationAuditRequired) && (
                 <Button icon={<CheckOutlined />} onClick={() => handleApprove(quotationDetail)}>审核通过</Button>
               )}
-              {canRejectQuotation(quotationDetail) && (
+              {canRejectQuotation(quotationDetail, quotationAuditRequired) && (
                 <Button icon={<CloseCircleOutlined />} onClick={() => openRejectModal(quotationDetail)}>驳回</Button>
               )}
-              {canRevokeReviewQuotation(quotationDetail) && (
+              {canRevokeReviewQuotation(quotationDetail, quotationAuditRequired) && (
                 <Button icon={<UndoOutlined />} onClick={() => handleRevokeReview(quotationDetail)}>撤回审核</Button>
               )}
-              {canConfirmCustomerQuotation(quotationDetail) && (
+              {canConfirmCustomerQuotation(quotationDetail, quotationAuditRequired) && (
                 <Button icon={<SendOutlined />} onClick={() => handleConfirmCustomer(quotationDetail)}>客户确认</Button>
               )}
               {canReopenQuotation(quotationDetail) && (
@@ -2438,7 +2580,7 @@ const QuotationsPage: React.FC = () => {
               {canDeleteQuotation(quotationDetail) && (
                 <Button danger icon={<DeleteOutlined />} onClick={() => handleDelete(quotationDetail)}>删除</Button>
               )}
-              {canConvertQuotation(quotationDetail) && (
+              {canConvertQuotation(quotationDetail, quotationAuditRequired) && (
                 <Button type="primary" icon={<SwapOutlined />} onClick={() => handleConvert(quotationDetail)}>转销售订单</Button>
               )}
               {canRevokePushQuotation(quotationDetail) && (
@@ -2451,16 +2593,17 @@ const QuotationsPage: React.FC = () => {
               )}
               <Tooltip
                 title={
-                  canPrintFormalQuotation(quotationDetail)
+                  canPrintFormalQuotation(quotationDetail, quotationAuditRequired)
                     ? t('app.kuaizhizao.quotation.formalPrint')
                     : t('app.kuaizhizao.quotation.formalPrintDenied')
                 }
               >
                 <Button
                   icon={<PrinterOutlined />}
-                  disabled={!canPrintFormalQuotation(quotationDetail)}
+                  disabled={!canPrintFormalQuotation(quotationDetail, quotationAuditRequired)}
                   onClick={() =>
-                    canPrintFormalQuotation(quotationDetail) && handlePrint(quotationDetail)
+                    canPrintFormalQuotation(quotationDetail, quotationAuditRequired) &&
+                    handlePrint(quotationDetail)
                   }
                 >
                   {t('app.kuaizhizao.quotation.formalPrint')}
@@ -2486,45 +2629,20 @@ const QuotationsPage: React.FC = () => {
             </Typography.Text>
           ) : undefined
         }
-        collaborationMetrics={
-          quotationDetail &&
-          quotationDetail.conversion_downstream_missing &&
-          quotationNextSteps?.length ? (
-            <Alert
-              type="warning"
-              showIcon
-              message="下游销售订单已不存在"
-              description={quotationNextSteps.join('；')}
-            />
-          ) : undefined
-        }
         collaborationLifecycle={
           quotationDetail && quotationLifecycleDetail
             ? (() => {
                 const lifecycle = quotationLifecycleDetail;
                 const mainStages = lifecycle.mainStages ?? [];
-                const subStages = lifecycle.subStages ?? [];
-                if (mainStages.length === 0 && subStages.length === 0) return undefined;
+                if (mainStages.length === 0) return undefined;
                 return (
-                  <>
-                    {mainStages.length > 0 && (
-                      <UniLifecycleStepper
-                        steps={mainStages}
-                        status={lifecycle.status}
-                        showLabels
-                        nextStepSuggestions={lifecycle.nextStepSuggestions}
-                        hideNextStepSuggestions={hideQuotationStepperNextRow}
-                      />
-                    )}
-                    {subStages.length > 0 && (
-                      <div>
-                        <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
-                          执行中 · 全链路
-                        </div>
-                        <UniLifecycleStepper steps={subStages} showLabels />
-                      </div>
-                    )}
-                  </>
+                  <UniLifecycleStepper
+                    steps={mainStages}
+                    status={lifecycle.status}
+                    showLabels
+                    nextStepSuggestions={lifecycle.nextStepSuggestions}
+                    hideNextStepSuggestions={hideQuotationStepperNextRow}
+                  />
                 );
               })()
             : undefined

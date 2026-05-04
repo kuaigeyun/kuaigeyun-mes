@@ -22,11 +22,7 @@ import { getDeliveryNoticeLifecycle } from '../../../utils/deliveryNoticeLifecyc
 import { useTranslation } from 'react-i18next';
 import type { DocumentPrintApiResult } from '../../../../../utils/printResponseHelpers';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
-import {
-  DocumentTrackingRelationsBody,
-  DocumentTrackingTimelineBody,
-  useDocumentTracking,
-} from '../../../../../components/document-tracking-panel';
+import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { customerApi } from '../../../../master-data/services/supply-chain';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { MaterialBatchPickerModal } from '../../../../../components/material-batch-picker-modal';
@@ -760,45 +756,19 @@ const DeliveryNotesPage: React.FC = () => {
               </DetailDrawerSection>
 
               <DetailDrawerSection title="生命周期">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {(() => {
-                    const lc = getDeliveryNoticeLifecycle(noticeDetail as Record<string, unknown>);
-                    const mainStages = lc.mainStages ?? [];
-                    if (mainStages.length === 0) return null;
-                    return (
-                      <UniLifecycleStepper
-                        steps={mainStages}
-                        showLabels
-                        status={lc.status}
-                        nextStepSuggestions={lc.nextStepSuggestions}
-                      />
-                    );
-                  })()}
-                  <div
-                    style={{
-                      paddingTop: 12,
-                      borderTop: '1px solid var(--ant-color-border-secondary)',
-                    }}
-                  >
-                    <div style={{ marginBottom: 8, fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
-                      上下游单据
-                    </div>
-                    {deliveryTracking.loading && (
-                      <div style={{ padding: '8px 0' }}>
-                        <Spin size="small" />
-                      </div>
-                    )}
-                    {deliveryTracking.error && (
-                      <Typography.Text type="danger">{deliveryTracking.error}</Typography.Text>
-                    )}
-                    {deliveryTracking.data && (
-                      <DocumentTrackingRelationsBody
-                        data={deliveryTracking.data}
-                        onDocumentClick={(type, id) => messageApi.info(`跳转到${type}#${id}`)}
-                      />
-                    )}
-                  </div>
-                </div>
+                {(() => {
+                  const lc = getDeliveryNoticeLifecycle(noticeDetail as Record<string, unknown>);
+                  const mainStages = lc.mainStages ?? [];
+                  if (mainStages.length === 0) return null;
+                  return (
+                    <UniLifecycleStepper
+                      steps={mainStages}
+                      showLabels
+                      status={lc.status}
+                      nextStepSuggestions={lc.nextStepSuggestions}
+                    />
+                  );
+                })()}
               </DetailDrawerSection>
 
               <DetailDrawerSection title="明细信息">

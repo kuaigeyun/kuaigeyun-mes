@@ -155,7 +155,6 @@ const LazyStatTrendArea = lazy(() =>
 )
 const LazyCreateWorkOrderOperationsList = lazy(() => import('./components/WorkOrderCreateDndList'))
 const LazyWorkOrderOperationsList = lazy(() => import('./components/WorkOrderDetailDndOperations'))
-const LazyWorkOrderKittingPanel = lazy(() => import('./components/WorkOrderKittingPanel'))
 import { WorkOrderReadinessPopover } from './components/WorkOrderReadinessPopover'
 const LazyQRCodeGenerator = lazy(() =>
   import('../../../../../components/qrcode/QRCodeGenerator').then(m => ({ default: m.QRCodeGenerator }))
@@ -5565,12 +5564,7 @@ const WorkOrdersPage: React.FC = () => {
                   />
                 </DetailDrawerSection>
 
-                {/* 4. 齐套性分析 */}
-                <DetailDrawerSection title="齐套分析">
-                  <LazyWorkOrderKittingPanel workOrderId={workOrderDetail?.id} />
-                </DetailDrawerSection>
-
-                {/* 5. 操作记录：时间线 */}
+                {/* 4. 操作记录：时间线 */}
                 {workOrderDetail?.id ? (
                   <DetailDrawerSection title="操作记录">
                     {workOrderTracking.loading && (

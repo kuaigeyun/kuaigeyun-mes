@@ -23,6 +23,7 @@ const LOCALE_BUNDLES: Record<string, Record<string, string>> = {
  * 合并翻译：以下 key 优先使用本地 locale，其余使用后端值
  * - path.*、app.*.menu.*：避免后端历史错误覆盖菜单/路径文案
  * - components.tenantSelection.*：登录页多组织选择弹窗；后端语言包常不含此类 key，合并后否则会显示原始 key
+ * - app.kuaizhizao.quotation.*：报价单词条随版本迭代快，语言管理里易残留旧文案（如「另存为新版本」），以仓库 locale 为准
  */
 function mergeTranslationsWithMenuPriority(
   backendTranslations: Record<string, string>,
@@ -35,7 +36,8 @@ function mergeTranslationsWithMenuPriority(
     const useLocal =
       key.startsWith('path.') ||
       (key.startsWith('app.') && key.includes('.menu.')) ||
-      key.startsWith('components.tenantSelection.');
+      key.startsWith('components.tenantSelection.') ||
+      key.startsWith('app.kuaizhizao.quotation.');
     if (useLocal) {
       merged[key] = local[key];
     }

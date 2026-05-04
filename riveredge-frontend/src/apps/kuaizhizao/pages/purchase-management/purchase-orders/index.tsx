@@ -39,7 +39,7 @@ import {
   getPurchaseOrderStatistics, expeditePurchaseOrder,
   PurchaseOrder, PurchaseOrderItem
 } from '../../../services/purchase';
-import { FulfillmentTrackingTimeline, PriceHistoryInsight } from './ProcurementEmpowermentComponents';
+import { PriceHistoryInsight } from './ProcurementEmpowermentComponents';
 import LandingCostAllocationModal from './LandingCostAllocationModal';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
 import { getApprovalStatus, ApprovalStatusResponse } from '../../../../../services/approvalInstance';
@@ -2601,7 +2601,6 @@ const PurchaseOrdersPage: React.FC = () => {
         collaboration={
           orderDetail ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {orderDetail.status !== '草稿' ? <FulfillmentTrackingTimeline orderId={orderDetail.id!} /> : null}
               {purchaseOrderLifecycle && (purchaseOrderLifecycle.mainStages ?? []).length > 0 ? (
                 <UniLifecycleStepper
                   steps={purchaseOrderLifecycle.mainStages ?? []}

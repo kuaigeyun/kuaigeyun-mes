@@ -759,8 +759,7 @@ const ProductionPlansPage: React.FC = () => {
               {(() => {
                 const lifecycle = getProductionPlanLifecycle(currentPlan);
                 const mainStages = lifecycle.mainStages ?? [];
-                const subStages = lifecycle.subStages ?? [];
-                if (mainStages.length === 0 && subStages.length === 0) return null;
+                if (mainStages.length === 0) return null;
                 return (
                   <DetailDrawerSection title="生命周期">
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -771,14 +770,6 @@ const ProductionPlansPage: React.FC = () => {
                           showLabels
                           nextStepSuggestions={lifecycle.nextStepSuggestions}
                         />
-                      )}
-                      {subStages.length > 0 && (
-                        <div>
-                          <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
-                            执行中 · 全链路
-                          </div>
-                          <UniLifecycleStepper steps={subStages} showLabels />
-                        </div>
                       )}
                     </div>
                   </DetailDrawerSection>

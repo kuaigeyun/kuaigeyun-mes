@@ -977,7 +977,6 @@ const SalesReturnsPage: React.FC = () => {
                             hideNextStepSuggestions
                           />
                         )}
-                        {(lifecycle.subStages ?? []).length > 0 && <UniLifecycleStepper steps={lifecycle.subStages ?? []} showLabels />}
                       </>
                     );
                   })()}
